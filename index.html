@@ -1151,8 +1151,12 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  <div style="display:flex;align-items:center;gap:10px">
  <div class="panel-title" style="margin:0">Все оплаты</div>
  <button onclick="showSheetColumns()" style="font-size:9px;padding:2px 8px;border-radius:20px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer;font-family:Inter,sans-serif;letter-spacing:1px"> КОЛОНКИ</button>
+ <button onclick="exportPaymentsCSV()" style="font-size:9px;padding:2px 8px;border-radius:20px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer;font-family:Inter,sans-serif;letter-spacing:1px"> ЭКСПОРТ</button>
  </div>
  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+ <select id="filter-employee" class="form-select" style="font-size:11px;padding:4px 10px" onchange="renderAllPayments()">
+ <option value="">Все менеджеры</option>
+ </select>
  <select id="filter-seated" class="form-select" style="font-size:11px;padding:4px 10px" onchange="renderAllPayments()">
  <option value="all"> Все (посаженные)</option>
  <option value="yes"> Посажена</option>
@@ -3294,12 +3298,14 @@ function renderAllPayments() {
  const catNames={license:' Лицензии',subscription:' Абон.',implementation:' Внедрение',integration:' Интеграция',other:' Прочее'};
  const methodNames={bank:'Банк',cash:'Наличные',card:'Карта'};
 
+ const fEmp = document.getElementById('filter-employee')?.value || '';
  const fSeat = document.getElementById('filter-seated')?.value || 'all';
  const fSvc = document.getElementById('filter-service')?.value || 'all';
  const fBank = document.getElementById('filter-bank')?.value || '';
 
  // Фильтруем по текущему выбранному периоду (Неделя / Месяц / Квартал / Год)
  let ps = getPeriodPayments(currentPeriod).slice().reverse();
+ if (fEmp) ps = ps.filter(function(p){ return String(p.employee) === fEmp; });
  if (fSeat === 'yes') ps = ps.filter(function(p){ return p.seated === true; });
  if (fSeat === 'no') ps = ps.filter(function(p){ return !p.seated; });
  if (fSvc === 'yes') ps = ps.filter(function(p){ return p.serviceWritten === true; });
@@ -3331,6 +3337,19 @@ function renderAllPayments() {
  +'<div><div style="font-family:Bebas Neue,sans-serif;font-size:18px;color:'+s.col+';letter-spacing:1px">'+s.val+'</div>'
  +'<div style="font-size:9px;color:var(--text-muted);letter-spacing:1px;font-family:Inter,sans-serif">'+s.label.toUpperCase()+'</div></div></div>';
  }).join('');
+ }
+
+ // Populate employee filter
+ var empSelectEl = document.getElementById('filter-employee');
+ if (empSelectEl) {
+  var curEmpVal = empSelectEl.value;
+  var empMap = {};
+  allPs.forEach(function(p){ var eid = p.employee; if(eid) empMap[eid] = (empMap[eid]||0) + 1; });
+  empSelectEl.innerHTML = '<option value="">Все менеджеры</option>';
+  Object.keys(empMap).sort(function(a,b){ return empMap[b]-empMap[a]; }).forEach(function(eid){
+   empSelectEl.innerHTML += '<option value="'+eid+'">'+empName(Number(eid)||eid)+' ('+empMap[eid]+')</option>';
+  });
+  empSelectEl.value = curEmpVal;
  }
 
  // Populate bank filter
@@ -7727,6 +7746,51 @@ window.addEventListener('offline',function(){
 });
 
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}
+
+// === EXPORT CSV ===
+function exportPaymentsCSV(){
+ var fEmp = document.getElementById('filter-employee')?.value || '';
+ var fSeat = document.getElementById('filter-seated')?.value || 'all';
+ var fSvc = document.getElementById('filter-service')?.value || 'all';
+ var fBank = document.getElementById('filter-bank')?.value || '';
+ var ps = getPeriodPayments(currentPeriod).slice().reverse();
+ if(fEmp) ps=ps.filter(function(p){return String(p.employee)===fEmp;});
+ if(fSeat==='yes') ps=ps.filter(function(p){return p.seated===true;});
+ if(fSeat==='no') ps=ps.filter(function(p){return !p.seated;});
+ if(fSvc==='yes') ps=ps.filter(function(p){return p.serviceWritten===true;});
+ if(fSvc==='no') ps=ps.filter(function(p){return !p.serviceWritten;});
+ if(fBank) ps=ps.filter(function(p){return (p.bank||'')===fBank;});
+ var catNames={license:'Лицензии',subscription:'Абон.',implementation:'Внедрение',integration:'Интеграция',other:'Прочее'};
+ var rows=[['Дата','Клиент','Сотрудник','Статья','Сумма','Способ','Посажена','Услуга списана','Комментарий']];
+ ps.forEach(function(p){
+  rows.push([p.date,p.client,empName(p.employee),catNames[p.category]||p.category,p.amount,p.method||'',p.seated?'Да':'Нет',p.serviceWritten?'Да':'Нет',p.comment||'']);
+ });
+ var csv='\uFEFF'+rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(';');}).join('\n');
+ var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+ var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+ a.download='payments_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+ showNotif('Экспорт','Файл payments скачан');
+}
+
+// === FAB BUTTON (mobile) ===
+(function(){
+ var fab=document.createElement('button');
+ fab.id='fab-add';
+ fab.innerHTML='+';
+ fab.style.cssText='display:none;position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--gold-mid),var(--gold-deep));color:#fff;font-size:28px;border:none;cursor:pointer;box-shadow:0 4px 20px rgba(59,130,246,.4);z-index:1000;font-family:Inter,sans-serif;transition:transform .2s;';
+ fab.onclick=function(){openModal('payment');};
+ document.body.appendChild(fab);
+ function checkFab(){
+  var w=window.innerWidth;
+  var isPayView=document.getElementById('view-payments')?.style.display==='block';
+  var isDash=document.getElementById('view-dashboard')?.style.display==='block';
+  fab.style.display=(w<=768&&(isPayView||isDash)&&currentUser&&currentUser.access?.add_payments)?'flex':'none';
+  fab.style.alignItems='center';fab.style.justifyContent='center';
+ }
+ window.addEventListener('resize',checkFab);
+ var origShowView=window.showView;
+ window.showView=function(){origShowView.apply(this,arguments);setTimeout(checkFab,50);};
+})();
 </script>
 </body>
 </html>
