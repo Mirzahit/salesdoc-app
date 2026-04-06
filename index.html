@@ -7218,41 +7218,41 @@ function intgRender() {
  // Package stats dashboard
  var pkgEl = document.getElementById('intg-package-stats');
  if (pkgEl) {
-  var pkgMap = {};
   var pkgDone = {};
   var pkgInWork = {};
   data.forEach(function(r){
    var pkg = r.package || 'Не указан';
-   pkgMap[pkg] = (pkgMap[pkg]||0) + 1;
-   if (r.status === 'Готово' && (isInPeriod(r.dateDone) || ((!r.dateDone || r.dateDone==='\u2014') && isInPeriod(r.deadline)))) {
-    pkgDone[pkg] = (pkgDone[pkg]||0) + 1;
-   }
-   if (r.status !== 'Готово' && r.status !== 'Отменено') {
-    pkgInWork[pkg] = (pkgInWork[pkg]||0) + 1;
-   }
+   var isDone = r.status === 'Готово' && (isInPeriod(r.dateDone) || ((!r.dateDone || r.dateDone==='\u2014') && isInPeriod(r.deadline)));
+   var isWork = r.status !== 'Готово' && r.status !== 'Отменено';
+   if (isDone) pkgDone[pkg] = (pkgDone[pkg]||0) + 1;
+   if (isWork) pkgInWork[pkg] = (pkgInWork[pkg]||0) + 1;
   });
   var pkgStyleMap = {
    'Стандарт':['#B4B2A9','rgba(136,135,128,.12)'],'стандарт Плюс':['#85B7EB','rgba(74,144,217,.12)'],
    'Стандарт Плюс':['#85B7EB','rgba(74,144,217,.12)'],'Стандарт+':['#85B7EB','rgba(74,144,217,.12)'],
    'Премиум':['#FFE08A','rgba(201,150,12,.12)'],'Не указан':['#6A6357','rgba(255,255,255,.04)']
   };
-  var pkgKeys = Object.keys(pkgMap).sort(function(a,b){ return pkgMap[b]-pkgMap[a]; });
-  var totalAll = data.length;
-  var ph = '<div style="display:grid;grid-template-columns:repeat('+Math.min(pkgKeys.length,4)+',1fr);gap:10px;margin-bottom:12px">';
+  // Собираем все пакеты (done + inWork)
+  var allPkgs = {};
+  Object.keys(pkgDone).forEach(function(k){ allPkgs[k]=true; });
+  Object.keys(pkgInWork).forEach(function(k){ allPkgs[k]=true; });
+  var pkgKeys = Object.keys(allPkgs).sort(function(a,b){ return (pkgDone[b]||0)-(pkgDone[a]||0); });
+  var totalDone = 0; pkgKeys.forEach(function(k){ totalDone += (pkgDone[k]||0); });
+  var ph = '<div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:10px;font-weight:600">'+periodLabel.toUpperCase()+'</div>';
+  ph += '<div style="display:grid;grid-template-columns:repeat('+Math.min(pkgKeys.length,4)+',1fr);gap:10px;margin-bottom:12px">';
   pkgKeys.forEach(function(pkg){
    var st = pkgStyleMap[pkg] || ['#b0a898','rgba(255,255,255,.04)'];
    var done = pkgDone[pkg] || 0;
    var inW = pkgInWork[pkg] || 0;
-   var total = pkgMap[pkg];
-   var pct = totalAll > 0 ? Math.round(total/totalAll*100) : 0;
+   var pct = totalDone > 0 ? Math.round(done/totalDone*100) : 0;
    ph += '<div style="background:'+st[1]+';border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;border-left:3px solid '+st[0]+'">';
    ph += '<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:'+st[0]+';margin-bottom:8px">'+pkg.toUpperCase()+'</div>';
-   ph += '<div style="font-family:Russo One,sans-serif;font-size:24px;color:'+st[0]+'">'+total+'</div>';
-   ph += '<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+pct+'% от всех</div>';
-   ph += '<div style="margin-top:8px;display:flex;gap:12px;font-size:10px">';
-   ph += '<span style="color:#4CAF50">✓ '+done+' за '+periodLabel+'</span>';
-   ph += '<span style="color:#FFD54F">⏳ '+inW+' в работе</span>';
-   ph += '</div></div>';
+   ph += '<div style="display:flex;align-items:baseline;gap:8px">';
+   ph += '<span style="font-family:Russo One,sans-serif;font-size:28px;color:#4CAF50">'+done+'</span>';
+   ph += '<span style="font-size:11px;color:var(--text-muted)">выполнено</span></div>';
+   ph += '<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+pct+'% от выполненных</div>';
+   ph += '<div style="margin-top:8px;font-size:10px;color:#FFD54F">⏳ '+inW+' в работе</div>';
+   ph += '</div>';
   });
   ph += '</div>';
   pkgEl.innerHTML = ph;
