@@ -375,6 +375,38 @@ h1,h2,h3,h4{
  background:var(--gold-gradient);
  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
 }
+/* === ANIMATIONS === */
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
+@keyframes scaleIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.view-animate{animation:fadeIn .3s ease-out}
+.panel{transition:transform .2s,box-shadow .2s}
+.panel:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.nav-item{transition:all .25s ease}
+.kpi-value{transition:all .3s ease}
+
+/* === SEARCH OVERLAY === */
+.search-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:none;align-items:flex-start;justify-content:center;padding:80px 20px;backdrop-filter:blur(8px)}
+.search-overlay.open{display:flex}
+.search-box{width:100%;max-width:600px;animation:scaleIn .2s ease-out}
+.search-input{width:100%;padding:16px 20px 16px 48px;border-radius:14px;border:1px solid var(--dark-border-bright);background:var(--dark-card);color:var(--text-primary);font-family:'Exo 2',sans-serif;font-size:16px;font-weight:500;outline:none;transition:border-color .2s}
+.search-input:focus{border-color:var(--gold-mid);box-shadow:0 0 20px rgba(201,150,12,.15)}
+.search-input::placeholder{color:var(--text-muted)}
+.search-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:18px;opacity:.5}
+.search-results{max-height:60vh;overflow-y:auto;margin-top:8px;border-radius:12px;background:var(--dark-card);border:1px solid var(--dark-border)}
+.search-results:empty{display:none}
+.search-item{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .15s;display:flex;justify-content:space-between;align-items:center}
+.search-item:hover{background:rgba(201,150,12,.08)}
+.search-item:last-child{border-bottom:none}
+.search-item-title{font-weight:600;font-size:13px;color:var(--text-primary)}
+.search-item-sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+.search-item-amount{font-family:'Russo One',sans-serif;font-size:13px;color:var(--gold-bright)}
+.search-hint{text-align:center;padding:16px;font-size:11px;color:var(--text-muted);letter-spacing:.5px}
+.search-tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.5px;margin-left:8px}
+.search-tag-payment{background:rgba(76,175,80,.15);color:#4CAF50}
+.search-tag-expense{background:rgba(239,83,80,.15);color:#EF5350}
+.search-tag-client{background:rgba(74,144,217,.15);color:#4A90D9}
+
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--dark-void);color:var(--text-primary);font-family:'Exo 2',sans-serif;font-weight:500;min-height:100vh;overflow-x:hidden;
  background-image:
@@ -892,10 +924,18 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(201,150,12,.
 <!-- MAIN -->
 <main class="main" id="main-app" style="display:none">
  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+ <div class="search-overlay" id="search-overlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-box">
+   <div style="position:relative"><span class="search-icon">🔍</span><input class="search-input" id="search-input" placeholder="Поиск клиентов, платежей, расходов..." autocomplete="off"></div>
+   <div class="search-results" id="search-results"></div>
+   <div class="search-hint">ESC — закрыть · Введите минимум 2 символа</div>
+  </div>
+ </div>
  <div class="topbar">
  <button class="menu-toggle" id="menu-toggle" onclick="toggleSidebar()">&#9776;</button>
  <div class="page-title" id="page-title">ОБЗОР ФИНАНСОВ</div>
  <div class="topbar-right">
+ <button onclick="openSearch()" title="Поиск (Ctrl+K)" style="padding:7px 14px;border-radius:10px;background:var(--glass-bg);border:1px solid var(--dark-border);color:var(--text-muted);font-family:'Exo 2',sans-serif;font-weight:600;font-size:11px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px"><span style="font-size:14px">🔍</span><span style="opacity:.6;font-size:10px">Ctrl+K</span></button>
  <button id="tg-report-btn" onclick="sendTgReport()" style="padding:7px 16px;border-radius:10px;background:linear-gradient(135deg,#0088cc,#005f8c);border:1px solid rgba(0,136,204,.4);color:#fff;font-family:'Exo 2',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;cursor:pointer;transition:all .2s;white-space:nowrap">📊 ОТЧЁТ В TG</button>
  <div class="sync-status" id="sync-status">
  <div class="sync-dot ok" id="sync-dot"></div>
@@ -7482,6 +7522,145 @@ function renderPnL() {
 // /P&L MODULE 
 
 
+
+// ============================================================
+// SEARCH — Ctrl+K / кнопка
+// ============================================================
+function openSearch(){
+ var ov=document.getElementById('search-overlay');
+ ov.classList.add('open');
+ var inp=document.getElementById('search-input');
+ inp.value='';
+ document.getElementById('search-results').innerHTML='';
+ setTimeout(function(){inp.focus();},100);
+}
+function closeSearch(){
+ document.getElementById('search-overlay').classList.remove('open');
+}
+document.addEventListener('keydown',function(e){
+ if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openSearch();}
+ if(e.key==='Escape'){closeSearch();}
+});
+document.getElementById('search-input').addEventListener('input',function(){
+ var q=this.value.trim().toLowerCase();
+ var res=document.getElementById('search-results');
+ if(q.length<2){res.innerHTML='';return;}
+ var items=[];
+ // Поиск по платежам
+ if(typeof payments!=='undefined')payments.forEach(function(p){
+  var text=(p.client||'')+' '+(p.category||'')+' '+(p.employee||'')+' '+(p.bank||'');
+  if(text.toLowerCase().indexOf(q)>=0){
+   items.push({type:'payment',title:p.client||'—',sub:(p.date||'')+' · '+(p.employee||''),amount:p.amount||0,data:p});
+  }
+ });
+ // Поиск по расходам
+ if(typeof expData!=='undefined')expData.forEach(function(e){
+  var text=(e.category||'')+' '+(e.note||'')+' '+(e.bank||'');
+  if(text.toLowerCase().indexOf(q)>=0){
+   items.push({type:'expense',title:e.category||'—',sub:(e.date||'')+' · '+(e.note||''),amount:e.amount||0,data:e});
+  }
+ });
+ // Уникальные клиенты
+ var clients={};
+ if(typeof payments!=='undefined')payments.forEach(function(p){
+  var name=(p.client||'').trim();
+  if(!name)return;
+  if(name.toLowerCase().indexOf(q)>=0){
+   if(!clients[name])clients[name]={count:0,total:0};
+   clients[name].count++;clients[name].total+=p.amount||0;
+  }
+ });
+ Object.keys(clients).forEach(function(name){
+  items.unshift({type:'client',title:name,sub:clients[name].count+' платежей',amount:clients[name].total,data:{client:name}});
+ });
+ // Лимит 20
+ items=items.slice(0,20);
+ if(items.length===0){res.innerHTML='<div class="search-hint">Ничего не найдено</div>';return;}
+ var html='';
+ items.forEach(function(it){
+  var tag=it.type==='payment'?'<span class="search-tag search-tag-payment">ОПЛАТА</span>':
+          it.type==='expense'?'<span class="search-tag search-tag-expense">РАСХОД</span>':
+          '<span class="search-tag search-tag-client">КЛИЕНТ</span>';
+  html+='<div class="search-item" onclick="searchClick(\''+it.type+'\',\''+encodeURIComponent(it.title)+'\')">';
+  html+='<div><div class="search-item-title">'+it.title+tag+'</div><div class="search-item-sub">'+it.sub+'</div></div>';
+  html+='<div class="search-item-amount">'+fmtNum(it.amount)+' ₸</div></div>';
+ });
+ res.innerHTML=html;
+});
+function searchClick(type,encodedTitle){
+ closeSearch();
+ if(type==='payment'||type==='client')showView('payments');
+ else if(type==='expense')showView('expenses');
+}
+
+// ============================================================
+// ANIMATIONS — плавные переходы между views
+// ============================================================
+(function(){
+ var origShowView=showView;
+ showView=function(v){
+  origShowView(v);
+  var el=document.getElementById('view-'+v);
+  if(el){el.classList.remove('view-animate');void el.offsetWidth;el.classList.add('view-animate');}
+ };
+})();
+
+// ============================================================
+// OFFLINE — кэширование данных в localStorage
+// ============================================================
+function saveDataOffline(){
+ try{
+  if(typeof payments!=='undefined'&&payments.length)localStorage.setItem('sd_cache_payments',JSON.stringify(payments));
+  if(typeof expData!=='undefined'&&expData.length)localStorage.setItem('sd_cache_expenses',JSON.stringify(expData));
+  localStorage.setItem('sd_cache_time',new Date().toISOString());
+ }catch(e){}
+}
+function loadDataOffline(){
+ try{
+  var cached=localStorage.getItem('sd_cache_payments');
+  if(cached&&(!payments||!payments.length)){
+   payments=JSON.parse(cached);
+   renderAll();
+  }
+  var cachedExp=localStorage.getItem('sd_cache_expenses');
+  if(cachedExp&&(!expData||!expData.length)){
+   expData=JSON.parse(cachedExp);
+  }
+ }catch(e){}
+}
+function getOfflineTime(){
+ var t=localStorage.getItem('sd_cache_time');
+ if(!t)return null;
+ return new Date(t);
+}
+// Сохранять данные после каждой синхронизации
+(function(){
+ var origSync=typeof syncFromSheets==='function'?syncFromSheets:null;
+ if(origSync){
+  syncFromSheets=async function(){
+   try{await origSync();}catch(e){throw e;}
+   finally{saveDataOffline();}
+  };
+ }
+})();
+// При загрузке — если offline, восстановить из кэша
+if(!navigator.onLine){
+ loadDataOffline();
+ var ct=getOfflineTime();
+ if(ct){
+  var st=document.getElementById('sync-status');
+  if(st){st.innerHTML='<span style="color:#FF7043">📴 Офлайн · данные от '+ct.toLocaleDateString('ru-RU')+' '+ct.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span>';}
+ }
+}
+window.addEventListener('online',function(){
+ var st=document.getElementById('sync-status');
+ if(st)st.innerHTML='<span style="color:#4CAF50">🟢 Онлайн</span>';
+ if(typeof syncFromSheets==='function')syncFromSheets();
+});
+window.addEventListener('offline',function(){
+ var st=document.getElementById('sync-status');
+ if(st)st.innerHTML='<span style="color:#FF7043">📴 Офлайн</span>';
+});
 
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}
 </script>
