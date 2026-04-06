@@ -3305,7 +3305,7 @@ function renderAllPayments() {
 
  // Фильтруем по текущему выбранному периоду (Неделя / Месяц / Квартал / Год)
  let ps = getPeriodPayments(currentPeriod).slice().reverse();
- if (fEmp) ps = ps.filter(function(p){ return String(p.employee) === fEmp; });
+ if (fEmp) ps = ps.filter(function(p){ return (p.managerName||empName(p.employee)) === fEmp; });
  if (fSeat === 'yes') ps = ps.filter(function(p){ return p.seated === true; });
  if (fSeat === 'no') ps = ps.filter(function(p){ return !p.seated; });
  if (fSvc === 'yes') ps = ps.filter(function(p){ return p.serviceWritten === true; });
@@ -3344,10 +3344,10 @@ function renderAllPayments() {
  if (empSelectEl) {
   var curEmpVal = empSelectEl.value;
   var empMap = {};
-  allPs.forEach(function(p){ var eid = p.employee; if(eid) empMap[eid] = (empMap[eid]||0) + 1; });
+  allPs.forEach(function(p){ var nm = p.managerName || empName(p.employee); if(nm && nm!=='-') empMap[nm] = (empMap[nm]||0) + 1; });
   empSelectEl.innerHTML = '<option value="">Все менеджеры</option>';
-  Object.keys(empMap).sort(function(a,b){ return empMap[b]-empMap[a]; }).forEach(function(eid){
-   empSelectEl.innerHTML += '<option value="'+eid+'">'+empName(Number(eid)||eid)+' ('+empMap[eid]+')</option>';
+  Object.keys(empMap).sort(function(a,b){ return empMap[b]-empMap[a]; }).forEach(function(nm){
+   empSelectEl.innerHTML += '<option value="'+nm+'">'+nm+' ('+empMap[nm]+')</option>';
   });
   empSelectEl.value = curEmpVal;
  }
@@ -7754,7 +7754,7 @@ function exportPaymentsCSV(){
  var fSvc = document.getElementById('filter-service')?.value || 'all';
  var fBank = document.getElementById('filter-bank')?.value || '';
  var ps = getPeriodPayments(currentPeriod).slice().reverse();
- if(fEmp) ps=ps.filter(function(p){return String(p.employee)===fEmp;});
+ if(fEmp) ps=ps.filter(function(p){return (p.managerName||empName(p.employee))===fEmp;});
  if(fSeat==='yes') ps=ps.filter(function(p){return p.seated===true;});
  if(fSeat==='no') ps=ps.filter(function(p){return !p.seated;});
  if(fSvc==='yes') ps=ps.filter(function(p){return p.serviceWritten===true;});
