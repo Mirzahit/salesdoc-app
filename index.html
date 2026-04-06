@@ -1494,10 +1494,10 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(201,150,12,.
  <!-- Kanban -->
  <div id="intg-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;min-height:300px"></div>
 
- <!-- Charts row — По типам -->
+ <!-- Dashboard по пакетам -->
  <div class="panel" id="intg-chart-type" style="min-height:100px;margin-bottom:16px">
-  <div class="panel-title" style="margin-bottom:10px">По типам</div>
-  <div id="intg-type-bars"></div>
+  <div class="panel-title" style="margin-bottom:10px">По пакетам</div>
+  <div id="intg-package-stats"></div>
  </div>
  <!-- Monthly breakdown table -->
  <div class="panel" id="intg-monthly-panel" style="min-height:100px;margin-bottom:16px">
@@ -7215,23 +7215,47 @@ function intgRender() {
   psEl.innerHTML = statsHtml;
  }
 
- // Chart
- var typeMap = {};
- data.forEach(function(r){ typeMap[r.type] = (typeMap[r.type]||0) + 1; });
- var typeEl = document.getElementById('intg-type-bars');
- if (typeEl) {
-  var maxType = Math.max.apply(null, Object.values(typeMap).concat([1]));
-  typeEl.innerHTML = Object.keys(typeMap).map(function(t){
-   var cnt = typeMap[t]; var pct = Math.round(cnt / maxType * 100);
-   var c = typeColors[t] || '#6A6357';
-   var done = data.filter(function(r){ return r.type===t && r.status==='Готово'; }).length;
-   return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
-    '<div style="width:80px;font-size:11px;color:var(--text-muted);font-weight:600;text-align:right;flex-shrink:0">'+t+'</div>' +
-    '<div style="flex:1;height:18px;background:var(--dark-border);border-radius:4px;overflow:hidden">' +
-    '<div style="height:100%;width:'+pct+'%;background:'+c+';border-radius:4px"></div></div>' +
-    '<div style="font-size:12px;color:'+c+';font-weight:700;min-width:30px">'+cnt+'</div>' +
-    '<div style="font-size:10px;color:var(--text-muted);min-width:50px">Гот: '+done+'</div></div>';
-  }).join('');
+ // Package stats dashboard
+ var pkgEl = document.getElementById('intg-package-stats');
+ if (pkgEl) {
+  var pkgMap = {};
+  var pkgDone = {};
+  var pkgInWork = {};
+  data.forEach(function(r){
+   var pkg = r.package || 'Не указан';
+   pkgMap[pkg] = (pkgMap[pkg]||0) + 1;
+   if (r.status === 'Готово' && (isInPeriod(r.dateDone) || ((!r.dateDone || r.dateDone==='\u2014') && isInPeriod(r.deadline)))) {
+    pkgDone[pkg] = (pkgDone[pkg]||0) + 1;
+   }
+   if (r.status !== 'Готово' && r.status !== 'Отменено') {
+    pkgInWork[pkg] = (pkgInWork[pkg]||0) + 1;
+   }
+  });
+  var pkgStyleMap = {
+   'Стандарт':['#B4B2A9','rgba(136,135,128,.12)'],'стандарт Плюс':['#85B7EB','rgba(74,144,217,.12)'],
+   'Стандарт Плюс':['#85B7EB','rgba(74,144,217,.12)'],'Стандарт+':['#85B7EB','rgba(74,144,217,.12)'],
+   'Премиум':['#FFE08A','rgba(201,150,12,.12)'],'Не указан':['#6A6357','rgba(255,255,255,.04)']
+  };
+  var pkgKeys = Object.keys(pkgMap).sort(function(a,b){ return pkgMap[b]-pkgMap[a]; });
+  var totalAll = data.length;
+  var ph = '<div style="display:grid;grid-template-columns:repeat('+Math.min(pkgKeys.length,4)+',1fr);gap:10px;margin-bottom:12px">';
+  pkgKeys.forEach(function(pkg){
+   var st = pkgStyleMap[pkg] || ['#b0a898','rgba(255,255,255,.04)'];
+   var done = pkgDone[pkg] || 0;
+   var inW = pkgInWork[pkg] || 0;
+   var total = pkgMap[pkg];
+   var pct = totalAll > 0 ? Math.round(total/totalAll*100) : 0;
+   ph += '<div style="background:'+st[1]+';border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;border-left:3px solid '+st[0]+'">';
+   ph += '<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:'+st[0]+';margin-bottom:8px">'+pkg.toUpperCase()+'</div>';
+   ph += '<div style="font-family:Russo One,sans-serif;font-size:24px;color:'+st[0]+'">'+total+'</div>';
+   ph += '<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+pct+'% от всех</div>';
+   ph += '<div style="margin-top:8px;display:flex;gap:12px;font-size:10px">';
+   ph += '<span style="color:#4CAF50">✓ '+done+' за '+periodLabel+'</span>';
+   ph += '<span style="color:#FFD54F">⏳ '+inW+' в работе</span>';
+   ph += '</div></div>';
+  });
+  ph += '</div>';
+  pkgEl.innerHTML = ph;
  }
 
  // MONTHLY TABLE
