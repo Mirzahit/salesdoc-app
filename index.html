@@ -2259,12 +2259,16 @@ let acts = (function(){
  }));
 })();
 
-let plans = {
- week: {new_sales:1350000, subscription:300000, calls:50, meetings:10, activations:5},
- month: {new_sales:8200000, subscription:2000000, calls:200, meetings:40, activations:20},
- quarter: {new_sales:24600000, subscription:6000000, calls:600, meetings:120, activations:60},
- year: {new_sales:98400000, subscription:24000000, calls:2400, meetings:480, activations:240},
-};
+let plans = (function(){
+ try{var s=localStorage.getItem('sd_plans');if(s)return JSON.parse(s);}catch(e){}
+ return {
+  week:{subscription:300000},
+  month:{subscription:2000000},
+  quarter:{subscription:6000000},
+  year:{subscription:24000000}
+ };
+})();
+function savePlans(){try{localStorage.setItem('sd_plans',JSON.stringify(plans));}catch(e){}}
 
 let currentPeriod='month', currentTab='payment', activePlanPeriod='week';
 let nextPayId=300, nextActId=50, planHistory=[], planChips=new Set(['license']);
@@ -4008,23 +4012,31 @@ function kcGetLTVRanked(){
 const catMeta={new_sales:{label:'Новые продажи',icon:'',color:'var(--gold-bright)',cls:'cat-license',unit:'₸'},subscription:{label:'Абон. платы',icon:'',color:'#4A90D9',cls:'cat-subscription',unit:'₸'},calls:{label:'Звонки',icon:'',color:'#4CAF50',cls:'cat-implementation',unit:'шт'},meetings:{label:'Встречи',icon:'',color:'#F59E0B',cls:'cat-meetings',unit:'шт'},activations:{label:'Активации',icon:'',color:'#AB47BC',cls:'cat-other',unit:'шт'}};
 
 function setPlanPeriodTab(btn,period){ activePlanPeriod=period; document.querySelectorAll('.ppt').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderCabinetPlans(); }
-function planGetActual(cat,ps){
- if(cat==='new_sales') return sumByCategory(ps,'license')+sumByCategory(ps,'implementation')+sumByCategory(ps,'integration')+sumByCategory(ps,'other');
- if(cat==='subscription') return sumByCategory(ps,'subscription');
- if(cat==='calls'||cat==='meetings'){
-  // Sum from Svetofor KPI data across all agents
-  var match=cat==='calls'?'звонок':'встреч';
-  var total=0;
-  if(planLastData&&planLastData.agents){
-   planLastData.agents.forEach(function(a){
-    a.kpis.forEach(function(k){
-     if(k.name.toLowerCase().indexOf(match)>=0) total+=k.fact||0;
-    });
+function _svetoforSum(match,field){
+ var total=0;
+ if(planLastData&&planLastData.agents){
+  planLastData.agents.forEach(function(a){
+   a.kpis.forEach(function(k){
+    if(k.name.toLowerCase().indexOf(match)>=0) total+=(k[field]||0);
    });
-  }
-  return total;
+  });
  }
- if(cat==='activations') return parseInt(localStorage.getItem('sd_plan_fact_activations_'+activePlanPeriod))||0;
+ return total;
+}
+function planGetPlan(cat){
+ if(cat==='new_sales') return _svetoforSum('продаж','plan');
+ if(cat==='calls') return _svetoforSum('звонок','plan');
+ if(cat==='meetings') return _svetoforSum('встреч','plan');
+ if(cat==='activations') return _svetoforSum('лицензи','plan');
+ if(cat==='subscription') return plans[activePlanPeriod].subscription||0;
+ return 0;
+}
+function planGetActual(cat,ps){
+ if(cat==='new_sales') return _svetoforSum('продаж','fact');
+ if(cat==='subscription') return sumByCategory(ps,'subscription');
+ if(cat==='calls') return _svetoforSum('звонок','fact');
+ if(cat==='meetings') return _svetoforSum('встреч','fact');
+ if(cat==='activations') return _svetoforSum('лицензи','fact');
  return 0;
 }
 var _planLoadingForCab=false;
@@ -4032,20 +4044,24 @@ function renderCabinetPlans() {
  if(!planLastData&&!_planLoadingForCab){_planLoadingForCab=true;planInit();planLoad().then(function(){_planLoadingForCab=false;renderCabinetPlans();}).catch(function(){_planLoadingForCab=false;});}
  const ps=getPeriodPayments(activePlanPeriod);
  document.getElementById('cabinet-plans-grid').innerHTML=`<div class="plan-cards-grid">`+Object.keys(catMeta).map(cat=>{
- const meta=catMeta[cat],planVal=plans[activePlanPeriod][cat]||0,actual=planGetActual(cat,ps);
+ const meta=catMeta[cat];
+ const planVal=planGetPlan(cat);
+ const actual=planGetActual(cat,ps);
  const isCount=meta.unit==='шт';
+ const isManual=false; // all data from Svetofor, no manual plan input
  const pct=planVal>0?Math.min(Math.round((actual/planVal)*100),100):0;
  const pctColor=pct>=100?'#4CAF50':pct>=60?'var(--gold-bright)':'#EF5350';
  const dispPlan=isCount?(planVal||'—'):(planVal>0?fmt(planVal)+' ₸':'— не задан');
  const dispFact=isCount?actual:(fmt(actual)+' ₸');
+ const src=isManual?'':'<div style="font-size:9px;color:var(--text-muted);margin-top:4px">Данные из Светофора</div>';
  return `<div class="plan-edit-card ${meta.cls}">
- <div style="font-size:11px;color:var(--text-secondary);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">${meta.icon} ${meta.label}</div>
+ <div style="font-size:11px;color:var(--text-secondary);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">${meta.label}</div>
  <div class="pec-current">${dispPlan}</div>
  <div class="pec-actual">Факт: <strong style="color:${meta.color}">${dispFact}</strong></div>
  <div class="pec-progress"><div class="pec-fill" style="width:${pct}%;background:linear-gradient(90deg,${meta.color}88,${meta.color})"></div></div>
- <div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-size:11px;font-weight:700;color:${pctColor}">${pct}% выполнено</span>${pct>=100?'<span style="font-size:10px;color:#4CAF50;font-weight:700"> ВЫПОЛНЕН</span>':''}</div>
- <div class="pec-input-row">${cat==='activations'?`<input class="pec-input" id="pec-fact-${cat}" type="number" placeholder="Факт..." value="${actual||''}" style="width:70px"><button class="pec-save-btn" onclick="savePlanFact('${cat}')" style="font-size:10px">Факт</button>`:''}
- <input class="pec-input" id="pec-${cat}" type="number" placeholder="${isCount?'План шт...':'Новый план...'}" value="${planVal||''}"><button class="pec-save-btn" onclick="quickSavePlan('${cat}')">Сохранить</button></div>
+ <div style="display:flex;justify-content:space-between;margin-bottom:${isManual?'12':'4'}px"><span style="font-size:11px;font-weight:700;color:${pctColor}">${pct}% выполнено</span>${pct>=100?'<span style="font-size:10px;color:#4CAF50;font-weight:700"> ВЫПОЛНЕН</span>':''}</div>
+ ${isManual?`<div class="pec-input-row"><input class="pec-input" id="pec-${cat}" type="number" placeholder="Новый план..." value="${plans[activePlanPeriod][cat]||''}"><button class="pec-save-btn" onclick="quickSavePlan('${cat}')">Сохранить</button></div>`:''}
+ ${src}
  </div>`;
  }).join('')+`</div>`;
 }
@@ -4056,7 +4072,9 @@ function savePlanFact(cat){
 }
 function quickSavePlan(cat) {
  const newVal=parseFloat(document.getElementById('pec-'+cat).value); if(!newVal||newVal<=0){showNotif('Ошибка','Введите сумму больше нуля');return;}
+ if(!plans[activePlanPeriod]) plans[activePlanPeriod]={};
  const oldVal=plans[activePlanPeriod][cat]||0; plans[activePlanPeriod][cat]=newVal;
+ savePlans();
  planHistory.unshift({date:new Date().toLocaleDateString('ru-RU'),period:{week:'Неделя',month:'Месяц',quarter:'Квартал',year:'Год'}[activePlanPeriod],cat:catMeta[cat].label,old:oldVal,newVal,who:currentUser?.name||'—'});
  renderCabinetPlans(); renderPlanHistory(); renderAll(); showNotif('План обновлён',catMeta[cat].label+' — '+fmtFull(newVal));
 }
@@ -4078,7 +4096,7 @@ function savePlanFromModal() {
  if(quarter){const old=plans.quarter[cat]||0;plans.quarter[cat]=quarter;planHistory.unshift({date:new Date().toLocaleDateString('ru-RU'),period:'Квартал',cat:catMeta[cat].label,old,newVal:quarter,who:currentUser?.name||'—'});}
  if(yearVal){const old=plans.year[cat]||0;plans.year[cat]=yearVal;planHistory.unshift({date:new Date().toLocaleDateString('ru-RU'),period:'Год',cat:catMeta[cat].label,old,newVal:yearVal,who:currentUser?.name||'—'});}
  });
- closePlanModal(); renderCabinetPlans(); renderPlanHistory(); renderAll(); showNotif('Планы сохранены',`${planChips.size} статей обновлено`);
+ savePlans(); closePlanModal(); renderCabinetPlans(); renderPlanHistory(); renderAll(); showNotif('Планы сохранены',`${planChips.size} статей обновлено`);
  ['pm-week','pm-month','pm-quarter','pm-year-val'].forEach(id=>document.getElementById(id).value='');
 }
 
