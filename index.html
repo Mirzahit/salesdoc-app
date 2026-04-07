@@ -4024,16 +4024,55 @@ function _svetoforSum(match,field){
  return total;
 }
 function planGetPlan(cat){
- if(cat==='new_sales') return _svetoforSum('продаж','plan');
+ if(cat==='new_sales'){
+  var total=0;
+  if(planLastData&&planLastData.agents){
+   planLastData.agents.forEach(function(a){
+    if(a.name.toLowerCase().indexOf('офис')>=0) return; // skip Офис (абон. платы)
+    a.kpis.forEach(function(k){ if(k.name.toLowerCase().indexOf('продаж')>=0) total+=(k.plan||0); });
+   });
+  }
+  return total;
+ }
  if(cat==='calls') return _svetoforSum('звонок','plan');
  if(cat==='meetings') return _svetoforSum('встреч','plan');
  if(cat==='activations') return _svetoforSum('лицензи','plan');
- if(cat==='subscription') return plans[activePlanPeriod].subscription||0;
+ if(cat==='subscription'){
+  // "Офис" agent in Svetofor → ПРОДАЖИ KPI = абон. платы
+  var total=0;
+  if(planLastData&&planLastData.agents){
+   planLastData.agents.forEach(function(a){
+    if(a.name.toLowerCase().indexOf('офис')>=0){
+     a.kpis.forEach(function(k){ if(k.name.toLowerCase().indexOf('продаж')>=0) total=k.plan||0; });
+    }
+   });
+  }
+  return total||plans[activePlanPeriod].subscription||0;
+ }
  return 0;
 }
 function planGetActual(cat,ps){
- if(cat==='new_sales') return _svetoforSum('продаж','fact');
- if(cat==='subscription') return sumByCategory(ps,'subscription');
+ if(cat==='new_sales'){
+  var total=0;
+  if(planLastData&&planLastData.agents){
+   planLastData.agents.forEach(function(a){
+    if(a.name.toLowerCase().indexOf('офис')>=0) return;
+    a.kpis.forEach(function(k){ if(k.name.toLowerCase().indexOf('продаж')>=0) total+=(k.fact||0); });
+   });
+  }
+  return total;
+ }
+ if(cat==='subscription'){
+  var total=0;
+  if(planLastData&&planLastData.agents){
+   planLastData.agents.forEach(function(a){
+    if(a.name.toLowerCase().indexOf('офис')>=0){
+     a.kpis.forEach(function(k){ if(k.name.toLowerCase().indexOf('продаж')>=0) total=k.fact||0; });
+    }
+   });
+  }
+  return total||sumByCategory(ps,'subscription');
+ }
  if(cat==='calls') return _svetoforSum('звонок','fact');
  if(cat==='meetings') return _svetoforSum('встреч','fact');
  if(cat==='activations') return _svetoforSum('лицензи','fact');
@@ -4048,7 +4087,7 @@ function renderCabinetPlans() {
  const planVal=planGetPlan(cat);
  const actual=planGetActual(cat,ps);
  const isCount=meta.unit==='шт';
- const isManual=false; // all data from Svetofor, no manual plan input
+ const isManual=false;
  const pct=planVal>0?Math.min(Math.round((actual/planVal)*100),100):0;
  const pctColor=pct>=100?'#4CAF50':pct>=60?'var(--gold-bright)':'#EF5350';
  const dispPlan=isCount?(planVal||'—'):(planVal>0?fmt(planVal)+' ₸':'— не задан');
