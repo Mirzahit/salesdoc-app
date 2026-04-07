@@ -8057,6 +8057,7 @@ function testsGetPersons(){
  return Object.keys(map).sort();
 }
 
+var _testsRadarPage={};// person → index in types array (for "all" tab paging)
 function testsRender(){
  var el=document.getElementById('tests-content');
  if(!el) return;
@@ -8070,13 +8071,14 @@ function testsRender(){
   return;
  }
  var types=['call','qualification','presentation','product'];
+ var typeIcons={call:'📞',qualification:'📋',presentation:'🎤',product:'📚'};
  var visibleTypes=(_testsTab==='all')?types:[_testsTab];
 
  el.innerHTML=persons.map(function(person){
   var pid=person.replace(/[^a-zA-Zа-яА-Я0-9]/g,'_');
   // Build score badges
   var badges='';
-  visibleTypes.forEach(function(t){
+  types.forEach(function(t){
    var res=_testsResults.filter(function(r){return r.person===person&&r.type===t;});
    if(res.length){
     var last=res[res.length-1];
@@ -8085,15 +8087,33 @@ function testsRender(){
    }
   });
   if(!badges) badges='<div style="font-size:11px;color:var(--text-muted)">Ещё не оценивался</div>';
-  // Last date
   var allRes=_testsResults.filter(function(r){return r.person===person;});
   var lastDate=allRes.length?allRes[allRes.length-1].date:'';
   var totalEvals=allRes.length;
-  // Buttons
+  // Action buttons
   var btns='';
   visibleTypes.forEach(function(t){
    btns+='<button class="test-btn" onclick="testsOpenEval(\''+person.replace(/'/g,"\\'")+'\',\''+t+'\')">'+_testTypeNames[t]+'</button>';
   });
+  // Radar section — paged on "all" tab, single on type tab
+  var radarHtml='';
+  if(_testsTab==='all'){
+   var pg=_testsRadarPage[person]||0;
+   var curType=types[pg];
+   radarHtml='<div class="test-radar-wrap">'
+    +'<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px">'
+    +'<button onclick="testsRadarPrev(\''+person.replace(/'/g,"\\'")+'\')" style="background:none;border:1px solid var(--dark-border);border-radius:6px;color:var(--text-secondary);width:28px;height:28px;cursor:pointer;font-size:14px">‹</button>'
+    +'<span style="font-size:12px;font-weight:600;color:'+_testTypeColors[curType]+';min-width:120px;text-align:center">'+typeIcons[curType]+' '+_testTypeNames[curType]+'</span>'
+    +'<button onclick="testsRadarNext(\''+person.replace(/'/g,"\\'")+'\')" style="background:none;border:1px solid var(--dark-border);border-radius:6px;color:var(--text-secondary);width:28px;height:28px;cursor:pointer;font-size:14px">›</button>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:center;gap:4px;margin-bottom:8px">'
+    +types.map(function(t,ti){return '<div style="width:8px;height:8px;border-radius:50%;background:'+(ti===pg?_testTypeColors[curType]:'rgba(148,163,184,0.25)')+'"></div>';}).join('')
+    +'</div>'
+    +'<canvas id="radar-'+pid+'" width="400" height="360"></canvas>'
+    +'</div>';
+  } else {
+   radarHtml='<div class="test-radar-wrap"><canvas id="radar-'+pid+'" width="400" height="360"></canvas></div>';
+  }
   return '<div class="test-emp-card">'
    +'<div class="test-emp-info">'
    +'<div class="test-emp-name">'+person+'</div>'
@@ -8104,34 +8124,43 @@ function testsRender(){
    +'<button class="test-btn" style="border-color:var(--dark-border);color:var(--text-muted)" onclick="testsShowHistory(\''+person.replace(/'/g,"\\'")+'\')">История</button>'
    +'</div>'
    +'</div>'
-   +'<div class="test-radar-wrap">'
-   +((_testsTab==='all')
-    ?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">'
-     +types.map(function(t){return '<div style="text-align:center"><div style="font-size:10px;font-weight:600;color:'+_testTypeColors[t]+';margin-bottom:2px">'+_testTypeNames[t]+'</div><canvas id="radar-'+pid+'-'+t+'" width="200" height="200"></canvas></div>';}).join('')
-     +'</div>'
-    :'<canvas id="radar-'+pid+'-single" width="400" height="360"></canvas>')
-   +'</div>'
+   +radarHtml
    +'</div>';
  }).join('');
  // Draw radars
  persons.forEach(function(person){
   var pid=person.replace(/[^a-zA-Zа-яА-Я0-9]/g,'_');
-  if(_testsTab==='all'){
-   types.forEach(function(t){ testsDrawRadar(person,pid+'-'+t,t); });
-  } else {
-   testsDrawRadar(person,pid+'-single',_testsTab);
-  }
+  var drawType=(_testsTab==='all')?types[_testsRadarPage[person]||0]:_testsTab;
+  testsDrawRadar(person,pid,drawType);
  });
+}
+function testsRadarPrev(person){
+ var types=['call','qualification','presentation','product'];
+ var pg=_testsRadarPage[person]||0;
+ _testsRadarPage[person]=(pg-1+types.length)%types.length;
+ testsRender();
+}
+function testsRadarNext(person){
+ var types=['call','qualification','presentation','product'];
+ var pg=_testsRadarPage[person]||0;
+ _testsRadarPage[person]=(pg+1)%types.length;
+ testsRender();
 }
 
 function testsDrawRadar(person,canvasId,singleType){
  var canvas=document.getElementById('radar-'+canvasId);
  if(!canvas) return;
  var ctx=canvas.getContext('2d');
+ var dpr=window.devicePixelRatio||1;
  var W=canvas.width,H=canvas.height;
- var isMini=W<=200;
- var cx=W/2,cy=H/2+(isMini?0:5),R=Math.min(W,H)/2-(isMini?30:65);
- ctx.clearRect(0,0,W,H);
+ // HiDPI: scale canvas for crisp text
+ if(!canvas._hdpi){
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.scale(dpr,dpr);canvas._hdpi=true;
+ }
+ var cx=W/2,cy=H/2+5,R=Math.min(W,H)/2-65;
+ ctx.clearRect(0,0,W*dpr,H*dpr);
 
  // Single type per radar
  var crit=_testsCriteria[singleType]||[];
@@ -8140,18 +8169,7 @@ function testsDrawRadar(person,canvasId,singleType){
  var labels=[],scores=[];
  var color=_testTypeColors[singleType]||'#3B82F6';
  crit.forEach(function(c,i){
-  if(isMini){
-   // Mini: short label - first word, max 10 chars
-   var short=c.label.split(' ')[0];
-   if(short.length>10) short=short.substring(0,9)+'…';
-   labels.push(short);
-  } else {
-   // Full: first 2-3 words, max 18 chars
-   var words=c.label.split(' ');
-   var short=words.slice(0,3).join(' ');
-   if(short.length>18) short=short.substring(0,17)+'…';
-   labels.push(short);
-  }
+  labels.push(c.label);
   scores.push(lastScores?(lastScores[i]||0):0);
  });
  var n=labels.length;
@@ -8176,37 +8194,35 @@ function testsDrawRadar(person,canvasId,singleType){
  if(hasData){
   ctx.beginPath();
   for(var i=0;i<n;i++){var val=scores[i]/10;var x=cx+Math.cos(angles[i])*R*val,y=cy+Math.sin(angles[i])*R*val;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
-  ctx.closePath();ctx.fillStyle=hexToRgba(color,0.2);ctx.fill();ctx.strokeStyle=hexToRgba(color,0.8);ctx.lineWidth=isMini?1.5:2;ctx.stroke();
-  for(var i=0;i<n;i++){var val=scores[i]/10;var x=cx+Math.cos(angles[i])*R*val,y=cy+Math.sin(angles[i])*R*val;ctx.beginPath();ctx.arc(x,y,isMini?3:4,0,Math.PI*2);ctx.fillStyle=hexToRgba(color,0.9);ctx.fill();}
+  ctx.closePath();ctx.fillStyle=hexToRgba(color,0.2);ctx.fill();ctx.strokeStyle=hexToRgba(color,0.8);ctx.lineWidth=2;ctx.stroke();
+  for(var i=0;i<n;i++){var val=scores[i]/10;var x=cx+Math.cos(angles[i])*R*val,y=cy+Math.sin(angles[i])*R*val;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle=hexToRgba(color,0.9);ctx.fill();}
  }
  // Labels + Score badges
- var badgeDist=isMini?14:20, labelDist=isMini?26:42;
- var fontSize=isMini?8:11, labelFontSize=isMini?7:10;
- var bw=isMini?18:24, bh=isMini?14:18, br=3;
  for(var i=0;i<n;i++){
   var ang=angles[i];
-  var lx=cx+Math.cos(ang)*(R+badgeDist),ly=cy+Math.sin(ang)*(R+badgeDist);
-  // Score badge
+  var cosA=Math.cos(ang),sinA=Math.sin(ang);
+  // Badge position
+  var bx=cx+cosA*(R+18),by=cy+sinA*(R+18);
+  var bw=24,bh=18,br=4;
   ctx.fillStyle=hexToRgba(color,0.85);
   ctx.beginPath();
-  ctx.moveTo(lx-bw/2+br,ly-bh/2);ctx.lineTo(lx+bw/2-br,ly-bh/2);ctx.quadraticCurveTo(lx+bw/2,ly-bh/2,lx+bw/2,ly-bh/2+br);
-  ctx.lineTo(lx+bw/2,ly+bh/2-br);ctx.quadraticCurveTo(lx+bw/2,ly+bh/2,lx+bw/2-br,ly+bh/2);
-  ctx.lineTo(lx-bw/2+br,ly+bh/2);ctx.quadraticCurveTo(lx-bw/2,ly+bh/2,lx-bw/2,ly+bh/2-br);
-  ctx.lineTo(lx-bw/2,ly-bh/2+br);ctx.quadraticCurveTo(lx-bw/2,ly-bh/2,lx-bw/2+br,ly-bh/2);
+  ctx.moveTo(bx-bw/2+br,by-bh/2);ctx.lineTo(bx+bw/2-br,by-bh/2);ctx.quadraticCurveTo(bx+bw/2,by-bh/2,bx+bw/2,by-bh/2+br);
+  ctx.lineTo(bx+bw/2,by+bh/2-br);ctx.quadraticCurveTo(bx+bw/2,by+bh/2,bx+bw/2-br,by+bh/2);
+  ctx.lineTo(bx-bw/2+br,by+bh/2);ctx.quadraticCurveTo(bx-bw/2,by+bh/2,bx-bw/2,by+bh/2-br);
+  ctx.lineTo(bx-bw/2,by-bh/2+br);ctx.quadraticCurveTo(bx-bw/2,by-bh/2,bx-bw/2+br,by-bh/2);
   ctx.closePath();ctx.fill();
-  ctx.font='bold '+fontSize+'px Inter,sans-serif';
+  ctx.font='bold 11px Inter,sans-serif';
   ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(String(scores[i]),lx,ly);
-  // Criterion label text
-  var tlx=cx+Math.cos(ang)*(R+labelDist),tly=cy+Math.sin(ang)*(R+labelDist);
-  ctx.font=labelFontSize+'px Inter,sans-serif';
-  ctx.fillStyle='rgba(226,232,240,0.75)';
-  // Align text based on position
-  if(Math.cos(ang)<-0.3) ctx.textAlign='right';
-  else if(Math.cos(ang)>0.3) ctx.textAlign='left';
+  ctx.fillText(String(scores[i]),bx,by);
+  // Criterion label — full readable text
+  var tlx=cx+cosA*(R+42),tly=cy+sinA*(R+42);
+  ctx.font='11px Inter,sans-serif';
+  ctx.fillStyle='rgba(226,232,240,0.85)';
+  if(cosA<-0.25) ctx.textAlign='right';
+  else if(cosA>0.25) ctx.textAlign='left';
   else ctx.textAlign='center';
-  if(Math.sin(ang)<-0.3) ctx.textBaseline='bottom';
-  else if(Math.sin(ang)>0.3) ctx.textBaseline='top';
+  if(sinA<-0.25) ctx.textBaseline='bottom';
+  else if(sinA>0.25) ctx.textBaseline='top';
   else ctx.textBaseline='middle';
   ctx.fillText(labels[i],tlx,tly);
  }
