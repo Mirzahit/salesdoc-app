@@ -1724,15 +1724,20 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  <!-- TESTS VIEW -->
  <div id="view-tests" style="display:none;position:relative">
 
- <!-- Tabs -->
- <div style="display:flex;gap:0;margin-bottom:16px;background:var(--dark-card);border-radius:12px;padding:4px;border:1px solid var(--dark-border)">
-  <button class="test-tab active" onclick="testsSetTab('all',this)">Все сотрудники</button>
-  <button class="test-tab" onclick="testsSetTab('call',this)">Звонки</button>
-  <button class="test-tab" onclick="testsSetTab('presentation',this)">Презентации</button>
-  <button class="test-tab" onclick="testsSetTab('settings',this)">Критерии</button>
+ <!-- Top bar -->
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+  <div style="display:flex;gap:0;background:var(--dark-card);border-radius:12px;padding:4px;border:1px solid var(--dark-border);flex:1;min-width:300px">
+   <button class="test-tab active" onclick="testsSetTab('all',this)">Все</button>
+   <button class="test-tab" onclick="testsSetTab('call',this)">Звонок</button>
+   <button class="test-tab" onclick="testsSetTab('qualification',this)">Квалификация</button>
+   <button class="test-tab" onclick="testsSetTab('presentation',this)">Презентация</button>
+   <button class="test-tab" onclick="testsSetTab('product',this)">Продукт</button>
+   <button class="test-tab" onclick="testsSetTab('settings',this)">⚙</button>
+  </div>
+  <button class="test-btn" style="padding:10px 20px;font-size:13px" onclick="testsOpenNewEval()">+ Оценить сотрудника</button>
  </div>
 
- <!-- Employee cards -->
+ <!-- Content -->
  <div id="tests-content"></div>
 
  </div>
@@ -7973,11 +7978,11 @@ function exportPaymentsCSV(){
 })();
 
 // ============================================================
-// TESTS / SKILLS ASSESSMENT MODULE
+// TESTS / SKILLS ASSESSMENT MODULE v2
 // ============================================================
 var _testsTab = 'all';
 var _testsCriteria = {
- call: [
+ call:[
   {id:'c1',label:'Приветствие и представление'},
   {id:'c2',label:'Выявление ЛПР'},
   {id:'c3',label:'Захват внимания (hook)'},
@@ -7987,7 +7992,17 @@ var _testsCriteria = {
   {id:'c7',label:'Энергия и уверенность'},
   {id:'c8',label:'Общее впечатление'}
  ],
- presentation: [
+ qualification:[
+  {id:'q1',label:'Сбор базовой информации (компания, продукт)'},
+  {id:'q2',label:'Торговая команда (агенты, экспедиторы)'},
+  {id:'q3',label:'Система продаж (Van Sales / PreSale)'},
+  {id:'q4',label:'Анализ текущего ПО и боли'},
+  {id:'q5',label:'Выход на ЛПР и дожим на презу'},
+  {id:'q6',label:'Выявление сроков и триггера'},
+  {id:'q7',label:'Квалификация бюджета'},
+  {id:'q8',label:'Классификация лида (горячий/тёплый/холодный)'}
+ ],
+ presentation:[
   {id:'p1',label:'Подготовка (знание клиента)'},
   {id:'p2',label:'Структура презентации'},
   {id:'p3',label:'Демонстрация продукта'},
@@ -7996,306 +8011,321 @@ var _testsCriteria = {
   {id:'p6',label:'Закрытие сделки'},
   {id:'p7',label:'Уверенность и харизма'},
   {id:'p8',label:'Общее впечатление'}
+ ],
+ product:[
+  {id:'k1',label:'Модули системы SalesDoc'},
+  {id:'k2',label:'Ценообразование и пакеты'},
+  {id:'k3',label:'Конкурентные преимущества'},
+  {id:'k4',label:'Кейсы и ROI (Nestle, Grizzly)'},
+  {id:'k5',label:'Боли клиентов по ролям'},
+  {id:'k6',label:'Метрики результатов (-40% время, +30% продаж)'},
+  {id:'k7',label:'Процесс внедрения (этапы, сроки)'},
+  {id:'k8',label:'Интеграции (1С, ERP)'}
  ]
 };
 var _testsResults = [];
+var _testTypeNames = {call:'Звонок',qualification:'Квалификация',presentation:'Презентация',product:'Знание продукта'};
+var _testTypeColors = {call:'#60A5FA',qualification:'#FFB74D',presentation:'#81C784',product:'#CE93D8'};
 
 function testsLoadData(){
  try{
-  var raw = localStorage.getItem('sd_tests_results');
-  if(raw) _testsResults = JSON.parse(raw);
-  var crit = localStorage.getItem('sd_tests_criteria');
-  if(crit) _testsCriteria = JSON.parse(crit);
+  var raw=localStorage.getItem('sd_tests_results');
+  if(raw) _testsResults=JSON.parse(raw);
+  var crit=localStorage.getItem('sd_tests_criteria_v2');
+  if(crit) _testsCriteria=JSON.parse(crit);
  }catch(e){}
 }
 function testsSaveData(){
  try{
-  localStorage.setItem('sd_tests_results', JSON.stringify(_testsResults));
-  localStorage.setItem('sd_tests_criteria', JSON.stringify(_testsCriteria));
+  localStorage.setItem('sd_tests_results',JSON.stringify(_testsResults));
+  localStorage.setItem('sd_tests_criteria_v2',JSON.stringify(_testsCriteria));
  }catch(e){}
 }
 testsLoadData();
 
-function testsSetTab(tab, btn){
- _testsTab = tab;
+function testsSetTab(tab,btn){
+ _testsTab=tab;
  document.querySelectorAll('.test-tab').forEach(function(t){t.classList.remove('active');});
  btn.classList.add('active');
  testsRender();
 }
 
-function testsRender(){
- var el = document.getElementById('tests-content');
- if(!el) return;
- if(_testsTab === 'settings'){ testsRenderSettings(el); return; }
- var mgrs = employees.filter(function(e){ return e.active !== false && (e.role==='manager'||e.role==='admin'); });
- if(!mgrs.length){ el.innerHTML='<div class="panel" style="text-align:center;padding:40px;color:var(--text-muted)">Нет активных менеджеров</div>'; return; }
- el.innerHTML = mgrs.map(function(emp){
-  var callResults = _testsResults.filter(function(r){return r.empId===emp.id && r.type==='call';});
-  var presResults = _testsResults.filter(function(r){return r.empId===emp.id && r.type==='presentation';});
-  if(_testsTab==='call' && !callResults.length && _testsResults.length>0) {}
-  if(_testsTab==='presentation' && !presResults.length && _testsResults.length>0) {}
-  var callAvg = callResults.length ? (callResults[callResults.length-1].scores.reduce(function(s,v){return s+v;},0)/callResults[callResults.length-1].scores.length).toFixed(1) : '—';
-  var presAvg = presResults.length ? (presResults[presResults.length-1].scores.reduce(function(s,v){return s+v;},0)/presResults[presResults.length-1].scores.length).toFixed(1) : '—';
-  var lastCall = callResults.length ? callResults[callResults.length-1].date : null;
-  var lastPres = presResults.length ? presResults[presResults.length-1].date : null;
-  var showCall = _testsTab==='all'||_testsTab==='call';
-  var showPres = _testsTab==='all'||_testsTab==='presentation';
-  var radarId = 'radar-'+emp.id;
-  return '<div class="test-emp-card">'
-   +'<div class="test-emp-info">'
-   +'<div class="test-emp-name">'+emp.name+'</div>'
-   +'<div class="test-emp-pos">'+emp.pos+'</div>'
-   +'<div class="test-score-row">'
-   +(showCall?'<div class="test-score-badge" style="background:rgba(59,130,246,.12);color:#60A5FA">Звонок: ★ '+callAvg+'</div>':'')
-   +(showPres?'<div class="test-score-badge" style="background:rgba(129,199,132,.12);color:#81C784">Презентация: ★ '+presAvg+'</div>':'')
-   +'</div>'
-   +'<div style="font-size:10px;color:var(--text-muted);margin-bottom:12px">'
-   +(lastCall?'Звонок: '+lastCall:'')+(lastCall&&lastPres?' · ':'')+(lastPres?'Презентация: '+lastPres:'')
-   +((!lastCall&&!lastPres)?'Ещё не оценивался':'')
-   +'</div>'
-   +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
-   +(showCall?'<button class="test-btn" onclick="testsOpenEval('+emp.id+',\'call\')">Оценить звонок</button>':'')
-   +(showPres?'<button class="test-btn" onclick="testsOpenEval('+emp.id+',\'presentation\')">Оценить презу</button>':'')
-   +'<button class="test-btn" style="border-color:var(--dark-border);color:var(--text-muted)" onclick="testsShowHistory('+emp.id+')">История</button>'
-   +'</div>'
-   +'</div>'
-   +'<div class="test-radar-wrap"><canvas id="'+radarId+'" width="320" height="280"></canvas></div>'
-   +'</div>';
- }).join('');
- // Draw radar charts
- mgrs.forEach(function(emp){ testsDrawRadar(emp.id); });
+// Get unique person names from results
+function testsGetPersons(){
+ var map={};
+ _testsResults.forEach(function(r){ if(r.person) map[r.person]=true; });
+ return Object.keys(map).sort();
 }
 
-function testsDrawRadar(empId){
- var canvas = document.getElementById('radar-'+empId);
+function testsRender(){
+ var el=document.getElementById('tests-content');
+ if(!el) return;
+ if(_testsTab==='settings'){testsRenderSettings(el);return;}
+ var persons=testsGetPersons();
+ if(!persons.length){
+  el.innerHTML='<div class="panel" style="text-align:center;padding:50px;color:var(--text-muted)">'
+   +'<div style="font-size:40px;margin-bottom:12px">📋</div>'
+   +'<div style="font-size:14px;margin-bottom:6px">Пока нет оценок</div>'
+   +'<div style="font-size:12px">Нажмите <strong>«+ Оценить сотрудника»</strong> чтобы начать</div></div>';
+  return;
+ }
+ var types=['call','qualification','presentation','product'];
+ var visibleTypes=(_testsTab==='all')?types:[_testsTab];
+
+ el.innerHTML=persons.map(function(person){
+  var pid=person.replace(/[^a-zA-Zа-яА-Я0-9]/g,'_');
+  // Build score badges
+  var badges='';
+  visibleTypes.forEach(function(t){
+   var res=_testsResults.filter(function(r){return r.person===person&&r.type===t;});
+   if(res.length){
+    var last=res[res.length-1];
+    var avg=(last.scores.reduce(function(s,v){return s+v;},0)/last.scores.length).toFixed(1);
+    badges+='<div class="test-score-badge" style="background:rgba(255,255,255,.06);color:'+_testTypeColors[t]+'">'+_testTypeNames[t]+': ★ '+avg+'</div>';
+   }
+  });
+  if(!badges) badges='<div style="font-size:11px;color:var(--text-muted)">Ещё не оценивался</div>';
+  // Last date
+  var allRes=_testsResults.filter(function(r){return r.person===person;});
+  var lastDate=allRes.length?allRes[allRes.length-1].date:'';
+  var totalEvals=allRes.length;
+  // Buttons
+  var btns='';
+  visibleTypes.forEach(function(t){
+   btns+='<button class="test-btn" onclick="testsOpenEval(\''+person.replace(/'/g,"\\'")+'\',\''+t+'\')">'+_testTypeNames[t]+'</button>';
+  });
+  return '<div class="test-emp-card">'
+   +'<div class="test-emp-info">'
+   +'<div class="test-emp-name">'+person+'</div>'
+   +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">'+totalEvals+' оценок · Последняя: '+(lastDate||'—')+'</div>'
+   +'<div class="test-score-row" style="flex-wrap:wrap">'+badges+'</div>'
+   +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
+   +btns
+   +'<button class="test-btn" style="border-color:var(--dark-border);color:var(--text-muted)" onclick="testsShowHistory(\''+person.replace(/'/g,"\\'")+'\')">История</button>'
+   +'</div>'
+   +'</div>'
+   +'<div class="test-radar-wrap"><canvas id="radar-'+pid+'" width="400" height="360"></canvas></div>'
+   +'</div>';
+ }).join('');
+ // Draw radars
+ persons.forEach(function(person){
+  var pid=person.replace(/[^a-zA-Zа-яА-Я0-9]/g,'_');
+  testsDrawRadar(person,pid);
+ });
+}
+
+function testsDrawRadar(person,canvasId){
+ var canvas=document.getElementById('radar-'+canvasId);
  if(!canvas) return;
- var ctx = canvas.getContext('2d');
- var W = canvas.width, H = canvas.height;
- var cx = W/2, cy = H/2+5, R = Math.min(W,H)/2-35;
+ var ctx=canvas.getContext('2d');
+ var W=canvas.width,H=canvas.height;
+ var cx=W/2,cy=H/2+5,R=Math.min(W,H)/2-65;
  ctx.clearRect(0,0,W,H);
 
- // Get latest scores for both types
- var callRes = _testsResults.filter(function(r){return r.empId===empId && r.type==='call';});
- var presRes = _testsResults.filter(function(r){return r.empId===empId && r.type==='presentation';});
- var showCall = _testsTab==='all'||_testsTab==='call';
- var showPres = _testsTab==='all'||_testsTab==='presentation';
-
- var criteria, scores1, scores2, labels;
- if(_testsTab==='call'){
-  criteria = _testsCriteria.call;
-  labels = criteria.map(function(c){return c.label;});
-  scores1 = callRes.length ? callRes[callRes.length-1].scores : null;
-  scores2 = null;
- } else if(_testsTab==='presentation'){
-  criteria = _testsCriteria.presentation;
-  labels = criteria.map(function(c){return c.label;});
-  scores1 = presRes.length ? presRes[presRes.length-1].scores : null;
-  scores2 = null;
- } else {
-  // All: merge both
-  criteria = _testsCriteria.call.concat(_testsCriteria.presentation);
-  labels = _testsCriteria.call.map(function(c){return c.label.split(' ')[0];}).concat(_testsCriteria.presentation.map(function(c){return c.label.split(' ')[0];}));
-  var cs1 = callRes.length ? callRes[callRes.length-1].scores : _testsCriteria.call.map(function(){return 0;});
-  var cs2 = presRes.length ? presRes[presRes.length-1].scores : _testsCriteria.presentation.map(function(){return 0;});
-  scores1 = cs1.concat(cs2);
-  scores2 = null;
- }
- var n = labels.length;
+ var types=(_testsTab==='all')?['call','qualification','presentation','product']:[_testsTab];
+ // Collect criteria and scores for visible types
+ var labels=[],scores=[];
+ types.forEach(function(t){
+  var crit=_testsCriteria[t]||[];
+  var res=_testsResults.filter(function(r){return r.person===person&&r.type===t;});
+  var lastScores=res.length?res[res.length-1].scores:null;
+  crit.forEach(function(c,i){
+   // Short meaningful label: first 2 words, max 16 chars
+   var words=c.label.split(' ');
+   var short=words.slice(0,2).join(' ');
+   if(short.length>16) short=short.substring(0,15)+'…';
+   labels.push(short);
+   scores.push(lastScores?(lastScores[i]||0):0);
+  });
+ });
+ var n=labels.length;
  if(!n) return;
- var angles = [];
- for(var i=0;i<n;i++) angles.push(-Math.PI/2 + (2*Math.PI/n)*i);
+ var angles=[];
+ for(var i=0;i<n;i++) angles.push(-Math.PI/2+(2*Math.PI/n)*i);
 
- // Draw grid
+ // Grid
  [0.2,0.4,0.6,0.8,1.0].forEach(function(pct){
   ctx.beginPath();
   for(var i=0;i<n;i++){
-   var x=cx+Math.cos(angles[i])*R*pct, y=cy+Math.sin(angles[i])*R*pct;
-   if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+   var x=cx+Math.cos(angles[i])*R*pct,y=cy+Math.sin(angles[i])*R*pct;
+   i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
   }
-  ctx.closePath();
-  ctx.strokeStyle='rgba(148,163,184,0.15)';
-  ctx.lineWidth=1;
-  ctx.stroke();
+  ctx.closePath();ctx.strokeStyle='rgba(148,163,184,0.15)';ctx.lineWidth=1;ctx.stroke();
  });
- // Spokes
- for(var i=0;i<n;i++){
+ for(var i=0;i<n;i++){ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(angles[i])*R,cy+Math.sin(angles[i])*R);ctx.strokeStyle='rgba(148,163,184,0.1)';ctx.stroke();}
+ // Polygon
+ var hasData=scores.some(function(s){return s>0;});
+ if(hasData){
   ctx.beginPath();
-  ctx.moveTo(cx,cy);
-  ctx.lineTo(cx+Math.cos(angles[i])*R, cy+Math.sin(angles[i])*R);
-  ctx.strokeStyle='rgba(148,163,184,0.1)';
-  ctx.stroke();
+  for(var i=0;i<n;i++){var val=scores[i]/10;var x=cx+Math.cos(angles[i])*R*val,y=cy+Math.sin(angles[i])*R*val;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.closePath();ctx.fillStyle='rgba(59,130,246,0.2)';ctx.fill();ctx.strokeStyle='rgba(59,130,246,0.8)';ctx.lineWidth=2;ctx.stroke();
+  for(var i=0;i<n;i++){var val=scores[i]/10;var x=cx+Math.cos(angles[i])*R*val,y=cy+Math.sin(angles[i])*R*val;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle='rgba(59,130,246,0.9)';ctx.fill();}
  }
- // Data polygon
- if(scores1){
-  ctx.beginPath();
-  for(var i=0;i<n;i++){
-   var val = (scores1[i]||0)/10;
-   var x=cx+Math.cos(angles[i])*R*val, y=cy+Math.sin(angles[i])*R*val;
-   if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-  }
-  ctx.closePath();
-  ctx.fillStyle='rgba(239,68,108,0.25)';
-  ctx.fill();
-  ctx.strokeStyle='rgba(239,68,108,0.8)';
-  ctx.lineWidth=2;
-  ctx.stroke();
-  // Dots + values
-  for(var i=0;i<n;i++){
-   var val=(scores1[i]||0)/10;
-   var x=cx+Math.cos(angles[i])*R*val, y=cy+Math.sin(angles[i])*R*val;
-   ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle='rgba(239,68,108,0.9)';ctx.fill();
-  }
- }
- // Labels with score badges
- ctx.font='bold 11px Inter,sans-serif';
+ // Labels + Score badges
  for(var i=0;i<n;i++){
-  var lx=cx+Math.cos(angles[i])*(R+22), ly=cy+Math.sin(angles[i])*(R+22);
-  var score = scores1 ? (scores1[i]||0) : 0;
-  // Badge background
-  var bw=22,bh=18;
-  ctx.fillStyle='rgba(239,68,108,0.85)';
+  var ang=angles[i];
+  var lx=cx+Math.cos(ang)*(R+20),ly=cy+Math.sin(ang)*(R+20);
+  // Score badge
+  var bw=24,bh=18,br=4;
+  ctx.fillStyle='rgba(59,130,246,0.85)';
   ctx.beginPath();
-  var br=4;
   ctx.moveTo(lx-bw/2+br,ly-bh/2);ctx.lineTo(lx+bw/2-br,ly-bh/2);ctx.quadraticCurveTo(lx+bw/2,ly-bh/2,lx+bw/2,ly-bh/2+br);
   ctx.lineTo(lx+bw/2,ly+bh/2-br);ctx.quadraticCurveTo(lx+bw/2,ly+bh/2,lx+bw/2-br,ly+bh/2);
   ctx.lineTo(lx-bw/2+br,ly+bh/2);ctx.quadraticCurveTo(lx-bw/2,ly+bh/2,lx-bw/2,ly+bh/2-br);
   ctx.lineTo(lx-bw/2,ly-bh/2+br);ctx.quadraticCurveTo(lx-bw/2,ly-bh/2,lx-bw/2+br,ly-bh/2);
   ctx.closePath();ctx.fill();
+  ctx.font='bold 11px Inter,sans-serif';
   ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(String(score),lx,ly);
+  ctx.fillText(String(scores[i]),lx,ly);
+  // Criterion label text
+  var tlx=cx+Math.cos(ang)*(R+42),tly=cy+Math.sin(ang)*(R+42);
+  ctx.font='10px Inter,sans-serif';
+  ctx.fillStyle='rgba(226,232,240,0.75)';
+  // Align text based on position
+  if(Math.cos(ang)<-0.3) ctx.textAlign='right';
+  else if(Math.cos(ang)>0.3) ctx.textAlign='left';
+  else ctx.textAlign='center';
+  if(Math.sin(ang)<-0.3) ctx.textBaseline='bottom';
+  else if(Math.sin(ang)>0.3) ctx.textBaseline='top';
+  else ctx.textBaseline='middle';
+  ctx.fillText(labels[i],tlx,tly);
  }
 }
 
-function testsOpenEval(empId, type){
- var emp = employees.find(function(e){return e.id===empId;});
- if(!emp) return;
- var criteria = _testsCriteria[type];
- var typeName = type==='call'?'Звонок':'Презентация';
- // Check for existing last scores
- var existing = _testsResults.filter(function(r){return r.empId===empId && r.type===type;});
- var lastScores = existing.length ? existing[existing.length-1].scores : criteria.map(function(){return 5;});
+// Open NEW evaluation — choose person name + type
+function testsOpenNewEval(){
+ var persons=testsGetPersons();
+ var suggestHtml=persons.length?'<datalist id="test-persons-list">'+persons.map(function(p){return '<option value="'+p+'">';}).join('')+'</datalist>':'<datalist id="test-persons-list"></datalist>';
+ var html='<div class="test-modal-overlay open" id="test-new-modal" onclick="if(event.target.id===\'test-new-modal\')this.remove()">'
+  +'<div class="test-modal" style="max-width:420px">'
+  +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
+  +'<div style="font-family:Space Grotesk,sans-serif;font-size:20px;font-weight:700;color:var(--text-primary)">Новая оценка</div>'
+  +'<button onclick="this.closest(\'.test-modal-overlay\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer">✕</button>'
+  +'</div>'
+  +suggestHtml
+  +'<div style="margin-bottom:16px"><div class="test-slider-label" style="margin-bottom:6px">Имя сотрудника</div>'
+  +'<input class="form-input" id="test-new-person" list="test-persons-list" placeholder="Введите имя..." style="width:100%;box-sizing:border-box;font-size:14px;padding:10px"></div>'
+  +'<div class="test-slider-label" style="margin-bottom:8px">Тип оценки</div>'
+  +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+  +'<button class="test-btn" style="padding:14px;font-size:13px;text-align:center;border-color:'+_testTypeColors.call+'" onclick="testsStartEval(\'call\')"><span style="font-size:20px;display:block;margin-bottom:4px">📞</span>Звонок</button>'
+  +'<button class="test-btn" style="padding:14px;font-size:13px;text-align:center;border-color:'+_testTypeColors.qualification+'" onclick="testsStartEval(\'qualification\')"><span style="font-size:20px;display:block;margin-bottom:4px">📋</span>Квалификация</button>'
+  +'<button class="test-btn" style="padding:14px;font-size:13px;text-align:center;border-color:'+_testTypeColors.presentation+'" onclick="testsStartEval(\'presentation\')"><span style="font-size:20px;display:block;margin-bottom:4px">🎤</span>Презентация</button>'
+  +'<button class="test-btn" style="padding:14px;font-size:13px;text-align:center;border-color:'+_testTypeColors.product+'" onclick="testsStartEval(\'product\')"><span style="font-size:20px;display:block;margin-bottom:4px">📚</span>Знание продукта</button>'
+  +'</div>'
+  +'</div></div>';
+ document.body.insertAdjacentHTML('beforeend',html);
+ setTimeout(function(){document.getElementById('test-new-person')?.focus();},100);
+}
 
- var html = '<div class="test-modal-overlay open" id="test-eval-modal" onclick="if(event.target.id===\'test-eval-modal\')this.remove()">'
+function testsStartEval(type){
+ var name=(document.getElementById('test-new-person')?.value||'').trim();
+ if(!name){showNotif('Ошибка','Введите имя сотрудника');return;}
+ var modal=document.getElementById('test-new-modal');
+ if(modal) modal.remove();
+ testsOpenEval(name,type);
+}
+
+function testsOpenEval(person,type){
+ var criteria=_testsCriteria[type];
+ if(!criteria||!criteria.length){showNotif('Ошибка','Нет критериев для этого типа');return;}
+ var typeName=_testTypeNames[type]||type;
+ var typeColor=_testTypeColors[type]||'#60A5FA';
+ var existing=_testsResults.filter(function(r){return r.person===person&&r.type===type;});
+ var lastScores=existing.length?existing[existing.length-1].scores:criteria.map(function(){return 5;});
+
+ var html='<div class="test-modal-overlay open" id="test-eval-modal" onclick="if(event.target.id===\'test-eval-modal\')this.remove()">'
   +'<div class="test-modal">'
   +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
-  +'<div><div style="font-family:Space Grotesk,sans-serif;font-size:20px;font-weight:700;color:var(--text-primary)">'+typeName+': '+emp.name+'</div>'
+  +'<div><div style="font-family:Space Grotesk,sans-serif;font-size:20px;font-weight:700;color:var(--text-primary)"><span style="color:'+typeColor+'">'+typeName+'</span> — '+person+'</div>'
   +'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+new Date().toLocaleDateString('ru')+'</div></div>'
   +'<button onclick="this.closest(\'.test-modal-overlay\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer">✕</button>'
   +'</div>';
- criteria.forEach(function(c, idx){
-  html += '<div class="test-slider-row">'
+ criteria.forEach(function(c,idx){
+  html+='<div class="test-slider-row">'
    +'<div class="test-slider-label">'+c.label+'</div>'
    +'<input type="range" min="1" max="10" value="'+lastScores[idx]+'" class="test-slider" id="tslider-'+idx+'" oninput="document.getElementById(\'tsval-'+idx+'\').textContent=this.value">'
    +'<div class="test-slider-val" id="tsval-'+idx+'">'+lastScores[idx]+'</div>'
    +'</div>';
  });
- html += '<div style="margin-top:12px"><div class="test-slider-label" style="margin-bottom:6px">Комментарий</div>'
+ html+='<div style="margin-top:12px"><div class="test-slider-label" style="margin-bottom:6px">Комментарий</div>'
   +'<textarea id="test-comment" style="width:100%;height:60px;background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:8px;padding:8px;color:var(--text-primary);font-family:Inter,sans-serif;font-size:12px;resize:vertical;outline:none;box-sizing:border-box" placeholder="Заметки по оценке..."></textarea></div>'
-  +'<button class="test-btn" style="width:100%;padding:12px;margin-top:14px;font-size:14px" onclick="testsSaveEval('+empId+',\''+type+'\','+criteria.length+')">СОХРАНИТЬ ОЦЕНКУ</button>'
+  +'<button class="test-btn" style="width:100%;padding:12px;margin-top:14px;font-size:14px;background:rgba(59,130,246,.15)" onclick="testsSaveEval(\''+person.replace(/'/g,"\\'")+'\',\''+type+'\','+criteria.length+')">СОХРАНИТЬ ОЦЕНКУ</button>'
   +'</div></div>';
- document.body.insertAdjacentHTML('beforeend', html);
+ document.body.insertAdjacentHTML('beforeend',html);
 }
 
-function testsSaveEval(empId, type, count){
- var scores = [];
- for(var i=0;i<count;i++){
-  var sl = document.getElementById('tslider-'+i);
-  scores.push(sl ? parseInt(sl.value) : 5);
- }
- var comment = document.getElementById('test-comment')?.value || '';
+function testsSaveEval(person,type,count){
+ var scores=[];
+ for(var i=0;i<count;i++){var sl=document.getElementById('tslider-'+i);scores.push(sl?parseInt(sl.value):5);}
+ var comment=document.getElementById('test-comment')?.value||'';
  _testsResults.push({
-  empId: empId,
-  type: type,
-  scores: scores,
-  comment: comment,
-  date: new Date().toISOString().slice(0,10),
-  evaluator: currentUser ? currentUser.name : 'Admin'
+  person:person,type:type,scores:scores,comment:comment,
+  date:new Date().toISOString().slice(0,10),
+  evaluator:currentUser?currentUser.name:'Admin'
  });
  testsSaveData();
- var modal = document.getElementById('test-eval-modal');
+ var modal=document.getElementById('test-eval-modal');
  if(modal) modal.remove();
  testsRender();
- var emp = employees.find(function(e){return e.id===empId;});
- showNotif('Оценка сохранена', (emp?emp.name:'')+' — '+(type==='call'?'Звонок':'Презентация'));
+ showNotif('Оценка сохранена',person+' — '+(_testTypeNames[type]||type));
 }
 
-function testsShowHistory(empId){
- var emp = employees.find(function(e){return e.id===empId;});
- if(!emp) return;
- var results = _testsResults.filter(function(r){return r.empId===empId;}).reverse();
- if(!results.length){
-  showNotif('История','Нет оценок для '+emp.name);
-  return;
- }
- var html = '<div class="test-modal-overlay open" id="test-hist-modal" onclick="if(event.target.id===\'test-hist-modal\')this.remove()">'
+function testsShowHistory(person){
+ var results=_testsResults.filter(function(r){return r.person===person;}).reverse();
+ if(!results.length){showNotif('История','Нет оценок для '+person);return;}
+ var html='<div class="test-modal-overlay open" id="test-hist-modal" onclick="if(event.target.id===\'test-hist-modal\')this.remove()">'
   +'<div class="test-modal">'
   +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
-  +'<div style="font-family:Space Grotesk,sans-serif;font-size:20px;font-weight:700;color:var(--text-primary)">История: '+emp.name+'</div>'
+  +'<div style="font-family:Space Grotesk,sans-serif;font-size:20px;font-weight:700;color:var(--text-primary)">История: '+person+'</div>'
   +'<button onclick="this.closest(\'.test-modal-overlay\').remove()" style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer">✕</button>'
   +'</div>'
-  +'<table class="data-table"><thead><tr><th>Дата</th><th>Тип</th><th>Средний балл</th><th>Оценил</th><th>Комментарий</th><th></th></tr></thead><tbody>';
- results.forEach(function(r, idx){
-  var avg = (r.scores.reduce(function(s,v){return s+v;},0)/r.scores.length).toFixed(1);
-  var typeLabel = r.type==='call'?'Звонок':'Презентация';
-  var color = r.type==='call'?'#60A5FA':'#81C784';
-  var realIdx = _testsResults.length - 1 - idx;
-  html += '<tr>'
+  +'<table class="data-table"><thead><tr><th>Дата</th><th>Тип</th><th>Ср. балл</th><th>Оценил</th><th>Комментарий</th><th></th></tr></thead><tbody>';
+ results.forEach(function(r,idx){
+  var avg=(r.scores.reduce(function(s,v){return s+v;},0)/r.scores.length).toFixed(1);
+  var color=_testTypeColors[r.type]||'#60A5FA';
+  var realIdx=_testsResults.indexOf(r);
+  html+='<tr>'
    +'<td style="color:var(--text-muted)">'+r.date+'</td>'
-   +'<td><span style="color:'+color+';font-weight:600">'+typeLabel+'</span></td>'
+   +'<td><span style="color:'+color+';font-weight:600">'+(_testTypeNames[r.type]||r.type)+'</span></td>'
    +'<td style="color:var(--gold-bright);font-weight:700;font-family:Space Grotesk,sans-serif;font-size:16px">★ '+avg+'</td>'
    +'<td style="color:var(--text-secondary);font-size:11px">'+r.evaluator+'</td>'
-   +'<td style="color:var(--text-muted);font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis">'+(r.comment||'—')+'</td>'
+   +'<td style="color:var(--text-muted);font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis">'+(r.comment||'—')+'</td>'
    +'<td><button onclick="testsDeleteResult('+realIdx+')" style="font-size:9px;padding:2px 6px;border-radius:4px;border:1px solid rgba(239,83,80,.3);background:rgba(239,83,80,.1);color:#EF9A9A;cursor:pointer">✕</button></td>'
    +'</tr>';
  });
- html += '</tbody></table></div></div>';
- document.body.insertAdjacentHTML('beforeend', html);
+ html+='</tbody></table></div></div>';
+ document.body.insertAdjacentHTML('beforeend',html);
 }
 
 function testsDeleteResult(idx){
  if(!confirm('Удалить эту оценку?')) return;
- _testsResults.splice(idx,1);
- testsSaveData();
- var modal = document.getElementById('test-hist-modal');
- if(modal) modal.remove();
+ _testsResults.splice(idx,1);testsSaveData();
+ var m=document.getElementById('test-hist-modal');if(m)m.remove();
  testsRender();
 }
 
 function testsRenderSettings(el){
- var html = '<div class="panel"><div class="panel-title">Критерии оценки — Звонок</div>';
- _testsCriteria.call.forEach(function(c,i){
-  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
-   +'<input class="form-input" style="flex:1;font-size:12px;padding:6px 10px" value="'+c.label+'" onchange="testsUpdateCriterion(\'call\','+i+',this.value)">'
-   +'<button onclick="testsRemoveCriterion(\'call\','+i+')" style="padding:4px 8px;border-radius:6px;border:1px solid rgba(239,83,80,.3);background:rgba(239,83,80,.1);color:#EF9A9A;cursor:pointer;font-size:11px">✕</button>'
-   +'</div>';
+ var allTypes=['call','qualification','presentation','product'];
+ var html='';
+ allTypes.forEach(function(type){
+  html+='<div class="panel" style="margin-bottom:14px"><div class="panel-title">'+_testTypeNames[type]+'</div>';
+  (_testsCriteria[type]||[]).forEach(function(c,i){
+   html+='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
+    +'<input class="form-input" style="flex:1;font-size:12px;padding:6px 10px" value="'+c.label+'" onchange="testsUpdateCriterion(\''+type+'\','+i+',this.value)">'
+    +'<button onclick="testsRemoveCriterion(\''+type+'\','+i+')" style="padding:4px 8px;border-radius:6px;border:1px solid rgba(239,83,80,.3);background:rgba(239,83,80,.1);color:#EF9A9A;cursor:pointer;font-size:11px">✕</button>'
+    +'</div>';
+  });
+  html+='<button class="test-btn" onclick="testsAddCriterion(\''+type+'\')" style="margin-top:6px">+ Критерий</button></div>';
  });
- html += '<button class="test-btn" onclick="testsAddCriterion(\'call\')" style="margin-top:6px">+ Критерий</button></div>';
-
- html += '<div class="panel" style="margin-top:14px"><div class="panel-title">Критерии оценки — Презентация</div>';
- _testsCriteria.presentation.forEach(function(c,i){
-  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
-   +'<input class="form-input" style="flex:1;font-size:12px;padding:6px 10px" value="'+c.label+'" onchange="testsUpdateCriterion(\'presentation\','+i+',this.value)">'
-   +'<button onclick="testsRemoveCriterion(\'presentation\','+i+')" style="padding:4px 8px;border-radius:6px;border:1px solid rgba(239,83,80,.3);background:rgba(239,83,80,.1);color:#EF9A9A;cursor:pointer;font-size:11px">✕</button>'
-   +'</div>';
- });
- html += '<button class="test-btn" onclick="testsAddCriterion(\'presentation\')" style="margin-top:6px">+ Критерий</button></div>';
- el.innerHTML = html;
+ el.innerHTML=html;
 }
 
-function testsUpdateCriterion(type,idx,val){
- _testsCriteria[type][idx].label = val;
- testsSaveData();
-}
-function testsRemoveCriterion(type,idx){
- _testsCriteria[type].splice(idx,1);
- testsSaveData();
- testsRender();
-}
+function testsUpdateCriterion(type,idx,val){_testsCriteria[type][idx].label=val;testsSaveData();}
+function testsRemoveCriterion(type,idx){_testsCriteria[type].splice(idx,1);testsSaveData();testsRender();}
 function testsAddCriterion(type){
- var id = type.charAt(0) + (_testsCriteria[type].length+1);
- _testsCriteria[type].push({id:id, label:'Новый критерий'});
- testsSaveData();
- testsRender();
+ var id=type.charAt(0)+(_testsCriteria[type].length+1);
+ _testsCriteria[type].push({id:id,label:'Новый критерий'});
+ testsSaveData();testsRender();
 }
 </script>
 </body>
