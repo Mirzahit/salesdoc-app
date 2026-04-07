@@ -4011,7 +4011,20 @@ function setPlanPeriodTab(btn,period){ activePlanPeriod=period; document.querySe
 function planGetActual(cat,ps){
  if(cat==='new_sales') return sumByCategory(ps,'license')+sumByCategory(ps,'implementation')+sumByCategory(ps,'integration')+sumByCategory(ps,'other');
  if(cat==='subscription') return sumByCategory(ps,'subscription');
- if(cat==='calls'||cat==='activations') return parseInt(localStorage.getItem('sd_plan_fact_'+cat+'_'+activePlanPeriod))||0;
+ if(cat==='calls'||cat==='meetings'){
+  // Sum from Svetofor KPI data across all agents
+  var match=cat==='calls'?'звонок':'встреч';
+  var total=0;
+  if(planLastData&&planLastData.agents){
+   planLastData.agents.forEach(function(a){
+    a.kpis.forEach(function(k){
+     if(k.name.toLowerCase().indexOf(match)>=0) total+=k.fact||0;
+    });
+   });
+  }
+  return total;
+ }
+ if(cat==='activations') return parseInt(localStorage.getItem('sd_plan_fact_activations_'+activePlanPeriod))||0;
  return 0;
 }
 function renderCabinetPlans() {
@@ -4029,7 +4042,7 @@ function renderCabinetPlans() {
  <div class="pec-actual">Факт: <strong style="color:${meta.color}">${dispFact}</strong></div>
  <div class="pec-progress"><div class="pec-fill" style="width:${pct}%;background:linear-gradient(90deg,${meta.color}88,${meta.color})"></div></div>
  <div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-size:11px;font-weight:700;color:${pctColor}">${pct}% выполнено</span>${pct>=100?'<span style="font-size:10px;color:#4CAF50;font-weight:700"> ВЫПОЛНЕН</span>':''}</div>
- <div class="pec-input-row">${isCount?`<input class="pec-input" id="pec-fact-${cat}" type="number" placeholder="Факт..." value="${actual||''}" style="width:70px"><button class="pec-save-btn" onclick="savePlanFact('${cat}')" style="font-size:10px">Факт</button>`:''}
+ <div class="pec-input-row">${cat==='activations'?`<input class="pec-input" id="pec-fact-${cat}" type="number" placeholder="Факт..." value="${actual||''}" style="width:70px"><button class="pec-save-btn" onclick="savePlanFact('${cat}')" style="font-size:10px">Факт</button>`:''}
  <input class="pec-input" id="pec-${cat}" type="number" placeholder="${isCount?'План шт...':'Новый план...'}" value="${planVal||''}"><button class="pec-save-btn" onclick="quickSavePlan('${cat}')">Сохранить</button></div>
  </div>`;
  }).join('')+`</div>`;
