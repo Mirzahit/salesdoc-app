@@ -4027,7 +4027,9 @@ function planGetActual(cat,ps){
  if(cat==='activations') return parseInt(localStorage.getItem('sd_plan_fact_activations_'+activePlanPeriod))||0;
  return 0;
 }
+var _planLoadingForCab=false;
 function renderCabinetPlans() {
+ if(!planLastData&&!_planLoadingForCab){_planLoadingForCab=true;planInit();planLoad().then(function(){_planLoadingForCab=false;renderCabinetPlans();}).catch(function(){_planLoadingForCab=false;});}
  const ps=getPeriodPayments(activePlanPeriod);
  document.getElementById('cabinet-plans-grid').innerHTML=`<div class="plan-cards-grid">`+Object.keys(catMeta).map(cat=>{
  const meta=catMeta[cat],planVal=plans[activePlanPeriod][cat]||0,actual=planGetActual(cat,ps);
