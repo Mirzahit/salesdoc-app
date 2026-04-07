@@ -9,7 +9,6 @@
 <link rel="apple-touch-icon" href="/icon-192.svg">
 <title>SalesDoc — Финансовый Дашборд v114</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <style>
 /* GOLD TEXT EFFECT — matching the image */
 .gold-text{
@@ -8412,10 +8411,19 @@ function testsAddCriterion(type){
 // ============================================================
 // PDF EXPORT — Test Results Report
 // ============================================================
+function _loadJsPDF(cb){
+ if(window.jspdf) return cb();
+ var s=document.createElement('script');
+ s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+ s.onload=cb;
+ s.onerror=function(){showNotif('Ошибка','Не удалось загрузить PDF библиотеку');};
+ document.head.appendChild(s);
+}
 function testsExportPDF(person){
- var _JP=window.jspdf||window.jsPDF||null;
- if(!_JP){showNotif('Ошибка','Библиотека PDF не загружена. Проверьте интернет.');return;}
- var jsPDF=_JP.jsPDF||_JP;
+ _loadJsPDF(function(){_testsExportPDFInner(person);});
+}
+function _testsExportPDFInner(person){
+ var jsPDF=window.jspdf.jsPDF;
  var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
  var W=210,margin=15,y=0;
  var results=_testsResults.filter(function(r){return r.person===person;});
