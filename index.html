@@ -2260,10 +2260,10 @@ let acts = (function(){
 })();
 
 let plans = {
- week: {license:500000, subscription:300000, implementation:800000, other:50000},
- month: {license:3000000, subscription:2000000, implementation:5000000, other:200000},
- quarter: {license:9000000, subscription:6000000, implementation:15000000, other:600000},
- year: {license:36000000, subscription:24000000, implementation:60000000, other:2400000},
+ week: {new_sales:1350000, subscription:300000, calls:50, activations:5},
+ month: {new_sales:8200000, subscription:2000000, calls:200, activations:20},
+ quarter: {new_sales:24600000, subscription:6000000, calls:600, activations:60},
+ year: {new_sales:98400000, subscription:24000000, calls:2400, activations:240},
 };
 
 let currentPeriod='month', currentTab='payment', activePlanPeriod='week';
@@ -3019,7 +3019,7 @@ function renderDonut(l,s,impl) {
 
 function renderPlanBars(l,s,i) {
  const plan=plans[currentPeriod];
- document.getElementById('plan-bars').innerHTML=[{label:'Лицензии',actual:l,plan:plan.license,color:'var(--gold-bright)'},{label:'Абон.плата',actual:s,plan:plan.subscription,color:'#4A90D9'},{label:'Внедрения',actual:i,plan:plan.implementation,color:'#4CAF50'}]
+ document.getElementById('plan-bars').innerHTML=[{label:'Новые продажи',actual:l+i,plan:plan.new_sales,color:'var(--gold-bright)'},{label:'Абон. платы',actual:s,plan:plan.subscription,color:'#4A90D9'}]
  .map(it=>{const pct=Math.min(Math.round((it.actual/it.plan)*100)||0,100);return`<div class="plan-item"><div class="plan-item-header"><span class="plan-item-label">${it.label}</span><span class="plan-item-value">${pct}% — ${fmtFull(it.actual)} / ${fmtFull(it.plan)}</span></div><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:linear-gradient(90deg,${it.color}88,${it.color})"></div></div></div>`;}).join('');
 }
 
@@ -3555,7 +3555,7 @@ function renderPlanView() {
  const ps=getPeriodPayments(p), l=sumByCategory(ps,'license'), s=sumByCategory(ps,'subscription'), i=sumByCategory(ps,'implementation')+sumByCategory(ps,'integration');
  const plan=plans[p];
  const _el=document.getElementById('plan-'+p); if(!_el) return;
- _el.innerHTML=[{label:'Лицензии',actual:l,plan:plan.license,color:'var(--gold-bright)'},{label:'Абон.плата',actual:s,plan:plan.subscription,color:'#4A90D9'},{label:'Внедрения',actual:i,plan:plan.implementation,color:'#4CAF50'}]
+ _el.innerHTML=[{label:'Новые продажи',actual:l+i,plan:plan.new_sales,color:'var(--gold-bright)'},{label:'Абон. платы',actual:s,plan:plan.subscription,color:'#4A90D9'}]
  .map(it=>{const pct=Math.min(Math.round((it.actual/it.plan)*100)||0,100);return`<div class="plan-item"><div class="plan-item-header"><span class="plan-item-label">${it.label}</span><span class="plan-item-value">${pct}%</span></div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px">${fmtFull(it.actual)} / ${fmtFull(it.plan)}</div><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:linear-gradient(90deg,${it.color}88,${it.color})"></div></div></div>`;}).join('');
  });
 }
@@ -4005,23 +4005,39 @@ function kcGetLTVRanked(){
 // ============================================================
 // PLAN CABINET
 // ============================================================
-const catMeta={license:{label:'Новые лицензии',icon:'',color:'var(--gold-bright)',cls:'cat-license'},subscription:{label:'Абон.плата',icon:'',color:'#4A90D9',cls:'cat-subscription'},implementation:{label:'Внедрения',icon:'',color:'#4CAF50',cls:'cat-implementation'},other:{label:'Прочее',icon:'',color:'#AB47BC',cls:'cat-other'}};
+const catMeta={new_sales:{label:'Новые продажи',icon:'💰',color:'var(--gold-bright)',cls:'cat-license',unit:'₸'},subscription:{label:'Абон. платы',icon:'🔄',color:'#4A90D9',cls:'cat-subscription',unit:'₸'},calls:{label:'Звонки и встречи',icon:'📞',color:'#4CAF50',cls:'cat-implementation',unit:'шт'},activations:{label:'Активации',icon:'🚀',color:'#AB47BC',cls:'cat-other',unit:'шт'}};
 
 function setPlanPeriodTab(btn,period){ activePlanPeriod=period; document.querySelectorAll('.ppt').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderCabinetPlans(); }
+function planGetActual(cat,ps){
+ if(cat==='new_sales') return sumByCategory(ps,'license')+sumByCategory(ps,'implementation')+sumByCategory(ps,'integration')+sumByCategory(ps,'other');
+ if(cat==='subscription') return sumByCategory(ps,'subscription');
+ if(cat==='calls'||cat==='activations') return parseInt(localStorage.getItem('sd_plan_fact_'+cat+'_'+activePlanPeriod))||0;
+ return 0;
+}
 function renderCabinetPlans() {
  const ps=getPeriodPayments(activePlanPeriod);
  document.getElementById('cabinet-plans-grid').innerHTML=`<div class="plan-cards-grid">`+Object.keys(catMeta).map(cat=>{
- const meta=catMeta[cat],planVal=plans[activePlanPeriod][cat]||0,actual=sumByCategory(ps,cat),pct=planVal>0?Math.min(Math.round((actual/planVal)*100),100):0;
+ const meta=catMeta[cat],planVal=plans[activePlanPeriod][cat]||0,actual=planGetActual(cat,ps);
+ const isCount=meta.unit==='шт';
+ const pct=planVal>0?Math.min(Math.round((actual/planVal)*100),100):0;
  const pctColor=pct>=100?'#4CAF50':pct>=60?'var(--gold-bright)':'#EF5350';
+ const dispPlan=isCount?(planVal||'—'):(planVal>0?fmt(planVal)+' ₸':'— не задан');
+ const dispFact=isCount?actual:(fmt(actual)+' ₸');
  return `<div class="plan-edit-card ${meta.cls}">
  <div style="font-size:11px;color:var(--text-secondary);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">${meta.icon} ${meta.label}</div>
- <div class="pec-current">${planVal>0?fmt(planVal)+' ₸':'— не задан'}</div>
- <div class="pec-actual">Факт: <strong style="color:${meta.color}">${fmt(actual)} ₸</strong></div>
+ <div class="pec-current">${dispPlan}</div>
+ <div class="pec-actual">Факт: <strong style="color:${meta.color}">${dispFact}</strong></div>
  <div class="pec-progress"><div class="pec-fill" style="width:${pct}%;background:linear-gradient(90deg,${meta.color}88,${meta.color})"></div></div>
  <div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-size:11px;font-weight:700;color:${pctColor}">${pct}% выполнено</span>${pct>=100?'<span style="font-size:10px;color:#4CAF50;font-weight:700"> ВЫПОЛНЕН</span>':''}</div>
- <div class="pec-input-row"><input class="pec-input" id="pec-${cat}" type="number" placeholder="Новый план..." value="${planVal||''}"><button class="pec-save-btn" onclick="quickSavePlan('${cat}')">Сохранить</button></div>
+ <div class="pec-input-row">${isCount?`<input class="pec-input" id="pec-fact-${cat}" type="number" placeholder="Факт..." value="${actual||''}" style="width:70px"><button class="pec-save-btn" onclick="savePlanFact('${cat}')" style="font-size:10px">Факт</button>`:''}
+ <input class="pec-input" id="pec-${cat}" type="number" placeholder="${isCount?'План шт...':'Новый план...'}" value="${planVal||''}"><button class="pec-save-btn" onclick="quickSavePlan('${cat}')">Сохранить</button></div>
  </div>`;
  }).join('')+`</div>`;
+}
+function savePlanFact(cat){
+ const v=parseInt(document.getElementById('pec-fact-'+cat).value)||0;
+ localStorage.setItem('sd_plan_fact_'+cat+'_'+activePlanPeriod,v);
+ renderCabinetPlans();showNotif('Факт обновлён',catMeta[cat].label+': '+v);
 }
 function quickSavePlan(cat) {
  const newVal=parseFloat(document.getElementById('pec-'+cat).value); if(!newVal||newVal<=0){showNotif('Ошибка','Введите сумму больше нуля');return;}
