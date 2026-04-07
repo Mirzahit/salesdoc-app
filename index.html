@@ -8168,8 +8168,13 @@ function testsDrawRadar(person,canvasId,singleType){
  var lastScores=res.length?res[res.length-1].scores:null;
  var labels=[],scores=[];
  var color=_testTypeColors[singleType]||'#3B82F6';
+ var fullLabels=[];
  crit.forEach(function(c,i){
-  labels.push(c.label);
+  fullLabels.push(c.label);
+  // Short label: first word, max 10 chars
+  var short=c.label.split(' ')[0];
+  if(short.length>10) short=short.substring(0,9)+'…';
+  labels.push(short);
   scores.push(lastScores?(lastScores[i]||0):0);
  });
  var n=labels.length;
@@ -8187,7 +8192,6 @@ function testsDrawRadar(person,canvasId,singleType){
   ctx.closePath();ctx.strokeStyle='rgba(148,163,184,0.15)';ctx.lineWidth=1;ctx.stroke();
  });
  for(var i=0;i<n;i++){ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(angles[i])*R,cy+Math.sin(angles[i])*R);ctx.strokeStyle='rgba(148,163,184,0.1)';ctx.stroke();}
- // Parse color to rgba
  function hexToRgba(hex,a){var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return 'rgba('+r+','+g+','+b+','+a+')';}
  // Polygon
  var hasData=scores.some(function(s){return s>0;});
@@ -8197,12 +8201,13 @@ function testsDrawRadar(person,canvasId,singleType){
   ctx.closePath();ctx.fillStyle=hexToRgba(color,0.2);ctx.fill();ctx.strokeStyle=hexToRgba(color,0.8);ctx.lineWidth=2;ctx.stroke();
   for(var i=0;i<n;i++){var val=scores[i]/10;var x=cx+Math.cos(angles[i])*R*val,y=cy+Math.sin(angles[i])*R*val;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle=hexToRgba(color,0.9);ctx.fill();}
  }
- // Labels + Score badges
+ // Short labels + Score badges — store hit areas for tooltip
+ var hitAreas=[];
  for(var i=0;i<n;i++){
   var ang=angles[i];
   var cosA=Math.cos(ang),sinA=Math.sin(ang);
-  // Badge position
   var bx=cx+cosA*(R+18),by=cy+sinA*(R+18);
+  // Score badge
   var bw=24,bh=18,br=4;
   ctx.fillStyle=hexToRgba(color,0.85);
   ctx.beginPath();
@@ -8214,10 +8219,10 @@ function testsDrawRadar(person,canvasId,singleType){
   ctx.font='bold 11px Inter,sans-serif';
   ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(String(scores[i]),bx,by);
-  // Criterion label — full readable text
-  var tlx=cx+cosA*(R+42),tly=cy+sinA*(R+42);
-  ctx.font='11px Inter,sans-serif';
-  ctx.fillStyle='rgba(226,232,240,0.85)';
+  // Short label below/beside badge
+  var tlx=cx+cosA*(R+38),tly=cy+sinA*(R+38);
+  ctx.font='10px Inter,sans-serif';
+  ctx.fillStyle='rgba(226,232,240,0.7)';
   if(cosA<-0.25) ctx.textAlign='right';
   else if(cosA>0.25) ctx.textAlign='left';
   else ctx.textAlign='center';
@@ -8225,6 +8230,44 @@ function testsDrawRadar(person,canvasId,singleType){
   else if(sinA>0.25) ctx.textBaseline='top';
   else ctx.textBaseline='middle';
   ctx.fillText(labels[i],tlx,tly);
+  // Store hit area (badge center in CSS px)
+  hitAreas.push({x:bx,y:by,label:fullLabels[i],score:scores[i]});
+ }
+ // Attach tooltip events
+ canvas._radarHits=hitAreas;
+ canvas._radarDpr=dpr;
+ if(!canvas._radarEvt){
+  canvas._radarEvt=true;
+  var tip=document.createElement('div');
+  tip.className='radar-tooltip';
+  tip.style.cssText='display:none;position:absolute;background:rgba(30,41,59,0.95);border:1px solid rgba(59,130,246,0.4);border-radius:8px;padding:8px 12px;color:#E2E8F0;font:12px Inter,sans-serif;pointer-events:none;z-index:999;max-width:220px;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,0.4)';
+  canvas.parentElement.style.position='relative';
+  canvas.parentElement.appendChild(tip);
+  function showTip(ex,ey){
+   var rect=canvas.getBoundingClientRect();
+   var mx=ex-rect.left, my=ey-rect.top;
+   var hits=canvas._radarHits||[];
+   var found=null,minD=999;
+   for(var j=0;j<hits.length;j++){
+    var dx=mx-hits[j].x,dy=my-hits[j].y;
+    var d=Math.sqrt(dx*dx+dy*dy);
+    if(d<30&&d<minD){minD=d;found=hits[j];}
+   }
+   if(found){
+    tip.innerHTML='<div style="font-weight:600;margin-bottom:3px;color:#93C5FD">'+found.label+'</div><div>Оценка: <strong style="font-size:16px;color:#fff">'+found.score+'</strong> / 10</div>';
+    tip.style.display='block';
+    var tx=mx+12,ty=my-10;
+    if(tx+200>canvas.offsetWidth) tx=mx-200;
+    if(ty<0) ty=my+20;
+    tip.style.left=tx+'px';tip.style.top=ty+'px';
+   } else { tip.style.display='none'; }
+  }
+  canvas.addEventListener('mousemove',function(e){showTip(e.clientX,e.clientY);});
+  canvas.addEventListener('mouseleave',function(){tip.style.display='none';});
+  canvas.addEventListener('touchstart',function(e){
+   var t=e.touches[0];showTip(t.clientX,t.clientY);
+   setTimeout(function(){tip.style.display='none';},2000);
+  },{passive:true});
  }
 }
 
