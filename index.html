@@ -1420,6 +1420,20 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  <!-- TAB: SETTINGS -->
  <div class="cab-tab-panel" id="cab-panel-settings">
 
+ <!-- USER MANAGEMENT -->
+ <div class="panel" id="cab-user-mgmt" style="display:none">
+ <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
+  Пользователи
+  <button class="add-btn" style="font-size:11px;padding:5px 14px" onclick="openAddUserModal()">+ Добавить</button>
+ </div>
+ <div style="overflow-x:auto">
+ <table class="data-table">
+ <thead><tr><th>Имя</th><th>Должность</th><th>Логин</th><th>Пароль</th><th>Роль</th><th>Статус</th><th></th></tr></thead>
+ <tbody id="user-mgmt-body"></tbody>
+ </table>
+ </div>
+ </div>
+
  <!-- ADMIN: MANAGE ACCESS -->
  <div class="panel" id="cab-manage-access" style="display:none">
  <div class="panel-title">Управление доступами сотрудников</div>
@@ -3640,9 +3654,11 @@ function saveEmployee() {
  ACCESS_KEYS.forEach(a=>{ access[a.key]=document.getElementById('acc-'+a.key)?.classList.contains('on')?1:0; });
  const editId=parseInt(document.getElementById('e-edit-id').value)||null;
  var data={id:editId||nextEmpId++,name:name,pos:document.getElementById('e-pos').value,email:email,pass:document.getElementById('e-pass').value||'1234',role:document.getElementById('e-role').value,bonus:parseFloat(document.getElementById('e-bonus').value)||0,access:access};
- if(editId){ const i=employees.findIndex(e=>e.id===editId); if(i>=0)employees[i]=data; }
- else employees.push(data);
+ if(editId){ const i=employees.findIndex(e=>e.id===editId); if(i>=0){data.active=employees[i].active!==false;employees[i]=data;} }
+ else { data.active=true; employees.push(data); }
+ saveCustomEmployees();
  closeEmpModal(); renderEmployees(); buildQuickChips(); populateEmployeeSelects();
+ if(document.getElementById('user-mgmt-body')) renderUserManagement();
  showNotif('Сотрудник сохранён',name);
 }
 
@@ -5528,6 +5544,8 @@ document.getElementById('sidebar').style.display = 'none';
 document.getElementById('main-app').style.display = 'none';
 
 initEmployees();
+// Восстановить сохранённых пользователей (добавленные/удалённые/изменённые)
+loadCustomEmployees();
 populateEmployeeSelects();
 setTimeout(buildQuickChips, 100);
 window.addEventListener('resize', function() {
@@ -5683,6 +5701,12 @@ function renderCabinetV83() {
  adminPanel.style.display = (u.role === 'admin') ? 'block' : 'none';
  if (u.role === 'admin') renderEmpAccessList(accessLabels);
  }
+ // User management panel (admin only)
+ const userMgmt = document.getElementById('cab-user-mgmt');
+ if (userMgmt) {
+ userMgmt.style.display = (u.role === 'admin') ? 'block' : 'none';
+ if (u.role === 'admin') renderUserManagement();
+ }
 }
 
 function switchCabTab(tab, btn) {
@@ -5691,6 +5715,120 @@ function switchCabTab(tab, btn) {
  btn.classList.add('active');
  var panel = document.getElementById('cab-panel-' + tab);
  if (panel) panel.classList.add('active');
+}
+
+// === USER MANAGEMENT ===
+function renderUserManagement() {
+ var body = document.getElementById('user-mgmt-body');
+ if (!body) return;
+ var roleNames = {admin:'Админ', manager:'Менеджер', operator:'Оператор', viewer:'Просмотр'};
+ var roleColors = {admin:'#3B82F6', manager:'#81C784', operator:'#FFB74D', viewer:'#90A4AE'};
+ body.innerHTML = employees.map(function(e) {
+  var statusBadge = e.active
+   ? '<span style="color:#81C784;font-size:11px;font-weight:600">Активен</span>'
+   : '<span style="color:#EF5350;font-size:11px;font-weight:600">Отключён</span>';
+  var toggleBtn = '<button onclick="toggleUserActive('+e.id+')" style="font-size:9px;padding:2px 8px;border-radius:6px;border:1px solid var(--dark-border);background:'+(e.active?'rgba(239,83,80,.1)':'rgba(129,199,132,.1)')+';color:'+(e.active?'#EF9A9A':'#81C784')+';cursor:pointer;margin-left:4px" title="'+(e.active?'Отключить':'Включить')+'">'+(e.active?'Откл':'Вкл')+'</button>';
+  var delBtn = e.id === 1 ? '' : '<button onclick="deleteUser('+e.id+')" style="font-size:9px;padding:2px 8px;border-radius:6px;border:1px solid rgba(239,83,80,.3);background:rgba(239,83,80,.1);color:#EF9A9A;cursor:pointer" title="Удалить">Удалить</button>';
+  var editBtn = '<button onclick="editUserInline('+e.id+')" style="font-size:9px;padding:2px 8px;border-radius:6px;border:1px solid var(--dark-border);background:rgba(59,130,246,.08);color:var(--gold-bright);cursor:pointer">Изм.</button>';
+  return '<tr>'
+   +'<td style="font-weight:600">'+e.name+'</td>'
+   +'<td style="color:var(--text-secondary);font-size:11px">'+e.pos+'</td>'
+   +'<td><code style="background:var(--dark-card);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--gold-bright)">'+e.email+'</code></td>'
+   +'<td><code style="background:var(--dark-card);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--text-secondary)">'+e.pass+'</code></td>'
+   +'<td><span style="font-size:10px;padding:2px 8px;border-radius:12px;background:rgba(255,255,255,.06);color:'+(roleColors[e.role]||'#90A4AE')+';font-weight:600">'+( roleNames[e.role]||e.role)+'</span></td>'
+   +'<td>'+statusBadge+toggleBtn+'</td>'
+   +'<td style="display:flex;gap:4px">'+editBtn+delBtn+'</td>'
+   +'</tr>';
+ }).join('');
+}
+
+function openAddUserModal() {
+ document.getElementById('e-name').value='';
+ document.getElementById('e-pos').value='';
+ document.getElementById('e-email').value='';
+ document.getElementById('e-pass').value='';
+ document.getElementById('e-role').value='viewer';
+ document.getElementById('e-bonus').value='0';
+ document.getElementById('e-edit-id').value='';
+ document.getElementById('emp-modal-title').textContent='Добавить пользователя';
+ updateAccessChecks();
+ document.getElementById('emp-modal').classList.add('open');
+}
+
+function editUserInline(id) {
+ var emp = employees.find(function(e){return e.id===id;});
+ if (!emp) return;
+ document.getElementById('e-name').value = emp.name;
+ document.getElementById('e-pos').value = emp.pos;
+ document.getElementById('e-email').value = emp.email;
+ document.getElementById('e-pass').value = emp.pass;
+ document.getElementById('e-pass').type = 'text';
+ document.getElementById('e-role').value = emp.role;
+ document.getElementById('e-bonus').value = emp.bonus||0;
+ document.getElementById('e-edit-id').value = id;
+ document.getElementById('emp-modal-title').textContent='Редактировать: '+emp.name;
+ updateAccessChecks();
+ // Restore actual access
+ if(emp.access){
+  document.querySelectorAll('#access-grid-modal input[type=checkbox]').forEach(function(cb){
+   cb.checked = emp.access[cb.name] ? true : false;
+  });
+ }
+ document.getElementById('emp-modal').classList.add('open');
+}
+
+function toggleUserActive(id) {
+ var emp = employees.find(function(e){return e.id===id;});
+ if (!emp) return;
+ emp.active = !emp.active;
+ saveCustomEmployees();
+ renderUserManagement();
+ showNotif('Пользователь', emp.name+' — '+(emp.active?'активирован':'отключён'));
+}
+
+function deleteUser(id) {
+ var emp = employees.find(function(e){return e.id===id;});
+ if (!emp) return;
+ if (!confirm('Удалить пользователя «'+emp.name+'»? Это действие нельзя отменить.')) return;
+ employees = employees.filter(function(e){return e.id!==id;});
+ saveCustomEmployees();
+ renderUserManagement();
+ renderEmpAccessList({
+  view_dashboard:' Обзор', view_payments:' Оплаты', view_acts:' Акты',
+  view_plan:' Планы', view_keyclients:' Клиенты',
+  view_employees:' Сотрудники', view_cabinet:' Кабинет', view_marketing:' Маркетинг',
+  view_ai:' ИИ', add_payments:' Добавлять оплаты', add_acts:' Добавлять акты',
+  edit_plans:' Редакт. планы', manage_employees:' Управление сотрудниками'
+ });
+ populateEmployeeSelects();
+ showNotif('Удалено', emp.name+' удалён из системы');
+}
+
+function saveCustomEmployees() {
+ try {
+  var data = employees.map(function(e){
+   return {id:e.id, name:e.name, pos:e.pos, email:e.email, pass:e.pass, role:e.role, bonus:e.bonus, active:e.active, access:e.access};
+  });
+  localStorage.setItem('sd_custom_employees', JSON.stringify(data));
+  saveEmployeePasswords();
+ } catch(ex){}
+}
+
+function loadCustomEmployees() {
+ try {
+  var raw = localStorage.getItem('sd_custom_employees');
+  if (raw) {
+   var data = JSON.parse(raw);
+   if (data && data.length) {
+    employees = data.map(function(e){
+     return {id:e.id, name:e.name, pos:e.pos, email:e.email, pass:e.pass, role:e.role, bonus:e.bonus||0, active:e.active!==false, access:e.access||Object.assign({},ROLE_DEFAULTS[e.role]||ROLE_DEFAULTS.viewer)};
+    });
+    nextEmpId = Math.max.apply(null, employees.map(function(e){return e.id;}))+1;
+    return true;
+   }
+  }
+ } catch(ex){}
+ return false;
 }
 
 function fmtK(n) {
