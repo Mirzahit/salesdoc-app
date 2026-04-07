@@ -8409,59 +8409,57 @@ function testsAddCriterion(type){
 }
 
 // ============================================================
-// PDF EXPORT — Test Results Report
+// PDF EXPORT — via print window (supports Cyrillic natively)
 // ============================================================
-function _loadJsPDF(cb){
- if(window.jspdf) return cb();
- var s=document.createElement('script');
- s.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js';
- s.onload=cb;
- s.onerror=function(){showNotif('Ошибка','Не удалось загрузить PDF библиотеку');};
- document.head.appendChild(s);
-}
 function testsExportPDF(person){
- _loadJsPDF(function(){_testsExportPDFInner(person);});
-}
-function _testsExportPDFInner(person){
- var jsPDF=window.jspdf.jsPDF;
- var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
- var W=210,margin=15,y=0;
  var results=_testsResults.filter(function(r){return r.person===person;});
  if(!results.length){showNotif('PDF','Нет оценок для '+person);return;}
  var today=new Date().toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});
-
- // --- Header band ---
- doc.setFillColor(17,24,39);
- doc.rect(0,0,W,38,'F');
- doc.setFillColor(59,130,246);
- doc.rect(0,36,W,2,'F');
-
- // Company name
- doc.setFont('helvetica','bold');doc.setFontSize(18);doc.setTextColor(59,130,246);
- doc.text('SALES DOCTOR',margin,14);
- // Subtitle
- doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(148,163,184);
- doc.text('Assessment Report',margin,20);
- // Date right-aligned
- doc.setFontSize(9);doc.setTextColor(148,163,184);
- doc.text(today,W-margin,14,{align:'right'});
-
- // Person + Evaluator row
- doc.setFontSize(10);doc.setTextColor(226,232,240);
- doc.text('Сотрудник:',margin,28);
- doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
- doc.text(person,margin+26,28);
-
  var evaluator='Абдылахатов Мырзахыт';
- doc.setFont('helvetica','normal');doc.setTextColor(226,232,240);
- doc.text('Принимающий:',W/2,28);
- doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
- doc.text(evaluator,W/2+32,28);
-
- y=46;
-
- // --- For each test type with results ---
  var types=['call','qualification','presentation','product'];
+
+ var h='<!DOCTYPE html><html><head><meta charset="UTF-8">'
+  +'<title>Тест — '+person+'</title>'
+  +'<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">'
+  +'<style>'
+  +'*{margin:0;padding:0;box-sizing:border-box}'
+  +'body{font-family:Inter,sans-serif;background:#0B0F19;color:#E2E8F0;padding:0}'
+  +'@page{size:A4;margin:12mm}'
+  +'.header{background:#111827;padding:20px 24px;border-bottom:3px solid #3B82F6;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}'
+  +'.logo{font-size:22px;font-weight:700;color:#3B82F6;letter-spacing:1px}'
+  +'.logo-sub{font-size:10px;color:#94A3B8;margin-top:2px}'
+  +'.header-right{text-align:right;font-size:11px;color:#94A3B8}'
+  +'.info-row{display:flex;justify-content:space-between;background:#1E293B;padding:12px 24px;margin-bottom:20px}'
+  +'.info-item{font-size:12px;color:#94A3B8}'
+  +'.info-item strong{color:#fff;font-weight:600}'
+  +'.section{margin-bottom:18px;page-break-inside:avoid}'
+  +'.section-head{background:#1E293B;padding:10px 16px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}'
+  +'.section-title{font-size:15px;font-weight:700;color:#3B82F6}'
+  +'.section-avg{font-size:14px;color:#fff;font-weight:700}'
+  +'.section-date{font-size:10px;color:#64748B;margin-left:12px}'
+  +'.row{display:flex;align-items:center;padding:5px 16px;font-size:12px}'
+  +'.row:nth-child(even){background:rgba(17,24,39,0.5)}'
+  +'.row-label{flex:1;color:#CBD5E1}'
+  +'.row-bar{width:120px;height:6px;background:#273548;border-radius:3px;margin:0 12px;overflow:hidden}'
+  +'.row-bar-fill{height:100%;border-radius:3px}'
+  +'.bar-high{background:#22C55E}.bar-mid{background:#3B82F6}.bar-low{background:#EF4444}'
+  +'.row-score{width:24px;text-align:right;font-weight:700;color:#fff}'
+  +'.comment{font-size:11px;color:#64748B;font-style:italic;padding:6px 16px}'
+  +'.footer{border-top:2px solid #3B82F6;padding-top:8px;margin-top:24px;display:flex;justify-content:space-between;font-size:9px;color:#64748B}'
+  +'@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'
+  +'</style></head><body>';
+
+ // Header
+ h+='<div class="header"><div><div class="logo">SALES DOCTOR</div><div class="logo-sub">Assessment Report</div></div>'
+  +'<div class="header-right">'+today+'</div></div>';
+
+ // Info row
+ h+='<div class="info-row">'
+  +'<div class="info-item">Сотрудник: <strong>'+person+'</strong></div>'
+  +'<div class="info-item">Принимающий: <strong>'+evaluator+'</strong></div>'
+  +'</div>';
+
+ // Sections per type
  types.forEach(function(type){
   var typeRes=results.filter(function(r){return r.type===type;});
   if(!typeRes.length) return;
@@ -8470,74 +8468,28 @@ function _testsExportPDFInner(person){
   var typeName=_testTypeNames[type]||type;
   var avg=(last.scores.reduce(function(s,v){return s+v;},0)/last.scores.length).toFixed(1);
 
-  // Check page break
-  if(y+10+crit.length*7+20>280){doc.addPage();y=15;}
-
-  // Type header
-  doc.setFillColor(30,41,59);
-  doc.roundedRect(margin,y,W-margin*2,10,2,2,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(59,130,246);
-  doc.text(typeName,margin+4,y+7);
-  // Avg score badge
-  doc.setTextColor(255,255,255);doc.setFontSize(11);
-  doc.text(avg+' / 10',W-margin-4,y+7,{align:'right'});
-  // Date of last eval
-  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(148,163,184);
-  doc.text(last.date,W-margin-30,y+7,{align:'right'});
-  y+=14;
-
-  // Criteria table
+  h+='<div class="section">';
+  h+='<div class="section-head"><div class="section-title">'+typeName+'</div><div><span class="section-avg">'+avg+' / 10</span><span class="section-date">'+last.date+'</span></div></div>';
   crit.forEach(function(c,i){
    var score=last.scores[i]||0;
-   // Alternating row bg
-   if(i%2===0){doc.setFillColor(17,24,39);doc.rect(margin,y-4,W-margin*2,7,'F');}
-   // Criterion name
-   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(226,232,240);
-   doc.text(c.label,margin+3,y);
-   // Score bar background
-   var barX=W-margin-55,barW=40,barH=4;
-   doc.setFillColor(39,53,72);
-   doc.roundedRect(barX,y-3,barW,barH,1,1,'F');
-   // Score bar filled
-   var fillW=barW*(score/10);
-   if(fillW>0){
-    var r=59,g=130,b=246;
-    if(score>=8){r=34;g=197;b=94;} // green for high
-    else if(score<=3){r=239;g=68;b=68;} // red for low
-    doc.setFillColor(r,g,b);
-    doc.roundedRect(barX,y-3,fillW,barH,1,1,'F');
-   }
-   // Score number
-   doc.setFont('helvetica','bold');doc.setFontSize(9);
-   doc.setTextColor(255,255,255);
-   doc.text(String(score),W-margin-4,y,{align:'right'});
-   y+=7;
+   var barClass=score>=8?'bar-high':score<=3?'bar-low':'bar-mid';
+   var pct=score*10;
+   h+='<div class="row"><span class="row-label">'+c.label+'</span>'
+    +'<div class="row-bar"><div class="row-bar-fill '+barClass+'" style="width:'+pct+'%"></div></div>'
+    +'<span class="row-score">'+score+'</span></div>';
   });
-
-  // Comment if exists
-  if(last.comment){
-   doc.setFont('helvetica','italic');doc.setFontSize(8);doc.setTextColor(148,163,184);
-   var lines=doc.splitTextToSize('💬 '+last.comment,W-margin*2-10);
-   doc.text(lines,margin+3,y+2);
-   y+=lines.length*4+4;
-  }
-  y+=8;
+  if(last.comment) h+='<div class="comment">💬 '+last.comment+'</div>';
+  h+='</div>';
  });
 
- // --- Footer ---
- var pageCount=doc.internal.getNumberOfPages();
- for(var p=1;p<=pageCount;p++){
-  doc.setPage(p);
-  doc.setFillColor(59,130,246);doc.rect(0,290,W,2,'F');
-  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(148,163,184);
-  doc.text('Sales Doctor — salesdoc.io',margin,296);
-  doc.text('Стр. '+p+' / '+pageCount,W-margin,296,{align:'right'});
- }
+ // Footer
+ h+='<div class="footer"><span>Sales Doctor — salesdoc.io</span><span>'+today+'</span></div>';
+ h+='</body></html>';
 
- // Save
- var filename='Test_'+person.replace(/\s+/g,'_')+'_'+today.replace(/\./g,'-')+'.pdf';
- doc.save(filename);
- showNotif('PDF сохранён',filename);
+ var w=window.open('','_blank','width=800,height=1000');
+ w.document.write(h);
+ w.document.close();
+ setTimeout(function(){w.print();},500);
 }
 </script>
 </body>
