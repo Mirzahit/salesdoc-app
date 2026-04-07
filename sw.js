@@ -1,4 +1,4 @@
-var CACHE_NAME = 'salesdoc-v117';
+var CACHE_NAME = 'salesdoc-v118';
 var PRECACHE = ['/', '/manifest.json', '/icon-192.svg'];
 
 self.addEventListener('install', function(e) {
@@ -33,6 +33,19 @@ self.addEventListener('fetch', function(e) {
         return resp;
       }).catch(function() {
         return caches.match(e.request);
+      })
+    );
+    return;
+  }
+  // CDN libs (jsPDF etc) — cache first
+  if (url.indexOf('cdn.jsdelivr.net') !== -1 || url.indexOf('cdnjs.cloudflare.com') !== -1 || url.indexOf('unpkg.com') !== -1) {
+    e.respondWith(
+      caches.match(e.request).then(function(cached) {
+        return cached || fetch(e.request).then(function(resp) {
+          var clone = resp.clone();
+          caches.open(CACHE_NAME).then(function(cache) { cache.put(e.request, clone); });
+          return resp;
+        });
       })
     );
     return;
