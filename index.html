@@ -2568,7 +2568,7 @@ async function syncFromSheets() {
  };
  });
  setSyncStatus('ok','Обновлено '+new Date().toLocaleTimeString('ru')+' · '+allNew.length+' записей');
- showNotif(' Данные загружены','«Доходы KZ 2026» — '+allNew.length+' записей (M:'+dbgFromM+', J:'+dbgFromJ+'). Март: '+dbgMar.length+' зап, '+fmtFull(dbgMarSum)+' ₸');
+ showNotif(' Данные загружены','«Доходы '+currentCountry+' 2026» — '+allNew.length+' записей (M:'+dbgFromM+', J:'+dbgFromJ+'). Март: '+dbgMar.length+' зап, '+fmtFull(dbgMarSum)+' '+COUNTRY_CONFIG[currentCountry].currency);
  renderAll();
  } else {
  setSyncStatus('ok','Нет новых данных — используются загруженные');
@@ -4239,63 +4239,67 @@ function showView(v) {
  if(v==='tests') testsRender();
 }
 
-// DATA SOURCES INFO 
-const DATA_SOURCES = {
- dashboard: {
-  title: 'ОБЗОР ФИНАНСОВ',
-  sources: [
-   {name:'Доходы KZ 2026', id:'1WJJRqPvQ_i9jVhQgNc2Kuuynneu9jjTJwMGijCZKHbo', sheets:'Янв, Фев, Мар', desc:'Основная таблица доходов — все оплаты, клиенты, суммы'},
-   {name:'Расходы KZ 2026', id:'1TQSgd1rBHmF4mIktKf8Sk3C3OGxfownysqgQwu0IzWM', sheets:'Январь–Март 2026', desc:'Для блока P&L (Доходы vs Расходы)'},
-   {name:'Планы продаж', id:'localStorage', sheets:'—', desc:'Планы хранятся локально в браузере'},
-  ]
- },
- payments: {
-  title: 'ОПЛАТЫ',
-  sources: [
-   {name:'Доходы KZ 2026', id:'1WJJRqPvQ_i9jVhQgNc2Kuuynneu9jjTJwMGijCZKHbo', sheets:'Янв, Фев, Мар', desc:'Все записи оплат: дата, клиент, статья, сумма, банк, посажена, услуга списана'},
-  ]
- },
- plan: {
-  title: 'ВЫПОЛНЕНИЕ ПЛАНА',
-  sources: [
-   {name:'Светофор KPI', id:'1dA_NypMBj2LbmSOn6GuZXcCNCUqN7lmBAs9S5FbgjzU', sheets:'Март, февраль 26, Январь 26, Декабрь 25, Ноябрь 25', desc:'Планы и факты по менеджерам: встречи, звонки, лицензии, продажи, KPI, бонусы'},
-  ]
- },
- keyclients: {
-  title: 'КЛЮЧЕВЫЕ КЛИЕНТЫ',
-  sources: [
-   {name:'Доходы KZ 2026', id:'1WJJRqPvQ_i9jVhQgNc2Kuuynneu9jjTJwMGijCZKHbo', sheets:'Янв, Фев, Мар', desc:'Клиенты, суммы оплат, категории — для сегментации и топ-10'},
-   {name:'Доходы KZ 2025 (LTV)', id:'11ErpSR9fJ_T0ggWBrHjRB35cMs4yl84HedSO1Tf4Z08', sheets:'Все месяцы 2025', desc:'Исторические данные для расчёта LTV клиентов'},
-  ]
- },
- expenses: {
-  title: 'РАСХОДЫ',
-  sources: [
-   {name:'Расходы KZ 2026', id:'1TQSgd1rBHmF4mIktKf8Sk3C3OGxfownysqgQwu0IzWM', sheets:'Январь–Март 2026', desc:'Дата, статья, примечание, сумма, банк — все расходы компании'},
-  ]
- },
- marketing: {
-  title: 'МАРКЕТИНГ',
-  sources: [
-   {name:'Лиды маркетинг', id:'19etQHubOqYtqobzGjVhWE-3ClCrQyZJ0zD2jklikO7A', sheets:'Лист1', desc:'Данные по лидам: источник, дата, статус, менеджер'},
-  ]
- },
- ai: {
-  title: 'ИИ МИРЗАХИТ',
-  sources: [
-   {name:'Доходы KZ 2026', id:'1WJJRqPvQ_i9jVhQgNc2Kuuynneu9jjTJwMGijCZKHbo', sheets:'Янв, Фев, Мар', desc:'ИИ анализирует данные оплат для ответов на вопросы'},
-  ]
- },
- cabinet: {
-  title: 'ЛИЧНЫЙ КАБИНЕТ',
-  sources: [
-   {name:'Локальные данные', id:'localStorage', sheets:'—', desc:'Пароли, настройки доступа, планы — хранятся в браузере'},
-  ]
- },
-};
+// DATA SOURCES INFO (динамически из COUNTRY_CONFIG)
+function getDataSources() {
+ var c = COUNTRY_CONFIG[currentCountry];
+ var cc = currentCountry;
+ return {
+  dashboard: {
+   title: 'ОБЗОР ФИНАНСОВ',
+   sources: [
+    {name:'Доходы '+cc+' 2026', id:c.SHEET_ID, sheets:'Янв–Дек', desc:'Основная таблица доходов — все оплаты, клиенты, суммы'},
+    {name:'Расходы '+cc+' 2026', id:c.EXP_SHEET_ID, sheets:'Январь–Декабрь 2026', desc:'Для блока P&L (Доходы vs Расходы)'},
+    {name:'Планы продаж', id:'localStorage', sheets:'—', desc:'Планы хранятся локально в браузере'},
+   ]
+  },
+  payments: {
+   title: 'ОПЛАТЫ',
+   sources: [
+    {name:'Доходы '+cc+' 2026', id:c.SHEET_ID, sheets:'Янв–Дек', desc:'Все записи оплат: дата, клиент, статья, сумма, банк, посажена, услуга списана'},
+   ]
+  },
+  plan: {
+   title: 'ВЫПОЛНЕНИЕ ПЛАНА',
+   sources: [
+    {name:'Светофор KPI '+cc, id:c.kpiSheetId, sheets:'Все месяцы', desc:'Планы и факты по менеджерам: встречи, звонки, лицензии, продажи, KPI, бонусы'},
+   ]
+  },
+  keyclients: {
+   title: 'КЛЮЧЕВЫЕ КЛИЕНТЫ',
+   sources: [
+    {name:'Доходы '+cc+' 2026', id:c.SHEET_ID, sheets:'Янв–Дек', desc:'Клиенты, суммы оплат, категории — для сегментации и топ-10'},
+    {name:'Доходы '+cc+' 2025 (LTV)', id:c.LTV_ID, sheets:'Все месяцы 2025', desc:'Исторические данные для расчёта LTV клиентов'},
+   ]
+  },
+  expenses: {
+   title: 'РАСХОДЫ',
+   sources: [
+    {name:'Расходы '+cc+' 2026', id:c.EXP_SHEET_ID, sheets:'Январь–Декабрь 2026', desc:'Дата, статья, примечание, сумма, банк — все расходы компании'},
+   ]
+  },
+  marketing: {
+   title: 'МАРКЕТИНГ',
+   sources: [
+    {name:'Лиды маркетинг', id:c.LEADS_SHEET_ID, sheets:'Лист1', desc:'Данные по лидам: источник, дата, статус, менеджер'},
+   ]
+  },
+  ai: {
+   title: 'ИИ МИРЗАХИТ',
+   sources: [
+    {name:'Доходы '+cc+' 2026', id:c.SHEET_ID, sheets:'Янв–Дек', desc:'ИИ анализирует данные оплат для ответов на вопросы'},
+   ]
+  },
+  cabinet: {
+   title: 'ЛИЧНЫЙ КАБИНЕТ',
+   sources: [
+    {name:'Локальные данные', id:'localStorage', sheets:'—', desc:'Пароли, настройки доступа, планы — хранятся в браузере'},
+   ]
+  },
+ };
+}
 
 function showDataSources(viewId) {
- var info = DATA_SOURCES[viewId];
+ var info = getDataSources()[viewId];
  if (!info) return;
  var overlay = document.createElement('div');
  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
