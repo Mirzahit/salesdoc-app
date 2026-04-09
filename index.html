@@ -2636,7 +2636,7 @@ function mapStatus(v){ const s=String(v||'').toLowerCase(); if(s.includes('оп�
 // UTILS
 // ============================================================
 function fmt(n){ if(n>=1000000)return(n/1000000).toFixed(1)+'М'; if(n>=1000)return(n/1000).toFixed(0)+'К'; return n.toString(); }
-function fmtFull(n){ return n.toLocaleString('ru-RU')+' ₸'; }
+function fmtFull(n){ return n.toLocaleString('ru-RU')+' '+COUNTRY_CONFIG[currentCountry].currency; }
 function empName(id){ const e=employees.find(x=>x.id===id); return e?e.name.split(' ')[0]+' '+(e.name.split(' ')[1]||''):'-'; }
 
 // PERIOD STATE 
@@ -2734,11 +2734,12 @@ function renderAll() {
  const ps=getPeriodPayments(currentPeriod);
  const license=sumByCategory(ps,'license'), sub=sumByCategory(ps,'subscription'), impl=sumByCategory(ps,'implementation'), integ=sumByCategory(ps,'integration');
  const total=license+sub+impl+integ+sumByCategory(ps,'other');
- document.getElementById('kpi-license').innerHTML=fmt(license)+' <span>₸</span>';
- document.getElementById('kpi-sub').innerHTML=fmt(sub)+' <span>₸</span>';
- document.getElementById('kpi-impl').innerHTML=fmt(impl)+' <span>₸</span>';
- const _integEl=document.getElementById('kpi-integ'); if(_integEl)_integEl.innerHTML=fmt(integ)+' <span>₸</span>';
- document.getElementById('kpi-total').innerHTML=fmt(total)+' <span>₸</span>';
+ var _cur = COUNTRY_CONFIG[currentCountry].currency;
+ document.getElementById('kpi-license').innerHTML=fmt(license)+' <span>'+_cur+'</span>';
+ document.getElementById('kpi-sub').innerHTML=fmt(sub)+' <span>'+_cur+'</span>';
+ document.getElementById('kpi-impl').innerHTML=fmt(impl)+' <span>'+_cur+'</span>';
+ const _integEl=document.getElementById('kpi-integ'); if(_integEl)_integEl.innerHTML=fmt(integ)+' <span>'+_cur+'</span>';
+ document.getElementById('kpi-total').innerHTML=fmt(total)+' <span>'+_cur+'</span>';
  // Средний чек новых клиентов: "новый" = у кого в categoryRaw (столбец Статья) есть слово "нов"
  (function calcAvgNewCheck(){
  function normClient(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
@@ -2765,7 +2766,7 @@ function renderAll() {
  totalNewSum += p.amount;
  });
  var avg = newCount > 0 ? Math.round(totalNewSum / newCount) : 0;
- document.getElementById('kpi-avg-new').innerHTML = fmt(avg) + ' <span>₸</span>';
+ document.getElementById('kpi-avg-new').innerHTML = fmt(avg) + ' <span>'+_cur+'</span>';
  var deltaEl = document.getElementById('delta-avg-new');
  if(deltaEl) { deltaEl.textContent = newCount + ' новых клиентов'; deltaEl.className = 'kpi-delta ' + (newCount > 0 ? 'up' : 'down'); }
  })();
@@ -2832,9 +2833,10 @@ function renderAvgCheckManagers(ps) {
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
   html += '<span style="font-size:11px;color:var(--text-light);font-weight:700">' + m.name + '</span>';
   html += '<span style="font-size:9px;color:var(--text-muted)">' + m.clients + ' новых клиентов</span></div>';
-  html += '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:18px;color:' + color + '">' + fmtBonus(m.avg) + ' <span style="font-size:10px;color:var(--text-muted)">₸</span></div>';
+  var _c = COUNTRY_CONFIG[currentCountry].currency;
+  html += '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:18px;color:' + color + '">' + fmtBonus(m.avg) + ' <span style="font-size:10px;color:var(--text-muted)">'+_c+'</span></div>';
   html += '<div style="height:4px;background:var(--dark-border);border-radius:2px;margin-top:8px;overflow:hidden"><div style="height:100%;width:' + barW + '%;background:' + color + ';border-radius:2px"></div></div>';
-  html += '<div style="font-size:10px;color:var(--text-muted);margin-top:4px">' + m.deals + ' сделок · ' + fmtBonus(m.total) + ' ₸ итого</div>';
+  html += '<div style="font-size:10px;color:var(--text-muted);margin-top:4px">' + m.deals + ' сделок · ' + fmtBonus(m.total) + ' '+_c+' итого</div>';
   html += '</div>';
  });
  el.innerHTML = html;
