@@ -2487,8 +2487,9 @@ async function syncFromSheets() {
  let amtRaw = row[colAmt];
  var srcCol = 'M';
  var rawM = row[colAmt], rawJ = row[9];
- if (amtRaw == null || amtRaw === '') { amtRaw = row[9]; srcCol = 'J'; }
- const amount = typeof amtRaw === 'number' ? amtRaw : parseFloat(String(amtRaw||'').replace(/[^0-9.,\s]/g,'').replace(',','.'));
+ if (amtRaw == null || String(amtRaw).trim() === '') { amtRaw = row[9]; srcCol = 'J'; }
+ if (amtRaw == null || String(amtRaw).trim() === '') { amtRaw = 0; }
+ const amount = typeof amtRaw === 'number' ? amtRaw : parseFloat(String(amtRaw).replace(/\s/g,'').replace(/[^0-9.,-]/g,'').replace(',','.'));
  if (!amount || amount<=0) return;
  const dateStr = parseDateFromSheet(row[colDate]) || ('2026-0'+(mi+1)+'-01');
  const managerRaw = String(row[colMgr]||'').trim();
