@@ -1964,6 +1964,7 @@ const COUNTRY_CONFIG = {
  KG: {
   label:'\u041A\u044B\u0440\u0433\u044B\u0437\u0441\u0442\u0430\u043D', flag:'\u{1F1F0}\u{1F1EC}', currency:'\u0441\u043E\u043C',
   months:['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'],
+  dateCorrection:1,
   SHEET_ID:'1RbnGDy0rZJj7Ek-j1y3FkAToCSXXtR8F-5a7ga67O2Q',
   gsUrl:'https://script.google.com/macros/s/AKfycbzKz7c6eUD9UZ-foL5BQJmhyh93nN9GbBAUoIxvvrQtIrwbQX_UKFo48Q_8jlo7qcSWxQ/exec',
   EXP_SHEET_ID:'1wJaSorA_jLG7YJJaTT2XXV6j5SSjufutVFOuKsK1tdY',
@@ -1985,6 +1986,19 @@ async function loadSheetData(sheetName) {
  try {
  const resp = await fetch(scriptUrl + '?action=getSheet&sheet=' + encodeURIComponent(sheetName) + '&spreadsheetId=' + SHEET_ID);
  const json = await resp.json();
+ // Коррекция часового пояса: standalone скрипт UTC+5, KG таблица UTC+6 → даты -1 день
+ var dc = COUNTRY_CONFIG[currentCountry].dateCorrection || 0;
+ if (dc && json && json.rows) {
+  json.rows = json.rows.map(function(row){
+   return row.map(function(cell){
+    if (typeof cell==='string' && /^\d{2}\.\d{2}\.\d{4}$/.test(cell)) {
+     var p=cell.split('.'); var d=new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])+dc);
+     return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear();
+    }
+    return cell;
+   });
+  });
+ }
  if (json && json.rows) return json;
  } catch(e) {
 
