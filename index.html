@@ -2490,8 +2490,7 @@ async function syncFromSheets() {
  if (amtRaw == null || String(amtRaw).trim() === '') { amtRaw = row[9]; srcCol = 'J'; }
  if (amtRaw == null || String(amtRaw).trim() === '') { amtRaw = 0; }
  const amount = typeof amtRaw === 'number' ? amtRaw : parseFloat(String(amtRaw).replace(/\s/g,'').replace(/[^0-9.,-]/g,'').replace(',','.'));
- console.log('[ROW] '+months[mi]+' r'+rowIdx+': '+String(row[colClient]).trim()+' | M='+JSON.stringify(rawM)+' J='+JSON.stringify(rawJ)+' → src='+srcCol+' amt='+amount+' cat='+String(row[colCat]||''));
- if (!amount || amount<=0) { console.warn('[SKIP] '+String(row[colClient]).trim()+' amount='+amount); return; }
+ if (!amount || amount<=0) return;
  const dateStr = parseDateFromSheet(row[colDate]) || ('2026-0'+(mi+1)+'-01');
  const managerRaw = String(row[colMgr]||'').trim();
  const techRaw = String(row[colTech]||'').trim();
@@ -2647,7 +2646,7 @@ function empName(id){ const e=employees.find(x=>x.id===id); return e?e.name.spli
 // selectedMonth = { year, month } (for month mode)
 // selectedYear = { year } (for year mode)
 let selectedWeek = null;
-let selectedMonth = { year:2026, month:2 }; // March 2026 default
+let selectedMonth = { year:new Date().getFullYear(), month:new Date().getMonth() }; // current month default
 let selectedYear = { year:2026 };
 let pickerMode = null; // 'week'|'month'|'year'|null
 
