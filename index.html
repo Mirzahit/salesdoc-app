@@ -453,6 +453,12 @@ body{background:var(--dark-void);color:var(--text-primary);font-family:'Inter',s
 .nav-item.hidden{display:none}
 .nav-icon{width:18px;text-align:center;font-size:14px}
 
+/* COUNTRY SWITCHER */
+.country-switcher{display:flex;gap:4px;margin:10px 16px 6px;padding:3px;background:rgba(17,24,39,.6);border-radius:10px;border:1px solid var(--dark-border)}
+.country-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 0;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;letter-spacing:1px;font-family:'Inter',sans-serif;background:transparent;color:var(--text-muted);transition:all .25s}
+.country-btn:hover{color:var(--text-secondary);background:rgba(59,130,246,.06)}
+.country-btn.active{background:rgba(59,130,246,.15);color:var(--gold-bright);border:1px solid rgba(59,130,246,.3);box-shadow:0 0 12px rgba(59,130,246,.1)}
+
 /* MAIN */
 .main{margin-left:240px;min-height:100vh}
 .topbar{height:60px;background:rgba(17,24,39,.95);border-bottom:1px solid var(--dark-border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:50;backdrop-filter:blur(10px)}
@@ -936,6 +942,10 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  <div class="cub-role" id="ub-role">Admin</div>
  </div>
  <button class="logout-btn" onclick="doLogout()" title="Выйти">⏻</button>
+ </div>
+ <div class="country-switcher" id="country-switcher">
+ <button class="country-btn active" data-country="KZ" onclick="switchCountry('KZ')">&#127472;&#127487; KZ</button>
+ <button class="country-btn" data-country="KG" onclick="switchCountry('KG')">&#127472;&#127468; KG</button>
  </div>
  <div class="nav-section">
  <div class="nav-label">Навигация</div>
@@ -1934,8 +1944,37 @@ function initEmployees(){
 }
 let nextEmpId = 13;
 
-// ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ ИЗ GOOGLE SHEETS (gviz API) 
-const SHEET_ID = '1WJJRqPvQ_i9jVhQgNc2Kuuynneu9jjTJwMGijCZKHbo';
+// ============================================================
+// COUNTRY CONFIG (KZ / KG)
+// ============================================================
+let currentCountry = localStorage.getItem('sd_country') || 'KZ';
+const COUNTRY_CONFIG = {
+ KZ: {
+  label:'Казахстан', flag:'\u{1F1F0}\u{1F1FF}', currency:'\u20B8',
+  SHEET_ID:'1WJJRqPvQ_i9jVhQgNc2Kuuynneu9jjTJwMGijCZKHbo',
+  gsUrl:'https://script.google.com/macros/s/AKfycbzKz7c6eUD9UZ-foL5BQJmhyh93nN9GbBAUoIxvvrQtIrwbQX_UKFo48Q_8jlo7qcSWxQ/exec',
+  EXP_SHEET_ID:'1TQSgd1rBHmF4mIktKf8Sk3C3OGxfownysqgQwu0IzWM',
+  INTG_SHEET_ID:'11ZnhVoLvIJRHeeJk0u-fZI2G5crWNHIpV9RDOVtDQJ4',
+  LEADS_SHEET_ID:'19etQHubOqYtqobzGjVhWE-3ClCrQyZJ0zD2jklikO7A',
+  kpiSheetId:'1dA_NypMBj2LbmSOn6GuZXcCNCUqN7lmBAs9S5FbgjzU',
+  LTV_ID:'11ErpSR9fJ_T0ggWBrHjRB35cMs4yl84HedSO1Tf4Z08',
+  GS_URL2:'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec'
+ },
+ KG: {
+  label:'\u041A\u044B\u0440\u0433\u044B\u0437\u0441\u0442\u0430\u043D', flag:'\u{1F1F0}\u{1F1EC}', currency:'\u0441\u043E\u043C',
+  SHEET_ID:'1RbnGDy0rZJj7Ek-j1y3FkAToCSXXtR8F-5a7ga67O2Q',
+  gsUrl:'https://script.google.com/macros/s/AKfycbzKz7c6eUD9UZ-foL5BQJmhyh93nN9GbBAUoIxvvrQtIrwbQX_UKFo48Q_8jlo7qcSWxQ/exec',
+  EXP_SHEET_ID:'1wJaSorA_jLG7YJJaTT2XXV6j5SSjufutVFOuKsK1tdY',
+  INTG_SHEET_ID:'11ZnhVoLvIJRHeeJk0u-fZI2G5crWNHIpV9RDOVtDQJ4',
+  LEADS_SHEET_ID:'19etQHubOqYtqobzGjVhWE-3ClCrQyZJ0zD2jklikO7A',
+  kpiSheetId:'1PJvpQbcWAV4TbkNgXvnlkIQhOgsbleM42oIBkWzqh10',
+  LTV_ID:'1e34EE4DKuj2tzatlX1qBFEAEX7aDtky02R2HA2KE7_M',
+  GS_URL2:'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec'
+ }
+};
+
+// ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ ИЗ GOOGLE SHEETS (gviz API)
+let SHEET_ID = COUNTRY_CONFIG[currentCountry].SHEET_ID;
 
 async function loadSheetData(sheetName) {
  // Если есть Apps Script URL — используем его (читает ВСЕ строки)
@@ -2006,7 +2045,7 @@ function parseDateFromSheet(v) {
 // Всего 293 записи оплат
 const SEATED_MAP = {"sarybas_2026-03-01": true, "almas_2026-03-01": true, "semicegold_2026-03-02": true, "1000mel_2026-03-01": true, "bauer-airan_2026-03-02": true, "kemel_2026-03-02": true, "abdusattarov_2026-03-02": true, "sayramnan1_2026-03-02": true, "sayramnan2_2026-03-02": true, "ksmclean_2026-03-02": true, "leaderplus_2026-03-02": true, "il-nur_2026-03-02": true, "popova_2026-03-02": true, "abdgroup_2026-03-02": true, "shintree_2026-03-02": true, "riri_2026-03-02": true, "flacongroup_2026-03-02": true, "bikura_2026-03-02": true, "abokado_2026-03-02": true, "balmuzpetro_2026-03-02": true, "karaganda_2026-03-02": true, "harper-aktau_2026-03-02": true, "horeka-jb_2026-03-02": true, "fc2020_2026-03-03": true, "rndtech_2026-03-03": true, "kamalov_2026-03-03": true, "karat_2026-01-03": true, "rokosast_2026-01-05": true, "as_2026-01-03": true, "alikhan_2026-01-05": true, "altea-kst_2026-01-05": true, "four-trade_2026-01-05": true, "ada01_2026-01-05": true, "jeren-asal_2026-01-05": true, "kemel_2026-01-05": true, "nuar-pv_2026-01-05": true, "pro-sklad_2026-01-05": true, "dk-isma_2026-01-06": true, "ksmclean_2026-01-06": true, "vizitkzo_2026-01-06": true, "sulifashym_2026-01-06": true, "ost01_2026-01-07": true, "provkus_2026-01-07": true, "adalz_2026-01-08": true, "provkus_2026-01-08": true, "lkmcenter_2026-01-08": true, "nfa_2026-01-08": true, "alikhan_2026-01-08": true, "gizzo_2026-01-09": true, "ksmclean_2026-01-13": true, "baizhol_2026-01-13": true, "sulifashym_2026-01-13": true, "dk-isma_2026-01-13": true, "kemel17_2026-01-14": true, "nfa_2026-01-14": true, "baizhol_2026-01-14": true, "whitedistro_2026-01-14": true, "vizavi_2026-01-14": true, "daur_2026-01-14": true, "smag_2026-01-15": true, "sayramnan-jet_2026-01-14": true, "candytrade_2026-01-15": true, "lkmcenter_2026-01-14": true, "tazalife_2026-01-15": true, "iphan01_2026-01-16": true, "harvestfs_2026-01-16": true, "sular_2026-01-19": true, "baizhol_2026-01-20": true, "ayau_2026-01-20": true, "ayau_2026-01-21": true, "ilzat989_2026-01-06": true, "dostyk_2026-01-20": true, "semicegold_2026-01-20": true, "ecoraduga_2026-01-21": true, "provkus_2026-01-21": true, "lengerskoe-7say_2026-01-21": true, "sarybas_2026-01-22": true, "osman ibox_2026-01-23": true, "adalz_2026-01-16": true, "bereke_2026-01-26": true, "mehkaz02_2026-01-26": true, "ecoala_2026-01-26": true, "plastkrep_2026-01-26": true, "vizitkarabulak_2026-01-26": true, "nfa_2026-01-26": true, "baizhol_2026-01-26": true, "and-kzn_2026-01-27": true, "kamalov_2026-01-27": true, "sarybas_2026-01-27": true, "smak_2026-01-28": true, "bereke_2026-01-28": true, "tazalife_2026-01-27": true, "lengersk7say_2026-01-27": true, "ost01_2026-01-28": true, "ksmclean_2026-01-28": true, "vizitkzo_2026-01-27": true, "sulifashym_2026-01-28": true, "gizzo_2026-01-28": true, "baizhol_2026-01-29": true, "il-nur_2026-01-29": true, "arasha_2026-01-29": true, "semicegold_2026-01-29": true, "provkus_2026-01-29": true, "iphan01_2026-01-30": true, "kemel17_2026-01-04": true, "каспи_2026-01-19": false, "venerapopular_2026-01-27": false, "alikhan1_2026-01-30": true, "smak_2026-01-29": true, "gizzo_2026-02-02": true, "kemel17_2026-02-02": true, "alexandr_2026-02-01": true, "eco-semki01_2026-02-01": true, "medactr_2026-02-02": true, "vizitkzo_2026-02-02": true, "tazalife_2026-02-02": true, "kausar06_2026-02-02": true, "ksmclean_2026-02-02": true, "sulifashy_2026-02-02": true, "ahi_2026-02-02": true, "shymkala_2026-02-02": true, "eda_2026-02-02": true, "lengerkz_2026-02-02": true, "balmuzpetro_2026-02-02": true, "balmuzkost_2026-02-02": true, "dddhalal_2026-02-02": true, "shah-company_2026-02-02": true, "nfa_2026-02-02": true, "optoboom_2026-02-02": true, "panteradistribution_2026-02-03": true, "smak1_2026-02-02": true, "smak1_2026-02-03": true, "baizhol_2026-02-03": true, "iphan01_2026-02-03": true, "bauer-airan_2026-02-02": true, "bota_2026-02-02": true, "kztiai_2026-02-04": true, "ost01_2026-02-04": true, "harper_2026-02-05": true, "adalz_2026-02-05": true, "il-nur_2026-02-05": true, "semicegold_2026-02-05": true, "bereke_2026-02-05": true, "vizitkzo_2026-02-05": true, "tazalife_2026-02-05": true, "kemel17_2026-02-05": true, "provkus_2026-02-05": true, "sulifashy_2026-02-05": true, "lkmcenter_2026-02-05": true, "candytrade_2026-02-05": true, "sarybas_2026-02-05": true, "ksmclean_2026-02-06": true, "dk-isma_2026-02-06": true, "alikhan_2026-02-06": true, "nfa_2026-02-06": true, "gizzo_2026-02-09": true, "baizhol_2026-02-09": true, "daur_2026-02-09": true, "adalz_2026-02-10": true, "smak_2026-02-10": true, "dostyk_2026-02-10": true, "arasha_2026-02-10": true, "whitedistro_2026-02-11": true, "qazaqstantv_2026-02-12": true, "iphan01_2026-02-12": true, "il-nur_2026-02-12": true, "ost01_2026-02-12": true, "jqt_2026-02-13": true, "kamalov_2026-02-16": true, "kemel17_2026-02-16": true, "ozyurt-food_2026-02-16": true, "semicegold_2026-02-17": true, "nfa_2026-02-17": true, "kemel17_2026-02-18": true, "bestdecor_2026-02-19": true, "bestdecor_2026-02-13": true, "balsan_2026-02-20": true, "eda_2026-02-20": true, "TOO UNI Trade Aktau_2026-02-20": false, "donifoods_2026-02-21": true, "gedeongd_2026-02-17": true, "gis123_2026-02-23": true, "whitedistro_2026-02-18": true, "taza_2026-02-23": true, "sayramnan-kenes_2026-02-24": true, "dom_2026-02-04": true, "dom_2026-02-19": true, "iphan01_2026-02-23": true, "f3_2026-02-24": true, "kerey_2026-02-24": true, "sayramnanaralkazaly_2026-02-24": true, "adal14_2026-02-24": true, "GIZZO_2026-02-23": true, "muscat_2026-02-25": true, "lztsfrukt ibox_2026-02-25": false, "taiger_2026-02-24": true, "viakom_2026-02-25": false, "altea-kst_2026-02-26": true, "tomiko_2026-02-26": true, "shst_2026-02-26": false, "host tattim_2026-02-26": true, "GIZZO_2026-02-24": true, "aromakz_2026-02-24": true, "qq1_2026-02-06": true, "yoyoto_2026-02-25": true, "ИП ЖОЛАМАНОВ_2026-02-27": false, "каспи_2026-02-02": false};
 
-let payments = (function() {
+let payments = (currentCountry === 'KZ') ? (function() {
  const RAW = [
 // === ЯНВАРЬ 2026 (132 записи, итого 19 626 600 ₸) ===
 // Данные из PDF: 130 посажено из 132
@@ -2239,7 +2278,7 @@ let payments = (function() {
  techSupport: r.tech,
  month: new Date(r.d).getMonth()
  }));
-})();
+})() : [];
 
 // Акты внедрений из данных таблицы
 let acts = (function(){
@@ -2269,7 +2308,7 @@ function savePlans(){try{localStorage.setItem('sd_plans',JSON.stringify(plans));
 
 let currentPeriod='month', currentTab='payment', activePlanPeriod='week';
 let nextPayId=300, nextActId=50, planHistory=[], planChips=new Set(['license']);
-let currentUser=null, gsUrl='https://script.google.com/macros/s/AKfycbzKz7c6eUD9UZ-foL5BQJmhyh93nN9GbBAUoIxvvrQtIrwbQX_UKFo48Q_8jlo7qcSWxQ/exec';
+let currentUser=null, gsUrl=COUNTRY_CONFIG[currentCountry].gsUrl;
 // 
 // TELEGRAM BOT — восстановление пароля
 // Вставь свой токен сюда (получи новый у @BotFather после отзыва старого):
@@ -2278,7 +2317,7 @@ const ADMIN_TG_ID = '5472344802'; // Мирзахит — получает за�
 const REPORT_BOT_TOKEN = '8655785486:AAFApF-E1v-OYu-bNQt4PNJxE8opRnw2Ljs';
 const REPORT_CHAT_ID = '5472344802';
 // 
-let kpiSheetId = '1dA_NypMBj2LbmSOn6GuZXcCNCUqN7lmBAs9S5FbgjzU';
+let kpiSheetId = COUNTRY_CONFIG[currentCountry].kpiSheetId;
 let profile={name:'',role:'',email:'',company:'SalesDoc'};
 
 // ============================================================
@@ -2336,6 +2375,42 @@ function connectKpiSheet() {
  showNotif('КПИ таблица подключена', 'ID: ' + val);
 }
 
+// ============================================================
+// COUNTRY SWITCHER
+// ============================================================
+function switchCountry(code) {
+ if (code === currentCountry) return;
+ currentCountry = code;
+ localStorage.setItem('sd_country', code);
+ var cfg = COUNTRY_CONFIG[code];
+ SHEET_ID = cfg.SHEET_ID;
+ gsUrl = cfg.gsUrl;
+ EXP_SHEET_ID = cfg.EXP_SHEET_ID;
+ EXPENSES_SHEET_ID = cfg.EXP_SHEET_ID;
+ INTG_SHEET_ID = cfg.INTG_SHEET_ID;
+ LEADS_SHEET_ID = cfg.LEADS_SHEET_ID;
+ kpiSheetId = cfg.kpiSheetId;
+ LTV_2025_ID = cfg.LTV_ID;
+ // Clear data
+ payments.length = 0;
+ if (typeof expensesData !== 'undefined') expensesData = [];
+ if (typeof intgData !== 'undefined') intgData = [];
+ Object.keys(SEATED_MAP).forEach(function(k){ delete SEATED_MAP[k]; });
+ updateCountrySwitcherUI();
+ setSyncStatus('loading', 'Загрузка ' + cfg.label + '...');
+ syncFromSheets();
+}
+
+function updateCountrySwitcherUI() {
+ document.querySelectorAll('.country-btn').forEach(function(btn){
+  btn.classList.toggle('active', btn.dataset.country === currentCountry);
+ });
+ var titleEl = document.querySelector('.page-title');
+ if (titleEl) {
+  var base = titleEl.textContent.replace(/\s*[\u{1F1E6}-\u{1F1FF}]{2}\s*/gu, '').trim();
+  titleEl.textContent = COUNTRY_CONFIG[currentCountry].flag + ' ' + base;
+ }
+}
 
 function setSyncStatus(state, text) {
  const dot=document.getElementById('sync-dot');
@@ -3899,7 +3974,7 @@ function kcDoSearch(q){
 var kcMode='current'; // 'current' or 'ltv'
 var ltv2025Data=null; // кэш данных 2025
 var ltv2025Loading=false;
-var LTV_2025_ID='11ErpSR9fJ_T0ggWBrHjRB35cMs4yl84HedSO1Tf4Z08';
+var LTV_2025_ID=COUNTRY_CONFIG[currentCountry].LTV_ID;
 
 function kcSetMode(mode,btn){
  document.querySelectorAll('#kc-mode-tabs .kc-pt').forEach(function(b){b.classList.remove('active');});
@@ -4824,11 +4899,12 @@ function doLogin() {
  document.getElementById('main-app').style.display = 'block';
 
  applyUserAccess();
+ updateCountrySwitcherUI();
  initCalendar();
  renderAll();
  showView('dashboard');
  // Автоматически загрузить свежие данные из Google Таблицы — сразу без задержки
- setSyncStatus('loading', 'Загрузка данных...');
+ setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
  syncFromSheets();
 }
 
@@ -6325,7 +6401,7 @@ buildQuickChips();
 
 // MARKETING 
 var _mktPeriod = 'week';
-var LEADS_SHEET_ID = '19etQHubOqYtqobzGjVhWE-3ClCrQyZJ0zD2jklikO7A';
+var LEADS_SHEET_ID = COUNTRY_CONFIG[currentCountry].LEADS_SHEET_ID;
 
 function mktFmt(n) {
  if (n === null || isNaN(n)) return '—';
@@ -7041,7 +7117,7 @@ async function planLoad() {
 
  var tab = PLAN_TABS[planTabIdx] || PLAN_TABS[0];
  var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(tab.name) + '&spreadsheetId=1dA_NypMBj2LbmSOn6GuZXcCNCUqN7lmBAs9S5FbgjzU&range=A1:G60';
+ var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(tab.name) + '&spreadsheetId=' + kpiSheetId + '&range=A1:G60';
 
  try {
  var resp = await fetch(url);
@@ -7064,7 +7140,7 @@ async function planLoad() {
 // /PLAN VIEW 
 
 // EXPENSES MODULE 
-var EXP_SHEET_ID = '1TQSgd1rBHmF4mIktKf8Sk3C3OGxfownysqgQwu0IzWM';
+var EXP_SHEET_ID = COUNTRY_CONFIG[currentCountry].EXP_SHEET_ID;
 var EXP_TABS = [
  {label:'Апрель 2026', name:'Апрель 2026', year:2026, month:3},
  {label:'Март 2026', name:'Март 2026', year:2026, month:2},
@@ -7337,7 +7413,7 @@ function expRenderTable() {
 // /EXPENSES MODULE 
 
 // INTEGRATIONS QUEUE MODULE 
-const INTG_SHEET_ID = '11ZnhVoLvIJRHeeJk0u-fZI2G5crWNHIpV9RDOVtDQJ4';
+let INTG_SHEET_ID = COUNTRY_CONFIG[currentCountry].INTG_SHEET_ID;
 let intgData = []; // {company, type, status, state, dateStart, deadline, dateDone, operator, manager}
 
 async function intgLoad() {
@@ -7746,7 +7822,7 @@ function intgRender() {
 // /INTEGRATIONS QUEUE MODULE 
 
 // P&L MODULE 
-const EXPENSES_SHEET_ID = '1TQSgd1rBHmF4mIktKf8Sk3C3OGxfownysqgQwu0IzWM';
+let EXPENSES_SHEET_ID = COUNTRY_CONFIG[currentCountry].EXP_SHEET_ID;
 let expensesData = []; // {date, category, note, amount, bank, month}
 
 async function loadExpenses() {
