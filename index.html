@@ -2481,7 +2481,7 @@ async function syncFromSheets() {
  }
  }
  var dataRows = headerIdx >= 0 ? data.rows.slice(headerIdx+1) : data.rows.slice(4);
- dataRows.forEach(function(row) {
+ dataRows.forEach(function(row, rowIdx) {
  if (!row || row[colClient] == null || String(row[colClient]).trim() === '') return;
  // Берём сумму факт (colAmt — столбец M), если пустой — берём столбец J (index 9)
  let amtRaw = row[colAmt];
@@ -2490,7 +2490,8 @@ async function syncFromSheets() {
  if (amtRaw == null || String(amtRaw).trim() === '') { amtRaw = row[9]; srcCol = 'J'; }
  if (amtRaw == null || String(amtRaw).trim() === '') { amtRaw = 0; }
  const amount = typeof amtRaw === 'number' ? amtRaw : parseFloat(String(amtRaw).replace(/\s/g,'').replace(/[^0-9.,-]/g,'').replace(',','.'));
- if (!amount || amount<=0) return;
+ console.log('[ROW] '+months[mi]+' r'+rowIdx+': '+String(row[colClient]).trim()+' | M='+JSON.stringify(rawM)+' J='+JSON.stringify(rawJ)+' → src='+srcCol+' amt='+amount+' cat='+String(row[colCat]||''));
+ if (!amount || amount<=0) { console.warn('[SKIP] '+String(row[colClient]).trim()+' amount='+amount); return; }
  const dateStr = parseDateFromSheet(row[colDate]) || ('2026-0'+(mi+1)+'-01');
  const managerRaw = String(row[colMgr]||'').trim();
  const techRaw = String(row[colTech]||'').trim();
