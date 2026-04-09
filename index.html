@@ -1977,14 +1977,15 @@ const COUNTRY_CONFIG = {
 let SHEET_ID = COUNTRY_CONFIG[currentCountry].SHEET_ID;
 
 async function loadSheetData(sheetName) {
- // Если есть Apps Script URL — используем его (читает ВСЕ строки)
- if (gsUrl) {
+ // Apps Script URL — используем standalone скрипт с spreadsheetId
+ var scriptUrl = COUNTRY_CONFIG[currentCountry].GS_URL2 || gsUrl;
+ if (scriptUrl) {
  try {
- const resp = await fetch(gsUrl + '?action=getSheet&sheet=' + encodeURIComponent(sheetName) + '&spreadsheetId=' + SHEET_ID);
+ const resp = await fetch(scriptUrl + '?action=getSheet&sheet=' + encodeURIComponent(sheetName) + '&spreadsheetId=' + SHEET_ID);
  const json = await resp.json();
  if (json && json.rows) return json;
  } catch(e) {
- 
+
  }
  }
  // Fallback: gviz API (может резать строки)
