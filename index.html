@@ -2420,7 +2420,14 @@ function switchCountry(code) {
  payments.length = 0;
  if (typeof expensesData !== 'undefined') expensesData = [];
  if (typeof intgData !== 'undefined') intgData = [];
+ if (typeof expData !== 'undefined') expData = [];
  Object.keys(SEATED_MAP).forEach(function(k){ delete SEATED_MAP[k]; });
+ // Пересоздать EXP_TABS для новой страны
+ var em = cfg.expMonths || COUNTRY_CONFIG[currentCountry].expMonths;
+ EXP_TABS = [];
+ for (var i = em.length - 1; i >= 0; i--) {
+  EXP_TABS.push({label:em[i], name:em[i], year:2026, month:i});
+ }
  updateCountrySwitcherUI();
  setSyncStatus('loading', 'Загрузка ' + cfg.label + '...');
  syncFromSheets();
@@ -7180,12 +7187,14 @@ async function planLoad() {
 
 // EXPENSES MODULE 
 var EXP_SHEET_ID = COUNTRY_CONFIG[currentCountry].EXP_SHEET_ID;
-var EXP_TABS = [
- {label:'Апрель 2026', name:'Апрель 2026', year:2026, month:3},
- {label:'Март 2026', name:'Март 2026', year:2026, month:2},
- {label:'Февраль 2026', name:'Февраль 2026', year:2026, month:1},
- {label:'Январь 2026', name:'Январь 2026', year:2026, month:0},
-];
+var EXP_TABS = (function(){
+ var em = COUNTRY_CONFIG[currentCountry].expMonths;
+ var tabs = [];
+ for (var i = em.length - 1; i >= 0; i--) {
+  tabs.push({label:em[i], name:em[i], year:2026, month:i});
+ }
+ return tabs;
+})();
 var expTabIdx = 0;
 var expData = []; // {date, category, note, amount, bank}
 var EXP_COLORS = {
