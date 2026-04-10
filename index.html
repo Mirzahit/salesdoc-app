@@ -7140,7 +7140,7 @@ function showBonusDetail(bonusId) {
   html += '<th>КЛИЕНТ</th><th style="text-align:right">СУММА ОПЛАТ</th><th style="text-align:right">БОНУС ' + info.coeff + '%</th>';
   if (isAdmin) html += '<th style="width:36px"></th>';
   html += '</tr></thead><tbody>';
-  info.companies.forEach(function(c) {
+  info.companies.forEach(function(c, ci) {
    var warn = !c.confirmed ? '<span style="color:#EF5350;font-size:9px;font-weight:600" title="Нет строки Новый клиент в таблице"> [нет нов.клиент]</span>' : '';
    var _clKey = c.client.toLowerCase().trim();
    var dupeWarn = _prevNewClients[_clKey] ? '<span style="color:#FF7043;font-size:9px;font-weight:600" title="Клиент уже был новым в ' + _prevNewClients[_clKey] + '"> [ПОВТОР: ' + _prevNewClients[_clKey] + ']</span>' : '';
@@ -7150,9 +7150,9 @@ function showBonusDetail(bonusId) {
    html += '<td style="color:'+(c.excluded?'var(--text-muted)':'#4CAF50')+';font-weight:700;text-align:right">' + fmtBonus(c.bonus) + ' '+_CUR+'</td>';
    if (isAdmin) {
     if (c.excluded) {
-     html += '<td style="text-align:center"><button onclick="bonusRestoreCompany(\''+bonusId+'\',\''+c.client.replace(/'/g,"\\'")+'\')" style="background:#1B5E20;color:#81C784;border:none;border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:600;text-decoration:none" title="Вернуть в бонус">↩</button></td>';
+     html += '<td style="text-align:center"><button class="bonus-action-btn" data-action="restore" data-idx="'+ci+'" style="background:#1B5E20;color:#81C784;border:none;border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:600;text-decoration:none" title="Вернуть в бонус">↩</button></td>';
     } else {
-     html += '<td style="text-align:center"><button onclick="bonusExcludeCompany(\''+bonusId+'\',\''+c.client.replace(/'/g,"\\'")+'\')" style="background:#4A1A1A;color:#EF5350;border:none;border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:600" title="Убрать из бонуса">✕</button></td>';
+     html += '<td style="text-align:center"><button class="bonus-action-btn" data-action="exclude" data-idx="'+ci+'" style="background:#4A1A1A;color:#EF5350;border:none;border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:600" title="Убрать из бонуса">✕</button></td>';
     }
    }
    html += '</tr>';
@@ -7187,6 +7187,20 @@ function showBonusDetail(bonusId) {
  html += '</div>';
  overlay.innerHTML = html;
  overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.remove(); });
+ // Привязка кнопок исключения/восстановления через data-атрибуты (безопасно для любых символов в названиях)
+ var _companies = info.companies;
+ overlay.querySelectorAll('.bonus-action-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+   var idx = parseInt(btn.dataset.idx);
+   var cl = _companies[idx] ? _companies[idx].client : '';
+   if (!cl) return;
+   if (btn.dataset.action === 'exclude') {
+    bonusExcludeCompany(bonusId, cl);
+   } else {
+    bonusRestoreCompany(bonusId, cl);
+   }
+  });
+ });
  document.body.appendChild(overlay);
 }
 
