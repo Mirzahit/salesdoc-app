@@ -2602,6 +2602,8 @@ async function syncFromSheets() {
  setSyncStatus('ok','Обновлено '+new Date().toLocaleTimeString('ru')+' · '+allNew.length+' записей');
  showNotif(' Данные загружены','«Доходы '+currentCountry+' 2026» — '+allNew.length+' записей (M:'+dbgFromM+', J:'+dbgFromJ+'). Март: '+dbgMar.length+' зап, '+fmtFull(dbgMarSum)+' '+COUNTRY_CONFIG[currentCountry].currency);
  renderAll();
+ // Загрузить Светофор для дашборда (звонки, встречи, активации)
+ if (!planLastData) { planInit(); planLoad().then(function(){ renderPlanView(); }).catch(function(){}); }
  } else {
  setSyncStatus('ok','Нет новых данных — используются загруженные');
  }
@@ -7023,7 +7025,7 @@ function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis, _exclud
 
  // === KPI ПРЕМИЯ ===
  var KPI_POTENTIAL = [
-  {match:'звонок', amount:6000},
+  {match:'звонк', amount:6000},
   {match:'встреч', amount:18000},
   {match:'crm', amount:6000}
  ];
