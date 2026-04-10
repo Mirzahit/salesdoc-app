@@ -1906,10 +1906,10 @@ const ACCESS_KEYS = [
 ];
 
 const ROLE_DEFAULTS = {
- admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_employees:0,view_cabinet:1,view_marketing:1,view_ai:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- operator: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,add_payments:0,add_acts:1,edit_plans:0,manage_employees:0 },
- viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_ai:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ operator: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,add_payments:0,add_acts:1,edit_plans:0,manage_employees:0 },
+ viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
 };
 
 // ============================================================
@@ -2358,7 +2358,7 @@ function applyUserAccess() {
  document.getElementById('cab-display-role').textContent=u.pos+' · '+profile.company;
 
  // Show/hide nav items
- const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',ai:'view_ai',expenses:'view_dashboard',integrations:'view_dashboard',tests:'view_dashboard'};
+ const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',ai:'view_ai',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests'};
  document.querySelectorAll('.nav-item[data-view]').forEach(el=>{
  const view=el.dataset.view;
  const key=viewMap[view];
@@ -5798,6 +5798,7 @@ document.getElementById('sidebar').style.display = 'none';
 document.getElementById('main-app').style.display = 'none';
 
 initEmployees();
+loadEmpAccess();
 // Восстановить сохранённых пользователей (добавленные/удалённые/изменённые)
 loadCustomEmployees();
 populateEmployeeSelects();
@@ -5932,11 +5933,12 @@ function renderCabinetV83() {
 
  // My access rights
  const accessLabels = {
- view_dashboard:' Обзор', view_payments:' Оплаты', view_acts:' Акты',
- view_plan:' Планы', view_keyclients:' Клиенты',
- view_employees:' Сотрудники', view_cabinet:' Кабинет', view_marketing:' Маркетинг',
- view_ai:' ИИ', add_payments:' Добавлять оплаты', add_acts:' Добавлять акты',
- edit_plans:' Редакт. планы', manage_employees:' Управление сотрудниками'
+ view_dashboard:'Обзор', view_payments:'Оплаты', view_acts:'Акты',
+ view_plan:'Планы', view_keyclients:'Клиенты', view_expenses:'Расходы',
+ view_integrations:'Интеграции', view_tests:'Тесты',
+ view_employees:'Сотрудники', view_cabinet:'Кабинет', view_marketing:'Маркетинг',
+ view_ai:'ИИ', add_payments:'Добавл. оплаты', add_acts:'Добавл. акты',
+ edit_plans:'Редакт. планы', manage_employees:'Упр. сотрудниками'
  };
  const grid = document.getElementById('my-access-grid');
  if (grid) {
@@ -6094,7 +6096,7 @@ function fmtK(n) {
 function renderEmpAccessList(accessLabels) {
  const list = document.getElementById('emp-access-list');
  if (!list) return;
- const others = employees.filter(e => e.role !== 'admin' && e.active !== false);
+ const others = employees.filter(e => e.id !== 1 && e.active !== false);
  list.innerHTML = others.map(emp => {
  const chips = Object.keys(accessLabels).map(key => {
  const has = emp.access && emp.access[key];
@@ -6109,16 +6111,34 @@ function renderEmpAccessList(accessLabels) {
  }).join('');
 }
 
+function saveEmpAccess() {
+ var data = {};
+ employees.forEach(function(e){ data[e.id] = e.access; });
+ try { localStorage.setItem('sd_emp_access', JSON.stringify(data)); } catch(ex){}
+}
+function loadEmpAccess() {
+ try {
+  var raw = localStorage.getItem('sd_emp_access');
+  if (!raw) return;
+  var data = JSON.parse(raw);
+  employees.forEach(function(e){
+   if (data[e.id]) e.access = Object.assign({}, e.access, data[e.id]);
+  });
+ } catch(ex){}
+}
+
 function toggleEmpAccess(empId, key) {
  const emp = employees.find(e => e.id === empId);
  if (!emp || !emp.access) return;
  emp.access[key] = emp.access[key] ? 0 : 1;
+ saveEmpAccess();
  const accessLabels = {
- view_dashboard:' Обзор', view_payments:' Оплаты', view_acts:' Акты',
- view_plan:' Планы', view_keyclients:' Клиенты',
- view_employees:' Сотрудники', view_cabinet:' Кабинет', view_marketing:' Маркетинг',
- view_ai:' ИИ', add_payments:' Добавлять оплаты', add_acts:' Добавлять акты',
- edit_plans:' Редакт. планы', manage_employees:' Управление сотрудниками'
+ view_dashboard:'Обзор', view_payments:'Оплаты', view_acts:'Акты',
+ view_plan:'Планы', view_keyclients:'Клиенты', view_expenses:'Расходы',
+ view_integrations:'Интеграции', view_tests:'Тесты',
+ view_employees:'Сотрудники', view_cabinet:'Кабинет', view_marketing:'Маркетинг',
+ view_ai:'ИИ', add_payments:'Добавл. оплаты', add_acts:'Добавл. акты',
+ edit_plans:'Редакт. планы', manage_employees:'Упр. сотрудниками'
  };
  renderEmpAccessList(accessLabels);
  showNotif('Доступ обновлён', emp.name + ': ' + accessLabels[key]);
