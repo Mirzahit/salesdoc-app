@@ -3131,29 +3131,34 @@ function renderDonut(l,s,impl) {
 }
 
 function renderPlanBars(l,s,i) {
+ try {
  const plan=plans[currentPeriod];
 
  // Факт/план из Светофора (если загружен)
- var callsFact = _svetoforSum('звонк','fact');
- var callsPlan = _svetoforSum('звонк','plan') || plan.calls;
- var meetFact = _svetoforSum('встреч','fact');
- var meetPlan = _svetoforSum('встреч','plan') || plan.meetings;
- var actFact = _svetoforSum('лицензи','fact');
- var actPlan = _svetoforSum('лицензи','plan') || plan.activations;
+ var callsFact = typeof _svetoforSum==='function' ? _svetoforSum('звонк','fact') : 0;
+ var callsPlan = (typeof _svetoforSum==='function' ? _svetoforSum('звонк','plan') : 0) || plan.calls || 0;
+ var meetFact = typeof _svetoforSum==='function' ? _svetoforSum('встреч','fact') : 0;
+ var meetPlan = (typeof _svetoforSum==='function' ? _svetoforSum('встреч','plan') : 0) || plan.meetings || 0;
+ var actFact = typeof _svetoforSum==='function' ? _svetoforSum('лицензи','fact') : 0;
+ var actPlan = (typeof _svetoforSum==='function' ? _svetoforSum('лицензи','plan') : 0) || plan.activations || 0;
 
  var items = [
   {label:'Новые продажи',actual:l+i,plan:plan.new_sales,color:'var(--gold-bright)',money:true},
-  {label:'Абон. платы',actual:s,plan:plan.subscription,color:'#4A90D9',money:true},
-  {label:'Звонки',actual:callsFact,plan:callsPlan,color:'#81C784',money:false},
-  {label:'Встречи',actual:meetFact,plan:meetPlan,color:'#CE93D8',money:false},
-  {label:'Активация лиц.',actual:actFact,plan:actPlan,color:'#FFB74D',money:false}
+  {label:'Абон. платы',actual:s,plan:plan.subscription,color:'#4A90D9',money:true}
  ];
+ // Показываем звонки/встречи/активации только если есть данные Светофора
+ if (callsPlan > 0 || meetPlan > 0 || actPlan > 0) {
+  items.push({label:'Звонки',actual:callsFact,plan:callsPlan,color:'#81C784',money:false});
+  items.push({label:'Встречи',actual:meetFact,plan:meetPlan,color:'#CE93D8',money:false});
+  items.push({label:'Активация лиц.',actual:actFact,plan:actPlan,color:'#FFB74D',money:false});
+ }
 
  document.getElementById('plan-bars').innerHTML=items.map(function(it){
   var pct=it.plan>0?Math.min(Math.round((it.actual/it.plan)*100),100):0;
   var valStr=it.money?(fmtFull(it.actual)+' / '+fmtFull(it.plan)):(Math.round(it.actual)+' / '+Math.round(it.plan));
   return'<div class="plan-item"><div class="plan-item-header"><span class="plan-item-label">'+it.label+'</span><span class="plan-item-value">'+pct+'% — '+valStr+'</span></div><div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%;background:linear-gradient(90deg,'+it.color+'88,'+it.color+')"></div></div></div>';
  }).join('');
+ } catch(e) { console.log('[renderPlanBars] error:', e.message); }
 }
 
 function renderRecentPayments(ps) {
