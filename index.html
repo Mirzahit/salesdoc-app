@@ -6920,16 +6920,24 @@ function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis) {
  var targetMonth = tab.month;
  var targetYear = tab.year;
 
+ // Хелпер: проверяем дату платежа по месяцу и году (надёжнее чем p.month — индекс таба)
+ function _matchMonth(p, tMonth, tYear) {
+  if (!p.date) return false;
+  var d = new Date(p.date + 'T00:00:00');
+  return d.getMonth() === tMonth && d.getFullYear() === tYear;
+ }
+
  // DEBUG
  var _dbgAll = payments.filter(function(p){ return String(p.managerName||'').toLowerCase().indexOf(agentLow)>=0; });
- var _dbgMonth = _dbgAll.filter(function(p){ return p.month === targetMonth; });
- var _dbgYear = _dbgMonth.filter(function(p){ return p.date ? new Date(p.date+'T00:00:00').getFullYear() === targetYear : false; });
- var _dbgNov = _dbgYear.filter(function(p){ return String(p.categoryRaw||'').toLowerCase().indexOf('нов')>=0; });
- console.log('[BONUS] agent='+agentName+' tabIdx='+tabIdx+' targetMonth='+targetMonth+' targetYear='+targetYear+' | all='+_dbgAll.length+' month='+_dbgMonth.length+' year='+_dbgYear.length+' nov='+_dbgNov.length);
- if (_dbgAll.length>0 && _dbgMonth.length===0) {
+ var _dbgMonth = _dbgAll.filter(function(p){ return _matchMonth(p, targetMonth, targetYear); });
+ var _dbgNov = _dbgMonth.filter(function(p){ return String(p.categoryRaw||'').toLowerCase().indexOf('нов')>=0; });
+ console.log('[BONUS] agent='+agentName+' tabIdx='+tabIdx+' targetMonth='+targetMonth+' targetYear='+targetYear+' | all='+_dbgAll.length+' byDate='+_dbgMonth.length+' nov='+_dbgNov.length);
+ if (_dbgAll.length>0) {
   var months = {};
-  _dbgAll.forEach(function(p){ months[p.month] = (months[p.month]||0)+1; });
-  console.log('[BONUS] months distribution:', JSON.stringify(months));
+  _dbgAll.forEach(function(p){ var k = 'tab:'+p.month; months[k] = (months[k]||0)+1; });
+  var dateMonths = {};
+  _dbgAll.forEach(function(p){ if(p.date){var d=new Date(p.date+'T00:00:00'); var k='date:'+d.getMonth(); dateMonths[k]=(dateMonths[k]||0)+1;} });
+  console.log('[BONUS] tab months:', JSON.stringify(months), '| date months:', JSON.stringify(dateMonths));
  }
 
  // Собираем факт по компаниям (для детализации)
@@ -6938,9 +6946,7 @@ function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis) {
  // Шаг 1: Находим компании у которых есть строка «новый клиент»
  var confirmedNewClients = {};
  payments.forEach(function(p){
-  if (p.month !== targetMonth) return;
-  var pYear = p.date ? new Date(p.date + 'T00:00:00').getFullYear() : -1;
-  if (pYear !== targetYear) return;
+  if (!_matchMonth(p, targetMonth, targetYear)) return;
   var mgrLow = String(p.managerName||'').toLowerCase().trim();
   var matched = false;
   nameVariants.forEach(function(nv){ if (mgrLow.indexOf(nv) >= 0 || nv.indexOf(mgrLow) >= 0) matched = true; });
@@ -6952,9 +6958,7 @@ function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis) {
  });
  // Шаг 2: Суммируем ВСЕ оплаты с «нов» в статье (нов клиент + нов внедрение + нов интеграция)
  payments.forEach(function(p){
-  if (p.month !== targetMonth) return;
-  var pYear = p.date ? new Date(p.date + 'T00:00:00').getFullYear() : -1;
-  if (pYear !== targetYear) return;
+  if (!_matchMonth(p, targetMonth, targetYear)) return;
   var mgrLow = String(p.managerName||'').toLowerCase().trim();
   var matched = false;
   nameVariants.forEach(function(nv){ if (mgrLow.indexOf(nv) >= 0 || nv.indexOf(mgrLow) >= 0) matched = true; });
@@ -7042,14 +7046,17 @@ function showBonusDetail(bonusId) {
  var _prevNewClients = {};
  try {
   payments.forEach(function(p){
-   var pY = p.date ? new Date(p.date + 'T00:00:00').getFullYear() : -1;
-   if (pY === _tY && p.month === _tM) return;
+   if (!p.date) return;
+   var _d = new Date(p.date + 'T00:00:00');
+   var pY = _d.getFullYear();
+   var pM = _d.getMonth();
+   if (pY === _tY && pM === _tM) return;
    if (pY > _tY) return;
-   if (pY === _tY && p.month > _tM) return;
+   if (pY === _tY && pM > _tM) return;
    var raw = String(p.categoryRaw||'').toLowerCase().trim();
    if (raw === 'новый клиент' || (raw.indexOf('новый') >= 0 && raw.indexOf('клиент') >= 0)) {
     var clKey = p.client.toLowerCase().trim();
-    if (!_prevNewClients[clKey]) _prevNewClients[clKey] = _dupeMonths[p.month] + ' ' + pY;
+    if (!_prevNewClients[clKey]) _prevNewClients[clKey] = _dupeMonths[pM] + ' ' + pY;
    }
   });
  } catch(e) {}
