@@ -6914,12 +6914,24 @@ var MANAGER_NAME_MAP = {
 function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis) {
  var agentLow = agentName.toLowerCase().trim();
  var nameVariants = MANAGER_NAME_MAP[agentLow] || [agentLow];
- 
+
  // Определяем месяц и год из PLAN_TABS
  var tab = PLAN_TABS[tabIdx] || PLAN_TABS[0];
  var targetMonth = tab.month;
  var targetYear = tab.year;
- 
+
+ // DEBUG
+ var _dbgAll = payments.filter(function(p){ return String(p.managerName||'').toLowerCase().indexOf(agentLow)>=0; });
+ var _dbgMonth = _dbgAll.filter(function(p){ return p.month === targetMonth; });
+ var _dbgYear = _dbgMonth.filter(function(p){ return p.date ? new Date(p.date+'T00:00:00').getFullYear() === targetYear : false; });
+ var _dbgNov = _dbgYear.filter(function(p){ return String(p.categoryRaw||'').toLowerCase().indexOf('нов')>=0; });
+ console.log('[BONUS] agent='+agentName+' tabIdx='+tabIdx+' targetMonth='+targetMonth+' targetYear='+targetYear+' | all='+_dbgAll.length+' month='+_dbgMonth.length+' year='+_dbgYear.length+' nov='+_dbgNov.length);
+ if (_dbgAll.length>0 && _dbgMonth.length===0) {
+  var months = {};
+  _dbgAll.forEach(function(p){ months[p.month] = (months[p.month]||0)+1; });
+  console.log('[BONUS] months distribution:', JSON.stringify(months));
+ }
+
  // Собираем факт по компаниям (для детализации)
  var companies = {};
  var factNew = 0;
