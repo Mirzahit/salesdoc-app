@@ -6134,7 +6134,9 @@ function loadCustomEmployees() {
       e.name = s.name; e.pos = s.pos; e.email = s.email;
       e.pass = s.pass; e.role = s.role; e.bonus = s.bonus||0;
       e.active = s.active!==false;
-      e.access = s.access||Object.assign({},ROLE_DEFAULTS[e.role]||ROLE_DEFAULTS.viewer);
+      // Мержим access: ROLE_DEFAULTS как база + сохранённый поверх (чтобы новые поля не терялись)
+      var baseAccess = Object.assign({}, ROLE_DEFAULTS[e.role]||ROLE_DEFAULTS.viewer);
+      e.access = Object.assign(baseAccess, s.access||{});
      }
     });
     // Добавляем пользователей из localStorage которых нет в базе
@@ -6142,7 +6144,8 @@ function loadCustomEmployees() {
     employees.forEach(function(e){ baseIds[e.id] = true; });
     data.forEach(function(e){
      if (!baseIds[e.id]) {
-      employees.push({id:e.id, name:e.name, pos:e.pos, email:e.email, pass:e.pass, role:e.role, bonus:e.bonus||0, active:e.active!==false, access:e.access||Object.assign({},ROLE_DEFAULTS[e.role]||ROLE_DEFAULTS.viewer), country:e.country||null});
+      var ba = Object.assign({}, ROLE_DEFAULTS[e.role]||ROLE_DEFAULTS.viewer);
+      employees.push({id:e.id, name:e.name, pos:e.pos, email:e.email, pass:e.pass, role:e.role, bonus:e.bonus||0, active:e.active!==false, access:Object.assign(ba, e.access||{}), country:e.country||null});
      }
     });
     nextEmpId = Math.max.apply(null, employees.map(function(e){return e.id;}))+1;
