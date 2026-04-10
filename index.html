@@ -6860,7 +6860,7 @@ function planRender(data) {
   // bonusId привязан к месяцу чтобы штрафы не переносились
   var bonusId = 'bonus-' + agent.name.replace(/[^a-zа-яё0-9]/gi,'') + '-' + planTabIdx;
   window['_bonusData_' + bonusId] = bonusInfo;
-  window['_bonusMeta_' + bonusId] = {name:agent.name, plan:salesKpi.plan, fact:salesKpi.fact, pct:salesKpi.pct};
+  window['_bonusMeta_' + bonusId] = {name:agent.name, plan:salesKpi.plan, fact:salesKpi.fact, pct:salesKpi.pct, kpis:agent.kpis};
   var penalty = (window._bonusPenalties && window._bonusPenalties[bonusId]) || 0;
   var displayNet = bonusInfo.bonusGross - bonusInfo.tax - penalty;
   var totalSalary = 270000 + bonusInfo.kpiTotal + displayNet;
@@ -6902,6 +6902,12 @@ var BONUS_TABLE = [
  {min:91, max:95, pct:8.5}, {min:96, max:99, pct:9}, {min:100, max:120, pct:9.5},
  {min:121, max:9999, pct:10}
 ];
+
+// Исключённые из бонуса компании: { "bonusKey": ["company1", "company2"] }
+var _bonusExcluded = (function(){
+ try { return JSON.parse(localStorage.getItem('sd_bonus_excluded')) || {}; } catch(e){ return {}; }
+})();
+function _saveBonusExcluded(){ localStorage.setItem('sd_bonus_excluded', JSON.stringify(_bonusExcluded)); }
 var OPERATOR_PACKAGES = {99000:0.30, 199000:0.30, 599000:0.50};
 var TAX_RATE = 0.12;
 
@@ -6911,7 +6917,7 @@ var MANAGER_NAME_MAP = {
  'юлия': ['юлия']
 };
 
-function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis) {
+function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis, _excludeKey) {
  var agentLow = agentName.toLowerCase().trim();
  var nameVariants = MANAGER_NAME_MAP[agentLow] || [agentLow];
 
@@ -6919,6 +6925,10 @@ function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis) {
  var tab = PLAN_TABS[tabIdx] || PLAN_TABS[0];
  var targetMonth = tab.month;
  var targetYear = tab.year;
+
+ // Исключённые компании
+ var exKey = _excludeKey || ('bonus-' + agentName.replace(/[^a-zа-яё0-9]/gi,'') + '-' + tabIdx);
+ var excluded = _bonusExcluded[exKey] || [];
 
  // Хелпер: проверяем дату платежа по месяцу и году (надёжнее чем p.month — индекс таба)
  function _matchMonth(p, tMonth, tYear) {
@@ -6988,13 +6998,21 @@ function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis) {
  var tax = Math.round(bonusGross * TAX_RATE);
  var bonusNet = bonusGross - tax;
 
- // Детализация по компаниям
+ // Детализация по компаниям (с учётом исключённых)
  var companyList = Object.keys(companies).map(function(cl){
   var info = companies[cl];
   var amt = info.amount;
-  var cb = Math.round(amt * coeff / 100);
-  return {client:cl, amount:amt, bonus:cb, confirmed:info.confirmed};
+  var isExcluded = excluded.indexOf(cl.toLowerCase().trim()) >= 0;
+  var cb = isExcluded ? 0 : Math.round(amt * coeff / 100);
+  return {client:cl, amount:amt, bonus:cb, confirmed:info.confirmed, excluded:isExcluded};
  }).sort(function(a,b){ return b.amount - a.amount; });
+
+ // Пересчитываем factNew без исключённых
+ var factNewFiltered = companyList.reduce(function(s,c){ return s + (c.excluded ? 0 : c.amount); }, 0);
+ factNew = factNewFiltered;
+ bonusGross = Math.round(factNew * coeff / 100);
+ tax = Math.round(bonusGross * TAX_RATE);
+ bonusNet = bonusGross - tax;
 
  // === KPI ПРЕМИЯ ===
  var KPI_POTENTIAL = [
@@ -7032,6 +7050,40 @@ function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis) {
  }
 
  return {factNew:factNew, pctExec:pctExec, coeff:coeff, bonusGross:bonusGross, tax:tax, bonusNet:bonusNet, companies:companyList, kpiItems:kpiItems, kpiTotal:kpiTotal, kpiEnabled:kpiEnabled};
+}
+
+function bonusExcludeCompany(bonusId, client) {
+ var key = bonusId;
+ if (!_bonusExcluded[key]) _bonusExcluded[key] = [];
+ var cl = client.toLowerCase().trim();
+ if (_bonusExcluded[key].indexOf(cl) < 0) _bonusExcluded[key].push(cl);
+ _saveBonusExcluded();
+ // Пересчитать бонус и перерисовать модал
+ _recalcAndReopenBonus(bonusId);
+}
+
+function bonusRestoreCompany(bonusId, client) {
+ var key = bonusId;
+ if (!_bonusExcluded[key]) return;
+ var cl = client.toLowerCase().trim();
+ _bonusExcluded[key] = _bonusExcluded[key].filter(function(c){ return c !== cl; });
+ if (_bonusExcluded[key].length === 0) delete _bonusExcluded[key];
+ _saveBonusExcluded();
+ _recalcAndReopenBonus(bonusId);
+}
+
+function _recalcAndReopenBonus(bonusId) {
+ var meta = window['_bonusMeta_' + bonusId];
+ if (!meta) return;
+ var tabIdx = parseInt(bonusId.split('-').pop());
+ var info = calcManagerBonus(meta.name, meta.plan, meta.fact, tabIdx, meta.pct, meta.kpis, bonusId);
+ window['_bonusData_' + bonusId] = info;
+ // Закрыть текущий модал и открыть заново
+ var overlay = document.querySelector('div[style*="fixed"][style*="z-index:9999"]');
+ if (overlay) overlay.remove();
+ showBonusDetail(bonusId);
+ // Обновить карточку на странице плана
+ try { planRender(planLastData); } catch(e){}
 }
 
 function showBonusDetail(bonusId) {
@@ -7083,23 +7135,36 @@ function showBonusDetail(bonusId) {
  if (info.companies.length === 0) {
   html += '<div style="text-align:center;color:var(--text-muted);padding:30px;font-size:12px">Нет оплат от новых клиентов за период</div>';
  } else {
+  var isAdmin = currentUser && currentUser.role === 'admin';
   html += '<div style="overflow-x:auto"><table class="data-table" style="width:100%"><thead><tr>';
   html += '<th>КЛИЕНТ</th><th style="text-align:right">СУММА ОПЛАТ</th><th style="text-align:right">БОНУС ' + info.coeff + '%</th>';
+  if (isAdmin) html += '<th style="width:36px"></th>';
   html += '</tr></thead><tbody>';
   info.companies.forEach(function(c) {
    var warn = !c.confirmed ? '<span style="color:#EF5350;font-size:9px;font-weight:600" title="Нет строки Новый клиент в таблице"> [нет нов.клиент]</span>' : '';
    var _clKey = c.client.toLowerCase().trim();
    var dupeWarn = _prevNewClients[_clKey] ? '<span style="color:#FF7043;font-size:9px;font-weight:600" title="Клиент уже был новым в ' + _prevNewClients[_clKey] + '"> [ПОВТОР: ' + _prevNewClients[_clKey] + ']</span>' : '';
-   html += '<tr><td>' + c.client + warn + dupeWarn + '</td>';
+   var rowStyle = c.excluded ? 'opacity:0.4;text-decoration:line-through' : '';
+   html += '<tr style="'+rowStyle+'"><td>' + c.client + warn + dupeWarn + (c.excluded ? ' <span style="color:#EF5350;font-size:9px;text-decoration:none;display:inline-block">исключён</span>' : '') + '</td>';
    html += '<td style="color:var(--gold-bright);font-weight:600;text-align:right">' + fmtBonus(c.amount) + ' '+_CUR+'</td>';
-   html += '<td style="color:#4CAF50;font-weight:700;text-align:right">' + fmtBonus(c.bonus) + ' '+_CUR+'</td></tr>';
+   html += '<td style="color:'+(c.excluded?'var(--text-muted)':'#4CAF50')+';font-weight:700;text-align:right">' + fmtBonus(c.bonus) + ' '+_CUR+'</td>';
+   if (isAdmin) {
+    if (c.excluded) {
+     html += '<td style="text-align:center"><button onclick="bonusRestoreCompany(\''+bonusId+'\',\''+c.client.replace(/'/g,"\\'")+'\')" style="background:#1B5E20;color:#81C784;border:none;border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:600;text-decoration:none" title="Вернуть в бонус">↩</button></td>';
+    } else {
+     html += '<td style="text-align:center"><button onclick="bonusExcludeCompany(\''+bonusId+'\',\''+c.client.replace(/'/g,"\\'")+'\')" style="background:#4A1A1A;color:#EF5350;border:none;border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;font-weight:600" title="Убрать из бонуса">✕</button></td>';
+    }
+   }
+   html += '</tr>';
   });
   html += '<tr style="border-top:2px solid var(--dark-border-bright)">';
   html += '<td style="font-weight:700;color:var(--gold-light);font-family:\'Space Grotesk\',sans-serif;letter-spacing:1px">ИТОГО</td>';
   html += '<td style="font-weight:700;color:var(--gold-bright);text-align:right">' + fmtBonus(info.factNew) + ' '+_CUR+'</td>';
-  html += '<td style="font-weight:700;color:#4CAF50;text-align:right;font-size:14px">' + fmtBonus(info.bonusGross) + ' '+_CUR+'</td></tr>';
+  html += '<td style="font-weight:700;color:#4CAF50;text-align:right;font-size:14px">' + fmtBonus(info.bonusGross) + ' '+_CUR+'</td>';
+  if (isAdmin) html += '<td></td>';
+  html += '</tr>';
   html += '</tbody></table></div>';
-  html += '<div style="font-size:10px;color:var(--text-muted);margin-top:8px;text-align:right">Налог 12%: -' + fmtBonus(info.tax) + ' ₸ · На руки: <span style="color:#4CAF50;font-weight:700">' + fmtBonus(info.bonusNet) + ' '+_CUR+'</span></div>';
+  html += '<div style="font-size:10px;color:var(--text-muted);margin-top:8px;text-align:right">Налог 12%: -' + fmtBonus(info.tax) + ' '+_CUR+' · На руки: <span style="color:#4CAF50;font-weight:700">' + fmtBonus(info.bonusNet) + ' '+_CUR+'</span></div>';
  }
 
  // KPI премия детализация
