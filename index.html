@@ -2491,7 +2491,6 @@ async function syncFromSheets() {
  var colDate=0, colClient=1, colCat=2, colMgr=5, colAmt=12, colBank=10, colSeated=11, colTech=17;
  if (headerIdx >= 0) {
  var hdrRow = data.rows[headerIdx];
- console.log('[SYNC] Sheet "'+months[mi]+'" headers:', JSON.stringify(hdrRow));
  hdrRow.forEach(function(h,i){
  var s = String(h||'').toLowerCase();
  if (s==='дата') colDate=i;
@@ -2504,9 +2503,6 @@ async function syncFromSheets() {
  else if (s.includes('посаж')) colSeated=i;
  else if (s.includes('тех')) colTech=i;
  });
- if (mi === 2) {
- console.log('[SYNC] Март headers: colAmt(M)='+colAmt);
- }
  }
  var dataRows = headerIdx >= 0 ? data.rows.slice(headerIdx+1) : data.rows.slice(4);
  dataRows.forEach(function(row, rowIdx) {
@@ -2559,24 +2555,6 @@ async function syncFromSheets() {
  });
  } catch(monthErr) { }
  }
- // ДИАГНОСТИКА — покажем результат синхронизации
- var dbgSeated = allNew.filter(function(p){return p.seated;}).length;
- var dbgMar = allNew.filter(function(p){return p.month===2;});
- var dbgMarSeated = dbgMar.filter(function(p){return p.seated;}).length;
- var dbgMarSum = dbgMar.reduce(function(s,p){ return s + p.amount; }, 0);
- var dbgFromM = allNew.filter(function(p){return p._srcCol==='M';}).length;
- var dbgFromJ = allNew.filter(function(p){return p._srcCol==='J';}).length;
- // Лог записей Марта где сумма из J (не из M)
- var marFromJ = dbgMar.filter(function(p){return p._srcCol==='J';});
- var marFromMsum = dbgMar.filter(function(p){return p._srcCol==='M';}).reduce(function(s,p){return s+p.amount;},0);
- var marFromJsum = marFromJ.reduce(function(s,p){return s+p.amount;},0);
- console.log('[SYNC] Март: '+dbgMar.length+' зап | из M:'+(dbgMar.length-marFromJ.length)+' ('+fmtFull(marFromMsum)+'₸) | из J:'+marFromJ.length+' ('+fmtFull(marFromJsum)+'₸) | итого: '+fmtFull(dbgMarSum)+'₸');
- 
- 
- 
- if (dbgMar.length > 0) {
- 
- }
  if (allNew.length > 0) {
  // Сохраняем ручные переключения serviceWritten из старых данных
  const oldPayMap = {};
@@ -2600,7 +2578,7 @@ async function syncFromSheets() {
  };
  });
  setSyncStatus('ok','Обновлено '+new Date().toLocaleTimeString('ru')+' · '+allNew.length+' записей');
- showNotif(' Данные загружены','«Доходы '+currentCountry+' 2026» — '+allNew.length+' записей (M:'+dbgFromM+', J:'+dbgFromJ+'). Март: '+dbgMar.length+' зап, '+fmtFull(dbgMarSum)+' '+COUNTRY_CONFIG[currentCountry].currency);
+ showNotif(' Данные загружены','«Доходы '+currentCountry+'» — '+allNew.length+' записей');
  renderAll();
  // Загрузить Светофор для дашборда (звонки, встречи, активации)
  if (!planLastData) { planInit(); planLoad().then(function(){ renderAll(); }).catch(function(){}); }
@@ -2613,7 +2591,7 @@ async function syncFromSheets() {
  showNotif('Ошибка синхронизации', e.message);
  }
  // Загрузка расходов для P&L — всегда после синхронизации доходов
- try { if(typeof loadExpenses==='function') await loadExpenses(); } catch(ex) { console.log('[P&L] loadExpenses error:', ex); }
+ try { if(typeof loadExpenses==='function') await loadExpenses(); } catch(ex) { }
  btn.classList.remove('syncing');
  // Утренний авто-отчёт в Telegram (раз в день)
  if(typeof checkMorningReport==='function') checkMorningReport();
@@ -3878,7 +3856,7 @@ function populateEmployeeSelects() {
 const MONTHS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const MONTHS_SHORT=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
 
-function getPaymentsByMonth(m){ return payments.filter(p=>{const d=new Date(p.date);return d.getMonth()===m&&d.getFullYear()===2026;}); }
+function getPaymentsByMonth(m){ var cy=new Date().getFullYear(); return payments.filter(p=>{const d=new Date(p.date);return d.getMonth()===m&&d.getFullYear()===cy;}); }
 function buildClientRanking(ps){ const map={}; ps.forEach(p=>{if(!map[p.client])map[p.client]={client:p.client,total:0,cats:{}}; map[p.client].total+=p.amount; map[p.client].cats[p.category]=(map[p.client].cats[p.category]||0)+p.amount;}); return Object.values(map).sort((a,b)=>b.total-a.total); }
 
 function kcGetCategories(ranked){
@@ -6307,29 +6285,29 @@ async function sendTgReport(silent) {
   msg += '📅 ' + periodLabel + ' | ' + now.toLocaleDateString('ru-RU') + '\n';
   msg += '━━━━━━━━━━━━━━━\n\n';
 
-  msg += '💰 <b>ДОХОДЫ:</b> ' + fmtNum(totalIncome) + ' ₸\n';
+  msg += '💰 <b>ДОХОДЫ:</b> ' + fmtNum(totalIncome) + ' '+_CUR+'\n';
   msg += '📈 Платежей: ' + pp.length + '\n';
   // Топ категории доходов
   Object.keys(catSum).sort(function(a,b){return catSum[b]-catSum[a];}).slice(0,4).forEach(function(c){
    var catNames = {subscription:'Абон. плата',implementation:'Внедрения',license:'Лицензии',integration:'Интеграции',other:'Прочее'};
-   msg += '   • ' + (catNames[c]||c) + ': ' + fmtNum(catSum[c]) + ' ₸\n';
+   msg += '   • ' + (catNames[c]||c) + ': ' + fmtNum(catSum[c]) + ' '+_CUR+'\n';
   });
   msg += '\n';
 
-  msg += '📉 <b>РАСХОДЫ:</b> ' + fmtNum(totalExp) + ' ₸\n';
+  msg += '📉 <b>РАСХОДЫ:</b> ' + fmtNum(totalExp) + ' '+_CUR+'\n';
   Object.keys(expCats).sort(function(a,b){return expCats[b]-expCats[a];}).slice(0,4).forEach(function(c){
-   msg += '   • ' + c + ': ' + fmtNum(expCats[c]) + ' ₸\n';
+   msg += '   • ' + c + ': ' + fmtNum(expCats[c]) + ' '+_CUR+'\n';
   });
   msg += '\n';
 
-  msg += '🏦 <b>P&L:</b> ' + (profit >= 0 ? '+' : '') + fmtNum(profit) + ' ₸\n';
+  msg += '🏦 <b>P&L:</b> ' + (profit >= 0 ? '+' : '') + fmtNum(profit) + ' '+_CUR+'\n';
   if (planPct) msg += '🎯 <b>План:</b> ' + planPct + '\n';
   msg += '\n';
 
   if (topClients.length) {
    msg += '👥 <b>Топ-5 клиентов:</b>\n';
    topClients.forEach(function(c,i){
-    msg += '   ' + (i+1) + '. ' + c + ' — ' + fmtNum(clientCount[c]) + ' ₸\n';
+    msg += '   ' + (i+1) + '. ' + c + ' — ' + fmtNum(clientCount[c]) + ' '+_CUR+'\n';
    });
    msg += '\n';
   }
@@ -7318,7 +7296,7 @@ function renderOperatorCards(grid) {
     '<span class="plan-kpi-label" style="color:#60A5FA;font-weight:700">СУММА ВНЕДРЕНИЙ</span>' +
     '<div class="plan-kpi-bar-wrap"><div class="plan-kpi-bar" style="width:60%;background:#60A5FA"></div></div>' +
     '<span class="plan-kpi-pct" style="color:#60A5FA">—</span>' +
-    '<span class="plan-kpi-nums" style="color:#60A5FA;font-weight:700">— ₸</span>' +
+    '<span class="plan-kpi-nums" style="color:#60A5FA;font-weight:700">— '+_CUR+'</span>' +
    '</div>' +
    naklHTML +
    '</div>' +
@@ -7439,10 +7417,10 @@ function expRender() {
 
  // KPI cards
  var kpiGrid = document.getElementById('exp-kpi-grid');
- var kpiHTML = '<div class="panel" style="padding:14px"><div class="kpi-label">ОБЩИЕ РАСХОДЫ</div><div class="kpi-value" style="font-size:20px">' + fmtNum(total) + ' <span style="font-size:12px">₸</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:4px">' + expData.length + ' операций</div></div>';
+ var kpiHTML = '<div class="panel" style="padding:14px"><div class="kpi-label">ОБЩИЕ РАСХОДЫ</div><div class="kpi-value" style="font-size:20px">' + fmtNum(total) + ' <span style="font-size:12px">'+_CUR+'</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:4px">' + expData.length + ' операций</div></div>';
  cats.forEach(function(cat) {
  var pct = total > 0 ? Math.round(catMap[cat] / total * 100) : 0;
- kpiHTML += '<div class="panel" style="padding:14px;border-left:3px solid ' + expColor(cat) + '"><div class="kpi-label">' + cat.toUpperCase() + '</div><div class="kpi-value" style="font-size:18px">' + fmtNum(catMap[cat]) + ' <span style="font-size:11px">₸</span></div><div style="font-size:11px;color:' + expColor(cat) + ';margin-top:4px">' + pct + '% от общих</div></div>';
+ kpiHTML += '<div class="panel" style="padding:14px;border-left:3px solid ' + expColor(cat) + '"><div class="kpi-label">' + cat.toUpperCase() + '</div><div class="kpi-value" style="font-size:18px">' + fmtNum(catMap[cat]) + ' <span style="font-size:11px">'+_CUR+'</span></div><div style="font-size:11px;color:' + expColor(cat) + ';margin-top:4px">' + pct + '% от общих</div></div>';
  });
  kpiGrid.innerHTML = kpiHTML;
 
@@ -7654,36 +7632,28 @@ async function intgLoad() {
   if (loaded) break;
   try {
    var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(sheetNames[si]) + '&spreadsheetId=' + INTG_SHEET_ID;
-   console.log('[INTG] Trying "' + sheetNames[si] + '"...');
    var resp = await fetch(url);
    var text = await resp.text();
-   console.log('[INTG] Response for "'+sheetNames[si]+'": ' + text.substring(0, 300));
    var json = JSON.parse(text);
-   if (json.error) { console.log('[INTG] Error: ' + json.error); continue; }
-   if (!json.rows || json.rows.length < 2) { console.log('[INTG] No data in "'+sheetNames[si]+'"'); continue; }
-   console.log('[INTG] Found "'+sheetNames[si]+'" with '+json.rows.length+' rows');
-   console.log('[INTG] Row 0:', JSON.stringify(json.rows[0]).substring(0,300));
-   console.log('[INTG] Row 1:', JSON.stringify(json.rows[1]).substring(0,300));
+   if (json.error) continue;
+   if (!json.rows || json.rows.length < 2) continue;
    parseIntgRows(json.rows);
    loaded = true;
-  } catch(e) { console.log('[INTG] Error "'+sheetNames[si]+'":', e.message); }
+  } catch(e) { }
  }
 
  // Если ничего не нашли — попробуем без имени листа (первый лист по умолчанию)
  if (!loaded) {
   try {
    var url2 = GS_URL + '?action=getSheet&sheet=&spreadsheetId=' + INTG_SHEET_ID;
-   console.log('[INTG] Trying default sheet (no name)...');
    var resp2 = await fetch(url2);
    var text2 = await resp2.text();
-   console.log('[INTG] Default response: ' + text2.substring(0, 300));
    var json2 = JSON.parse(text2);
    if (json2.rows && json2.rows.length > 2) {
-    console.log('[INTG] Default sheet: '+json2.rows.length+' rows');
     parseIntgRows(json2.rows);
     loaded = true;
    }
-  } catch(e2) { console.log('[INTG] Default error:', e2.message); }
+  } catch(e2) { }
  }
 
  // Статусы для фильтра
@@ -7710,7 +7680,6 @@ function parseIntgRows(rows) {
   if (rowStr.indexOf('компани') >= 0 || rowStr.indexOf('названи') >= 0) { headerIdx = i; break; }
  }
  if (headerIdx < 0) headerIdx = 0;
- console.log('[INTG] Header at row:', headerIdx, JSON.stringify(rows[headerIdx]).substring(0,300));
 
  var hdr = rows[headerIdx];
  var colCompany=5, colStatus=6, colState=7, colType=8, colOperator=9, colManager=10;
@@ -7734,7 +7703,6 @@ function parseIntgRows(rows) {
   if (h.indexOf('вид базы') >= 0) colDbType = hi;
   if (h.indexOf('пакет') >= 0 || h.indexOf('тип интеграц') >= 0) colPackage = hi;
  }
- console.log('[INTG] Columns: company='+colCompany+' status='+colStatus+' type='+colType+' package='+colPackage);
 
  rows.slice(headerIdx + 1).forEach(function(row) {
   if (!row) return;
@@ -7759,7 +7727,6 @@ function parseIntgRows(rows) {
    package: colPackage >= 0 ? (function(v){ v=String(v||'').trim(); return v ? v.charAt(0).toUpperCase()+v.slice(1) : ''; })(row[colPackage]) : ''
   });
  });
- console.log('[INTG] Parsed: ' + intgData.length + ' records');
 }
 
 function intgRender() {
@@ -8064,10 +8031,9 @@ async function loadExpenses() {
  var mi = months[si].mi;
  try {
  var url = EXP_GS + '?action=getSheet&sheet=' + encodeURIComponent(sheetName) + '&spreadsheetId=' + EXPENSES_SHEET_ID + '&range=A1:E100';
- console.log('[P&L] Loading "' + sheetName + '"...');
  var resp = await fetch(url);
  var json = await resp.json();
- if (!json.rows || json.rows.length < 2) { console.log('[P&L] No data for "'+sheetName+'"'); continue; }
+ if (!json.rows || json.rows.length < 2) continue;
  
  // Ищем заголовок
  var headerIdx = -1;
@@ -8090,10 +8056,8 @@ async function loadExpenses() {
  });
  count++;
  });
- console.log('[P&L] "'+sheetName+'": '+count+' записей');
- } catch(e) { console.log('[P&L] Error "'+sheetName+'":', e.message); }
+ } catch(e) { }
  }
- console.log('[P&L] Итого расходов: ' + expensesData.length + ' записей, сумма: ' + expensesData.reduce(function(s,e){return s+e.amount;},0));
  renderPnL();
 }
 
