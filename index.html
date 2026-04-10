@@ -6854,7 +6854,6 @@ function planRender(data) {
  var agentLow = agent.name.toLowerCase().trim();
  var isManager = (agentLow.indexOf('айдос') >= 0 && agentLow.indexOf('kg') < 0) || agentLow.indexOf('юлия') >= 0;
  var isSkip = agentLow.indexOf('офис') >= 0 || agentLow.indexOf('курс') >= 0 || agentLow.indexOf('kg') >= 0;
- console.log('[BONUS] Agent:', agent.name, 'isManager:', isManager, 'isSkip:', isSkip, 'salesKpi:', !!salesKpi, 'tabIdx:', planTabIdx);
  if (isManager && salesKpi && !isSkip) {
   var bonusInfo = calcManagerBonus(agent.name, salesKpi.plan, salesKpi.fact, planTabIdx, salesKpi.pct, agent.kpis);
   // bonusId привязан к месяцу чтобы штрафы не переносились
@@ -6935,19 +6934,6 @@ function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis, _exclud
   if (!p.date) return false;
   var d = new Date(p.date + 'T00:00:00');
   return d.getMonth() === tMonth && d.getFullYear() === tYear;
- }
-
- // DEBUG
- var _dbgAll = payments.filter(function(p){ return String(p.managerName||'').toLowerCase().indexOf(agentLow)>=0; });
- var _dbgMonth = _dbgAll.filter(function(p){ return _matchMonth(p, targetMonth, targetYear); });
- var _dbgNov = _dbgMonth.filter(function(p){ return String(p.categoryRaw||'').toLowerCase().indexOf('нов')>=0; });
- console.log('[BONUS] agent='+agentName+' tabIdx='+tabIdx+' targetMonth='+targetMonth+' targetYear='+targetYear+' | all='+_dbgAll.length+' byDate='+_dbgMonth.length+' nov='+_dbgNov.length);
- if (_dbgAll.length>0) {
-  var months = {};
-  _dbgAll.forEach(function(p){ var k = 'tab:'+p.month; months[k] = (months[k]||0)+1; });
-  var dateMonths = {};
-  _dbgAll.forEach(function(p){ if(p.date){var d=new Date(p.date+'T00:00:00'); var k='date:'+d.getMonth(); dateMonths[k]=(dateMonths[k]||0)+1;} });
-  console.log('[BONUS] tab months:', JSON.stringify(months), '| date months:', JSON.stringify(dateMonths));
  }
 
  // Собираем факт по компаниям (для детализации)
