@@ -3666,8 +3666,29 @@ function renderPlanView() {
  const ps=getPeriodPayments(p), l=sumByCategory(ps,'license'), s=sumByCategory(ps,'subscription'), i=sumByCategory(ps,'implementation')+sumByCategory(ps,'integration');
  const plan=plans[p];
  const _el=document.getElementById('plan-'+p); if(!_el) return;
- _el.innerHTML=[{label:'Новые продажи',actual:l+i,plan:plan.new_sales,color:'var(--gold-bright)'},{label:'Абон. платы',actual:s,plan:plan.subscription,color:'#4A90D9'}]
- .map(it=>{const pct=Math.min(Math.round((it.actual/it.plan)*100)||0,100);return`<div class="plan-item"><div class="plan-item-header"><span class="plan-item-label">${it.label}</span><span class="plan-item-value">${pct}%</span></div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px">${fmtFull(it.actual)} / ${fmtFull(it.plan)}</div><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:linear-gradient(90deg,${it.color}88,${it.color})"></div></div></div>`;}).join('');
+
+ // Факт звонков, встреч, активаций из Светофора
+ var callsFact = _svetoforSum('звонок','fact');
+ var meetingsFact = _svetoforSum('встреч','fact');
+ var activationsFact = _svetoforSum('лицензи','fact');
+ // Планы из Светофора (если есть) или из plans
+ var callsPlan = _svetoforSum('звонок','plan') || plan.calls;
+ var meetingsPlan = _svetoforSum('встреч','plan') || plan.meetings;
+ var activationsPlan = _svetoforSum('лицензи','plan') || plan.activations;
+
+ var items = [
+  {label:'Новые продажи',actual:l+i,plan:plan.new_sales,color:'var(--gold-bright)',isMoney:true},
+  {label:'Абон. платы',actual:s,plan:plan.subscription,color:'#4A90D9',isMoney:true},
+  {label:'Звонки',actual:callsFact,plan:callsPlan,color:'#81C784',isMoney:false},
+  {label:'Встречи',actual:meetingsFact,plan:meetingsPlan,color:'#CE93D8',isMoney:false},
+  {label:'Активация лиц.',actual:activationsFact,plan:activationsPlan,color:'#FFB74D',isMoney:false}
+ ];
+
+ _el.innerHTML=items.map(it=>{
+  var pct=it.plan>0?Math.min(Math.round((it.actual/it.plan)*100),100):0;
+  var valStr=it.isMoney?(fmtFull(it.actual)+' / '+fmtFull(it.plan)):(Math.round(it.actual)+' / '+Math.round(it.plan));
+  return`<div class="plan-item"><div class="plan-item-header"><span class="plan-item-label">${it.label}</span><span class="plan-item-value">${pct}%</span></div><div style="font-size:10px;color:var(--text-muted);margin-bottom:3px">${valStr}</div><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:linear-gradient(90deg,${it.color}88,${it.color})"></div></div></div>`;
+ }).join('');
  });
 }
 
