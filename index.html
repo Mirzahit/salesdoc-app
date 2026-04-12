@@ -1981,20 +1981,7 @@ function loadManualPayments(){
  }catch(e){}
  return[];
 }
-function saveEmployeePasswords(){
- try{
-  var data={};
-  employees.forEach(function(e){data[e.id]=e.pass;});
-  localStorage.setItem('sd_emp_passwords',JSON.stringify(data));
- }catch(e){}
-}
-function loadEmployeePasswords(){
- try{
-  var raw=localStorage.getItem('sd_emp_passwords');
-  if(raw){return JSON.parse(raw);}
- }catch(e){}
- return null;
-}
+// saveEmployeePasswords / loadEmployeePasswords убраны — пароли теперь в Google Sheet (хеши)
 
 // ============================================================
 // SIDEBAR TOGGLE (responsive)
@@ -2043,30 +2030,60 @@ const ROLE_DEFAULTS = {
 // Менеджеры: Мирзахит, Айдос Хапез, Юлия, Дана, Асем, Малика
 // Тех.поддержка: Айдос, Самат, Акбар, Нурай
 var employees = [];
-function initEmployees(){
- employees=[
- {id:1, name:'Мирзахит', pos:'Руководитель / Менеджер', email:'office@salesdoc.io', pass:'admin', role:'admin', bonus:0, active:true, access:Object.assign({},ROLE_DEFAULTS.admin)},
- {id:2, name:'Айдос Хапез', pos:'Менеджер по продажам', email:'aidosh', pass:'1234', role:'manager', bonus:0, active:true, access:Object.assign({},ROLE_DEFAULTS.manager)},
- {id:3, name:'Юлия', pos:'Менеджер по продажам', email:'yulia', pass:'1234', role:'manager', bonus:0, active:true, access:Object.assign({},ROLE_DEFAULTS.manager)},
- {id:4, name:'Дана', pos:'Менеджер', email:'dana', pass:'1234', role:'manager', bonus:0, active:false, access:Object.assign({},ROLE_DEFAULTS.manager)},
- {id:5, name:'Асем', pos:'Менеджер', email:'asem', pass:'1234', role:'manager', bonus:0, active:true, access:Object.assign({},ROLE_DEFAULTS.manager)},
- {id:6, name:'Малика', pos:'Менеджер', email:'malika', pass:'1234', role:'manager', bonus:0, active:false, access:Object.assign({},ROLE_DEFAULTS.manager)},
- {id:7, name:'Айдос', pos:'Оператор тех.поддержки', email:'aidos', pass:'1234', role:'operator', bonus:30, active:true, access:Object.assign({},ROLE_DEFAULTS.operator)},
- {id:8, name:'Самат', pos:'Оператор тех.поддержки', email:'samat', pass:'1234', role:'operator', bonus:30, active:true, access:Object.assign({},ROLE_DEFAULTS.operator)},
- {id:9, name:'Акбар', pos:'Оператор тех.поддержки', email:'akbar', pass:'1234', role:'operator', bonus:30, active:false, access:Object.assign({},ROLE_DEFAULTS.operator)},
- {id:10,name:'Нурай', pos:'Оператор тех.поддержки', email:'nuray', pass:'1234', role:'operator', bonus:30, active:true, access:Object.assign({},ROLE_DEFAULTS.operator)},
- {id:11,name:'Гульшан', pos:'Бухгалтер', email:'gulshan', pass:'1234', role:'viewer', bonus:0, active:true, access:Object.assign({},ROLE_DEFAULTS.viewer)},
- {id:12,name:'Аурика', pos:'Бухгалтер', email:'aurika', pass:'1234', role:'viewer', bonus:0, active:true, access:Object.assign({},ROLE_DEFAULTS.viewer)},
- {id:13,name:'Арслан', pos:'Руководитель филиала KG', email:'arslan', pass:'1234', role:'admin', bonus:0, active:true, access:Object.assign({},ROLE_DEFAULTS.admin), country:'KG'},
- ];
- // Восстанавливаем сохранённые пароли из localStorage
- var savedPasses = loadEmployeePasswords();
- if(savedPasses){
-  employees.forEach(function(e){
-   if(savedPasses[e.id]) e.pass = savedPasses[e.id];
-  });
- }
+var _employeesLoaded = false;
+var ACADEMY_SHEET_ID = '1A5zZZi54Le3bUHkUng8L-Kbt2dkfMwwP48cpNFQ9ZMQ';
+
+// SHA-256 хеш для сравнения паролей (пароли в коде НЕ хранятся)
+async function sha256(str) {
+ var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+ return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
+
+function initEmployees(){
+ // Загружаем из Google Sheet (лист "Users" в Academy Sheet)
+ var url = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
+ fetch(url + '?action=getSheet&sheet=Users&spreadsheetId=' + ACADEMY_SHEET_ID)
+  .then(function(r){return r.json();})
+  .then(function(data){
+   var rows = data.rows || data;
+   if(!rows || rows.length < 2) { _initFallbackEmployees(); return; }
+   employees = [];
+   for(var i=1;i<rows.length;i++){
+    var r = rows[i];
+    if(!r || !r[0]) continue;
+    var role = (r[5]||'viewer').toLowerCase();
+    employees.push({
+     id: parseInt(r[0])||i,
+     name: r[1]||'',
+     pos: r[2]||'',
+     email: r[3]||'',
+     pass_hash: r[4]||'',
+     role: role,
+     bonus: parseInt(r[6])||0,
+     active: (r[7]||'').toLowerCase() === 'true',
+     access: Object.assign({}, ROLE_DEFAULTS[role] || ROLE_DEFAULTS.viewer),
+     country: r[8]||''
+    });
+   }
+   nextEmpId = employees.length + 1;
+   _employeesLoaded = true;
+   console.log('Employees loaded from Sheet: ' + employees.length);
+  })
+  .catch(function(e){
+   console.error('Failed to load employees:', e);
+   _initFallbackEmployees();
+  });
+}
+
+function _initFallbackEmployees(){
+ // Fallback если Sheet недоступен — минимальный admin (хеш, не пароль!)
+ employees = [
+  {id:1, name:'Admin', pos:'Admin', email:'office@salesdoc.io', pass_hash:'8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', role:'admin', bonus:0, active:true, access:Object.assign({},ROLE_DEFAULTS.admin)}
+ ];
+ nextEmpId = 2;
+ _employeesLoaded = true;
+}
+
 let nextEmpId = 14;
 
 // ============================================================
@@ -3924,7 +3941,7 @@ function openEmpModal(id=null) {
  document.getElementById('e-name').value=emp?.name||'';
  document.getElementById('e-pos').value=emp?.pos||'';
  document.getElementById('e-email').value=emp?.email||'';
- document.getElementById('e-pass').value=emp?.pass||'';
+ document.getElementById('e-pass').value=''; // пароль не показываем (хеш)
  document.getElementById('e-role').value=emp?.role||'operator';
  document.getElementById('e-bonus').value=emp?.bonus??30;
  updateAccessChecks(emp?.access);
@@ -3953,14 +3970,22 @@ function updateAccessChecks(existingAccess=null) {
  });
 }
 
-function saveEmployee() {
+async function saveEmployee() {
  const name=document.getElementById('e-name').value.trim();
  const email=document.getElementById('e-email').value.trim();
  if(!name||!email){ showNotif('Ошибка','Заполните имя и email'); return; }
  const access={};
  ACCESS_KEYS.forEach(a=>{ access[a.key]=document.getElementById('acc-'+a.key)?.classList.contains('on')?1:0; });
  const editId=parseInt(document.getElementById('e-edit-id').value)||null;
- var data={id:editId||nextEmpId++,name:name,pos:document.getElementById('e-pos').value,email:email,pass:document.getElementById('e-pass').value||'1234',role:document.getElementById('e-role').value,bonus:parseFloat(document.getElementById('e-bonus').value)||0,access:access};
+ var newPass = document.getElementById('e-pass').value;
+ var passHash = '';
+ if (editId) {
+  var existing = employees.find(e=>e.id===editId);
+  passHash = existing ? (existing.pass_hash||'') : '';
+ }
+ if (newPass) { passHash = await sha256(newPass); }
+ else if (!editId) { passHash = await sha256('1234'); } // дефолтный для нового
+ var data={id:editId||nextEmpId++,name:name,pos:document.getElementById('e-pos').value,email:email,pass_hash:passHash,role:document.getElementById('e-role').value,bonus:parseFloat(document.getElementById('e-bonus').value)||0,access:access};
  if(editId){ const i=employees.findIndex(e=>e.id===editId); if(i>=0){data.active=employees[i].active!==false;employees[i]=data;} }
  else { data.active=true; employees.push(data); }
  saveCustomEmployees();
@@ -5061,26 +5086,34 @@ function showNotif(title,msg){ document.getElementById('notif-title').textConten
 // ============================================================
 // AUTH & INIT
 // ============================================================
-function doLogin() {
+async function doLogin() {
  const email = document.getElementById('login-email').value.trim();
  const pass = document.getElementById('login-pass').value;
- const emp = employees.find(function(e){ return (e.email === email || e.name === email) && e.pass === pass; });
+
+ // Хешируем введённый пароль для сравнения с pass_hash из таблицы
+ const passHash = await sha256(pass);
+
+ const emp = employees.find(function(e){
+  return (e.email === email || e.name === email) && (e.pass_hash === passHash || e.pass === pass);
+ });
  if (!emp) {
  document.getElementById('login-err').textContent = 'Неверный логин или пароль';
  return;
  }
  currentUser = emp;
 
- // Запомнить меня
+ // Запомнить меня (сохраняем хеш, не открытый пароль)
  const remember = document.getElementById('remember-me');
  if (remember && remember.checked) {
  try {
  localStorage.setItem('sd_saved_login', email);
- localStorage.setItem('sd_saved_pass', pass);
+ localStorage.setItem('sd_saved_pass_hash', passHash);
+ localStorage.removeItem('sd_saved_pass'); // убрать старый открытый пароль
  } catch(e) {}
  } else {
  try {
  localStorage.removeItem('sd_saved_login');
+ localStorage.removeItem('sd_saved_pass_hash');
  localStorage.removeItem('sd_saved_pass');
  } catch(e) {}
  }
@@ -5109,15 +5142,47 @@ function doLogin() {
 // Автозаполнение из localStorage при загрузке
 (function autoFillLogin() {
  try {
- const savedLogin = localStorage.getItem('sd_saved_login');
- const savedPass = localStorage.getItem('sd_saved_pass');
- if (savedLogin && savedPass) {
- const emailEl = document.getElementById('login-email');
- const passEl = document.getElementById('login-pass');
- const remEl = document.getElementById('remember-me');
- if (emailEl) emailEl.value = savedLogin;
- if (passEl) passEl.value = savedPass;
- if (remEl) remEl.checked = true;
+ var savedLogin = localStorage.getItem('sd_saved_login');
+ var savedHash = localStorage.getItem('sd_saved_pass_hash');
+ var savedPass = localStorage.getItem('sd_saved_pass'); // старый формат (удалим)
+ if (savedLogin && savedHash) {
+  // Автовход по хешу — ищем сотрудника по email + hash
+  var waitForEmployees = setInterval(function(){
+   if (!_employeesLoaded) return;
+   clearInterval(waitForEmployees);
+   var emp = employees.find(function(e){ return (e.email === savedLogin || e.name === savedLogin) && e.pass_hash === savedHash; });
+   if (emp) {
+    currentUser = emp;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('sidebar').style.display = 'flex';
+    document.getElementById('main-app').style.display = 'block';
+    applyUserAccess();
+    if (currentUser.country) {
+     switchCountry(currentUser.country);
+     var cs = document.getElementById('country-switcher');
+     if(cs) cs.style.display = 'none';
+    } else {
+     var cs = document.getElementById('country-switcher');
+     if(cs) cs.style.display = '';
+    }
+    updateCountrySwitcherUI();
+    initCalendar();
+    renderAll();
+    showView('dashboard');
+    setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
+    syncFromSheets();
+   }
+  }, 200);
+  // Таймаут: если за 10 сек не загрузились — покажем форму
+  setTimeout(function(){ clearInterval(waitForEmployees); }, 10000);
+ } else if (savedLogin && savedPass) {
+  // Старый формат — заполним поля, пусть нажмёт войти
+  var emailEl = document.getElementById('login-email');
+  var passEl = document.getElementById('login-pass');
+  var remEl = document.getElementById('remember-me');
+  if (emailEl) emailEl.value = savedLogin;
+  if (passEl) passEl.value = savedPass;
+  if (remEl) remEl.checked = true;
  }
  } catch(e) {}
 })();
@@ -5133,13 +5198,8 @@ function doLogout() {
 }
 
 function quickLogin(id) {
- var eid = parseInt(id);
- var e = employees.find(function(x){ return x.id === eid; });
- if (!e) { return; }
- document.getElementById('login-email').value = e.email;
- document.getElementById('login-pass').value = e.pass;
- document.getElementById('login-err').textContent = '';
- doLogin();
+ // Quick login отключен в целях безопасности — используйте форму входа
+ console.log('quickLogin disabled — use login form');
 }
 
 // 
@@ -6021,8 +6081,8 @@ async function sendForgotRequest() {
  ' Запрос на восстановление пароля\n\n' +
  ' Сотрудник: ' + emp.name + '\n' +
  ' Логин: ' + emp.email + '\n' +
- ' Текущий пароль: ' + emp.pass + '\n\n' +
- ' Перешли этот пароль сотруднику в Telegram.'
+ ' Нужно сбросить пароль.\n\n' +
+ ' Зайди в Google Sheet "Users" и обнови pass_hash.'
  );
 
  try {
@@ -6142,7 +6202,7 @@ function renderUserManagement() {
    +'<td style="font-weight:600">'+e.name+'</td>'
    +'<td style="color:var(--text-secondary);font-size:11px">'+e.pos+'</td>'
    +'<td><code style="background:var(--dark-card);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--gold-bright)">'+e.email+'</code></td>'
-   +'<td><code style="background:var(--dark-card);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--text-secondary)">'+e.pass+'</code></td>'
+   +'<td><code style="background:var(--dark-card);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--text-secondary)">***</code></td>'
    +'<td><span style="font-size:10px;padding:2px 8px;border-radius:12px;background:rgba(255,255,255,.06);color:'+(roleColors[e.role]||'#90A4AE')+';font-weight:600">'+( roleNames[e.role]||e.role)+'</span></td>'
    +'<td>'+statusBadge+toggleBtn+'</td>'
    +'<td style="display:flex;gap:4px">'+editBtn+delBtn+'</td>'
@@ -6169,8 +6229,9 @@ function editUserInline(id) {
  document.getElementById('e-name').value = emp.name;
  document.getElementById('e-pos').value = emp.pos;
  document.getElementById('e-email').value = emp.email;
- document.getElementById('e-pass').value = emp.pass;
- document.getElementById('e-pass').type = 'text';
+ document.getElementById('e-pass').value = ''; // пароль не показываем
+ document.getElementById('e-pass').type = 'password';
+ document.getElementById('e-pass').placeholder = 'Новый пароль (оставьте пустым)';
  document.getElementById('e-role').value = emp.role;
  document.getElementById('e-bonus').value = emp.bonus||0;
  document.getElementById('e-edit-id').value = id;
@@ -6215,10 +6276,9 @@ function deleteUser(id) {
 function saveCustomEmployees() {
  try {
   var data = employees.map(function(e){
-   return {id:e.id, name:e.name, pos:e.pos, email:e.email, pass:e.pass, role:e.role, bonus:e.bonus, active:e.active, access:e.access, country:e.country||null};
+   return {id:e.id, name:e.name, pos:e.pos, email:e.email, pass_hash:e.pass_hash||'', role:e.role, bonus:e.bonus, active:e.active, access:e.access, country:e.country||null};
   });
   localStorage.setItem('sd_custom_employees', JSON.stringify(data));
-  saveEmployeePasswords();
  } catch(ex){}
 }
 
@@ -6236,7 +6296,7 @@ function loadCustomEmployees() {
      if (savedMap[e.id]) {
       var s = savedMap[e.id];
       e.name = s.name; e.pos = s.pos; e.email = s.email;
-      e.pass = s.pass; e.role = s.role; e.bonus = s.bonus||0;
+      e.pass_hash = s.pass_hash||s.pass||e.pass_hash; e.role = s.role; e.bonus = s.bonus||0;
       e.active = s.active!==false;
       // Мержим access: ROLE_DEFAULTS как база + сохранённый поверх (чтобы новые поля не терялись)
       var baseAccess = Object.assign({}, ROLE_DEFAULTS[e.role]||ROLE_DEFAULTS.viewer);
@@ -6249,7 +6309,7 @@ function loadCustomEmployees() {
     data.forEach(function(e){
      if (!baseIds[e.id]) {
       var ba = Object.assign({}, ROLE_DEFAULTS[e.role]||ROLE_DEFAULTS.viewer);
-      employees.push({id:e.id, name:e.name, pos:e.pos, email:e.email, pass:e.pass, role:e.role, bonus:e.bonus||0, active:e.active!==false, access:Object.assign(ba, e.access||{}), country:e.country||null});
+      employees.push({id:e.id, name:e.name, pos:e.pos, email:e.email, pass_hash:e.pass_hash||e.pass||'', role:e.role, bonus:e.bonus||0, active:e.active!==false, access:Object.assign(ba, e.access||{}), country:e.country||null});
      }
     });
     nextEmpId = Math.max.apply(null, employees.map(function(e){return e.id;}))+1;
@@ -6317,29 +6377,31 @@ function toggleEmpAccess(empId, key) {
  showNotif('Доступ обновлён', emp.name + ': ' + accessLabels[key]);
 }
 
-function changePassword() {
+async function changePassword() {
  const oldP = document.getElementById('pass-old').value;
  const newP = document.getElementById('pass-new').value;
  const conf = document.getElementById('pass-confirm').value;
  const msg = document.getElementById('pass-msg');
 
  if (!oldP || !newP || !conf) { msg.style.color='#EF5350'; msg.textContent=' Заполните все поля'; return; }
- if (currentUser.pass !== oldP) { msg.style.color='#EF5350'; msg.textContent=' Неверный текущий пароль'; return; }
+ // Проверяем старый пароль через хеш
+ var oldHash = await sha256(oldP);
+ if (currentUser.pass_hash !== oldHash && currentUser.pass !== oldP) { msg.style.color='#EF5350'; msg.textContent=' Неверный текущий пароль'; return; }
  if (newP.length < 4) { msg.style.color='#EF5350'; msg.textContent=' Пароль слишком короткий (мин. 4 символа)'; return; }
  if (newP !== conf) { msg.style.color='#EF5350'; msg.textContent=' Пароли не совпадают'; return; }
 
- // Обновляем пароль
- currentUser.pass = newP;
+ // Обновляем хеш пароля
+ var newHash = await sha256(newP);
+ currentUser.pass_hash = newHash;
+ delete currentUser.pass; // убираем открытый пароль если был
  const emp = employees.find(e => e.id === currentUser.id);
- if (emp) emp.pass = newP;
+ if (emp) { emp.pass_hash = newHash; delete emp.pass; }
 
- // Сохраняем все пароли в localStorage
- saveEmployeePasswords();
-
- // Обновляем в localStorage если был "Запомнить меня"
+ // Обновляем "Запомнить меня" с новым хешем
  try {
  if (localStorage.getItem('sd_saved_login')) {
- localStorage.setItem('sd_saved_pass', newP);
+ localStorage.setItem('sd_saved_pass_hash', newHash);
+ localStorage.removeItem('sd_saved_pass');
  }
  } catch(e) {}
 
@@ -9083,7 +9145,7 @@ function kbOpen(id) {
 // ============================================================
 // ACADEMY MODULE
 // ============================================================
-var ACADEMY_SHEET_ID = '1A5zZZi54Le3bUHkUng8L-Kbt2dkfMwwP48cpNFQ9ZMQ';
+// ACADEMY_SHEET_ID определён выше рядом с employees
 var _acadEmployees = [];
 var _acadCodes = [];
 var _acadTab = 'employees';
