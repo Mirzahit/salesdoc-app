@@ -5090,11 +5090,17 @@ async function doLogin() {
  const email = document.getElementById('login-email').value.trim();
  const pass = document.getElementById('login-pass').value;
 
+ // Ждём загрузки сотрудников из Sheet (если ещё не загрузились)
+ if (!_employeesLoaded) {
+  document.getElementById('login-err').textContent = 'Загрузка данных... попробуйте через 2 сек';
+  return;
+ }
+
  // Хешируем введённый пароль для сравнения с pass_hash из таблицы
  const passHash = await sha256(pass);
 
  const emp = employees.find(function(e){
-  return (e.email === email || e.name === email) && (e.pass_hash === passHash || e.pass === pass);
+  return (e.email === email || e.name === email) && e.pass_hash === passHash;
  });
  if (!emp) {
  document.getElementById('login-err').textContent = 'Неверный логин или пароль';
@@ -6296,7 +6302,12 @@ function loadCustomEmployees() {
      if (savedMap[e.id]) {
       var s = savedMap[e.id];
       e.name = s.name; e.pos = s.pos; e.email = s.email;
-      e.pass_hash = s.pass_hash||s.pass||e.pass_hash; e.role = s.role; e.bonus = s.bonus||0;
+      // pass_hash из localStorage берём только если это реальный SHA-256 (64 hex символа)
+      var savedHash = s.pass_hash || '';
+      if (!savedHash && s.pass && /^[a-f0-9]{64}$/.test(s.pass)) savedHash = s.pass;
+      if (savedHash && /^[a-f0-9]{64}$/.test(savedHash)) e.pass_hash = savedHash;
+      // иначе оставляем pass_hash из Sheet
+      e.role = s.role; e.bonus = s.bonus||0;
       e.active = s.active!==false;
       // Мержим access: ROLE_DEFAULTS как база + сохранённый поверх (чтобы новые поля не терялись)
       var baseAccess = Object.assign({}, ROLE_DEFAULTS[e.role]||ROLE_DEFAULTS.viewer);
@@ -6309,7 +6320,10 @@ function loadCustomEmployees() {
     data.forEach(function(e){
      if (!baseIds[e.id]) {
       var ba = Object.assign({}, ROLE_DEFAULTS[e.role]||ROLE_DEFAULTS.viewer);
-      employees.push({id:e.id, name:e.name, pos:e.pos, email:e.email, pass_hash:e.pass_hash||e.pass||'', role:e.role, bonus:e.bonus||0, active:e.active!==false, access:Object.assign(ba, e.access||{}), country:e.country||null});
+      var ph = e.pass_hash || '';
+      if (!ph && e.pass && /^[a-f0-9]{64}$/.test(e.pass)) ph = e.pass;
+      if (ph && !/^[a-f0-9]{64}$/.test(ph)) ph = '';
+      employees.push({id:e.id, name:e.name, pos:e.pos, email:e.email, pass_hash:ph, role:e.role, bonus:e.bonus||0, active:e.active!==false, access:Object.assign(ba, e.access||{}), country:e.country||null});
      }
     });
     nextEmpId = Math.max.apply(null, employees.map(function(e){return e.id;}))+1;
