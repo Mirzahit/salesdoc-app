@@ -9610,9 +9610,9 @@ function ltvCalculate() {
   // LTV прогноз = месячный чек x 12
   var ltv12 = monthlyCheck * 12;
 
-  // Активен ли сейчас? Последняя оплата + period > сегодня
+  // Активен ли сейчас? Последняя оплата + period + 2 мес запас > сегодня
   var activeUntil = c.lastDate ? new Date(c.lastDate) : now;
-  activeUntil.setMonth(activeUntil.getMonth() + (c.lastPeriod || 1));
+  activeUntil.setMonth(activeUntil.getMonth() + (c.lastPeriod || 1) + 2);
   var isActive = activeUntil >= now;
 
   clients.push({
@@ -9630,18 +9630,18 @@ function ltvCalculate() {
 
  clients.sort(function(a,b){ return b.ltv12 - a.ltv12; });
 
- // KPI — считаем только по активным клиентам
+ // KPI — по всем клиентам с оплатами
  var activeClients = clients.filter(function(c){return c.active;});
  var totalClients = clients.length;
  var activeCount = activeClients.length;
- var avgLTV = activeCount > 0 ? activeClients.reduce(function(s,c){return s+c.ltv12;},0) / activeCount : 0;
- var avgCheck = activeCount > 0 ? activeClients.reduce(function(s,c){return s+c.monthlyCheck;},0) / activeCount : 0;
+ var avgLTV = totalClients > 0 ? clients.reduce(function(s,c){return s+c.ltv12;},0) / totalClients : 0;
+ var avgCheck = totalClients > 0 ? clients.reduce(function(s,c){return s+c.monthlyCheck;},0) / totalClients : 0;
  var avgMonths = totalClients > 0 ? clients.reduce(function(s,c){return s+c.lifetime;},0) / totalClients : 0;
 
  document.getElementById('ltv-avg').textContent = fmtFull(Math.round(avgLTV));
  document.getElementById('ltv-avg-check').textContent = fmtFull(Math.round(avgCheck));
  document.getElementById('ltv-avg-months').textContent = avgMonths.toFixed(1);
- document.getElementById('ltv-total-clients').textContent = activeCount + ' / ' + totalClients;
+ document.getElementById('ltv-total-clients').textContent = activeCount + ' акт. / ' + totalClients + ' всего';
 
  // Таблица
  var tbody = document.getElementById('ltv-table-body');
