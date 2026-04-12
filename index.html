@@ -5102,6 +5102,12 @@ async function doLogin() {
  const email = document.getElementById('login-email').value.trim();
  const pass = document.getElementById('login-pass').value;
 
+ // Проверяем что поля заполнены
+ if (!email || !pass) {
+  document.getElementById('login-err').textContent = 'Введите логин и пароль';
+  return;
+ }
+
  // Ждём загрузки сотрудников из Sheet (если ещё не загрузились)
  if (!_employeesLoaded) {
   document.getElementById('login-err').textContent = 'Загрузка данных... попробуйте через 2 сек';
@@ -5157,14 +5163,16 @@ async function doLogin() {
  syncFromSheets();
 }
 
-// Автозаполнение из localStorage при загрузке
+// Автовход из localStorage при загрузке
 (function autoFillLogin() {
  try {
  var savedLogin = localStorage.getItem('sd_saved_login');
  var savedHash = localStorage.getItem('sd_saved_pass_hash');
- var savedPass = localStorage.getItem('sd_saved_pass'); // старый формат (удалим)
+ var savedPass = localStorage.getItem('sd_saved_pass'); // старый формат
  if (savedLogin && savedHash) {
-  // Автовход по хешу — ищем сотрудника по email + hash
+  // Есть сохранённый вход — показываем "Вход..." и скрываем форму
+  var errEl = document.getElementById('login-err');
+  if (errEl) { errEl.style.color = '#81C784'; errEl.textContent = 'Автоматический вход...'; }
   var waitForEmployees = setInterval(function(){
    if (!_employeesLoaded) return;
    clearInterval(waitForEmployees);
@@ -5189,18 +5197,18 @@ async function doLogin() {
     showView('dashboard');
     setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
     syncFromSheets();
+   } else {
+    // Хеш не совпал — показать форму, пусть вводит заново
+    if (errEl) { errEl.style.color = '#EF5350'; errEl.textContent = 'Сессия истекла, войдите заново'; }
+    localStorage.removeItem('sd_saved_pass_hash');
+    localStorage.removeItem('sd_saved_login');
    }
   }, 200);
-  // Таймаут: если за 10 сек не загрузились — покажем форму
   setTimeout(function(){ clearInterval(waitForEmployees); }, 10000);
  } else if (savedLogin && savedPass) {
-  // Старый формат — заполним поля, пусть нажмёт войти
-  var emailEl = document.getElementById('login-email');
-  var passEl = document.getElementById('login-pass');
-  var remEl = document.getElementById('remember-me');
-  if (emailEl) emailEl.value = savedLogin;
-  if (passEl) passEl.value = savedPass;
-  if (remEl) remEl.checked = true;
+  // Старый формат — удаляем, пусть войдёт заново
+  localStorage.removeItem('sd_saved_pass');
+  localStorage.removeItem('sd_saved_login');
  }
  } catch(e) {}
 })();
