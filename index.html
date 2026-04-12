@@ -698,19 +698,24 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
 .sync-dot.loading{background:var(--gold-mid);animation:pulse .8s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-/* GOOGLE SHEETS SETUP */
-.gs-setup{background:rgba(74,144,217,.05);border:1px solid rgba(74,144,217,.2);border-radius:12px;padding:20px;margin-bottom:16px}
-.gs-setup-title{font-size:13px;color:#90CAF9;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.gs-steps{counter-reset:step}
-.gs-step{counter-increment:step;display:flex;gap:12px;margin-bottom:10px;align-items:flex-start}
-.gs-step::before{content:counter(step);width:22px;height:22px;border-radius:50%;background:rgba(74,144,217,.2);border:1px solid rgba(74,144,217,.3);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#90CAF9;flex-shrink:0;margin-top:1px}
-.gs-step-text{font-size:12px;color:var(--text-muted);line-height:1.5}
-.gs-step-text code{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);border-radius:4px;padding:1px 6px;color:var(--gold-bright);font-size:11px}
-.gs-url-row{display:flex;gap:8px;margin-top:4px}
-.gs-url-input{flex:1;background:var(--dark-card);border:1px solid var(--dark-border-bright);border-radius:8px;padding:9px 12px;color:var(--text-primary);font-family:'Inter',sans-serif;font-size:12px;outline:none;transition:all .2s}
-.gs-url-input:focus{border-color:#4A90D9;box-shadow:0 0 0 2px rgba(74,144,217,.15)}
-.gs-connect-btn{padding:9px 18px;border-radius:8px;background:rgba(74,144,217,.2);border:1px solid rgba(74,144,217,.3);color:#90CAF9;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;white-space:nowrap}
-.gs-connect-btn:hover{background:rgba(74,144,217,.35)}
+/* CONNECTION CARDS */
+.conn-grid{display:grid;gap:10px}
+.conn-card{background:var(--dark-card);border:1px solid var(--dark-border-bright);border-radius:12px;padding:14px 16px;transition:all .2s}
+.conn-card:hover{border-color:rgba(74,144,217,.3)}
+.conn-card-header{display:flex;align-items:center;gap:12px;cursor:pointer}
+.conn-card-header:hover .conn-card-name{color:var(--text-primary)}
+.conn-card-icon{font-size:20px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:rgba(74,144,217,.08);border-radius:10px;flex-shrink:0}
+.conn-card-name{font-size:13px;font-weight:600;color:var(--text-secondary);transition:color .2s}
+.conn-card-desc{font-size:10px;color:var(--text-muted);margin-top:2px}
+.conn-card-status{margin-left:auto;font-size:14px;color:#34D399}
+.conn-card-detail{margin-top:12px;padding-top:12px;border-top:1px solid var(--dark-border);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.conn-input{flex:1;min-width:200px;background:var(--dark-panel);border:1px solid var(--dark-border-bright);border-radius:8px;padding:8px 12px;color:var(--text-primary);font-family:'Inter',sans-serif;font-size:11px;outline:none;transition:all .2s}
+.conn-input:focus{border-color:#4A90D9;box-shadow:0 0 0 2px rgba(74,144,217,.15)}
+.conn-save-btn{padding:8px 16px;border-radius:8px;background:rgba(74,144,217,.15);border:1px solid rgba(74,144,217,.25);color:#90CAF9;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;white-space:nowrap}
+.conn-save-btn:hover{background:rgba(74,144,217,.3)}
+/* legacy aliases */
+.gs-url-input{flex:1;background:var(--dark-panel);border:1px solid var(--dark-border-bright);border-radius:8px;padding:8px 12px;color:var(--text-primary);font-family:'Inter',sans-serif;font-size:11px;outline:none}
+.gs-connect-btn{padding:8px 16px;border-radius:8px;background:rgba(74,144,217,.15);border:1px solid rgba(74,144,217,.25);color:#90CAF9;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
 
 /* EMPLOYEES */
 .emp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
@@ -1522,7 +1527,7 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  </div>
  <div style="overflow-x:auto">
  <table class="data-table">
- <thead><tr><th>Имя</th><th>Должность</th><th>Логин</th><th>Пароль</th><th>Роль</th><th>Статус</th><th></th></tr></thead>
+ <thead><tr><th>Имя</th><th>Должность</th><th>Логин</th><th>Роль</th><th>Статус</th><th></th></tr></thead>
  <tbody id="user-mgmt-body"></tbody>
  </table>
  </div>
@@ -1534,38 +1539,41 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  <div id="emp-access-list"></div>
  </div>
 
- <!-- Google Sheets setup -->
- <div class="gs-setup">
- <div class="gs-setup-title">Подключение Google Таблицы</div>
- <div class="gs-steps">
- <div class="gs-step"><div class="gs-step-text">Откройте таблицу <strong>«Доходы KZ 2026»</strong> в Google Sheets</div></div>
- <div class="gs-step"><div class="gs-step-text">Перейдите в меню: <code>Расширения → Apps Script</code></div></div>
- <div class="gs-step"><div class="gs-step-text">Вставьте код из блока ниже и нажмите «Развернуть → Новое развёртывание → Веб-приложение»</div></div>
- <div class="gs-step"><div class="gs-step-text">Установите доступ: <code>Все (даже анонимные)</code> → скопируйте URL</div></div>
- <div class="gs-step"><div class="gs-step-text">Вставьте URL веб-приложения сюда:</div></div>
+ <!-- CONNECTIONS -->
+ <div class="panel">
+ <div class="panel-title">Подключения</div>
+ <div class="conn-grid">
+  <div class="conn-card">
+   <div class="conn-card-header" onclick="var d=document.getElementById('conn-gs-detail');d.style.display=d.style.display==='none'?'flex':'none'">
+    <div class="conn-card-icon">📊</div>
+    <div><div class="conn-card-name">Google Таблица</div><div class="conn-card-desc">Основной источник данных</div></div>
+    <div class="conn-card-status" id="conn-gs-status" style="color:#34D399">Подключено</div>
+   </div>
+   <div class="conn-card-detail" id="conn-gs-detail" style="display:none">
+    <input class="conn-input" id="gs-url" placeholder="URL веб-приложения Apps Script" value="https://script.google.com/macros/s/AKfycbzKz7c6eUD9UZ-foL5BQJmhyh93nN9GbBAUoIxvvrQtIrwbQX_UKFo48Q_8jlo7qcSWxQ/exec">
+    <button class="conn-save-btn" onclick="connectSheets()">Сохранить</button>
+   </div>
+  </div>
+  <div class="conn-card">
+   <div class="conn-card-header" onclick="var d=document.getElementById('conn-kpi-detail');d.style.display=d.style.display==='none'?'flex':'none'">
+    <div class="conn-card-icon">🚦</div>
+    <div><div class="conn-card-name">КПИ Светофор</div><div class="conn-card-desc">Таблица показателей</div></div>
+    <div class="conn-card-status" id="conn-kpi-status" style="color:#34D399">Подключено</div>
+   </div>
+   <div class="conn-card-detail" id="conn-kpi-detail" style="display:none">
+    <input class="conn-input" id="kpi-sheet-id-input" placeholder="ID таблицы" value="1dA_NypMBj2LbmSOn6GuZXcCNCUqN7lmBAs9S5FbgjzU">
+    <button class="conn-save-btn" onclick="connectKpiSheet()">Сохранить</button>
+    <div id="kpi-sheet-status" style="margin-top:6px;font-size:11px;color:#81C784"></div>
+   </div>
+  </div>
  </div>
- <div class="gs-url-row">
- <input class="gs-url-input" id="gs-url" placeholder="https://script.google.com/macros/s/AKfy.../exec" value="https://script.google.com/macros/s/AKfycbzKz7c6eUD9UZ-foL5BQJmhyh93nN9GbBAUoIxvvrQtIrwbQX_UKFo48Q_8jlo7qcSWxQ/exec">
- <button class="gs-connect-btn" onclick="connectSheets()">Подключить</button>
+ <div style="margin-top:12px;text-align:center">
+  <button onclick="document.getElementById('dev-section').style.display=document.getElementById('dev-section').style.display==='none'?'block':'none'" style="font-size:10px;padding:4px 12px;border-radius:6px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);cursor:pointer">Для разработчиков ▾</button>
  </div>
- <div style="margin-top:16px;background:var(--dark-card);border:1px solid var(--dark-border);border-radius:8px;padding:14px">
- <div style="font-size:10px;color:var(--text-muted);letter-spacing:2px;margin-bottom:10px">КОД ДЛЯ APPS SCRIPT (скопируйте целиком):</div>
- <pre id="apps-script-code" style="font-size:10px;color:#81C784;line-height:1.6;overflow-x:auto;white-space:pre-wrap"></pre>
+ <div id="dev-section" style="display:none;margin-top:12px;background:var(--dark-card);border:1px solid var(--dark-border);border-radius:8px;padding:14px">
+  <div style="font-size:10px;color:var(--text-muted);letter-spacing:2px;margin-bottom:10px">КОД APPS SCRIPT</div>
+  <pre id="apps-script-code" style="font-size:10px;color:#81C784;line-height:1.6;overflow-x:auto;white-space:pre-wrap;max-height:300px;overflow-y:auto"></pre>
  </div>
- </div>
-
- <!-- KPI Sheet setup -->
- <div class="gs-setup" style="margin-top:16px">
- <div class="gs-setup-title">Таблица КПИ Светофор</div>
- <div class="gs-steps">
- <div class="gs-step"><div class="gs-step-text">Скопируйте ID таблицы из URL: <code>spreadsheets/d/<strong>ВОТ_ЭТО</strong>/edit</code></div></div>
- <div class="gs-step"><div class="gs-step-text">Вставьте ID ниже и нажмите «Подключить» (Apps Script должен быть уже подключён выше):</div></div>
- </div>
- <div class="gs-url-row">
- <input class="gs-url-input" id="kpi-sheet-id-input" placeholder="ID таблицы KPI..." value="1dA_NypMBj2LbmSOn6GuZXcCNCUqN7lmBAs9S5FbgjzU">
- <button class="gs-connect-btn" onclick="connectKpiSheet()">Подключить</button>
- </div>
- <div id="kpi-sheet-status" style="margin-top:8px;font-size:11px;color:#81C784"></div>
  </div>
 
  </div><!-- end settings tab -->
@@ -6208,7 +6216,6 @@ function renderUserManagement() {
    +'<td style="font-weight:600">'+e.name+'</td>'
    +'<td style="color:var(--text-secondary);font-size:11px">'+e.pos+'</td>'
    +'<td><code style="background:var(--dark-card);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--gold-bright)">'+e.email+'</code></td>'
-   +'<td><code style="background:var(--dark-card);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--text-secondary)">***</code></td>'
    +'<td><span style="font-size:10px;padding:2px 8px;border-radius:12px;background:rgba(255,255,255,.06);color:'+(roleColors[e.role]||'#90A4AE')+';font-weight:600">'+( roleNames[e.role]||e.role)+'</span></td>'
    +'<td>'+statusBadge+toggleBtn+'</td>'
    +'<td style="display:flex;gap:4px">'+editBtn+delBtn+'</td>'
