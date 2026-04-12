@@ -9551,10 +9551,48 @@ function ltvCalculate() {
  var btn = document.getElementById('ltv-load-btn');
  if (btn) btn.textContent = 'Обновить LTV';
 
+ // Автозагрузка 2025 если ещё не загружены
+ if (!ltv2025Data && !ltv2025Loading) {
+  ltv2025Loading = true;
+  var months2025 = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+  var loaded2025 = 0; var allRows2025 = [];
+  months2025.forEach(function(sheet, mi){
+   var url = 'https://docs.google.com/spreadsheets/d/' + LTV_2025_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(sheet) + '&range=A4:T500';
+   fetch(url).then(function(r){ return r.text(); }).then(function(csv){
+    var rows = kcParseCSV(csv);
+    rows.forEach(function(row){
+     if (!row[0] || !row[1]) return;
+     var client = String(row[1]).trim().toLowerCase();
+     if (!client || client === 'компания') return;
+     var amtJ = kcParseNum(row[9]);
+     var amtM = kcParseNum(row[12]);
+     var amt = amtM > 0 ? amtM : (amtJ > 0 ? amtJ : 0);
+     if (amt <= 0) return;
+     allRows2025.push({
+      client: String(row[1]).trim(), amount: amt, month: mi, year: 2025,
+      qty: parseInt(row[4]) || 1, price: kcParseNum(row[7]),
+      period: parseFloat(String(row[8] || '1').replace(',', '.')) || 1,
+      tariff: String(row[6] || '').trim(), date: String(row[0] || '').trim()
+     });
+    });
+    loaded2025++;
+    if (loaded2025 >= 12) { ltv2025Data = allRows2025; ltv2025Loading = false; ltvCalculate(); }
+   }).catch(function(){ loaded2025++; if (loaded2025 >= 12) { ltv2025Data = allRows2025.length > 0 ? allRows2025 : []; ltv2025Loading = false; ltvCalculate(); } });
+  });
+  if (btn) btn.textContent = 'Загрузка 2025...';
+  return; // вернёмся после загрузки через callback
+ }
+
+ // Разовые тарифы — не считаем в LTV
+ var SKIP_TARIFFS = ['услуга','баланс','оплата долга'];
+
  // Собираем данные по клиентам из 2026 (есть qty, price, period)
  var clientMap = {};
 
  payments.forEach(function(p){
+  // Пропускаем разовые услуги и баланс
+  var tariff = p._rawRow ? String(p._rawRow[6]||'').trim().toLowerCase() : '';
+  if (SKIP_TARIFFS.indexOf(tariff) >= 0) return;
   var key = p.client.toLowerCase();
   if (!clientMap[key]) clientMap[key] = {
    name: p.client,
@@ -9584,6 +9622,8 @@ function ltvCalculate() {
  // 2025 данные — добавляем к total, сдвигаем firstDate, берём price/qty/period
  if (ltv2025Data) {
   ltv2025Data.forEach(function(r){
+   // Пропускаем разовые услуги и баланс
+   if (r.tariff && SKIP_TARIFFS.indexOf(r.tariff.toLowerCase()) >= 0) return;
    var key = r.client.toLowerCase();
    if (!clientMap[key]) clientMap[key] = {
     name: r.client, monthlyRate: 0, totalPaid: 0,
