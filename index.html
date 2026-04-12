@@ -1368,7 +1368,6 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  <div style="font-family:'Space Grotesk','Inter',sans-serif;font-size:18px;color:var(--gold-bright);letter-spacing:2px">Ключевые клиенты</div>
  <div style="display:flex;gap:4px" id="kc-mode-tabs">
  <div class="kc-pt active" onclick="kcSetMode('current',this)">Текущий</div>
- <div class="kc-pt" onclick="kcSetMode('ltv',this)">LTV (2025+2026)</div>
  </div>
  <div id="kc-ltv-status" style="font-size:10px;color:var(--text-muted);display:none"></div>
  </div>
@@ -1776,6 +1775,43 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  <div style="font-size:12px;color:#6A6357">Лиды загружаются автоматически из Google Таблицы. Введи расход и продажи — метрики посчитаются сами. для обновления.</div>
  </div>
 
+ <!-- LTV SECTION -->
+ <div class="panel" style="margin-top:20px;border:1px solid rgba(52,211,153,.2)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+   <div>
+    <div class="panel-title" style="margin-bottom:2px">LTV клиентов</div>
+    <div style="font-size:11px;color:var(--text-muted)">Lifetime Value -- сколько клиент приносит за всё время</div>
+   </div>
+   <button onclick="ltvLoad()" id="ltv-load-btn" style="padding:8px 18px;border-radius:8px;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.25);color:#34D399;font-size:12px;font-weight:600;cursor:pointer">Рассчитать LTV</button>
+  </div>
+  <!-- KPI Cards -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px" id="ltv-kpi-row">
+   <div style="padding:16px;background:rgba(52,211,153,.06);border-radius:10px;border:1px solid rgba(52,211,153,.15);text-align:center">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Средний LTV</div>
+    <div style="font-size:22px;font-weight:700;color:#34D399" id="ltv-avg">--</div>
+   </div>
+   <div style="padding:16px;background:rgba(96,165,250,.06);border-radius:10px;border:1px solid rgba(96,165,250,.15);text-align:center">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Средний чек/мес</div>
+    <div style="font-size:22px;font-weight:700;color:#60A5FA" id="ltv-avg-check">--</div>
+   </div>
+   <div style="padding:16px;background:rgba(251,191,36,.06);border-radius:10px;border:1px solid rgba(251,191,36,.15);text-align:center">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Ср. срок (мес)</div>
+    <div style="font-size:22px;font-weight:700;color:#FBBF24" id="ltv-avg-months">--</div>
+   </div>
+   <div style="padding:16px;background:rgba(239,83,80,.06);border-radius:10px;border:1px solid rgba(239,83,80,.15);text-align:center">
+    <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Всего клиентов</div>
+    <div style="font-size:22px;font-weight:700;color:#EF5350" id="ltv-total-clients">--</div>
+   </div>
+  </div>
+  <!-- Table -->
+  <div id="ltv-table-wrap" style="display:none;overflow-x:auto">
+   <table class="data-table">
+    <thead><tr><th>#</th><th>Клиент</th><th>Всего оплат</th><th>Мес. активности</th><th>Сред. чек/мес</th><th>LTV (прогноз 12 мес)</th></tr></thead>
+    <tbody id="ltv-table-body"></tbody>
+   </table>
+  </div>
+  <div id="ltv-status" style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px">Нажмите "Рассчитать LTV" для загрузки данных 2025+2026</div>
+ </div>
 </div>
  <!-- /MARKETING VIEW -->
 
@@ -9474,6 +9510,111 @@ function acadCreateCode(country) {
 // ============================================================
 function reportsInit() {
  // Инициализация страницы отчётов (пока статично)
+}
+
+// ============================================================
+// LTV MODULE (Marketing page)
+// ============================================================
+function ltvLoad() {
+ var btn = document.getElementById('ltv-load-btn');
+ var statusEl = document.getElementById('ltv-status');
+ if (btn) btn.textContent = 'Загрузка...';
+ if (statusEl) statusEl.textContent = 'Загрузка данных 2025...';
+
+ // Если 2025 уже загружен — сразу считаем
+ if (ltv2025Data && ltv2025Data.length) {
+  ltvCalculate();
+  return;
+ }
+ // Загружаем 2025
+ kcLoadLTV2025();
+ // Ждём загрузки
+ var waitLTV = setInterval(function(){
+  if (ltv2025Loading) return;
+  clearInterval(waitLTV);
+  ltvCalculate();
+ }, 500);
+ setTimeout(function(){ clearInterval(waitLTV); }, 30000);
+}
+
+function ltvCalculate() {
+ var btn = document.getElementById('ltv-load-btn');
+ if (btn) btn.textContent = 'Обновить LTV';
+
+ // Собираем все оплаты по клиентам с датами (месяцами)
+ var clientMap = {};
+
+ // 2025 данные
+ if (ltv2025Data) {
+  ltv2025Data.forEach(function(r){
+   var key = r.client.toLowerCase();
+   if (!clientMap[key]) clientMap[key] = {name: r.client, payments: [], months: {}};
+   clientMap[key].payments.push(r.amount);
+   var mKey = '2025-' + r.month;
+   clientMap[key].months[mKey] = (clientMap[key].months[mKey]||0) + r.amount;
+  });
+ }
+
+ // 2026 данные
+ payments.forEach(function(p){
+  var key = p.client.toLowerCase();
+  if (!clientMap[key]) clientMap[key] = {name: p.client, payments: [], months: {}};
+  clientMap[key].payments.push(p.amount);
+  var d = new Date(p.date);
+  var mKey = d.getFullYear() + '-' + d.getMonth();
+  clientMap[key].months[mKey] = (clientMap[key].months[mKey]||0) + p.amount;
+ });
+
+ // Считаем LTV для каждого клиента
+ var clients = [];
+ Object.keys(clientMap).forEach(function(key){
+  var c = clientMap[key];
+  var totalPaid = c.payments.reduce(function(s,a){return s+a;}, 0);
+  var activeMonths = Object.keys(c.months).length;
+  var avgPerMonth = activeMonths > 0 ? totalPaid / activeMonths : 0;
+  var ltv12 = avgPerMonth * 12; // Прогноз на 12 месяцев
+  clients.push({
+   name: c.name,
+   total: totalPaid,
+   months: activeMonths,
+   avgMonth: avgPerMonth,
+   ltv12: ltv12
+  });
+ });
+
+ clients.sort(function(a,b){ return b.ltv12 - a.ltv12; });
+
+ // KPI
+ var totalClients = clients.length;
+ var avgLTV = totalClients > 0 ? clients.reduce(function(s,c){return s+c.ltv12;},0) / totalClients : 0;
+ var avgCheck = totalClients > 0 ? clients.reduce(function(s,c){return s+c.avgMonth;},0) / totalClients : 0;
+ var avgMonths = totalClients > 0 ? clients.reduce(function(s,c){return s+c.months;},0) / totalClients : 0;
+
+ document.getElementById('ltv-avg').textContent = fmtFull(Math.round(avgLTV));
+ document.getElementById('ltv-avg-check').textContent = fmtFull(Math.round(avgCheck));
+ document.getElementById('ltv-avg-months').textContent = avgMonths.toFixed(1);
+ document.getElementById('ltv-total-clients').textContent = totalClients;
+
+ // Таблица топ-30
+ var tbody = document.getElementById('ltv-table-body');
+ var wrap = document.getElementById('ltv-table-wrap');
+ var statusEl = document.getElementById('ltv-status');
+ if (wrap) wrap.style.display = 'block';
+ if (statusEl) statusEl.style.display = 'none';
+
+ if (tbody) {
+  tbody.innerHTML = clients.slice(0, 30).map(function(c, i){
+   var ltvColor = c.ltv12 > avgLTV ? '#34D399' : (c.ltv12 > avgLTV*0.5 ? '#FBBF24' : '#EF5350');
+   return '<tr>' +
+    '<td>' + (i+1) + '</td>' +
+    '<td style="font-weight:600">' + c.name + '</td>' +
+    '<td>' + fmtFull(Math.round(c.total)) + '</td>' +
+    '<td style="text-align:center">' + c.months + '</td>' +
+    '<td>' + fmtFull(Math.round(c.avgMonth)) + '</td>' +
+    '<td style="font-weight:700;color:' + ltvColor + '">' + fmtFull(Math.round(c.ltv12)) + '</td>' +
+    '</tr>';
+  }).join('');
+ }
 }
 
 function reportGenerate(type) {
