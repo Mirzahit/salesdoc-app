@@ -9611,12 +9611,13 @@ function ltvCalculate() {
   var c = clientMap[key];
   if (c.totalPaid <= 0) return;
 
-  // Срок жизни = от первой оплаты до конца последнего оплаченного периода
+  // Срок жизни = от первого оплаченного месяца до последнего + period
+  // Оплата по календарным месяцам (не по дням)
   var lifetimeMonths = 1;
   if (c.firstDate && c.lastDate) {
-   var endDate = new Date(c.lastDate);
-   endDate.setMonth(endDate.getMonth() + (c.lastPeriod || 1));
-   lifetimeMonths = Math.max(1, Math.round((endDate - c.firstDate) / (1000*60*60*24*30.44)));
+   var firstM = c.firstDate.getFullYear() * 12 + c.firstDate.getMonth();
+   var lastM = c.lastDate.getFullYear() * 12 + c.lastDate.getMonth();
+   lifetimeMonths = Math.max(1, (lastM - firstM) + (c.lastPeriod || 1));
   }
 
   // Месячный чек: если есть price*qty — берём. Иначе total/lifetime
@@ -9625,10 +9626,11 @@ function ltvCalculate() {
   // LTV прогноз = месячный чек x 12
   var ltv12 = monthlyCheck * 12;
 
-  // Активен ли сейчас? Последняя оплата + period + 2 мес запас > сегодня
-  var activeUntil = c.lastDate ? new Date(c.lastDate) : now;
-  activeUntil.setMonth(activeUntil.getMonth() + (c.lastPeriod || 1) + 2);
-  var isActive = activeUntil >= now;
+  // Активен ли? Последний оплаченный месяц + period + 1 мес запас >= текущий месяц
+  var nowM = now.getFullYear() * 12 + now.getMonth();
+  var lastPaidM = c.lastDate ? (c.lastDate.getFullYear() * 12 + c.lastDate.getMonth()) : nowM;
+  var coveredUntilM = lastPaidM + (c.lastPeriod || 1);
+  var isActive = (coveredUntilM + 1) >= nowM; // +1 мес запас
 
   clients.push({
    name: c.name,
