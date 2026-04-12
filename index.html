@@ -9586,12 +9586,23 @@ function ltvCalculate() {
  // Разовые тарифы — не считаем в LTV
  var SKIP_TARIFFS = ['услуга','баланс','оплата долга'];
 
+ // Проверяем что данные синхронизированы из Sheets
+ var hasSynced = payments.some(function(p){ return !!p._rawRow; });
+ if (!hasSynced) {
+  var statusEl = document.getElementById('ltv-status');
+  if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Сначала синхронизируйте данные (кнопка "Синхронизировать")'; statusEl.style.color = '#FBBF24'; }
+  if (btn) btn.textContent = 'Обновить LTV';
+  return;
+ }
+
  // Собираем данные по клиентам из 2026 (есть qty, price, period)
  var clientMap = {};
 
  payments.forEach(function(p){
+  // Только синхронизированные данные (с _rawRow из Sheets)
+  if (!p._rawRow) return;
   // Пропускаем разовые услуги и баланс
-  var tariff = p._rawRow ? String(p._rawRow[6]||'').trim().toLowerCase() : '';
+  var tariff = String(p._rawRow[6]||'').trim().toLowerCase();
   if (SKIP_TARIFFS.indexOf(tariff) >= 0) return;
   var key = p.client.toLowerCase();
   if (!clientMap[key]) clientMap[key] = {
