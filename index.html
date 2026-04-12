@@ -4349,7 +4349,17 @@ function kcLoadLTV2025(){
     var amtM=kcParseNum(row[12]);
     var amt=amtM>0?amtM:(amtJ>0?amtJ:0);
     if(amt<=0) return;
-    allRows.push({client:String(row[1]).trim(),amount:amt,month:mi,year:2025});
+    allRows.push({
+     client:String(row[1]).trim(),
+     amount:amt,
+     month:mi,
+     year:2025,
+     qty:parseInt(row[4])||1,
+     price:kcParseNum(row[7]),
+     period:parseFloat(String(row[8]||'1').replace(',','.'))||1,
+     tariff:String(row[6]||'').trim(),
+     date:String(row[0]||'').trim()
+    });
    });
    loaded++;
    if(statusEl) statusEl.textContent='Загрузка 2025... '+loaded+'/12';
@@ -9571,7 +9581,7 @@ function ltvCalculate() {
   }
  });
 
- // 2025 данные — добавляем к total и сдвигаем firstDate
+ // 2025 данные — добавляем к total, сдвигаем firstDate, берём price/qty/period
  if (ltv2025Data) {
   ltv2025Data.forEach(function(r){
    var key = r.client.toLowerCase();
@@ -9583,10 +9593,15 @@ function ltvCalculate() {
    var c = clientMap[key];
    c.totalPaid += r.amount;
    c.paymentsCount++;
-   // 2025: month 0=Янв ... 11=Дек
    var d2025 = new Date(2025, r.month, 15);
    if (!c.firstDate || d2025 < c.firstDate) c.firstDate = d2025;
-   if (!c.lastDate || d2025 > c.lastDate) c.lastDate = d2025;
+   if (!c.lastDate || d2025 > c.lastDate) {
+    c.lastDate = d2025;
+    c.lastPeriod = r.period || 1;
+    c.licenses = r.qty || c.licenses;
+    if (r.price > 0 && r.qty > 0) c.monthlyRate = r.price * r.qty;
+    if (r.tariff) c.tariff = r.tariff;
+   }
   });
  }
 
