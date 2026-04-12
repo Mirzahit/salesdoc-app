@@ -1806,7 +1806,7 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
   <!-- Table -->
   <div id="ltv-table-wrap" style="display:none;overflow-x:auto">
    <table class="data-table">
-    <thead><tr><th>#</th><th>Клиент</th><th>Всего оплат</th><th>Мес. активности</th><th>Сред. чек/мес</th><th>LTV (прогноз 12 мес)</th></tr></thead>
+    <thead><tr><th>#</th><th>Клиент</th><th>Лицензии</th><th>Тариф</th><th>Чек/мес</th><th>Срок</th><th>LTV (12 мес)</th><th>Статус</th></tr></thead>
     <tbody id="ltv-table-body"></tbody>
    </table>
   </div>
@@ -9541,61 +9541,109 @@ function ltvCalculate() {
  var btn = document.getElementById('ltv-load-btn');
  if (btn) btn.textContent = 'Обновить LTV';
 
- // Собираем все оплаты по клиентам с датами (месяцами)
+ // Собираем данные по клиентам из 2026 (есть qty, price, period)
  var clientMap = {};
 
- // 2025 данные
+ payments.forEach(function(p){
+  var key = p.client.toLowerCase();
+  if (!clientMap[key]) clientMap[key] = {
+   name: p.client,
+   monthlyRate: 0,    // текущий месячный чек (price x qty)
+   totalPaid: 0,      // всего оплачено
+   firstDate: null,   // первая оплата
+   lastDate: null,    // последняя оплата
+   lastPeriod: 0,     // period последней оплаты
+   licenses: 0,       // текущее кол-во лицензий
+   tariff: '',        // последний тариф
+   paymentsCount: 0
+  };
+  var c = clientMap[key];
+  c.totalPaid += p.amount;
+  c.paymentsCount++;
+  var d = new Date(p.date);
+  if (!c.firstDate || d < c.firstDate) c.firstDate = d;
+  if (!c.lastDate || d > c.lastDate) {
+   c.lastDate = d;
+   c.lastPeriod = p.period || 1;
+   c.licenses = p.qty || 1;
+   c.monthlyRate = (p.price || 0) * (p.qty || 1);
+   c.tariff = p._rawRow ? String(p._rawRow[6]||'') : '';
+  }
+ });
+
+ // 2025 данные — добавляем к total и сдвигаем firstDate
  if (ltv2025Data) {
   ltv2025Data.forEach(function(r){
    var key = r.client.toLowerCase();
-   if (!clientMap[key]) clientMap[key] = {name: r.client, payments: [], months: {}};
-   clientMap[key].payments.push(r.amount);
-   var mKey = '2025-' + r.month;
-   clientMap[key].months[mKey] = (clientMap[key].months[mKey]||0) + r.amount;
+   if (!clientMap[key]) clientMap[key] = {
+    name: r.client, monthlyRate: 0, totalPaid: 0,
+    firstDate: null, lastDate: null, lastPeriod: 1,
+    licenses: 0, tariff: '', paymentsCount: 0
+   };
+   var c = clientMap[key];
+   c.totalPaid += r.amount;
+   c.paymentsCount++;
+   // 2025: month 0=Янв ... 11=Дек
+   var d2025 = new Date(2025, r.month, 15);
+   if (!c.firstDate || d2025 < c.firstDate) c.firstDate = d2025;
+   if (!c.lastDate || d2025 > c.lastDate) c.lastDate = d2025;
   });
  }
 
- // 2026 данные
- payments.forEach(function(p){
-  var key = p.client.toLowerCase();
-  if (!clientMap[key]) clientMap[key] = {name: p.client, payments: [], months: {}};
-  clientMap[key].payments.push(p.amount);
-  var d = new Date(p.date);
-  var mKey = d.getFullYear() + '-' + d.getMonth();
-  clientMap[key].months[mKey] = (clientMap[key].months[mKey]||0) + p.amount;
- });
-
- // Считаем LTV для каждого клиента
+ var now = new Date();
  var clients = [];
  Object.keys(clientMap).forEach(function(key){
   var c = clientMap[key];
-  var totalPaid = c.payments.reduce(function(s,a){return s+a;}, 0);
-  var activeMonths = Object.keys(c.months).length;
-  var avgPerMonth = activeMonths > 0 ? totalPaid / activeMonths : 0;
-  var ltv12 = avgPerMonth * 12; // Прогноз на 12 месяцев
+  if (c.totalPaid <= 0) return;
+
+  // Срок жизни = от первой оплаты до конца последнего оплаченного периода
+  var lifetimeMonths = 1;
+  if (c.firstDate && c.lastDate) {
+   var endDate = new Date(c.lastDate);
+   endDate.setMonth(endDate.getMonth() + (c.lastPeriod || 1));
+   lifetimeMonths = Math.max(1, Math.round((endDate - c.firstDate) / (1000*60*60*24*30.44)));
+  }
+
+  // Месячный чек: если есть price*qty — берём. Иначе total/lifetime
+  var monthlyCheck = c.monthlyRate > 0 ? c.monthlyRate : Math.round(c.totalPaid / lifetimeMonths);
+
+  // LTV прогноз = месячный чек x 12
+  var ltv12 = monthlyCheck * 12;
+
+  // Активен ли сейчас? Последняя оплата + period > сегодня
+  var activeUntil = c.lastDate ? new Date(c.lastDate) : now;
+  activeUntil.setMonth(activeUntil.getMonth() + (c.lastPeriod || 1));
+  var isActive = activeUntil >= now;
+
   clients.push({
    name: c.name,
-   total: totalPaid,
-   months: activeMonths,
-   avgMonth: avgPerMonth,
-   ltv12: ltv12
+   total: c.totalPaid,
+   lifetime: lifetimeMonths,
+   monthlyCheck: monthlyCheck,
+   ltv12: ltv12,
+   licenses: c.licenses,
+   tariff: c.tariff,
+   active: isActive,
+   payments: c.paymentsCount
   });
  });
 
  clients.sort(function(a,b){ return b.ltv12 - a.ltv12; });
 
- // KPI
+ // KPI — считаем только по активным клиентам
+ var activeClients = clients.filter(function(c){return c.active;});
  var totalClients = clients.length;
- var avgLTV = totalClients > 0 ? clients.reduce(function(s,c){return s+c.ltv12;},0) / totalClients : 0;
- var avgCheck = totalClients > 0 ? clients.reduce(function(s,c){return s+c.avgMonth;},0) / totalClients : 0;
- var avgMonths = totalClients > 0 ? clients.reduce(function(s,c){return s+c.months;},0) / totalClients : 0;
+ var activeCount = activeClients.length;
+ var avgLTV = activeCount > 0 ? activeClients.reduce(function(s,c){return s+c.ltv12;},0) / activeCount : 0;
+ var avgCheck = activeCount > 0 ? activeClients.reduce(function(s,c){return s+c.monthlyCheck;},0) / activeCount : 0;
+ var avgMonths = totalClients > 0 ? clients.reduce(function(s,c){return s+c.lifetime;},0) / totalClients : 0;
 
  document.getElementById('ltv-avg').textContent = fmtFull(Math.round(avgLTV));
  document.getElementById('ltv-avg-check').textContent = fmtFull(Math.round(avgCheck));
  document.getElementById('ltv-avg-months').textContent = avgMonths.toFixed(1);
- document.getElementById('ltv-total-clients').textContent = totalClients;
+ document.getElementById('ltv-total-clients').textContent = activeCount + ' / ' + totalClients;
 
- // Таблица топ-30
+ // Таблица
  var tbody = document.getElementById('ltv-table-body');
  var wrap = document.getElementById('ltv-table-wrap');
  var statusEl = document.getElementById('ltv-status');
@@ -9603,15 +9651,20 @@ function ltvCalculate() {
  if (statusEl) statusEl.style.display = 'none';
 
  if (tbody) {
-  tbody.innerHTML = clients.slice(0, 30).map(function(c, i){
+  tbody.innerHTML = clients.slice(0, 50).map(function(c, i){
    var ltvColor = c.ltv12 > avgLTV ? '#34D399' : (c.ltv12 > avgLTV*0.5 ? '#FBBF24' : '#EF5350');
+   var statusBadge = c.active
+    ? '<span style="color:#34D399;font-size:10px">Активен</span>'
+    : '<span style="color:#EF5350;font-size:10px">Неактивен</span>';
    return '<tr>' +
     '<td>' + (i+1) + '</td>' +
     '<td style="font-weight:600">' + c.name + '</td>' +
-    '<td>' + fmtFull(Math.round(c.total)) + '</td>' +
-    '<td style="text-align:center">' + c.months + '</td>' +
-    '<td>' + fmtFull(Math.round(c.avgMonth)) + '</td>' +
+    '<td>' + c.licenses + ' лиц.</td>' +
+    '<td>' + (c.tariff || '--') + '</td>' +
+    '<td>' + fmtFull(Math.round(c.monthlyCheck)) + '</td>' +
+    '<td style="text-align:center">' + c.lifetime + ' мес</td>' +
     '<td style="font-weight:700;color:' + ltvColor + '">' + fmtFull(Math.round(c.ltv12)) + '</td>' +
+    '<td>' + statusBadge + '</td>' +
     '</tr>';
   }).join('');
  }
