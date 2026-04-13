@@ -456,8 +456,9 @@ body{background:var(--dark-void);color:var(--text-primary);font-family:'Inter',s
 .nav-group-trigger .nav-g-icon{width:20px;text-align:center;font-size:15px;flex-shrink:0}
 .nav-group-trigger .nav-g-arrow{margin-left:auto;font-size:9px;color:var(--text-muted);transition:transform .2s}
 .nav-group.has-active>.nav-group-trigger{color:var(--gold-bright)}
-.nav-group-popup{display:none;position:fixed;left:240px;min-width:200px;background:rgba(15,20,35,.95);border:1px solid var(--dark-border);border-radius:12px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:999;backdrop-filter:blur(20px)}
-.nav-group:hover>.nav-group-popup,.nav-group.touch-open>.nav-group-popup{display:block}
+.nav-group-popup{display:none;position:fixed;left:240px;min-width:200px;background:rgba(15,20,35,.95);border:1px solid var(--dark-border);border-radius:12px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:999;backdrop-filter:blur(20px);padding-left:16px;margin-left:-10px}
+.nav-group-popup-inner{background:rgba(15,20,35,.95);border:1px solid var(--dark-border);border-radius:12px;padding:6px}
+.nav-group.hover-open>.nav-group-popup,.nav-group.touch-open>.nav-group-popup{display:block}
 .nav-popup-title{font-size:9px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;padding:6px 10px 4px;font-weight:700}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;margin-bottom:1px;cursor:pointer;transition:all .2s;font-size:13px;font-weight:600;letter-spacing:.5px;color:var(--text-muted);position:relative;overflow:hidden;white-space:nowrap}
 .nav-item:hover{background:rgba(59,130,246,.08);color:var(--gold-light)}
@@ -2212,13 +2213,31 @@ function toggleNavGroup(el){
  var group = el.parentElement;
  group.classList.toggle('open');
 }
-// Hover popup positioning
+// Hover popup positioning with delay
+var _navHoverTimer = null;
 document.querySelectorAll('.nav-group').forEach(function(g){
+ var popup = g.querySelector('.nav-group-popup');
+ if(!popup) return;
+
  g.addEventListener('mouseenter',function(){
-  var popup = g.querySelector('.nav-group-popup');
-  if(!popup) return;
+  clearTimeout(_navHoverTimer);
+  // Закрыть другие
+  document.querySelectorAll('.nav-group.hover-open').forEach(function(o){ if(o!==g) o.classList.remove('hover-open'); });
   var rect = g.getBoundingClientRect();
   popup.style.top = rect.top + 'px';
+  g.classList.add('hover-open');
+ });
+
+ g.addEventListener('mouseleave',function(){
+  _navHoverTimer = setTimeout(function(){ g.classList.remove('hover-open'); }, 200);
+ });
+
+ popup.addEventListener('mouseenter',function(){
+  clearTimeout(_navHoverTimer);
+ });
+
+ popup.addEventListener('mouseleave',function(){
+  _navHoverTimer = setTimeout(function(){ g.classList.remove('hover-open'); }, 150);
  });
 });
 // Touch support for nav hover popups (mobile)
