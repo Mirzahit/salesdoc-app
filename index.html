@@ -990,6 +990,33 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  .kpi-label{font-size:9px!important}
  .login-logo{font-size:32px!important;letter-spacing:3px!important}
 }
+/* KANBAN STYLES */
+.kb-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px;min-height:400px;-webkit-overflow-scrolling:touch}
+.kb-column{width:260px;min-width:260px;flex-shrink:0;background:rgba(17,24,39,.5);border:1px solid var(--dark-border);border-radius:14px;display:flex;flex-direction:column;max-height:calc(100vh - 260px)}
+.kb-column-header{padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--dark-border)}
+.kb-column-header .kb-col-title{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary)}
+.kb-column-header .kb-col-count{font-size:10px;background:rgba(59,130,246,.15);color:#60A5FA;padding:2px 8px;border-radius:10px;font-weight:600}
+.kb-column-body{flex:1;overflow-y:auto;padding:8px;min-height:60px}
+.kb-column-body.drag-over{background:rgba(59,130,246,.06);border-radius:0 0 14px 14px}
+.kb-card{background:var(--dark-card);border:1px solid rgba(255,255,255,.04);border-radius:10px;padding:12px;margin-bottom:8px;cursor:grab;transition:transform .15s,box-shadow .15s,opacity .15s;position:relative}
+.kb-card:hover{border-color:rgba(59,130,246,.25);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.kb-card.dragging{opacity:.4;transform:rotate(2deg)}
+.kb-card .kb-client{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:6px}
+.kb-card .kb-meta{font-size:10px;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.kb-card .kb-meta span{display:inline-flex;align-items:center;gap:3px}
+.kb-card .kb-badge{font-size:9px;padding:1px 6px;border-radius:4px;font-weight:600}
+.kb-badge-days{background:rgba(52,211,153,.12);color:#34D399}
+.kb-badge-warn{background:rgba(251,191,36,.12);color:#FBBF24}
+.kb-badge-danger{background:rgba(239,83,80,.12);color:#EF5350}
+.kb-badge-done{background:rgba(52,211,153,.12);color:#34D399}
+.kb-operator{font-size:10px;color:#AB47BC;font-weight:600;margin-top:4px}
+.kb-ghost{height:4px;border-radius:2px;background:rgba(59,130,246,.3);margin:4px 0;transition:height .15s}
+.kb-ghost.active{height:40px;background:rgba(59,130,246,.1);border:2px dashed rgba(59,130,246,.4);border-radius:8px}
+@media(max-width:768px){
+ .kb-board{flex-direction:column}
+ .kb-column{width:100%;min-width:100%;max-height:none}
+ .kb-column-body{max-height:300px}
+}
 </style>
 
 </head>
@@ -1052,6 +1079,7 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
   <div class="nav-group-label" onclick="toggleNavGroup(this)">Управление <span class="nav-arrow">&#9662;</span></div>
   <div class="nav-group-items">
    <div class="nav-item" data-view="academy" onclick="showView('academy')"> Академия</div>
+   <div class="nav-item" data-view="kanban" onclick="showView('kanban')"> Внедрение</div>
   </div>
  </div>
  <div class="nav-group open">
@@ -2007,6 +2035,50 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  </div>
  <!-- /REPORTS VIEW -->
 
+ <!-- KANBAN / ВНЕДРЕНИЕ VIEW -->
+ <div id="view-kanban" style="display:none;position:relative">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <button class="add-btn" onclick="kbLoad()" id="kb-refresh-btn" style="font-size:11px;padding:5px 14px">Обновить</button>
+    <select id="kb-filter-operator" class="form-select" style="font-size:11px;padding:4px 10px;min-width:140px" onchange="kbRender()">
+     <option value="">Все операторы</option>
+    </select>
+    <select id="kb-filter-manager" class="form-select" style="font-size:11px;padding:4px 10px;min-width:140px" onchange="kbRender()">
+     <option value="">Все менеджеры</option>
+    </select>
+   </div>
+   <div style="display:flex;align-items:center;gap:8px">
+    <div id="kb-status" style="font-size:11px;color:var(--text-muted)"></div>
+    <button onclick="kbOpenSettings()" title="Настройки колонок" style="background:none;border:1px solid var(--dark-border);border-radius:8px;padding:4px 10px;cursor:pointer;color:var(--text-muted);font-size:14px">&#9881;</button>
+   </div>
+  </div>
+  <div id="kb-summary" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px"></div>
+  <div id="kb-board" class="kb-board"></div>
+ </div>
+ <!-- /KANBAN VIEW -->
+
+ <!-- KANBAN SETTINGS MODAL -->
+ <div class="modal-overlay" id="kb-settings-modal" onclick="if(event.target===this)kbCloseSettings()" style="display:none">
+  <div class="modal" style="max-width:480px">
+   <button class="modal-close" onclick="kbCloseSettings()">&#10005;</button>
+   <div class="modal-title">Настройки колонок</div>
+   <div id="kb-columns-list" style="margin:16px 0"></div>
+   <div style="display:flex;gap:8px;margin-top:12px">
+    <input class="form-input" id="kb-new-col-name" placeholder="Новая колонка" style="flex:1">
+    <button class="add-btn" onclick="kbAddColumn()">Добавить</button>
+   </div>
+   <button class="add-btn" onclick="kbSaveColumns()" style="width:100%;margin-top:16px;background:linear-gradient(135deg,#4A90D9,#60A5FA)">Сохранить</button>
+  </div>
+ </div>
+
+ <!-- KANBAN CARD DETAIL MODAL -->
+ <div class="modal-overlay" id="kb-card-modal" onclick="if(event.target===this)kbCloseCard()" style="display:none">
+  <div class="modal" style="max-width:520px">
+   <button class="modal-close" onclick="kbCloseCard()">&#10005;</button>
+   <div id="kb-card-detail"></div>
+  </div>
+ </div>
+
  </div><!-- /content -->
 </main>
 
@@ -2142,6 +2214,7 @@ const ACCESS_KEYS = [
  { key:'view_acts', label:'Акты работ' },
  { key:'view_plan', label:'Выполнение плана' },
 
+ { key:'view_kanban', label:'Внедрение' },
  { key:'view_employees', label:'Сотрудники' },
  { key:'view_cabinet', label:'Личный кабинет' },
  { key:'add_payments', label:'Добавлять оплаты' },
@@ -2151,10 +2224,10 @@ const ACCESS_KEYS = [
 ];
 
 const ROLE_DEFAULTS = {
- admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:0,view_reports:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- operator: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,view_knowledge:1,view_academy:0,view_reports:0,add_payments:0,add_acts:1,edit_plans:0,manage_employees:0 },
- viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,view_knowledge:1,view_academy:0,view_reports:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ operator: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,add_payments:0,add_acts:1,edit_plans:0,manage_employees:0 },
+ viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
 };
 
 // ============================================================
@@ -2633,7 +2706,7 @@ function applyUserAccess() {
  document.getElementById('cab-display-role').textContent=u.pos+' · '+profile.company;
 
  // Show/hide nav items
- const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',ai:'view_ai',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports'};
+ const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',ai:'view_ai',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban'};
  document.querySelectorAll('.nav-item[data-view]').forEach(el=>{
  const view=el.dataset.view;
  const key=viewMap[view];
@@ -4573,10 +4646,10 @@ function saveProfile(){ if(currentUser){currentUser.name=document.getElementById
 // NAV
 // ============================================================
 function showView(v) {
- ['dashboard','payments','plan','keyclients','ai','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports'].forEach(x=>{
+ ['dashboard','payments','plan','keyclients','ai','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban'].forEach(x=>{
  const el=document.getElementById('view-'+x); if(el)el.style.display=x===v?'block':'none';
  });
- const titles={dashboard:'ОБЗОР ФИНАНСОВ',payments:'ОПЛАТЫ',plan:'ВЫПОЛНЕНИЕ ПЛАНА',keyclients:'КЛЮЧЕВЫЕ КЛИЕНТЫ',ai:'ИИ МИРЗАХИТ — ФИНАНСОВЫЙ АНАЛИТИК',cabinet:'ЛИЧНЫЙ КАБИНЕТ',marketing:'МАРКЕТИНГ — АНАЛИЗ ЛИДОВ',expenses:'РАСХОДЫ',integrations:'ОЧЕРЕДЬ ИНТЕГРАЦИИ',tests:'ТЕСТЫ / ОЦЕНКА НАВЫКОВ',knowledge:'БАЗА ЗНАНИЙ',academy:'АКАДЕМИЯ',reports:'ОТЧЁТЫ'};
+ const titles={dashboard:'ОБЗОР ФИНАНСОВ',payments:'ОПЛАТЫ',plan:'ВЫПОЛНЕНИЕ ПЛАНА',keyclients:'КЛЮЧЕВЫЕ КЛИЕНТЫ',ai:'ИИ МИРЗАХИТ — ФИНАНСОВЫЙ АНАЛИТИК',cabinet:'ЛИЧНЫЙ КАБИНЕТ',marketing:'МАРКЕТИНГ — АНАЛИЗ ЛИДОВ',expenses:'РАСХОДЫ',integrations:'ОЧЕРЕДЬ ИНТЕГРАЦИИ',tests:'ТЕСТЫ / ОЦЕНКА НАВЫКОВ',knowledge:'БАЗА ЗНАНИЙ',academy:'АКАДЕМИЯ',reports:'ОТЧЁТЫ',kanban:'ВНЕДРЕНИЕ'};
  document.getElementById('page-title').textContent=titles[v]||v.toUpperCase();
  // cabinet не подсвечиваем в nav, он открывается по аватарке
  document.querySelectorAll('.nav-item[data-view]').forEach(function(el){
@@ -4597,6 +4670,7 @@ function showView(v) {
  if(v==='knowledge') kbRender();
  if(v==='academy') acadLoad();
  if(v==='reports') reportsInit();
+ if(v==='kanban'){if(!window._kbLoaded){kbLoad();window._kbLoaded=true;}else{kbRenderBoard();}}
 }
 
 // DATA SOURCES INFO (динамически из COUNTRY_CONFIG)
@@ -9827,6 +9901,435 @@ function reportGenerate(type) {
   bodyEl.innerHTML = '<div style="color:var(--text-muted);padding:20px;text-align:center">Этот отчёт пока в разработке</div>';
  }
  resultEl.scrollIntoView({behavior:'smooth'});
+}
+
+// ============================================================
+// KANBAN — ВНЕДРЕНИЕ
+// ============================================================
+var KB_SHEET_ID = '1lXBeS-TTH2SihtV_6Ki4O_nnuNaC9xza2esw0sZnZKc';
+var KB_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx2PCxmhB49fYj5jgHu0KhQr4W9Ckl0-_A78zbAgmhjbUQCOQf5S49BeN06usQfdq4R/exec';
+var kbCards = [];
+var kbColumns = [];
+var kbOperators = [];
+var kbDragCard = null;
+
+function kbLoad() {
+ document.getElementById('kb-status').textContent = 'Загрузка...';
+ // Загружаем настройки (этапы, операторы)
+ var settingsUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Настройки');
+ var cardsUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Карточки');
+
+ Promise.all([fetch(settingsUrl).then(r=>r.text()), fetch(cardsUrl).then(r=>r.text())])
+ .then(function(results) {
+  // Parse settings
+  var sRows = kbParseCsv(results[0]);
+  kbColumns = []; kbOperators = [];
+  sRows.forEach(function(r,i){
+   if(i===0) return; // skip header
+   if(r[0] && r[0].trim()) kbColumns.push(r[0].trim());
+   if(r[2] && r[2].trim()) kbOperators.push(r[2].trim());
+  });
+  if(!kbColumns.length) kbColumns = ['В очереди','Интеграция','Обучение','Настройка','Тест','Запущен'];
+
+  // Parse cards
+  var cRows = kbParseCsv(results[1]);
+  kbCards = [];
+  cRows.forEach(function(r,i){
+   if(i===0) return;
+   if(!r[1] || !r[1].trim()) return;
+   kbCards.push({
+    id: r[0] || String(i),
+    client: r[1] || '',
+    operator: r[2] || '',
+    stage: r[3] || kbColumns[0] || 'В очереди',
+    category: r[4] || '',
+    manager: r[5] || '',
+    amount: r[6] || '',
+    tariff: r[7] || '',
+    qty: r[8] || '',
+    period: r[9] || '',
+    payDate: r[10] || '',
+    activDate: r[11] || '',
+    _row: i + 1
+   });
+  });
+
+  document.getElementById('kb-status').textContent = kbCards.length + ' клиентов';
+  kbFillFilters();
+  kbRenderBoard();
+  kbRenderSummary();
+ })
+ .catch(function(e){
+  document.getElementById('kb-status').textContent = 'Ошибка загрузки';
+  console.error('KB load error:', e);
+ });
+}
+
+function kbParseCsv(text) {
+ var rows = []; var row = []; var field = ''; var inQ = false;
+ for (var i = 0; i < text.length; i++) {
+  var c = text[i];
+  if (inQ) {
+   if (c === '"' && text[i+1] === '"') { field += '"'; i++; }
+   else if (c === '"') { inQ = false; }
+   else { field += c; }
+  } else {
+   if (c === '"') { inQ = true; }
+   else if (c === ',') { row.push(field); field = ''; }
+   else if (c === '\n' || (c === '\r' && text[i+1] === '\n')) {
+    row.push(field); field = ''; rows.push(row); row = [];
+    if (c === '\r') i++;
+   } else { field += c; }
+  }
+ }
+ if (field || row.length) { row.push(field); rows.push(row); }
+ return rows;
+}
+
+function kbFillFilters() {
+ var opSel = document.getElementById('kb-filter-operator');
+ var mgSel = document.getElementById('kb-filter-manager');
+ var ops = {}, mgs = {};
+ kbCards.forEach(function(c){ if(c.operator) ops[c.operator]=1; if(c.manager) mgs[c.manager]=1; });
+ opSel.innerHTML = '<option value="">Все операторы</option>' + Object.keys(ops).sort().map(function(o){ return '<option value="'+o+'">'+o+'</option>'; }).join('');
+ mgSel.innerHTML = '<option value="">Все менеджеры</option>' + Object.keys(mgs).sort().map(function(m){ return '<option value="'+m+'">'+m+'</option>'; }).join('');
+}
+
+function kbGetFiltered() {
+ var opF = document.getElementById('kb-filter-operator').value;
+ var mgF = document.getElementById('kb-filter-manager').value;
+ return kbCards.filter(function(c){
+  if(opF && c.operator !== opF) return false;
+  if(mgF && c.manager !== mgF) return false;
+  return true;
+ });
+}
+
+function kbRenderSummary() {
+ var el = document.getElementById('kb-summary');
+ var filtered = kbGetFiltered();
+ var total = filtered.length;
+ var done = filtered.filter(function(c){ return c.stage === 'Запущен'; }).length;
+ var noOp = filtered.filter(function(c){ return !c.operator; }).length;
+ var avgDays = 0;
+ var daysArr = filtered.filter(function(c){ return c.payDate && c.stage !== 'Запущен'; }).map(function(c){
+  var d = new Date(c.payDate.split('.').reverse().join('-'));
+  if(isNaN(d)) return 0;
+  return Math.floor((Date.now() - d) / 86400000);
+ }).filter(function(d){ return d > 0; });
+ if(daysArr.length) avgDays = Math.round(daysArr.reduce(function(a,b){return a+b;},0) / daysArr.length);
+
+ el.innerHTML = '<div class="kpi-card"><div class="kpi-label">ВСЕГО</div><div class="kpi-value">'+total+'</div></div>'
+  + '<div class="kpi-card"><div class="kpi-label">ЗАПУЩЕНО</div><div class="kpi-value" style="color:#34D399">'+done+'</div></div>'
+  + '<div class="kpi-card"><div class="kpi-label">БЕЗ ОПЕРАТОРА</div><div class="kpi-value" style="color:'+(noOp?'#EF5350':'var(--text-primary)')+'">'+noOp+'</div></div>'
+  + '<div class="kpi-card"><div class="kpi-label">СРЕДН. ДНЕЙ</div><div class="kpi-value">'+avgDays+'</div></div>';
+}
+
+function kbRenderBoard() {
+ var board = document.getElementById('kb-board');
+ var filtered = kbGetFiltered();
+ board.innerHTML = '';
+
+ kbColumns.forEach(function(col) {
+  var colCards = filtered.filter(function(c){ return c.stage === col; });
+  var colEl = document.createElement('div');
+  colEl.className = 'kb-column';
+  colEl.dataset.stage = col;
+
+  // Header
+  var hdr = document.createElement('div');
+  hdr.className = 'kb-column-header';
+  hdr.innerHTML = '<span class="kb-col-title">' + col + '</span><span class="kb-col-count">' + colCards.length + '</span>';
+  colEl.appendChild(hdr);
+
+  // Body (drop zone)
+  var body = document.createElement('div');
+  body.className = 'kb-column-body';
+  body.dataset.stage = col;
+  body.addEventListener('dragover', kbDragOver);
+  body.addEventListener('dragleave', kbDragLeave);
+  body.addEventListener('drop', kbDrop);
+  // Touch events
+  body.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive:false});
+
+  colCards.forEach(function(card) {
+   body.appendChild(kbCreateCardEl(card));
+  });
+
+  colEl.appendChild(body);
+  board.appendChild(colEl);
+ });
+
+ kbRenderSummary();
+}
+
+function kbCreateCardEl(card) {
+ var el = document.createElement('div');
+ el.className = 'kb-card';
+ el.draggable = true;
+ el.dataset.id = card.id;
+ el.dataset.row = card._row;
+
+ // Days in work
+ var days = 0;
+ if(card.payDate) {
+  var parts = card.payDate.split('.');
+  var d = parts.length === 3 ? new Date(parts[2]+'-'+parts[1]+'-'+parts[0]) : new Date(card.payDate);
+  if(!isNaN(d)) days = Math.floor((Date.now() - d) / 86400000);
+ }
+ var badgeClass = days > 14 ? 'kb-badge-danger' : days > 7 ? 'kb-badge-warn' : 'kb-badge-days';
+ if(card.stage === 'Запущен') badgeClass = 'kb-badge-done';
+
+ var html = '<div class="kb-client">' + card.client + '</div>';
+ html += '<div class="kb-meta">';
+ if(card.amount) html += '<span>' + fmtFull(parseFloat(card.amount)||0) + '</span>';
+ if(card.tariff) html += '<span>' + card.tariff + '</span>';
+ if(card.payDate) html += '<span class="kb-badge ' + badgeClass + '">' + (card.stage === 'Запущен' ? 'Готов' : days + ' дн') + '</span>';
+ html += '</div>';
+ if(card.operator) html += '<div class="kb-operator">' + card.operator + '</div>';
+ if(card.activDate && card.stage === 'Запущен') html += '<div style="font-size:10px;color:#34D399;margin-top:2px">Активация: ' + card.activDate + '</div>';
+
+ el.innerHTML = html;
+
+ // Drag events
+ el.addEventListener('dragstart', function(e){
+  kbDragCard = card;
+  el.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', card.id);
+ });
+ el.addEventListener('dragend', function(){
+  el.classList.remove('dragging');
+  kbDragCard = null;
+  document.querySelectorAll('.kb-column-body.drag-over').forEach(function(b){ b.classList.remove('drag-over'); });
+ });
+
+ // Click to open detail
+ el.addEventListener('click', function(e){
+  if(el.classList.contains('dragging')) return;
+  kbOpenCard(card);
+ });
+
+ // Touch drag support
+ var touchStartY = 0, touchStartX = 0, touchMoved = false;
+ el.addEventListener('touchstart', function(e){
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  touchMoved = false;
+  kbDragCard = card;
+ }, {passive:true});
+ el.addEventListener('touchmove', function(e){
+  var dx = e.touches[0].clientX - touchStartX;
+  var dy = e.touches[0].clientY - touchStartY;
+  if(Math.abs(dx) > 10 || Math.abs(dy) > 10) touchMoved = true;
+ }, {passive:true});
+ el.addEventListener('touchend', function(e){
+  if(!touchMoved) kbOpenCard(card);
+  kbDragCard = null;
+ });
+
+ return el;
+}
+
+function kbDragOver(e) {
+ e.preventDefault();
+ e.dataTransfer.dropEffect = 'move';
+ this.classList.add('drag-over');
+}
+function kbDragLeave(e) {
+ this.classList.remove('drag-over');
+}
+function kbDrop(e) {
+ e.preventDefault();
+ this.classList.remove('drag-over');
+ if(!kbDragCard) return;
+ var newStage = this.dataset.stage;
+ if(kbDragCard.stage === newStage) return;
+ kbMoveCard(kbDragCard, newStage);
+}
+
+function kbMoveCard(card, newStage) {
+ var oldStage = card.stage;
+ card.stage = newStage;
+
+ // If moved to last column, set activation date
+ if(newStage === 'Запущен' && !card.activDate) {
+  var now = new Date();
+  card.activDate = ('0'+now.getDate()).slice(-2) + '.' + ('0'+(now.getMonth()+1)).slice(-2) + '.' + now.getFullYear();
+ }
+
+ kbRenderBoard();
+
+ // Write to sheet
+ kbSaveToSheet(card, oldStage, newStage);
+}
+
+function kbSaveToSheet(card, oldStage, newStage) {
+ // Update stage in Карточки sheet (column D = index 3)
+ var updateUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Карточки');
+
+ // Use Apps Script if URL is set
+ if(KB_SCRIPT_URL) {
+  var payload = {
+   action: 'moveCard',
+   sheetId: KB_SHEET_ID,
+   row: card._row,
+   stage: newStage,
+   activDate: card.activDate || '',
+   client: card.client,
+   operator: card.operator,
+   oldStage: oldStage,
+   who: (currentUser && currentUser.name) || 'Dashboard'
+  };
+  fetch(KB_SCRIPT_URL, {
+   method: 'POST',
+   headers: {'Content-Type':'text/plain'},
+   body: JSON.stringify(payload)
+  }).then(function(r){ return r.text(); }).then(function(t){
+   console.log('KB save:', t);
+   document.getElementById('kb-status').textContent = 'Сохранено';
+   setTimeout(function(){ document.getElementById('kb-status').textContent = kbCards.length + ' клиентов'; }, 2000);
+  }).catch(function(e){
+   console.error('KB save error:', e);
+   document.getElementById('kb-status').textContent = 'Ошибка сохранения';
+  });
+ } else {
+  document.getElementById('kb-status').textContent = 'Только просмотр (doPost не настроен)';
+ }
+}
+
+function kbOpenCard(card) {
+ var el = document.getElementById('kb-card-detail');
+ var days = 0;
+ if(card.payDate) {
+  var parts = card.payDate.split('.');
+  var d = parts.length === 3 ? new Date(parts[2]+'-'+parts[1]+'-'+parts[0]) : new Date(card.payDate);
+  if(!isNaN(d)) days = Math.floor((Date.now() - d) / 86400000);
+ }
+
+ var html = '<div style="margin-bottom:16px"><div style="font-size:18px;font-weight:700;color:var(--text-primary)">' + card.client + '</div></div>';
+
+ html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">';
+ html += '<div class="kpi-card" style="padding:10px"><div class="kpi-label">ЭТАП</div><div style="font-size:14px;font-weight:600;color:#60A5FA">' + card.stage + '</div></div>';
+ html += '<div class="kpi-card" style="padding:10px"><div class="kpi-label">ОПЕРАТОР</div><div style="font-size:14px;font-weight:600;color:#AB47BC">' + (card.operator || 'Не назначен') + '</div></div>';
+ html += '<div class="kpi-card" style="padding:10px"><div class="kpi-label">ДНЕЙ В РАБОТЕ</div><div style="font-size:14px;font-weight:600">' + days + '</div></div>';
+ html += '<div class="kpi-card" style="padding:10px"><div class="kpi-label">СУММА</div><div style="font-size:14px;font-weight:600">' + (card.amount ? fmtFull(parseFloat(card.amount)||0) : '-') + '</div></div>';
+ html += '</div>';
+
+ html += '<table style="width:100%;font-size:12px;color:var(--text-secondary)">';
+ if(card.tariff) html += '<tr><td style="padding:4px 0;color:var(--text-muted)">Тариф</td><td style="padding:4px 0;text-align:right">' + card.tariff + '</td></tr>';
+ if(card.qty) html += '<tr><td style="padding:4px 0;color:var(--text-muted)">Лицензий</td><td style="padding:4px 0;text-align:right">' + card.qty + '</td></tr>';
+ if(card.period) html += '<tr><td style="padding:4px 0;color:var(--text-muted)">Период</td><td style="padding:4px 0;text-align:right">' + card.period + '</td></tr>';
+ if(card.manager) html += '<tr><td style="padding:4px 0;color:var(--text-muted)">Менеджер</td><td style="padding:4px 0;text-align:right">' + card.manager + '</td></tr>';
+ if(card.payDate) html += '<tr><td style="padding:4px 0;color:var(--text-muted)">Дата оплаты</td><td style="padding:4px 0;text-align:right">' + card.payDate + '</td></tr>';
+ if(card.activDate) html += '<tr><td style="padding:4px 0;color:var(--text-muted)">Дата активации</td><td style="padding:4px 0;text-align:right;color:#34D399">' + card.activDate + '</td></tr>';
+ if(card.category) html += '<tr><td style="padding:4px 0;color:var(--text-muted)">Категория</td><td style="padding:4px 0;text-align:right">' + card.category + '</td></tr>';
+ html += '</table>';
+
+ // Stage change buttons
+ html += '<div style="margin-top:16px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Переместить в:</div>';
+ html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+ kbColumns.forEach(function(col){
+  var active = col === card.stage;
+  html += '<button onclick="kbMoveFromModal(\''+card.id+'\',\''+col+'\')" style="padding:5px 12px;border-radius:8px;border:1px solid '+(active?'#60A5FA':'var(--dark-border)')+';background:'+(active?'rgba(59,130,246,.15)':'transparent')+';color:'+(active?'#60A5FA':'var(--text-secondary)')+';font-size:11px;cursor:pointer;font-weight:'+(active?'600':'400')+'">' + col + '</button>';
+ });
+ html += '</div></div>';
+
+ // Operator change
+ if(kbOperators.length) {
+  html += '<div style="margin-top:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Оператор:</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+  kbOperators.forEach(function(op){
+   var active = op === card.operator;
+   html += '<button onclick="kbSetOperator(\''+card.id+'\',\''+op+'\')" style="padding:5px 12px;border-radius:8px;border:1px solid '+(active?'#AB47BC':'var(--dark-border)')+';background:'+(active?'rgba(171,71,188,.15)':'transparent')+';color:'+(active?'#AB47BC':'var(--text-secondary)')+';font-size:11px;cursor:pointer;font-weight:'+(active?'600':'400')+'">' + op + '</button>';
+  });
+  html += '</div></div>';
+ }
+
+ el.innerHTML = html;
+ document.getElementById('kb-card-modal').style.display = 'flex';
+}
+
+function kbCloseCard() {
+ document.getElementById('kb-card-modal').style.display = 'none';
+}
+
+function kbMoveFromModal(cardId, newStage) {
+ var card = kbCards.find(function(c){ return c.id === cardId; });
+ if(!card || card.stage === newStage) return;
+ kbMoveCard(card, newStage);
+ kbOpenCard(card); // refresh modal
+}
+
+function kbSetOperator(cardId, operator) {
+ var card = kbCards.find(function(c){ return c.id === cardId; });
+ if(!card || card.operator === operator) return;
+ card.operator = operator;
+ kbRenderBoard();
+ kbOpenCard(card);
+
+ if(KB_SCRIPT_URL) {
+  fetch(KB_SCRIPT_URL, {
+   method: 'POST',
+   headers: {'Content-Type':'text/plain'},
+   body: JSON.stringify({ action:'setOperator', sheetId:KB_SHEET_ID, row:card._row, operator:operator })
+  }).catch(function(e){ console.error('KB save operator error:', e); });
+ }
+}
+
+// Column settings
+function kbOpenSettings() {
+ var el = document.getElementById('kb-columns-list');
+ el.innerHTML = '';
+ kbColumns.forEach(function(col, i){
+  el.innerHTML += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px" data-idx="'+i+'">'
+   + '<input class="form-input kb-col-input" value="'+col+'" style="flex:1;font-size:12px;padding:6px 10px">'
+   + '<button onclick="kbRemoveColumn('+i+')" style="background:none;border:1px solid rgba(239,83,80,.3);border-radius:6px;color:#EF5350;cursor:pointer;padding:3px 8px;font-size:11px">X</button>'
+   + '</div>';
+ });
+ document.getElementById('kb-settings-modal').style.display = 'flex';
+}
+
+function kbCloseSettings() {
+ document.getElementById('kb-settings-modal').style.display = 'none';
+}
+
+function kbAddColumn() {
+ var inp = document.getElementById('kb-new-col-name');
+ var name = inp.value.trim();
+ if(!name) return;
+ kbColumns.push(name);
+ inp.value = '';
+ kbOpenSettings(); // refresh list
+}
+
+function kbRemoveColumn(idx) {
+ if(kbColumns.length <= 2) return;
+ kbColumns.splice(idx, 1);
+ kbOpenSettings();
+}
+
+function kbSaveColumns() {
+ var inputs = document.querySelectorAll('#kb-columns-list .kb-col-input');
+ var newCols = [];
+ inputs.forEach(function(inp){ var v = inp.value.trim(); if(v) newCols.push(v); });
+ if(newCols.length < 2) return;
+ kbColumns = newCols;
+ kbCloseSettings();
+ kbRenderBoard();
+
+ // Save columns to sheet settings
+ if(KB_SCRIPT_URL) {
+  fetch(KB_SCRIPT_URL, {
+   method: 'POST',
+   headers: {'Content-Type':'text/plain'},
+   body: JSON.stringify({ action:'saveColumns', sheetId:KB_SHEET_ID, columns:kbColumns })
+  }).catch(function(e){ console.error('KB save columns error:', e); });
+ }
+}
+
+function kbRender() {
+ kbRenderBoard();
 }
 
 </script>
