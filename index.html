@@ -450,19 +450,24 @@ body{background:var(--dark-void);color:var(--text-primary);font-family:'Inter',s
 .nav-section::-webkit-scrollbar-track{background:transparent}
 .nav-section::-webkit-scrollbar-thumb{background:rgba(59,130,246,.2);border-radius:4px}
 .nav-label{font-size:9px;color:var(--text-muted);letter-spacing:3px;text-transform:uppercase;padding:0 8px;margin-bottom:6px}
-.nav-group{margin-bottom:4px}
-.nav-group-label{font-size:10px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;padding:8px 12px 4px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:color .2s;user-select:none}
-.nav-group-label:hover{color:var(--text-secondary)}
-.nav-arrow{font-size:8px;transition:transform .2s;color:var(--text-muted)}
-.nav-group:not(.open) .nav-arrow{transform:rotate(-90deg)}
-.nav-group-items{overflow:hidden;transition:max-height .25s ease}
-.nav-group.open .nav-group-items{max-height:500px}
-.nav-group:not(.open) .nav-group-items{max-height:0}
-.nav-item{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:8px;margin-bottom:2px;cursor:pointer;transition:all .2s;font-size:13px;font-weight:600;letter-spacing:.5px;color:var(--text-muted);position:relative;overflow:hidden}
+.nav-group{margin-bottom:2px;position:relative}
+.nav-group-trigger{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:13px;font-weight:600;letter-spacing:.5px;color:var(--text-muted);user-select:none}
+.nav-group-trigger:hover{background:rgba(59,130,246,.08);color:var(--text-primary)}
+.nav-group-trigger .nav-g-icon{width:20px;text-align:center;font-size:15px;flex-shrink:0}
+.nav-group-trigger .nav-g-arrow{margin-left:auto;font-size:9px;color:var(--text-muted);transition:transform .2s}
+.nav-group.has-active>.nav-group-trigger{color:var(--gold-bright)}
+.nav-group-popup{display:none;position:absolute;left:100%;top:0;min-width:200px;background:var(--dark-card);border:1px solid var(--dark-border);border-radius:12px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:300;backdrop-filter:blur(20px)}
+.nav-group:hover>.nav-group-popup,.nav-group.touch-open>.nav-group-popup{display:block}
+.nav-group-popup::before{content:'';position:absolute;left:-10px;top:0;width:10px;height:100%}
+.nav-popup-title{font-size:9px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;padding:6px 10px 4px;font-weight:700}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;margin-bottom:1px;cursor:pointer;transition:all .2s;font-size:13px;font-weight:600;letter-spacing:.5px;color:var(--text-muted);position:relative;overflow:hidden;white-space:nowrap}
 .nav-item:hover{background:rgba(59,130,246,.08);color:var(--gold-light)}
 .nav-item.active{background:rgba(59,130,246,0.12);backdrop-filter:blur(10px);color:var(--gold-bright);border:1px solid rgba(59,130,246,0.28);box-shadow:0 0 20px rgba(59,130,246,0.08)}
 .nav-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold-bright);border-radius:0 2px 2px 0}
 .nav-item.hidden{display:none}
+.nav-item-solo{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:13px;font-weight:600;letter-spacing:.5px;color:var(--text-muted);margin-bottom:2px}
+.nav-item-solo:hover{background:rgba(59,130,246,.08);color:var(--gold-light)}
+.nav-item-solo.active{background:rgba(59,130,246,0.12);color:var(--gold-bright);border:1px solid rgba(59,130,246,0.28)}
 .nav-icon{width:18px;text-align:center;font-size:14px}
 
 /* KNOWLEDGE BASE */
@@ -959,6 +964,7 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  .kpi-grid{grid-template-columns:repeat(2,1fr)!important}
  .content{padding:16px!important}
  .cab-access-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+ .nav-group-popup{position:fixed;left:220px;min-width:180px}
 }
 
 /* RESPONSIVE — Mobile (<768px) */
@@ -1059,36 +1065,51 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  <button class="country-btn" data-country="KG" onclick="switchCountry('KG')">&#127472;&#127468; KG</button>
  </div>
  <div class="nav-section">
- <div class="nav-group open">
-  <div class="nav-group-label" onclick="toggleNavGroup(this)">Финансы <span class="nav-arrow">&#9662;</span></div>
-  <div class="nav-group-items">
-   <div class="nav-item active" data-view="dashboard" onclick="showView('dashboard')"> Дашборд</div>
-   <div class="nav-item" data-view="payments" onclick="showView('payments')"> Оплаты</div>
-   <div class="nav-item" data-view="expenses" onclick="showView('expenses')"> Расходы</div>
-   <div class="nav-item" data-view="plan" onclick="showView('plan')"> Выполнение плана</div>
+ <!-- Дашборд — отдельная кнопка -->
+ <div class="nav-item-solo active" data-view="dashboard" onclick="showView('dashboard')">
+  <span class="nav-g-icon">&#9632;</span> Дашборд
+ </div>
+
+ <!-- Финансы -->
+ <div class="nav-group" onclick="navGroupTouch(this)">
+  <div class="nav-group-trigger"><span class="nav-g-icon">&#8382;</span> Финансы <span class="nav-g-arrow">&#9656;</span></div>
+  <div class="nav-group-popup">
+   <div class="nav-popup-title">Финансы</div>
+   <div class="nav-item" data-view="payments" onclick="showView('payments')">Оплаты</div>
+   <div class="nav-item" data-view="expenses" onclick="showView('expenses')">Расходы</div>
+   <div class="nav-item" data-view="plan" onclick="showView('plan')">Выполнение плана</div>
   </div>
  </div>
- <div class="nav-group open">
-  <div class="nav-group-label" onclick="toggleNavGroup(this)">Клиенты <span class="nav-arrow">&#9662;</span></div>
-  <div class="nav-group-items">
-   <div class="nav-item" data-view="keyclients" onclick="showView('keyclients')"> Ключевые клиенты</div>
-   <div class="nav-item" data-view="integrations" onclick="showView('integrations')"> Очередь интеграции</div>
+
+ <!-- Клиенты -->
+ <div class="nav-group" onclick="navGroupTouch(this)">
+  <div class="nav-group-trigger"><span class="nav-g-icon">&#9823;</span> Клиенты <span class="nav-g-arrow">&#9656;</span></div>
+  <div class="nav-group-popup">
+   <div class="nav-popup-title">Клиенты</div>
+   <div class="nav-item" data-view="keyclients" onclick="showView('keyclients')">Ключевые клиенты</div>
+   <div class="nav-item" data-view="integrations" onclick="showView('integrations')">Очередь интеграции</div>
+   <div class="nav-item" data-view="kanban" onclick="showView('kanban')">Внедрение</div>
   </div>
  </div>
- <div class="nav-group open">
-  <div class="nav-group-label" onclick="toggleNavGroup(this)">Управление <span class="nav-arrow">&#9662;</span></div>
-  <div class="nav-group-items">
-   <div class="nav-item" data-view="academy" onclick="showView('academy')"> Академия</div>
-   <div class="nav-item" data-view="kanban" onclick="showView('kanban')"> Внедрение</div>
+
+ <!-- Управление -->
+ <div class="nav-group" onclick="navGroupTouch(this)">
+  <div class="nav-group-trigger"><span class="nav-g-icon">&#9881;</span> Управление <span class="nav-g-arrow">&#9656;</span></div>
+  <div class="nav-group-popup">
+   <div class="nav-popup-title">Управление</div>
+   <div class="nav-item" data-view="academy" onclick="showView('academy')">Академия</div>
   </div>
  </div>
- <div class="nav-group open">
-  <div class="nav-group-label" onclick="toggleNavGroup(this)">Инструменты <span class="nav-arrow">&#9662;</span></div>
-  <div class="nav-group-items">
-   <div class="nav-item" data-view="marketing" onclick="showView('marketing')"> Маркетинг</div>
-   <div class="nav-item" data-view="knowledge" onclick="showView('knowledge')"> База знаний</div>
-   <div class="nav-item" data-view="reports" onclick="showView('reports')"> Отчёты</div>
-   <div class="nav-item" data-view="ai" onclick="showView('ai')"> ИИ Мирзахит</div>
+
+ <!-- Инструменты -->
+ <div class="nav-group" onclick="navGroupTouch(this)">
+  <div class="nav-group-trigger"><span class="nav-g-icon">&#9881;</span> Инструменты <span class="nav-g-arrow">&#9656;</span></div>
+  <div class="nav-group-popup">
+   <div class="nav-popup-title">Инструменты</div>
+   <div class="nav-item" data-view="marketing" onclick="showView('marketing')">Маркетинг</div>
+   <div class="nav-item" data-view="knowledge" onclick="showView('knowledge')">База знаний</div>
+   <div class="nav-item" data-view="reports" onclick="showView('reports')">Отчёты</div>
+   <div class="nav-item" data-view="ai" onclick="showView('ai')">ИИ Мирзахит</div>
   </div>
  </div>
  </div>
@@ -2192,6 +2213,15 @@ function toggleNavGroup(el){
  var group = el.parentElement;
  group.classList.toggle('open');
 }
+// Touch support for nav hover popups (mobile)
+function navGroupTouch(group){
+ if('ontouchstart' in window){
+  var wasOpen = group.classList.contains('touch-open');
+  document.querySelectorAll('.nav-group.touch-open').forEach(function(g){ g.classList.remove('touch-open'); });
+  if(!wasOpen){ group.classList.add('touch-open'); event.stopPropagation(); }
+ }
+}
+document.addEventListener('click',function(){ document.querySelectorAll('.nav-group.touch-open').forEach(function(g){ g.classList.remove('touch-open'); }); });
 function toggleSidebar(){
  var sb=document.querySelector('.sidebar');
  var ov=document.getElementById('sidebar-overlay');
@@ -4651,12 +4681,21 @@ function showView(v) {
  });
  const titles={dashboard:'ОБЗОР ФИНАНСОВ',payments:'ОПЛАТЫ',plan:'ВЫПОЛНЕНИЕ ПЛАНА',keyclients:'КЛЮЧЕВЫЕ КЛИЕНТЫ',ai:'ИИ МИРЗАХИТ — ФИНАНСОВЫЙ АНАЛИТИК',cabinet:'ЛИЧНЫЙ КАБИНЕТ',marketing:'МАРКЕТИНГ — АНАЛИЗ ЛИДОВ',expenses:'РАСХОДЫ',integrations:'ОЧЕРЕДЬ ИНТЕГРАЦИИ',tests:'ТЕСТЫ / ОЦЕНКА НАВЫКОВ',knowledge:'БАЗА ЗНАНИЙ',academy:'АКАДЕМИЯ',reports:'ОТЧЁТЫ',kanban:'ВНЕДРЕНИЕ'};
  document.getElementById('page-title').textContent=titles[v]||v.toUpperCase();
- // cabinet не подсвечиваем в nav, он открывается по аватарке
+ // Подсветка активного пункта в nav
  document.querySelectorAll('.nav-item[data-view]').forEach(function(el){
   el.classList.toggle('active',el.dataset.view===v);
-  // Раскрыть группу активного пункта
-  if(el.dataset.view===v){var g=el.closest('.nav-group');if(g)g.classList.add('open');}
  });
+ // Подсветка solo dashboard
+ document.querySelectorAll('.nav-item-solo[data-view]').forEach(function(el){
+  el.classList.toggle('active',el.dataset.view===v);
+ });
+ // Подсветка родительской группы
+ document.querySelectorAll('.nav-group').forEach(function(g){
+  var hasActive = g.querySelector('.nav-item.active');
+  g.classList.toggle('has-active', !!hasActive);
+ });
+ // Закрыть popup после выбора
+ document.querySelectorAll('.nav-group.touch-open').forEach(function(g){ g.classList.remove('touch-open'); });
  if(v==='cabinet'){renderCabinetPlans();renderPlanHistory();renderCabinetV83();}
  if(v==='employees')renderEmployees();
  if(v==='keyclients')renderKeyClients();
