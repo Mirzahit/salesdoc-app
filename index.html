@@ -10006,11 +10006,13 @@ var kbLog = [];
 
 function kbLoad() {
  document.getElementById('kb-status').textContent = 'Загрузка...';
- var settingsUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Настройки');
- var cardsUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Карточки');
- var logUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Лог');
 
- Promise.all([fetch(settingsUrl).then(r=>r.text()), fetch(cardsUrl).then(r=>r.text()), fetch(logUrl).then(r=>r.text())])
+ // Настройки и лог — из таблицы Внедрения
+ var settingsUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Настройки');
+ var logUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Лог');
+ var kbDataUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Карточки');
+
+ Promise.all([fetch(settingsUrl).then(r=>r.text()), fetch(logUrl).then(r=>r.text()), fetch(kbDataUrl).then(r=>r.text())])
  .then(function(results) {
   // Parse settings
   var sRows = kbParseCsv(results[0]);
@@ -10024,40 +10026,59 @@ function kbLoad() {
   if(!kbColumns.length) kbColumns = ['В очереди','Интеграция','Обучение','Настройка','Тест','Запущен'];
   if(!kbChecklist.length) kbChecklist = ['Подключение к серверу','Загрузка базы клиентов','Настройка маршрутов','Обучение менеджеров','Тестовый день','Проверка отчётов'];
 
-  // Parse cards
-  var cRows = kbParseCsv(results[1]);
-  kbCards = [];
-  cRows.forEach(function(r,i){
+  // Parse saved kanban data (operator, stage, checklist per client)
+  var kbSaved = {};
+  var kbRows = kbParseCsv(results[2]);
+  kbRows.forEach(function(r,i){
    if(i===0) return;
    if(!r[1] || !r[1].trim()) return;
-   var cl = (r[12]||'').split(',').map(function(x){return x.trim()==='1'?1:0;});
-   while(cl.length < kbChecklist.length) cl.push(0);
-   kbCards.push({
-    id: r[0] || String(i),
-    client: r[1] || '',
-    operator: r[2] || '',
-    stage: r[3] || kbColumns[0] || 'В очереди',
-    category: r[4] || '',
-    manager: r[5] || '',
-    amount: r[6] || '',
-    tariff: r[7] || '',
-    qty: r[8] || '',
-    period: r[9] || '',
-    payDate: r[10] || '',
-    activDate: r[11] || '',
-    checklist: cl,
-    _row: i + 1
-   });
+   kbSaved[r[1].trim().toLowerCase()] = {
+    operator: r[2]||'', stage: r[3]||'', checklist: (r[12]||'').split(',').map(function(x){return x.trim()==='1'?1:0;}), _row: i+1
+   };
   });
 
   // Parse log
-  var lRows = kbParseCsv(results[2]);
+  var lRows = kbParseCsv(results[1]);
   kbLog = [];
   lRows.forEach(function(r,i){
    if(i===0) return;
    if(!r[0]) return;
    kbLog.push({date:r[0],client:r[1],operator:r[2],from:r[3],to:r[4],who:r[5],comment:r[6],type:r[7]||'move'});
   });
+
+  // Карточки из payments (Доходы) — только внедрение без даты активации
+  kbCards = [];
+  var seen = {};
+  if(typeof payments !== 'undefined' && payments.length) {
+   payments.forEach(function(p, i){
+    if(p.category !== 'implementation') return;
+    if(p.activationDate) return; // уже внедрён — не показываем
+    var clientKey = p.client.toLowerCase();
+    if(seen[clientKey]) return; // один клиент = одна карточка
+    seen[clientKey] = true;
+    var saved = kbSaved[clientKey] || {};
+    var cl = saved.checklist || [];
+    while(cl.length < kbChecklist.length) cl.push(0);
+    var payD = '';
+    if(p.date) { var dd = new Date(p.date); if(!isNaN(dd)) payD = ('0'+dd.getDate()).slice(-2)+'.'+('0'+(dd.getMonth()+1)).slice(-2)+'.'+dd.getFullYear(); }
+    kbCards.push({
+     id: String(p.id || i),
+     client: p.client,
+     operator: saved.operator || '',
+     stage: saved.stage || kbColumns[0] || 'В очереди',
+     category: p.categoryRaw || '',
+     manager: p.managerName || '',
+     amount: String(p.amount || ''),
+     tariff: p.tariff || '',
+     qty: String(p.qty || ''),
+     period: String(p.period || ''),
+     payDate: payD,
+     activDate: '',
+     checklist: cl,
+     _row: saved._row || 0
+    });
+   });
+  }
 
   document.getElementById('kb-status').textContent = kbCards.length + ' клиентов';
   kbFillFilters();
@@ -10299,37 +10320,35 @@ function kbMoveCard(card, newStage) {
 }
 
 function kbSaveToSheet(card, oldStage, newStage) {
- // Update stage in Карточки sheet (column D = index 3)
- var updateUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Карточки');
+ if(!KB_SCRIPT_URL) { document.getElementById('kb-status').textContent = 'Только просмотр'; return; }
 
- // Use Apps Script if URL is set
- if(KB_SCRIPT_URL) {
-  var payload = {
-   action: 'moveCard',
-   sheetId: KB_SHEET_ID,
-   row: card._row,
-   stage: newStage,
-   activDate: card.activDate || '',
-   client: card.client,
-   operator: card.operator,
-   oldStage: oldStage,
-   who: (currentUser && currentUser.name) || 'Dashboard'
-  };
-  fetch(KB_SCRIPT_URL, {
-   method: 'POST',
-   headers: {'Content-Type':'text/plain'},
-   body: JSON.stringify(payload)
-  }).then(function(r){ return r.text(); }).then(function(t){
-   console.log('KB save:', t);
-   document.getElementById('kb-status').textContent = 'Сохранено';
-   setTimeout(function(){ document.getElementById('kb-status').textContent = kbCards.length + ' клиентов'; }, 2000);
-  }).catch(function(e){
-   console.error('KB save error:', e);
-   document.getElementById('kb-status').textContent = 'Ошибка сохранения';
-  });
- } else {
-  document.getElementById('kb-status').textContent = 'Только просмотр (doPost не настроен)';
- }
+ var payload = {
+  action: card._row ? 'moveCard' : 'upsertCard',
+  sheetId: KB_SHEET_ID,
+  row: card._row,
+  client: card.client,
+  operator: card.operator,
+  stage: newStage,
+  activDate: card.activDate || '',
+  oldStage: oldStage,
+  who: (currentUser && currentUser.name) || 'Dashboard',
+  category: card.category,
+  manager: card.manager,
+  amount: card.amount,
+  checklist: card.checklist ? card.checklist.join(',') : ''
+ };
+ fetch(KB_SCRIPT_URL, {
+  method: 'POST',
+  headers: {'Content-Type':'text/plain'},
+  body: JSON.stringify(payload)
+ }).then(function(r){ return r.json(); }).then(function(res){
+  if(res && res.row) card._row = res.row; // update row after insert
+  document.getElementById('kb-status').textContent = 'Сохранено';
+  setTimeout(function(){ document.getElementById('kb-status').textContent = kbCards.length + ' клиентов'; }, 2000);
+ }).catch(function(e){
+  console.error('KB save error:', e);
+  document.getElementById('kb-status').textContent = 'Ошибка сохранения';
+ });
 }
 
 function kbOpenCard(card) {
