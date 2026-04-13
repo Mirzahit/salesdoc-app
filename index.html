@@ -432,7 +432,7 @@ body{background:var(--dark-void);color:var(--text-primary);font-family:'Inter',s
 .login-user-chip:hover{border-color:var(--gold-mid);color:var(--gold-light);background:rgba(59,130,246,.08);transform:translateY(-1px)}
 
 /* SIDEBAR */
-.sidebar{position:fixed;left:0;top:0;height:100dvh;height:100vh;width:240px;background:rgba(11,15,25,0.85);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);border-right:1px solid rgba(59,130,246,0.18);z-index:100;display:flex;flex-direction:column;box-shadow:4px 0 40px rgba(0,0,0,0.3),inset -1px 0 0 rgba(59,130,246,0.12);transition:transform .3s;overflow:visible}
+.sidebar{position:fixed;left:0;top:0;height:100dvh;height:100vh;width:240px;background:rgba(11,15,25,0.85);backdrop-filter:blur(40px);-webkit-backdrop-filter:blur(40px);border-right:1px solid rgba(59,130,246,0.18);z-index:100;display:flex;flex-direction:column;box-shadow:4px 0 40px rgba(0,0,0,0.3),inset -1px 0 0 rgba(59,130,246,0.12);transition:transform .3s}
 @supports(height:100dvh){.sidebar{height:100dvh}}
 .logo-area{padding:24px 20px;border-bottom:1px solid var(--dark-border)}
 .logo-text{font-family:'Space Grotesk','Inter',sans-serif;font-size:22px;font-weight:700;letter-spacing:4px;background:linear-gradient(135deg,var(--gold-bright),var(--gold-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:2px}
@@ -456,9 +456,8 @@ body{background:var(--dark-void);color:var(--text-primary);font-family:'Inter',s
 .nav-group-trigger .nav-g-icon{width:20px;text-align:center;font-size:15px;flex-shrink:0}
 .nav-group-trigger .nav-g-arrow{margin-left:auto;font-size:9px;color:var(--text-muted);transition:transform .2s}
 .nav-group.has-active>.nav-group-trigger{color:var(--gold-bright)}
-.nav-group-popup{display:none;position:absolute;left:100%;top:0;min-width:200px;background:var(--dark-card);border:1px solid var(--dark-border);border-radius:12px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:300;backdrop-filter:blur(20px)}
+.nav-group-popup{display:none;position:fixed;left:240px;min-width:200px;background:rgba(15,20,35,.95);border:1px solid var(--dark-border);border-radius:12px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:999;backdrop-filter:blur(20px)}
 .nav-group:hover>.nav-group-popup,.nav-group.touch-open>.nav-group-popup{display:block}
-.nav-group-popup::before{content:'';position:absolute;left:-10px;top:0;width:10px;height:100%}
 .nav-popup-title{font-size:9px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;padding:6px 10px 4px;font-weight:700}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;margin-bottom:1px;cursor:pointer;transition:all .2s;font-size:13px;font-weight:600;letter-spacing:.5px;color:var(--text-muted);position:relative;overflow:hidden;white-space:nowrap}
 .nav-item:hover{background:rgba(59,130,246,.08);color:var(--gold-light)}
@@ -964,7 +963,7 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
  .kpi-grid{grid-template-columns:repeat(2,1fr)!important}
  .content{padding:16px!important}
  .cab-access-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
- .nav-group-popup{position:fixed;left:220px;min-width:180px}
+ .nav-group-popup{left:220px;min-width:180px}
 }
 
 /* RESPONSIVE — Mobile (<768px) */
@@ -2213,12 +2212,26 @@ function toggleNavGroup(el){
  var group = el.parentElement;
  group.classList.toggle('open');
 }
+// Hover popup positioning
+document.querySelectorAll('.nav-group').forEach(function(g){
+ g.addEventListener('mouseenter',function(){
+  var popup = g.querySelector('.nav-group-popup');
+  if(!popup) return;
+  var rect = g.getBoundingClientRect();
+  popup.style.top = rect.top + 'px';
+ });
+});
 // Touch support for nav hover popups (mobile)
 function navGroupTouch(group){
  if('ontouchstart' in window){
   var wasOpen = group.classList.contains('touch-open');
   document.querySelectorAll('.nav-group.touch-open').forEach(function(g){ g.classList.remove('touch-open'); });
-  if(!wasOpen){ group.classList.add('touch-open'); event.stopPropagation(); }
+  if(!wasOpen){
+   group.classList.add('touch-open');
+   var popup = group.querySelector('.nav-group-popup');
+   if(popup){ var rect = group.getBoundingClientRect(); popup.style.top = rect.top + 'px'; }
+   event.stopPropagation();
+  }
  }
 }
 document.addEventListener('click',function(){ document.querySelectorAll('.nav-group.touch-open').forEach(function(g){ g.classList.remove('touch-open'); }); });
