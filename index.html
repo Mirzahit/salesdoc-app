@@ -10695,23 +10695,25 @@ function kbOpenCardPage(card) {
  // Main content
  var html = '';
 
- // Info grid
- html += '<div class="kbc-section"><div class="kbc-section-title">Информация</div>';
- html += '<div class="kbc-info-grid">';
- html += '<div class="kbc-info-item"><div class="kbc-info-label">Менеджер</div><div class="kbc-info-value">'+(card.manager||'—')+'</div></div>';
- html += '<div class="kbc-info-item"><div class="kbc-info-label">Сумма</div><div class="kbc-info-value">'+(card.amount?fmtFull(parseFloat(card.amount)||0):'—')+'</div></div>';
- html += '<div class="kbc-info-item"><div class="kbc-info-label">Оператор</div><div class="kbc-info-value" style="color:'+opColor+'">'+(card.operator||'Не назначен')+'</div></div>';
- html += '<div class="kbc-info-item"><div class="kbc-info-label">Дней в работе</div><div class="kbc-info-value" style="color:'+(days>KB_AGING_DAYS&&card.stage!=='Запущен'?'#EF5350':'var(--text-primary)')+'">'+days+'</div></div>';
- if(card.tariff) html += '<div class="kbc-info-item"><div class="kbc-info-label">Тариф</div><div class="kbc-info-value">'+card.tariff+'</div></div>';
- if(card.payDate) html += '<div class="kbc-info-item"><div class="kbc-info-label">Дата оплаты</div><div class="kbc-info-value">'+card.payDate+'</div></div>';
- if(card.activDate) html += '<div class="kbc-info-item"><div class="kbc-info-label">Дата активации</div><div class="kbc-info-value" style="color:#34D399">'+card.activDate+'</div></div>';
- if(card.category) html += '<div class="kbc-info-item"><div class="kbc-info-label">Категория</div><div class="kbc-info-value">'+card.category+'</div></div>';
- html += '</div></div>';
-
- // CRM Fields (like amoCRM)
+ // All fields in one list (amoCRM style)
  if(!card.fields) card.fields = {};
- html += '<div class="kbc-section"><div class="kbc-section-title">Данные клиента</div>';
+ html += '<div class="kbc-section">';
  html += '<div class="kbc-fields">';
+ // Built-in info fields (read-only)
+ var infoFields = [
+  {label:'Менеджер', val:card.manager||'—'},
+  {label:'Сумма', val:card.amount?fmtFull(parseFloat(card.amount)||0):'—'},
+  {label:'Оператор', val:card.operator||'Не назначен', color:opColor},
+  {label:'Дней в работе', val:String(days), color:(days>KB_AGING_DAYS&&card.stage!=='Запущен'?'#EF5350':'')},
+  {label:'Дата оплаты', val:card.payDate||'—'},
+  {label:'Категория', val:card.category||'—'}
+ ];
+ if(card.tariff) infoFields.push({label:'Тариф', val:card.tariff});
+ if(card.activDate) infoFields.push({label:'Дата активации', val:card.activDate, color:'#34D399'});
+ infoFields.forEach(function(f){
+  html += '<div class="kbc-field-row"><div class="kbc-field-label">'+f.label+'</div><div class="kbc-field-value"><span style="font-size:12px;font-weight:600;color:'+(f.color||'var(--text-primary)')+'">'+f.val+'</span></div></div>';
+ });
+ // Editable CRM fields
  KB_CRM_FIELDS.forEach(function(f){
   var val = card.fields[f.key] || '';
   html += '<div class="kbc-field-row"><div class="kbc-field-label">'+f.label+'</div><div class="kbc-field-value">';
