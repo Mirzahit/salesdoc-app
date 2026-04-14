@@ -1112,6 +1112,20 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
 /* Checklist warning toast */
 .kb-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(239,83,80,.15);border:1px solid rgba(239,83,80,.3);color:#EF9A9A;padding:10px 24px;border-radius:10px;font-size:12px;font-weight:600;z-index:300;backdrop-filter:blur(10px);opacity:0;transition:opacity .3s;pointer-events:none}
 .kb-toast.visible{opacity:1;pointer-events:auto}
+/* KANBAN CRM FIELDS */
+.kbc-fields{margin-top:4px}
+.kbc-field-row{display:flex;align-items:center;border-bottom:1px solid rgba(255,255,255,.03);min-height:38px}
+.kbc-field-row:hover{background:rgba(59,130,246,.03)}
+.kbc-field-label{width:180px;flex-shrink:0;font-size:12px;color:var(--text-muted);padding:8px 12px;font-weight:500}
+.kbc-field-value{flex:1;padding:4px 8px}
+.kbc-field-value input,.kbc-field-value select{width:100%;background:transparent;border:1px solid transparent;border-radius:6px;padding:6px 8px;color:var(--text-primary);font-size:12px;font-family:'Inter',sans-serif;transition:border-color .2s}
+.kbc-field-value input:hover,.kbc-field-value select:hover{border-color:var(--dark-border)}
+.kbc-field-value input:focus,.kbc-field-value select:focus{border-color:rgba(59,130,246,.4);outline:none;background:var(--dark-panel)}
+.kbc-field-value select{cursor:pointer;appearance:auto;-webkit-appearance:auto}
+.kbc-field-value select option{background:var(--dark-card);color:var(--text-primary)}
+.kbc-save-fields{margin-top:12px;display:flex;justify-content:flex-end}
+.kbc-save-fields button{background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);border-radius:8px;color:#60A5FA;padding:8px 20px;cursor:pointer;font-size:11px;font-weight:700;transition:all .2s}
+.kbc-save-fields button:hover{background:rgba(59,130,246,.25)}
 /* KANBAN REPORT TABLES */
 .kbr-table{width:100%;border-collapse:collapse;font-size:12px;font-family:'Inter',sans-serif}
 .kbr-table th{padding:10px 14px;text-align:left;font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--dark-border);font-weight:700}
@@ -10179,6 +10193,28 @@ function reportGenerate(type) {
 var KB_SHEET_ID = '1lXBeS-TTH2SihtV_6Ki4O_nnuNaC9xza2esw0sZnZKc';
 var KB_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxwDR2XdFd7-AgZDumdwxlJqGOe8jGFYS3sQFi6To60jsN0QraOYkRtgCpnWRdScrxd/exec';
 var KB_OP_COLORS = {'Айдос':'#3B82F6','Акбар':'#34D399','Самат':'#F59E0B'};
+// CRM fields definition for card detail
+var KB_CRM_FIELDS = [
+ {key:'budget',label:'Бюджет сделки',type:'text'},
+ {key:'position',label:'Должность',type:'select',options:['Директор','Зам. директора','Руководитель IT','Руководитель продаж','Менеджер','Бухгалтер','Другое']},
+ {key:'city',label:'Город',type:'text'},
+ {key:'licenses',label:'Лицензии',type:'text'},
+ {key:'product',label:'Продукция',type:'text'},
+ {key:'currentSoft',label:'Какой программой пользуются',type:'select',options:['1С','Excel','Нет','iiko','МойСклад','Другое']},
+ {key:'source',label:'Источник сделки',type:'select',options:['Входящий звонок','Marquiz','Instagram','Рекомендация','Холодный звонок']},
+ {key:'contract',label:'Договор',type:'text'},
+ {key:'subPeriod',label:'Период подписки',type:'select',options:['1 месяц','3 месяца','6 месяцев','12 месяцев']},
+ {key:'segment',label:'Сегмент',type:'select',options:['FMCG','HoReCa','Фарма']},
+ {key:'implType',label:'Внедрение',type:'select',options:['Стандарт','Расширенное','VIP']},
+ {key:'integrationType',label:'Интеграция',type:'select',options:['API','1С','iiko','Нет']},
+ {key:'poType',label:'П.О',type:'select',options:['SalesDoc Web','SalesDoc Mobile','SalesDoc Full','Другое']},
+ {key:'serverName',label:'Имя сервера',type:'text'},
+ {key:'login',label:'Логин',type:'text'},
+ {key:'password',label:'Пароль',type:'text'},
+ {key:'phone',label:'Телефон',type:'text'},
+ {key:'contactPerson',label:'Контактное лицо',type:'text'},
+ {key:'notes',label:'Примечание',type:'text'}
+];
 var KB_WIP_LIMIT = 8; // макс карточек на этап
 var KB_AGING_DAYS = 7; // дней без движения = "застрял"
 var kbCards = [];
@@ -10216,8 +10252,10 @@ function kbLoad() {
   kbRows.forEach(function(r,i){
    if(i===0) return;
    if(!r[1] || !r[1].trim()) return;
+   var savedFields = {};
+   try { if(r[13]) savedFields = JSON.parse(r[13]); } catch(e){}
    kbSaved[r[1].trim().toLowerCase()] = {
-    operator: r[2]||'', stage: r[3]||'', checklist: (r[12]||'').split(',').map(function(x){return x.trim()==='1'?1:0;}), _row: i+1
+    operator: r[2]||'', stage: r[3]||'', checklist: (r[12]||'').split(',').map(function(x){return x.trim()==='1'?1:0;}), fields: savedFields, _row: i+1
    };
   });
 
@@ -10259,6 +10297,7 @@ function kbLoad() {
      payDate: payD,
      activDate: '',
      checklist: cl,
+     fields: saved.fields || {},
      _row: saved._row || 0
     });
    });
@@ -10324,7 +10363,7 @@ function kbRenderSummary() {
  var countEl = document.getElementById('kb-stat-count');
  var amtEl = document.getElementById('kb-stat-amount');
  if(countEl) countEl.textContent = total;
- if(amtEl && totalAmt > 0) amtEl.textContent = ' \u00b7 ' + fmtFull(totalAmt) + ' \u20b8';
+ if(amtEl && totalAmt > 0) amtEl.textContent = ' \u00b7 ' + fmtFull(totalAmt);
  else if(amtEl) amtEl.textContent = '';
 }
 
@@ -10591,13 +10630,32 @@ function kbOpenCardPage(card) {
  html += '<div class="kbc-section"><div class="kbc-section-title">Информация</div>';
  html += '<div class="kbc-info-grid">';
  html += '<div class="kbc-info-item"><div class="kbc-info-label">Менеджер</div><div class="kbc-info-value">'+(card.manager||'—')+'</div></div>';
- html += '<div class="kbc-info-item"><div class="kbc-info-label">Сумма</div><div class="kbc-info-value">'+(card.amount?fmtFull(parseFloat(card.amount)||0)+' \u20b8':'—')+'</div></div>';
+ html += '<div class="kbc-info-item"><div class="kbc-info-label">Сумма</div><div class="kbc-info-value">'+(card.amount?fmtFull(parseFloat(card.amount)||0):'—')+'</div></div>';
  html += '<div class="kbc-info-item"><div class="kbc-info-label">Оператор</div><div class="kbc-info-value" style="color:'+opColor+'">'+(card.operator||'Не назначен')+'</div></div>';
  html += '<div class="kbc-info-item"><div class="kbc-info-label">Дней в работе</div><div class="kbc-info-value" style="color:'+(days>KB_AGING_DAYS&&card.stage!=='Запущен'?'#EF5350':'var(--text-primary)')+'">'+days+'</div></div>';
  if(card.tariff) html += '<div class="kbc-info-item"><div class="kbc-info-label">Тариф</div><div class="kbc-info-value">'+card.tariff+'</div></div>';
  if(card.payDate) html += '<div class="kbc-info-item"><div class="kbc-info-label">Дата оплаты</div><div class="kbc-info-value">'+card.payDate+'</div></div>';
  if(card.activDate) html += '<div class="kbc-info-item"><div class="kbc-info-label">Дата активации</div><div class="kbc-info-value" style="color:#34D399">'+card.activDate+'</div></div>';
  if(card.category) html += '<div class="kbc-info-item"><div class="kbc-info-label">Категория</div><div class="kbc-info-value">'+card.category+'</div></div>';
+ html += '</div></div>';
+
+ // CRM Fields (like amoCRM)
+ if(!card.fields) card.fields = {};
+ html += '<div class="kbc-section"><div class="kbc-section-title">Данные клиента</div>';
+ html += '<div class="kbc-fields">';
+ KB_CRM_FIELDS.forEach(function(f){
+  var val = card.fields[f.key] || '';
+  html += '<div class="kbc-field-row"><div class="kbc-field-label">'+f.label+'</div><div class="kbc-field-value">';
+  if(f.type === 'select') {
+   html += '<select data-field="'+f.key+'" onchange="kbFieldChanged(\''+card.id+'\',\''+f.key+'\',this.value)">';
+   html += '<option value="">...</option>';
+   f.options.forEach(function(o){ html += '<option value="'+o+'"'+(val===o?' selected':'')+'>'+o+'</option>'; });
+   html += '</select>';
+  } else {
+   html += '<input data-field="'+f.key+'" value="'+val.replace(/"/g,'&quot;')+'" placeholder="..." onchange="kbFieldChanged(\''+card.id+'\',\''+f.key+'\',this.value)">';
+  }
+  html += '</div></div>';
+ });
  html += '</div></div>';
 
  // Checklist
@@ -10726,6 +10784,23 @@ function kbToggleCheck(cardId, idx) {
   fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
    body:JSON.stringify({action:'updateChecklist',sheetId:KB_SHEET_ID,row:card._row,checklist:card.checklist.join(',')})
   }).catch(function(e){ console.error('KB checklist save error:', e); });
+ }
+}
+
+// CRM field change handler
+function kbFieldChanged(cardId, fieldKey, value) {
+ var card = kbCards.find(function(c){ return c.id === cardId; });
+ if(!card) return;
+ if(!card.fields) card.fields = {};
+ card.fields[fieldKey] = value;
+ // Save to sheet
+ if(KB_SCRIPT_URL) {
+  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
+   body:JSON.stringify({action:'updateFields',sheetId:KB_SHEET_ID,row:card._row,client:card.client,fields:card.fields})
+  }).then(function(){
+   document.getElementById('kb-status').textContent = 'Сохранено';
+   setTimeout(function(){ document.getElementById('kb-status').textContent = kbCards.length + ' клиентов'; }, 1500);
+  }).catch(function(e){ console.error('KB field save error:', e); });
  }
 }
 
@@ -10875,7 +10950,7 @@ function kbOpenReport() {
  // KPIs
  document.getElementById('kbr-kpis').innerHTML =
   '<div class="kbr-kpi"><div class="kpi-label">Всего клиентов</div><div class="kpi-value">'+total+'</div></div>'+
-  '<div class="kbr-kpi"><div class="kpi-label">Сумма</div><div class="kpi-value" style="font-size:20px">'+fmtFull(totalAmt)+' \u20b8</div></div>'+
+  '<div class="kbr-kpi"><div class="kpi-label">Сумма</div><div class="kpi-value" style="font-size:20px">'+fmtFull(totalAmt)+'</div></div>'+
   '<div class="kbr-kpi"><div class="kpi-label">Запущено</div><div class="kpi-value" style="color:#34D399">'+done+'</div></div>'+
   '<div class="kbr-kpi"><div class="kpi-label">Без оператора</div><div class="kpi-value" style="color:'+(noOp?'#EF5350':'var(--text-primary)')+'">'+noOp+'</div></div>'+
   '<div class="kbr-kpi"><div class="kpi-label">Средн. дней</div><div class="kpi-value">'+avgDays+'</div></div>'+
@@ -10892,7 +10967,7 @@ function kbOpenReport() {
  var colors = ['#3B82F6','#60A5FA','#FBBF24','#F59E0B','#34D399','#10B981','#AB47BC','#EF5350'];
  stageData.forEach(function(s,i){
   var pct = maxStage>0?Math.round(s.count/maxStage*100):0;
-  funnelHtml += '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--text-secondary);font-weight:600">'+s.name+'</span><span style="font-size:11px;color:var(--text-muted)">'+s.count+' \u00b7 '+fmtFull(s.amt)+' \u20b8</span></div>';
+  funnelHtml += '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--text-secondary);font-weight:600">'+s.name+'</span><span style="font-size:11px;color:var(--text-muted)">'+s.count+' \u00b7 '+fmtFull(s.amt)+'</span></div>';
   funnelHtml += '<div class="kbr-bar"><div class="kbr-bar-fill" style="width:'+pct+'%;background:'+(colors[i%colors.length])+'"></div><div class="kbr-bar-label">'+s.count+'</div></div></div>';
  });
  document.getElementById('kbr-funnel').innerHTML = funnelHtml;
@@ -10924,7 +10999,7 @@ function kbOpenReport() {
   var sClD = sc.reduce(function(a,c){return a+kbChecklistProgress(c).done;},0);
   var sClT = sc.reduce(function(a,c){return a+kbChecklistProgress(c).total;},0);
   var sClP = sClT>0?Math.round(sClD/sClT*100):0;
-  stHtml += '<tr><td class="val">'+s.name+'</td><td class="val">'+s.count+'</td><td class="amt">'+fmtFull(s.amt)+' \u20b8</td><td>'+sAvg+' дн</td><td style="color:'+(sNoOp?'#EF5350':'var(--text-muted)')+'">'+sNoOp+'</td><td>'+sClP+'%</td></tr>';
+  stHtml += '<tr><td class="val">'+s.name+'</td><td class="val">'+s.count+'</td><td class="amt">'+fmtFull(s.amt)+'</td><td>'+sAvg+' дн</td><td style="color:'+(sNoOp?'#EF5350':'var(--text-muted)')+'">'+sNoOp+'</td><td>'+sClP+'%</td></tr>';
  });
  stHtml += '</tbody></table>';
  document.getElementById('kbr-stages-table').outerHTML = stHtml;
@@ -10937,7 +11012,7 @@ function kbOpenReport() {
   var o=ops[op];var avg=o.days.length?Math.round(o.days.reduce(function(a,b){return a+b;},0)/o.days.length):0;
   var clP=o.clTotal>0?Math.round(o.clDone/o.clTotal*100):0;
   var clr=KB_OP_COLORS[op]||'var(--text-primary)';
-  opHtml += '<tr><td class="val" style="color:'+clr+'">'+op+'</td><td class="val">'+o.count+'</td><td class="amt">'+fmtFull(o.amt)+' \u20b8</td><td style="color:#34D399">'+o.done+'</td><td>'+avg+' дн</td><td>'+clP+'%</td></tr>';
+  opHtml += '<tr><td class="val" style="color:'+clr+'">'+op+'</td><td class="val">'+o.count+'</td><td class="amt">'+fmtFull(o.amt)+'</td><td style="color:#34D399">'+o.done+'</td><td>'+avg+' дн</td><td>'+clP+'%</td></tr>';
  });
  opHtml += '</tbody></table>';
  document.getElementById('kbr-ops-table').outerHTML = opHtml;
