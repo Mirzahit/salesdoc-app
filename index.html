@@ -10727,8 +10727,9 @@ function kbOpenCardPage(card) {
   {label:'Дата оплаты', val:card.payDate||'—'},
   {label:'Категория', val:card.category||'—'}
  ];
- infoFields.push({label:'Лицензии', val:card.qty && card.qty!=='0' && card.qty!=='NaN' ? card.qty + ' шт' : '—'});
- infoFields.push({label:'Тариф / Период', val:card.tariff || '—'});
+ // Лицензии и Тариф — авто из данных, но редактируемые
+ var autoLic = card.qty && card.qty!=='0' && card.qty!=='NaN' ? card.qty : (card.fields&&card.fields._licenses||'');
+ var autoTariff = card.tariff || (card.fields&&card.fields._tariff||'');
  if(card.activDate) infoFields.push({label:'Дата активации', val:card.activDate, color:'#34D399'});
  // Интеграция — показать очередь и этап
  var intgInfo = kbGetIntegrationInfo(card);
@@ -10736,6 +10737,9 @@ function kbOpenCardPage(card) {
  infoFields.forEach(function(f){
   html += '<div class="kbc-field-row"><div class="kbc-field-label">'+f.label+'</div><div class="kbc-field-value"><span style="font-size:12px;font-weight:600;color:'+(f.color||'var(--text-primary)')+'">'+f.val+'</span></div></div>';
  });
+ // Лицензии и Тариф — автозаполнение из данных, но редактируемые
+ html += '<div class="kbc-field-row"><div class="kbc-field-label">Лицензии</div><div class="kbc-field-value"><input data-field="_licenses" value="'+autoLic.toString().replace(/"/g,'&quot;')+'" placeholder="кол-во" onchange="kbFieldChanged(\''+card.id+'\',\'_licenses\',this.value)"></div></div>';
+ html += '<div class="kbc-field-row"><div class="kbc-field-label">Тариф / Период</div><div class="kbc-field-value"><input data-field="_tariff" value="'+autoTariff.toString().replace(/"/g,'&quot;')+'" placeholder="тариф" onchange="kbFieldChanged(\''+card.id+'\',\'_tariff\',this.value)"></div></div>';
  // Editable CRM fields
  KB_CRM_FIELDS.forEach(function(f){
   var val = card.fields[f.key] || '';
