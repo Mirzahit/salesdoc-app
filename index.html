@@ -10355,6 +10355,11 @@ function kbLoad() {
     while(cl.length < kbChecklist.length) cl.push(0);
     var payD = '';
     if(p.date) { var dd = new Date(p.date); if(!isNaN(dd)) payD = ('0'+dd.getDate()).slice(-2)+'.'+('0'+(dd.getMonth()+1)).slice(-2)+'.'+dd.getFullYear(); }
+    // Найти запись "новый клиент" для лицензий и периода
+    var newClientPay = payments.find(function(pp){ return pp.client.toLowerCase()===clientKey && pp.categoryRaw && pp.categoryRaw.toLowerCase().indexOf('нов')>=0 && pp.categoryRaw.toLowerCase().indexOf('клиент')>=0; });
+    var licQty = newClientPay ? String(newClientPay.qty||'') : String(p.qty||'');
+    var licTariff = newClientPay ? (newClientPay.tariff||'') : (p.tariff||'');
+    var licPeriod = newClientPay ? String(newClientPay.period||'') : String(p.period||'');
     kbCards.push({
      id: String(p.id || i),
      client: p.client,
@@ -10363,9 +10368,9 @@ function kbLoad() {
      category: p.categoryRaw || '',
      manager: p.managerName || '',
      amount: String(p.amount || ''),
-     tariff: p.tariff || '',
-     qty: String(p.qty || ''),
-     period: String(p.period || ''),
+     tariff: licTariff,
+     qty: licQty,
+     period: licPeriod,
      payDate: payD,
      activDate: '',
      checklist: cl,
