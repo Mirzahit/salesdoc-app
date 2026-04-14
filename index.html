@@ -1112,6 +1112,19 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
 /* Checklist warning toast */
 .kb-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(239,83,80,.15);border:1px solid rgba(239,83,80,.3);color:#EF9A9A;padding:10px 24px;border-radius:10px;font-size:12px;font-weight:600;z-index:300;backdrop-filter:blur(10px);opacity:0;transition:opacity .3s;pointer-events:none}
 .kb-toast.visible{opacity:1;pointer-events:auto}
+/* KANBAN REPORT TABLES */
+.kbr-table{width:100%;border-collapse:collapse;font-size:12px;font-family:'Inter',sans-serif}
+.kbr-table th{padding:10px 14px;text-align:left;font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--dark-border);font-weight:700}
+.kbr-table td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--text-secondary)}
+.kbr-table tr:hover td{background:rgba(59,130,246,.03)}
+.kbr-table .val{font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--text-primary)}
+.kbr-table .amt{color:var(--gold-bright)}
+.kbr-bar{height:24px;border-radius:6px;position:relative;overflow:hidden;background:rgba(255,255,255,.03)}
+.kbr-bar-fill{height:100%;border-radius:6px;transition:width .4s}
+.kbr-bar-label{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:var(--text-primary)}
+.kbr-kpi{background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:12px;padding:16px;text-align:center}
+.kbr-kpi .kpi-value{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;color:var(--gold-bright);line-height:1.1}
+.kbr-kpi .kpi-label{font-size:10px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;font-weight:700}
 @media(max-width:768px){
  .kb-board{flex-direction:column}
  .kb-column{width:100%;min-width:100%;max-height:none}
@@ -2175,6 +2188,7 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
      <button class="kb-filter-btn" id="kb-mg-filter-btn" onclick="kbToggleFilterDD('manager')">Менеджер &#9662;</button>
      <div class="kb-filter-dropdown" id="kb-mg-dropdown" style="display:none"></div>
     </div>
+    <button class="kb-filter-btn" onclick="kbOpenReport()" style="background:rgba(59,130,246,.08)">&#128202; Отчёт</button>
     <button class="kb-icon-btn" onclick="kbOpenSettings()" title="Настройки">&#9881;</button>
     <button class="kb-icon-btn" onclick="kbLoad()" id="kb-refresh-btn" title="Обновить">&#8635;</button>
     <div id="kb-status" style="font-size:10px;color:var(--text-muted);min-width:60px;text-align:right"></div>
@@ -2210,6 +2224,40 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
   </div>
  </div>
  <!-- /FULLSCREEN CARD PAGE -->
+
+ <!-- FULLSCREEN REPORT PAGE -->
+ <div id="view-kb-report" style="display:none;position:fixed;inset:0;z-index:9999;background:#0B0F19;overflow-y:auto">
+  <div class="kbc-header">
+   <button class="kbc-back" onclick="kbCloseReport()">&#8592; Доска</button>
+   <div class="kbc-title">Отчёт по внедрениям</div>
+  </div>
+  <div style="padding:24px;max-width:1200px;margin:0 auto">
+   <!-- KPI row -->
+   <div id="kbr-kpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px"></div>
+   <!-- Funnel -->
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+    <div>
+     <div class="kbc-section-title" style="margin-bottom:12px">Воронка по этапам</div>
+     <div id="kbr-funnel"></div>
+    </div>
+    <div>
+     <div class="kbc-section-title" style="margin-bottom:12px">Aging — дней без движения</div>
+     <div id="kbr-aging"></div>
+    </div>
+   </div>
+   <!-- Stage table -->
+   <div class="kbc-section-title" style="margin-bottom:12px">Сводка по этапам</div>
+   <div style="overflow-x:auto;margin-bottom:24px">
+    <table id="kbr-stages-table" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+   </div>
+   <!-- Operator table -->
+   <div class="kbc-section-title" style="margin-bottom:12px">Отчёт по операторам</div>
+   <div style="overflow-x:auto;margin-bottom:24px">
+    <table id="kbr-ops-table" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+   </div>
+  </div>
+ </div>
+ <!-- /FULLSCREEN REPORT PAGE -->
 
  <!-- CHECKLIST WARNING TOAST -->
  <div class="kb-toast" id="kb-toast">Завершите чеклист перед переводом на следующий этап</div>
@@ -10807,6 +10855,98 @@ function kbShowToast(msg) {
  t.textContent = msg;
  t.classList.add('visible');
  setTimeout(function(){ t.classList.remove('visible'); }, 3000);
+}
+
+// --- KANBAN REPORT ---
+function kbOpenReport() {
+ var cards = kbGetFiltered();
+ var total = cards.length;
+ var totalAmt = cards.reduce(function(s,c){return s+(parseFloat(c.amount)||0);},0);
+ var done = cards.filter(function(c){return c.stage===kbColumns[kbColumns.length-1];}).length;
+ var noOp = cards.filter(function(c){return !c.operator;}).length;
+ var daysArr = cards.filter(function(c){return c.payDate&&c.stage!==kbColumns[kbColumns.length-1];}).map(function(c){
+  var d=new Date(c.payDate.split('.').reverse().join('-')); return isNaN(d)?0:Math.floor((Date.now()-d)/86400000);
+ }).filter(function(d){return d>0;});
+ var avgDays = daysArr.length ? Math.round(daysArr.reduce(function(a,b){return a+b;},0)/daysArr.length) : 0;
+ var clDone = cards.reduce(function(s,c){var p=kbChecklistProgress(c);return s+p.done;},0);
+ var clTotal = cards.reduce(function(s,c){var p=kbChecklistProgress(c);return s+p.total;},0);
+ var clPct = clTotal>0?Math.round(clDone/clTotal*100):0;
+
+ // KPIs
+ document.getElementById('kbr-kpis').innerHTML =
+  '<div class="kbr-kpi"><div class="kpi-label">Всего клиентов</div><div class="kpi-value">'+total+'</div></div>'+
+  '<div class="kbr-kpi"><div class="kpi-label">Сумма</div><div class="kpi-value" style="font-size:20px">'+fmtFull(totalAmt)+' \u20b8</div></div>'+
+  '<div class="kbr-kpi"><div class="kpi-label">Запущено</div><div class="kpi-value" style="color:#34D399">'+done+'</div></div>'+
+  '<div class="kbr-kpi"><div class="kpi-label">Без оператора</div><div class="kpi-value" style="color:'+(noOp?'#EF5350':'var(--text-primary)')+'">'+noOp+'</div></div>'+
+  '<div class="kbr-kpi"><div class="kpi-label">Средн. дней</div><div class="kpi-value">'+avgDays+'</div></div>'+
+  '<div class="kbr-kpi"><div class="kpi-label">Чеклист</div><div class="kpi-value">'+clPct+'%</div></div>';
+
+ // Funnel
+ var maxStage = 0;
+ var stageData = kbColumns.map(function(col){
+  var sc = cards.filter(function(c){return c.stage===col;});
+  if(sc.length>maxStage) maxStage=sc.length;
+  return {name:col, count:sc.length, amt:sc.reduce(function(s,c){return s+(parseFloat(c.amount)||0);},0)};
+ });
+ var funnelHtml = '';
+ var colors = ['#3B82F6','#60A5FA','#FBBF24','#F59E0B','#34D399','#10B981','#AB47BC','#EF5350'];
+ stageData.forEach(function(s,i){
+  var pct = maxStage>0?Math.round(s.count/maxStage*100):0;
+  funnelHtml += '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--text-secondary);font-weight:600">'+s.name+'</span><span style="font-size:11px;color:var(--text-muted)">'+s.count+' \u00b7 '+fmtFull(s.amt)+' \u20b8</span></div>';
+  funnelHtml += '<div class="kbr-bar"><div class="kbr-bar-fill" style="width:'+pct+'%;background:'+(colors[i%colors.length])+'"></div><div class="kbr-bar-label">'+s.count+'</div></div></div>';
+ });
+ document.getElementById('kbr-funnel').innerHTML = funnelHtml;
+
+ // Aging
+ var agingBuckets = [{label:'0\u20137 дн',min:0,max:7,color:'#34D399'},{label:'8\u201314 дн',min:8,max:14,color:'#FBBF24'},{label:'15\u201330 дн',min:15,max:30,color:'#F59E0B'},{label:'31\u201360 дн',min:31,max:60,color:'#EF5350'},{label:'60+ дн',min:61,max:9999,color:'#B71C1C'}];
+ var activeCards = cards.filter(function(c){return c.stage!==kbColumns[kbColumns.length-1]&&c.payDate;});
+ var maxBucket = 0;
+ var bucketData = agingBuckets.map(function(b){
+  var cnt = activeCards.filter(function(c){var d=kbGetDays(c);return d>=b.min&&d<=b.max;}).length;
+  if(cnt>maxBucket) maxBucket=cnt;
+  return {label:b.label,count:cnt,color:b.color};
+ });
+ var agingHtml = '';
+ bucketData.forEach(function(b){
+  var pct=maxBucket>0?Math.round(b.count/maxBucket*100):0;
+  agingHtml += '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--text-secondary);font-weight:600">'+b.label+'</span><span style="font-size:11px;color:var(--text-muted)">'+b.count+' клиентов</span></div>';
+  agingHtml += '<div class="kbr-bar"><div class="kbr-bar-fill" style="width:'+pct+'%;background:'+b.color+'"></div><div class="kbr-bar-label">'+b.count+'</div></div></div>';
+ });
+ document.getElementById('kbr-aging').innerHTML = agingHtml;
+
+ // Stages table
+ var stHtml = '<table class="kbr-table"><thead><tr><th>Этап</th><th>Клиентов</th><th>Сумма</th><th>Средн. дней</th><th>Без оператора</th><th>Чеклист</th></tr></thead><tbody>';
+ stageData.forEach(function(s){
+  var sc = cards.filter(function(c){return c.stage===s.name;});
+  var sDays = sc.filter(function(c){return c.payDate;}).map(function(c){var d=new Date(c.payDate.split('.').reverse().join('-'));return isNaN(d)?0:Math.floor((Date.now()-d)/86400000);}).filter(function(d){return d>0;});
+  var sAvg = sDays.length?Math.round(sDays.reduce(function(a,b){return a+b;},0)/sDays.length):0;
+  var sNoOp = sc.filter(function(c){return !c.operator;}).length;
+  var sClD = sc.reduce(function(a,c){return a+kbChecklistProgress(c).done;},0);
+  var sClT = sc.reduce(function(a,c){return a+kbChecklistProgress(c).total;},0);
+  var sClP = sClT>0?Math.round(sClD/sClT*100):0;
+  stHtml += '<tr><td class="val">'+s.name+'</td><td class="val">'+s.count+'</td><td class="amt">'+fmtFull(s.amt)+' \u20b8</td><td>'+sAvg+' дн</td><td style="color:'+(sNoOp?'#EF5350':'var(--text-muted)')+'">'+sNoOp+'</td><td>'+sClP+'%</td></tr>';
+ });
+ stHtml += '</tbody></table>';
+ document.getElementById('kbr-stages-table').outerHTML = stHtml;
+
+ // Operators table
+ var ops = {};
+ cards.forEach(function(c){var op=c.operator||'Не назначен';if(!ops[op])ops[op]={count:0,amt:0,done:0,days:[],clDone:0,clTotal:0};ops[op].count++;ops[op].amt+=(parseFloat(c.amount)||0);if(c.stage===kbColumns[kbColumns.length-1])ops[op].done++;var p=kbChecklistProgress(c);ops[op].clDone+=p.done;ops[op].clTotal+=p.total;if(c.payDate&&c.stage!==kbColumns[kbColumns.length-1]){var d=new Date(c.payDate.split('.').reverse().join('-'));if(!isNaN(d)){var dd=Math.floor((Date.now()-d)/86400000);if(dd>0)ops[op].days.push(dd);}}});
+ var opHtml = '<table class="kbr-table"><thead><tr><th>Оператор</th><th>Клиентов</th><th>Сумма</th><th>Запущено</th><th>Средн. дней</th><th>Чеклист</th></tr></thead><tbody>';
+ Object.keys(ops).sort().forEach(function(op){
+  var o=ops[op];var avg=o.days.length?Math.round(o.days.reduce(function(a,b){return a+b;},0)/o.days.length):0;
+  var clP=o.clTotal>0?Math.round(o.clDone/o.clTotal*100):0;
+  var clr=KB_OP_COLORS[op]||'var(--text-primary)';
+  opHtml += '<tr><td class="val" style="color:'+clr+'">'+op+'</td><td class="val">'+o.count+'</td><td class="amt">'+fmtFull(o.amt)+' \u20b8</td><td style="color:#34D399">'+o.done+'</td><td>'+avg+' дн</td><td>'+clP+'%</td></tr>';
+ });
+ opHtml += '</tbody></table>';
+ document.getElementById('kbr-ops-table').outerHTML = opHtml;
+
+ document.getElementById('view-kb-report').style.display = 'block';
+}
+
+function kbCloseReport() {
+ document.getElementById('view-kb-report').style.display = 'none';
 }
 
 function kbRender() {
