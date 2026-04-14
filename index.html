@@ -2500,6 +2500,10 @@ function applyTheme(mode) {
  document.querySelectorAll('.theme-btn').forEach(function(b) {
   b.classList.toggle('active', b.dataset.theme === mode);
  });
+ // Update theme-dependent JS colors
+ if(typeof kcGetCatColors==='function') kcCatColors=kcGetCatColors();
+ // Re-render current view if needed
+ try{ if(typeof renderKeyClients==='function') renderKeyClients(); }catch(e){}
 }
 // Apply saved theme immediately
 (function(){
@@ -4618,7 +4622,11 @@ function kcGetCategories(ranked){
  return{gold:gold,silver:silver,red:red,total:total,avg:avg};
 }
 
-var kcCatColors={gold:'#60A5FA',silver:'#B4B2A9',red:'#EF5350'};
+function kcGetCatColors(){
+ var isLight=document.body.classList.contains('light');
+ return {gold:isLight?'#1565C0':'#60A5FA',silver:isLight?'#546E7A':'#B4B2A9',red:isLight?'#C62828':'#EF5350'};
+}
+var kcCatColors=kcGetCatColors();
 var kcCatBg={gold:'rgba(96,165,250,0.08)',silver:'rgba(180,178,169,0.06)',red:'rgba(239,83,80,0.06)'};
 
 function kcGetPs(){
@@ -4627,6 +4635,7 @@ function kcGetPs(){
 
 function renderKeyClients(){
  if(!document.getElementById('kc-cats')) return;
+ kcCatColors=kcGetCatColors();
  kcMonth=selectedMonth.month;
  var ranked;
  if(kcMode==='ltv'){
