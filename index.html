@@ -1232,9 +1232,9 @@ body.light .theme-btn.active{background:rgba(76,140,245,.1);color:#1967D2}
  </div>
  <button class="logout-btn" onclick="event.stopPropagation();doLogout()" title="Выйти">⏻</button>
  </div>
- <div class="country-switcher" id="country-switcher">
- <button class="country-btn active" data-country="KZ" onclick="switchCountry('KZ')">&#127472;&#127487; KZ</button>
- <button class="country-btn" data-country="KG" onclick="switchCountry('KG')">&#127472;&#127468; KG</button>
+ <div class="country-switcher" id="country-switcher" style="display:none">
+ <button class="country-btn active" data-country="KZ" onclick="switchCountry('KZ')">KZ</button>
+ <button class="country-btn" data-country="KG" onclick="switchCountry('KG')">KG</button>
  </div>
  <div class="nav-section">
  <div class="nav-item-solo active" data-view="dashboard" onclick="showView('dashboard')">
@@ -1322,6 +1322,10 @@ body.light .theme-btn.active{background:rgba(76,140,245,.1);color:#1967D2}
  <div style="padding:0 16px 14px">
   <button class="cal-apply-btn" onclick="calApply()" style="width:100%">ПРИМЕНИТЬ</button>
  </div>
+ </div>
+ <div class="theme-switch" id="topbar-country" style="display:none">
+  <button class="theme-btn country-top-btn active" data-country="KZ" onclick="switchCountry('KZ')">KZ</button>
+  <button class="theme-btn country-top-btn" data-country="KG" onclick="switchCountry('KG')">KG</button>
  </div>
  <div class="theme-switch">
   <button class="theme-btn" data-theme="light" onclick="setTheme('light')" title="Светлая тема">&#9788; light</button>
@@ -3122,7 +3126,7 @@ function switchCountry(code) {
 }
 
 function updateCountrySwitcherUI() {
- document.querySelectorAll('.country-btn').forEach(function(btn){
+ document.querySelectorAll('.country-btn,.country-top-btn').forEach(function(btn){
   btn.classList.toggle('active', btn.dataset.country === currentCountry);
  });
  var titleEl = document.querySelector('.page-title');
@@ -5715,8 +5719,10 @@ async function doLogin() {
  if (currentUser.country) {
   switchCountry(currentUser.country);
   document.getElementById('country-switcher').style.display = 'none';
+  document.getElementById('topbar-country').style.display = 'none';
  } else {
-  document.getElementById('country-switcher').style.display = '';
+  document.getElementById('country-switcher').style.display = 'none';
+  document.getElementById('topbar-country').style.display = '';
  }
  updateCountrySwitcherUI();
  initCalendar();
@@ -11061,7 +11067,7 @@ function kbOpenReport() {
  document.getElementById('kbr-aging').innerHTML = agingHtml;
 
  // Stages table
- var stHtml = '<table class="kbr-table"><thead><tr><th>Этап</th><th>Клиентов</th><th>Сумма</th><th>Средн. дней</th><th>Без оператора</th><th>Чеклист</th></tr></thead><tbody>';
+ var stHtml = '<thead><tr><th>Этап</th><th>Клиентов</th><th>Сумма</th><th>Средн. дней</th><th>Без оператора</th><th>Чеклист</th></tr></thead><tbody>';
  stageData.forEach(function(s){
   var sc = cards.filter(function(c){return c.stage===s.name;});
   var sDays = sc.filter(function(c){return c.payDate;}).map(function(c){var d=new Date(c.payDate.split('.').reverse().join('-'));return isNaN(d)?0:Math.floor((Date.now()-d)/86400000);}).filter(function(d){return d>0;});
@@ -11072,21 +11078,21 @@ function kbOpenReport() {
   var sClP = sClT>0?Math.round(sClD/sClT*100):0;
   stHtml += '<tr><td class="val">'+s.name+'</td><td class="val">'+s.count+'</td><td class="amt">'+fmtFull(s.amt)+'</td><td>'+sAvg+' дн</td><td style="color:'+(sNoOp?'#EF5350':'var(--text-muted)')+'">'+sNoOp+'</td><td>'+sClP+'%</td></tr>';
  });
- stHtml += '</tbody></table>';
- document.getElementById('kbr-stages-table').outerHTML = stHtml;
+ stHtml += '</tbody>';
+ document.getElementById('kbr-stages-table').innerHTML = stHtml;
 
  // Operators table
  var ops = {};
  cards.forEach(function(c){var op=c.operator||'Не назначен';if(!ops[op])ops[op]={count:0,amt:0,done:0,days:[],clDone:0,clTotal:0};ops[op].count++;ops[op].amt+=(parseFloat(c.amount)||0);if(c.stage===kbColumns[kbColumns.length-1])ops[op].done++;var p=kbChecklistProgress(c);ops[op].clDone+=p.done;ops[op].clTotal+=p.total;if(c.payDate&&c.stage!==kbColumns[kbColumns.length-1]){var d=new Date(c.payDate.split('.').reverse().join('-'));if(!isNaN(d)){var dd=Math.floor((Date.now()-d)/86400000);if(dd>0)ops[op].days.push(dd);}}});
- var opHtml = '<table class="kbr-table"><thead><tr><th>Оператор</th><th>Клиентов</th><th>Сумма</th><th>Запущено</th><th>Средн. дней</th><th>Чеклист</th></tr></thead><tbody>';
+ var opHtml = '<thead><tr><th>Оператор</th><th>Клиентов</th><th>Сумма</th><th>Запущено</th><th>Средн. дней</th><th>Чеклист</th></tr></thead><tbody>';
  Object.keys(ops).sort().forEach(function(op){
   var o=ops[op];var avg=o.days.length?Math.round(o.days.reduce(function(a,b){return a+b;},0)/o.days.length):0;
   var clP=o.clTotal>0?Math.round(o.clDone/o.clTotal*100):0;
   var clr=KB_OP_COLORS[op]||'var(--text-primary)';
   opHtml += '<tr><td class="val" style="color:'+clr+'">'+op+'</td><td class="val">'+o.count+'</td><td class="amt">'+fmtFull(o.amt)+'</td><td style="color:#34D399">'+o.done+'</td><td>'+avg+' дн</td><td>'+clP+'%</td></tr>';
  });
- opHtml += '</tbody></table>';
- document.getElementById('kbr-ops-table').outerHTML = opHtml;
+ opHtml += '</tbody>';
+ document.getElementById('kbr-ops-table').innerHTML = opHtml;
 
  document.getElementById('view-kb-report').style.display = 'block';
 }
