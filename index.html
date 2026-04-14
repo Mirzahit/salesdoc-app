@@ -10279,16 +10279,9 @@ var KB_CRM_FIELDS = [
  {key:'budget',label:'Бюджет сделки',type:'text'},
  {key:'position',label:'Должность',type:'select',options:['Директор','Зам. директора','Руководитель IT','Руководитель продаж','Менеджер','Бухгалтер','Другое']},
  {key:'city',label:'Город',type:'text'},
- {key:'licenses',label:'Лицензии',type:'text'},
- {key:'product',label:'Продукция',type:'text'},
- {key:'currentSoft',label:'Какой программой пользуются',type:'select',options:['1С','Excel','Нет','iiko','МойСклад','Другое']},
- {key:'source',label:'Источник сделки',type:'select',options:['Входящий звонок','Marquiz','Instagram','Рекомендация','Холодный звонок']},
- {key:'contract',label:'Договор',type:'text'},
  {key:'subPeriod',label:'Период подписки',type:'select',options:['1 месяц','3 месяца','6 месяцев','12 месяцев']},
  {key:'segment',label:'Сегмент',type:'select',options:['FMCG','HoReCa','Фарма']},
  {key:'implType',label:'Внедрение',type:'select',options:['Стандарт','Расширенное','VIP']},
- {key:'integrationType',label:'Интеграция',type:'select',options:['API','1С','iiko','Нет']},
- {key:'poType',label:'П.О',type:'select',options:['SalesDoc Web','SalesDoc Mobile','SalesDoc Full','Другое']},
  {key:'serverName',label:'Имя сервера',type:'text'},
  {key:'login',label:'Логин',type:'text'},
  {key:'password',label:'Пароль',type:'text'},
@@ -10540,6 +10533,22 @@ function kbRenderBoard() {
  kbRenderSummary();
 }
 
+function kbGetIntegrationInfo(card) {
+ // Search in intgData (integration queue) by client name
+ if(typeof intgData !== 'undefined' && intgData.length) {
+  var clientLow = card.client.toLowerCase();
+  var found = intgData.find(function(d){ return d.company && d.company.toLowerCase().indexOf(clientLow) >= 0; });
+  if(found) {
+   var status = found.status || found.state || 'В очереди';
+   var type = found.type || '';
+   var text = status + (type ? ' (' + type + ')' : '');
+   var color = status === 'Завершён' || status === 'done' ? '#34D399' : status === 'В работе' ? '#FBBF24' : '#60A5FA';
+   return {text:text, color:color};
+  }
+ }
+ return {text:'Не в очереди', color:'var(--text-muted)'};
+}
+
 function kbGetDays(card) {
  if(!card.payDate) return 0;
  var parts = card.payDate.split('.');
@@ -10720,8 +10729,12 @@ function kbOpenCardPage(card) {
   {label:'Дата оплаты', val:card.payDate||'—'},
   {label:'Категория', val:card.category||'—'}
  ];
+ infoFields.push({label:'Лицензии', val:card.qty||'—'});
  if(card.tariff) infoFields.push({label:'Тариф', val:card.tariff});
  if(card.activDate) infoFields.push({label:'Дата активации', val:card.activDate, color:'#34D399'});
+ // Интеграция — показать очередь и этап
+ var intgInfo = kbGetIntegrationInfo(card);
+ infoFields.push({label:'Интеграция', val:intgInfo.text, color:intgInfo.color});
  infoFields.forEach(function(f){
   html += '<div class="kbc-field-row"><div class="kbc-field-label">'+f.label+'</div><div class="kbc-field-value"><span style="font-size:12px;font-weight:600;color:'+(f.color||'var(--text-primary)')+'">'+f.val+'</span></div></div>';
  });
