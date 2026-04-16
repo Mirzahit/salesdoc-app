@@ -1249,7 +1249,7 @@ body.light .content td span[style]{color:#2A3042!important}
 .kbc-feed-text{font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.4}
 .kbc-feed-move{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;margin-top:4px}
 .kbc-feed-move .from{color:#EF9A9A}.kbc-feed-move .to{color:#81C784}
-.kbc-comment-box{padding:12px 16px;border-top:1px solid var(--dark-border);flex-shrink:0}
+.kbc-comment-box{padding:8px 12px;border-top:1px solid var(--dark-border);flex-shrink:0}
 .kbc-comment-input{display:flex;gap:8px}
 .kbc-comment-input input{flex:1;background:var(--dark-bg);border:1px solid var(--dark-border);border-radius:8px;padding:8px 12px;color:var(--text-primary);font-size:12px;outline:none}
 .kbc-comment-input input:focus{border-color:rgba(59,130,246,.4)}
@@ -3539,7 +3539,7 @@ async function syncFromSheets() {
  qty: (function(){ var v=row[4]; return typeof v==='number'?v:parseFloat(String(v||'').replace(/[^0-9.,]/g,'').replace(',','.'))||0; })(),
  price: (function(){ var v=row[7]; return typeof v==='number'?v:parseFloat(String(v||'').replace(/[^0-9.,]/g,'').replace(',','.'))||0; })(),
  period: (function(){ var v=row[8]; return typeof v==='number'?v:parseFloat(String(v||'').replace(/[^0-9.,]/g,'').replace(',','.'))||0; })(),
- activationDate: (function(){ var v=row[colActivation]; return v?parseDateFromSheet(v):null; })(),
+ activationDate: (function(){ var v=row[colActivation]; if(!v && colActivation===14) v=row[15]; return v?parseDateFromSheet(v):null; })(),
  periodStart: (function(){ var v=row[19]; return v?String(v).trim():''; })(),
  // === конец доп. столбцов ===
  _srcCol: srcCol,
@@ -3575,6 +3575,8 @@ async function syncFromSheets() {
  setSyncStatus('ok','Обновлено '+new Date().toLocaleTimeString('ru')+' · '+allNew.length+' записей');
  showNotif(' Данные загружены','«Доходы '+currentCountry+'» — '+allNew.length+' записей');
  renderAll();
+ // Перезагрузить Kanban если уже открывался — чтобы учесть даты активации
+ if(window._kbLoaded) { window._kbLoaded = false; if(document.getElementById('view-kanban').style.display !== 'none') kbLoad(); }
  // Загрузить Светофор для дашборда (звонки, встречи, активации)
  if (!planLastData) { planInit(); planLoad().then(function(){ renderAll(); }).catch(function(){}); }
  } else {
@@ -11823,30 +11825,7 @@ function kbOpenCardPage(card) {
  html += '</div>';
  html += '</div></div>';
 
- // Tasks list (read-only in main, creation in sidebar)
- if(!card.fields) card.fields = {};
- var tasks = [];
- try { tasks = JSON.parse(card.fields._tasks || '[]'); } catch(e) { tasks = []; }
- if(tasks.length) {
-  html += '<div class="kbc-section"><div class="kbc-section-title">Задачи ('+tasks.filter(function(t){return !t.done;}).length+' активных)</div>';
-  tasks.forEach(function(t, ti) {
-   var tt = KB_TASK_TYPES.find(function(x){return x.key===t.type;}) || {icon:'\uD83D\uDCCB',label:t.type,color:'#888'};
-   var overdue = t.date && new Date(t.date.split('.').reverse().join('-')) < new Date() && !t.done;
-   var doneStyle = t.done ? 'opacity:.5;text-decoration:line-through' : '';
-   html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--dark-panel);border:1px solid '+(overdue?'rgba(239,83,80,.4)':'var(--dark-border)')+';border-radius:8px;margin-bottom:4px;'+doneStyle+'">';
-   html += '<div onclick="kbToggleTask(\''+card.id+'\','+ti+')" style="cursor:pointer;width:18px;height:18px;border-radius:50%;border:2px solid '+(t.done?'#34D399':tt.color)+';background:'+(t.done?'rgba(52,211,153,.15)':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">';
-   if(t.done) html += '<span style="color:#34D399;font-size:11px">\u2713</span>';
-   html += '</div>';
-   html += '<span style="font-size:13px">'+tt.icon+'</span>';
-   html += '<div style="flex:1;min-width:0"><span style="font-size:11px;font-weight:600;color:'+(overdue?'#EF5350':'var(--text-primary)')+'">'+tt.label+'</span>';
-   if(t.text) html += ' <span style="font-size:10px;color:var(--text-muted)">'+t.text+'</span>';
-   html += '</div>';
-   if(t.date) html += '<span style="font-size:10px;color:'+(overdue?'#EF5350':'var(--text-muted)')+'">'+t.date+'</span>';
-   html += '<span onclick="kbDeleteTask(\''+card.id+'\','+ti+')" style="cursor:pointer;font-size:13px;color:var(--text-muted);opacity:.3" title="\u0423\u0434\u0430\u043b\u0438\u0442\u044c">&times;</span>';
-   html += '</div>';
-  });
-  html += '</div>';
- }
+ // Tasks moved to sidebar (kbRenderCardFeed)
 
  // Stage buttons
  html += '<div class="kbc-section"><div class="kbc-section-title">Этап</div>';
@@ -11878,10 +11857,37 @@ function kbOpenCardPage(card) {
 }
 
 function kbRenderCardFeed(card) {
- var cardLog = kbLog.filter(function(l){ return l.client === card.client; }).slice(0, 30);
  var html = '';
- if(!cardLog.length) {
-  html = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:12px">Нет активности</div>';
+
+ // Tasks section (in feed)
+ var tasks = [];
+ try { tasks = JSON.parse((card.fields && card.fields._tasks) || '[]'); } catch(e) { tasks = []; }
+ if(tasks.length) {
+  var active = tasks.filter(function(t){return !t.done;}).length;
+  html += '<div style="padding:0 0 10px;border-bottom:1px solid var(--dark-border);margin-bottom:10px">';
+  html += '<div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;font-weight:700;margin-bottom:8px">Задачи' + (active ? ' ('+active+')' : '') + '</div>';
+  tasks.forEach(function(t, ti) {
+   var tt = KB_TASK_TYPES.find(function(x){return x.key===t.type;}) || {icon:'\uD83D\uDCCB',label:t.type,color:'#888'};
+   var overdue = t.date && new Date(t.date.split('.').reverse().join('-')) < new Date() && !t.done;
+   var doneOp = t.done ? 'opacity:.45;' : '';
+   html += '<div style="display:flex;align-items:center;gap:6px;padding:5px 0;'+doneOp+'">';
+   html += '<div onclick="kbToggleTask(\''+card.id+'\','+ti+')" style="cursor:pointer;width:16px;height:16px;border-radius:50%;border:2px solid '+(t.done?'#34D399':tt.color)+';background:'+(t.done?'rgba(52,211,153,.15)':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">';
+   if(t.done) html += '<span style="color:#34D399;font-size:9px">\u2713</span>';
+   html += '</div>';
+   html += '<span style="font-size:12px">'+tt.icon+'</span>';
+   html += '<span style="font-size:11px;font-weight:600;color:'+(overdue?'#EF5350':'var(--text-primary)')+';'+(t.done?'text-decoration:line-through':'')+'">'+tt.label+'</span>';
+   if(t.text) html += '<span style="font-size:10px;color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t.text+'</span>';
+   if(t.date) html += '<span style="font-size:9px;color:'+(overdue?'#EF5350':'var(--text-muted)')+'">'+t.date+'</span>';
+   html += '<span onclick="kbDeleteTask(\''+card.id+'\','+ti+')" style="cursor:pointer;font-size:12px;color:var(--text-muted);opacity:.3">&times;</span>';
+   html += '</div>';
+  });
+  html += '</div>';
+ }
+
+ // Activity log
+ var cardLog = kbLog.filter(function(l){ return l.client === card.client; }).slice(0, 30);
+ if(!cardLog.length && !tasks.length) {
+  html += '<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:12px">Нет активности</div>';
  } else {
   cardLog.forEach(function(l){
    html += '<div class="kbc-feed-item">';
