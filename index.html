@@ -3035,27 +3035,31 @@ function mapCategoryFromSheet(cat) {
 
 function parseDateFromSheet(v) {
  if (!v) return null;
+ if (typeof v === 'number' && v === 0) return null;
  // Число (Excel serial date)
  if (typeof v === 'number') {
  const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+ if (isNaN(d)) return null;
  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
  }
- const s = String(v);
+ const s = String(v).trim();
+ if (!s || s === '0' || s === '-' || s === '—') return null;
  // gviz format: Date(2026,1,3)
  if (s.includes('Date(')) {
  const m = s.match(/Date\((\d+),(\d+),(\d+)\)/);
  if (m) return m[1]+'-'+String(parseInt(m[2])+1).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
  }
- // Apps Script format: "02.02.2026" или "2/2/2026" 
+ // Apps Script format: "02.02.2026" или "2/2/2026"
  const dotMatch = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
  if (dotMatch) return dotMatch[3]+'-'+dotMatch[2].padStart(2,'0')+'-'+dotMatch[1].padStart(2,'0');
  const slashMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
  if (slashMatch) return slashMatch[3]+'-'+slashMatch[1].padStart(2,'0')+'-'+slashMatch[2].padStart(2,'0');
- // ISO or substring
+ // ISO
  if (s.match(/^\d{4}-\d{2}-\d{2}/)) return s.substring(0,10);
  // GMT string from Apps Script: "Mon Feb 03 2026..."
- try { const d = new Date(s); if (!isNaN(d)) return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); } catch(e){}
- return s.substring(0,10);
+ try { const d = new Date(s); if (!isNaN(d) && d.getFullYear() > 2000) return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); } catch(e){}
+ // Не удалось распознать как дату — вернуть null
+ return null;
 }
 
 // ДАННЫЕ ИЗ GOOGLE SHEETS (Январь, Февраль, Март 2026) 
@@ -11328,11 +11332,14 @@ function kbLoad() {
   kbCards = [];
   var seen = {};
 
-  // Построим карту активации: если у клиента есть дата активации на ЛЮБОЙ статье (новый клиент, лицензия, внедрение) — он активирован
+  // Карта активации: проверяем только «новый клиент» и «лицензия» (не абонентку и не другие статьи)
   var clientActivMap = {};
   if(typeof payments !== 'undefined' && payments.length) {
    payments.forEach(function(p) {
     if(!p.activationDate) return;
+    var cat = (p.categoryRaw||'').toLowerCase();
+    // Только значимые статьи для активации
+    if(cat.indexOf('нов') < 0 && cat.indexOf('лицен') < 0 && cat.indexOf('внедрен') < 0) return;
     var ck = p.client.toLowerCase();
     if(!clientActivMap[ck]) clientActivMap[ck] = p.activationDate;
    });
@@ -11380,6 +11387,7 @@ function kbLoad() {
    });
   }
 
+  console.log('[Kanban] payments:', payments.length, 'implementation:', payments.filter(function(p){return p.category==='implementation'}).length, 'with activDate:', Object.keys(clientActivMap).length, '=> kbCards:', kbCards.length);
   document.getElementById('kb-status').textContent = kbCards.length + ' клиентов';
   kbFillFilters();
   kbRenderBoard();
