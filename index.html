@@ -11273,14 +11273,27 @@ function kbLoad() {
    kbLog.push({date:r[0],client:r[1],operator:r[2],from:r[3],to:r[4],who:r[5],comment:r[6],type:r[7]||'move'});
   });
 
-  // Карточки из payments (Доходы) — только внедрение без даты активации
+  // Карточки из payments (Доходы) — внедрение, проверяем активацию по ЛЮБОЙ строке клиента
   kbCards = [];
   var seen = {};
+
+  // Построим карту активации: если у клиента есть дата активации на ЛЮБОЙ статье (новый клиент, лицензия, внедрение) — он активирован
+  var clientActivMap = {};
+  if(typeof payments !== 'undefined' && payments.length) {
+   payments.forEach(function(p) {
+    if(!p.activationDate) return;
+    var ck = p.client.toLowerCase();
+    if(!clientActivMap[ck]) clientActivMap[ck] = p.activationDate;
+   });
+  }
+
   if(typeof payments !== 'undefined' && payments.length) {
    payments.forEach(function(p, i){
     if(p.category !== 'implementation') return;
-    if(p.activationDate) return; // уже внедрён — не показываем
     var clientKey = p.client.toLowerCase();
+    // Проверяем активацию по ЛЮБОЙ строке этого клиента (новый клиент, лицензия и т.д.)
+    var clientActivated = clientActivMap[clientKey] || p.activationDate;
+    if(clientActivated) return; // уже активирован — не показываем на доске
     if(seen[clientKey]) return; // один клиент = одна карточка
     seen[clientKey] = true;
     var saved = kbSaved[clientKey] || {};
