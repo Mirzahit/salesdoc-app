@@ -1242,12 +1242,17 @@ body.light .content td span[style]{color:#2A3042!important}
 .kbc-feed-text{font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.4}
 .kbc-feed-move{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;margin-top:4px}
 .kbc-feed-move .from{color:#EF9A9A}.kbc-feed-move .to{color:#81C784}
-.kbc-comment-box{padding:16px 20px;border-top:1px solid var(--dark-border)}
+.kbc-comment-box{padding:12px 16px;border-top:1px solid var(--dark-border);flex-shrink:0}
 .kbc-comment-input{display:flex;gap:8px}
 .kbc-comment-input input{flex:1;background:var(--dark-bg);border:1px solid var(--dark-border);border-radius:8px;padding:8px 12px;color:var(--text-primary);font-size:12px;outline:none}
 .kbc-comment-input input:focus{border-color:rgba(59,130,246,.4)}
 .kbc-comment-input button{background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);border-radius:8px;color:#60A5FA;padding:8px 16px;cursor:pointer;font-size:11px;font-weight:700;transition:all .2s}
 .kbc-comment-input button:hover{background:rgba(59,130,246,.25)}
+.kbc-input-tab{padding:6px 12px;font-size:11px;font-weight:600;border:none;background:transparent;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;font-family:inherit;transition:all .15s}
+.kbc-input-tab.active{color:#3B82F6;border-bottom-color:#3B82F6}
+.kbc-input-tab:hover{color:var(--text-primary)}
+.kbc-task-type-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:11px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:3px;transition:all .15s}
+.kbc-task-type-btn.selected{border-color:var(--sel-color);color:var(--sel-color);background:var(--sel-bg)}
 /* Settings tabs */
 .kb-settings-tabs{display:flex;gap:0;margin-bottom:16px;background:var(--dark-panel);border-radius:10px;padding:3px;border:1px solid var(--dark-border)}
 .kb-settings-tab{flex:1;padding:8px 16px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;background:transparent;color:var(--text-muted);transition:all .2s;text-align:center}
@@ -2542,9 +2547,29 @@ body.light .content td span[style]{color:#2A3042!important}
     <div class="kbc-sidebar-header">Активность</div>
     <div class="kbc-feed" id="kbc-feed"></div>
     <div class="kbc-comment-box">
-     <div class="kbc-comment-input">
-      <input id="kbc-comment-text" placeholder="Комментарий...">
+     <!-- amoCRM tabs: Примечание / Задача -->
+     <div style="display:flex;gap:0;margin-bottom:8px;border-bottom:1px solid var(--dark-border);padding:0 4px">
+      <button id="kbc-tab-note" class="kbc-input-tab active" onclick="kbInputTab('note')">Примечание</button>
+      <button id="kbc-tab-task" class="kbc-input-tab" onclick="kbInputTab('task')">Задача</button>
+     </div>
+     <!-- Примечание mode -->
+     <div id="kbc-mode-note" class="kbc-comment-input">
+      <input id="kbc-comment-text" placeholder="Примечание...">
       <button onclick="kbAddCommentFromPage()">Отправить</button>
+     </div>
+     <!-- Задача mode -->
+     <div id="kbc-mode-task" style="display:none">
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px" id="kbc-task-types"></div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+       <span style="font-size:11px;color:var(--text-muted)">на</span>
+       <input type="date" id="kbc-task-date" style="padding:4px 8px;border-radius:6px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:11px;font-family:inherit">
+       <input type="time" id="kbc-task-time" style="padding:4px 6px;border-radius:6px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:11px;font-family:inherit;width:70px">
+       <input type="text" id="kbc-task-text" placeholder="описание..." style="flex:1;min-width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:11px;font-family:inherit">
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+       <button onclick="kbPostTask()" style="padding:6px 16px;border-radius:6px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:#3B82F6;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Поставить</button>
+       <button onclick="kbInputTab('note')" style="padding:6px 12px;border-radius:6px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:11px;cursor:pointer;font-family:inherit">Отменить</button>
+      </div>
      </div>
     </div>
    </div>
@@ -11301,6 +11326,9 @@ function kbLoad() {
   if(typeof payments !== 'undefined' && payments.length) {
    payments.forEach(function(p, i){
     if(p.category !== 'implementation') return;
+    // Исключаем "доработку" — на доске только "внедрение" и "нов внедрение"
+    var catLow = (p.categoryRaw||'').toLowerCase();
+    if(catLow.indexOf('доработ') >= 0) return;
     var clientKey = p.client.toLowerCase();
     // Проверяем активацию по ЛЮБОЙ строке этого клиента (новый клиент, лицензия и т.д.)
     var clientActivated = clientActivMap[clientKey] || p.activationDate;
@@ -11757,57 +11785,30 @@ function kbOpenCardPage(card) {
  html += '</div>';
  html += '</div></div>';
 
- // Tasks (amoCRM style)
+ // Tasks list (read-only in main, creation in sidebar)
  if(!card.fields) card.fields = {};
- if(!card.fields._tasks) card.fields._tasks = '[]';
  var tasks = [];
- try { tasks = JSON.parse(card.fields._tasks); } catch(e) { tasks = []; }
- html += '<div class="kbc-section"><div class="kbc-section-title">Задачи</div>';
-
- // Active tasks
+ try { tasks = JSON.parse(card.fields._tasks || '[]'); } catch(e) { tasks = []; }
  if(tasks.length) {
+  html += '<div class="kbc-section"><div class="kbc-section-title">Задачи ('+tasks.filter(function(t){return !t.done;}).length+' активных)</div>';
   tasks.forEach(function(t, ti) {
-   var tt = KB_TASK_TYPES.find(function(x){return x.key===t.type;}) || {icon:'📋',label:t.type,color:'#888'};
+   var tt = KB_TASK_TYPES.find(function(x){return x.key===t.type;}) || {icon:'\uD83D\uDCCB',label:t.type,color:'#888'};
    var overdue = t.date && new Date(t.date.split('.').reverse().join('-')) < new Date() && !t.done;
    var doneStyle = t.done ? 'opacity:.5;text-decoration:line-through' : '';
-   var overdueStyle = overdue ? 'border-color:#EF5350' : '';
-   html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--dark-panel);border:1px solid '+(overdue?'rgba(239,83,80,.4)':'var(--dark-border)')+';border-radius:10px;margin-bottom:6px;'+doneStyle+'">';
-   html += '<div onclick="kbToggleTask(\''+card.id+'\','+ti+')" style="cursor:pointer;width:20px;height:20px;border-radius:50%;border:2px solid '+(t.done?'#34D399':tt.color)+';background:'+(t.done?'rgba(52,211,153,.15)':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">';
-   if(t.done) html += '<span style="color:#34D399;font-size:12px">✓</span>';
+   html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--dark-panel);border:1px solid '+(overdue?'rgba(239,83,80,.4)':'var(--dark-border)')+';border-radius:8px;margin-bottom:4px;'+doneStyle+'">';
+   html += '<div onclick="kbToggleTask(\''+card.id+'\','+ti+')" style="cursor:pointer;width:18px;height:18px;border-radius:50%;border:2px solid '+(t.done?'#34D399':tt.color)+';background:'+(t.done?'rgba(52,211,153,.15)':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">';
+   if(t.done) html += '<span style="color:#34D399;font-size:11px">\u2713</span>';
    html += '</div>';
-   html += '<span style="font-size:14px">'+tt.icon+'</span>';
-   html += '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:'+(overdue?'#EF5350':'var(--text-primary)')+'">'+tt.label+'</div>';
-   if(t.text) html += '<div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+t.text+'</div>';
+   html += '<span style="font-size:13px">'+tt.icon+'</span>';
+   html += '<div style="flex:1;min-width:0"><span style="font-size:11px;font-weight:600;color:'+(overdue?'#EF5350':'var(--text-primary)')+'">'+tt.label+'</span>';
+   if(t.text) html += ' <span style="font-size:10px;color:var(--text-muted)">'+t.text+'</span>';
    html += '</div>';
    if(t.date) html += '<span style="font-size:10px;color:'+(overdue?'#EF5350':'var(--text-muted)')+'">'+t.date+'</span>';
-   if(t.time) html += '<span style="font-size:10px;color:var(--text-muted);margin-left:4px">'+t.time+'</span>';
-   html += '<span onclick="kbDeleteTask(\''+card.id+'\','+ti+')" style="cursor:pointer;font-size:14px;color:var(--text-muted);opacity:.4;margin-left:4px" title="Удалить">&times;</span>';
+   html += '<span onclick="kbDeleteTask(\''+card.id+'\','+ti+')" style="cursor:pointer;font-size:13px;color:var(--text-muted);opacity:.3" title="\u0423\u0434\u0430\u043b\u0438\u0442\u044c">&times;</span>';
    html += '</div>';
   });
+  html += '</div>';
  }
-
- // New task form — use safe ID
- var safeId = String(card.id).replace(/[^a-zA-Z0-9_-]/g, '_');
- html += '<div id="kbt-form-'+safeId+'" style="display:none;margin-top:8px">';
- html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
- KB_TASK_TYPES.forEach(function(tt) {
-  html += '<button class="kbt-type-btn" data-type="'+tt.key+'" onclick="kbSelectTaskType(event.currentTarget,\''+tt.key+'\')" style="padding:6px 12px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;transition:all .15s">'+tt.icon+' '+tt.label+'</button>';
- });
- html += '</div>';
- html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
- html += '<input type="date" id="kbt-date-'+safeId+'" style="padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
- html += '<input type="time" id="kbt-time-'+safeId+'" style="padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
- html += '<input type="text" id="kbt-text-'+safeId+'" placeholder="Описание задачи..." style="flex:1;min-width:120px;padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
- html += '</div>';
- html += '<div style="display:flex;gap:8px;margin-top:8px">';
- html += '<button onclick="kbSaveTask(\''+card.id+'\')" style="padding:8px 20px;border-radius:8px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:#3B82F6;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Поставить</button>';
- html += '<button onclick="kbHideTaskForm(\''+safeId+'\')" style="padding:8px 16px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit">Отменить</button>';
- html += '</div>';
- html += '</div>';
-
- // Add task button
- html += '<button onclick="kbShowTaskForm(\''+safeId+'\')" style="margin-top:6px;padding:8px 16px;border-radius:8px;border:1px dashed var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit;width:100%;text-align:center">+ Добавить задачу</button>';
- html += '</div>';
 
  // Stage buttons
  html += '<div class="kbc-section"><div class="kbc-section-title">Этап</div>';
@@ -12104,48 +12105,54 @@ window.kbToggleAct = function(cardId) {
  kbShowToast(card.fields._actReceived === '1' ? 'Акт получен' : 'Акт снят');
 };
 
-// --- KANBAN TASKS (amoCRM style) ---
+// --- KANBAN TASKS (amoCRM style in sidebar) ---
 var _kbtSelectedType = '';
 
-window.kbShowTaskForm = function(safeId) {
- var el = document.getElementById('kbt-form-'+safeId);
- if(el) el.style.display = 'block';
-};
-window.kbHideTaskForm = function(safeId) {
- var el = document.getElementById('kbt-form-'+safeId);
- if(el) el.style.display = 'none';
+window.kbInputTab = function(tab) {
+ var noteTab = document.getElementById('kbc-tab-note');
+ var taskTab = document.getElementById('kbc-tab-task');
+ var noteMode = document.getElementById('kbc-mode-note');
+ var taskMode = document.getElementById('kbc-mode-task');
+ if(!noteTab || !taskTab) return;
+ if(tab === 'task') {
+  noteTab.classList.remove('active'); taskTab.classList.add('active');
+  noteMode.style.display = 'none'; taskMode.style.display = 'block';
+  // Populate task type buttons
+  var typesEl = document.getElementById('kbc-task-types');
+  if(typesEl && !typesEl.children.length) {
+   typesEl.innerHTML = KB_TASK_TYPES.map(function(tt) {
+    return '<button class="kbc-task-type-btn" data-type="'+tt.key+'" style="--sel-color:'+tt.color+';--sel-bg:'+tt.color+'18" onclick="kbSelectSidebarType(this,\''+tt.key+'\')">'+tt.icon+' '+tt.label+'</button>';
+   }).join('');
+  }
+  // Set today as default
+  var dateEl = document.getElementById('kbc-task-date');
+  if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+ } else {
+  noteTab.classList.add('active'); taskTab.classList.remove('active');
+  noteMode.style.display = 'flex'; taskMode.style.display = 'none';
+  _kbtSelectedType = '';
+ }
 };
 
-window.kbSelectTaskType = function(btn, type) {
+window.kbSelectSidebarType = function(btn, type) {
  _kbtSelectedType = type;
- // Highlight selected
- var form = btn.closest('[id^="kbt-form-"]');
- if(form) {
-  form.querySelectorAll('.kbt-type-btn').forEach(function(b) {
-   var tt = KB_TASK_TYPES.find(function(x){return x.key===b.dataset.type;});
-   if(b.dataset.type === type) {
-    b.style.background = (tt?tt.color:'#3B82F6')+'22';
-    b.style.borderColor = tt?tt.color:'#3B82F6';
-    b.style.color = tt?tt.color:'#3B82F6';
-   } else {
-    b.style.background = 'transparent';
-    b.style.borderColor = 'var(--dark-border)';
-    b.style.color = 'var(--text-muted)';
-   }
+ var container = document.getElementById('kbc-task-types');
+ if(container) {
+  container.querySelectorAll('.kbc-task-type-btn').forEach(function(b) {
+   b.classList.toggle('selected', b.dataset.type === type);
   });
  }
 };
 
-window.kbSaveTask = function(cardId) {
+window.kbPostTask = function() {
  if(!_kbtSelectedType) { kbShowToast('Выберите тип задачи'); return; }
- var card = kbCards.find(function(c){return c.id===cardId;});
- if(!card) return;
+ if(!kbCurrentCard) return;
+ var card = kbCurrentCard;
  if(!card.fields) card.fields = {};
 
- var safeId = String(cardId).replace(/[^a-zA-Z0-9_-]/g, '_');
- var dateEl = document.getElementById('kbt-date-'+safeId);
- var timeEl = document.getElementById('kbt-time-'+safeId);
- var textEl = document.getElementById('kbt-text-'+safeId);
+ var dateEl = document.getElementById('kbc-task-date');
+ var timeEl = document.getElementById('kbc-task-time');
+ var textEl = document.getElementById('kbc-task-text');
 
  var dateVal = '';
  if(dateEl && dateEl.value) {
@@ -12169,9 +12176,10 @@ window.kbSaveTask = function(cardId) {
 
  _kbtSelectedType = '';
  kbOpenCardPage(card);
+ kbInputTab('note');
  kbSaveTasksToSheet(card);
  var tt = KB_TASK_TYPES.find(function(x){return x.key===task.type;});
- kbShowToast('Задача «'+(tt?tt.label:task.type)+'» добавлена');
+ kbShowToast('Задача \u00ab'+(tt?tt.label:task.type)+'\u00bb поставлена');
 };
 
 window.kbToggleTask = function(cardId, idx) {
