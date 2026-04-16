@@ -3489,12 +3489,17 @@ async function syncFromSheets() {
  if (r && String(r[1]||'').trim() === 'Компания') { headerIdx = ri; break; }
  }
  // Определяем индексы столбцов по заголовку
- var colDate=0, colClient=1, colCat=2, colMgr=5, colAmt=12, colBank=10, colSeated=11, colTech=17, colActivation=14;
+ var colDate=0, colClient=1, colCat=2, colMgr=5, colAmt=12, colBank=10, colSeated=11, colTech=17, colActivation=-1;
  if (headerIdx >= 0) {
  var hdrRow = data.rows[headerIdx];
+ // Сначала ищем столбец активации отдельно (не в else if цепочке)
+ hdrRow.forEach(function(h,i){
+  var s = String(h||'').toLowerCase().replace(/\s+/g,' ').trim();
+  if (s.includes('активац') || s.includes('дата актив') || s.includes('activation')) colActivation=i;
+ });
  hdrRow.forEach(function(h,i){
  var s = String(h||'').toLowerCase();
- if (s==='дата') colDate=i;
+ if (s==='дата' && i < 3) colDate=i;
  else if (s==='компания') colClient=i;
  else if (s.includes('стать')) colCat=i;
  else if (s==='менеджер') colMgr=i;
@@ -3502,10 +3507,12 @@ async function syncFromSheets() {
  else if (s.includes('сумма') && !s.includes('факт') && !s.includes('оста')) { if(colAmt===9) colAmt=i; }
  else if (s==='банк') colBank=i;
  else if (s.includes('посаж')) colSeated=i;
- else if (s.includes('тех')) colTech=i;
- else if (s.includes('активац') || s.includes('дата актив')) colActivation=i;
+ else if (s.includes('тех') && !s.includes('актив')) colTech=i;
  });
+ console.log('[Sheets] ' + months[mi] + ': colActivation=' + colActivation + ', headers:', hdrRow.map(function(h,i){return i+':'+String(h||'').substring(0,15)}).join(' | '));
  }
+ // Fallback: если столбец не найден, пробуем 14 и 15
+ if (colActivation < 0) colActivation = 14;
  var dataRows = headerIdx >= 0 ? data.rows.slice(headerIdx+1) : data.rows.slice(4);
  dataRows.forEach(function(row, rowIdx) {
  if (!row || row[colClient] == null || String(row[colClient]).trim() === '') return;
