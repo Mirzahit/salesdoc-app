@@ -3424,6 +3424,9 @@ function switchCountry(code) {
  }
  updateCountrySwitcherUI();
  setSyncStatus('loading', 'Загрузка ' + cfg.label + '...');
+ // Сбросить Kanban для перезагрузки с новой страной
+ window._kbLoaded = false;
+ kbCards = [];
  syncFromSheets();
 }
 
@@ -11418,12 +11421,12 @@ function kbFillFilters() {
  mgSel.innerHTML = '<option value="">Все менеджеры</option>' + Object.keys(mgs).sort().map(function(m){ return '<option value="'+m+'">'+m+'</option>'; }).join('');
 }
 
+var _kbFilterOp = '';
+var _kbFilterMg = '';
 function kbGetFiltered() {
- var opF = document.getElementById('kb-filter-operator').value;
- var mgF = document.getElementById('kb-filter-manager').value;
  return kbCards.filter(function(c){
-  if(opF && c.operator !== opF) return false;
-  if(mgF && c.manager !== mgF) return false;
+  if(_kbFilterOp && c.operator !== _kbFilterOp) return false;
+  if(_kbFilterMg && c.manager !== _kbFilterMg) return false;
   if(kbSearchQuery && c.client.toLowerCase().indexOf(kbSearchQuery) < 0) return false;
   return true;
  });
@@ -11466,8 +11469,7 @@ window.kbToggleFilterDD = function(type) {
   var val = type==='operator' ? c.operator : c.manager;
   if(val) items[val] = (items[val]||0) + 1;
  });
- var selId = type==='operator' ? 'kb-filter-operator' : 'kb-filter-manager';
- var curVal = document.getElementById(selId).value;
+ var curVal = type==='operator' ? _kbFilterOp : _kbFilterMg;
  var html = '<div class="kb-fd-item'+(curVal===''?' active':'')+'" onclick="kbSelectFilter(\''+type+'\',\'\')">Все ('+ kbCards.length +')</div>';
  Object.keys(items).sort().forEach(function(k){
   html += '<div class="kb-fd-item'+(curVal===k?' active':'')+'" onclick="kbSelectFilter(\''+type+'\',\''+k.replace(/'/g,"\\'")+'\')">'+k+' ('+items[k]+')</div>';
@@ -11477,16 +11479,15 @@ window.kbToggleFilterDD = function(type) {
 }
 
 window.kbSelectFilter = function(type, val) {
- var selId = type==='operator' ? 'kb-filter-operator' : 'kb-filter-manager';
+ if(type==='operator') _kbFilterOp = val;
+ else _kbFilterMg = val;
  var btnId = type==='operator' ? 'kb-op-filter-btn' : 'kb-mg-filter-btn';
  var ddId = type==='operator' ? 'kb-op-dropdown' : 'kb-mg-dropdown';
- document.getElementById(selId).value = val;
  document.getElementById(ddId).style.display = 'none';
  var btn = document.getElementById(btnId);
  if(val) { btn.textContent = val; btn.classList.add('active'); }
  else { btn.innerHTML = (type==='operator'?'Оператор':'Менеджер')+' &#9662;'; btn.classList.remove('active'); }
  kbRenderBoard();
- kbRenderSummary();
 };
 
 // Close dropdowns on outside click
