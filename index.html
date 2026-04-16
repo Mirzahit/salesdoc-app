@@ -11220,6 +11220,14 @@ var KB_CRM_FIELDS = [
  {key:'contactPerson',label:'Контактное лицо',type:'text'},
  {key:'notes',label:'Примечание',type:'text'}
 ];
+var KB_TASK_TYPES = [
+ {key:'call', label:'\u041f\u043e\u0437\u0432\u043e\u043d\u0438\u0442\u044c', icon:'\uD83D\uDCDE', color:'#4CAF50'},
+ {key:'write', label:'\u041d\u0430\u043f\u0438\u0441\u0430\u0442\u044c', icon:'\uD83D\uDCAC', color:'#8B5CF6'},
+ {key:'meeting', label:'\u0412\u0441\u0442\u0440\u0435\u0447\u0430', icon:'\uD83E\uDD1D', color:'#FF9800'},
+ {key:'setup', label:'\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430', icon:'\u2699\uFE0F', color:'#3B82F6'},
+ {key:'training', label:'\u041e\u0431\u0443\u0447\u0435\u043d\u0438\u0435', icon:'\uD83C\uDF93', color:'#FBBF24'},
+ {key:'check', label:'\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430', icon:'\u2705', color:'#06B6D4'}
+];
 var KB_WIP_LIMIT = 8; // макс карточек на этап
 var KB_AGING_DAYS = 7; // дней без движения = "застрял"
 var kbCards = [];
@@ -11749,6 +11757,57 @@ function kbOpenCardPage(card) {
  html += '</div>';
  html += '</div></div>';
 
+ // Tasks (amoCRM style)
+ if(!card.fields) card.fields = {};
+ if(!card.fields._tasks) card.fields._tasks = '[]';
+ var tasks = [];
+ try { tasks = JSON.parse(card.fields._tasks); } catch(e) { tasks = []; }
+ html += '<div class="kbc-section"><div class="kbc-section-title">Задачи</div>';
+
+ // Active tasks
+ if(tasks.length) {
+  tasks.forEach(function(t, ti) {
+   var tt = KB_TASK_TYPES.find(function(x){return x.key===t.type;}) || {icon:'📋',label:t.type,color:'#888'};
+   var overdue = t.date && new Date(t.date.split('.').reverse().join('-')) < new Date() && !t.done;
+   var doneStyle = t.done ? 'opacity:.5;text-decoration:line-through' : '';
+   var overdueStyle = overdue ? 'border-color:#EF5350' : '';
+   html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--dark-panel);border:1px solid '+(overdue?'rgba(239,83,80,.4)':'var(--dark-border)')+';border-radius:10px;margin-bottom:6px;'+doneStyle+'">';
+   html += '<div onclick="kbToggleTask(\''+card.id+'\','+ti+')" style="cursor:pointer;width:20px;height:20px;border-radius:50%;border:2px solid '+(t.done?'#34D399':tt.color)+';background:'+(t.done?'rgba(52,211,153,.15)':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0">';
+   if(t.done) html += '<span style="color:#34D399;font-size:12px">✓</span>';
+   html += '</div>';
+   html += '<span style="font-size:14px">'+tt.icon+'</span>';
+   html += '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:'+(overdue?'#EF5350':'var(--text-primary)')+'">'+tt.label+'</div>';
+   if(t.text) html += '<div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+t.text+'</div>';
+   html += '</div>';
+   if(t.date) html += '<span style="font-size:10px;color:'+(overdue?'#EF5350':'var(--text-muted)')+'">'+t.date+'</span>';
+   if(t.time) html += '<span style="font-size:10px;color:var(--text-muted);margin-left:4px">'+t.time+'</span>';
+   html += '<span onclick="kbDeleteTask(\''+card.id+'\','+ti+')" style="cursor:pointer;font-size:14px;color:var(--text-muted);opacity:.4;margin-left:4px" title="Удалить">&times;</span>';
+   html += '</div>';
+  });
+ }
+
+ // New task form
+ html += '<div id="kbt-form-'+card.id+'" style="display:none;margin-top:8px">';
+ html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
+ KB_TASK_TYPES.forEach(function(tt) {
+  html += '<button class="kbt-type-btn" data-type="'+tt.key+'" onclick="kbSelectTaskType(this,\''+tt.key+'\')" style="padding:6px 12px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:4px;transition:all .15s">'+tt.icon+' '+tt.label+'</button>';
+ });
+ html += '</div>';
+ html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
+ html += '<input type="date" id="kbt-date-'+card.id+'" style="padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
+ html += '<input type="time" id="kbt-time-'+card.id+'" style="padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
+ html += '<input type="text" id="kbt-text-'+card.id+'" placeholder="Описание задачи..." style="flex:1;min-width:120px;padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
+ html += '</div>';
+ html += '<div style="display:flex;gap:8px;margin-top:8px">';
+ html += '<button onclick="kbSaveTask(\''+card.id+'\')" style="padding:8px 20px;border-radius:8px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:#3B82F6;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Поставить</button>';
+ html += '<button onclick="document.getElementById(\'kbt-form-'+card.id+'\').style.display=\'none\'" style="padding:8px 16px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit">Отменить</button>';
+ html += '</div>';
+ html += '</div>';
+
+ // Add task button
+ html += '<button onclick="document.getElementById(\'kbt-form-'+card.id+'\').style.display=\'block\'" style="margin-top:6px;padding:8px 16px;border-radius:8px;border:1px dashed var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit;width:100%;text-align:center">+ Добавить задачу</button>';
+ html += '</div>';
+
  // Stage buttons
  html += '<div class="kbc-section"><div class="kbc-section-title">Этап</div>';
  html += '<div class="kbc-stage-btns">';
@@ -12043,6 +12102,97 @@ window.kbToggleAct = function(cardId) {
  }
  kbShowToast(card.fields._actReceived === '1' ? 'Акт получен' : 'Акт снят');
 };
+
+// --- KANBAN TASKS (amoCRM style) ---
+var _kbtSelectedType = '';
+
+window.kbSelectTaskType = function(btn, type) {
+ _kbtSelectedType = type;
+ // Highlight selected
+ var form = btn.closest('[id^="kbt-form-"]');
+ if(form) {
+  form.querySelectorAll('.kbt-type-btn').forEach(function(b) {
+   var tt = KB_TASK_TYPES.find(function(x){return x.key===b.dataset.type;});
+   if(b.dataset.type === type) {
+    b.style.background = (tt?tt.color:'#3B82F6')+'22';
+    b.style.borderColor = tt?tt.color:'#3B82F6';
+    b.style.color = tt?tt.color:'#3B82F6';
+   } else {
+    b.style.background = 'transparent';
+    b.style.borderColor = 'var(--dark-border)';
+    b.style.color = 'var(--text-muted)';
+   }
+  });
+ }
+};
+
+window.kbSaveTask = function(cardId) {
+ if(!_kbtSelectedType) { kbShowToast('Выберите тип задачи'); return; }
+ var card = kbCards.find(function(c){return c.id===cardId;});
+ if(!card) return;
+ if(!card.fields) card.fields = {};
+
+ var dateEl = document.getElementById('kbt-date-'+cardId);
+ var timeEl = document.getElementById('kbt-time-'+cardId);
+ var textEl = document.getElementById('kbt-text-'+cardId);
+
+ var dateVal = '';
+ if(dateEl && dateEl.value) {
+  var d = new Date(dateEl.value);
+  dateVal = ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2)+'.'+d.getFullYear();
+ }
+
+ var task = {
+  type: _kbtSelectedType,
+  date: dateVal,
+  time: timeEl ? timeEl.value : '',
+  text: textEl ? textEl.value.trim() : '',
+  done: false,
+  created: new Date().toISOString().slice(0,10)
+ };
+
+ var tasks = [];
+ try { tasks = JSON.parse(card.fields._tasks || '[]'); } catch(e) { tasks = []; }
+ tasks.push(task);
+ card.fields._tasks = JSON.stringify(tasks);
+
+ _kbtSelectedType = '';
+ kbOpenCardPage(card);
+ kbSaveTasksToSheet(card);
+ var tt = KB_TASK_TYPES.find(function(x){return x.key===task.type;});
+ kbShowToast('Задача «'+(tt?tt.label:task.type)+'» добавлена');
+};
+
+window.kbToggleTask = function(cardId, idx) {
+ var card = kbCards.find(function(c){return c.id===cardId;});
+ if(!card || !card.fields) return;
+ var tasks = [];
+ try { tasks = JSON.parse(card.fields._tasks || '[]'); } catch(e) { tasks = []; }
+ if(!tasks[idx]) return;
+ tasks[idx].done = !tasks[idx].done;
+ card.fields._tasks = JSON.stringify(tasks);
+ kbOpenCardPage(card);
+ kbSaveTasksToSheet(card);
+};
+
+window.kbDeleteTask = function(cardId, idx) {
+ var card = kbCards.find(function(c){return c.id===cardId;});
+ if(!card || !card.fields) return;
+ var tasks = [];
+ try { tasks = JSON.parse(card.fields._tasks || '[]'); } catch(e) { tasks = []; }
+ tasks.splice(idx, 1);
+ card.fields._tasks = JSON.stringify(tasks);
+ kbOpenCardPage(card);
+ kbSaveTasksToSheet(card);
+ kbShowToast('Задача удалена');
+};
+
+function kbSaveTasksToSheet(card) {
+ if(!KB_SCRIPT_URL) return;
+ fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
+  body:JSON.stringify({action:'updateFields',sheetId:KB_SHEET_ID,row:card._row,client:card.client,fields:card.fields})
+ }).catch(function(e){ console.error('KB save tasks error:', e); });
+}
 
 // --- KANBAN REPORT ---
 function kbOpenReport() {
