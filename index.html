@@ -1146,9 +1146,12 @@ body.light .content span[style*="font-weight:600"]{color:#2A3042!important}
 body.light .content span[style*="font-weight: 600"]{color:#2A3042!important}
 body.light .content td span[style]{color:#2A3042!important}
 /* KANBAN STYLES */
-.kb-board{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;padding-bottom:0;flex:1;-webkit-overflow-scrolling:touch;scrollbar-width:none;-ms-overflow-style:none}
+.kb-board{display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;padding-bottom:0;flex:1;-webkit-overflow-scrolling:touch;scrollbar-width:none;-ms-overflow-style:none}
 .kb-board::-webkit-scrollbar{display:none}
-.kb-column{flex:1;min-width:220px;flex-shrink:0;background:rgba(17,24,39,.5);border:1px solid var(--dark-border);border-radius:14px;display:flex;flex-direction:column;max-height:calc(100vh - 130px)}
+.kb-scroll-dots{display:flex;justify-content:center;gap:3px;padding:6px 0;flex-shrink:0}
+.kb-scroll-dot{width:16px;height:6px;border-radius:3px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.08);cursor:pointer;transition:all .2s}
+.kb-scroll-dot.active{background:rgba(148,163,184,.35)}
+.kb-column{width:280px;min-width:280px;flex-shrink:0;background:rgba(17,24,39,.5);border:1px solid var(--dark-border);border-radius:14px;display:flex;flex-direction:column;max-height:calc(100vh - 130px)}
 .kb-column-header{padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--dark-border)}
 .kb-column-header .kb-col-title{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary)}
 .kb-column-header .kb-col-count{font-size:10px;background:rgba(59,130,246,.15);color:#60A5FA;padding:2px 8px;border-radius:10px;font-weight:600}
@@ -2535,6 +2538,8 @@ body.light .content td span[style]{color:#2A3042!important}
   <select id="kb-filter-manager" style="display:none" onchange="kbRenderBoard()"><option value="">Все</option></select>
   <!-- Канбан доска -->
   <div id="kb-board" class="kb-board"></div>
+  <!-- Scroll dots (как в amoCRM) -->
+  <div id="kb-scroll-dots" class="kb-scroll-dots"></div>
  </div>
  <!-- /KANBAN VIEW -->
 
@@ -11525,6 +11530,34 @@ function kbRenderBoard() {
  });
 
  kbRenderSummary();
+ kbRenderScrollDots();
+}
+
+// Scroll dots navigation (amoCRM style)
+function kbRenderScrollDots() {
+ var dotsEl = document.getElementById('kb-scroll-dots');
+ var board = document.getElementById('kb-board');
+ if(!dotsEl || !board) return;
+ var cols = board.querySelectorAll('.kb-column');
+ if(!cols.length) { dotsEl.innerHTML = ''; return; }
+ dotsEl.innerHTML = '';
+ cols.forEach(function(col, i) {
+  var dot = document.createElement('div');
+  dot.className = 'kb-scroll-dot' + (i === 0 ? ' active' : '');
+  dot.onclick = function() {
+   col.scrollIntoView({behavior:'smooth', inline:'start', block:'nearest'});
+  };
+  dotsEl.appendChild(dot);
+ });
+ // Update active dot on scroll
+ board.onscroll = function() {
+  var scrollLeft = board.scrollLeft;
+  var colWidth = (cols[0] ? cols[0].offsetWidth : 280) + 12;
+  var activeIdx = Math.round(scrollLeft / colWidth);
+  dotsEl.querySelectorAll('.kb-scroll-dot').forEach(function(d, i) {
+   d.classList.toggle('active', i === activeIdx);
+  });
+ };
 }
 
 function kbGetIntegrationInfo(card) {
