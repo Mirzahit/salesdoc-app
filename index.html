@@ -7808,12 +7808,25 @@ function num(v) {
 }
 function parseDate(v) {
  if (!v) return '';
- var m = String(v).match(/(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{2,4})/);
+ var s = String(v).trim();
+ // yyyy-mm-dd
+ var m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+ if (m) return m[3].padStart(2,'0') + '.' + m[2].padStart(2,'0') + '.' + String(parseInt(m[1]) % 100).padStart(2,'0');
+ // dd.mm.yyyy or dd/mm/yyyy or dd-mm-yyyy
+ m = s.match(/^(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{2,4})$/);
  if (m) { var y = parseInt(m[3]); if (y < 100) y += 2000; return m[1].padStart(2,'0') + '.' + m[2].padStart(2,'0') + '.' + String(y % 100).padStart(2,'0'); }
- m = String(v).match(/(\d{4})-(\d{2})-(\d{2})/);
- if (m) return m[3] + '.' + m[2] + '.' + String(parseInt(m[1]) % 100).padStart(2,'0');
- return v;
+ // "Mar 2, 2026" or "2 Mar 2026" English month names
+ var months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,янв:1,фев:2,мар:3,апр:4,мая:5,июн:6,июл:7,авг:8,сен:9,окт:10,ноя:11,дек:12};
+ m = s.match(/(\d{1,2})\s+(\w{3})\w*\s+(\d{4})/);
+ if (m && months[m[2].toLowerCase().substr(0,3)]) return m[1].padStart(2,'0') + '.' + String(months[m[2].toLowerCase().substr(0,3)]).padStart(2,'0') + '.' + String(parseInt(m[3]) % 100).padStart(2,'0');
+ m = s.match(/(\w{3})\w*\s+(\d{1,2}),?\s+(\d{4})/);
+ if (m && months[m[1].toLowerCase().substr(0,3)]) return m[2].padStart(2,'0') + '.' + String(months[m[1].toLowerCase().substr(0,3)]).padStart(2,'0') + '.' + String(parseInt(m[3]) % 100).padStart(2,'0');
+ // Try to find any date-like pattern
+ m = s.match(/(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{2,4})/);
+ if (m) { var y = parseInt(m[3]); if (y < 100) y += 2000; return m[1].padStart(2,'0') + '.' + m[2].padStart(2,'0') + '.' + String(y % 100).padStart(2,'0'); }
+ return '';
 }
+function todayDateStr() { var d = new Date(); return String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + String(d.getFullYear() % 100).padStart(2,'0'); }
 function findCol(row, keys) {
  var rk = Object.keys(row);
  for (var i = 0; i < rk.length; i++) {
@@ -7824,6 +7837,22 @@ function findCol(row, keys) {
  }
  return '';
 }
+// Smart date column finder — tries known names first, then scans all values for date patterns
+function findDateCol(row) {
+ var names = ['reportingstart','reportingstarts','starts','start','startdate','day','date','дата','датаотчёта','датаотчета','начало','началоотчёта','началоотчета','reporting','день','period','период'];
+ var v = findCol(row, names);
+ if (v && parseDate(v)) return parseDate(v);
+ // Fallback: scan ALL columns for date-like values
+ var keys = Object.keys(row);
+ for (var i = 0; i < keys.length; i++) {
+  var val = row[keys[i]];
+  if (!val) continue;
+  var parsed = parseDate(val);
+  if (parsed && parsed.match(/^\d{2}\.\d{2}\.\d{2}$/)) return parsed;
+ }
+ return '';
+}
+
 function parseStatus(raw) {
  var s = String(raw).toLowerCase();
  if (s.indexOf('inact') !== -1 || s.indexOf('paus') !== -1 || s === 'paused') return 'inactive';
@@ -7850,7 +7879,7 @@ function mapMetaRow(row) {
   cpm: num(findCol(row, ['cpm','cpmprice','ценазапоказ'])),
   cpc: num(findCol(row, ['costperclick','cpc','ценазаклик','costperlinkclick'])),
   ctr: num(findCol(row, ['ctr','clickthroughrate','кликабельность'])),
-  start: parseDate(findCol(row, ['reportingstart','starts','начало','startdate','дата','reporting']))
+  start: findDateCol(row) || todayDateStr()
  };
 }
 
@@ -7874,7 +7903,7 @@ function mapGoogleRow(row) {
   frequency: 0,
   clicks: clicks,
   leads: conv, cpr: cpr, cpm: cpm, cpc: cpc, ctr: ctr,
-  start: parseDate(findCol(row, ['day','date','дата','день','startdate','reportingstart']))
+  start: findDateCol(row) || todayDateStr()
  };
 }
 
@@ -7898,7 +7927,7 @@ function mapTikTokRow(row) {
   spend: spend, reach: reach,
   impressions: impr, frequency: freq,
   clicks: clicks, leads: conv, cpr: cpr, cpm: cpm, cpc: cpc, ctr: ctr,
-  start: parseDate(findCol(row, ['date','дата','day','reportdate']))
+  start: findDateCol(row) || todayDateStr()
  };
 }
 
