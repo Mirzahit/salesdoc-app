@@ -11249,6 +11249,9 @@ function kbLoad() {
    if(r[4] && r[4].trim()) kbChecklist.push(r[4].trim());
   });
   if(!kbColumns.length) kbColumns = ['В очереди','Интеграция','Обучение','Настройка','Тест','Запущен'];
+  if(!kbOperators.length) kbOperators = ['Айдос','Акбар','Самат'];
+  // Гарантируем что все операторы из KB_OP_COLORS в списке
+  Object.keys(KB_OP_COLORS).forEach(function(op){ if(kbOperators.indexOf(op) < 0) kbOperators.push(op); });
   if(!kbChecklist.length) kbChecklist = ['Подключение к серверу','Загрузка базы клиентов','Настройка маршрутов','Обучение менеджеров','Тестовый день','Проверка отчётов'];
 
   // Parse saved kanban data (operator, stage, checklist per client)
@@ -11399,7 +11402,7 @@ function kbSearchFilter() {
 
 // --- KANBAN DROPDOWN FILTERS ---
 var kbActiveDD = null;
-function kbToggleFilterDD(type) {
+window.kbToggleFilterDD = function(type) {
  var ddId = type === 'operator' ? 'kb-op-dropdown' : 'kb-mg-dropdown';
  var btnId = type === 'operator' ? 'kb-op-filter-btn' : 'kb-mg-filter-btn';
  var dd = document.getElementById(ddId);
@@ -11425,7 +11428,7 @@ function kbToggleFilterDD(type) {
  dd.style.display = 'block';
 }
 
-function kbSelectFilter(type, val) {
+window.kbSelectFilter = function(type, val) {
  var selId = type==='operator' ? 'kb-filter-operator' : 'kb-filter-manager';
  var btnId = type==='operator' ? 'kb-op-filter-btn' : 'kb-mg-filter-btn';
  var ddId = type==='operator' ? 'kb-op-dropdown' : 'kb-mg-dropdown';
@@ -11435,7 +11438,8 @@ function kbSelectFilter(type, val) {
  if(val) { btn.textContent = val; btn.classList.add('active'); }
  else { btn.innerHTML = (type==='operator'?'Оператор':'Менеджер')+' &#9662;'; btn.classList.remove('active'); }
  kbRenderBoard();
-}
+ kbRenderSummary();
+};
 
 // Close dropdowns on outside click
 document.addEventListener('click', function(e){
