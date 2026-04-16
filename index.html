@@ -11857,16 +11857,17 @@ function kbOpenCardPage(card) {
  });
  html += '</div></div>';
 
- // Operator buttons
+ // Operator dropdown
  if(kbOperators.length) {
+  var opClr = KB_OP_COLORS[card.operator] || 'var(--text-muted)';
   html += '<div class="kbc-section"><div class="kbc-section-title">Оператор</div>';
-  html += '<div class="kbc-stage-btns">';
+  html += '<select onchange="kbSetOperatorPage(\''+card.id+'\',this.value)" style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid '+(card.operator?opClr:'var(--dark-border)')+';background:var(--dark-panel);color:'+(card.operator?opClr:'var(--text-muted)')+';font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;outline:none;appearance:auto">';
+  html += '<option value=""'+(card.operator?'':' selected')+'>Не назначен</option>';
   kbOperators.forEach(function(op){
-   var active = op === card.operator;
-   var clr = KB_OP_COLORS[op] || '#AB47BC';
-   html += '<button class="kbc-op-btn'+(active?' active':'')+'" style="'+(active?'border-color:'+clr+';color:'+clr+';background:'+clr+'18':'')+'" onclick="kbSetOperatorPage(\''+card.id+'\',\''+op.replace(/'/g,"\\'")+'\')">'+op+'</button>';
+   html += '<option value="'+op+'"'+(op===card.operator?' selected':'')+'>'+op+'</option>';
   });
-  html += '</div></div>';
+  html += '</select>';
+  html += '</div>';
  }
 
  document.getElementById('kbc-main').innerHTML = html;
@@ -11951,10 +11952,41 @@ function kbSetOperatorPage(cardId, operator) {
  card.operator = operator;
  kbRenderBoard();
  kbOpenCardPage(card);
+ // Сохранить в таблицу Карточки (Kanban)
  if(KB_SCRIPT_URL) {
   fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
    body:JSON.stringify({action:'setOperator',sheetId:KB_SHEET_ID,row:card._row,operator:operator})
   }).catch(function(e){ console.error('KB save operator error:', e); });
+ }
+ // Записать оператора в столбец R (Тех поддержка) таблицы Доходы
+ kbWriteOperatorToDohodы(card.client, operator);
+ kbShowToast(operator ? 'Оператор: ' + operator : 'Оператор снят');
+}
+
+function kbWriteOperatorToDohodы(clientName, operator) {
+ // Найти строки этого клиента в payments и записать тех.поддержку
+ if(typeof payments === 'undefined' || !payments.length) return;
+ var rows = [];
+ payments.forEach(function(p) {
+  if(p.client.toLowerCase() === clientName.toLowerCase() && p.category === 'implementation') {
+   p.techSupport = operator;
+   // Запомним что нужно записать
+   if(p._rawRow) rows.push(p);
+  }
+ });
+ // Отправить запрос на запись в таблицу Доходы через Apps Script
+ if(KB_SCRIPT_URL && clientName) {
+  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
+   body:JSON.stringify({
+    action:'setTechSupport',
+    sheetId:SHEET_ID,
+    client:clientName,
+    operator:operator,
+    column:'R'
+   })
+  }).then(function(r){ return r.json(); }).then(function(res){
+   console.log('[Kanban] Оператор записан в Доходы:', clientName, operator, res);
+  }).catch(function(e){ console.error('KB write operator to Доходы error:', e); });
  }
 }
 
