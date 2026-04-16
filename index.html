@@ -3381,7 +3381,7 @@ function applyUserAccess() {
  if (!currentUser) return;
  const u=currentUser;
  document.getElementById('ub-name').textContent=u.name.split(' ')[0]+' '+(u.name.split(' ')[1]||'');
- document.getElementById('ub-role').textContent={admin:'Администратор',manager:'Менеджер',operator:'Оператор',viewer:'Просмотр'}[u.role]||u.role;
+ document.getElementById('ub-role').textContent=(ROLE_LABELS||{})[u.role]||{admin:'Администратор',head:'Руководитель',rop:'РОП',manager:'Менеджер',operator:'Оператор',accountant:'Бухгалтер',viewer:'Просмотр'}[u.role]||u.role;
  document.getElementById('ub-avatar').textContent=u.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
  document.getElementById('avatar-initials').textContent=document.getElementById('ub-avatar').textContent;
  document.getElementById('cab-display-name').textContent=u.name;
@@ -4912,8 +4912,11 @@ async function saveEmployee() {
  if(editId){ const i=employees.findIndex(e=>e.id===editId); if(i>=0){employees[i]=data;} }
  else { employees.push(data); }
  saveCustomEmployees();
+ if(typeof saveEmpAccess === 'function') saveEmpAccess();
  closeEmpModal(); renderEmployees(); buildQuickChips(); populateEmployeeSelects();
  if(document.getElementById('user-mgmt-body')) renderUserManagement();
+ // Применить обновлённые права если редактируем текущего пользователя
+ if(editId && currentUser && currentUser.id === editId) { currentUser.access = data.access; applyUserAccess(); }
  showNotif('Сотрудник сохранён',name);
 }
 
@@ -11406,6 +11409,21 @@ function kbLoad() {
     operator: r[2]||'', stage: r[3]||'', checklist: (r[12]||'').split(',').map(function(x){return x.trim()==='1'?1:0;}), fields: savedFields, _row: i+1
    };
   });
+  // Merge with localStorage fallback (если Google Script не сохранил)
+  try {
+   var localSaved = JSON.parse(localStorage.getItem('kb_cards_local') || '{}');
+   Object.keys(localSaved).forEach(function(key) {
+    var ls = localSaved[key];
+    if(!kbSaved[key]) kbSaved[key] = ls;
+    else {
+     // localStorage перезаписывает если в таблице пусто
+     if(!kbSaved[key].operator && ls.operator) kbSaved[key].operator = ls.operator;
+     if(!kbSaved[key].stage && ls.stage) kbSaved[key].stage = ls.stage;
+     if(ls.fields) kbSaved[key].fields = Object.assign(kbSaved[key].fields || {}, ls.fields);
+     if(ls.checklist && ls.checklist.some(function(x){return x===1;})) kbSaved[key].checklist = ls.checklist;
+    }
+   });
+  } catch(e) {}
 
   // Parse log
   var lRows = kbParseCsv(results[1]);
@@ -11793,7 +11811,24 @@ function kbDrop(e) {
  kbMoveCard(kbDragCard, newStage);
 }
 
+// Сохранить карточку в localStorage (fallback если Google Script не работает)
+function kbSaveLocal(card) {
+ try {
+  var data = JSON.parse(localStorage.getItem('kb_cards_local') || '{}');
+  var key = card.client.toLowerCase();
+  data[key] = {
+   operator: card.operator || '',
+   stage: card.stage || '',
+   checklist: card.checklist || [],
+   fields: card.fields || {},
+   activDate: card.activDate || ''
+  };
+  localStorage.setItem('kb_cards_local', JSON.stringify(data));
+ } catch(e) {}
+}
+
 function kbSaveToSheet(card, oldStage, newStage) {
+ kbSaveLocal(card); // localStorage fallback
  if(!KB_SCRIPT_URL) { document.getElementById('kb-status').textContent = 'Только просмотр'; return; }
 
  var payload = {
@@ -12025,6 +12060,7 @@ function kbSetOperatorPage(cardId, operator) {
  var card = kbCards.find(function(c){ return c.id === cardId; });
  if(!card || card.operator === operator) return;
  card.operator = operator;
+ kbSaveLocal(card); // localStorage fallback
  kbRenderBoard();
  kbOpenCardPage(card);
  // Сохранить в таблицу Карточки (Kanban)
@@ -12033,8 +12069,6 @@ function kbSetOperatorPage(cardId, operator) {
    body:JSON.stringify({action:'setOperator',sheetId:KB_SHEET_ID,row:card._row,operator:operator})
   }).catch(function(e){ console.error('KB save operator error:', e); });
  }
- // Записать оператора в столбец R (Тех поддержка) таблицы Доходы
- kbWriteOperatorToDohodы(card.client, operator);
  kbShowToast(operator ? 'Оператор: ' + operator : 'Оператор снят');
 }
 
@@ -12089,6 +12123,7 @@ function kbToggleCheck(cardId, idx) {
  if(!card.checklist) card.checklist = [];
  while(card.checklist.length <= idx) card.checklist.push(0);
  card.checklist[idx] = card.checklist[idx] ? 0 : 1;
+ kbSaveLocal(card);
  kbOpenCardPage(card);
  kbRenderBoard();
  if(KB_SCRIPT_URL) {
