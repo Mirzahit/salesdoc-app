@@ -1822,7 +1822,12 @@ body.light .content td span[style]{color:#2A3042!important}
  <button onclick="showDataSources('cabinet')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(59,130,246,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'">!</button>
  <!-- HERO -->
  <div class="cabinet-hero">
- <div class="cabinet-avatar"><div class="avatar-ring"></div><div class="avatar-inner" id="avatar-initials">АД</div></div>
+ <div class="cabinet-avatar" style="position:relative;cursor:pointer" onclick="document.getElementById('avatar-upload').click()" title="Нажмите чтобы загрузить фото">
+  <div class="avatar-ring"></div>
+  <div class="avatar-inner" id="avatar-initials" style="overflow:hidden">АД</div>
+  <div style="position:absolute;bottom:2px;right:2px;width:22px;height:22px;border-radius:50%;background:var(--dark-card);border:2px solid var(--dark-border);display:flex;align-items:center;justify-content:center;font-size:11px">📷</div>
+  <input type="file" id="avatar-upload" accept="image/*" onchange="uploadAvatar(this)" style="display:none">
+ </div>
  <div style="flex:1">
  <div class="cabinet-name" id="cab-display-name">Администратор</div>
  <div class="cabinet-role" id="cab-display-role">Руководитель · SalesDoc</div>
@@ -2695,15 +2700,29 @@ body.light .content td span[style]{color:#2A3042!important}
  <div class="form-row"><div class="form-group"><label class="form-label">Email / Логин</label><input class="form-input" id="e-email" placeholder="user@salesdoc.io"></div><div class="form-group"><label class="form-label">Пароль</label><input class="form-input" id="e-pass" type="password" placeholder="Минимум 4 символа"></div></div>
  <div class="form-row"><div class="form-group"><label class="form-label">Роль в системе</label>
  <select class="form-select" id="e-role" onchange="updateAccessChecks()">
- <option value="admin"> Администратор</option>
- <option value="manager"> Менеджер</option>
- <option value="operator" selected> Оператор тех.поддержки</option>
- <option value="viewer"> Только просмотр</option>
+ <option value="admin">Администратор</option>
+ <option value="head">Руководитель</option>
+ <option value="rop">РОП</option>
+ <option value="manager">Менеджер</option>
+ <option value="operator" selected>Оператор</option>
+ <option value="accountant">Бухгалтер</option>
  </select>
- </div><div class="form-group"><label class="form-label">% бонуса (внедрения)</label><input class="form-input" id="e-bonus" type="number" placeholder="30" value="30" min="0" max="100"></div></div>
- <div style="margin-top:4px">
+ </div><div class="form-group"><label class="form-label">% бонуса</label><input class="form-input" id="e-bonus" type="number" placeholder="30" value="30" min="0" max="100"></div></div>
+ <!-- Активность toggle -->
+ <div style="display:flex;align-items:center;gap:12px;margin-top:12px;padding:12px 16px;background:var(--dark-panel);border-radius:10px;border:1px solid var(--dark-border)">
+  <span style="font-size:12px;color:var(--text-secondary)">Активность</span>
+  <label class="cab-toggle"><input type="checkbox" id="e-active" checked><span class="cab-toggle-slider"></span></label>
+  <span id="e-active-label" style="font-size:11px;color:#81C784">Работает</span>
+ </div>
+ <!-- Права доступа (amoCRM style) -->
+ <div style="margin-top:12px">
  <div class="form-label" style="margin-bottom:10px">Права доступа</div>
- <div class="access-grid" id="access-grid-modal"></div>
+ <div style="overflow-x:auto">
+  <table class="data-table" id="access-table-modal" style="font-size:11px">
+   <thead><tr><th style="text-align:left;min-width:140px">Раздел</th><th style="text-align:center;width:60px">Доступ</th></tr></thead>
+   <tbody id="access-table-body"></tbody>
+  </table>
+ </div>
  </div>
  <input type="hidden" id="e-edit-id">
  <button class="form-submit" onclick="saveEmployee()">СОХРАНИТЬ СОТРУДНИКА</button>
@@ -2855,24 +2874,40 @@ function closeSidebar(){
 // ACCESS RIGHTS DEFINITIONS
 // ============================================================
 const ACCESS_KEYS = [
- { key:'view_dashboard', label:'Дашборд' },
- { key:'view_payments', label:'Оплаты' },
- { key:'view_acts', label:'Акты работ' },
- { key:'view_plan', label:'Выполнение плана' },
-
- { key:'view_kanban', label:'Внедрение' },
- { key:'view_employees', label:'Сотрудники' },
- { key:'view_cabinet', label:'Личный кабинет' },
- { key:'add_payments', label:'Добавлять оплаты' },
- { key:'add_acts', label:'Добавлять акты' },
- { key:'edit_plans', label:'Редактировать планы' },
- { key:'manage_employees', label:'Управлять сотрудниками' },
+ { key:'view_dashboard', label:'Дашборд', group:'Просмотр' },
+ { key:'view_payments', label:'Оплаты', group:'Просмотр' },
+ { key:'view_acts', label:'Акты работ', group:'Просмотр' },
+ { key:'view_plan', label:'Выполнение плана', group:'Просмотр' },
+ { key:'view_keyclients', label:'Ключевые клиенты', group:'Просмотр' },
+ { key:'view_expenses', label:'Расходы', group:'Просмотр' },
+ { key:'view_integrations', label:'Очередь интеграции', group:'Просмотр' },
+ { key:'view_kanban', label:'Внедрение', group:'Просмотр' },
+ { key:'view_marketing', label:'Маркетинг', group:'Просмотр' },
+ { key:'view_reports', label:'Отчёты', group:'Просмотр' },
+ { key:'view_ai', label:'ИИ', group:'Просмотр' },
+ { key:'view_knowledge', label:'База знаний', group:'Просмотр' },
+ { key:'view_academy', label:'Академия', group:'Просмотр' },
+ { key:'view_tests', label:'Тесты', group:'Просмотр' },
+ { key:'view_employees', label:'Сотрудники', group:'Просмотр' },
+ { key:'view_cabinet', label:'Кабинет', group:'Просмотр' },
+ { key:'add_payments', label:'Добавлять оплаты', group:'Действия' },
+ { key:'add_acts', label:'Добавлять акты', group:'Действия' },
+ { key:'edit_plans', label:'Редактировать планы', group:'Действия' },
+ { key:'manage_employees', label:'Управлять сотрудниками', group:'Действия' },
 ];
+
+const ROLE_LABELS = {
+ admin:'Администратор', head:'Руководитель', rop:'РОП',
+ manager:'Менеджер', operator:'Оператор', accountant:'Бухгалтер'
+};
 
 const ROLE_DEFAULTS = {
  admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
  manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
  operator: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,add_payments:0,add_acts:1,edit_plans:0,manage_employees:0 },
+ accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
  viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
 };
 
@@ -4747,8 +4782,8 @@ function calcBonuses() {
 // ============================================================
 function renderEmployees() {
  if (!document.getElementById('emp-grid')) return; // раздел скрыт
- const roleLabels={admin:' Администратор',manager:' Менеджер',operator:' Оператор',viewer:' Просмотр'};
- const roleColors={admin:'#60A5FA',manager:'#90CAF9',operator:'#81C784',viewer:'#BCAAA4'};
+ const roleLabels={admin:'Администратор',head:'Руководитель',rop:'РОП',manager:'Менеджер',operator:'Оператор',accountant:'Бухгалтер',viewer:'Просмотр'};
+ const roleColors={admin:'#60A5FA',head:'#AB47BC',rop:'#FF7043',manager:'#90CAF9',operator:'#81C784',accountant:'#FBBF24',viewer:'#BCAAA4'};
  const canManage = currentUser && currentUser.access.manage_employees;
 
  // Status filter
@@ -4806,6 +4841,7 @@ function toggleEmpActive(id) {
  const emp = employees.find(function(e){return e.id===id;});
  if (!emp) return;
  emp.active = emp.active === false ? true : false;
+ saveCustomEmployees();
  renderEmployees();
  showNotif(emp.active ? ' Сотрудник восстановлен' : ' Сотрудник помечен как уволенный', emp.name);
 }
@@ -4817,9 +4853,17 @@ function openEmpModal(id=null) {
  document.getElementById('e-name').value=emp?.name||'';
  document.getElementById('e-pos').value=emp?.pos||'';
  document.getElementById('e-email').value=emp?.email||'';
- document.getElementById('e-pass').value=''; // пароль не показываем (хеш)
+ document.getElementById('e-pass').value='';
  document.getElementById('e-role').value=emp?.role||'operator';
  document.getElementById('e-bonus').value=emp?.bonus??30;
+ // Активность toggle
+ var activeEl = document.getElementById('e-active');
+ var activeLbl = document.getElementById('e-active-label');
+ if(activeEl) {
+  activeEl.checked = emp ? emp.active !== false : true;
+  if(activeLbl) activeLbl.textContent = activeEl.checked ? 'Работает' : 'Уволен';
+  activeEl.onchange = function() { if(activeLbl) activeLbl.textContent = this.checked ? 'Работает' : 'Уволен'; activeLbl.style.color = this.checked ? '#81C784' : '#EF5350'; };
+ }
  updateAccessChecks(emp?.access);
  document.getElementById('emp-modal').classList.add('open');
 }
@@ -4833,17 +4877,21 @@ function deleteEmployee(id) {
 }
 
 function updateAccessChecks(existingAccess=null) {
- const role = document.getElementById('e-role').value;
- const defaults = existingAccess || ROLE_DEFAULTS[role] || ROLE_DEFAULTS.viewer;
- document.getElementById('access-grid-modal').innerHTML = ACCESS_KEYS.map(a=>`
- <div class="access-item">
- <div class="access-check ${defaults[a.key]?'on':''}" id="acc-${a.key}" onclick="this.classList.toggle('on')">${defaults[a.key]?'':''}</div>
- ${a.label}
- </div>`).join('');
- // re-bind onclick to also update text
- document.querySelectorAll('.access-check').forEach(el=>{
- el.addEventListener('click',function(){ this.textContent=this.classList.contains('on')?'':''; });
- });
+ var role = document.getElementById('e-role').value;
+ var defaults = existingAccess || ROLE_DEFAULTS[role] || ROLE_DEFAULTS.viewer;
+ var tbody = document.getElementById('access-table-body');
+ if(!tbody) return;
+ var lastGroup = '';
+ tbody.innerHTML = ACCESS_KEYS.map(function(a) {
+  var on = defaults[a.key] ? 1 : 0;
+  var groupHeader = '';
+  if(a.group && a.group !== lastGroup) { lastGroup = a.group; groupHeader = '<tr><td colspan="2" style="padding:8px 4px;font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;font-weight:700;border-bottom:1px solid var(--dark-border)">'+a.group+'</td></tr>'; }
+  return groupHeader + '<tr><td style="padding:6px 4px">' + a.label + '</td>'
+   + '<td style="text-align:center;padding:6px 4px">'
+   + '<div id="acc-'+a.key+'" onclick="this.classList.toggle(\'on\');this.innerHTML=this.classList.contains(\'on\')?\'<span style=color:#4CAF50>&#10004;</span>\':\'<span style=color:#EF5350>&#10006;</span>\'" class="access-check '+(on?'on':'')+'" style="cursor:pointer;width:24px;height:24px;border-radius:6px;border:1px solid var(--dark-border);display:inline-flex;align-items:center;justify-content:center;font-size:13px;transition:all .15s;'+(on?'background:rgba(76,175,80,.1);border-color:rgba(76,175,80,.3)':'background:rgba(239,83,80,.05);border-color:rgba(239,83,80,.15)')+'">'
+   + (on ? '<span style="color:#4CAF50">&#10004;</span>' : '<span style="color:#EF5350">&#10006;</span>')
+   + '</div></td></tr>';
+ }).join('');
 }
 
 async function saveEmployee() {
@@ -4861,9 +4909,11 @@ async function saveEmployee() {
  }
  if (newPass) { passHash = await sha256(newPass); }
  else if (!editId) { passHash = await sha256('1234'); } // дефолтный для нового
- var data={id:editId||nextEmpId++,name:name,pos:document.getElementById('e-pos').value,email:email,pass_hash:passHash,role:document.getElementById('e-role').value,bonus:parseFloat(document.getElementById('e-bonus').value)||0,access:access};
- if(editId){ const i=employees.findIndex(e=>e.id===editId); if(i>=0){data.active=employees[i].active!==false;employees[i]=data;} }
- else { data.active=true; employees.push(data); }
+ var activeToggle = document.getElementById('e-active');
+ var isActive = activeToggle ? activeToggle.checked : true;
+ var data={id:editId||nextEmpId++,name:name,pos:document.getElementById('e-pos').value,email:email,pass_hash:passHash,role:document.getElementById('e-role').value,bonus:parseFloat(document.getElementById('e-bonus').value)||0,access:access,active:isActive};
+ if(editId){ const i=employees.findIndex(e=>e.id===editId); if(i>=0){employees[i]=data;} }
+ else { employees.push(data); }
  saveCustomEmployees();
  closeEmpModal(); renderEmployees(); buildQuickChips(); populateEmployeeSelects();
  if(document.getElementById('user-mgmt-body')) renderUserManagement();
@@ -5316,6 +5366,33 @@ function savePlanFromModal() {
 function toggleProfileEdit(){ const p=document.getElementById('profile-edit-panel'); const show=p.style.display!=='none'; p.style.display=show?'none':'block'; if(!show&&currentUser){document.getElementById('prof-name').value=currentUser.name;document.getElementById('prof-role').value=currentUser.pos;document.getElementById('prof-email').value=currentUser.email;document.getElementById('prof-company').value=profile.company;} }
 function saveProfile(){ if(currentUser){currentUser.name=document.getElementById('prof-name').value||currentUser.name;currentUser.pos=document.getElementById('prof-role').value||currentUser.pos;} profile.company=document.getElementById('prof-company').value||profile.company; document.getElementById('cab-display-name').textContent=currentUser?.name||''; document.getElementById('cab-display-role').textContent=(currentUser?.pos||'')+' · '+profile.company; document.getElementById('profile-edit-panel').style.display='none'; showNotif('Профиль сохранён',''); }
 
+// Avatar upload
+function uploadAvatar(input) {
+ if(!input.files || !input.files[0]) return;
+ var file = input.files[0];
+ if(file.size > 2 * 1024 * 1024) { showNotif('Ошибка','Фото не более 2 МБ'); return; }
+ var reader = new FileReader();
+ reader.onload = function(e) {
+  var dataUrl = e.target.result;
+  var avatarEl = document.getElementById('avatar-initials');
+  if(avatarEl) avatarEl.innerHTML = '<img src="'+dataUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+  // Сохранить в localStorage
+  try { localStorage.setItem('sd_avatar_' + (currentUser ? currentUser.id : '0'), dataUrl); } catch(ex) { console.warn('Avatar too large for localStorage'); }
+  showNotif('Аватарка обновлена','');
+ };
+ reader.readAsDataURL(file);
+}
+function loadAvatar() {
+ if(!currentUser) return;
+ try {
+  var dataUrl = localStorage.getItem('sd_avatar_' + currentUser.id);
+  if(dataUrl) {
+   var avatarEl = document.getElementById('avatar-initials');
+   if(avatarEl) avatarEl.innerHTML = '<img src="'+dataUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+  }
+ } catch(e) {}
+}
+
 // ============================================================
 // NAV
 // ============================================================
@@ -5343,7 +5420,7 @@ function showView(v) {
  });
  // Закрыть popup после выбора
  document.querySelectorAll('.nav-group.touch-open').forEach(function(g){ g.classList.remove('touch-open'); });
- if(v==='cabinet'){renderCabinetPlans();renderPlanHistory();renderCabinetV83();}
+ if(v==='cabinet'){renderCabinetPlans();renderPlanHistory();renderCabinetV83();loadAvatar();}
  if(v==='employees')renderEmployees();
  if(v==='keyclients')renderKeyClients();
  if(v==='ai'){initAiChat();}
