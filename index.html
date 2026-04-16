@@ -5374,9 +5374,11 @@ function uploadAvatar(input) {
  var reader = new FileReader();
  reader.onload = function(e) {
   var dataUrl = e.target.result;
+  var imgTag = '<img src="'+dataUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
   var avatarEl = document.getElementById('avatar-initials');
-  if(avatarEl) avatarEl.innerHTML = '<img src="'+dataUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
-  // Сохранить в localStorage
+  if(avatarEl) avatarEl.innerHTML = imgTag;
+  var sidebarAvatar = document.getElementById('ub-avatar');
+  if(sidebarAvatar) sidebarAvatar.innerHTML = imgTag;
   try { localStorage.setItem('sd_avatar_' + (currentUser ? currentUser.id : '0'), dataUrl); } catch(ex) { console.warn('Avatar too large for localStorage'); }
   showNotif('Аватарка обновлена','');
  };
@@ -5387,8 +5389,12 @@ function loadAvatar() {
  try {
   var dataUrl = localStorage.getItem('sd_avatar_' + currentUser.id);
   if(dataUrl) {
+   var imgTag = '<img src="'+dataUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
    var avatarEl = document.getElementById('avatar-initials');
-   if(avatarEl) avatarEl.innerHTML = '<img src="'+dataUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+   if(avatarEl) avatarEl.innerHTML = imgTag;
+   // Также обновить sidebar аватар
+   var sidebarAvatar = document.getElementById('ub-avatar');
+   if(sidebarAvatar) sidebarAvatar.innerHTML = imgTag;
   }
  } catch(e) {}
 }
@@ -6121,6 +6127,7 @@ async function doLogin() {
  document.getElementById('main-app').style.display = 'block';
 
  applyUserAccess();
+ loadAvatar();
  applyTheme(localStorage.getItem('sd-theme') || 'dark');
  // Привязка к стране: если у пользователя задана country — переключить и скрыть switcher
  if (currentUser.country) {
