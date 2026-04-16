@@ -1907,17 +1907,14 @@ body.light .content td span[style]{color:#2A3042!important}
  </div>
  <div style="overflow-x:auto">
  <table class="data-table">
- <thead><tr><th>Имя</th><th>Должность</th><th>Логин</th><th>Пароль</th><th>Роль</th><th>Статус</th><th></th></tr></thead>
+ <thead><tr><th>Сотрудник</th><th>Должность</th><th>Логин</th><th>Роль</th><th>Статус</th></tr></thead>
  <tbody id="user-mgmt-body"></tbody>
  </table>
  </div>
  </div>
 
- <!-- ADMIN: MANAGE ACCESS -->
- <div class="panel" id="cab-manage-access" style="display:none">
- <div class="panel-title">Управление доступами сотрудников</div>
- <div id="emp-access-list"></div>
- </div>
+ <!-- ADMIN: MANAGE ACCESS — перенесено в карточку сотрудника (модал) -->
+ <div id="emp-access-list" style="display:none"></div>
 
  <!-- CONNECTIONS -->
  <div class="panel">
@@ -7203,23 +7200,17 @@ function switchCabTab(tab, btn) {
 function renderUserManagement() {
  var body = document.getElementById('user-mgmt-body');
  if (!body) return;
- var roleNames = {admin:'Админ', manager:'Менеджер', operator:'Оператор', viewer:'Просмотр'};
- var roleColors = {admin:'#3B82F6', manager:'#81C784', operator:'#FFB74D', viewer:'#90A4AE'};
- body.innerHTML = employees.filter(function(e){ return e.active; }).map(function(e) {
-  var statusBadge = e.active
-   ? '<span style="color:#81C784;font-size:11px;font-weight:600">Активен</span>'
-   : '<span style="color:#EF5350;font-size:11px;font-weight:600">Отключён</span>';
-  var toggleBtn = '<button onclick="toggleUserActive('+e.id+')" style="font-size:9px;padding:2px 8px;border-radius:6px;border:1px solid var(--dark-border);background:'+(e.active?'rgba(239,83,80,.1)':'rgba(129,199,132,.1)')+';color:'+(e.active?'#EF9A9A':'#81C784')+';cursor:pointer;margin-left:4px" title="'+(e.active?'Отключить':'Включить')+'">'+(e.active?'Откл':'Вкл')+'</button>';
-  var delBtn = e.id === 1 ? '' : '<button onclick="deleteUser('+e.id+')" style="font-size:9px;padding:2px 8px;border-radius:6px;border:1px solid rgba(239,83,80,.3);background:rgba(239,83,80,.1);color:#EF9A9A;cursor:pointer" title="Удалить">Удалить</button>';
-  var editBtn = '<button onclick="editUserInline('+e.id+')" style="font-size:9px;padding:2px 8px;border-radius:6px;border:1px solid var(--dark-border);background:rgba(59,130,246,.08);color:var(--gold-bright);cursor:pointer">Изм.</button>';
-  return '<tr>'
-   +'<td style="font-weight:600">'+e.name+'</td>'
+ var rn = ROLE_LABELS || {admin:'Админ',head:'Руководитель',rop:'РОП',manager:'Менеджер',operator:'Оператор',accountant:'Бухгалтер',viewer:'Просмотр'};
+ var rc = {admin:'#3B82F6',head:'#AB47BC',rop:'#FF7043',manager:'#81C784',operator:'#FFB74D',accountant:'#FBBF24',viewer:'#90A4AE'};
+ body.innerHTML = employees.map(function(e) {
+  var isActive = e.active !== false;
+  var statusDot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(isActive?'#4CAF50':'#EF5350')+';margin-right:6px" title="'+(isActive?'Активен':'Отключён')+'"></span>';
+  return '<tr onclick="openEmpModal('+e.id+')" style="cursor:pointer;opacity:'+(isActive?'1':'.5')+'" title="Нажмите для настройки прав">'
+   +'<td style="font-weight:600">'+statusDot+e.name+'</td>'
    +'<td style="color:var(--text-secondary);font-size:11px">'+e.pos+'</td>'
    +'<td><code style="background:var(--dark-card);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--gold-bright)">'+e.email+'</code></td>'
-   +'<td><code style="background:var(--dark-card);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--text-secondary)">***</code></td>'
-   +'<td><span style="font-size:10px;padding:2px 8px;border-radius:12px;background:rgba(255,255,255,.06);color:'+(roleColors[e.role]||'#90A4AE')+';font-weight:600">'+( roleNames[e.role]||e.role)+'</span></td>'
-   +'<td>'+statusBadge+toggleBtn+'</td>'
-   +'<td style="display:flex;gap:4px">'+editBtn+delBtn+'</td>'
+   +'<td><span style="font-size:10px;padding:2px 8px;border-radius:12px;background:rgba(255,255,255,.06);color:'+(rc[e.role]||'#90A4AE')+';font-weight:600">'+(rn[e.role]||e.role)+'</span></td>'
+   +'<td style="text-align:right"><span style="font-size:10px;color:var(--text-muted)">'+(isActive?'Работает':'Уволен')+'</span></td>'
    +'</tr>';
  }).join('');
 }
