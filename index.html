@@ -578,6 +578,36 @@ body:not(.light){background-image:radial-gradient(ellipse 80% 60% at 15% 10%, rg
 .kpi-delta.up{color:#4CAF50;background:rgba(76,175,80,.1)}
 .kpi-delta.down{color:#EF5350;background:rgba(239,83,80,.1)}
 
+/* META ADS KPI */
+.meta-kpi-card{background:var(--dark-panel);border-radius:10px;padding:12px;text-align:center}
+.meta-kpi-label{font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+.meta-kpi-val{font-size:20px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif}
+.meta-month-card{background:var(--dark-card);border:1px solid var(--dark-border);border-radius:10px;padding:12px;text-align:center}
+.meta-month-card .month-name{font-size:11px;color:var(--text-muted);margin-bottom:4px}
+.meta-month-card .month-spend{font-size:18px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif}
+.meta-month-card .month-leads{font-size:11px;color:var(--text-secondary);margin-top:4px}
+.meta-month-card .month-cpl{font-size:11px;margin-top:2px}
+.meta-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.meta-badge-green{background:rgba(76,175,80,.12);color:#4CAF50}
+.meta-badge-blue{background:rgba(59,130,246,.12);color:#3B82F6}
+.meta-badge-orange{background:rgba(255,152,0,.12);color:#FF9800}
+.meta-badge-red{background:rgba(239,83,80,.12);color:#EF5350}
+.meta-badge-gray{background:rgba(148,163,184,.12);color:var(--text-secondary)}
+.meta-upload-chip{font-size:10px;padding:4px 10px;border-radius:20px;background:var(--dark-panel);border:1px solid var(--dark-border);color:var(--text-secondary);display:inline-flex;align-items:center;gap:4px}
+.meta-upload-chip .chip-remove{cursor:pointer;opacity:.5;font-size:12px}
+.meta-upload-chip .chip-remove:hover{opacity:1;color:#EF5350}
+.meta-bar-pct{height:8px;border-radius:4px;background:rgba(59,130,246,.3)}
+.meta-filter-bar{display:flex;gap:0;background:var(--dark-panel);border-radius:8px;padding:3px;border:1px solid var(--dark-border)}
+.meta-filter-btn,.meta-plat-btn{padding:5px 12px;font-size:11px;font-weight:600;border:none;border-radius:6px;cursor:pointer;background:transparent;color:var(--text-muted);font-family:inherit;transition:all .2s}
+.meta-filter-btn.active,.meta-plat-btn.active{background:rgba(59,130,246,.15);color:#3B82F6}
+.meta-filter-btn:hover,.meta-plat-btn:hover{color:var(--text-primary)}
+.meta-kpi-delta{font-size:11px;margin-top:4px;min-height:16px}
+.meta-delta-up{color:#4CAF50}
+.meta-delta-down{color:#EF5350}
+.meta-delta-neutral{color:var(--text-muted)}
+.meta-plat-icon{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px}
+.meta-plat-meta{background:#1877F2}.meta-plat-google{background:#FBBC04}.meta-plat-tiktok{background:#EE1D52}
+
 /* PANEL */
 .panel{background:var(--dark-card);border:1px solid var(--dark-border);border-radius:14px;padding:20px;position:relative;overflow:hidden;margin-bottom:16px}
 .panel::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(59,130,246,.3),transparent)}
@@ -2105,6 +2135,168 @@ body.light .content td span[style]{color:#2A3042!important}
   </div>
   <div id="ltv-status" style="text-align:center;padding:20px;color:var(--text-muted);font-size:12px">Нажмите "Рассчитать LTV" для загрузки данных 2025+2026</div>
  </div>
+
+ <!-- TARGET ADS SECTION -->
+ <div class="panel" style="margin-top:20px;border:1px solid rgba(59,130,246,.2)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+   <div>
+    <div class="panel-title" style="margin-bottom:2px">Таргет: Рекламные кабинеты</div>
+    <div style="font-size:11px;color:var(--text-muted)">Meta Ads, Google Ads, TikTok Ads — загрузите CSV</div>
+   </div>
+   <div style="display:flex;gap:8px;align-items:center">
+    <label style="padding:8px 18px;border-radius:8px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#3B82F6;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+     <span>Загрузить CSV</span>
+     <input type="file" accept=".csv,.tsv,.txt" id="meta-csv-input" onchange="metaCsvUpload(this)" style="display:none" multiple>
+    </label>
+    <button onclick="metaExportReport()" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(52,211,153,.25);background:rgba(52,211,153,.08);color:#34D399;font-size:11px;cursor:pointer;font-weight:600" title="Экспорт отчёта в CSV">Экспорт</button>
+    <button onclick="metaCsvClear()" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(239,83,80,.2);background:transparent;color:#EF5350;font-size:11px;cursor:pointer;font-weight:600" title="Очистить все данные">Очистить</button>
+   </div>
+  </div>
+  <div id="meta-csv-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
+
+  <!-- Upload history -->
+  <div id="meta-upload-history" style="display:none;margin-bottom:16px">
+   <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">История загрузок:</div>
+   <div id="meta-upload-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+  </div>
+
+  <!-- Dashboard container - hidden until data loaded -->
+  <div id="meta-ads-dashboard" style="display:none">
+
+   <!-- Filter bar -->
+   <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <div class="meta-filter-bar">
+     <button class="meta-filter-btn" onclick="metaSetFilter('7',this)">7 дней</button>
+     <button class="meta-filter-btn" onclick="metaSetFilter('30',this)">30 дней</button>
+     <button class="meta-filter-btn" onclick="metaSetFilter('90',this)">90 дней</button>
+     <button class="meta-filter-btn active" onclick="metaSetFilter('all',this)">Всё</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;margin-left:8px">
+     <input type="date" id="meta-date-from" onchange="metaSetFilter('custom')" style="padding:5px 8px;border-radius:6px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:11px;font-family:inherit">
+     <span style="color:var(--text-muted);font-size:11px">—</span>
+     <input type="date" id="meta-date-to" onchange="metaSetFilter('custom')" style="padding:5px 8px;border-radius:6px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:11px;font-family:inherit">
+    </div>
+    <!-- Platform filter -->
+    <div class="meta-filter-bar" style="margin-left:auto">
+     <button class="meta-plat-btn active" onclick="metaSetPlatform('all',this)">Все</button>
+     <button class="meta-plat-btn" onclick="metaSetPlatform('meta',this)">Meta</button>
+     <button class="meta-plat-btn" onclick="metaSetPlatform('google',this)">Google</button>
+     <button class="meta-plat-btn" onclick="metaSetPlatform('tiktok',this)">TikTok</button>
+    </div>
+   </div>
+
+   <!-- Date range -->
+   <div id="meta-date-range" style="font-size:13px;color:var(--text-secondary);margin-bottom:16px"></div>
+
+   <!-- KPI row -->
+   <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:6px" id="meta-kpi-row">
+    <div class="meta-kpi-card"><div class="meta-kpi-label">Потрачено</div><div class="meta-kpi-val" id="meta-k-spend">—</div><div class="meta-kpi-delta" id="meta-d-spend"></div></div>
+    <div class="meta-kpi-card"><div class="meta-kpi-label">Все лиды</div><div class="meta-kpi-val" id="meta-k-leads">—</div><div class="meta-kpi-delta" id="meta-d-leads"></div></div>
+    <div class="meta-kpi-card"><div class="meta-kpi-label">CPL средний</div><div class="meta-kpi-val" id="meta-k-cpl">—</div><div class="meta-kpi-delta" id="meta-d-cpl"></div></div>
+    <div class="meta-kpi-card"><div class="meta-kpi-label">Охват</div><div class="meta-kpi-val" id="meta-k-reach">—</div><div class="meta-kpi-delta" id="meta-d-reach"></div></div>
+    <div class="meta-kpi-card"><div class="meta-kpi-label">Показы</div><div class="meta-kpi-val" id="meta-k-impressions">—</div><div class="meta-kpi-delta" id="meta-d-impressions"></div></div>
+    <div class="meta-kpi-card"><div class="meta-kpi-label">Клики</div><div class="meta-kpi-val" id="meta-k-clicks">—</div><div class="meta-kpi-delta" id="meta-d-clicks"></div></div>
+   </div>
+   <!-- Comparison previous period -->
+   <div id="meta-comparison-row" style="display:none;margin-bottom:16px;padding:8px 12px;background:var(--dark-panel);border-radius:8px;font-size:11px;color:var(--text-muted)"></div>
+
+   <!-- Campaign table -->
+   <div class="panel" style="padding:16px;margin-bottom:12px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">Детализация по кампаниям</div>
+    <div style="overflow-x:auto">
+     <table class="data-table" style="min-width:800px">
+      <thead><tr>
+       <th style="text-align:left">Кампания</th><th>Расход</th><th>Лиды</th><th>CPL</th>
+       <th>Охват</th><th>Показы</th><th>Частота</th><th>Клики</th><th>CTR</th><th>CPC</th><th>CPM</th><th>Объявл.</th>
+      </tr></thead>
+      <tbody id="meta-campaign-table"></tbody>
+     </table>
+    </div>
+   </div>
+
+   <!-- Region table -->
+   <div class="panel" style="padding:16px;margin-bottom:12px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">Детализация по регионам / группам</div>
+    <div style="overflow-x:auto">
+     <table class="data-table">
+      <thead><tr>
+       <th style="text-align:left">Группа / Регион</th><th>Расход</th><th>Лиды</th><th>CPL</th><th>Охват</th><th>Доля расхода</th>
+      </tr></thead>
+      <tbody id="meta-region-table"></tbody>
+     </table>
+    </div>
+   </div>
+
+   <!-- Monthly cards -->
+   <div id="meta-monthly-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px"></div>
+
+   <!-- Charts row 1 -->
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div class="panel" style="padding:16px">
+     <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">Расходы по месяцам и кампаниям</div>
+     <div style="position:relative;height:220px"><canvas id="meta-chart-month-campaign"></canvas></div>
+    </div>
+    <div class="panel" style="padding:16px">
+     <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">Динамика CPL по месяцам</div>
+     <div style="position:relative;height:220px"><canvas id="meta-chart-cpl-trend"></canvas></div>
+    </div>
+   </div>
+
+   <!-- Charts row 2 -->
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div class="panel" style="padding:16px">
+     <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">Доля расходов по кампаниям</div>
+     <div style="position:relative;height:200px"><canvas id="meta-chart-spend-pie"></canvas></div>
+    </div>
+    <div class="panel" style="padding:16px">
+     <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">Лиды по регионам</div>
+     <div style="position:relative;height:200px"><canvas id="meta-chart-region-leads"></canvas></div>
+    </div>
+   </div>
+
+   <!-- Charts row 3 -->
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div class="panel" style="padding:16px">
+     <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">CPL по объявлениям</div>
+     <div style="position:relative;height:280px"><canvas id="meta-chart-cpl-ads"></canvas></div>
+    </div>
+    <div class="panel" style="padding:16px">
+     <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">Эффективность: Лиды vs CPL</div>
+     <div style="position:relative;height:280px"><canvas id="meta-chart-efficiency"></canvas></div>
+    </div>
+   </div>
+
+   <!-- Ad status cards -->
+   <div class="panel" style="padding:16px;margin-bottom:12px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">Статусы объявлений</div>
+    <div id="meta-status-cards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px"></div>
+   </div>
+
+   <!-- All ads table -->
+   <div class="panel" style="padding:16px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">Все объявления (детально) <span id="meta-ads-count" style="font-size:12px;color:var(--text-muted);font-weight:400"></span></div>
+    <div style="overflow-x:auto">
+     <table class="data-table" style="min-width:1100px">
+      <thead><tr>
+       <th style="text-align:left">Платф.</th><th style="text-align:left">Кампания</th><th style="text-align:left">Группа</th><th style="text-align:left">Объявление</th>
+       <th>Статус</th><th>Расход</th><th>Лиды</th><th>CPL</th><th>Охват</th><th>Показы</th><th>Частота</th><th>Клики</th><th>CTR</th><th>CPC</th><th>CPM</th><th>Старт</th>
+      </tr></thead>
+      <tbody id="meta-all-ads-table"></tbody>
+     </table>
+    </div>
+   </div>
+
+  </div><!-- /meta-ads-dashboard -->
+
+  <!-- Empty state -->
+  <div id="meta-ads-empty" style="text-align:center;padding:30px 20px;color:var(--text-muted)">
+   <div style="font-size:32px;margin-bottom:12px"></div>
+   <div style="font-size:13px;margin-bottom:8px">Загрузите CSV из рекламного кабинета</div>
+   <div style="font-size:11px;color:var(--text-muted)">Meta Ads, Google Ads, TikTok Ads — платформа определяется автоматически</div>
+  </div>
+ </div>
+ <!-- /TARGET ADS SECTION -->
+
 </div>
  <!-- /MARKETING VIEW -->
 
@@ -7534,6 +7726,637 @@ window.mktAutoCalc = function() {
 };
 
 // /MARKETING
+
+// ===== META ADS CSV DASHBOARD =====
+(function(){
+var META_STORAGE_KEY = 'meta_ads_data';
+var META_UPLOADS_KEY = 'meta_ads_uploads';
+var META_FILTER_KEY = 'meta_ads_filter';
+var META_PLATFORM_KEY = 'meta_ads_platform';
+var _metaCharts = {};
+var _metaFilter = 'all';
+var _metaPlatform = 'all';
+
+try { _metaFilter = localStorage.getItem(META_FILTER_KEY) || 'all'; } catch(e) {}
+try { _metaPlatform = localStorage.getItem(META_PLATFORM_KEY) || 'all'; } catch(e) {}
+
+function ensureChartJS(cb) {
+ if (window.Chart) return cb();
+ var s = document.createElement('script');
+ s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
+ s.onload = cb;
+ document.head.appendChild(s);
+}
+
+// ---- CSV PARSING ----
+function parseCSV(text) {
+ var sep = ',';
+ var firstLine = text.split('\n')[0];
+ if (firstLine.split('\t').length > firstLine.split(',').length) sep = '\t';
+ if (firstLine.split(';').length > firstLine.split(sep).length) sep = ';';
+ var lines = []; var current = ''; var inQ = false;
+ for (var i = 0; i < text.length; i++) {
+  var ch = text[i];
+  if (ch === '"') { inQ = !inQ; current += ch; }
+  else if (ch === '\n' && !inQ) { lines.push(current); current = ''; }
+  else if (ch === '\r' && !inQ) {}
+  else { current += ch; }
+ }
+ if (current.trim()) lines.push(current);
+ if (lines.length < 2) return { headers: [], rows: [] };
+ function splitRow(line) {
+  var fields = []; var field = ''; var q = false;
+  for (var i = 0; i < line.length; i++) {
+   var c = line[i];
+   if (c === '"') { q = !q; }
+   else if (c === sep && !q) { fields.push(field.trim()); field = ''; }
+   else { field += c; }
+  }
+  fields.push(field.trim());
+  return fields;
+ }
+ var headers = splitRow(lines[0]);
+ var rows = [];
+ for (var i = 1; i < lines.length; i++) {
+  if (!lines[i].trim()) continue;
+  var vals = splitRow(lines[i]);
+  var obj = {};
+  for (var j = 0; j < headers.length; j++) obj[headers[j]] = vals[j] || '';
+  rows.push(obj);
+ }
+ return { headers: headers, rows: rows };
+}
+
+// ---- PLATFORM DETECTION ----
+function detectPlatform(headers) {
+ var joined = headers.join(' ').toLowerCase();
+ if (joined.indexOf('ad set') !== -1 || joined.indexOf('adset') !== -1 || joined.indexOf('amount spent') !== -1 || joined.indexOf('группаобъявлений') !== -1) return 'meta';
+ if (joined.indexOf('ad group') !== -1 || joined.indexOf('conversions') !== -1 || joined.indexOf('conv. value') !== -1 || joined.indexOf('группа объявлений') !== -1 || joined.indexOf('конверсии') !== -1) return 'google';
+ if (joined.indexOf('ad group name') !== -1 && (joined.indexOf('total cost') !== -1 || joined.indexOf('cost per result') !== -1)) return 'tiktok';
+ if (joined.indexOf('campaign') !== -1 && joined.indexOf('cost') !== -1) return 'google';
+ return 'meta'; // default
+}
+
+// ---- COLUMN MAPPING ----
+function num(v) {
+ if (!v && v !== 0) return 0;
+ v = String(v).replace(/\s/g, '').replace(',', '.');
+ return parseFloat(v) || 0;
+}
+function parseDate(v) {
+ if (!v) return '';
+ var m = String(v).match(/(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{2,4})/);
+ if (m) { var y = parseInt(m[3]); if (y < 100) y += 2000; return m[1].padStart(2,'0') + '.' + m[2].padStart(2,'0') + '.' + String(y % 100).padStart(2,'0'); }
+ m = String(v).match(/(\d{4})-(\d{2})-(\d{2})/);
+ if (m) return m[3] + '.' + m[2] + '.' + String(parseInt(m[1]) % 100).padStart(2,'0');
+ return v;
+}
+function findCol(row, keys) {
+ var rk = Object.keys(row);
+ for (var i = 0; i < rk.length; i++) {
+  var k = rk[i].toLowerCase().replace(/[^a-zа-яё0-9]/gi, '');
+  for (var j = 0; j < keys.length; j++) {
+   if (k.indexOf(keys[j].toLowerCase().replace(/[^a-zа-яё0-9]/gi, '')) !== -1) return row[rk[i]];
+  }
+ }
+ return '';
+}
+function parseStatus(raw) {
+ var s = String(raw).toLowerCase();
+ if (s.indexOf('inact') !== -1 || s.indexOf('paus') !== -1 || s === 'paused') return 'inactive';
+ if (s.indexOf('not_deliver') !== -1 || s.indexOf('notdeliver') !== -1 || s.indexOf('stopped') !== -1 || s.indexOf('limit') !== -1 || s.indexOf('enabled') !== -1 && s.indexOf('not') !== -1) return 'not_delivering';
+ if (s.indexOf('archiv') !== -1 || s.indexOf('delet') !== -1 || s.indexOf('removed') !== -1) return 'archived';
+ if (s.indexOf('active') !== -1 || s.indexOf('enabled') !== -1 || s.indexOf('eligible') !== -1) return 'active';
+ return 'active';
+}
+
+function mapMetaRow(row) {
+ return {
+  platform: 'meta',
+  campaign: findCol(row, ['campaignname','campaign','кампания','названиекампании']) || 'Unknown',
+  group: findCol(row, ['adsetname','adset','группаобъявлений','группа','setname']) || '',
+  ad: findCol(row, ['adname','названиеобъявления','объявление']) || '',
+  status: parseStatus(findCol(row, ['deliverystatus','delivery','status','статус','effectivestatus'])),
+  spend: num(findCol(row, ['amountspent','amount','расход','потрачено','spent','cost','затраты','израсходовано'])),
+  reach: num(findCol(row, ['reach','охват'])),
+  impressions: num(findCol(row, ['impressions','показы','impression'])),
+  frequency: num(findCol(row, ['frequency','частота'])),
+  clicks: num(findCol(row, ['linkclicks','clicks','клики','кликиссылк','linkclic'])),
+  leads: num(findCol(row, ['results','result','результат','лиды','leads','конверси'])),
+  cpr: num(findCol(row, ['costperresult','costper','ценазарезультат','cpl','цена'])),
+  cpm: num(findCol(row, ['cpm','cpmprice','ценазапоказ'])),
+  cpc: num(findCol(row, ['costperclick','cpc','ценазаклик','costperlinkclick'])),
+  ctr: num(findCol(row, ['ctr','clickthroughrate','кликабельность'])),
+  start: parseDate(findCol(row, ['reportingstart','starts','начало','startdate','дата','reporting']))
+ };
+}
+
+function mapGoogleRow(row) {
+ var spend = num(findCol(row, ['cost','стоимость','расход','costmicros']));
+ var clicks = num(findCol(row, ['clicks','клики']));
+ var impr = num(findCol(row, ['impressions','impr','показы']));
+ var conv = num(findCol(row, ['conversions','конверсии','allconv']));
+ var cpc = clicks > 0 ? spend / clicks : 0;
+ var cpm = impr > 0 ? spend / impr * 1000 : 0;
+ var ctr = impr > 0 ? clicks / impr * 100 : 0;
+ var cpr = conv > 0 ? spend / conv : 0;
+ return {
+  platform: 'google',
+  campaign: findCol(row, ['campaign','кампания']) || 'Unknown',
+  group: findCol(row, ['adgroup','группаобъявлений','группа']) || '',
+  ad: findCol(row, ['adname','headline','объявление','заголовок']) || '',
+  status: parseStatus(findCol(row, ['campaignstatus','adstatus','status','статус','состояние'])),
+  spend: spend, reach: 0,
+  impressions: impr,
+  frequency: 0,
+  clicks: clicks,
+  leads: conv, cpr: cpr, cpm: cpm, cpc: cpc, ctr: ctr,
+  start: parseDate(findCol(row, ['day','date','дата','день','startdate','reportingstart']))
+ };
+}
+
+function mapTikTokRow(row) {
+ var spend = num(findCol(row, ['totalcost','cost','spend','расход','стоимость']));
+ var clicks = num(findCol(row, ['clicks','клики']));
+ var impr = num(findCol(row, ['impressions','показы','impression']));
+ var conv = num(findCol(row, ['result','results','conversion','конверси']));
+ var reach = num(findCol(row, ['reach','охват']));
+ var cpc = clicks > 0 ? spend / clicks : 0;
+ var cpm = impr > 0 ? spend / impr * 1000 : 0;
+ var ctr = impr > 0 ? clicks / impr * 100 : 0;
+ var cpr = conv > 0 ? spend / conv : 0;
+ var freq = reach > 0 ? impr / reach : 0;
+ return {
+  platform: 'tiktok',
+  campaign: findCol(row, ['campaignname','campaign','кампания']) || 'Unknown',
+  group: findCol(row, ['adgroupname','adgroup','группа']) || '',
+  ad: findCol(row, ['adname','объявление','ad']) || '',
+  status: parseStatus(findCol(row, ['status','статус','deliverystatus'])),
+  spend: spend, reach: reach,
+  impressions: impr, frequency: freq,
+  clicks: clicks, leads: conv, cpr: cpr, cpm: cpm, cpc: cpc, ctr: ctr,
+  start: parseDate(findCol(row, ['date','дата','day','reportdate']))
+ };
+}
+
+// ---- STORAGE ----
+function metaLoadData() { try { return JSON.parse(localStorage.getItem(META_STORAGE_KEY)) || []; } catch(e) { return []; } }
+function metaSaveData(ads) { try { localStorage.setItem(META_STORAGE_KEY, JSON.stringify(ads)); } catch(e) {} }
+function metaLoadUploads() { try { return JSON.parse(localStorage.getItem(META_UPLOADS_KEY)) || []; } catch(e) { return []; } }
+function metaSaveUploads(list) { try { localStorage.setItem(META_UPLOADS_KEY, JSON.stringify(list)); } catch(e) {} }
+
+// ---- DATE HELPERS ----
+function parseMetaDate(dateStr) {
+ if (!dateStr) return new Date(0);
+ var p = dateStr.split('.');
+ if (p.length < 3) return new Date(0);
+ var y = parseInt(p[2]); if (y < 100) y += 2000;
+ return new Date(y, parseInt(p[1]) - 1, parseInt(p[0]));
+}
+
+// ---- FILTER ----
+function metaFilterAds(allAds) {
+ var ads = allAds;
+ // Platform filter
+ if (_metaPlatform !== 'all') ads = ads.filter(function(a) { return a.platform === _metaPlatform; });
+ // Date filter
+ if (_metaFilter === 'all') return ads;
+ var now = new Date(); now.setHours(23,59,59);
+ var from, to = now;
+ if (_metaFilter === '7') { from = new Date(now); from.setDate(from.getDate() - 7); }
+ else if (_metaFilter === '30') { from = new Date(now); from.setDate(from.getDate() - 30); }
+ else if (_metaFilter === '90') { from = new Date(now); from.setDate(from.getDate() - 90); }
+ else if (_metaFilter === 'custom') {
+  var f = document.getElementById('meta-date-from');
+  var t = document.getElementById('meta-date-to');
+  if (f && f.value) from = new Date(f.value);
+  if (t && t.value) { to = new Date(t.value); to.setHours(23,59,59); }
+  if (!from) return ads;
+ } else return ads;
+ return ads.filter(function(a) {
+  if (!a.start) return false;
+  var d = parseMetaDate(a.start);
+  return d >= from && d <= to;
+ });
+}
+
+function metaGetPrevPeriodAds(allAds) {
+ if (_metaFilter === 'all' || _metaFilter === 'custom') return [];
+ var days = parseInt(_metaFilter);
+ if (!days) return [];
+ var now = new Date(); now.setHours(23,59,59);
+ var curFrom = new Date(now); curFrom.setDate(curFrom.getDate() - days);
+ var prevFrom = new Date(curFrom); prevFrom.setDate(prevFrom.getDate() - days);
+ var prevTo = new Date(curFrom); prevTo.setDate(prevTo.getDate() - 1); prevTo.setHours(23,59,59);
+ var platAds = _metaPlatform !== 'all' ? allAds.filter(function(a) { return a.platform === _metaPlatform; }) : allAds;
+ return platAds.filter(function(a) {
+  if (!a.start) return false;
+  var d = parseMetaDate(a.start);
+  return d >= prevFrom && d <= prevTo;
+ });
+}
+
+function metaSumTotals(ads) {
+ var t = {spend:0, leads:0, reach:0, impressions:0, clicks:0};
+ ads.forEach(function(a) { t.spend += a.spend; t.leads += a.leads; t.reach += a.reach; t.impressions += a.impressions; t.clicks += a.clicks; });
+ t.cpl = t.leads > 0 ? t.spend / t.leads : 0;
+ return t;
+}
+
+function metaDeltaHtml(cur, prev, key, invert) {
+ if (!prev || !prev[key]) return '';
+ var pct = prev[key] !== 0 ? ((cur[key] - prev[key]) / prev[key] * 100) : 0;
+ if (Math.abs(pct) < 0.5) return '<span class="meta-delta-neutral">—</span>';
+ var up = pct > 0;
+ var good = invert ? !up : up;
+ var cls = good ? 'meta-delta-up' : 'meta-delta-down';
+ var arrow = up ? '\u2191' : '\u2193';
+ return '<span class="' + cls + '">' + arrow + Math.abs(pct).toFixed(0) + '%</span>';
+}
+
+// ---- UPLOAD HANDLER ----
+window.metaCsvUpload = function(input) {
+ var files = input.files;
+ if (!files || !files.length) return;
+ var statusEl = document.getElementById('meta-csv-status');
+ var totalNew = 0; var processed = 0;
+ var existingAds = metaLoadData();
+ var uploads = metaLoadUploads();
+
+ function processFile(file) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+   var parsed = parseCSV(e.target.result);
+   var platform = detectPlatform(parsed.headers);
+   var mapper = platform === 'google' ? mapGoogleRow : platform === 'tiktok' ? mapTikTokRow : mapMetaRow;
+   var mapped = parsed.rows.map(mapper).filter(function(a) { return a.spend > 0 || a.reach > 0 || a.impressions > 0; });
+
+   mapped.forEach(function(ad) {
+    var isDup = existingAds.some(function(ex) {
+     return ex.campaign === ad.campaign && ex.group === ad.group && ex.ad === ad.ad
+       && Math.abs(ex.spend - ad.spend) < 0.01 && ex.reach === ad.reach && ex.platform === ad.platform;
+    });
+    if (!isDup) { existingAds.push(ad); totalNew++; }
+   });
+
+   var platLabel = {meta:'Meta', google:'Google', tiktok:'TikTok'}[platform] || platform;
+   uploads.push({ name: file.name, date: new Date().toLocaleDateString('ru-RU'), rows: mapped.length, platform: platLabel });
+   processed++;
+
+   if (processed === files.length) {
+    metaSaveData(existingAds);
+    metaSaveUploads(uploads);
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Загружено ' + totalNew + ' новых записей из ' + files.length + ' файл(ов)'; }
+    input.value = '';
+    metaRenderAll(existingAds);
+    setTimeout(function() { if (statusEl) statusEl.style.display = 'none'; }, 5000);
+   }
+  };
+  reader.readAsText(file, 'UTF-8');
+ }
+ for (var i = 0; i < files.length; i++) processFile(files[i]);
+};
+
+window.metaCsvClear = function() {
+ if (!confirm('Очистить все данные рекламных кабинетов?')) return;
+ localStorage.removeItem(META_STORAGE_KEY);
+ localStorage.removeItem(META_UPLOADS_KEY);
+ document.getElementById('meta-ads-dashboard').style.display = 'none';
+ document.getElementById('meta-ads-empty').style.display = 'block';
+ document.getElementById('meta-upload-history').style.display = 'none';
+ Object.keys(_metaCharts).forEach(function(k) { if (_metaCharts[k]) { _metaCharts[k].destroy(); delete _metaCharts[k]; } });
+};
+
+// ---- FILTER UI ----
+window.metaSetFilter = function(f, btn) {
+ _metaFilter = f;
+ try { localStorage.setItem(META_FILTER_KEY, f); } catch(e) {}
+ if (btn) {
+  document.querySelectorAll('.meta-filter-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+ } else if (f === 'custom') {
+  document.querySelectorAll('.meta-filter-btn').forEach(function(b) { b.classList.remove('active'); });
+ }
+ metaRenderAll(metaLoadData());
+};
+
+window.metaSetPlatform = function(p, btn) {
+ _metaPlatform = p;
+ try { localStorage.setItem(META_PLATFORM_KEY, p); } catch(e) {}
+ document.querySelectorAll('.meta-plat-btn').forEach(function(b) { b.classList.remove('active'); });
+ if (btn) btn.classList.add('active');
+ metaRenderAll(metaLoadData());
+};
+
+// ---- FORMATTING ----
+function mf(n) { return n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : n.toFixed(0); }
+function mfDollar(n) { return '$' + (n >= 1000 ? mf(n) : n.toFixed(0)); }
+function mfFull(n) { return n.toLocaleString('ru-RU', {maximumFractionDigits:0}); }
+
+// ---- AGGREGATION ----
+function aggregateByCampaign(ads) {
+ var map = {};
+ ads.forEach(function(a) {
+  if (!map[a.campaign]) map[a.campaign] = {campaign:a.campaign, spend:0, leads:0, reach:0, impressions:0, clicks:0, adCount:0};
+  var c = map[a.campaign];
+  c.spend += a.spend; c.leads += a.leads; c.reach += a.reach;
+  c.impressions += a.impressions; c.clicks += a.clicks; c.adCount++;
+ });
+ return Object.values(map).sort(function(a,b) { return b.spend - a.spend; });
+}
+function aggregateByGroup(ads) {
+ var map = {};
+ ads.forEach(function(a) {
+  var key = a.group || a.campaign;
+  if (!map[key]) map[key] = {group:key, spend:0, leads:0, reach:0, impressions:0, clicks:0};
+  var g = map[key];
+  g.spend += a.spend; g.leads += a.leads; g.reach += a.reach; g.impressions += a.impressions; g.clicks += a.clicks;
+ });
+ return Object.values(map).sort(function(a,b) { return b.spend - a.spend; });
+}
+function aggregateByMonth(ads) {
+ var map = {};
+ var mn = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+ ads.forEach(function(a) {
+  if (!a.start) return;
+  var parts = a.start.split('.'); if (parts.length < 3) return;
+  var m = parseInt(parts[1]) - 1;
+  var y = parseInt(parts[2]); if (y < 100) y += 2000;
+  var key = y + '-' + String(m).padStart(2,'0');
+  if (!map[key]) map[key] = {key:key, month:m, year:y, name:mn[m], spend:0, leads:0, reach:0, impressions:0, clicks:0, campaigns:{}};
+  var mo = map[key];
+  mo.spend += a.spend; mo.leads += a.leads; mo.reach += a.reach; mo.impressions += a.impressions; mo.clicks += a.clicks;
+  if (!mo.campaigns[a.campaign]) mo.campaigns[a.campaign] = 0;
+  mo.campaigns[a.campaign] += a.spend;
+ });
+ return Object.values(map).sort(function(a,b) { return a.key < b.key ? -1 : 1; });
+}
+
+function metaStatusBadge(s) {
+ var cls = {active:'meta-badge-green', inactive:'meta-badge-orange', not_delivering:'meta-badge-gray', archived:'meta-badge-red'};
+ var lbl = {active:'Active', inactive:'Inactive', not_delivering:'Stopped', archived:'Archived'};
+ return '<span class="meta-badge ' + (cls[s]||'meta-badge-gray') + '">' + (lbl[s]||s) + '</span>';
+}
+
+function platIcon(p) {
+ var cls = {meta:'meta-plat-meta', google:'meta-plat-google', tiktok:'meta-plat-tiktok'};
+ var lbl = {meta:'M', google:'G', tiktok:'T'};
+ return '<span class="meta-plat-icon ' + (cls[p]||'') + '" title="' + (p||'') + '"></span>';
+}
+
+// ---- RENDER ALL ----
+function metaRenderAll(allAds) {
+ if (!allAds || !allAds.length) {
+  document.getElementById('meta-ads-dashboard').style.display = 'none';
+  document.getElementById('meta-ads-empty').style.display = 'block';
+  return;
+ }
+ document.getElementById('meta-ads-dashboard').style.display = 'block';
+ document.getElementById('meta-ads-empty').style.display = 'none';
+
+ // Restore filter UI state
+ document.querySelectorAll('.meta-filter-btn').forEach(function(b) {
+  var v = b.getAttribute('onclick').match(/'([^']+)'/);
+  if (v && v[1] === _metaFilter) b.classList.add('active'); else if (_metaFilter === 'custom') b.classList.remove('active');
+ });
+ document.querySelectorAll('.meta-plat-btn').forEach(function(b) {
+  var v = b.getAttribute('onclick').match(/'([^']+)'/);
+  if (v && v[1] === _metaPlatform) b.classList.add('active'); else b.classList.remove('active');
+ });
+
+ var ads = metaFilterAds(allAds);
+
+ // Upload history
+ var uploads = metaLoadUploads();
+ var histEl = document.getElementById('meta-upload-history');
+ var listEl = document.getElementById('meta-upload-list');
+ if (uploads.length) {
+  histEl.style.display = 'block';
+  listEl.innerHTML = uploads.map(function(u, i) {
+   var platBadge = u.platform ? '<span class="meta-plat-icon meta-plat-' + (u.platform||'').toLowerCase() + '"></span>' : '';
+   return '<span class="meta-upload-chip">' + platBadge + u.name + ' (' + u.date + ') <span class="chip-remove" onclick="metaRemoveUpload('+i+')">&times;</span></span>';
+  }).join('');
+ } else { histEl.style.display = 'none'; }
+
+ // Totals
+ var cur = metaSumTotals(ads);
+ var totalSpend = cur.spend;
+
+ // Date range
+ var minDate = '', maxDate = '';
+ ads.forEach(function(a) {
+  if (a.start) { if (!minDate || a.start < minDate) minDate = a.start; if (!maxDate || a.start > maxDate) maxDate = a.start; }
+ });
+ var dateEl = document.getElementById('meta-date-range');
+ if (dateEl && minDate) {
+  var days = Math.max(1, Math.round((parseMetaDate(maxDate) - parseMetaDate(minDate)) / 86400000)) + 1;
+  dateEl.innerHTML = '<span style="font-weight:600">Таргет: полная аналитика</span> <span style="color:var(--text-muted);font-size:12px">' + minDate + ' — ' + maxDate + ' (' + days + ' дн.)</span>';
+ } else if (dateEl) { dateEl.innerHTML = ''; }
+
+ // Comparison
+ var prev = metaSumTotals(metaGetPrevPeriodAds(allAds));
+ var hasPrev = prev.spend > 0 || prev.leads > 0;
+
+ // KPI
+ document.getElementById('meta-k-spend').textContent = mfDollar(cur.spend);
+ document.getElementById('meta-k-leads').textContent = mfFull(cur.leads);
+ document.getElementById('meta-k-cpl').textContent = cur.leads > 0 ? '$' + (cur.spend / cur.leads).toFixed(2) : '—';
+ document.getElementById('meta-k-reach').textContent = mf(cur.reach);
+ document.getElementById('meta-k-impressions').textContent = mf(cur.impressions);
+ document.getElementById('meta-k-clicks').textContent = mfFull(cur.clicks);
+
+ // Deltas
+ document.getElementById('meta-d-spend').innerHTML = hasPrev ? metaDeltaHtml(cur, prev, 'spend', false) : '';
+ document.getElementById('meta-d-leads').innerHTML = hasPrev ? metaDeltaHtml(cur, prev, 'leads', false) : '';
+ document.getElementById('meta-d-cpl').innerHTML = hasPrev && cur.cpl && prev.cpl ? metaDeltaHtml(cur, prev, 'cpl', true) : '';
+ document.getElementById('meta-d-reach').innerHTML = hasPrev ? metaDeltaHtml(cur, prev, 'reach', false) : '';
+ document.getElementById('meta-d-impressions').innerHTML = hasPrev ? metaDeltaHtml(cur, prev, 'impressions', false) : '';
+ document.getElementById('meta-d-clicks').innerHTML = hasPrev ? metaDeltaHtml(cur, prev, 'clicks', false) : '';
+
+ // Comparison row
+ var compRow = document.getElementById('meta-comparison-row');
+ if (hasPrev && compRow) {
+  compRow.style.display = 'flex';
+  compRow.innerHTML = '<span style="margin-right:12px">Пред. период:</span>'
+   + '<span style="margin-right:16px">Расход: ' + mfDollar(prev.spend) + '</span>'
+   + '<span style="margin-right:16px">Лиды: ' + mfFull(prev.leads) + '</span>'
+   + '<span style="margin-right:16px">CPL: ' + (prev.cpl ? '$' + prev.cpl.toFixed(2) : '—') + '</span>'
+   + '<span style="margin-right:16px">Охват: ' + mf(prev.reach) + '</span>'
+   + '<span>Клики: ' + mfFull(prev.clicks) + '</span>';
+ } else if (compRow) { compRow.style.display = 'none'; }
+
+ // Campaign table
+ var campaigns = aggregateByCampaign(ads);
+ var ctb = document.getElementById('meta-campaign-table');
+ ctb.innerHTML = campaigns.map(function(c, i) {
+  var freq = c.reach > 0 ? (c.impressions / c.reach).toFixed(2) : '—';
+  var ctr = c.impressions > 0 ? (c.clicks / c.impressions * 100).toFixed(2) + '%' : '—';
+  var cpc = c.clicks > 0 ? '$' + (c.spend / c.clicks).toFixed(2) : '—';
+  var cpm = c.impressions > 0 ? '$' + (c.spend / c.impressions * 1000).toFixed(2) : '—';
+  var cpl = c.leads > 0 ? '$' + (c.spend / c.leads).toFixed(2) : '—';
+  var cplColor = c.leads > 0 ? ((c.spend/c.leads) < 8 ? '#4CAF50' : (c.spend/c.leads) < 12 ? '#FF9800' : '#EF5350') : 'inherit';
+  var leadsBadge = c.leads > 0 ? '<span class="meta-badge ' + (c.leads >= 50 ? 'meta-badge-green' : 'meta-badge-blue') + '">' + c.leads + '</span>' : '<span style="color:var(--text-muted)">—</span>';
+  var bg = i % 2 === 0 ? 'background:var(--dark-panel)' : '';
+  return '<tr style="border-bottom:1px solid var(--dark-border);' + bg + '"><td style="padding:10px 4px;font-weight:600">' + c.campaign + '</td><td style="text-align:right;padding:10px 4px;font-weight:600">$' + mfFull(c.spend) + '</td><td style="text-align:right;padding:10px 4px">' + leadsBadge + '</td><td style="text-align:right;padding:10px 4px;color:' + cplColor + '">' + cpl + '</td><td style="text-align:right;padding:10px 4px">' + mf(c.reach) + '</td><td style="text-align:right;padding:10px 4px">' + mf(c.impressions) + '</td><td style="text-align:right;padding:10px 4px">' + freq + '</td><td style="text-align:right;padding:10px 4px">' + mfFull(c.clicks) + '</td><td style="text-align:right;padding:10px 4px">' + ctr + '</td><td style="text-align:right;padding:10px 4px">' + cpc + '</td><td style="text-align:right;padding:10px 4px">' + cpm + '</td><td style="text-align:right;padding:10px 4px">' + c.adCount + '</td></tr>';
+ }).join('');
+
+ // Region table
+ var groups = aggregateByGroup(ads);
+ var rtb = document.getElementById('meta-region-table');
+ rtb.innerHTML = groups.map(function(g, i) {
+  var cpl = g.leads > 0 ? '$' + (g.spend / g.leads).toFixed(2) : '—';
+  var cplColor = g.leads > 0 ? ((g.spend/g.leads) < 8 ? '#4CAF50' : (g.spend/g.leads) < 12 ? '#FF9800' : '#EF5350') : 'var(--text-muted)';
+  var pct = totalSpend > 0 ? (g.spend / totalSpend * 100) : 0;
+  var leadsBadge = g.leads > 0 ? '<span class="meta-badge ' + (g.leads >= 50 ? 'meta-badge-green' : 'meta-badge-blue') + '">' + g.leads + '</span>' : '<span style="color:var(--text-muted)">—</span>';
+  var bg = i % 2 === 0 ? 'background:var(--dark-panel)' : '';
+  return '<tr style="border-bottom:1px solid var(--dark-border);' + bg + '"><td style="padding:8px 4px;font-weight:' + (g.leads > 0 ? '600' : '400') + '">' + g.group + '</td><td style="text-align:right;padding:8px 4px">$' + mfFull(g.spend) + '</td><td style="text-align:right;padding:8px 4px">' + leadsBadge + '</td><td style="text-align:right;padding:8px 4px;color:' + cplColor + '">' + cpl + '</td><td style="text-align:right;padding:8px 4px">' + mf(g.reach) + '</td><td style="text-align:right;padding:8px 4px"><div class="meta-bar-pct" style="width:' + pct + '%"></div></td></tr>';
+ }).join('');
+
+ // Monthly cards
+ var months = aggregateByMonth(ads);
+ var mcEl = document.getElementById('meta-monthly-cards');
+ mcEl.innerHTML = months.map(function(mo) {
+  var cpl = mo.leads > 0 ? (mo.spend / mo.leads).toFixed(2) : null;
+  var cplColor = cpl ? (cpl < 9 ? '#4CAF50' : cpl < 11 ? 'var(--text-primary)' : '#FF9800') : 'var(--text-muted)';
+  var label = mo.name + (mo.year !== new Date().getFullYear() ? ' ' + mo.year : '');
+  return '<div class="meta-month-card"><div class="month-name">' + label + '</div><div class="month-spend">$' + mfFull(mo.spend) + '</div><div class="month-leads">' + mo.leads + ' лидов</div><div class="month-cpl" style="color:' + cplColor + '">CPL ' + (cpl ? '$' + cpl : '—') + '</div></div>';
+ }).join('');
+
+ // Status cards
+ var statusCount = {active:{n:0,spend:0}, inactive:{n:0,spend:0}, not_delivering:{n:0,spend:0}, archived:{n:0,spend:0}};
+ ads.forEach(function(a) { if (!statusCount[a.status]) statusCount[a.status] = {n:0,spend:0}; statusCount[a.status].n++; statusCount[a.status].spend += a.spend; });
+ var scEl = document.getElementById('meta-status-cards');
+ var sL = {active:'Active', inactive:'Inactive', not_delivering:'Stopped', archived:'Archived'};
+ var sC = {active:['rgba(76,175,80,.1)','#4CAF50'], inactive:['rgba(255,152,0,.1)','#FF9800'], not_delivering:['var(--dark-panel)','var(--text-secondary)'], archived:['rgba(239,83,80,.1)','#EF5350']};
+ scEl.innerHTML = Object.keys(sL).map(function(s) {
+  var sc = statusCount[s] || {n:0,spend:0};
+  return '<div style="background:' + sC[s][0] + ';border-radius:10px;padding:12px;text-align:center"><div style="font-size:20px;font-weight:700;color:' + sC[s][1] + '">' + sc.n + '</div><div style="font-size:11px;color:' + sC[s][1] + ';margin-top:4px">' + sL[s] + ' ($' + mfFull(sc.spend) + ')</div></div>';
+ }).join('');
+
+ // All ads table
+ var sorted = ads.slice().sort(function(a,b) { return b.spend - a.spend; });
+ document.getElementById('meta-ads-count').textContent = '(' + sorted.length + ' объявлений)';
+ var atb = document.getElementById('meta-all-ads-table');
+ atb.innerHTML = sorted.map(function(a) {
+  var cplColor = a.cpr > 10 ? '#EF5350' : (a.cpr > 0 && a.cpr < 5) ? '#4CAF50' : 'inherit';
+  return '<tr style="border-bottom:1px solid var(--dark-border)"><td style="padding:6px 4px">' + platIcon(a.platform) + '</td><td style="padding:6px 4px;font-weight:500">' + a.campaign + '</td><td style="padding:6px 4px">' + a.group + '</td><td style="padding:6px 4px">' + a.ad + '</td><td style="padding:6px 4px;text-align:center">' + metaStatusBadge(a.status) + '</td><td style="padding:6px 4px;text-align:right;font-weight:500">$' + a.spend.toFixed(0) + '</td><td style="padding:6px 4px;text-align:right">' + (a.leads || '—') + '</td><td style="padding:6px 4px;text-align:right;color:' + cplColor + '">' + (a.cpr ? '$' + a.cpr.toFixed(2) : '—') + '</td><td style="padding:6px 4px;text-align:right">' + mf(a.reach) + '</td><td style="padding:6px 4px;text-align:right">' + mf(a.impressions) + '</td><td style="padding:6px 4px;text-align:right">' + a.frequency.toFixed(2) + '</td><td style="padding:6px 4px;text-align:right">' + a.clicks + '</td><td style="padding:6px 4px;text-align:right">' + a.ctr.toFixed(2) + '%</td><td style="padding:6px 4px;text-align:right">' + (a.cpc ? '$' + a.cpc.toFixed(2) : '—') + '</td><td style="padding:6px 4px;text-align:right">$' + a.cpm.toFixed(2) + '</td><td style="padding:6px 4px;text-align:right">' + a.start + '</td></tr>';
+ }).join('');
+
+ ensureChartJS(function() { metaRenderCharts(ads, campaigns, groups, months); });
+}
+
+// ---- CHARTS ----
+function metaRenderCharts(ads, campaigns, groups, months) {
+ var isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+ var textColor = isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)';
+ var gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+ var cc = ['#3B82F6','#10B981','#8B5CF6','#F59E0B','#EF4444','#06B6D4','#EC4899','#84CC16'];
+ Object.keys(_metaCharts).forEach(function(k) { if (_metaCharts[k]) { _metaCharts[k].destroy(); delete _metaCharts[k]; } });
+
+ var mL = months.map(function(m) { return m.name.substr(0,3); });
+ var allCN = {}; months.forEach(function(m) { Object.keys(m.campaigns).forEach(function(c) { allCN[c] = 1; }); });
+ var cn = Object.keys(allCN);
+ var ds1 = cn.map(function(n, i) { return {label:n, data:months.map(function(m) { return Math.round(m.campaigns[n] || 0); }), backgroundColor:cc[i % cc.length]}; });
+ var c1 = document.getElementById('meta-chart-month-campaign');
+ if (c1) _metaCharts.mc = new Chart(c1, {type:'bar', data:{labels:mL, datasets:ds1}, options:{responsive:true, maintainAspectRatio:false, scales:{x:{stacked:true,ticks:{color:textColor},grid:{display:false}}, y:{stacked:true,ticks:{color:textColor,callback:function(v){return '$'+v}},grid:{color:gridColor}}}, plugins:{legend:{position:'top',labels:{color:textColor,usePointStyle:true,pointStyle:'rectRounded',padding:8,font:{size:10}}}}}});
+
+ var cplD = months.map(function(m) { return m.leads > 0 ? +(m.spend / m.leads).toFixed(2) : null; });
+ var c2 = document.getElementById('meta-chart-cpl-trend');
+ if (c2) _metaCharts.ct = new Chart(c2, {type:'line', data:{labels:mL, datasets:[{label:'CPL', data:cplD, borderColor:'#F59E0B', backgroundColor:'rgba(245,158,11,0.1)', fill:true, tension:0.3, pointRadius:6, pointBackgroundColor:'#F59E0B', spanGaps:true}]}, options:{responsive:true, maintainAspectRatio:false, scales:{x:{ticks:{color:textColor},grid:{display:false}}, y:{min:0,ticks:{color:textColor,callback:function(v){return '$'+v}},grid:{color:gridColor}}}, plugins:{legend:{display:false}}}});
+
+ var c3 = document.getElementById('meta-chart-spend-pie');
+ if (c3) _metaCharts.sp = new Chart(c3, {type:'doughnut', data:{labels:campaigns.map(function(c){return c.campaign}), datasets:[{data:campaigns.map(function(c){return Math.round(c.spend)}), backgroundColor:cc.slice(0, campaigns.length), borderWidth:0}]}, options:{responsive:true, maintainAspectRatio:false, cutout:'55%', plugins:{legend:{position:'right',labels:{color:textColor,padding:6,usePointStyle:true,pointStyle:'rectRounded',font:{size:11}}}}}});
+
+ var wlg = groups.filter(function(g) { return g.leads > 0; });
+ var c4 = document.getElementById('meta-chart-region-leads');
+ if (c4) _metaCharts.rl = new Chart(c4, {type:'bar', data:{labels:wlg.map(function(g){return g.group}), datasets:[{data:wlg.map(function(g){return g.leads}), backgroundColor:cc.slice(0, wlg.length)}]}, options:{responsive:true, maintainAspectRatio:false, indexAxis:'y', scales:{x:{ticks:{color:textColor},grid:{color:gridColor}}, y:{ticks:{color:textColor,font:{size:10}},grid:{display:false}}}, plugins:{legend:{display:false}}}});
+
+ var wla = ads.filter(function(a) { return a.leads > 0 && a.cpr > 0; }).sort(function(a,b) { return a.cpr - b.cpr; });
+ var c5 = document.getElementById('meta-chart-cpl-ads');
+ if (c5) _metaCharts.ca = new Chart(c5, {type:'bar', data:{labels:wla.map(function(a){return (a.group||a.campaign)+'/'+a.ad}), datasets:[{data:wla.map(function(a){return a.cpr}), backgroundColor:wla.map(function(a){return a.cpr<5?'#10B981':a.cpr<10?'#3B82F6':'#F59E0B'})}]}, options:{responsive:true, maintainAspectRatio:false, indexAxis:'y', scales:{x:{ticks:{color:textColor,callback:function(v){return '$'+v}},grid:{color:gridColor}}, y:{ticks:{color:textColor,font:{size:9}},grid:{display:false}}}, plugins:{legend:{display:false}}}});
+
+ var c6 = document.getElementById('meta-chart-efficiency');
+ if (c6) _metaCharts.ef = new Chart(c6, {type:'scatter', data:{datasets:[{data:wla.map(function(a){return {x:a.leads,y:a.cpr,name:(a.group||a.campaign)+'/'+a.ad}}), backgroundColor:'rgba(59,130,246,0.6)', borderColor:'#3B82F6', pointRadius:8}]}, options:{responsive:true, maintainAspectRatio:false, scales:{x:{title:{display:true,text:'Лиды',color:textColor},ticks:{color:textColor},grid:{color:gridColor},min:0}, y:{title:{display:true,text:'CPL ($)',color:textColor},ticks:{color:textColor},grid:{color:gridColor},min:0}}, plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return ctx.raw.name+': '+ctx.raw.x+' лидов, $'+ctx.raw.y.toFixed(2)}}}}}});
+}
+
+// ---- EXPORT ----
+window.metaExportReport = function() {
+ var allAds = metaLoadData();
+ if (!allAds || !allAds.length) { if (typeof showNotif === 'function') showNotif('Экспорт', 'Нет данных для экспорта'); return; }
+ var ads = metaFilterAds(allAds);
+ if (!ads.length) { if (typeof showNotif === 'function') showNotif('Экспорт', 'Нет данных за выбранный период'); return; }
+
+ var cur = metaSumTotals(ads);
+ var campaigns = aggregateByCampaign(ads);
+ var groups = aggregateByGroup(ads);
+ var months = aggregateByMonth(ads);
+
+ var rows = [];
+ // Summary
+ rows.push(['=== СВОДКА ===']);
+ rows.push(['Потрачено','Лиды','CPL','Охват','Показы','Клики']);
+ rows.push([cur.spend.toFixed(2), cur.leads, cur.cpl ? cur.cpl.toFixed(2) : '', cur.reach, cur.impressions, cur.clicks]);
+ rows.push([]);
+
+ // Campaigns
+ rows.push(['=== КАМПАНИИ ===']);
+ rows.push(['Кампания','Расход','Лиды','CPL','Охват','Показы','Частота','Клики','CTR','CPC','CPM','Объявлений']);
+ campaigns.forEach(function(c) {
+  var freq = c.reach > 0 ? (c.impressions / c.reach).toFixed(2) : '';
+  rows.push([c.campaign, c.spend.toFixed(2), c.leads, c.leads > 0 ? (c.spend/c.leads).toFixed(2) : '', c.reach, c.impressions, freq, c.clicks, c.impressions > 0 ? (c.clicks/c.impressions*100).toFixed(2)+'%' : '', c.clicks > 0 ? (c.spend/c.clicks).toFixed(2) : '', c.impressions > 0 ? (c.spend/c.impressions*1000).toFixed(2) : '', c.adCount]);
+ });
+ rows.push([]);
+
+ // Regions
+ rows.push(['=== РЕГИОНЫ ===']);
+ rows.push(['Группа','Расход','Лиды','CPL','Охват','Доля %']);
+ groups.forEach(function(g) {
+  rows.push([g.group, g.spend.toFixed(2), g.leads, g.leads > 0 ? (g.spend/g.leads).toFixed(2) : '', g.reach, cur.spend > 0 ? (g.spend/cur.spend*100).toFixed(1)+'%' : '']);
+ });
+ rows.push([]);
+
+ // Monthly
+ rows.push(['=== ПО МЕСЯЦАМ ===']);
+ rows.push(['Месяц','Расход','Лиды','CPL']);
+ months.forEach(function(m) {
+  rows.push([m.name + ' ' + m.year, m.spend.toFixed(2), m.leads, m.leads > 0 ? (m.spend/m.leads).toFixed(2) : '']);
+ });
+ rows.push([]);
+
+ // All ads
+ rows.push(['=== ВСЕ ОБЪЯВЛЕНИЯ ===']);
+ rows.push(['Платформа','Кампания','Группа','Объявление','Статус','Расход','Лиды','CPL','Охват','Показы','Частота','Клики','CTR','CPC','CPM','Старт']);
+ ads.sort(function(a,b) { return b.spend - a.spend; }).forEach(function(a) {
+  rows.push([a.platform||'meta', a.campaign, a.group, a.ad, a.status, a.spend.toFixed(2), a.leads, a.cpr ? a.cpr.toFixed(2) : '', a.reach, a.impressions, a.frequency.toFixed(2), a.clicks, a.ctr.toFixed(2)+'%', a.cpc ? a.cpc.toFixed(2) : '', a.cpm.toFixed(2), a.start]);
+ });
+
+ var csv = '\uFEFF' + rows.map(function(r) { return r.map(function(cell) { return '"' + String(cell === undefined ? '' : cell).replace(/"/g, '""') + '"'; }).join(';'); }).join('\n');
+ var blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+ var a = document.createElement('a');
+ a.href = URL.createObjectURL(blob);
+ a.download = 'target_ads_report_' + new Date().toISOString().slice(0,10) + '.csv';
+ a.click();
+ if (typeof showNotif === 'function') showNotif('Экспорт', 'Отчёт target_ads скачан');
+};
+
+window.metaRemoveUpload = function(idx) {
+ var uploads = metaLoadUploads();
+ uploads.splice(idx, 1);
+ metaSaveUploads(uploads);
+ metaRenderAll(metaLoadData());
+};
+
+// Auto-init on marketing view
+var origMktInit = window.mktInit;
+window.mktInit = function() {
+ if (origMktInit) origMktInit();
+ var ads = metaLoadData();
+ if (ads && ads.length) metaRenderAll(ads);
+};
+
+})();
+// /META ADS CSV
+
 var PLAN_TABS = [
  {label:'Апрель 2026', name:'Апрель', year:2026, month:3},
  {label:'Март 2026', name:'Март', year:2026, month:2},
