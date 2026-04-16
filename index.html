@@ -1146,12 +1146,9 @@ body.light .content span[style*="font-weight:600"]{color:#2A3042!important}
 body.light .content span[style*="font-weight: 600"]{color:#2A3042!important}
 body.light .content td span[style]{color:#2A3042!important}
 /* KANBAN STYLES */
-.kb-board{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px;flex:1;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:rgba(148,163,184,.15) transparent}
-.kb-board::-webkit-scrollbar{height:3px}
-.kb-board::-webkit-scrollbar-track{background:transparent}
-.kb-board::-webkit-scrollbar-thumb{background:rgba(148,163,184,.15);border-radius:3px}
-.kb-board::-webkit-scrollbar-thumb:hover{background:rgba(148,163,184,.3)}
-.kb-column{width:260px;min-width:260px;flex-shrink:0;background:rgba(17,24,39,.5);border:1px solid var(--dark-border);border-radius:14px;display:flex;flex-direction:column;max-height:calc(100vh - 120px)}
+.kb-board{display:flex;gap:10px;overflow-x:auto;overflow-y:hidden;padding-bottom:0;flex:1;-webkit-overflow-scrolling:touch;scrollbar-width:none;-ms-overflow-style:none}
+.kb-board::-webkit-scrollbar{display:none}
+.kb-column{flex:1;min-width:220px;flex-shrink:0;background:rgba(17,24,39,.5);border:1px solid var(--dark-border);border-radius:14px;display:flex;flex-direction:column;max-height:calc(100vh - 130px)}
 .kb-column-header{padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--dark-border)}
 .kb-column-header .kb-col-title{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-secondary)}
 .kb-column-header .kb-col-count{font-size:10px;background:rgba(59,130,246,.15);color:#60A5FA;padding:2px 8px;border-radius:10px;font-weight:600}
@@ -3480,7 +3477,7 @@ async function syncFromSheets() {
  if (r && String(r[1]||'').trim() === 'Компания') { headerIdx = ri; break; }
  }
  // Определяем индексы столбцов по заголовку
- var colDate=0, colClient=1, colCat=2, colMgr=5, colAmt=12, colBank=10, colSeated=11, colTech=17;
+ var colDate=0, colClient=1, colCat=2, colMgr=5, colAmt=12, colBank=10, colSeated=11, colTech=17, colActivation=14;
  if (headerIdx >= 0) {
  var hdrRow = data.rows[headerIdx];
  hdrRow.forEach(function(h,i){
@@ -3494,6 +3491,7 @@ async function syncFromSheets() {
  else if (s==='банк') colBank=i;
  else if (s.includes('посаж')) colSeated=i;
  else if (s.includes('тех')) colTech=i;
+ else if (s.includes('активац') || s.includes('дата актив')) colActivation=i;
  });
  }
  var dataRows = headerIdx >= 0 ? data.rows.slice(headerIdx+1) : data.rows.slice(4);
@@ -3536,7 +3534,7 @@ async function syncFromSheets() {
  qty: (function(){ var v=row[4]; return typeof v==='number'?v:parseFloat(String(v||'').replace(/[^0-9.,]/g,'').replace(',','.'))||0; })(),
  price: (function(){ var v=row[7]; return typeof v==='number'?v:parseFloat(String(v||'').replace(/[^0-9.,]/g,'').replace(',','.'))||0; })(),
  period: (function(){ var v=row[8]; return typeof v==='number'?v:parseFloat(String(v||'').replace(/[^0-9.,]/g,'').replace(',','.'))||0; })(),
- activationDate: (function(){ var v=row[14]; return v?parseDateFromSheet(v):null; })(),
+ activationDate: (function(){ var v=row[colActivation]; return v?parseDateFromSheet(v):null; })(),
  periodStart: (function(){ var v=row[19]; return v?String(v).trim():''; })(),
  // === конец доп. столбцов ===
  _srcCol: srcCol,
