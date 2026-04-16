@@ -3492,16 +3492,15 @@ async function syncFromSheets() {
  var colDate=0, colClient=1, colCat=2, colMgr=5, colAmt=12, colBank=10, colSeated=11, colTech=17, colActivation=-1;
  if (headerIdx >= 0) {
  var hdrRow = data.rows[headerIdx];
- // Ищем столбец «Дата активации» (не «Цена активации»!) — берём первый подходящий
- hdrRow.forEach(function(h,i){
-  var s = String(h||'').toLowerCase().replace(/\s+/g,' ').trim();
-  if (colActivation < 0 && s.includes('дата') && s.includes('актив')) colActivation=i;
- });
- // Fallback: любой столбец с «активац» но не «цена»
- if (colActivation < 0) {
+ // Столбец «Дата активации» — всегда O (индекс 14), но проверяем и динамически
+ // Проверяем что в колонке 14 есть «актив» в заголовке
+ var h14 = String(hdrRow[14]||'').toLowerCase();
+ if (h14.includes('актив')) { colActivation = 14; }
+ else {
+  // Динамический поиск: «дата» + «актив», не «цена»
   hdrRow.forEach(function(h,i){
    var s = String(h||'').toLowerCase().replace(/\s+/g,' ').trim();
-   if (colActivation < 0 && s.includes('активац') && !s.includes('цена') && !s.includes('стоимость')) colActivation=i;
+   if (colActivation < 0 && s.includes('дата') && s.includes('актив') && !s.includes('цена')) colActivation=i;
   });
  }
  hdrRow.forEach(function(h,i){
