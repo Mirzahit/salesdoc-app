@@ -1203,15 +1203,15 @@ body.light .content td span[style]{color:#2A3042!important}
 .kb-filter-dropdown .kb-fd-item:hover{background:rgba(59,130,246,.08);color:var(--text-primary)}
 .kb-filter-dropdown .kb-fd-item.active{background:rgba(59,130,246,.12);color:#60A5FA;font-weight:600}
 /* KANBAN FULLSCREEN CARD PAGE */
-#view-kb-card{display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow-y:auto}
-.kbc-header{display:flex;align-items:center;gap:16px;padding:16px 24px;border-bottom:1px solid var(--dark-border);background:rgba(11,15,25,.95);backdrop-filter:blur(20px);position:sticky;top:0;z-index:10}
+#view-kb-card{display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow:hidden;flex-direction:column}
+.kbc-header{display:flex;align-items:center;gap:16px;padding:16px 24px;border-bottom:1px solid var(--dark-border);background:rgba(11,15,25,.95);backdrop-filter:blur(20px);flex-shrink:0;z-index:10}
 .kbc-back{background:none;border:1px solid var(--dark-border);border-radius:8px;padding:6px 14px;color:var(--text-muted);font-size:12px;cursor:pointer;font-weight:600;transition:all .2s;display:flex;align-items:center;gap:6px}
 .kbc-back:hover{border-color:rgba(59,130,246,.3);color:#60A5FA}
 .kbc-title{font-size:18px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk',sans-serif;flex:1}
 .kbc-stage-badge{font-size:11px;font-weight:700;padding:5px 16px;border-radius:20px;background:rgba(59,130,246,.12);color:#60A5FA;border:1px solid rgba(59,130,246,.25);letter-spacing:.5px}
-.kbc-body{display:grid;grid-template-columns:minmax(320px,480px) 1fr;gap:0;min-height:calc(100vh - 60px)}
-.kbc-main{padding:16px 20px;overflow-y:auto}
-.kbc-sidebar{border-left:1px solid var(--dark-border);display:flex;flex-direction:column;background:rgba(17,24,39,.3)}
+.kbc-body{display:grid;grid-template-columns:minmax(320px,480px) 1fr;gap:0;flex:1;overflow:hidden}
+.kbc-main{padding:16px 20px;overflow-y:auto;max-height:100%}
+.kbc-sidebar{border-left:1px solid var(--dark-border);display:flex;flex-direction:column;background:rgba(17,24,39,.3);overflow:hidden}
 .kbc-section{margin-bottom:16px}
 .kbc-section-title{font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:8px}
 .kbc-info-grid{display:flex;flex-wrap:wrap;gap:8px}
@@ -11786,26 +11786,27 @@ function kbOpenCardPage(card) {
   });
  }
 
- // New task form
- html += '<div id="kbt-form-'+card.id+'" style="display:none;margin-top:8px">';
+ // New task form — use safe ID
+ var safeId = String(card.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+ html += '<div id="kbt-form-'+safeId+'" style="display:none;margin-top:8px">';
  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">';
  KB_TASK_TYPES.forEach(function(tt) {
-  html += '<button class="kbt-type-btn" data-type="'+tt.key+'" onclick="kbSelectTaskType(this,\''+tt.key+'\')" style="padding:6px 12px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:4px;transition:all .15s">'+tt.icon+' '+tt.label+'</button>';
+  html += '<button class="kbt-type-btn" data-type="'+tt.key+'" onclick="kbSelectTaskType(event.currentTarget,\''+tt.key+'\')" style="padding:6px 12px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px;transition:all .15s">'+tt.icon+' '+tt.label+'</button>';
  });
  html += '</div>';
  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
- html += '<input type="date" id="kbt-date-'+card.id+'" style="padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
- html += '<input type="time" id="kbt-time-'+card.id+'" style="padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
- html += '<input type="text" id="kbt-text-'+card.id+'" placeholder="Описание задачи..." style="flex:1;min-width:120px;padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
+ html += '<input type="date" id="kbt-date-'+safeId+'" style="padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
+ html += '<input type="time" id="kbt-time-'+safeId+'" style="padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
+ html += '<input type="text" id="kbt-text-'+safeId+'" placeholder="Описание задачи..." style="flex:1;min-width:120px;padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit">';
  html += '</div>';
  html += '<div style="display:flex;gap:8px;margin-top:8px">';
  html += '<button onclick="kbSaveTask(\''+card.id+'\')" style="padding:8px 20px;border-radius:8px;background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.3);color:#3B82F6;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Поставить</button>';
- html += '<button onclick="document.getElementById(\'kbt-form-'+card.id+'\').style.display=\'none\'" style="padding:8px 16px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit">Отменить</button>';
+ html += '<button onclick="kbHideTaskForm(\''+safeId+'\')" style="padding:8px 16px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit">Отменить</button>';
  html += '</div>';
  html += '</div>';
 
  // Add task button
- html += '<button onclick="document.getElementById(\'kbt-form-'+card.id+'\').style.display=\'block\'" style="margin-top:6px;padding:8px 16px;border-radius:8px;border:1px dashed var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit;width:100%;text-align:center">+ Добавить задачу</button>';
+ html += '<button onclick="kbShowTaskForm(\''+safeId+'\')" style="margin-top:6px;padding:8px 16px;border-radius:8px;border:1px dashed var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit;width:100%;text-align:center">+ Добавить задачу</button>';
  html += '</div>';
 
  // Stage buttons
@@ -11834,7 +11835,7 @@ function kbOpenCardPage(card) {
  kbRenderCardFeed(card);
 
  // Show fullscreen
- document.getElementById('view-kb-card').style.display = 'block';
+ document.getElementById('view-kb-card').style.display = 'flex';
 }
 
 function kbRenderCardFeed(card) {
@@ -12106,6 +12107,15 @@ window.kbToggleAct = function(cardId) {
 // --- KANBAN TASKS (amoCRM style) ---
 var _kbtSelectedType = '';
 
+window.kbShowTaskForm = function(safeId) {
+ var el = document.getElementById('kbt-form-'+safeId);
+ if(el) el.style.display = 'block';
+};
+window.kbHideTaskForm = function(safeId) {
+ var el = document.getElementById('kbt-form-'+safeId);
+ if(el) el.style.display = 'none';
+};
+
 window.kbSelectTaskType = function(btn, type) {
  _kbtSelectedType = type;
  // Highlight selected
@@ -12132,9 +12142,10 @@ window.kbSaveTask = function(cardId) {
  if(!card) return;
  if(!card.fields) card.fields = {};
 
- var dateEl = document.getElementById('kbt-date-'+cardId);
- var timeEl = document.getElementById('kbt-time-'+cardId);
- var textEl = document.getElementById('kbt-text-'+cardId);
+ var safeId = String(cardId).replace(/[^a-zA-Z0-9_-]/g, '_');
+ var dateEl = document.getElementById('kbt-date-'+safeId);
+ var timeEl = document.getElementById('kbt-time-'+safeId);
+ var textEl = document.getElementById('kbt-text-'+safeId);
 
  var dateVal = '';
  if(dateEl && dateEl.value) {
