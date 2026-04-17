@@ -2502,10 +2502,14 @@ body.light .content td span[style]{color:#2A3042!important}
    </div>
    <div style="position:relative;height:220px"><canvas id="stat-main-canvas"></canvas></div>
   </div>
-  <!-- 7 отделений Хаббарда -->
-  <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:10px">7 отделений по оргсхеме</div>
-  <div style="display:flex;flex-direction:column;gap:8px" id="stat-departments"></div>
-  <div style="margin-top:12px;font-size:11px;color:var(--text-muted)">Нажми на строку для детализации -- подсвечены отделения с ключевыми метриками</div>
+  <!-- 7 отделений Хаббарда (раскрывающийся список) -->
+  <div class="panel" style="padding:0;overflow:hidden">
+   <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none" onclick="statToggleDepts()" id="stat-depts-header">
+    <div style="font-size:14px;font-weight:600;color:var(--text-primary)">7 отделений по оргсхеме</div>
+    <span style="font-size:12px;color:var(--text-muted);transition:transform .2s" id="stat-depts-arrow">&#9662;</span>
+   </div>
+   <div style="display:none;padding:0 10px 10px;flex-direction:column;gap:6px" id="stat-departments"></div>
+  </div>
  </div>
  <!-- /STATISTICS VIEW -->
 
@@ -11027,9 +11031,23 @@ function statInit() {
 }
 
 var _statMainChart = null;
+var _statDeptsOpen = false;
+window.statToggleDepts = function() {
+ _statDeptsOpen = !_statDeptsOpen;
+ var el = document.getElementById('stat-departments');
+ var arrow = document.getElementById('stat-depts-arrow');
+ if(el) el.style.display = _statDeptsOpen ? 'flex' : 'none';
+ if(arrow) arrow.style.transform = _statDeptsOpen ? 'rotate(180deg)' : '';
+};
+
+function _ensureChart(cb) {
+ if(typeof Chart!=='undefined'){cb();return;}
+ if(typeof ensureChartJS==='function'){ensureChartJS(cb);return;}
+ var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';s.onload=cb;document.head.appendChild(s);
+}
 
 function statBuildMainChart(labels, sales, impls, leads) {
- ensureChartJS(function(){
+ _ensureChart(function(){
   var canvas = document.getElementById('stat-main-canvas');
   if(!canvas) return;
   if(_statMainChart) { _statMainChart.destroy(); _statMainChart=null; }
@@ -11077,7 +11095,7 @@ window.statExpandChart = function() {
  document.body.appendChild(overlay);
 
  // Пересоздать график на fullscreen canvas
- ensureChartJS(function(){
+ _ensureChart(function(){
   var weeks=statGetWeeks(8);
   var labels=[],sales=[],impls=[],leads=[];
   if(typeof payments!=='undefined'){
