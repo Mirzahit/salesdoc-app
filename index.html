@@ -2488,19 +2488,30 @@ body.light .content td span[style]{color:#2A3042!important}
    <div>
     <div style="font-size:13px;color:var(--text-muted)" id="stat-period-label"></div>
    </div>
-   <div style="display:flex;gap:6px" id="stat-period-btns">
-    <button class="meta-filter-btn active" onclick="statSetPeriod('week',this)">Неделя</button>
-    <button class="meta-filter-btn" onclick="statSetPeriod('month',this)">Месяц</button>
-    <button class="meta-filter-btn" onclick="statSetPeriod('quarter',this)">Квартал</button>
+   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <select id="stat-emp-filter" onchange="statSetEmp(this)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;min-width:180px;cursor:pointer">
+     <option value="all">Все сотрудники</option>
+    </select>
+    <div style="display:flex;gap:6px" id="stat-period-btns">
+     <button class="meta-filter-btn active" onclick="statSetPeriod('week',this)">Неделя</button>
+     <button class="meta-filter-btn" onclick="statSetPeriod('month',this)">Месяц</button>
+     <button class="meta-filter-btn" onclick="statSetPeriod('quarter',this)">Квартал</button>
+    </div>
    </div>
   </div>
   <!-- Общий график -->
   <div class="panel" style="padding:18px;margin-bottom:16px">
    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-    <div style="font-size:14px;font-weight:600;color:var(--text-primary)">Динамика компании по неделям</div>
+    <div style="font-size:14px;font-weight:600;color:var(--text-primary)" id="stat-main-title">Динамика компании по неделям</div>
     <button onclick="statExpandChart()" style="padding:4px 10px;border-radius:6px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:10px;cursor:pointer" title="На весь экран">Развернуть</button>
    </div>
-   <div style="position:relative;height:220px"><canvas id="stat-main-canvas"></canvas></div>
+   <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
+    <b style="color:#3B82F6">Оплаты (T)</b> — сумма всех оплат из «Доходы» в периоде. &nbsp;
+    <b style="color:#F59E0B">Оплаты по новым клиентам (T)</b> — статьи с «нов» (нов клиент / нов внедрение / нов интеграция), без абонентских. &nbsp;
+    <b style="color:#34D399">Внедрения (шт)</b> — число оплат с заполненной «Датой активации». &nbsp;
+    <b style="color:#A78BFA">Лиды (шт)</b> — из таблицы маркетинга (LEADS_SHEET, Лист1).
+   </div>
+   <div id="stat-main-chart-wrap" style="position:relative;height:220px;transition:height .25s ease"><canvas id="stat-main-canvas"></canvas></div>
   </div>
   <!-- 7 отделений Хаббарда (раскрывающийся список) -->
   <div class="panel" style="padding:0;overflow:hidden">
@@ -4014,6 +4025,9 @@ function renderAll() {
  setupKpiTooltips(ps);
   renderM2MA2A(ps);
  renderAvgCheckManagers(ps);
+ // Если страница Статистики открыта — перерисовать с новым selectedMonth
+ var statView = document.getElementById('view-statistics');
+ if(statView && statView.style.display!=='none' && typeof statInit==='function') statInit();
 }
 
 function renderAvgCheckManagers(ps) {
@@ -10942,6 +10956,29 @@ function testsExportPDF(person){
 
 // Статистики по 7 отделениям Хаббарда с реальными данными
 var _statPeriod = 'week';
+var _statEmpFilter = 'all';
+// Кеш лидов из LEADS_SHEET_ID (row[1]=дата, row[13]=кол-во лидов)
+var _statLeadsCache = null;
+
+function statLoadLeadsOnce(cb) {
+ if(_statLeadsCache) { cb(_statLeadsCache); return; }
+ if(typeof LEADS_SHEET_ID==='undefined'){ cb([]); return; }
+ var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
+ var url = GS_URL + '?action=getSheet&spreadsheetId=' + LEADS_SHEET_ID + '&sheet=Лист1&range=A1:R300';
+ fetch(url).then(function(r){return r.json();}).then(function(data){
+  var rows = (data && data.rows) || [];
+  var leads = [];
+  rows.forEach(function(row){
+   var dateStr = row[1] || '';
+   var cnt = Number(row[13]);
+   if(!dateStr || typeof dateStr!=='string' || dateStr.indexOf('T')<0) return;
+   if(isNaN(cnt) || cnt<=0 || cnt>500) return;
+   leads.push({date:new Date(dateStr), count:cnt});
+  });
+  _statLeadsCache = leads;
+  cb(leads);
+ }).catch(function(){ _statLeadsCache=[]; cb([]); });
+}
 
 // 7 отделений с привязкой к реальным данным
 var STAT_DEPTS = [
@@ -10962,60 +10999,201 @@ function statSetPeriod(p, btn) {
  statInit();
 }
 
+function statSetEmp(sel) {
+ _statEmpFilter = sel.value || 'all';
+ statInit();
+}
+
+function statPopulateEmpFilter() {
+ var sel = document.getElementById('stat-emp-filter');
+ if(!sel) return;
+ var cur = sel.value || _statEmpFilter;
+ sel.innerHTML = '<option value="all">Все сотрудники</option>';
+ // Берём всех менеджеров из payments (по managerName / empName) — так видны реальные исполнители,
+ // даже если в настройках их деактивировали.
+ if(typeof payments==='undefined') return;
+ var mgrs = {};
+ payments.forEach(function(p){
+  var nm = p.managerName || (typeof empName==='function' ? empName(p.employee) : '');
+  if(nm && nm!=='-' && nm.trim()) mgrs[nm] = (mgrs[nm]||0)+1;
+ });
+ Object.keys(mgrs).sort(function(a,b){return a.localeCompare(b,'ru');}).forEach(function(nm){
+  var opt = document.createElement('option');
+  opt.value = nm;                // фильтруем по имени
+  opt.textContent = nm + ' ('+mgrs[nm]+')';
+  sel.appendChild(opt);
+ });
+ sel.value = cur;
+}
+
+// Возвращает бакеты (недели/месяцы/кварталы) с учётом selectedMonth
+function statGetBuckets(period, count) {
+ var buckets = [];
+ var mNames = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+ // Якорь — выбранный месяц (глобальный selectedMonth) или текущий
+ var sel = (typeof selectedMonth!=='undefined') ? selectedMonth : {year:new Date().getFullYear(), month:new Date().getMonth()};
+ var selYear = sel.year, selMonth = sel.month;
+
+ if(period === 'month') {
+  // Последние N месяцев, заканчивая выбранным
+  var n = count || 6;
+  for(var i=n-1;i>=0;i--) {
+   var y = selYear, m = selMonth - i;
+   while(m < 0){ m += 12; y--; }
+   var start = new Date(y, m, 1);
+   var end = new Date(y, m+1, 1);
+   buckets.push({start:start, end:end, label: mNames[m]+' '+String(y).slice(-2)});
+  }
+ } else if(period === 'quarter') {
+  // Последние N кварталов, заканчивая кварталом выбранного месяца
+  var n2 = count || 4;
+  var curQ = Math.floor(selMonth/3);
+  for(var j=n2-1;j>=0;j--) {
+   var yy = selYear, qq = curQ - j;
+   while(qq < 0){ qq += 4; yy--; }
+   var sm = qq*3;
+   var s = new Date(yy, sm, 1);
+   var e = new Date(yy, sm+3, 1);
+   buckets.push({start:s, end:e, label:'Q'+(qq+1)+' '+String(yy).slice(-2)});
+  }
+ } else {
+  // week: недели ВНУТРИ выбранного месяца (01-07, 08-14, 15-21, 22-28, 29-конец)
+  var monthStart = new Date(selYear, selMonth, 1);
+  var monthEnd = new Date(selYear, selMonth+1, 1); // exclusive
+  var cursor = new Date(monthStart);
+  while(cursor < monthEnd) {
+   var wkStart = new Date(cursor);
+   var wkEnd = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()+7);
+   if(wkEnd > monthEnd) wkEnd = new Date(monthEnd);
+   var lastIncl = new Date(wkEnd - 86400000);
+   var lbl = ('0'+wkStart.getDate()).slice(-2)+'.'+('0'+(wkStart.getMonth()+1)).slice(-2)+'-'+('0'+lastIncl.getDate()).slice(-2)+'.'+('0'+(lastIncl.getMonth()+1)).slice(-2);
+   buckets.push({start:wkStart, end:wkEnd, label:lbl});
+   cursor = wkEnd;
+  }
+ }
+ return buckets;
+}
+
 function statInit() {
  if(typeof payments==='undefined'||!payments.length) return;
- var weeks = statGetWeeks(8);
+ statPopulateEmpFilter();
+
+ // Счётчики для бакетов: неделя/месяц/квартал
+ var bucketCount = _statPeriod==='month' ? 6 : (_statPeriod==='quarter' ? 4 : 8);
+ var buckets = statGetBuckets(_statPeriod, bucketCount);
+ _statBuckets = buckets;  // сохраняем для drill-down по клику на точке
+
+ // Заголовок периода
  var now = new Date();
  var monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
- var weekNum = Math.ceil((now.getDate())/7);
  var lbl = document.getElementById('stat-period-label');
- if(lbl) lbl.textContent = monthNames[now.getMonth()]+' '+now.getFullYear()+' -- неделя '+weekNum;
+ if(lbl) {
+  var periodText = _statPeriod==='week' ? 'неделя '+Math.ceil(now.getDate()/7)
+                 : _statPeriod==='month' ? 'месяц'
+                 : 'квартал '+(Math.floor(now.getMonth()/3)+1);
+  lbl.textContent = monthNames[now.getMonth()]+' '+now.getFullYear()+' -- '+periodText;
+ }
 
- // Считаем данные по неделям
- var weekData = [];
- weeks.forEach(function(wk){
-  var wp = payments.filter(function(p){var d=new Date(p.date||p.d);return d>=wk.start&&d<wk.end;});
-  var income = wp.reduce(function(s,p){return s+(p.amount||0);},0);
-  var impls = wp.filter(function(p){return p.category==='implementation';}).length;
-  var intgs = wp.filter(function(p){return p.category==='integration'||(p.categoryRaw&&p.categoryRaw.toLowerCase().indexOf('интегр')>=0);}).length;
-  var newCls = {};
-  wp.filter(function(p){return p.category==='license'||p.category==='implementation';}).forEach(function(p){newCls[p.client]=1;});
-  var sales = wp.filter(function(p){return p.category==='license'||p.category==='implementation';}).reduce(function(s,p){return s+(p.amount||0);},0);
-  var subs = wp.filter(function(p){return p.category==='subscription';}).reduce(function(s,p){return s+(p.amount||0);},0);
-  weekData.push({label:wk.label,income:income,sales:sales,subs:subs,impls:impls,intgs:intgs,leads:Object.keys(newCls).length,profit:Math.round(income*0.25)});
+ // Фильтр по сотруднику (по имени менеджера — совпадает с логикой страницы «Оплаты»)
+ var fEmp = _statEmpFilter==='all' ? null : _statEmpFilter;
+ var filteredPayments = !fEmp ? payments : payments.filter(function(p){
+  var nm = p.managerName || (typeof empName==='function' ? empName(p.employee) : '');
+  return nm === fEmp;
  });
 
- // Chart.js график (3 линии с тултипами и кликабельной легендой)
- var chartLabels = weekData.map(function(w){return w.label;});
- var salesArr = weekData.map(function(w){return w.sales;});
- var implsArr = weekData.map(function(w){return w.impls;});
- var leadsArr = weekData.map(function(w){return w.leads;});
- statBuildMainChart(chartLabels, salesArr, implsArr, leadsArr);
+ // Считаем данные по бакетам
+ var bucketData = [];
+ buckets.forEach(function(wk){
+  var wp = filteredPayments.filter(function(p){var d=new Date(p.date||p.d);return d>=wk.start&&d<wk.end;});
+  // Оплаты = ВСЕ оплаты в периоде
+  var sales = wp.reduce(function(s,p){return s+(p.amount||0);},0);
+  // Оплаты по новым клиентам = categoryRaw содержит "нов" кроме "абон"
+  // (та же логика что в calcManagerBonus: нов клиент + нов внедрение + нов интеграция, минус абонентские)
+  var newClientsSales = 0, newClientsSet = {};
+  wp.forEach(function(p){
+   var raw = String(p.categoryRaw||'').toLowerCase().trim();
+   if((raw.indexOf('нов')>=0 || raw==='новый клиент') && raw.indexOf('абон')<0){
+    newClientsSales += (p.amount||0);
+    if(p.client) newClientsSet[p.client]=1;
+   }
+  });
+  // Внедрения = количество оплат с заполненной датой активации (activationDate)
+  var impls = wp.filter(function(p){return p.activationDate && String(p.activationDate).trim().length>0;}).length;
+  bucketData.push({
+   label:wk.label, sales:sales, impls:impls,
+   newClientsSales:newClientsSales, newClientsCount:Object.keys(newClientsSet).length,
+   _start:wk.start, _end:wk.end
+  });
+ });
 
- // 7 отделений
+ // Загружаем лиды асинхронно и рисуем/перерисовываем график
+ statLoadLeadsOnce(function(leadsData){
+  var leadsArr = bucketData.map(function(w){
+   var total = 0;
+   leadsData.forEach(function(l){ if(l.date>=w._start && l.date<w._end) total += l.count; });
+   return total;
+  });
+  var chartLabels = bucketData.map(function(w){return w.label;});
+  var salesArr = bucketData.map(function(w){return w.sales;});
+  var implsArr = bucketData.map(function(w){return w.impls;});
+  var newCliArr = bucketData.map(function(w){return w.newClientsSales;});
+  statBuildMainChart(chartLabels, salesArr, implsArr, leadsArr, newCliArr);
+  // Обновляем цифры HR-секции для leads (после загрузки)
+  statRenderDepartments(bucketData, leadsArr);
+ });
+
+ // Заголовок графика по периоду
+ var chartTitleEl = document.getElementById('stat-main-title');
+ if(chartTitleEl) {
+  chartTitleEl.textContent = 'Динамика компании по ' + (_statPeriod==='week'?'неделям':_statPeriod==='month'?'месяцам':'кварталам');
+ }
+
+ // Первая (быстрая) отрисовка отделений пока лиды грузятся
+ statRenderDepartments(bucketData, null);
+}
+
+function statRenderDepartments(bucketData, leadsArr) {
  var deptEl = document.getElementById('stat-departments');
  if(!deptEl) return;
+ var activeEmpCount = typeof employees!=='undefined' ? employees.filter(function(e){return e.active!==false;}).length : 0;
  var html = '';
  STAT_DEPTS.forEach(function(dept){
-  var vals = weekData.map(function(w){
-   if(dept.metric==='profit') return w.profit;
-   if(dept.metric==='income') return w.income;
+  // Массив значений по бакетам (для sparkline)
+  var vals = bucketData.map(function(w,i){
+   if(dept.metric==='profit') return Math.round((w.sales||0)*0.25);
+   if(dept.metric==='income') return w.sales;
    if(dept.metric==='sales') return w.sales;
    if(dept.metric==='implementations') return w.impls;
-   if(dept.metric==='leads') return w.leads;
-   if(dept.metric==='employees') return typeof employees!=='undefined'?employees.filter(function(e){return e.active;}).length:0;
-   if(dept.metric==='quality') return typeof employees!=='undefined'?employees.filter(function(e){return e.active;}).length:0;
-   return 0;
+   if(dept.metric==='leads') return leadsArr ? (leadsArr[i]||0) : null;
+   return null;
   });
-  var last = vals[vals.length-1];
-  var prev = vals.length>1?vals[vals.length-2]:0;
-  var diff = last-prev;
-  var pct = prev?Math.round(diff/prev*100):0;
-  var diffColor = diff>0?'#34D399':diff<0?'#EF5350':'var(--text-muted)';
-  var diffText = (diff>0?'+':'')+pct+'%';
+  // Метрики без данных по времени: employees, quality
+  var hasTimeData = vals.every(function(v){return v!==null;});
+  var last, prev, diff, pct, diffColor, diffText, valText, sparkSvg;
   var isMoney = dept.unit==='T';
-  var valText = isMoney?fmtFull(last):last;
-  var sparkSvg = statSparkSvg(vals, dept.color);
+
+  if(hasTimeData) {
+   last = vals[vals.length-1]||0;
+   prev = vals.length>1?(vals[vals.length-2]||0):0;
+   diff = last-prev;
+   pct = prev?Math.round(diff/prev*100):0;
+   diffColor = diff>0?'#34D399':diff<0?'#EF5350':'var(--text-muted)';
+   diffText = (diff>0?'+':'')+pct+'%';
+   valText = isMoney?fmtFull(last):last;
+   sparkSvg = statSparkSvg(vals, dept.color);
+  } else if(dept.metric==='employees') {
+   // Реальная метрика: активные сотрудники (текущий срез)
+   valText = activeEmpCount;
+   diffText = 'тек.';
+   diffColor = 'var(--text-muted)';
+   sparkSvg = '<div style="width:120px;text-align:right;font-size:10px;color:var(--text-muted)">срез на сегодня</div>';
+  } else {
+   // quality: пока нет источника данных
+   valText = '—';
+   diffText = 'нет данных';
+   diffColor = 'var(--text-muted)';
+   sparkSvg = '<div style="width:120px;text-align:right;font-size:10px;color:var(--text-muted)">—</div>';
+  }
 
   var bg = dept.highlight ? 'rgba('+parseInt(dept.color.slice(1,3),16)+','+parseInt(dept.color.slice(3,5),16)+','+parseInt(dept.color.slice(5,7),16)+',.06)' : 'var(--dark-panel)';
   var border = dept.highlight ? '1.5px solid '+dept.color : '1px solid var(--dark-border)';
@@ -11023,7 +11201,7 @@ function statInit() {
   html += '<div style="background:'+bg+';border:'+border+';border-radius:10px;padding:12px 16px;display:grid;grid-template-columns:36px 1fr auto 120px;gap:14px;align-items:center;cursor:pointer;transition:all .15s" onclick="statOpenPage(\''+dept.metric+'\')" onmouseover="this.style.transform=\'translateX(2px)\'" onmouseout="this.style.transform=\'\'">';
   html += '<div style="width:36px;height:36px;border-radius:50%;background:'+(dept.highlight?dept.color:'var(--dark-card)')+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:'+(dept.highlight?'#fff':'var(--text-muted)')+'">'+dept.num+'</div>';
   html += '<div><div style="font-size:13px;font-weight:600;color:var(--text-primary)">'+dept.name+'</div><div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+(dept.responsible?dept.responsible+' -- ':'')+dept.sub+'</div></div>';
-  html += '<div style="text-align:right"><div style="font-size:17px;font-weight:600;color:var(--text-primary)">'+valText+(isMoney?'':' '+dept.unit)+'</div><div style="font-size:10px;color:'+diffColor+'">'+diffText+'</div></div>';
+  html += '<div style="text-align:right"><div style="font-size:17px;font-weight:600;color:var(--text-primary)">'+valText+(isMoney && hasTimeData?'':(hasTimeData?' '+dept.unit:''))+'</div><div style="font-size:10px;color:'+diffColor+'">'+diffText+'</div></div>';
   html += '<div>'+sparkSvg+'</div>';
   html += '</div>';
  });
@@ -11038,6 +11216,13 @@ window.statToggleDepts = function() {
  var arrow = document.getElementById('stat-depts-arrow');
  if(el) el.style.display = _statDeptsOpen ? 'flex' : 'none';
  if(arrow) arrow.style.transform = _statDeptsOpen ? 'rotate(180deg)' : '';
+ // Увеличиваем диаграмму, когда блок 7 отделений свёрнут
+ var wrap = document.getElementById('stat-main-chart-wrap');
+ if(wrap) {
+  wrap.style.height = _statDeptsOpen ? '220px' : 'calc(100vh - 260px)';
+ }
+ // Перерисовать Chart.js после изменения размера
+ if(_statMainChart) setTimeout(function(){ try{_statMainChart.resize();}catch(e){} }, 280);
 };
 
 function _ensureChart(cb) {
@@ -11046,39 +11231,70 @@ function _ensureChart(cb) {
  var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';s.onload=cb;document.head.appendChild(s);
 }
 
-function statBuildMainChart(labels, sales, impls, leads) {
+var _statBuckets = [];  // Сохраняем границы бакетов для drill-down
+
+function statBuildMainChart(labels, sales, impls, leads, newCliSales) {
  _ensureChart(function(){
   var canvas = document.getElementById('stat-main-canvas');
   if(!canvas) return;
   if(_statMainChart) { _statMainChart.destroy(); _statMainChart=null; }
   var ctx = canvas.getContext('2d');
+  // Индексы: 0-Оплаты, 1-Оплаты по новым, 2-Внедрения, 3-Лиды
+  var datasets = [
+   {label:'Оплаты (T)',data:sales,borderColor:'#3B82F6',backgroundColor:'#3B82F620',tension:.3,borderWidth:2,pointRadius:4,pointHoverRadius:7,fill:false,yAxisID:'y'},
+   {label:'Оплаты по новым клиентам (T)',data:newCliSales||[],borderColor:'#F59E0B',backgroundColor:'#F59E0B20',borderDash:[6,4],tension:.3,borderWidth:2,pointRadius:4,pointHoverRadius:7,fill:false,yAxisID:'y'},
+   {label:'Внедрения (шт)',data:impls,borderColor:'#34D399',backgroundColor:'#34D39920',tension:.3,borderWidth:2,pointRadius:4,pointHoverRadius:7,fill:false,yAxisID:'y1',hidden:true},
+   {label:'Лиды (шт)',data:leads,borderColor:'#A78BFA',backgroundColor:'#A78BFA20',tension:.3,borderWidth:2,pointRadius:4,pointHoverRadius:7,fill:false,yAxisID:'y1',hidden:true}
+  ];
   _statMainChart = new Chart(ctx, {
    type:'line',
-   data:{
-    labels:labels,
-    datasets:[
-     {label:'Оплаты (T)',data:sales,borderColor:'#3B82F6',backgroundColor:'#3B82F620',tension:.3,borderWidth:2,pointRadius:4,pointHoverRadius:7,fill:false,yAxisID:'y'},
-     {label:'Внедрения',data:impls,borderColor:'#34D399',backgroundColor:'#34D39920',tension:.3,borderWidth:2,pointRadius:4,pointHoverRadius:7,fill:false,yAxisID:'y1'},
-     {label:'Лиды',data:leads,borderColor:'#A78BFA',backgroundColor:'#A78BFA20',tension:.3,borderWidth:2,pointRadius:4,pointHoverRadius:7,fill:false,yAxisID:'y1'}
-    ]
-   },
+   data:{labels:labels,datasets:datasets},
    options:{
     responsive:true,
     maintainAspectRatio:false,
     interaction:{mode:'index',intersect:false},
+    onClick:function(evt,els,chart){
+     if(!els||!els.length) return;
+     var el = els[0];
+     var bucketIdx = el.index;
+     var dsIdx = el.datasetIndex;
+     var kind = dsIdx===0?'sales':dsIdx===1?'newcli':dsIdx===2?'impls':'leads';
+     statShowDrilldown(bucketIdx, kind);
+    },
     plugins:{
-     legend:{display:true,position:'top',labels:{color:'#94A3B8',font:{size:11,family:'Inter'},boxWidth:12,padding:16,usePointStyle:true}},
+     legend:{display:true,position:'top',
+      labels:{color:'#94A3B8',font:{size:11,family:'Inter'},boxWidth:12,padding:16,usePointStyle:true},
+      onClick:function(e,legendItem,legend){
+       // Группы: money(0,1) и count(2,3). Клик делает активной только выбранную линию в своей группе.
+       var chart = legend.chart;
+       var idx = legendItem.datasetIndex;
+       var moneyGroup = (idx===0||idx===1);
+       chart.data.datasets.forEach(function(ds,i){
+        var iMoney = (i===0||i===1);
+        if(moneyGroup){
+         // Показываем только выбранную money-линию, прячем counts
+         if(iMoney) ds.hidden = (i!==idx);
+         else ds.hidden = true;
+        } else {
+         // Показываем только выбранную counts-линию, прячем money
+         if(!iMoney) ds.hidden = (i!==idx);
+         else ds.hidden = true;
+        }
+       });
+       chart.update();
+      }
+     },
      tooltip:{enabled:true,backgroundColor:'#1A3A52',titleColor:'#E2E8F0',bodyColor:'#E2E8F0',borderColor:'rgba(59,130,246,.3)',borderWidth:1,padding:10,displayColors:true,callbacks:{
       label:function(ctx){
        var v=ctx.parsed.y;
-       if(ctx.datasetIndex===0) return ctx.dataset.label+': '+fmtFull(v);
-       return ctx.dataset.label+': '+v;
+       if(ctx.datasetIndex===0||ctx.datasetIndex===1) return ctx.dataset.label+': '+fmtFull(v);
+       return ctx.dataset.label+': '+v+' шт';
       }
      }}
     },
     scales:{
-     y:{position:'left',beginAtZero:true,grid:{color:'rgba(148,163,184,.06)'},ticks:{color:'#94A3B8',font:{size:10},callback:function(v){return v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?Math.round(v/1000)+'K':v;}}},
-     y1:{position:'right',beginAtZero:true,grid:{display:false},ticks:{color:'#94A3B8',font:{size:10}}},
+     y:{position:'left',beginAtZero:true,grid:{color:'rgba(148,163,184,.06)'},title:{display:true,text:'Сумма, '+(typeof _CUR!=='undefined'?_CUR:'T'),color:'#94A3B8',font:{size:10}},ticks:{color:'#94A3B8',font:{size:10},callback:function(v){return v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?Math.round(v/1000)+'K':v;}}},
+     y1:{position:'right',beginAtZero:true,grid:{display:false},title:{display:true,text:'Количество, шт',color:'#94A3B8',font:{size:10}},ticks:{color:'#94A3B8',font:{size:10},precision:0}},
      x:{grid:{display:false},ticks:{color:'#94A3B8',font:{size:9},maxRotation:0}}
     }
    }
@@ -11087,44 +11303,127 @@ function statBuildMainChart(labels, sales, impls, leads) {
 }
 
 // Развернуть график на весь экран
+// Drill-down по клику на точку графика: показывает список оплат, составивших значение
+window.statShowDrilldown = function(bucketIdx, kind){
+ if(typeof payments==='undefined') return;
+ var wk = _statBuckets[bucketIdx]; if(!wk) return;
+ // Фильтр по менеджеру (если выбран)
+ var fEmp = _statEmpFilter==='all' ? null : _statEmpFilter;
+ var items = payments.filter(function(p){
+  var d = new Date(p.date||p.d);
+  if(!(d>=wk.start && d<wk.end)) return false;
+  if(fEmp){
+   var nm = p.managerName || (typeof empName==='function' ? empName(p.employee) : '');
+   if(nm!==fEmp) return false;
+  }
+  var raw = String(p.categoryRaw||'').toLowerCase().trim();
+  if(kind==='newcli'){
+   return (raw.indexOf('нов')>=0 || raw==='новый клиент') && raw.indexOf('абон')<0;
+  }
+  if(kind==='impls'){
+   return p.activationDate && String(p.activationDate).trim().length>0;
+  }
+  // sales = все
+  return true;
+ });
+ // Лиды — отдельный источник, показываем заметку
+ var ttl = {sales:'Все оплаты', newcli:'Оплаты по новым клиентам', impls:'Внедрения (активированные)', leads:'Лиды'}[kind] || '';
+ var modal = document.createElement('div');
+ modal.style.cssText='position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:20px';
+ modal.onclick=function(e){ if(e.target===modal) modal.remove(); };
+ var rows = '';
+ var total = 0, tcount = items.length;
+ if(kind==='leads'){
+  rows = '<tr><td colspan="5" style="padding:14px;color:var(--text-muted);text-align:center">Лиды приходят из таблицы маркетинга (LEADS_SHEET). Источник не содержит разбивки по менеджерам/клиентам — есть только суммарные значения по датам из колонки N «Лист1».</td></tr>';
+ } else if(!items.length){
+  rows = '<tr><td colspan="5" style="padding:14px;color:var(--text-muted);text-align:center">Нет оплат за этот период</td></tr>';
+ } else {
+  items.sort(function(a,b){ return new Date(a.date||a.d) - new Date(b.date||b.d); });
+  items.forEach(function(p){
+   total += (p.amount||0);
+   var mgr = p.managerName || (typeof empName==='function'?empName(p.employee):'');
+   var actMark = p.activationDate ? '<span style="color:#34D399" title="активирован '+p.activationDate+'">✓</span>' : '';
+   rows += '<tr style="border-top:1px solid var(--dark-border)">'
+     +'<td style="padding:8px 10px;white-space:nowrap">'+(p.date||p.d||'')+'</td>'
+     +'<td style="padding:8px 10px">'+(p.client||'—')+' '+actMark+'</td>'
+     +'<td style="padding:8px 10px;color:var(--text-secondary)">'+(p.categoryRaw||p.category||'')+'</td>'
+     +'<td style="padding:8px 10px">'+(mgr||'—')+'</td>'
+     +'<td style="padding:8px 10px;text-align:right;font-weight:700;color:#3B82F6">'+fmtFull(p.amount||0)+'</td>'
+     +'</tr>';
+  });
+ }
+ var periodText = wk.label + ' · ' + (_statPeriod==='week'?'неделя':_statPeriod==='month'?'месяц':'квартал');
+ modal.innerHTML = '<div style="background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:12px;max-width:900px;width:100%;max-height:85vh;display:flex;flex-direction:column">'
+  +'<div style="padding:16px 20px;border-bottom:1px solid var(--dark-border);display:flex;justify-content:space-between;align-items:center">'
+   +'<div><div style="font-size:15px;font-weight:700;color:var(--text-primary)">'+ttl+'</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">'+periodText+(fEmp?' · '+fEmp:'')+'</div></div>'
+   +'<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="padding:6px 14px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);cursor:pointer;font-size:12px">Закрыть</button>'
+  +'</div>'
+  +'<div style="overflow-y:auto;flex:1"><table style="width:100%;border-collapse:collapse;font-size:12px;color:var(--text-primary)">'
+   +'<thead><tr style="background:var(--dark-card);position:sticky;top:0"><th style="padding:10px;text-align:left">Дата</th><th style="padding:10px;text-align:left">Клиент</th><th style="padding:10px;text-align:left">Статья</th><th style="padding:10px;text-align:left">Менеджер</th><th style="padding:10px;text-align:right">Сумма</th></tr></thead>'
+   +'<tbody>'+rows+'</tbody>'
+   +(kind==='leads'?'':'<tfoot><tr style="background:var(--dark-card);font-weight:700"><td colspan="4" style="padding:10px">ИТОГО ('+tcount+')</td><td style="padding:10px;text-align:right;color:#3B82F6">'+fmtFull(total)+'</td></tr></tfoot>')
+   +'</table></div>'
+  +'</div>';
+ document.body.appendChild(modal);
+};
+
 window.statExpandChart = function() {
  var overlay = document.createElement('div');
  overlay.style.cssText='position:fixed;inset:0;z-index:10000;background:var(--dark-void);display:flex;flex-direction:column;padding:20px';
  overlay.onclick=function(e){if(e.target===overlay){overlay.remove();statInit();}};
- overlay.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div style="font-size:16px;font-weight:700;color:var(--text-primary)">Динамика компании по неделям</div><button onclick="this.closest(\'div[style*=fixed]\').remove();statInit();" style="padding:6px 16px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer">Закрыть</button></div><div style="flex:1;position:relative"><canvas id="stat-fullscreen-canvas"></canvas></div>';
+ var periodWord = _statPeriod==='week'?'неделям':_statPeriod==='month'?'месяцам':'кварталам';
+ overlay.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div style="font-size:16px;font-weight:700;color:var(--text-primary)">Динамика компании по '+periodWord+'</div><button onclick="this.closest(\'div[style*=fixed]\').remove();statInit();" style="padding:6px 16px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer">Закрыть</button></div><div style="flex:1;position:relative"><canvas id="stat-fullscreen-canvas"></canvas></div>';
  document.body.appendChild(overlay);
 
  // Пересоздать график на fullscreen canvas
  _ensureChart(function(){
-  var weeks=statGetWeeks(8);
-  var labels=[],sales=[],impls=[],leads=[];
+  var bucketCount = _statPeriod==='month' ? 6 : (_statPeriod==='quarter' ? 4 : 8);
+  var bks = statGetBuckets(_statPeriod, bucketCount);
+  var labels=[],sales=[],impls=[],newCli=[],bktRanges=[];
   if(typeof payments!=='undefined'){
-   weeks.forEach(function(wk){
-    labels.push(wk.label);
-    var wp=payments.filter(function(p){var d=new Date(p.date||p.d);return d>=wk.start&&d<wk.end;});
-    sales.push(wp.filter(function(p){return p.category==='license'||p.category==='implementation';}).reduce(function(s,p){return s+(p.amount||0);},0));
-    impls.push(wp.filter(function(p){return p.category==='implementation';}).length);
-    var c={};wp.filter(function(p){return p.category==='license'||p.category==='implementation';}).forEach(function(p){c[p.client]=1;});
-    leads.push(Object.keys(c).length);
+   var fEmpFs = _statEmpFilter==='all' ? null : _statEmpFilter;
+   var fp = !fEmpFs ? payments : payments.filter(function(p){
+    var nm = p.managerName || (typeof empName==='function' ? empName(p.employee) : '');
+    return nm === fEmpFs;
+   });
+   bks.forEach(function(wk){
+    labels.push(wk.label); bktRanges.push(wk);
+    var wp=fp.filter(function(p){var d=new Date(p.date||p.d);return d>=wk.start&&d<wk.end;});
+    // Все оплаты
+    sales.push(wp.reduce(function(s,p){return s+(p.amount||0);},0));
+    // Активированные
+    impls.push(wp.filter(function(p){return p.activationDate && String(p.activationDate).trim().length>0;}).length);
+    // Новые клиенты: categoryRaw содержит "нов" кроме "абон" (та же логика что в calcManagerBonus)
+    var nc=0;
+    wp.forEach(function(p){
+     var raw=String(p.categoryRaw||'').toLowerCase().trim();
+     if((raw.indexOf('нов')>=0 || raw==='новый клиент') && raw.indexOf('абон')<0) nc += (p.amount||0);
+    });
+    newCli.push(nc);
    });
   }
+  statLoadLeadsOnce(function(leadsData){
+   var leads = bktRanges.map(function(wk){var t=0;leadsData.forEach(function(l){if(l.date>=wk.start&&l.date<wk.end)t+=l.count;});return t;});
   var canvas=document.getElementById('stat-fullscreen-canvas');
   if(!canvas) return;
   new Chart(canvas.getContext('2d'),{
    type:'line',
    data:{labels:labels,datasets:[
     {label:'Оплаты (T)',data:sales,borderColor:'#3B82F6',tension:.3,borderWidth:2.5,pointRadius:5,pointHoverRadius:9,fill:false,yAxisID:'y'},
-    {label:'Внедрения',data:impls,borderColor:'#34D399',tension:.3,borderWidth:2.5,pointRadius:5,pointHoverRadius:9,fill:false,yAxisID:'y1'},
-    {label:'Лиды',data:leads,borderColor:'#A78BFA',tension:.3,borderWidth:2.5,pointRadius:5,pointHoverRadius:9,fill:false,yAxisID:'y1'}
+    {label:'Оплаты по новым клиентам (T)',data:newCli,borderColor:'#F59E0B',borderDash:[6,4],tension:.3,borderWidth:2.5,pointRadius:5,pointHoverRadius:9,fill:false,yAxisID:'y'},
+    {label:'Внедрения (шт)',data:impls,borderColor:'#34D399',tension:.3,borderWidth:2.5,pointRadius:5,pointHoverRadius:9,fill:false,yAxisID:'y1',hidden:true},
+    {label:'Лиды (шт)',data:leads,borderColor:'#A78BFA',tension:.3,borderWidth:2.5,pointRadius:5,pointHoverRadius:9,fill:false,yAxisID:'y1',hidden:true}
    ]},
    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     plugins:{legend:{display:true,position:'top',labels:{color:'#E2E8F0',font:{size:13,family:'Inter'},boxWidth:14,padding:20,usePointStyle:true}},
-     tooltip:{enabled:true,backgroundColor:'#1A3A52',titleColor:'#E2E8F0',bodyColor:'#E2E8F0',titleFont:{size:13},bodyFont:{size:12},padding:12,callbacks:{label:function(ctx){var v=ctx.parsed.y;if(ctx.datasetIndex===0)return ctx.dataset.label+': '+fmtFull(v);return ctx.dataset.label+': '+v;}}}},
+     tooltip:{enabled:true,backgroundColor:'#1A3A52',titleColor:'#E2E8F0',bodyColor:'#E2E8F0',titleFont:{size:13},bodyFont:{size:12},padding:12,callbacks:{label:function(ctx){var v=ctx.parsed.y;if(ctx.datasetIndex===0||ctx.datasetIndex===1)return ctx.dataset.label+': '+fmtFull(v);return ctx.dataset.label+': '+v;}}}},
     scales:{
      y:{position:'left',beginAtZero:true,grid:{color:'rgba(148,163,184,.08)'},ticks:{color:'#94A3B8',font:{size:12},callback:function(v){return v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?Math.round(v/1000)+'K':v;}}},
      y1:{position:'right',beginAtZero:true,grid:{display:false},ticks:{color:'#94A3B8',font:{size:12}}},
      x:{grid:{display:false},ticks:{color:'#94A3B8',font:{size:11}}}
     }}
+  });
   });
  });
 };
