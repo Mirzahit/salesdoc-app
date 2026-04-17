@@ -1368,6 +1368,33 @@ body.light .content td span[style]{color:#2A3042!important}
  .kbc-body{grid-template-columns:1fr}
  .kbc-sidebar{border-left:none;border-top:1px solid var(--dark-border)}
 }
+
+/* ============================================================
+   AVATARS — цветные инициалы сотрудников (ТЗ v146, изменение 3)
+   ============================================================ */
+.avatar{
+ display:inline-flex;
+ align-items:center;
+ justify-content:center;
+ width:28px;
+ height:28px;
+ border-radius:50%;
+ font-size:11px;
+ font-weight:700;
+ letter-spacing:-0.2px;
+ flex-shrink:0;
+ vertical-align:middle;
+}
+.avatar-sm{
+ width:22px;
+ height:22px;
+ font-size:10px;
+}
+.avatar-lg{
+ width:40px;
+ height:40px;
+ font-size:14px;
+}
 </style>
 
 </head>
@@ -2937,6 +2964,34 @@ body.light .content td span[style]{color:#2A3042!important}
 
 <script>
 // ============================================================
+// AVATARS — ТЗ v146, изменение 3
+// ============================================================
+var AVATARS = {
+ 'Айдос Хапез': {initials:'АХ', bg:'#E0E7FF', color:'#3730A3'},
+ 'Юлия':        {initials:'Ю',  bg:'#FCE7F3', color:'#9D174D'},
+ 'Айдос':       {initials:'А',  bg:'#DBEAFE', color:'#1E40AF'},
+ 'Самат':       {initials:'С',  bg:'#F3E8FF', color:'#6B21A8'},
+ 'Акбар':       {initials:'Ак', bg:'#FEF3C7', color:'#92400E'},
+ 'Гульшан':     {initials:'Г',  bg:'#ECFDF5', color:'#047857'},
+ 'Аурика':      {initials:'Ау', bg:'#FEE2E2', color:'#991B1B'},
+ 'Мырзахыт':    {initials:'МА', bg:'#E0F2FE', color:'#075985'}
+};
+function renderAvatar(name, size){
+ size = size || '';
+ var n = String(name||'').trim();
+ // Точное совпадение
+ var a = AVATARS[n];
+ // Мягкое совпадение: "Айдос Хапез Ахметов" → "Айдос Хапез" (в порядке убывания длины ключа)
+ if(!a){
+  var keys = Object.keys(AVATARS).sort(function(x,y){return y.length-x.length;});
+  for(var i=0;i<keys.length;i++){ if(n.indexOf(keys[i])>=0){ a=AVATARS[keys[i]]; break; } }
+ }
+ var cls = 'avatar' + (size ? ' '+size : '');
+ if(!a) return '<span class="'+cls+'" style="background:#F1F5F9;color:#64748B">?</span>';
+ return '<span class="'+cls+'" style="background:'+a.bg+';color:'+a.color+'" title="'+n.replace(/"/g,'&quot;')+'">'+a.initials+'</span>';
+}
+
+// ============================================================
 // THEME SWITCHER (light / dark)
 // ============================================================
 function setTheme(mode) {
@@ -4076,7 +4131,7 @@ function renderAvgCheckManagers(ps) {
   var color = barW >= 70 ? '#4CAF50' : '#EF9A9A';
   html += '<div style="background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:12px;padding:14px">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-  html += '<span style="font-size:11px;color:var(--text-light);font-weight:700">' + m.name + '</span>';
+  html += '<span style="font-size:11px;color:var(--text-light);font-weight:700;display:inline-flex;align-items:center;gap:8px">' + renderAvatar(m.name,'avatar-sm') + '<span>' + m.name + '</span></span>';
   html += '<span style="font-size:9px;color:var(--text-muted)">' + m.clients + ' новых клиентов</span></div>';
   var _c = COUNTRY_CONFIG[currentCountry].currency;
   html += '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:18px;color:' + color + '">' + fmtBonus(m.avg) + ' <span style="font-size:10px;color:var(--text-muted)">'+_c+'</span></div>';
@@ -4783,7 +4838,7 @@ function renderAllPayments() {
  return '<tr>'
  +'<td style="color:var(--text-muted)">'+p.date+'</td>'
  +'<td>'+p.client+'</td>'
- +'<td style="color:var(--text-secondary);font-size:11px">'+empName(p.employee)+'</td>'
+ +'<td style="color:var(--text-secondary);font-size:11px"><span style="display:inline-flex;align-items:center;gap:6px">'+renderAvatar(p.managerName||empName(p.employee),'avatar-sm')+'<span>'+empName(p.employee)+'</span></span></td>'
  +'<td style="color:var(--text-secondary)">'+( catNames[p.category]||p.category)+'</td>'
  +'<td style="color:var(--gold-bright);font-weight:600">'+fmtFull(p.amount)+'</td>'
  +'<td style="color:var(--text-muted)">'+( methodNames[p.method]||p.method||'—')+'</td>'
@@ -4894,7 +4949,7 @@ function renderAllActs() {
  const statusLabel={signed:'ПОДПИСАН',process:'В ПРОЦЕССЕ',pending:'ОЖИДАНИЕ'};
  el.innerHTML=acts.slice().reverse().map(a=>`<tr>
  <td style="color:var(--text-muted)">${a.date}</td><td>${a.client}</td>
- <td style="color:var(--text-secondary);font-size:11px">${empName(a.employee)}</td>
+ <td style="color:var(--text-secondary);font-size:11px"><span style="display:inline-flex;align-items:center;gap:6px">${renderAvatar(a.techSupport||empName(a.employee),'avatar-sm')}<span>${empName(a.employee)}</span></span></td>
  <td style="color:var(--text-secondary);max-width:180px;overflow:hidden;text-overflow:ellipsis">${a.project.substring(0,35)}${a.project.length>35?'...':''}</td>
  <td style="color:var(--gold-bright);font-weight:600">${fmtFull(a.amount)}</td>
  <td style="color:var(--text-muted)">${a.number}</td>
@@ -10059,11 +10114,11 @@ function intgRender() {
   if (queueNum > 0) h += '<div style="width:20px;height:20px;border-radius:50%;background:rgba(59,130,246,.15);color:#93C5FD;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:Space Grotesk,sans-serif">'+queueNum+'</div>';
   h += '<div style="font-size:12px;font-weight:700;color:#E2E8F0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'+(r.status==='Отменено'?';text-decoration:line-through;opacity:.5':'')+'">'+r.company+'</div>';
   h += badges + '</div>';
-  if (r.operator && r.operator !== '\u2014') h += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0"><span style="color:#475569">Оператор</span><span style="color:#94A3B8">'+r.operator+'</span></div>';
+  if (r.operator && r.operator !== '\u2014') h += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;padding:1px 0"><span style="color:#475569">Оператор</span><span style="color:#94A3B8;display:inline-flex;align-items:center;gap:5px">'+renderAvatar(r.operator,'avatar-sm')+'<span>'+r.operator+'</span></span></div>';
   if (deadline) h += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0"><span style="color:#475569">'+(r.status==='Готово'?'Выполнено':'Срок')+'</span><span style="color:'+(isOverdue?'#EF5350':r.status==='Готово'?'#81C784':'#94A3B8')+';font-weight:'+(isOverdue?'700':'400')+'">'+(isOverdue?'ПРОСРОЧЕН ':'')+deadline+'</span></div>';
   if (r.state && r.state !== '\u2014' && r.state !== 'Нормально') h += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0"><span style="color:#475569">Состояние</span><span style="color:#FFD54F;font-weight:600">'+r.state+'</span></div>';
   h += '<div class="intg-detail" style="display:none;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06);font-size:10px">';
-  if (r.manager && r.manager !== '\u2014') h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Менеджер</span><span style="color:#94A3B8">'+r.manager+'</span></div>';
+  if (r.manager && r.manager !== '\u2014') h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:1px 0"><span style="color:#475569">Менеджер</span><span style="color:#94A3B8;display:inline-flex;align-items:center;gap:5px">'+renderAvatar(r.manager,'avatar-sm')+'<span>'+r.manager+'</span></span></div>';
   if (fmtD(r.dateStart)) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Взято в работу</span><span style="color:#94A3B8">'+fmtD(r.dateStart)+'</span></div>';
   if (r.status === 'Готово' && fmtD(r.dateDone)) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Дата исполнения</span><span style="color:#81C784">'+fmtD(r.dateDone)+'</span></div>';
   if (r.login) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Логин/пароль</span><span style="color:#94A3B8;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.login.replace(/"/g,'&quot;')+'">'+r.login+'</span></div>';
@@ -11470,7 +11525,7 @@ window.statShowDrilldown = function(bucketIdx, kind){
      +'<td style="padding:8px 10px;white-space:nowrap">'+(p.date||p.d||'')+'</td>'
      +'<td style="padding:8px 10px">'+(p.client||'—')+' '+actMark+'</td>'
      +'<td style="padding:8px 10px;color:var(--text-secondary)">'+(p.categoryRaw||p.category||'')+'</td>'
-     +'<td style="padding:8px 10px">'+(mgr||'—')+'</td>'
+     +'<td style="padding:8px 10px"><span style="display:inline-flex;align-items:center;gap:6px">'+renderAvatar(mgr,'avatar-sm')+'<span>'+(mgr||'—')+'</span></span></td>'
      +'<td style="padding:8px 10px;text-align:right;font-weight:700;color:#3B82F6">'+fmtFull(p.amount||0)+'</td>'
      +'</tr>';
   });
