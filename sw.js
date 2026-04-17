@@ -1,4 +1,4 @@
-var CACHE_NAME = 'salesdoc-v127';
+var CACHE_NAME = 'salesdoc-v130';
 var PRECACHE = ['/', '/manifest.json', '/icon-192.svg'];
 
 self.addEventListener('install', function(e) {
