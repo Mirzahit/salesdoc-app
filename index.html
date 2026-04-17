@@ -397,14 +397,18 @@ body.light .stat-card-value{color:#111827}
 /* ТЗ v146, изменение 6: цветная полоска 2px сверху каждой KPI-карточки.
    По умолчанию индиго. Карточки могут задать другой цвет через --accent. */
 body.light .kpi-card::before{
- content:'';
- position:absolute;
- top:0;left:0;right:0;
- height:2px;
- background:var(--accent,#6366F1);
- z-index:1;
- border-radius:0;
- inset:auto;
+ content:''!important;
+ position:absolute!important;
+ top:0!important;
+ left:0!important;
+ right:0!important;
+ bottom:auto!important;
+ width:auto!important;
+ height:2px!important;
+ background:var(--accent,#6366F1)!important;
+ z-index:1!important;
+ border-radius:0!important;
+ inset:0 0 auto 0!important;
 }
 body.light .kpi-card[data-accent="green"]{--accent:#059669}
 body.light .kpi-card[data-accent="red"]{--accent:#DC2626}
@@ -445,7 +449,9 @@ body.light .nav-group-popup .nav-item:hover{background:#F3F4F6;color:#111827}
 body.light .nav-group-popup .nav-item.active{background:#EEF2FF;color:#4338CA;font-weight:600}
 body.light .nav-group-popup .nav-item.active::before{display:none}
 /* Контент страницы сдвигается правее на ширину панели + отступы (180 + 10 + 70 + 10) */
-body.light.has-submenu .main{margin-left:270px}
+body.light.has-submenu .main{margin-left:278px}
+/* Подменю-панель: двигаем относительно нового 78px сайдбара */
+body.light .nav-group.has-active>.nav-group-popup{left:88px!important}
 
 /* ТЗ v146, изменение 10: цвет активного пункта в основном меню (light theme) */
 body.light .sidebar{background:#111827}
@@ -460,52 +466,30 @@ body.light .nav-item-solo.active::before{background:#6366F1;width:2px;top:10px;b
 body.light .logo-text{color:#FFFFFF}
 body.light .logo-sub{color:rgba(255,255,255,0.5)}
 
-/* ТЗ v146: стиль меню по референсу (одинаково в обеих темах) */
-.sidebar{background:#111827!important;border-right:none!important}
-.nav-group-trigger .nav-g-icon{
- display:flex;
- align-items:center;
- justify-content:center;
- width:40px;
- height:40px;
- border-radius:10px;
- margin-bottom:4px;
- transition:all .2s;
- background:transparent;
- font-size:inherit;
-}
-.nav-item-solo .nav-g-icon{
- display:flex;
- align-items:center;
- justify-content:center;
- width:40px;
- height:40px;
- border-radius:10px;
- margin-bottom:4px;
- transition:all .2s;
- background:transparent;
-}
-.nav-group-trigger,.nav-item-solo{
+/* ТЗ v146: меню — точная спецификация .nav-btn с 20x20 SVG.
+   НИКАКИХ градиентных квадратов вокруг иконок. Активный пункт
+   подсвечивается только фоном #1F2937 + 2px индиго-полоской слева. */
+.sidebar{background:#111827!important;border-right:none!important;width:78px!important;padding:12px 8px!important;border-radius:0 12px 12px 0}
+.nav-btn{
+ width:100%;
+ padding:10px 4px!important;
+ text-align:center;
+ border-radius:8px!important;
+ cursor:pointer;
+ transition:background 0.15s!important;
+ position:relative;
+ margin-bottom:4px!important;
+ background:transparent!important;
+ display:block!important;
+ font-size:9px!important;
+ font-weight:500!important;
+ letter-spacing:0.2px!important;
  color:#9CA3AF!important;
- padding:8px 4px!important;
+ gap:0!important;
 }
-.nav-group-trigger:hover,.nav-item-solo:hover{background:transparent!important;color:#FFFFFF!important}
-.nav-group-trigger:hover .nav-g-icon,.nav-item-solo:hover .nav-g-icon{background:#1F2937}
-/* Активный пункт — градиентный кружок с иконкой + подложка */
-.nav-group.has-active>.nav-group-trigger,.nav-item-solo.active{
- background:#1F2937!important;
- color:#FFFFFF!important;
- font-weight:600!important;
- border-radius:10px;
- margin:2px 6px;
- padding:8px 4px!important;
-}
-.nav-group.has-active>.nav-group-trigger .nav-g-icon,.nav-item-solo.active .nav-g-icon{
- background:linear-gradient(135deg,#6366F1 0%,#818CF8 100%);
- color:#FFFFFF;
- box-shadow:0 2px 8px rgba(99,102,241,.4);
-}
-.nav-group.has-active>.nav-group-trigger::before,.nav-item-solo.active::before{
+.nav-btn:hover{background:#1F2937!important}
+.nav-btn.active,.nav-group.has-active>.nav-btn{background:#1F2937!important}
+.nav-btn.active::before,.nav-group.has-active>.nav-btn::before{
  content:'';
  position:absolute;
  left:0;
@@ -515,7 +499,38 @@ body.light .logo-sub{color:rgba(255,255,255,0.5)}
  background:#6366F1;
  border-radius:0 2px 2px 0;
 }
-/* Логотип/аватарка */
+.nav-icon{
+ width:20px!important;
+ height:20px!important;
+ margin:0 auto 5px!important;
+ display:block!important;
+ background:transparent!important;
+ border-radius:0!important;
+ padding:0!important;
+ box-shadow:none!important;
+}
+.nav-icon-stroke{stroke:#9CA3AF;transition:stroke 0.15s}
+.nav-btn.active .nav-icon-stroke,
+.nav-btn:hover .nav-icon-stroke,
+.nav-group.has-active>.nav-btn .nav-icon-stroke{stroke:white}
+/* fill-атрибут для circle в иконке Управление (был fill="currentColor") */
+.nav-icon-stroke[fill]:not([fill="none"]){fill:#9CA3AF}
+.nav-btn.active .nav-icon-stroke[fill]:not([fill="none"]),
+.nav-btn:hover .nav-icon-stroke[fill]:not([fill="none"]){fill:white}
+.nav-label{
+ font-size:9px!important;
+ font-weight:500!important;
+ letter-spacing:0.2px!important;
+ color:#9CA3AF!important;
+ font-family:'Manrope','Inter',sans-serif!important;
+}
+.nav-btn.active .nav-label,
+.nav-btn:hover .nav-label,
+.nav-group.has-active>.nav-btn .nav-label{color:white!important;font-weight:600!important}
+/* Старая gold-полоска у has-active убрана */
+.nav-group.has-active>.nav-group-trigger::before{background:transparent!important;width:0!important}
+.nav-item-solo.active::before{background:transparent!important;width:0!important}
+/* Логотип текст */
 .logo-text{color:#FFFFFF}
 .logo-sub{color:rgba(255,255,255,0.5)}
 /* Shared gold text effect */
@@ -706,7 +721,7 @@ body:not(.light){background-image:radial-gradient(ellipse 80% 60% at 15% 10%, rg
 .country-btn.active{background:rgba(59,130,246,.15);color:var(--gold-bright);border:1px solid rgba(59,130,246,.3);box-shadow:0 0 12px rgba(59,130,246,.1)}
 
 /* MAIN */
-.main{margin-left:70px;min-height:100vh}
+.main{margin-left:78px;min-height:100vh}
 .topbar{height:60px;background:var(--topbar-bg);border-bottom:1px solid var(--dark-border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;position:sticky;top:0;z-index:50;backdrop-filter:blur(10px)}
 .page-title{font-family:'Manrope','Inter',sans-serif;font-size:18px;font-weight:700;letter-spacing:-0.2px;color:var(--text-primary)}
 .topbar-right{display:flex;align-items:center;gap:12px}
@@ -1240,7 +1255,9 @@ body.light .theme-btn.active{background:rgba(76,140,245,.1);color:#1967D2}
 body.light .kpi-label{color:#6B7A99!important}
 body.light .kpi-value{color:#111827!important;-webkit-text-fill-color:#111827!important}
 body.light .page-title{color:#111827!important;-webkit-text-fill-color:#111827!important}
-body.light .panel-title{color:#1967D2!important;-webkit-text-fill-color:#1967D2!important}
+body.light .panel-title{color:#111827!important;-webkit-text-fill-color:#111827!important;letter-spacing:-0.1px!important;font-family:'Manrope','Inter',sans-serif!important;background:none!important}
+/* Светлая тема -- отключаем тонированный радиальный фон */
+body.light{background-image:none!important}
 body.light .gold-text,.gold-gradient-text{color:#1967D2!important;-webkit-text-fill-color:#1967D2!important}
 /* ТЗ v146, изменение 7: бейджи-дельты согласно палитре */
 body.light .kpi-delta{padding:2px 6px!important;border-radius:4px!important;font-size:10px!important;font-weight:600!important}
@@ -1561,7 +1578,7 @@ body.light .content td span[style]{color:#2A3042!important}
 <!-- SIDEBAR -->
 <aside class="sidebar" id="sidebar" style="display:none">
  <div class="logo-area">
- <img src="data:image/png;base64,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" alt="SD" style="width:42px;height:auto;border-radius:10px">
+ <div style="width:40px;height:40px;background:#6366F1;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:15px;letter-spacing:-0.5px;font-family:'Manrope',sans-serif">SD</div>
  </div>
  <div class="current-user-badge" id="user-badge" onclick="showView('cabinet')" style="cursor:pointer" title="Личный кабинет">
  <div class="cub-avatar" id="ub-avatar">АД</div>
@@ -1576,13 +1593,10 @@ body.light .content td span[style]{color:#2A3042!important}
  <button class="country-btn" data-country="KG" onclick="switchCountry('KG')">KG</button>
  </div>
  <div class="nav-section">
- <div class="nav-item-solo active" data-view="dashboard" onclick="showView('dashboard')">
-  <span class="nav-g-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
-  Дашборд
- </div>
+ <div class="nav-item-solo nav-btn active"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect class="nav-icon-stroke" x="3" y="3" width="6" height="6" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="11" y="3" width="6" height="4" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="3" y="11" width="6" height="4" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="11" y="9" width="6" height="8" rx="1.5" stroke-width="1.5"/></svg><div class="nav-label">Дашборд</div></div>
 
  <div class="nav-group" onclick="navGroupTouch(this)">
-  <div class="nav-group-trigger"><span class="nav-g-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg></span>Финансы</div>
+  <div class="nav-group-trigger nav-btn"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle class="nav-icon-stroke" cx="10" cy="10" r="7" stroke-width="1.5"/><path class="nav-icon-stroke" d="M7 10h6M10 7v6" stroke-width="1.5" stroke-linecap="round"/></svg><div class="nav-label">Финансы</div></div>
   <div class="nav-group-popup">
    <div class="nav-popup-title">Финансы</div>
    <div class="nav-item" data-view="payments" onclick="showView('payments')">Оплаты</div>
@@ -1592,7 +1606,7 @@ body.light .content td span[style]{color:#2A3042!important}
  </div>
 
  <div class="nav-group" onclick="navGroupTouch(this)">
-  <div class="nav-group-trigger"><span class="nav-g-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg></span>Клиенты</div>
+  <div class="nav-group-trigger nav-btn"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle class="nav-icon-stroke" cx="10" cy="7" r="3" stroke-width="1.5"/><path class="nav-icon-stroke" d="M4 17c0-3 2.5-5 6-5s6 2 6 5" stroke-width="1.5" stroke-linecap="round"/></svg><div class="nav-label">Клиенты</div></div>
   <div class="nav-group-popup">
    <div class="nav-popup-title">Клиенты</div>
    <div class="nav-item" data-view="keyclients" onclick="showView('keyclients')">Ключевые клиенты</div>
@@ -1602,7 +1616,7 @@ body.light .content td span[style]{color:#2A3042!important}
  </div>
 
  <div class="nav-group" onclick="navGroupTouch(this)">
-  <div class="nav-group-trigger"><span class="nav-g-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><circle cx="5" cy="6" r="1.2" fill="currentColor" stroke="none"/><path d="M9 6h12"/><circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none"/><path d="M9 12h12"/><circle cx="5" cy="18" r="1.2" fill="currentColor" stroke="none"/><path d="M9 18h12"/></svg></span>Управление</div>
+  <div class="nav-group-trigger nav-btn"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect class="nav-icon-stroke" x="3" y="4" width="14" height="3" rx="1" stroke-width="1.5"/><rect class="nav-icon-stroke" x="3" y="9" width="10" height="3" rx="1" stroke-width="1.5"/><rect class="nav-icon-stroke" x="3" y="14" width="12" height="3" rx="1" stroke-width="1.5"/></svg><div class="nav-label">Управление</div></div>
   <div class="nav-group-popup">
    <div class="nav-popup-title">Управление</div>
    <div class="nav-item" data-view="academy" onclick="showView('academy')">Академия</div>
@@ -1610,7 +1624,7 @@ body.light .content td span[style]{color:#2A3042!important}
  </div>
 
  <div class="nav-group" onclick="navGroupTouch(this)">
-  <div class="nav-group-trigger"><span class="nav-g-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span>Инструменты</div>
+  <div class="nav-group-trigger nav-btn"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect class="nav-icon-stroke" x="3" y="3" width="14" height="14" rx="2" stroke-width="1.5"/><path class="nav-icon-stroke" d="M6 7h8M6 10h5M6 13h7" stroke-width="1.5" stroke-linecap="round"/></svg><div class="nav-label">Инструменты</div></div>
   <div class="nav-group-popup">
    <div class="nav-popup-title">Инструменты</div>
    <div class="nav-item" data-view="statistics" onclick="showView('statistics')">Статистики</div>
