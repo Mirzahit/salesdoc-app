@@ -10388,7 +10388,23 @@ window.addEventListener('offline',function(){
  if(st)st.innerHTML='<span style="color:#FF7043">📴 Офлайн</span>';
 });
 
-if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').then(function(reg){reg.update();}).catch(function(){});}
+if('serviceWorker' in navigator){
+ navigator.serviceWorker.register('/sw.js').then(function(reg){
+  reg.update();
+  // Если появился новый SW — сразу активируем и перезагружаем страницу
+  reg.addEventListener('updatefound', function(){
+   var nw = reg.installing;
+   if(!nw) return;
+   nw.addEventListener('statechange', function(){
+    if(nw.state==='installed' && navigator.serviceWorker.controller){
+     // Обновление подъехало — триггерим reload чтобы не показывать старую версию
+     try{ nw.postMessage({type:'SKIP_WAITING'}); }catch(e){}
+     setTimeout(function(){ try{ location.reload(); }catch(e){} }, 200);
+    }
+   });
+  });
+ }).catch(function(){});
+}
 
 // === EXPORT CSV ===
 function exportPaymentsCSV(){
@@ -10963,20 +10979,35 @@ var _statLeadsCache = null;
 // Резерв: лиды из Meta Ads CSV (localStorage) — по дате запуска кампании
 function statGetMetaAdsLeads() {
  var ads = [];
- try { ads = JSON.parse(localStorage.getItem('meta_ads_data')||'[]'); } catch(e){}
+ try { ads = JSON.parse(localStorage.getItem('meta_ads_data')||'[]'); } catch(e){ return []; }
+ if(!Array.isArray(ads)) return [];
  var result = [];
  ads.forEach(function(a){
-  if(!a.start) return;
+  if(!a || !a.start) return;
   var p = String(a.start).split('.');
   if(p.length<3) return;
-  var y = parseInt(p[2],10); if(y<100) y+=2000;
-  var d = new Date(y, parseInt(p[1],10)-1, parseInt(p[0],10));
+  var day = parseInt(p[0],10), mon = parseInt(p[1],10), y = parseInt(p[2],10);
+  if(isNaN(day) || isNaN(mon) || isNaN(y)) return;
+  if(y<100) y+=2000;
+  if(y<2020 || y>2100 || mon<1 || mon>12 || day<1 || day>31) return;
+  var d = new Date(y, mon-1, day);
+  if(isNaN(d.getTime())) return;
   var cnt = parseInt(a.leads,10) || 0;
   if(cnt<=0) return;
   result.push({date:d, count:cnt, source:'meta_csv', campaign:a.campaign||a.ad||''});
  });
  return result;
 }
+// При загрузке нового Meta CSV — инвалидация кеша статистик
+(function(){
+ try {
+  var _origSetItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function(k,v){
+   _origSetItem(k,v);
+   if(k==='meta_ads_data' && typeof _statLeadsCache!=='undefined'){ _statLeadsCache = null; }
+  };
+ } catch(e){}
+})();
 
 function statLoadLeadsOnce(cb) {
  if(_statLeadsCache) { cb(_statLeadsCache); return; }
@@ -11061,9 +11092,12 @@ function statPopulateEmpFilter() {
 function statGetBuckets(period, count) {
  var buckets = [];
  var mNames = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
- // Якорь — выбранный месяц (глобальный selectedMonth) или текущий
- var sel = (typeof selectedMonth!=='undefined') ? selectedMonth : {year:new Date().getFullYear(), month:new Date().getMonth()};
- var selYear = sel.year, selMonth = sel.month;
+ // Якорь — выбранный месяц (глобальный selectedMonth) или текущий; валидируем на всякий случай
+ var sel = (typeof selectedMonth!=='undefined' && selectedMonth) ? selectedMonth : {year:new Date().getFullYear(), month:new Date().getMonth()};
+ var selYear = (typeof sel.year==='number' && sel.year>=2000 && sel.year<2100) ? sel.year : new Date().getFullYear();
+ var selMonth = (typeof sel.month==='number' && sel.month>=0 && sel.month<=11) ? sel.month : new Date().getMonth();
+ // period валидируем
+ if(period!=='month' && period!=='quarter' && period!=='week') period = 'week';
 
  if(period === 'month') {
   // Последние N месяцев, заканчивая выбранным
@@ -11105,9 +11139,27 @@ function statGetBuckets(period, count) {
  return buckets;
 }
 
+// Безопасная обёртка для критичных функций — одна ошибка не валит страницу
+function _statSafe(name, fn, fallback) {
+ try { return fn(); }
+ catch(e) {
+  try { console.error('[stats:'+name+']', e.message, e.stack); } catch(_){}
+  return fallback;
+ }
+}
+
+var _statInitLocked = false;  // защита от рекурсивных вызовов
 function statInit() {
- if(typeof payments==='undefined'||!payments.length) return;
- statPopulateEmpFilter();
+ if(_statInitLocked) return;
+ _statInitLocked = true;
+ try { _statInitImpl(); }
+ catch(e) { try { console.error('[stats:init]', e.message, e.stack); } catch(_){} }
+ finally { _statInitLocked = false; }
+}
+
+function _statInitImpl() {
+ if(typeof payments==='undefined'||!Array.isArray(payments)||!payments.length) return;
+ _statSafe('populateEmpFilter', statPopulateEmpFilter, null);
 
  // Счётчики для бакетов: неделя/месяц/квартал
  var bucketCount = _statPeriod==='month' ? 6 : (_statPeriod==='quarter' ? 4 : 8);
@@ -11182,6 +11234,40 @@ function statInit() {
  // Первая (быстрая) отрисовка отделений пока лиды грузятся
  statRenderDepartments(bucketData, null);
 }
+
+// Self-test — проверяем что все критичные функции/объекты статистик на месте.
+// Запускается через 3с после загрузки, логирует в консоль. Помогает сразу увидеть регрессии.
+window.statSelfTest = function() {
+ var checks = [
+  ['statInit', typeof statInit==='function'],
+  ['statGetBuckets', typeof statGetBuckets==='function'],
+  ['statBuildMainChart', typeof statBuildMainChart==='function'],
+  ['statRenderDepartments', typeof statRenderDepartments==='function'],
+  ['statShowDrilldown', typeof statShowDrilldown==='function'],
+  ['statLoadLeadsOnce', typeof statLoadLeadsOnce==='function'],
+  ['statGetMetaAdsLeads', typeof statGetMetaAdsLeads==='function'],
+  ['statPopulateEmpFilter', typeof statPopulateEmpFilter==='function'],
+  ['_statSafe', typeof _statSafe==='function'],
+  ['view-statistics elem', !!document.getElementById('view-statistics')],
+  ['stat-emp-filter elem', !!document.getElementById('stat-emp-filter')],
+  ['stat-main-canvas elem', !!document.getElementById('stat-main-canvas')],
+  ['stat-departments elem', !!document.getElementById('stat-departments')],
+  ['buckets(week) returns array', (function(){try{return Array.isArray(statGetBuckets('week'));}catch(e){return false;}})()],
+  ['buckets(month) returns array', (function(){try{return Array.isArray(statGetBuckets('month'));}catch(e){return false;}})()],
+  ['buckets(quarter) returns array', (function(){try{return Array.isArray(statGetBuckets('quarter'));}catch(e){return false;}})()],
+  ['buckets validate bad period', (function(){try{return statGetBuckets('xxx').length>0;}catch(e){return false;}})()],
+  ['metaAdsLeads returns array', (function(){try{return Array.isArray(statGetMetaAdsLeads());}catch(e){return false;}})()]
+ ];
+ var failed = checks.filter(function(c){return !c[1];});
+ if(failed.length){
+  try{console.error('[stats:selfTest] FAIL:', failed.map(function(c){return c[0];}).join(', '));}catch(e){}
+  return {ok:false, failed:failed.map(function(c){return c[0];})};
+ }
+ try{console.log('[stats:selfTest] OK ('+checks.length+' checks passed)');}catch(e){}
+ return {ok:true, checks:checks.length};
+};
+// Запускаем после того как DOM и payments загрузились
+setTimeout(function(){ try{ statSelfTest(); }catch(e){} }, 3000);
 
 function statRenderDepartments(bucketData, leadsArr) {
  var deptEl = document.getElementById('stat-departments');
@@ -11266,9 +11352,10 @@ var _statBuckets = [];  // Сохраняем границы бакетов дл
 
 function statBuildMainChart(labels, sales, impls, leads, newCliSales) {
  _ensureChart(function(){
+  try {
   var canvas = document.getElementById('stat-main-canvas');
   if(!canvas) return;
-  if(_statMainChart) { _statMainChart.destroy(); _statMainChart=null; }
+  if(_statMainChart) { try{_statMainChart.destroy();}catch(_){} _statMainChart=null; }
   var ctx = canvas.getContext('2d');
   // Индексы: 0-Оплаты, 1-Оплаты по новым, 2-Внедрения, 3-Лиды
   var datasets = [
@@ -11330,13 +11417,16 @@ function statBuildMainChart(labels, sales, impls, leads, newCliSales) {
     }
    }
   });
+  } catch(e){ try{console.error('[stats:buildMainChart]', e.message);}catch(_){} }
  });
 }
 
 // Развернуть график на весь экран
 // Drill-down по клику на точку графика: показывает список оплат, составивших значение
 window.statShowDrilldown = function(bucketIdx, kind){
- if(typeof payments==='undefined') return;
+ try {
+ if(typeof payments==='undefined'||!Array.isArray(payments)) return;
+ if(typeof bucketIdx!=='number' || bucketIdx<0) return;
  var wk = _statBuckets[bucketIdx]; if(!wk) return;
  // Фильтр по менеджеру (если выбран)
  var fEmp = _statEmpFilter==='all' ? null : _statEmpFilter;
@@ -11397,6 +11487,7 @@ window.statShowDrilldown = function(bucketIdx, kind){
    +'</table></div>'
   +'</div>';
  document.body.appendChild(modal);
+ } catch(e){ try{console.error('[stats:drilldown]', e.message);}catch(_){} }
 };
 
 window.statExpandChart = function() {

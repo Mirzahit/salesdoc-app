@@ -1,4 +1,4 @@
-var CACHE_NAME = 'salesdoc-v142';
+var CACHE_NAME = 'salesdoc-v143';
 var PRECACHE = ['/', '/manifest.json', '/icon-192.svg'];
 
 self.addEventListener('install', function(e) {
@@ -8,6 +8,11 @@ self.addEventListener('install', function(e) {
     })
   );
   self.skipWaiting();
+});
+
+// Позволяет странице принудительно активировать новую версию SW сразу
+self.addEventListener('message', function(e){
+  if(e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', function(e) {
