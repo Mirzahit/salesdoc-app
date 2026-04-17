@@ -539,6 +539,29 @@ body:not(.light){background-image:radial-gradient(ellipse 80% 60% at 15% 10%, rg
 .kb-viewer-body video{width:100%;max-height:70vh}
 .kb-admin-btn{padding:8px 16px;border-radius:8px;font-size:12px;cursor:pointer;background:linear-gradient(135deg,var(--gold-bright),var(--gold-mid));color:var(--dark-void);font-weight:700;border:none;font-family:'Inter',sans-serif;letter-spacing:.5px;box-shadow:0 4px 15px rgba(59,130,246,.35);transition:all .2s}
 .kb-admin-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(59,130,246,.5)}
+/* Orgchart */
+.org-dept-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.org-card{padding:14px;border-radius:10px;background:var(--dark-panel);border:1px solid var(--dark-border);border-left:3px solid;cursor:pointer;transition:all .2s;position:relative}
+.org-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.3);border-color:rgba(255,255,255,.1)}
+.org-card .org-num{font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:1px;margin-bottom:4px}
+.org-card .org-name{font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:6px;line-height:1.3}
+.org-card .org-ckp{font-size:10px;color:var(--text-muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.org-card .org-type-badge{position:absolute;top:8px;right:8px;font-size:8px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.org-card .org-children-count{font-size:9px;color:var(--text-muted);margin-top:8px;padding-top:6px;border-top:1px solid var(--dark-border)}
+.org-card.highlighted{box-shadow:0 0 0 2px var(--gold-bright);border-color:var(--gold-bright)}
+.org-section-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:16px}
+.org-detail-close{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.org-detail-close:hover{background:rgba(255,255,255,.06)}
+.org-detail-header{margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--dark-border)}
+.org-detail-field{margin-bottom:14px}
+.org-detail-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;font-weight:600}
+.org-detail-value{font-size:13px;color:var(--text-primary);line-height:1.5}
+.org-asset-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:all .15s;text-decoration:none;color:var(--text-primary)}
+.org-asset-item:hover{border-color:rgba(59,130,246,.3);background:rgba(59,130,246,.04)}
+.org-asset-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;font-weight:700}
+.org-child-link{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;background:var(--dark-panel);border:1px solid var(--dark-border);color:var(--text-primary);font-size:11px;cursor:pointer;margin:2px;transition:all .15s;font-weight:500}
+.org-child-link:hover{border-color:rgba(59,130,246,.3);color:#60A5FA}
+.org-section-title{font-size:12px;font-weight:700;color:var(--text-secondary);letter-spacing:1px;text-transform:uppercase;margin:16px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--dark-border)}
 @media(max-width:768px){.kb-grid{grid-template-columns:1fr}.kb-search{width:100%}.kb-toolbar{flex-direction:column}}
 
 /* COUNTRY SWITCHER */
@@ -2459,33 +2482,71 @@ body.light .content td span[style]{color:#2A3042!important}
 
  <!-- KNOWLEDGE BASE VIEW -->
  <div id="view-knowledge" style="display:none;position:relative">
-
-  <!-- Toolbar -->
-  <div class="kb-toolbar">
-   <div class="kb-tabs" id="kb-tabs">
-    <button class="kb-tab active" onclick="kbSetCategory('all',this)">Все</button>
-    <button class="kb-tab" onclick="kbSetCategory('onboarding',this)">Для новичков</button>
-    <button class="kb-tab" onclick="kbSetCategory('sales',this)">Продажи</button>
-    <button class="kb-tab" onclick="kbSetCategory('product',this)">Продукт</button>
-    <button class="kb-tab" onclick="kbSetCategory('process',this)">Процессы</button>
-    <button class="kb-tab" onclick="kbSetCategory('faq',this)">FAQ</button>
+  <!-- 2 кнопки навигации -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px">
+   <div class="panel" onclick="kbOpenOrgPage()" style="padding:28px;text-align:center;cursor:pointer;border:1px solid rgba(251,191,36,.25);transition:all .2s;position:relative;overflow:hidden" onmouseover="this.style.borderColor='rgba(251,191,36,.5)';this.style.background='rgba(251,191,36,.04)'" onmouseout="this.style.borderColor='rgba(251,191,36,.25)';this.style.background=''">
+    <div style="font-size:32px;margin-bottom:10px;color:#FBBF24;font-weight:700;font-family:'Space Grotesk',sans-serif">SDS</div>
+    <div style="font-size:16px;font-weight:700;color:#FBBF24;letter-spacing:.5px;margin-bottom:6px">ОРГСХЕМА</div>
+    <div style="font-size:11px;color:var(--text-muted)">Структура компании, департаменты, ЦКП, ответственные</div>
+    <div style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:20px;color:rgba(251,191,36,.3)">&#8594;</div>
    </div>
-   <input class="kb-search" id="kb-search" placeholder="Поиск материалов..." oninput="kbFilter()">
+   <div class="panel" onclick="kbOpenMaterialsPage()" style="padding:28px;text-align:center;cursor:pointer;border:1px solid rgba(59,130,246,.25);transition:all .2s;position:relative;overflow:hidden" onmouseover="this.style.borderColor='rgba(59,130,246,.5)';this.style.background='rgba(59,130,246,.04)'" onmouseout="this.style.borderColor='rgba(59,130,246,.25)';this.style.background=''">
+    <div style="font-size:32px;margin-bottom:10px;color:#60A5FA;font-weight:700;font-family:'Space Grotesk',sans-serif">DOC</div>
+    <div style="font-size:16px;font-weight:700;color:#60A5FA;letter-spacing:.5px;margin-bottom:6px">МАТЕРИАЛЫ И ДОКУМЕНТЫ</div>
+    <div style="font-size:11px;color:var(--text-muted)">Видео, документы, регламенты, обучение</div>
+    <div style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:20px;color:rgba(59,130,246,.3)">&#8594;</div>
+   </div>
   </div>
-
-  <!-- KPI row -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px" id="kb-kpi-row">
-   <div class="kpi-card"><div class="kpi-label">ВСЕГО МАТЕРИАЛОВ</div><div class="kpi-value" id="kb-stat-total">0</div></div>
-   <div class="kpi-card"><div class="kpi-label">ВИДЕО</div><div class="kpi-value" id="kb-stat-video">0</div></div>
-   <div class="kpi-card"><div class="kpi-label">ДОКУМЕНТЫ</div><div class="kpi-value" id="kb-stat-doc">0</div></div>
-   <div class="kpi-card"><div class="kpi-label">НОВЫЕ</div><div class="kpi-value" id="kb-stat-new">0</div><div class="kpi-delta up" style="font-size:9px">за 7 дней</div></div>
-  </div>
-
-  <!-- Cards grid -->
-  <div class="kb-grid" id="kb-grid"></div>
-
  </div>
  <!-- /KNOWLEDGE BASE VIEW -->
+
+ <!-- FULLSCREEN: ОРГСХЕМА -->
+ <div id="view-kb-org" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow-y:auto">
+  <div class="kbc-header">
+   <button class="kbc-back" onclick="kbCloseOrgPage()">&#8592; База знаний</button>
+   <div class="kbc-title">Оргсхема SDS</div>
+  </div>
+  <div style="padding:24px;max-width:1400px;margin:0 auto">
+   <!-- Toolbar -->
+   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <div id="org-breadcrumbs" style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);flex-wrap:wrap"></div>
+    <div style="display:flex;gap:8px;align-items:center">
+     <input id="org-search" placeholder="Поиск по оргсхеме..." oninput="orgSearch()" style="padding:8px 14px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit;width:240px;outline:none">
+     <button onclick="orgResetView()" style="padding:6px 14px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:11px;cursor:pointer;font-family:inherit">Вся схема</button>
+    </div>
+   </div>
+   <!-- KPI -->
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px" id="org-kpi-row"></div>
+   <!-- Chart -->
+   <div id="org-chart"></div>
+  </div>
+  <!-- Detail sidebar -->
+  <div id="org-detail" style="display:none;position:fixed;right:0;top:0;bottom:0;width:480px;max-width:90vw;background:var(--dark-card);border-left:1px solid var(--dark-border);z-index:10000;overflow-y:auto;box-shadow:-8px 0 32px rgba(0,0,0,.5)">
+   <div style="padding:20px" id="org-detail-content"></div>
+  </div>
+  <div id="org-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999" onclick="orgCloseDetail()"></div>
+ </div>
+
+ <!-- FULLSCREEN: МАТЕРИАЛЫ -->
+ <div id="view-kb-materials" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow-y:auto">
+  <div class="kbc-header">
+   <button class="kbc-back" onclick="kbCloseMaterialsPage()">&#8592; База знаний</button>
+   <div class="kbc-title">Материалы и документы</div>
+  </div>
+  <div style="padding:24px;max-width:1200px;margin:0 auto">
+   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div class="kb-tabs" id="kb-mat-tabs" style="display:flex;gap:0;background:var(--dark-card);border-radius:12px;padding:4px;border:1px solid var(--dark-border)">
+     <button class="kb-tab active" onclick="kbMatSetCategory('all',this)">Все</button>
+     <button class="kb-tab" onclick="kbMatSetCategory('onboarding',this)">Для новичков</button>
+     <button class="kb-tab" onclick="kbMatSetCategory('sales',this)">Продажи</button>
+     <button class="kb-tab" onclick="kbMatSetCategory('product',this)">Продукт</button>
+     <button class="kb-tab" onclick="kbMatSetCategory('process',this)">Процессы</button>
+    </div>
+    <input id="kb-mat-search" placeholder="Поиск материалов..." oninput="kbMatFilter()" style="padding:8px 14px;border-radius:10px;border:1px solid var(--dark-border);background:var(--dark-card);color:var(--text-primary);font-size:13px;font-family:inherit;width:220px;outline:none">
+   </div>
+   <div id="kb-mat-grid" class="kb-grid"></div>
+  </div>
+ </div>
 
  <!-- ACADEMY VIEW -->
  <div id="view-academy" style="display:none;position:relative">
@@ -5524,6 +5585,11 @@ function showView(v) {
  var mktTarget = document.getElementById('view-mkt-target');
  if(mktLtv) mktLtv.style.display='none';
  if(mktTarget) mktTarget.style.display='none';
+ // Hide knowledge subpages
+ var kbOrg = document.getElementById('view-kb-org');
+ var kbMat = document.getElementById('view-kb-materials');
+ if(kbOrg) kbOrg.style.display='none';
+ if(kbMat) kbMat.style.display='none';
  const titles={dashboard:'ОБЗОР ФИНАНСОВ',payments:'ОПЛАТЫ',plan:'ВЫПОЛНЕНИЕ ПЛАНА',keyclients:'КЛЮЧЕВЫЕ КЛИЕНТЫ',ai:'ИИ МИРЗАХИТ — ФИНАНСОВЫЙ АНАЛИТИК',cabinet:'ЛИЧНЫЙ КАБИНЕТ',marketing:'МАРКЕТИНГ — АНАЛИЗ ЛИДОВ',expenses:'РАСХОДЫ',integrations:'ОЧЕРЕДЬ ИНТЕГРАЦИИ',tests:'ТЕСТЫ / ОЦЕНКА НАВЫКОВ',knowledge:'БАЗА ЗНАНИЙ',academy:'АКАДЕМИЯ',reports:'ОТЧЁТЫ',kanban:'ВНЕДРЕНИЕ'};
  document.getElementById('page-title').textContent=titles[v]||v.toUpperCase();
  // Подсветка активного пункта в nav
@@ -5551,7 +5617,7 @@ function showView(v) {
  if(v==='expenses'){expInit();expLoad();}
  if(v==='integrations'&&!window._intgLoaded){intgLoad();window._intgLoaded=true;} else if(v==='integrations'){intgRender();}
  if(v==='tests') testsRender();
- if(v==='knowledge') kbRender();
+ if(v==='knowledge') { /* показываем 2 кнопки -- оргсхема и материалы */ }
  if(v==='academy') acadLoad();
  if(v==='reports') reportsInit();
  if(v==='kanban'){if(!window._kbLoaded){kbLoad();window._kbLoaded=true;}else{kbRenderBoard();}}
@@ -10822,36 +10888,397 @@ function testsExportPDF(person){
 }
 
 // ============================================================
-// KNOWLEDGE BASE MODULE
+// ORGCHART MODULE — База знаний / Оргсхема SDS
 // ============================================================
-var _kbCategory = 'all';
-var _kbItems = [
- // DEMO DATA — будет заменено на Google Sheet
- {id:1, title:'Как работать в SalesDoc — первые шаги', desc:'Полное руководство для нового менеджера: от регистрации до первой сделки', type:'video', category:'onboarding', url:'https://www.youtube.com/embed/dQw4w9WgXcQ', thumb:'', date:'2026-04-01', isNew:true},
- {id:2, title:'Скрипт холодного звонка', desc:'Пошаговый скрипт для первого контакта с потенциальным клиентом B2B', type:'doc', category:'sales', url:'', thumb:'', date:'2026-04-05', isNew:true},
- {id:3, title:'Продуктовый каталог 2026', desc:'Все тарифы, модули и возможности SalesDoc для презентации клиенту', type:'pdf', category:'product', url:'', thumb:'', date:'2026-03-20', isNew:false},
- {id:4, title:'Работа с возражениями', desc:'Топ-15 возражений клиентов и проверенные ответы на каждое', type:'doc', category:'sales', url:'', thumb:'', date:'2026-03-15', isNew:false},
- {id:5, title:'Как проводить демо продукта', desc:'Видео-инструкция: структура демо, на что делать акцент, типичные ошибки', type:'video', category:'sales', url:'https://www.youtube.com/embed/dQw4w9WgXcQ', thumb:'', date:'2026-04-08', isNew:true},
- {id:6, title:'Регламент работы менеджера', desc:'Ежедневные задачи, KPI, отчётность, правила ведения CRM', type:'doc', category:'process', url:'', thumb:'', date:'2026-02-10', isNew:false},
- {id:7, title:'FAQ: частые вопросы клиентов', desc:'Ответы на самые популярные вопросы при продаже и внедрении', type:'link', category:'faq', url:'', thumb:'', date:'2026-03-28', isNew:false},
- {id:8, title:'Настройка интеграций', desc:'Как подключить 1С, Kaspi, WhatsApp и другие сервисы к SalesDoc', type:'video', category:'product', url:'https://www.youtube.com/embed/dQw4w9WgXcQ', thumb:'', date:'2026-04-10', isNew:true},
- {id:9, title:'Онбординг: чек-лист первой недели', desc:'Что должен сделать новый сотрудник за первые 5 рабочих дней', type:'doc', category:'onboarding', url:'', thumb:'', date:'2026-01-15', isNew:false},
- {id:10, title:'Как считать бонусы', desc:'Формула расчёта бонусов менеджера: новые продажи, KPI, исключения', type:'doc', category:'process', url:'', thumb:'', date:'2026-03-01', isNew:false},
+var ORG_DATA = [
+ // Деп 7 Административный
+ {id:'dept-7',num:'7',name:'Административный департамент',type:'department',parentId:null,ckp:'Процветающая и развивающаяся компания, производящая продукт безупречного качества.',role:'Председатель Совета учредителей',responsible:null,description:'Высший орган управления. Определяет стратегию, контролирует все департаменты.',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'off-21',num:'21',name:'Офис учредителей',type:'office',parentId:'dept-7',ckp:'Использующая эффективные технологии и развивающаяся компания с высокой заработной платой сотрудников и растущими резервами.',role:'Председатель Совета учредителей',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-council',num:'',name:'Совет учредителей',type:'section',parentId:'off-21',ckp:'Согласованная деятельность совладельцев и сотрудников офиса, благодаря которой успешно развивается компания.',role:'Председатель / Учредители',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-strat-mgmt',num:'',name:'Служба стратегического управления',type:'section',parentId:'off-21',ckp:'Компания, успешно реализующая эффективные стратегические планы.',role:'Руководитель',responsible:{name:'Мырзахыт',note:'CEO'},description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-strat-mkt',num:'',name:'Служба стратегического маркетинга',type:'section',parentId:'off-21',ckp:'Эффективная маркетинговая стратегия, обеспечивающая успех на рынке.',role:'Руководитель',responsible:{name:'Мырзахыт',note:'CEO'},description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-tech',num:'',name:'Служба технологии',type:'section',parentId:'off-21',ckp:'Хорошо описанная, эффективная технология, которая без искажений применяется всеми подразделениями компании.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-build',num:'',name:'Служба построения',type:'section',parentId:'off-21',ckp:'Применяемые в компании эффективные инструменты управления, которые приводят к повышению дохода и средней заработной платы.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-fin-assets',num:'',name:'Служба финансов и ценных активов',type:'section',parentId:'off-21',ckp:'Надёжно защищённые активы и резервы компании.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'off-20',num:'20',name:'Офис официальных вопросов',type:'office',parentId:'dept-7',ckp:'Безопасное и содействующее развитию компании окружение.',role:'Руководитель офиса',responsible:null,description:'',functions:[],kpi:[],assets:[{type:'doc',label:'ТД1 -- срочный трудовой договор',url:''},{type:'doc',label:'ТД2 -- дистанционный трудовой договор',url:''},{type:'doc',label:'ТД3 -- временный трудовой договор',url:''}],notes:'',color:'#4CAF50'},
+ {id:'svc-legal',num:'',name:'Юридическая служба',type:'section',parentId:'off-20',ckp:'Юридически защищённая компания.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-pr',num:'',name:'Служба по связям с общественностью',type:'section',parentId:'off-20',ckp:'Люди, обладающие властью или авторитетом в области деятельности компании, имеющие хорошее мнение и содействующие её развитию.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-security',num:'',name:'Служба безопасности',type:'section',parentId:'off-20',ckp:'Активы и сотрудники компании, находящиеся в безопасности.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'off-19',num:'19',name:'Офис Генерального директора',type:'office',parentId:'dept-7',ckp:'Успешно реализующая планы, развивающаяся и прибыльная компания.',role:'Генеральный директор',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-dep-admin',num:'',name:'Служба заместителя по административным вопросам',type:'section',parentId:'off-19',ckp:'Активно развивающиеся Департаменты 1 и 2, успешно производящие свои ЦКП.',role:'Зам по адм. вопросам',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-dep-tech',num:'',name:'Служба заместителя по техническим вопросам',type:'section',parentId:'off-19',ckp:'Активно развивающиеся Департаменты 3, 4, 5.',role:'Зам по техн. вопросам',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-dep-public',num:'',name:'Служба заместителя по работе с публикой',type:'section',parentId:'off-19',ckp:'Активно развивающийся Департамент 6.',role:'Зам по работе с публикой',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-dev',num:'',name:'Служба развития',type:'section',parentId:'off-19',ckp:'Успешно завершённые проекты по развитию.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-pricing',num:'',name:'Совет по ценообразованию',type:'section',parentId:'off-19',ckp:'Утверждённые ассортимент и цены, обеспечивающие максимальные обороты и высокую прибыль.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-exec',num:'',name:'Исполнительный совет',type:'section',parentId:'off-19',ckp:'Развивающиеся департаменты компании.',role:'Председатель ИС',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ {id:'svc-advisory',num:'',name:'Рекомендательный совет',type:'section',parentId:'off-19',ckp:'Согласованные действия департаментов по увеличению дохода и прибыли.',role:'Председатель РС',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#4CAF50'},
+ // Деп 1 HR
+ {id:'dept-1',num:'1',name:'Департамент HR',type:'department',parentId:null,ckp:'Введённые в должность сотрудники, производящие свои ЦКП.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'otd-1',num:'1',name:'Отдел направления и персонала',type:'otdel',parentId:'dept-1',ckp:'Введённые в должность сотрудники, каждый из которых усиливает деятельность всей компании.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-orgschema',num:'',name:'Секция оргсхемы и бизнес-процессов',type:'section',parentId:'otd-1',ckp:'Высокая скорость потока частиц в компании.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-dolzhpapki',num:'',name:'Секция должностных папок',type:'section',parentId:'otd-1',ckp:'Содержащие все политики должностные папки.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-naim',num:'',name:'Секция найма',type:'section',parentId:'otd-1',ckp:'Нанятые сотрудники, прошедшие испытательный срок с отличными результатами.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-vvod',num:'',name:'Секция введения в должность',type:'section',parentId:'otd-1',ckp:'Сотрудники, хорошо знающие содержимое своих должностных папок.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-kadry',num:'',name:'Секция кадрового учёта',type:'section',parentId:'otd-1',ckp:'Актуальная кадровая документация.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'otd-2',num:'2',name:'Отдел коммуникаций',type:'otdel',parentId:'dept-1',ckp:'Высокая скорость движения частиц по хорошо обустроенным коммуникационным линиям.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-rabmesta',num:'',name:'Секция обеспечения рабочих мест',type:'section',parentId:'otd-2',ckp:'Оборудованные рабочие места.',role:'Администратор',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-pismcomm',num:'',name:'Секция письменной коммуникации',type:'section',parentId:'otd-2',ckp:'Система письменной коммуникации без сбоев.',role:'Администратор',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-elcomm',num:'',name:'Секция электронных коммуникаций',type:'section',parentId:'otd-2',ckp:'Электронные коммуникации, техника и ПО.',role:'Администратор',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'otd-3',num:'3',name:'Отдел инспекций и докладов',type:'otdel',parentId:'dept-1',ckp:'Находящиеся в безопасности и продуктивно работающие сотрудники.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-inspect',num:'',name:'Секция инспекций',type:'section',parentId:'otd-3',ckp:'Обнаруженные и улаженные проблемы.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-stat',num:'',name:'Секция статистик',type:'section',parentId:'otd-3',ckp:'Актуальные статистики, ИЦО.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-ethics',num:'',name:'Секция этики',type:'section',parentId:'otd-3',ckp:'Сотрудники, справляющиеся с этическими ситуациями.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-reward',num:'',name:'Секция поощрений',type:'section',parentId:'otd-3',ckp:'Вознаграждённые за достижения сотрудники.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ {id:'sec-osnovy',num:'',name:'Секция основ компании',type:'section',parentId:'otd-3',ckp:'Действующие рудименты компании.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#7C4DFF'},
+ // Деп 2 Коммерческий
+ {id:'dept-2',num:'2',name:'Коммерческий департамент',type:'department',parentId:null,ckp:'Расширяющаяся область деятельности и новые клиенты компании.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'otd-4',num:'4',name:'Отдел продвижения',type:'otdel',parentId:'dept-2',ckp:'Отклики потенциальных клиентов, полученные в результате действий по продвижению.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sec-site',num:'',name:'Секция сайта',type:'section',parentId:'otd-4',ckp:'Отклики с сайта.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sec-target',num:'',name:'Секция таргетированной рекламы',type:'section',parentId:'otd-4',ckp:'Отклики от таргета.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sec-context',num:'',name:'Секция контекстной рекламы',type:'section',parentId:'otd-4',ckp:'Отклики от контекста.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sec-seo',num:'',name:'Секция SEO продвижения',type:'section',parentId:'otd-4',ckp:'Отклики от SEO.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'otd-5',num:'5',name:'Отдел понимания',type:'otdel',parentId:'dept-2',ckp:'Потенциальные клиенты, понимающие ценность продуктов компании.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sec-present',num:'',name:'Секция презентаций',type:'section',parentId:'otd-5',ckp:'Презентации, создающие понимание.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sec-kp',num:'',name:'Секция коммерческих предложений',type:'section',parentId:'otd-5',ckp:'Впечатляющие КП.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sec-consult',num:'',name:'Секция консультаций',type:'section',parentId:'otd-5',ckp:'Клиент, понявший ценность.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sec-seminars',num:'',name:'Секция семинаров и вебинаров',type:'section',parentId:'otd-5',ckp:'Клиент, желающий купить.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'otd-6',num:'6',name:'Отдел продаж',type:'otdel',parentId:'dept-2',ckp:'Доход компании больше, чем расходы.',role:'Начальник',responsible:{name:'Айдос Хапез, Юлия',note:'2 менеджера'},description:'',functions:[],kpi:[],assets:[{type:'doc',label:'Регламент amoCRM (7 разделов, 11 этапов)',url:''},{type:'doc',label:'14 касаний до/после КЭВ',url:''}],notes:'',color:'#00BCD4'},
+ {id:'sec-ibox',num:'',name:'Секция iBox',type:'section',parentId:'otd-6',ckp:'Доход от продаж iBox.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sec-sd',num:'',name:'Секция Sales Doctor',type:'section',parentId:'otd-6',ckp:'Доход от продаж SalesDoc.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sec-dopsales',num:'',name:'Секция дополнительных продаж',type:'section',parentId:'otd-6',ckp:'Доход от допродаж.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sector-integ-sale',num:'',name:'Сектор продаж интеграции',type:'sector',parentId:'sec-dopsales',ckp:'Доход от продаж интеграции.',role:'Специалист',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sector-impl-sale',num:'',name:'Сектор продаж внедрения',type:'sector',parentId:'sec-dopsales',ckp:'Доход от продаж внедрения.',role:'Специалист',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ {id:'sec-crm',num:'',name:'Секция CRM',type:'section',parentId:'otd-6',ckp:'База клиентов с актуальными данными.',role:'Менеджер',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#00BCD4'},
+ // Деп 3 Финансовый
+ {id:'dept-3',num:'3',name:'Финансовый департамент',type:'department',parentId:null,ckp:'Сохранённые, учтённые и не утрачивающие своей ценности денежные и материальные активы.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#FFB300'},
+ {id:'otd-7',num:'7',name:'Отдел дохода',type:'otdel',parentId:'dept-3',ckp:'Все средства, полученные компанией.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[{type:'sheet',label:'Доходы KZ 2026',url:'https://docs.google.com/spreadsheets/d/1WJJRqPvQ_i9jVhQgNc2Kuuynneu9jjTJwMGijCZKHbo'},{type:'bot',label:'@sakesdocbot',url:'https://t.me/sakesdocbot'},{type:'bot',label:'@kassasdkzbot',url:'https://t.me/kassasdkzbot'},{type:'dashboard',label:'payment-dashboard v105',url:''}],notes:'',color:'#FFB300'},
+ {id:'otd-8',num:'8',name:'Отдел расходов',type:'otdel',parentId:'dept-3',ckp:'Выполненные обязательства перед кредиторами.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[{type:'bot',label:'@finzvsbot',url:'https://t.me/finzvsbot'},{type:'tg_chat',label:'Sales Doc ЗВС',url:'https://t.me/+g0FNMisfHj8zMmMy'},{type:'sheet',label:'Таблица ЗВС',url:'https://docs.google.com/spreadsheets/d/1n-5gFiCHYUE5fRR6Flj_ZhO-cMFrf-gFocPQPlvrUd4'}],notes:'',color:'#FFB300'},
+ {id:'otd-9',num:'9',name:'Отдел учёта',type:'otdel',parentId:'dept-3',ckp:'Полностью учтённые активы, точные отчёты.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#FFB300'},
+ // Деп 4 Технический
+ {id:'dept-4',num:'4',name:'Технический департамент',type:'department',parentId:null,ckp:'Профессионально предоставленные программы, интегрированные с ПО заказчика, работающие без сбоев.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#2196F3'},
+ {id:'otd-10',num:'10',name:'Отдел по работе с категорией A',type:'otdel',parentId:'dept-4',ckp:'Клиент, готовый продлевать контракт надолго.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#2196F3'},
+ {id:'otd-11',num:'11',name:'Отдел по работе с категорией B, C',type:'otdel',parentId:'dept-4',ckp:'1. Профессионально предоставленный продукт. 2. Уверенно использующий продукт клиент.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#2196F3'},
+ {id:'otd-12',num:'12',name:'Отдел интеграции',type:'otdel',parentId:'dept-4',ckp:'Стабильно работающий продукт в результате своевременной техподдержки.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[{type:'sheet',label:'Очередь интеграции',url:'https://docs.google.com/spreadsheets/d/11ZnhVoLvIJRHeeJk0u-fZI2G5crWNHIpV9RDOVtDQJ4'}],notes:'',color:'#2196F3'},
+ // Деп 5 Квалификации
+ {id:'dept-5',num:'5',name:'Департамент квалификации',type:'department',parentId:null,ckp:'Квалифицированные сотрудники, предоставляющие клиентам продукты безупречного качества.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#E91E63'},
+ {id:'otd-13',num:'13',name:'Отдел качества и продления',type:'otdel',parentId:'dept-5',ckp:'Предоставленные товары и обслуживание, соответствующие стандартам качества.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#E91E63'},
+ {id:'otd-14',num:'14',name:'Отдел обучения',type:'otdel',parentId:'dept-5',ckp:'Компетентные сотрудники, производящие качественно свои ЦКП.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[{type:'course',label:'Академия ТП (8 модулей)',url:''},{type:'course',label:'Мастерство Ритейла',url:''}],notes:'',color:'#E91E63'},
+ {id:'otd-15',num:'15',name:'Отдел совершенствования',type:'otdel',parentId:'dept-5',ckp:'Усовершенствованная деятельность организации и сотрудников.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#E91E63'},
+ // Деп 6 PR
+ {id:'dept-6',num:'6',name:'Департамент PR',type:'department',parentId:null,ckp:'Привлекательный профессиональный имидж компании в глазах публики.',role:'Руководитель',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#FF5722'},
+ {id:'otd-16',num:'16',name:'Отдел связей с общественностью',type:'otdel',parentId:'dept-6',ckp:'Привлекательный имидж компании в глазах публики.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[{type:'tg_channel',label:'Inside Team MIR',url:'https://t.me/inside_team_MIR'},{type:'tg_channel',label:'FMCG SNG',url:'https://t.me/fmcgsng'},{type:'bot',label:'@zakadromMir_bot',url:'https://t.me/zakadromMir_bot'}],notes:'',color:'#FF5722'},
+ {id:'otd-17',num:'17',name:'Отдел вводных услуг',type:'otdel',parentId:'dept-6',ckp:'Новые клиенты, привлечённые через вводные услуги.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#FF5722'},
+ {id:'otd-18',num:'18',name:'Отдел по работе с партнёрами',type:'otdel',parentId:'dept-6',ckp:'Клиенты и партнёры, направляющие много новых клиентов.',role:'Начальник',responsible:null,description:'',functions:[],kpi:[],assets:[],notes:'',color:'#FF5722'}
 ];
 
-function kbSetCategory(cat, btn) {
- _kbCategory = cat;
- document.querySelectorAll('.kb-tab').forEach(function(t){ t.classList.remove('active'); });
- if(btn) btn.classList.add('active');
- kbRender();
+// Текущий узел для навигации
+var _orgCurrentId = null;
+
+// Типы на русском
+var ORG_TYPE_LABELS = {department:'Департамент',office:'Офис',otdel:'Отдел',section:'Секция/Служба',sector:'Сектор'};
+// Иконки ассетов (SVG-символы, без эмодзи)
+var ORG_ASSET_ICONS = {bot:{icon:'B',bg:'rgba(59,130,246,.15)',color:'#60A5FA'},sheet:{icon:'T',bg:'rgba(52,211,153,.15)',color:'#34D399'},dashboard:{icon:'D',bg:'rgba(251,191,36,.15)',color:'#FBBF24'},doc:{icon:'F',bg:'rgba(239,83,80,.15)',color:'#EF5350'},tg_channel:{icon:'C',bg:'rgba(139,92,246,.15)',color:'#A78BFA'},tg_chat:{icon:'G',bg:'rgba(96,165,250,.15)',color:'#60A5FA'},video:{icon:'V',bg:'rgba(239,83,80,.15)',color:'#EF5350'},course:{icon:'K',bg:'rgba(251,191,36,.15)',color:'#FBBF24'},other:{icon:'?',bg:'rgba(148,163,184,.15)',color:'#94A3B8'}};
+
+function orgGetChildren(parentId) {
+ return ORG_DATA.filter(function(n){ return n.parentId === parentId; });
+}
+function orgGetNode(id) {
+ return ORG_DATA.find(function(n){ return n.id === id; });
+}
+function orgGetPath(id) {
+ var path = [];
+ var node = orgGetNode(id);
+ while(node) { path.unshift(node); node = node.parentId ? orgGetNode(node.parentId) : null; }
+ return path;
 }
 
-function kbFilter() {
+// Навигация подстраниц базы знаний
+function kbOpenOrgPage() {
+ document.getElementById('view-kb-org').style.display = 'block';
+ orgInit();
+}
+function kbCloseOrgPage() {
+ document.getElementById('view-kb-org').style.display = 'none';
+ orgCloseDetail();
+}
+function kbOpenMaterialsPage() {
+ document.getElementById('view-kb-materials').style.display = 'block';
+ kbMatRender();
+}
+function kbCloseMaterialsPage() {
+ document.getElementById('view-kb-materials').style.display = 'none';
+}
+
+// Материалы -- категория и рендер
+var _kbMatCategory = 'all';
+var _kbMatItems = [
+ {id:1,title:'Как работать в SalesDoc',desc:'Полное руководство для нового менеджера: от регистрации до первой сделки',type:'video',category:'onboarding',url:'',date:'2026-04-01',isNew:true},
+ {id:2,title:'Скрипт холодного звонка',desc:'Пошаговый скрипт для первого контакта с потенциальным клиентом B2B',type:'doc',category:'sales',url:'',date:'2026-04-05',isNew:true},
+ {id:3,title:'Продуктовый каталог 2026',desc:'Все тарифы, модули и возможности SalesDoc',type:'doc',category:'product',url:'',date:'2026-03-20',isNew:false},
+ {id:4,title:'Работа с возражениями',desc:'Топ-15 возражений клиентов и проверенные ответы',type:'doc',category:'sales',url:'',date:'2026-03-15',isNew:false},
+ {id:5,title:'Как проводить демо продукта',desc:'Видео-инструкция: структура демо, акценты, ошибки',type:'video',category:'sales',url:'',date:'2026-04-08',isNew:true},
+ {id:6,title:'Регламент работы менеджера',desc:'Ежедневные задачи, KPI, отчётность, правила CRM',type:'doc',category:'process',url:'',date:'2026-02-10',isNew:false},
+ {id:7,title:'Онбординг: чек-лист первой недели',desc:'Что должен сделать новый сотрудник за первые 5 дней',type:'doc',category:'onboarding',url:'',date:'2026-01-15',isNew:false},
+ {id:8,title:'Как считать бонусы',desc:'Формула расчёта бонусов менеджера: продажи, KPI',type:'doc',category:'process',url:'',date:'2026-03-01',isNew:false},
+ {id:9,title:'Настройка интеграций',desc:'Подключение 1С, Kaspi, WhatsApp к SalesDoc',type:'video',category:'product',url:'',date:'2026-04-10',isNew:true}
+];
+
+function kbMatSetCategory(cat, btn) {
+ _kbMatCategory = cat;
+ var tabs = document.getElementById('kb-mat-tabs');
+ if(tabs) tabs.querySelectorAll('.kb-tab').forEach(function(t){ t.classList.remove('active'); });
+ if(btn) btn.classList.add('active');
+ kbMatRender();
+}
+function kbMatFilter() { kbMatRender(); }
+
+function kbMatRender() {
+ var q = '';
+ var searchEl = document.getElementById('kb-mat-search');
+ if(searchEl) q = searchEl.value.toLowerCase().trim();
+ var items = _kbMatItems.filter(function(i){
+  if(_kbMatCategory !== 'all' && i.category !== _kbMatCategory) return false;
+  if(q && i.title.toLowerCase().indexOf(q)<0 && i.desc.toLowerCase().indexOf(q)<0) return false;
+  return true;
+ });
+ var grid = document.getElementById('kb-mat-grid');
+ if(!grid) return;
+ var typeLabels = {video:'Видео',doc:'Документ',pdf:'PDF',link:'Ссылка'};
+ if(!items.length) {
+  grid.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-muted)"><div style="font-size:14px;margin-bottom:4px">Материалы не найдены</div><div style="font-size:11px;opacity:.6">Попробуйте изменить фильтр</div></div>';
+  return;
+ }
+ grid.innerHTML = items.map(function(item){
+  var badge = item.isNew ? '<div class="kb-card-badge">NEW</div>' : '';
+  var d = new Date(item.date);
+  var dateStr = d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'});
+  var tagCls = item.type==='video'?'kb-tag-video':'kb-tag-doc';
+  return '<div class="kb-card" onclick="'+(item.url?'window.open(\''+item.url+'\',\'_blank\')':'showNotif(\''+item.title+'\',\'Ссылка будет добавлена позже\')')+'">'
+   +badge
+   +'<div class="kb-card-thumb"><div class="kb-type-icon" style="font-size:32px;color:var(--text-muted)">'+(item.type==='video'?'&#9654;':'&#9776;')+'</div></div>'
+   +'<div class="kb-card-body">'
+   +'<div class="kb-card-title">'+item.title+'</div>'
+   +'<div class="kb-card-desc">'+item.desc+'</div>'
+   +'<div class="kb-card-meta"><span class="kb-card-tag '+tagCls+'">'+(typeLabels[item.type]||'')+'</span><span class="kb-card-date">'+dateStr+'</span></div>'
+   +'</div></div>';
+ }).join('');
+}
+
+function orgInit() {
+ _orgCurrentId = null;
+ orgRender();
+ orgRenderKpi();
+ orgRenderBreadcrumbs(null);
+}
+
+function orgRenderKpi() {
+ var depts = ORG_DATA.filter(function(n){return n.type==='department';}).length;
+ var offices = ORG_DATA.filter(function(n){return n.type==='office';}).length;
+ var otdels = ORG_DATA.filter(function(n){return n.type==='otdel';}).length;
+ var sections = ORG_DATA.filter(function(n){return n.type==='section';}).length;
+ var total = ORG_DATA.length;
+ var withAssets = ORG_DATA.filter(function(n){return n.assets && n.assets.length>0;}).length;
+ var el = document.getElementById('org-kpi-row');
+ if(!el) return;
+ el.innerHTML = '<div class="kpi-card"><div class="kpi-label">ВСЕГО БЛОКОВ</div><div class="kpi-value">'+total+'</div></div>'
+  +'<div class="kpi-card"><div class="kpi-label">ДЕПАРТАМЕНТЫ</div><div class="kpi-value" style="color:#60A5FA">'+depts+'</div></div>'
+  +'<div class="kpi-card"><div class="kpi-label">ОФИСЫ / ОТДЕЛЫ</div><div class="kpi-value">'+(offices+otdels)+'</div></div>'
+  +'<div class="kpi-card"><div class="kpi-label">СЕКЦИИ</div><div class="kpi-value">'+sections+'</div></div>'
+  +'<div class="kpi-card"><div class="kpi-label">С ИНСТРУМЕНТАМИ</div><div class="kpi-value" style="color:#FBBF24">'+withAssets+'</div></div>';
+}
+
+function orgRenderBreadcrumbs(id) {
+ var el = document.getElementById('org-breadcrumbs');
+ if(!el) return;
+ if(!id) { el.innerHTML = '<span style="font-weight:600;color:var(--gold-bright)">Оргсхема SDS</span>'; return; }
+ var path = orgGetPath(id);
+ var html = '<span style="cursor:pointer;color:#60A5FA" onclick="orgResetView()">Оргсхема</span>';
+ path.forEach(function(n,i){
+  html += ' <span style="color:var(--text-muted)">&#8250;</span> ';
+  if(i < path.length-1) html += '<span style="cursor:pointer;color:#60A5FA" onclick="orgNavigate(\''+n.id+'\')">'+n.name+'</span>';
+  else html += '<span style="font-weight:600;color:var(--text-primary)">'+n.name+'</span>';
+ });
+ el.innerHTML = html;
+}
+
+function orgRender() {
+ var container = document.getElementById('org-chart');
+ if(!container) return;
+ var html = '';
+
+ if(!_orgCurrentId) {
+  // Главный уровень -- 7 департаментов
+  html += '<div class="org-section-title">Департаменты</div>';
+  html += '<div class="org-dept-row">';
+  var depts = ORG_DATA.filter(function(n){return n.type==='department';});
+  depts.sort(function(a,b){return parseInt(a.num)-parseInt(b.num);});
+  depts.forEach(function(d){
+   var children = orgGetChildren(d.id);
+   html += orgCardHtml(d, children.length);
+  });
+  html += '</div>';
+ } else {
+  // Показать детей текущего узла
+  var node = orgGetNode(_orgCurrentId);
+  if(!node) { orgResetView(); return; }
+  var children = orgGetChildren(_orgCurrentId);
+
+  // Заголовок текущего узла
+  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;cursor:pointer" onclick="orgOpenDetail(\''+node.id+'\')">';
+  html += '<div style="width:4px;height:40px;border-radius:2px;background:'+node.color+'"></div>';
+  html += '<div>';
+  html += '<div style="font-size:16px;font-weight:700;color:var(--text-primary)">'+node.name+'</div>';
+  html += '<div style="font-size:11px;color:var(--text-muted)">'+(ORG_TYPE_LABELS[node.type]||'')+(node.num?' #'+node.num:'')+' -- нажмите для деталей</div>';
+  html += '</div></div>';
+
+  if(children.length) {
+   // Группируем по типу
+   var groups = {};
+   children.forEach(function(c){
+    var t = c.type;
+    if(!groups[t]) groups[t] = [];
+    groups[t].push(c);
+   });
+   Object.keys(groups).forEach(function(t){
+    html += '<div class="org-section-title">'+(ORG_TYPE_LABELS[t]||t)+'</div>';
+    html += '<div class="org-section-grid">';
+    groups[t].forEach(function(c){
+     var sub = orgGetChildren(c.id);
+     html += orgCardHtml(c, sub.length);
+    });
+    html += '</div>';
+   });
+  } else {
+   html += '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:12px">Нет подчинённых блоков</div>';
+  }
+ }
+ container.innerHTML = html;
+}
+
+function orgCardHtml(node, childCount) {
+ var h = '<div class="org-card" style="border-left-color:'+node.color+'" onclick="orgNavigateOrOpen(\''+node.id+'\')">';
+ if(node.num) h += '<div class="org-num">#'+node.num+'</div>';
+ h += '<div class="org-type-badge">'+(ORG_TYPE_LABELS[node.type]||'')+'</div>';
+ h += '<div class="org-name">'+node.name+'</div>';
+ h += '<div class="org-ckp">'+node.ckp+'</div>';
+ if(node.responsible) h += '<div style="font-size:10px;color:'+node.color+';margin-top:6px;font-weight:600">'+node.responsible.name+'</div>';
+ if(node.assets && node.assets.length) h += '<div style="font-size:9px;color:var(--text-muted);margin-top:4px">'+node.assets.length+' инструмент'+(node.assets.length>1&&node.assets.length<5?'а':node.assets.length>=5?'ов':'')+'</div>';
+ if(childCount > 0) h += '<div class="org-children-count">'+childCount+' подразделени'+(childCount===1?'е':childCount<5?'я':'й')+' &#8250;</div>';
+ h += '</div>';
+ return h;
+}
+
+window.orgNavigateOrOpen = function(id) {
+ var children = orgGetChildren(id);
+ if(children.length > 0) { orgNavigate(id); }
+ else { orgOpenDetail(id); }
+};
+
+window.orgNavigate = function(id) {
+ _orgCurrentId = id;
+ orgRender();
+ orgRenderBreadcrumbs(id);
+};
+
+function orgResetView() {
+ _orgCurrentId = null;
+ orgRender();
+ orgRenderBreadcrumbs(null);
+ document.getElementById('org-search').value = '';
+}
+
+function orgSearch() {
+ var q = (document.getElementById('org-search').value||'').toLowerCase().trim();
+ if(!q) { orgRender(); return; }
+ var results = ORG_DATA.filter(function(n){
+  return n.name.toLowerCase().indexOf(q)>=0 || n.ckp.toLowerCase().indexOf(q)>=0 || (n.role&&n.role.toLowerCase().indexOf(q)>=0);
+ });
+ var container = document.getElementById('org-chart');
+ if(!results.length) { container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">Ничего не найдено</div>'; return; }
+ var html = '<div class="org-section-title">Результаты поиска ('+results.length+')</div><div class="org-section-grid">';
+ results.forEach(function(n){ html += orgCardHtml(n, orgGetChildren(n.id).length); });
+ html += '</div>';
+ container.innerHTML = html;
+}
+
+function orgOpenDetail(id) {
+ var node = orgGetNode(id);
+ if(!node) return;
+ var parent = node.parentId ? orgGetNode(node.parentId) : null;
+ var children = orgGetChildren(id);
+
+ var h = '<button class="org-detail-close" onclick="orgCloseDetail()">&#10005;</button>';
+ // Header
+ h += '<div class="org-detail-header">';
+ h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">';
+ h += '<div style="width:4px;height:36px;border-radius:2px;background:'+node.color+'"></div>';
+ h += '<div>';
+ if(node.num) h += '<div style="font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:1px">#'+node.num+' '+ORG_TYPE_LABELS[node.type]+'</div>';
+ else h += '<div style="font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:1px">'+ORG_TYPE_LABELS[node.type]+'</div>';
+ h += '<div style="font-size:18px;font-weight:700;color:var(--text-primary)">'+node.name+'</div>';
+ h += '</div></div>';
+ if(parent) h += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">&#8592; <span style="cursor:pointer;color:#60A5FA" onclick="orgOpenDetail(\''+parent.id+'\')">'+parent.name+'</span></div>';
+ h += '</div>';
+
+ // ЦКП
+ h += '<div class="org-detail-field"><div class="org-detail-label">ЦКП (ценный конечный продукт)</div><div class="org-detail-value" style="color:'+node.color+';font-weight:600">'+node.ckp+'</div></div>';
+ // Должность
+ if(node.role) h += '<div class="org-detail-field"><div class="org-detail-label">Должность</div><div class="org-detail-value">'+node.role+'</div></div>';
+ // Ответственный
+ if(node.responsible) {
+  h += '<div class="org-detail-field"><div class="org-detail-label">Ответственный</div><div class="org-detail-value" style="font-weight:600">'+node.responsible.name+(node.responsible.note?' <span style="font-weight:400;color:var(--text-muted)">('+node.responsible.note+')</span>':'')+'</div></div>';
+ } else {
+  h += '<div class="org-detail-field"><div class="org-detail-label">Ответственный</div><div class="org-detail-value" style="color:var(--text-muted);font-style:italic">Не назначен</div></div>';
+ }
+ // Описание
+ if(node.description) h += '<div class="org-detail-field"><div class="org-detail-label">Описание</div><div class="org-detail-value">'+node.description+'</div></div>';
+ // Инструменты
+ if(node.assets && node.assets.length) {
+  h += '<div class="org-detail-field"><div class="org-detail-label">Инструменты ('+node.assets.length+')</div>';
+  node.assets.forEach(function(a){
+   var ic = ORG_ASSET_ICONS[a.type] || ORG_ASSET_ICONS.other;
+   h += '<a class="org-asset-item" href="'+(a.url||'#')+'" target="_blank" onclick="'+(a.url?'':'event.preventDefault()')+'">';
+   h += '<div class="org-asset-icon" style="background:'+ic.bg+';color:'+ic.color+'">'+ic.icon+'</div>';
+   h += '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+a.label+'</div>';
+   if(a.description) h += '<div style="font-size:10px;color:var(--text-muted)">'+a.description+'</div>';
+   h += '</div></a>';
+  });
+  h += '</div>';
+ }
+ // Подчинённые
+ if(children.length) {
+  h += '<div class="org-detail-field"><div class="org-detail-label">Подразделения ('+children.length+')</div><div style="display:flex;flex-wrap:wrap;gap:4px">';
+  children.forEach(function(c){
+   h += '<div class="org-child-link" onclick="orgNavigate(\''+c.id+'\');orgCloseDetail()">'+c.name+' &#8250;</div>';
+  });
+  h += '</div></div>';
+ }
+ // Заметки
+ if(node.notes) h += '<div class="org-detail-field"><div class="org-detail-label">Заметки</div><div class="org-detail-value">'+node.notes+'</div></div>';
+
+ document.getElementById('org-detail-content').innerHTML = h;
+ document.getElementById('org-detail').style.display = 'block';
+ document.getElementById('org-detail-overlay').style.display = 'block';
+}
+
+function orgCloseDetail() {
+ document.getElementById('org-detail').style.display = 'none';
+ document.getElementById('org-detail-overlay').style.display = 'none';
+}
+
+// Заглушки для старого кода (не ломать)
+function kbSetCategory(){}
+function kbFilter(){}
+function kbRender(){ orgInit(); }
+var _kbItems = [];
+var _kbCategory = 'all';
+// Старые функции -- заглушки
+function kbSetCategory(cat, btn) {
  kbRender();
 }
 
 function knowledgeGetFiltered() {
- var q = (document.getElementById('kb-search').value || '').toLowerCase().trim();
+ var q = '';
  return _kbItems.filter(function(item) {
   if (_kbCategory !== 'all' && item.category !== _kbCategory) return false;
   if (q && item.title.toLowerCase().indexOf(q) < 0 && item.desc.toLowerCase().indexOf(q) < 0) return false;
