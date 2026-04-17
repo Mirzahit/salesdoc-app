@@ -2509,7 +2509,7 @@ body.light .content td span[style]{color:#2A3042!important}
     <b style="color:#3B82F6">Оплаты (T)</b> — сумма всех оплат из «Доходы» в периоде. &nbsp;
     <b style="color:#F59E0B">Оплаты по новым клиентам (T)</b> — статьи с «нов» (нов клиент / нов внедрение / нов интеграция), без абонентских. &nbsp;
     <b style="color:#34D399">Внедрения (шт)</b> — число оплат с заполненной «Датой активации». &nbsp;
-    <b style="color:#A78BFA">Лиды (шт)</b> — из таблицы маркетинга (LEADS_SHEET, Лист1).
+    <b style="color:#A78BFA">Лиды (шт)</b> — из таблицы маркетинга (LEADS_SHEET, Лист1) + Meta Ads CSV (после последней даты в Листе).
    </div>
    <div id="stat-main-chart-wrap" style="position:relative;height:220px;transition:height .25s ease"><canvas id="stat-main-canvas"></canvas></div>
   </div>
@@ -10960,27 +10960,55 @@ var _statEmpFilter = 'all';
 // Кеш лидов из LEADS_SHEET_ID (row[1]=дата, row[13]=кол-во лидов)
 var _statLeadsCache = null;
 
+// Резерв: лиды из Meta Ads CSV (localStorage) — по дате запуска кампании
+function statGetMetaAdsLeads() {
+ var ads = [];
+ try { ads = JSON.parse(localStorage.getItem('meta_ads_data')||'[]'); } catch(e){}
+ var result = [];
+ ads.forEach(function(a){
+  if(!a.start) return;
+  var p = String(a.start).split('.');
+  if(p.length<3) return;
+  var y = parseInt(p[2],10); if(y<100) y+=2000;
+  var d = new Date(y, parseInt(p[1],10)-1, parseInt(p[0],10));
+  var cnt = parseInt(a.leads,10) || 0;
+  if(cnt<=0) return;
+  result.push({date:d, count:cnt, source:'meta_csv', campaign:a.campaign||a.ad||''});
+ });
+ return result;
+}
+
 function statLoadLeadsOnce(cb) {
  if(_statLeadsCache) { cb(_statLeadsCache); return; }
- if(typeof LEADS_SHEET_ID==='undefined'){ cb([]); return; }
+ if(typeof LEADS_SHEET_ID==='undefined'){ cb(statGetMetaAdsLeads()); return; }
  var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
  // Расширяем диапазон до 3000 строк чтобы захватить все лиды
  var url = GS_URL + '?action=getSheet&spreadsheetId=' + LEADS_SHEET_ID + '&sheet=Лист1&range=A1:R3000';
  fetch(url).then(function(r){return r.json();}).then(function(data){
   var rows = (data && data.rows) || [];
-  var leads = [];
+  var sheetLeads = [];
+  var maxDate = null;
   // В таблице Meta Ads каждая строка = 1 лид. row[1]=дата, row[12]=имя компании, row[15]=телефон.
-  // Колонка N (row[13]) — НЕ количество, это атрибут лида (напр. номер формы), игнорируем.
   rows.forEach(function(row){
    var dateStr = row[1] || '';
    if(!dateStr || typeof dateStr!=='string' || dateStr.indexOf('T')<0) return;
-   // Должна быть хотя бы какая-то контактная информация, иначе это заголовок / мусор
    if(!row[12] && !row[15]) return;
-   leads.push({date:new Date(dateStr), count:1, name:row[12]||'', phone:row[15]||''});
+   var d = new Date(dateStr);
+   if(!maxDate || d>maxDate) maxDate = d;
+   sheetLeads.push({date:d, count:1, source:'sheet', name:row[12]||'', phone:row[15]||''});
   });
-  _statLeadsCache = leads;
-  cb(leads);
- }).catch(function(){ _statLeadsCache=[]; cb([]); });
+  // Добавляем лидов из Meta Ads CSV для периодов ПОСЛЕ последней даты в Sheet
+  // (избегаем двойного счёта и показываем актуальные цифры)
+  var metaLeads = statGetMetaAdsLeads();
+  var cutoff = maxDate || new Date(0);
+  var extraMeta = metaLeads.filter(function(l){ return l.date > cutoff; });
+  _statLeadsCache = sheetLeads.concat(extraMeta);
+  cb(_statLeadsCache);
+ }).catch(function(){
+  // Если Sheet недоступен — хотя бы Meta CSV покажем
+  _statLeadsCache = statGetMetaAdsLeads();
+  cb(_statLeadsCache);
+ });
 }
 
 // 7 отделений с привязкой к реальным данным
