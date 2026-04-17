@@ -10964,16 +10964,19 @@ function statLoadLeadsOnce(cb) {
  if(_statLeadsCache) { cb(_statLeadsCache); return; }
  if(typeof LEADS_SHEET_ID==='undefined'){ cb([]); return; }
  var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- var url = GS_URL + '?action=getSheet&spreadsheetId=' + LEADS_SHEET_ID + '&sheet=Лист1&range=A1:R300';
+ // Расширяем диапазон до 3000 строк чтобы захватить все лиды
+ var url = GS_URL + '?action=getSheet&spreadsheetId=' + LEADS_SHEET_ID + '&sheet=Лист1&range=A1:R3000';
  fetch(url).then(function(r){return r.json();}).then(function(data){
   var rows = (data && data.rows) || [];
   var leads = [];
+  // В таблице Meta Ads каждая строка = 1 лид. row[1]=дата, row[12]=имя компании, row[15]=телефон.
+  // Колонка N (row[13]) — НЕ количество, это атрибут лида (напр. номер формы), игнорируем.
   rows.forEach(function(row){
    var dateStr = row[1] || '';
-   var cnt = Number(row[13]);
    if(!dateStr || typeof dateStr!=='string' || dateStr.indexOf('T')<0) return;
-   if(isNaN(cnt) || cnt<=0 || cnt>500) return;
-   leads.push({date:new Date(dateStr), count:cnt});
+   // Должна быть хотя бы какая-то контактная информация, иначе это заголовок / мусор
+   if(!row[12] && !row[15]) return;
+   leads.push({date:new Date(dateStr), count:1, name:row[12]||'', phone:row[15]||''});
   });
   _statLeadsCache = leads;
   cb(leads);
