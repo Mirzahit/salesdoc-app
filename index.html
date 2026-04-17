@@ -1443,6 +1443,7 @@ body.light .content td span[style]{color:#2A3042!important}
   <div class="nav-group-trigger"><span class="nav-g-icon">&#9881;</span>Инструменты</div>
   <div class="nav-group-popup">
    <div class="nav-popup-title">Инструменты</div>
+   <div class="nav-item" data-view="statistics" onclick="showView('statistics')">Статистики</div>
    <div class="nav-item" data-view="marketing" onclick="showView('marketing')">Маркетинг</div>
    <div class="nav-item" data-view="knowledge" onclick="showView('knowledge')">База знаний</div>
    <div class="nav-item" data-view="reports" onclick="showView('reports')">Отчёты</div>
@@ -2481,6 +2482,16 @@ body.light .content td span[style]{color:#2A3042!important}
  <!-- /TESTS VIEW -->
 
  <!-- KNOWLEDGE BASE VIEW -->
+ <!-- STATISTICS / ИЦО VIEW -->
+ <div id="view-statistics" style="display:none;position:relative">
+  <div style="font-size:11px;color:var(--text-muted);margin-bottom:16px">Информационный центр организации -- статистики по отделам</div>
+  <!-- KPI -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px" id="stat-kpi-row"></div>
+  <!-- ИЦО стенд: 3 ряда по 7 статистик -->
+  <div id="stat-ico-board"></div>
+ </div>
+ <!-- /STATISTICS VIEW -->
+
  <div id="view-knowledge" style="display:none;position:relative">
   <!-- 2 кнопки навигации -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px">
@@ -3024,8 +3035,8 @@ const ROLE_LABELS = {
 };
 
 const ROLE_DEFAULTS = {
- admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
  rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
  manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
  operator: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,add_payments:0,add_acts:1,edit_plans:0,manage_employees:0 },
@@ -3513,7 +3524,7 @@ function applyUserAccess() {
  document.getElementById('cab-display-role').textContent=u.pos+' · '+profile.company;
 
  // Show/hide nav items
- const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',ai:'view_ai',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban'};
+ const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',ai:'view_ai',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics'};
  document.querySelectorAll('.nav-item[data-view]').forEach(el=>{
  const view=el.dataset.view;
  const key=viewMap[view];
@@ -5574,7 +5585,7 @@ function _loadAvatarFromCloud() {
 // NAV
 // ============================================================
 function showView(v) {
- ['dashboard','payments','plan','keyclients','ai','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban'].forEach(x=>{
+ ['dashboard','payments','plan','keyclients','ai','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban','statistics'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
@@ -5590,7 +5601,7 @@ function showView(v) {
  var kbMat = document.getElementById('view-kb-materials');
  if(kbOrg) kbOrg.style.display='none';
  if(kbMat) kbMat.style.display='none';
- const titles={dashboard:'ОБЗОР ФИНАНСОВ',payments:'ОПЛАТЫ',plan:'ВЫПОЛНЕНИЕ ПЛАНА',keyclients:'КЛЮЧЕВЫЕ КЛИЕНТЫ',ai:'ИИ МИРЗАХИТ — ФИНАНСОВЫЙ АНАЛИТИК',cabinet:'ЛИЧНЫЙ КАБИНЕТ',marketing:'МАРКЕТИНГ — АНАЛИЗ ЛИДОВ',expenses:'РАСХОДЫ',integrations:'ОЧЕРЕДЬ ИНТЕГРАЦИИ',tests:'ТЕСТЫ / ОЦЕНКА НАВЫКОВ',knowledge:'БАЗА ЗНАНИЙ',academy:'АКАДЕМИЯ',reports:'ОТЧЁТЫ',kanban:'ВНЕДРЕНИЕ'};
+ const titles={dashboard:'ОБЗОР ФИНАНСОВ',payments:'ОПЛАТЫ',plan:'ВЫПОЛНЕНИЕ ПЛАНА',keyclients:'КЛЮЧЕВЫЕ КЛИЕНТЫ',ai:'ИИ МИРЗАХИТ — ФИНАНСОВЫЙ АНАЛИТИК',cabinet:'ЛИЧНЫЙ КАБИНЕТ',marketing:'МАРКЕТИНГ — АНАЛИЗ ЛИДОВ',expenses:'РАСХОДЫ',integrations:'ОЧЕРЕДЬ ИНТЕГРАЦИИ',tests:'ТЕСТЫ / ОЦЕНКА НАВЫКОВ',knowledge:'БАЗА ЗНАНИЙ',academy:'АКАДЕМИЯ',reports:'ОТЧЁТЫ',kanban:'ВНЕДРЕНИЕ',statistics:'СТАТИСТИКИ — ИЦО'};
  document.getElementById('page-title').textContent=titles[v]||v.toUpperCase();
  // Подсветка активного пункта в nav
  document.querySelectorAll('.nav-item[data-view]').forEach(function(el){
@@ -5618,6 +5629,7 @@ function showView(v) {
  if(v==='integrations'&&!window._intgLoaded){intgLoad();window._intgLoaded=true;} else if(v==='integrations'){intgRender();}
  if(v==='tests') testsRender();
  if(v==='knowledge') { /* показываем 2 кнопки -- оргсхема и материалы */ }
+ if(v==='statistics') statInit();
  if(v==='academy') acadLoad();
  if(v==='reports') reportsInit();
  if(v==='kanban'){if(!window._kbLoaded){kbLoad();window._kbLoaded=true;}else{kbRenderBoard();}}
@@ -10885,6 +10897,184 @@ function testsExportPDF(person){
  w.document.write(h);
  w.document.close();
  setTimeout(function(){w.print();},500);
+}
+
+// ============================================================
+// STATISTICS / ИЦО MODULE
+// ============================================================
+
+// Статистики по отделам (21 отдел = 21 статистика на ИЦО)
+var STAT_DEFINITIONS = [
+ // Ряд 1: Департаменты 1-2 (HR + Коммерческий)
+ {id:'stat-otd-1',name:'Отд. 1 Направления',dept:1,unit:'чел.',formula:'hired',color:'#7C4DFF'},
+ {id:'stat-otd-2',name:'Отд. 2 Коммуникации',dept:1,unit:'баллы',formula:'checklist',color:'#7C4DFF'},
+ {id:'stat-otd-3',name:'Отд. 3 Инспекции',dept:1,unit:'баллы',formula:'checklist',color:'#7C4DFF'},
+ {id:'stat-otd-4',name:'Отд. 4 Продвижение',dept:2,unit:'лиды',formula:'leads',color:'#00BCD4'},
+ {id:'stat-otd-5',name:'Отд. 5 Понимание',dept:2,unit:'КП',formula:'kp_sent',color:'#00BCD4'},
+ {id:'stat-otd-6',name:'Отд. 6 Продажи',dept:2,unit:'T',formula:'sales',color:'#00BCD4'},
+ {id:'stat-otd-7',name:'Отд. 7 Доход',dept:3,unit:'T',formula:'income',color:'#FFB300'},
+ // Ряд 2: Департаменты 3-4 (Финансовый + Технический)
+ {id:'stat-otd-8',name:'Отд. 8 Расходы',dept:3,unit:'T',formula:'expenses',color:'#FFB300',inverted:true},
+ {id:'stat-otd-9',name:'Отд. 9 Учёт',dept:3,unit:'баллы',formula:'checklist',color:'#FFB300'},
+ {id:'stat-otd-10',name:'Отд. 10 Кат. A',dept:4,unit:'клиентов',formula:'clients_a',color:'#2196F3'},
+ {id:'stat-otd-11',name:'Отд. 11 Кат. B,C',dept:4,unit:'клиентов',formula:'clients_bc',color:'#2196F3'},
+ {id:'stat-otd-12',name:'Отд. 12 Интеграция',dept:4,unit:'интегр.',formula:'integrations',color:'#2196F3'},
+ {id:'stat-otd-13',name:'Отд. 13 Качество',dept:5,unit:'баллы',formula:'checklist',color:'#E91E63'},
+ {id:'stat-otd-14',name:'Отд. 14 Обучение',dept:5,unit:'обуч.',formula:'trainings',color:'#E91E63'},
+ // Ряд 3: Департаменты 5-7 (Квалификация + PR + Админ)
+ {id:'stat-otd-15',name:'Отд. 15 Совершенст.',dept:5,unit:'программ',formula:'improvements',color:'#E91E63'},
+ {id:'stat-otd-16',name:'Отд. 16 PR',dept:6,unit:'публик.',formula:'publications',color:'#FF5722'},
+ {id:'stat-otd-17',name:'Отд. 17 Вводные',dept:6,unit:'участн.',formula:'webinar_attendees',color:'#FF5722'},
+ {id:'stat-otd-18',name:'Отд. 18 Партнёры',dept:6,unit:'клиент.',formula:'partner_clients',color:'#FF5722'},
+ {id:'stat-off-19',name:'Офис 19 ГД',dept:7,unit:'T',formula:'total_income',color:'#4CAF50'},
+ {id:'stat-off-20',name:'Офис 20 Офиц.',dept:7,unit:'баллы',formula:'checklist',color:'#4CAF50'},
+ {id:'stat-off-21',name:'Офис 21 Учред.',dept:7,unit:'T',formula:'profit',color:'#4CAF50'}
+];
+
+function statInit() {
+ statRenderKpi();
+ statRenderICO();
+}
+
+function statRenderKpi() {
+ var el = document.getElementById('stat-kpi-row');
+ if(!el) return;
+ // Считаем из payments
+ var totalIncome = 0, totalExpenses = 0, clientCount = 0, weekIncome = 0;
+ var now = new Date();
+ var weekAgo = new Date(now - 7*86400000);
+ var clients = {};
+ if(typeof payments !== 'undefined') {
+  payments.forEach(function(p){
+   totalIncome += (p.amount || 0);
+   clients[p.client] = true;
+   var d = new Date(p.date || p.d);
+   if(d >= weekAgo) weekIncome += (p.amount || 0);
+  });
+ }
+ clientCount = Object.keys(clients).length;
+ if(typeof expData !== 'undefined') {
+  expData.forEach(function(e){ totalExpenses += (e.amount || 0); });
+ }
+ el.innerHTML =
+  '<div class="kpi-card"><div class="kpi-label">ВАЛОВОЙ ДОХОД</div><div class="kpi-value" style="font-size:20px">'+fmtFull(totalIncome)+'</div></div>'
+  +'<div class="kpi-card"><div class="kpi-label">ДОХОД ЗА НЕДЕЛЮ</div><div class="kpi-value" style="color:#34D399">'+fmtFull(weekIncome)+'</div></div>'
+  +'<div class="kpi-card"><div class="kpi-label">РАСХОДЫ</div><div class="kpi-value" style="color:#EF5350">'+fmtFull(totalExpenses)+'</div></div>'
+  +'<div class="kpi-card"><div class="kpi-label">КЛИЕНТОВ</div><div class="kpi-value">'+clientCount+'</div></div>'
+  +'<div class="kpi-card"><div class="kpi-label">СТАТИСТИК НА ИЦО</div><div class="kpi-value" style="color:#60A5FA">'+STAT_DEFINITIONS.length+'</div></div>';
+}
+
+function statRenderICO() {
+ var board = document.getElementById('stat-ico-board');
+ if(!board) return;
+ // Получаем недельные данные из payments
+ var weeklyData = statCalcWeekly();
+
+ var html = '';
+ // 3 ряда по 7 статистик
+ for(var row = 0; row < 3; row++) {
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:12px">';
+  for(var col = 0; col < 7; col++) {
+   var idx = row * 7 + col;
+   var stat = STAT_DEFINITIONS[idx];
+   if(!stat) { html += '<div></div>'; continue; }
+   var data = weeklyData[stat.id] || [];
+   var current = data.length > 0 ? data[data.length-1] : 0;
+   var prev = data.length > 1 ? data[data.length-2] : 0;
+   var trend = current - prev;
+   var trendColor = trend > 0 ? '#34D399' : trend < 0 ? '#EF5350' : 'var(--text-muted)';
+   var trendArrow = trend > 0 ? '&#9650;' : trend < 0 ? '&#9660;' : '&#8212;';
+   if(stat.inverted) { trendColor = trend < 0 ? '#34D399' : trend > 0 ? '#EF5350' : 'var(--text-muted)'; }
+
+   // Мини-график (sparkline)
+   var sparkline = statSparkline(data, stat.color, stat.inverted);
+
+   html += '<div style="padding:10px;background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:8px;border-top:3px solid '+stat.color+'">';
+   html += '<div style="font-size:9px;color:var(--text-muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+stat.name+'</div>';
+   html += '<div style="display:flex;align-items:baseline;gap:6px">';
+   html += '<div style="font-size:18px;font-weight:700;color:var(--text-primary)">'+fmtFull(current)+'</div>';
+   html += '<div style="font-size:10px;color:'+trendColor+'">'+trendArrow+' '+Math.abs(trend)+'</div>';
+   html += '</div>';
+   html += '<div style="font-size:9px;color:var(--text-muted);margin-bottom:6px">'+stat.unit+'</div>';
+   html += sparkline;
+   html += '</div>';
+  }
+  html += '</div>';
+ }
+ board.innerHTML = html;
+}
+
+function statSparkline(data, color, inverted) {
+ if(!data || data.length < 2) return '<div style="height:30px"></div>';
+ var max = Math.max.apply(null, data);
+ var min = Math.min.apply(null, data);
+ if(max === min) max = min + 1;
+ var w = 100;
+ var h = 30;
+ var step = w / (data.length - 1);
+ var points = data.map(function(v, i){
+  var y = h - ((v - min) / (max - min)) * h;
+  if(inverted) y = ((v - min) / (max - min)) * h;
+  return (i * step).toFixed(1) + ',' + y.toFixed(1);
+ }).join(' ');
+ return '<svg width="100%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" style="display:block">'
+  + '<polyline fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linejoin="round" points="'+points+'"/>'
+  + '</svg>';
+}
+
+function statCalcWeekly() {
+ // Группируем payments по неделям и считаем метрики
+ var result = {};
+ STAT_DEFINITIONS.forEach(function(s){ result[s.id] = []; });
+
+ if(typeof payments === 'undefined' || !payments.length) {
+  // Демо данные
+  STAT_DEFINITIONS.forEach(function(s){
+   var arr = [];
+   for(var i = 0; i < 13; i++) arr.push(Math.floor(Math.random() * 100) + 10);
+   result[s.id] = arr;
+  });
+  return result;
+ }
+
+ // Реальные данные: группируем по неделям (последние 13 недель)
+ var now = new Date();
+ var weeks = [];
+ for(var w = 12; w >= 0; w--) {
+  var start = new Date(now - (w+1)*7*86400000);
+  var end = new Date(now - w*7*86400000);
+  weeks.push({start:start, end:end});
+ }
+
+ weeks.forEach(function(wk) {
+  var weekPayments = payments.filter(function(p){
+   var d = new Date(p.date || p.d);
+   return d >= wk.start && d < wk.end;
+  });
+  var weekIncome = weekPayments.reduce(function(s,p){ return s + (p.amount||0); }, 0);
+  var weekClients = {};
+  weekPayments.forEach(function(p){ weekClients[p.client]=true; });
+
+  // Продажи (новые лицензии + внедрение)
+  var sales = weekPayments.filter(function(p){ return p.category==='license'||p.category==='implementation'; })
+   .reduce(function(s,p){ return s+(p.amount||0); }, 0);
+
+  result['stat-otd-6'].push(sales);
+  result['stat-otd-7'].push(weekIncome);
+  result['stat-off-19'].push(weekIncome);
+  result['stat-off-21'].push(Math.round(weekIncome * 0.3)); // условная прибыль 30%
+  result['stat-otd-10'].push(Object.keys(weekClients).length);
+  result['stat-otd-11'].push(Math.max(0, Object.keys(weekClients).length - 2));
+ });
+
+ // Остальные статистики -- пока демо
+ STAT_DEFINITIONS.forEach(function(s){
+  if(!result[s.id].length) {
+   for(var i = 0; i < 13; i++) result[s.id].push(Math.floor(Math.random() * 50) + 5);
+  }
+ });
+
+ return result;
 }
 
 // ============================================================
