@@ -2498,13 +2498,9 @@ body.light .content td span[style]{color:#2A3042!important}
   <div class="panel" style="padding:18px;margin-bottom:16px">
    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
     <div style="font-size:14px;font-weight:600;color:var(--text-primary)">Динамика компании по неделям</div>
-    <div style="display:flex;gap:12px;font-size:11px;color:var(--text-muted)">
-     <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:3px;border-radius:1px;background:#3B82F6"></span>Оплаты</span>
-     <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:3px;border-radius:1px;background:#34D399"></span>Внедрения</span>
-     <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:3px;border-radius:1px;background:#A78BFA"></span>Лиды</span>
-    </div>
+    <button onclick="statExpandChart()" style="padding:4px 10px;border-radius:6px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:10px;cursor:pointer" title="На весь экран">Развернуть</button>
    </div>
-   <div id="stat-main-chart" style="height:200px"></div>
+   <div style="position:relative;height:220px"><canvas id="stat-main-canvas"></canvas></div>
   </div>
   <!-- 7 отделений Хаббарда -->
   <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:10px">7 отделений по оргсхеме</div>
@@ -10985,19 +10981,12 @@ function statInit() {
   weekData.push({label:wk.label,income:income,sales:sales,subs:subs,impls:impls,intgs:intgs,leads:Object.keys(newCls).length,profit:Math.round(income*0.25)});
  });
 
- // Общий SVG график (3 линии: оплаты, внедрения, лиды)
- var chartEl = document.getElementById('stat-main-chart');
- if(chartEl) {
-  var labels = weekData.map(function(w){return w.label;});
-  var salesArr = weekData.map(function(w){return w.sales;});
-  var implsArr = weekData.map(function(w){return w.impls;});
-  var leadsArr = weekData.map(function(w){return w.leads;});
-  chartEl.innerHTML = statSvgMultiLine(labels, [
-   {data:salesArr,color:'#3B82F6',label:'Оплаты',isMoney:true},
-   {data:implsArr,color:'#34D399',label:'Внедрения'},
-   {data:leadsArr,color:'#A78BFA',label:'Лиды'}
-  ]);
- }
+ // Chart.js график (3 линии с тултипами и кликабельной легендой)
+ var chartLabels = weekData.map(function(w){return w.label;});
+ var salesArr = weekData.map(function(w){return w.sales;});
+ var implsArr = weekData.map(function(w){return w.impls;});
+ var leadsArr = weekData.map(function(w){return w.leads;});
+ statBuildMainChart(chartLabels, salesArr, implsArr, leadsArr);
 
  // 7 отделений
  var deptEl = document.getElementById('stat-departments');
@@ -11037,6 +11026,91 @@ function statInit() {
  deptEl.innerHTML = html;
 }
 
+var _statMainChart = null;
+
+function statBuildMainChart(labels, sales, impls, leads) {
+ ensureChartJS(function(){
+  var canvas = document.getElementById('stat-main-canvas');
+  if(!canvas) return;
+  if(_statMainChart) { _statMainChart.destroy(); _statMainChart=null; }
+  var ctx = canvas.getContext('2d');
+  _statMainChart = new Chart(ctx, {
+   type:'line',
+   data:{
+    labels:labels,
+    datasets:[
+     {label:'Оплаты (T)',data:sales,borderColor:'#3B82F6',backgroundColor:'#3B82F620',tension:.3,borderWidth:2,pointRadius:4,pointHoverRadius:7,fill:false,yAxisID:'y'},
+     {label:'Внедрения',data:impls,borderColor:'#34D399',backgroundColor:'#34D39920',tension:.3,borderWidth:2,pointRadius:4,pointHoverRadius:7,fill:false,yAxisID:'y1'},
+     {label:'Лиды',data:leads,borderColor:'#A78BFA',backgroundColor:'#A78BFA20',tension:.3,borderWidth:2,pointRadius:4,pointHoverRadius:7,fill:false,yAxisID:'y1'}
+    ]
+   },
+   options:{
+    responsive:true,
+    maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{
+     legend:{display:true,position:'top',labels:{color:'#94A3B8',font:{size:11,family:'Inter'},boxWidth:12,padding:16,usePointStyle:true}},
+     tooltip:{enabled:true,backgroundColor:'#1A3A52',titleColor:'#E2E8F0',bodyColor:'#E2E8F0',borderColor:'rgba(59,130,246,.3)',borderWidth:1,padding:10,displayColors:true,callbacks:{
+      label:function(ctx){
+       var v=ctx.parsed.y;
+       if(ctx.datasetIndex===0) return ctx.dataset.label+': '+fmtFull(v);
+       return ctx.dataset.label+': '+v;
+      }
+     }}
+    },
+    scales:{
+     y:{position:'left',beginAtZero:true,grid:{color:'rgba(148,163,184,.06)'},ticks:{color:'#94A3B8',font:{size:10},callback:function(v){return v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?Math.round(v/1000)+'K':v;}}},
+     y1:{position:'right',beginAtZero:true,grid:{display:false},ticks:{color:'#94A3B8',font:{size:10}}},
+     x:{grid:{display:false},ticks:{color:'#94A3B8',font:{size:9},maxRotation:0}}
+    }
+   }
+  });
+ });
+}
+
+// Развернуть график на весь экран
+window.statExpandChart = function() {
+ var overlay = document.createElement('div');
+ overlay.style.cssText='position:fixed;inset:0;z-index:10000;background:var(--dark-void);display:flex;flex-direction:column;padding:20px';
+ overlay.onclick=function(e){if(e.target===overlay){overlay.remove();statInit();}};
+ overlay.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div style="font-size:16px;font-weight:700;color:var(--text-primary)">Динамика компании по неделям</div><button onclick="this.closest(\'div[style*=fixed]\').remove();statInit();" style="padding:6px 16px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer">Закрыть</button></div><div style="flex:1;position:relative"><canvas id="stat-fullscreen-canvas"></canvas></div>';
+ document.body.appendChild(overlay);
+
+ // Пересоздать график на fullscreen canvas
+ ensureChartJS(function(){
+  var weeks=statGetWeeks(8);
+  var labels=[],sales=[],impls=[],leads=[];
+  if(typeof payments!=='undefined'){
+   weeks.forEach(function(wk){
+    labels.push(wk.label);
+    var wp=payments.filter(function(p){var d=new Date(p.date||p.d);return d>=wk.start&&d<wk.end;});
+    sales.push(wp.filter(function(p){return p.category==='license'||p.category==='implementation';}).reduce(function(s,p){return s+(p.amount||0);},0));
+    impls.push(wp.filter(function(p){return p.category==='implementation';}).length);
+    var c={};wp.filter(function(p){return p.category==='license'||p.category==='implementation';}).forEach(function(p){c[p.client]=1;});
+    leads.push(Object.keys(c).length);
+   });
+  }
+  var canvas=document.getElementById('stat-fullscreen-canvas');
+  if(!canvas) return;
+  new Chart(canvas.getContext('2d'),{
+   type:'line',
+   data:{labels:labels,datasets:[
+    {label:'Оплаты (T)',data:sales,borderColor:'#3B82F6',tension:.3,borderWidth:2.5,pointRadius:5,pointHoverRadius:9,fill:false,yAxisID:'y'},
+    {label:'Внедрения',data:impls,borderColor:'#34D399',tension:.3,borderWidth:2.5,pointRadius:5,pointHoverRadius:9,fill:false,yAxisID:'y1'},
+    {label:'Лиды',data:leads,borderColor:'#A78BFA',tension:.3,borderWidth:2.5,pointRadius:5,pointHoverRadius:9,fill:false,yAxisID:'y1'}
+   ]},
+   options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:true,position:'top',labels:{color:'#E2E8F0',font:{size:13,family:'Inter'},boxWidth:14,padding:20,usePointStyle:true}},
+     tooltip:{enabled:true,backgroundColor:'#1A3A52',titleColor:'#E2E8F0',bodyColor:'#E2E8F0',titleFont:{size:13},bodyFont:{size:12},padding:12,callbacks:{label:function(ctx){var v=ctx.parsed.y;if(ctx.datasetIndex===0)return ctx.dataset.label+': '+fmtFull(v);return ctx.dataset.label+': '+v;}}}},
+    scales:{
+     y:{position:'left',beginAtZero:true,grid:{color:'rgba(148,163,184,.08)'},ticks:{color:'#94A3B8',font:{size:12},callback:function(v){return v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?Math.round(v/1000)+'K':v;}}},
+     y1:{position:'right',beginAtZero:true,grid:{display:false},ticks:{color:'#94A3B8',font:{size:12}}},
+     x:{grid:{display:false},ticks:{color:'#94A3B8',font:{size:11}}}
+    }}
+  });
+ });
+};
+
 function statSparkSvg(data, color) {
  if(!data||data.length<2) return '';
  var max=Math.max.apply(null,data)||1;var min=Math.min.apply(null,data);if(max===min)max=min+1;
@@ -11044,30 +11118,6 @@ function statSparkSvg(data, color) {
  var pts=data.map(function(v,i){return(i*step).toFixed(1)+','+(h-((v-min)/(max-min))*h*0.8-2).toFixed(1);}).join(' ');
  var areaPts = pts+' '+((data.length-1)*step)+','+h+' 0,'+h;
  return '<svg width="120" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="display:block"><polygon fill="'+color+'15" points="'+areaPts+'"/><polyline fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linejoin="round" points="'+pts+'"/></svg>';
-}
-
-function statSvgMultiLine(labels, series) {
- var w=800,h=180,padL=50,padR=10,padT=10,padB=25;
- var cw=w-padL-padR,ch=h-padT-padB;
- var n=labels.length;if(!n)return'';
- // Найти макс для первой серии (деньги) и для остальных
- var max1=Math.max.apply(null,series[0].data)||1;
- var max2=Math.max.apply(null,series[1].data.concat(series[2].data))||1;
- var svg='<svg width="100%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">';
- // Горизонтальные линии
- for(var g=0;g<5;g++){var gy=padT+ch/4*g;svg+='<line x1="'+padL+'" y1="'+gy+'" x2="'+(w-padR)+'" y2="'+gy+'" stroke="rgba(148,163,184,.08)" stroke-width="0.5"/>';}
- // Серии
- series.forEach(function(s,si){
-  var mx=si===0?max1:max2;
-  var pts=s.data.map(function(v,i){var x=padL+i*(cw/(n-1));var y=padT+ch-(v/mx)*ch;return x.toFixed(1)+','+y.toFixed(1);}).join(' ');
-  svg+='<polyline fill="none" stroke="'+s.color+'" stroke-width="2" stroke-linejoin="round" points="'+pts+'"/>';
-  // Точки
-  s.data.forEach(function(v,i){var x=padL+i*(cw/(n-1));var y=padT+ch-(v/mx)*ch;svg+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="3" fill="'+s.color+'"/>';});
- });
- // Подписи
- labels.forEach(function(l,i){var x=padL+i*(cw/(n-1));svg+='<text x="'+x.toFixed(1)+'" y="'+(h-4)+'" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="Inter,sans-serif">'+l.split('-')[0]+'</text>';});
- svg+='</svg>';
- return svg;
 }
 
 function statOpenPage(metric) {
