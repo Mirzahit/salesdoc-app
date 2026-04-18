@@ -809,6 +809,8 @@ body:not(.light) .kpi-footer-inline{
 }
 body:not(.light) .kpi-footer-inline .kfi-lbl{color:#94A3B8; margin-right:4px}
 body:not(.light) .kpi-footer-inline .kfi-sep{opacity:.4; margin:0 8px}
+/* В light-теме .kpi-footer-inline не показываем (там свой layout KPI с боковыми чипами) */
+body.light .kpi-footer-inline{display:none !important}
 .kpi-delta.down{color:#EF5350;background:rgba(239,83,80,.1)}
 
 /* META ADS KPI */
@@ -14842,7 +14844,11 @@ function kbRender() {
 ============================================================ */
 (function(){
  function renderKpiFooters(){
-  if (document.body.classList.contains('light')) return;
+  // В light-теме футеры не нужны — удаляем все ранее созданные
+  if (document.body.classList.contains('light')) {
+   document.querySelectorAll('.kpi-footer-inline').forEach(function(el){ el.remove(); });
+   return;
+  }
   document.querySelectorAll('.kpi-card').forEach(function(card){
    var chips = card.querySelectorAll('.kpi-chip');
    if (!chips.length) return;
