@@ -12958,6 +12958,14 @@ var kbChecklist = [];
 var kbDragCard = null;
 var kbLog = [];
 
+// Пользовательский override чеклиста (приоритетнее Sheet и дефолта)
+function _kbSaveChecklistLocal(){
+ try{ localStorage.setItem('kb_checklist_user', JSON.stringify(kbChecklist)); }catch(e){}
+}
+function _kbLoadChecklistLocal(){
+ try{ var v = JSON.parse(localStorage.getItem('kb_checklist_user')||'null'); return Array.isArray(v) ? v : null; }catch(e){ return null; }
+}
+
 function kbLoad() {
  document.getElementById('kb-status').textContent = 'Загрузка...';
 
@@ -12981,7 +12989,13 @@ function kbLoad() {
   if(!kbOperators.length) kbOperators = ['Айдос','Акбар','Самат'];
   // Гарантируем что все операторы из KB_OP_COLORS в списке
   Object.keys(KB_OP_COLORS).forEach(function(op){ if(kbOperators.indexOf(op) < 0) kbOperators.push(op); });
-  if(!kbChecklist.length) kbChecklist = ['Подключение к серверу','Загрузка базы клиентов','Настройка маршрутов','Обучение менеджеров','Тестовый день','Проверка отчётов'];
+  // Пользовательский override (из localStorage) побеждает Sheet и дефолт
+  var _userCl = _kbLoadChecklistLocal();
+  if(_userCl) {
+   kbChecklist = _userCl; // уважаем пустой массив тоже — значит пользователь всё удалил
+  } else if(!kbChecklist.length) {
+   kbChecklist = ['Подключение к серверу','Загрузка базы клиентов','Настройка маршрутов','Обучение менеджеров','Тестовый день','Проверка отчётов'];
+  }
 
   // Parse saved kanban data (operator, stage, checklist per client)
   var kbSaved = {};
@@ -14172,13 +14186,16 @@ function kbAddChecklistItem() {
  var name = inp.value.trim();
  if(!name) return;
  kbChecklist.push(name);
+ _kbSaveChecklistLocal();
  inp.value = '';
  kbOpenSettings();
 }
 
 function kbRemoveChecklistItem(idx) {
- if(kbChecklist.length <= 1) return;
+ // Позволяем удалять до пустого списка (пользователь может захотеть убрать чеклист совсем)
+ if(idx < 0 || idx >= kbChecklist.length) return;
  kbChecklist.splice(idx, 1);
+ _kbSaveChecklistLocal();
  kbOpenSettings();
 }
 
@@ -14188,11 +14205,12 @@ function kbSaveSettings() {
  var newCols = [];
  colInputs.forEach(function(inp){ var v = inp.value.trim(); if(v) newCols.push(v); });
  if(newCols.length >= 2) kbColumns = newCols;
- // Save checklist
+ // Save checklist (позволяем пустой список — если пользователь убрал всё)
  var clInputs = document.querySelectorAll('#kb-checklist-list .kb-cl-input');
  var newCl = [];
  clInputs.forEach(function(inp){ var v = inp.value.trim(); if(v) newCl.push(v); });
- if(newCl.length >= 1) kbChecklist = newCl;
+ kbChecklist = newCl;
+ _kbSaveChecklistLocal();
 
  kbCloseSettings();
  kbRenderBoard();
