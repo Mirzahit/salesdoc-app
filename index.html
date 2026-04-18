@@ -71,24 +71,25 @@
  background:none!important;
 }
 
-/* KPI values */
+/* KPI values — чистый белый вместо голубого градиента, глазам легче */
 .kpi-value{
  font-family:'Space Grotesk',sans-serif!important;
  font-size:28px!important;
  letter-spacing:1px!important;
- background:var(--gold-gradient);
- -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+ color:#F1F5F9 !important;
+ -webkit-text-fill-color:#F1F5F9 !important;
+ background:none !important;
  line-height:1.1!important;
 }
 
-/* KPI labels */
+/* KPI labels — нейтрально-серый вместо прозрачного голубого */
 .kpi-label{
  font-family:'Inter',sans-serif!important;
  font-size:12px!important;
  letter-spacing:1.5px!important;
  text-transform:uppercase!important;
  font-weight:700!important;
- color:rgba(96,165,250,0.75)!important;
+ color:#94A3B8 !important;
  margin-bottom:4px!important;
 }
 
@@ -751,15 +752,55 @@ body:not(.light){background-image:radial-gradient(ellipse 80% 60% at 15% 10%, rg
 /* KPI */
 .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
 .kpi-card{background:var(--dark-card);border:1px solid var(--dark-border);border-radius:14px;padding:18px;position:relative;overflow:hidden;transition:all .3s}
-.kpi-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(59,130,246,.06) 0%,transparent 60%);border-radius:14px}
-.kpi-card::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(59,130,246,.4),transparent)}
-.kpi-card:hover{border-color:var(--gold-deep);box-shadow:0 8px 30px rgba(59,130,246,.15);transform:translateY(-2px)}
+/* Убираем голубой glow и голубую полоску — ставим тонкий акцент в зависимости от data-accent */
+.kpi-card::before{content:'';position:absolute;inset:0;border-radius:14px;pointer-events:none;opacity:0}
+.kpi-card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:14px 14px 0 0;background:var(--kpi-accent,#6366F1);opacity:.7}
+.kpi-card[data-accent="green"]{--kpi-accent:#10B981}
+.kpi-card[data-accent="red"]{--kpi-accent:#EF4444}
+.kpi-card[data-accent="amber"]{--kpi-accent:#F59E0B}
+.kpi-card[data-accent="gray"]{--kpi-accent:#64748B}
+.kpi-card[data-accent="blue"]{--kpi-accent:#3B82F6}
+.kpi-card:hover{border-color:rgba(99,102,241,.5);box-shadow:0 8px 30px rgba(0,0,0,.25);transform:translateY(-2px)}
 .kpi-icon{display:none}
-.kpi-label{font-size:10px;color:var(--text-muted);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:6px;font-family:'Inter','Inter',sans-serif;font-weight:500}
-.kpi-value{font-family:'Space Grotesk','Inter',sans-serif;font-size:24px;font-weight:700;color:var(--gold-bright);line-height:1;letter-spacing:1px}
+.kpi-label{font-size:10px;color:#94A3B8;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:6px;font-family:'Inter','Inter',sans-serif;font-weight:500}
+.kpi-value{font-family:'Space Grotesk','Inter',sans-serif;font-size:24px;font-weight:700;color:#F1F5F9;line-height:1;letter-spacing:1px}
 .kpi-value span{font-size:12px;color:var(--text-secondary);margin-left:2px}
 .kpi-delta{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;margin-top:6px;padding:2px 7px;border-radius:20px}
 .kpi-delta.up{color:#4CAF50;background:rgba(76,175,80,.1)}
+
+/* Компактный вид KPI-карточек в тёмной теме: M2M-блок превращаем в маленький бейдж в углу, A2A скрываем, добавляем футер */
+body:not(.light) .kpi-card-inner{display:block !important;position:relative !important}
+body:not(.light) .kpi-divider{display:none !important}
+body:not(.light) .kpi-right{
+ position:absolute !important; top:0 !important; right:0 !important;
+ display:flex !important; gap:6px !important; flex-direction:row !important;
+ background:none !important; border:none !important; padding:0 !important;
+}
+body:not(.light) .kpi-chip.chip-flat{display:none !important}
+body:not(.light) .kpi-chip{
+ background:rgba(148,163,184,.08) !important;
+ border:none !important; border-radius:8px !important;
+ padding:4px 9px !important;
+ display:flex !important; align-items:center !important; gap:4px !important;
+ min-width:0 !important;
+}
+body:not(.light) .kpi-chip-label,
+body:not(.light) .kpi-chip-val,
+body:not(.light) .kpi-chip-prev{display:none !important}
+body:not(.light) .kpi-chip-sub{
+ font-size:11px !important; font-weight:600 !important;
+ letter-spacing:0 !important; text-transform:none !important;
+ white-space:nowrap !important; color:#94A3B8 !important;
+}
+body:not(.light) .kpi-chip.chip-down .kpi-chip-sub{color:#F87171 !important}
+body:not(.light) .kpi-chip.chip-up .kpi-chip-sub{color:#4ADE80 !important}
+body:not(.light) .kpi-left{width:100% !important; padding-right:90px !important}
+body:not(.light) .kpi-footer-inline{
+ font-size:11px; color:#64748B; margin-top:10px;
+ letter-spacing:.2px; font-family:'Inter',sans-serif; font-weight:500;
+}
+body:not(.light) .kpi-footer-inline .kfi-lbl{color:#94A3B8; margin-right:4px}
+body:not(.light) .kpi-footer-inline .kfi-sep{opacity:.4; margin:0 8px}
 .kpi-delta.down{color:#EF5350;background:rgba(239,83,80,.1)}
 
 /* META ADS KPI */
@@ -14784,6 +14825,51 @@ function kbCloseReport() {
 function kbRender() {
  kbRenderBoard();
 }
+
+/* ============================================================
+   KPI FOOTERS — дорисовывает строку "Мар 2.7М · Апр'25 нет данных"
+   снизу каждой KPI-карточки на дашборде (dark-theme only).
+   Данные берёт из боковых .kpi-chip блоков (M2M/A2A),
+   сами блоки скрыты CSS'ом и превращены в компактный бейдж.
+============================================================ */
+(function(){
+ function renderKpiFooters(){
+  if (document.body.classList.contains('light')) return;
+  document.querySelectorAll('.kpi-card').forEach(function(card){
+   var chips = card.querySelectorAll('.kpi-chip');
+   if (!chips.length) return;
+   var c1 = chips[0], c2 = chips[1];
+   var prev1 = c1 && c1.querySelector('.kpi-chip-prev') ? c1.querySelector('.kpi-chip-prev').textContent.trim() : '';
+   var sub1 = c1 && c1.querySelector('.kpi-chip-sub') ? c1.querySelector('.kpi-chip-sub').textContent : '';
+   var prev2 = c2 && c2.querySelector('.kpi-chip-prev') ? c2.querySelector('.kpi-chip-prev').textContent.trim() : '';
+   var sub2raw = c2 && c2.querySelector('.kpi-chip-sub') ? c2.querySelector('.kpi-chip-sub').textContent.trim() : '';
+   var m1 = sub1.match(/к\s+(\S+)/); var period1 = m1 ? m1[1] : 'Март';
+   var m2 = sub2raw.match(/к\s+(\S+)/); var period2 = m2 ? m2[1] : "Апр'25";
+   var v1 = prev1 || 'нет данных';
+   var v2 = prev2 || (sub2raw.toLowerCase().indexOf('нет') >= 0 ? 'нет данных' : sub2raw || 'нет данных');
+   var kLeft = card.querySelector('.kpi-left') || card.querySelector('.kpi-card-inner') || card;
+   var footer = kLeft.querySelector('.kpi-footer-inline');
+   if (!footer) {
+    footer = document.createElement('div');
+    footer.className = 'kpi-footer-inline';
+    kLeft.appendChild(footer);
+   }
+   footer.innerHTML = '<span class="kfi-lbl">' + period1 + '</span>' + v1 +
+                      '<span class="kfi-sep">·</span>' +
+                      '<span class="kfi-lbl">' + period2 + '</span>' + v2;
+  });
+ }
+ window.__renderKpiFooters = renderKpiFooters;
+ // Запускаем после того как renderAll отработает
+ if (typeof window.renderAll === 'function') {
+  var _orig = window.renderAll;
+  window.renderAll = function(){ var r = _orig.apply(this, arguments); setTimeout(renderKpiFooters, 50); return r; };
+ }
+ // Страховка — если KPI пересобираются другим путём
+ setInterval(renderKpiFooters, 2500);
+ // Первый рендер
+ setTimeout(renderKpiFooters, 500);
+})();
 
 </script>
 </body>
