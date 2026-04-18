@@ -1232,9 +1232,19 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
 .plan-sum-val{font-size:18px;font-weight:900;font-family:"Inter",sans-serif;color:var(--gold-bright)}
 .plan-sum-lbl{font-size:10px;letter-spacing:2px;color:var(--text-muted);margin-top:2px}
 
-/* HAMBURGER BUTTON — hidden on desktop */
-.menu-toggle{display:none;background:none;border:1px solid var(--dark-border);border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--gold-bright);font-size:20px;line-height:1;transition:all .2s}
-.menu-toggle:hover{border-color:var(--gold-mid);background:rgba(59,130,246,.08)}
+/* HAMBURGER BUTTON — видим на всех размерах, на десктопе сворачивает сайдбар */
+.menu-toggle{display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--dark-border);border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--text-secondary);font-size:16px;line-height:1;transition:all .2s;min-width:34px;height:34px}
+.menu-toggle:hover{border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.08);color:var(--text-primary)}
+body.light .menu-toggle{color:#4B5563;border-color:#E5E7EB}
+body.light .menu-toggle:hover{background:#F3F4F6;color:#111827;border-color:#9CA3AF}
+
+/* Плавные переходы для sidebar + main при collapse */
+.sidebar{transition:transform .25s ease, width .25s ease}
+.main{transition:margin-left .25s ease}
+
+/* COLLAPSED SIDEBAR — desktop */
+body.sidebar-collapsed .sidebar{transform:translateX(-100%)}
+body.sidebar-collapsed .main{margin-left:0 !important}
 
 /* SIDEBAR OVERLAY — mobile only */
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99;opacity:0;transition:opacity .3s}
@@ -1250,7 +1260,6 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
 
 /* RESPONSIVE — Mobile (<768px) */
 @media(max-width:768px){
- .menu-toggle{display:flex;align-items:center;justify-content:center}
  .sidebar{transform:translateX(-100%);z-index:200}
  .sidebar.open{transform:translateX(0)}
  .main{margin-left:0!important}
@@ -1720,7 +1729,7 @@ body.light .content td span[style]{color:#2A3042!important}
   </div>
  </div>
  <div class="topbar">
- <button class="menu-toggle" id="menu-toggle" onclick="toggleSidebar()">=</button>
+ <button class="menu-toggle" id="menu-toggle" onclick="toggleSidebar()" title="Свернуть/развернуть меню"><svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="2.5" y="3.5" width="15" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><line x1="7.5" y1="3.5" x2="7.5" y2="16.5" stroke="currentColor" stroke-width="1.5"/></svg></button>
  <div class="page-title" id="page-title">Обзор финансов</div>
  <div class="topbar-right">
  <button onclick="openSearch()" title="Поиск (Ctrl+K)" style="padding:7px 14px;border-radius:10px;background:var(--glass-bg);border:1px solid var(--dark-border);color:var(--text-muted);font-family:'Inter',sans-serif;font-weight:600;font-size:11px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px"><span style="font-size:14px"></span><span style="opacity:.6;font-size:10px">Ctrl+K</span></button>
@@ -3320,10 +3329,18 @@ function navGroupTouch(group){
 }
 document.addEventListener('click',function(){ document.querySelectorAll('.nav-group.touch-open').forEach(function(g){ g.classList.remove('touch-open'); }); });
 function toggleSidebar(){
+ var isMobile = window.innerWidth <= 768;
  var sb=document.querySelector('.sidebar');
  var ov=document.getElementById('sidebar-overlay');
- sb.classList.toggle('open');
- ov.classList.toggle('visible');
+ if (isMobile) {
+  // Мобильная версия: overlay поверх контента
+  sb.classList.toggle('open');
+  ov.classList.toggle('visible');
+ } else {
+  // Десктоп: сворачиваем сайдбар, контент расширяется на всю ширину
+  var collapsed = document.body.classList.toggle('sidebar-collapsed');
+  try { localStorage.setItem('sd_sidebar_collapsed', collapsed ? '1' : '0'); } catch(e){}
+ }
 }
 function closeSidebar(){
  var sb=document.querySelector('.sidebar');
@@ -3331,6 +3348,14 @@ function closeSidebar(){
  sb.classList.remove('open');
  ov.classList.remove('visible');
 }
+// Восстанавливаем состояние сворачивания при загрузке
+(function restoreSidebarState(){
+ try {
+  if (localStorage.getItem('sd_sidebar_collapsed') === '1' && window.innerWidth > 768) {
+   document.body.classList.add('sidebar-collapsed');
+  }
+ } catch(e){}
+})();
 
 // ============================================================
 // ACCESS RIGHTS DEFINITIONS
