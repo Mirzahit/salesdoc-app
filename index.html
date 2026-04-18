@@ -415,21 +415,21 @@ body.light .kpi-card[data-accent="red"]{--accent:#DC2626}
 body.light .kpi-card[data-accent="amber"]{--accent:#D97706}
 body.light .kpi-card[data-accent="gray"]{--accent:#9CA3AF}
 
-/* ТЗ v146, изменение 9: подменю выдвигается сбоку как белая панель */
+/* ТЗ v146, изменение 9: подменю — белая floating панель, открывается по hover/touch */
 body.light .sidebar{background:#111827;border-right:none}
-/* Подменю: всегда видно для активной группы; убираем тёмный поп-ап стиль */
-body.light .nav-group.has-active>.nav-group-popup{
+/* Подменю: floating overlay — не сужает контент, закрывается после выбора */
+body.light .nav-group.hover-open>.nav-group-popup,
+body.light .nav-group.touch-open>.nav-group-popup{
  display:block!important;
  position:fixed;
  left:80px;
- top:70px;
  width:180px;
  background:#FFFFFF;
  border:0.5px solid #E5E7EB;
  border-radius:12px;
  padding:14px;
- box-shadow:0 4px 16px rgba(0,0,0,0.04);
- z-index:99;
+ box-shadow:0 8px 24px rgba(0,0,0,0.08);
+ z-index:999;
 }
 body.light .nav-group-popup-inner{background:transparent;border:none;padding:0}
 body.light .nav-popup-title{color:#9CA3AF;font-size:10px;letter-spacing:0.8px;font-weight:700;padding:0 4px;margin-bottom:10px}
@@ -448,10 +448,9 @@ body.light .nav-group-popup .nav-item{
 body.light .nav-group-popup .nav-item:hover{background:#F3F4F6;color:#111827}
 body.light .nav-group-popup .nav-item.active{background:#EEF2FF;color:#4338CA;font-weight:600}
 body.light .nav-group-popup .nav-item.active::before{display:none}
-/* Контент страницы сдвигается правее на ширину панели + отступы (180 + 10 + 70 + 10) */
-body.light.has-submenu .main{margin-left:278px}
-/* Подменю-панель: двигаем относительно нового 78px сайдбара */
-body.light .nav-group.has-active>.nav-group-popup{left:88px!important}
+/* Подменю floating overlay — не двигает контент */
+body.light .nav-group.hover-open>.nav-group-popup,
+body.light .nav-group.touch-open>.nav-group-popup{left:88px!important}
 
 /* ТЗ v146, изменение 10: цвет активного пункта в основном меню (light theme) */
 body.light .sidebar{background:#111827}
@@ -1615,7 +1614,7 @@ body.light .content td span[style]{color:#2A3042!important}
  <button class="country-btn" data-country="KG" onclick="switchCountry('KG')">KG</button>
  </div>
  <div class="nav-section">
- <div class="nav-item-solo nav-btn active"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect class="nav-icon-stroke" x="3" y="3" width="6" height="6" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="11" y="3" width="6" height="4" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="3" y="11" width="6" height="4" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="11" y="9" width="6" height="8" rx="1.5" stroke-width="1.5"/></svg><div class="nav-label">Дашборд</div></div>
+ <div class="nav-item-solo nav-btn active" data-view="dashboard" onclick="showView('dashboard')"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect class="nav-icon-stroke" x="3" y="3" width="6" height="6" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="11" y="3" width="6" height="4" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="3" y="11" width="6" height="4" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="11" y="9" width="6" height="8" rx="1.5" stroke-width="1.5"/></svg><div class="nav-label">Дашборд</div></div>
 
  <div class="nav-group" onclick="navGroupTouch(this)">
   <div class="nav-group-trigger nav-btn"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle class="nav-icon-stroke" cx="10" cy="10" r="7" stroke-width="1.5"/><path class="nav-icon-stroke" d="M7 10h6M10 7v6" stroke-width="1.5" stroke-linecap="round"/></svg><div class="nav-label">Финансы</div></div>
@@ -5903,10 +5902,11 @@ function showView(v) {
   g.classList.toggle('has-active', !!hasActive);
   if(hasActive) anyHasActive = true;
  });
- // ТЗ v146: сдвигаем контент если активен раздел с подменю (light theme only)
+ // has-submenu оставляем для совместимости, но контент больше не сдвигается
  document.body.classList.toggle('has-submenu', !!anyHasActive);
- // Закрыть popup после выбора
- document.querySelectorAll('.nav-group.touch-open').forEach(function(g){ g.classList.remove('touch-open'); });
+ // Закрыть popup после выбора (и hover, и touch)
+ if(typeof _navHoverTimer !== 'undefined') clearTimeout(_navHoverTimer);
+ document.querySelectorAll('.nav-group.touch-open,.nav-group.hover-open').forEach(function(g){ g.classList.remove('touch-open'); g.classList.remove('hover-open'); });
  if(v==='cabinet'){renderCabinetPlans();renderPlanHistory();renderCabinetV83();loadAvatar();}
  if(v==='employees')renderEmployees();
  if(v==='keyclients')renderKeyClients();
