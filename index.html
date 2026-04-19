@@ -13432,6 +13432,81 @@ function kbGetDays(card) {
  return isNaN(d) ? 0 : Math.floor((Date.now() - d) / 86400000);
 }
 
+// === SLA ТАЙМЕР — сколько дней на текущем этапе ===
+function kbGetStageDays(card){
+ if(!card || !card.fields) return 0;
+ var iso = card.fields._stageEnteredAt;
+ if(!iso) return 0;
+ var d = new Date(iso);
+ if(isNaN(d)) return 0;
+ return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+// Пороги SLA (можно потом вынести в настройки)
+var KB_SLA_WARN = 3;     // > 3 дн — жёлтый
+var KB_SLA_DANGER = 7;   // > 7 дн — красный
+function kbStageColor(days){
+ if(days > KB_SLA_DANGER) return '#EF5350';
+ if(days > KB_SLA_WARN) return '#FBBF24';
+ return '#34D399';
+}
+
+// === ИСТОРИЯ КАРТОЧКИ ===
+function kbLoadHistory(cardId){
+ try{ var raw = localStorage.getItem('kb_history_'+cardId); return raw ? JSON.parse(raw) : []; }catch(e){ return []; }
+}
+function kbSaveHistory(cardId, arr){
+ try{ localStorage.setItem('kb_history_'+cardId, JSON.stringify(arr.slice(-200))); }catch(e){} // ограничим 200 записей
+}
+function kbLogEvent(card, type, text){
+ if(!card) return;
+ var hist = kbLoadHistory(card.id);
+ var author = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'Система';
+ hist.push({ts: new Date().toISOString(), author: author, type: type, text: text});
+ kbSaveHistory(card.id, hist);
+}
+function kbFormatTimeAgo(iso){
+ var t = new Date(iso).getTime();
+ if(isNaN(t)) return '—';
+ var sec = Math.floor((Date.now() - t) / 1000);
+ if(sec < 60) return 'только что';
+ if(sec < 3600) return Math.floor(sec/60) + ' мин назад';
+ if(sec < 86400) return Math.floor(sec/3600) + ' ч назад';
+ if(sec < 604800) return Math.floor(sec/86400) + ' дн назад';
+ var d = new Date(iso);
+ return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2)+'.'+d.getFullYear();
+}
+// Добавление комментария (вызывается кнопкой в карточке)
+window.kbAddComment = function(cardId){
+ var card = kbCards.find(function(c){ return c.id === cardId; });
+ if(!card) return;
+ var input = document.getElementById('kbc-comment-input');
+ if(!input) return;
+ var text = input.value.trim();
+ if(!text) return;
+ kbLogEvent(card, 'comment', text);
+ input.value = '';
+ kbRenderHistory(card);
+};
+// Рендер ленты истории
+function kbRenderHistory(card){
+ var box = document.getElementById('kbc-history-list');
+ if(!box) return;
+ var hist = kbLoadHistory(card.id).slice().reverse(); // свежие сверху
+ if(!hist.length){ box.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:8px 0">Пока нет событий</div>'; return; }
+ box.innerHTML = hist.map(function(ev){
+  var iconColor = ev.type === 'stage_change' ? '#60A5FA' : ev.type === 'comment' ? '#A78BFA' : '#9CA3AF';
+  var icon = ev.type === 'stage_change' ? '&#8594;' : ev.type === 'comment' ? '&#128172;' : '&#9679;';
+  var safeText = String(ev.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return '<div style="display:flex;gap:8px;padding:8px 0;border-top:1px solid rgba(148,163,184,.08)">'+
+   '<div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:'+iconColor+'1a;color:'+iconColor+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">'+icon+'</div>'+
+   '<div style="flex:1;min-width:0">'+
+    '<div style="font-size:11px;color:var(--text-primary);font-weight:500;line-height:1.4">'+safeText+'</div>'+
+    '<div style="font-size:9px;color:var(--text-muted);margin-top:2px">'+(ev.author||'—')+' · '+kbFormatTimeAgo(ev.ts)+'</div>'+
+   '</div>'+
+  '</div>';
+ }).join('');
+}
+
 function kbChecklistProgress(card) {
  var stageItems = kbGetChecklistForStage(card.stage);
  var done = 0;
@@ -13473,6 +13548,12 @@ function kbCreateCardEl(card) {
  if(card.amount) html += '<span>' + fmtFull(parseFloat(card.amount)||0) + '</span>';
  if(card.tariff) html += '<span>' + card.tariff + '</span>';
  if(card.payDate) html += '<span class="kb-badge ' + badgeClass + '">' + (card.stage === 'Запущен' ? 'Готов' : days + ' дн') + '</span>';
+ // SLA: дней на текущем этапе (цвет по порогам)
+ var stageDays = kbGetStageDays(card);
+ if(stageDays > 0 && card.stage !== 'Запущен'){
+  var slaColor = kbStageColor(stageDays);
+  html += '<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:'+slaColor+'1a;color:'+slaColor+';font-weight:700" title="Дней на этапе '+card.stage+'">&#9201; '+stageDays+' дн</span>';
+ }
  if(prog.total > 0) html += '<span style="color:'+progColor+'">' + prog.done + '/' + prog.total + '</span>';
  html += '</div>';
  if(card.operator) html += '<div class="kb-operator" style="color:'+opColor+'">' + card.operator + '</div>';
@@ -13642,10 +13723,14 @@ function kbOpenCardPage(card) {
  // Строка с названием этапа
  pipHtml += '<div class="kbc-pipeline-header" onclick="kbTogglePipelineDD(event)">';
  pipHtml += '<div><span class="pip-stage-name">'+card.stage+'</span>';
- // Подсказка сколько дней на этапе
- var daysOnStage = kbGetDays(card);
- if(daysOnStage > 0) pipHtml += '<span class="pip-stage-sub">('+daysOnStage+' дн)</span>';
- else pipHtml += '<span class="pip-stage-sub">(Сегодня)</span>';
+ // SLA: сколько дней на текущем этапе (не от оплаты, а от входа на этап)
+ var stageDaysDetail = kbGetStageDays(card);
+ if(stageDaysDetail > 0){
+  var slaColor = kbStageColor(stageDaysDetail);
+  pipHtml += '<span class="pip-stage-sub" style="color:'+slaColor+';font-weight:700">&#9201; '+stageDaysDetail+' дн на этапе</span>';
+ } else {
+  pipHtml += '<span class="pip-stage-sub">(на этапе сегодня)</span>';
+ }
  pipHtml += '</div>';
  pipHtml += '<span class="pip-chevron" id="kbc-pip-arrow">&#709;</span>';
  pipHtml += '</div>';
@@ -13711,6 +13796,16 @@ function kbOpenCardPage(card) {
   html += '</div></div>';
  });
  html += '</div></div>';
+
+ // === ИСТОРИЯ / КОММЕНТАРИИ ===
+ html += '<div class="kbc-section">';
+ html += '<div class="kbc-section-title">История и комментарии</div>';
+ html += '<div style="display:flex;gap:6px;margin-bottom:10px">';
+ html += '<input id="kbc-comment-input" type="text" placeholder="Добавить комментарий..." onkeydown="if(event.key===\'Enter\'){kbAddComment(\''+card.id+'\');event.preventDefault();}" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit;outline:none">';
+ html += '<button onclick="kbAddComment(\''+card.id+'\')" style="padding:8px 14px;border-radius:8px;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:#A78BFA;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0">Добавить</button>';
+ html += '</div>';
+ html += '<div id="kbc-history-list" style="max-height:260px;overflow-y:auto;padding:2px 4px"></div>';
+ html += '</div>';
 
  // Checklist -- фильтр по этапу + сворачиваемый
  var stageItems = kbGetChecklistForStage(card.stage);
@@ -13842,6 +13937,9 @@ function kbOpenCardPage(card) {
  mainEl.innerHTML = '';
  mainEl.appendChild(pipEl);
  mainEl.insertAdjacentHTML('beforeend', html);
+
+ // Рендерим ленту истории после вставки HTML
+ kbRenderHistory(card);
 
  // Sidebar: activity feed
  kbRenderCardFeed(card);
@@ -14331,6 +14429,11 @@ function kbMoveCard(card, newStage) {
   }
  }
  card.stage = newStage;
+ // SLA: обновить дату входа на новый этап
+ if(!card.fields) card.fields = {};
+ card.fields._stageEnteredAt = new Date().toISOString();
+ // Лог в историю
+ kbLogEvent(card, 'stage_change', 'Этап изменён: ' + oldStage + ' → ' + newStage);
  if(newStage === kbColumns[kbColumns.length-1] && !card.activDate) {
   var now = new Date();
   card.activDate = ('0'+now.getDate()).slice(-2)+'.'+('0'+(now.getMonth()+1)).slice(-2)+'.'+now.getFullYear();
