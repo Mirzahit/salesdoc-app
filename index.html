@@ -10435,56 +10435,75 @@ function intgRender() {
 }
 // /INTEGRATIONS QUEUE MODULE 
 
-// P&L MODULE 
+// P&L MODULE
 let EXPENSES_SHEET_ID = COUNTRY_CONFIG[currentCountry].EXP_SHEET_ID;
 let expensesData = []; // {date, category, note, amount, bank, month}
+let _expensesLoadingPromise = null; // guard от параллельных вызовов (race condition → удвоение сумм)
 
 async function loadExpenses() {
- expensesData = [];
- 
- // Используем тот же Apps Script что и раздел "Расходы" — он точно работает
- var EXP_GS = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- var ALL_EXP_MONTHS = COUNTRY_CONFIG[currentCountry].expMonths;
- var nowExp = new Date();
- var curExpIdx = nowExp.getMonth();
- var months = [];
- for (var ei = 0; ei <= curExpIdx; ei++) {
-  months.push({name: ALL_EXP_MONTHS[ei], mi: ei});
- }
- 
- for (var si = 0; si < months.length; si++) {
- var sheetName = months[si].name;
- var mi = months[si].mi;
+ // Если уже идёт загрузка — возвращаем тот же Promise, не запускаем второй параллельный fetch
+ if (_expensesLoadingPromise) return _expensesLoadingPromise;
+
+ _expensesLoadingPromise = (async function(){
+  // Собираем результат в локальный буфер, чтобы race condition не мог накапливать push'и в глобальный массив
+  var buffer = [];
+
+  var EXP_GS = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
+  var ALL_EXP_MONTHS = COUNTRY_CONFIG[currentCountry].expMonths;
+  var nowExp = new Date();
+  var curExpIdx = nowExp.getMonth();
+  var months = [];
+  for (var ei = 0; ei <= curExpIdx; ei++) {
+   months.push({name: ALL_EXP_MONTHS[ei], mi: ei});
+  }
+
+  for (var si = 0; si < months.length; si++) {
+   var sheetName = months[si].name;
+   var mi = months[si].mi;
+   try {
+    var url = EXP_GS + '?action=getSheet&sheet=' + encodeURIComponent(sheetName) + '&spreadsheetId=' + EXPENSES_SHEET_ID + '&range=A1:E100';
+    var resp = await fetch(url);
+    var json = await resp.json();
+    if (!json.rows || json.rows.length < 2) continue;
+
+    var headerIdx = -1;
+    for (var i = 0; i < json.rows.length; i++) {
+     if (json.rows[i] && String(json.rows[i][0]||'').toLowerCase() === 'дата') { headerIdx = i; break; }
+    }
+    var dataRows = headerIdx >= 0 ? json.rows.slice(headerIdx + 1) : json.rows.slice(1);
+    dataRows.forEach(function(row) {
+     if (!row || !row[0] || !row[3]) return;
+     var amount = typeof row[3] === 'number' ? row[3] : parseFloat(String(row[3]).replace(/[^0-9.,]/g,'').replace(',','.'));
+     if (!amount || amount <= 0) return;
+     buffer.push({
+      date: parseDateFromSheet(row[0]) || '',
+      category: String(row[1] || 'Прочее').trim(),
+      note: String(row[2] || '').trim(),
+      amount: amount,
+      bank: String(row[4] || '').trim(),
+      month: mi
+     });
+    });
+   } catch(e) { }
+  }
+
+  // Дедупликация на случай если в Sheet попали дубли или прошёл повторный вызов
+  var seen = new Set();
+  expensesData = buffer.filter(function(e){
+   var key = e.date + '|' + e.category + '|' + e.amount + '|' + e.month + '|' + e.note + '|' + e.bank;
+   if (seen.has(key)) return false;
+   seen.add(key);
+   return true;
+  });
+
+  renderPnL();
+ })();
+
  try {
- var url = EXP_GS + '?action=getSheet&sheet=' + encodeURIComponent(sheetName) + '&spreadsheetId=' + EXPENSES_SHEET_ID + '&range=A1:E100';
- var resp = await fetch(url);
- var json = await resp.json();
- if (!json.rows || json.rows.length < 2) continue;
- 
- // Ищем заголовок
- var headerIdx = -1;
- for (var i = 0; i < json.rows.length; i++) {
- if (json.rows[i] && String(json.rows[i][0]||'').toLowerCase() === 'дата') { headerIdx = i; break; }
+  await _expensesLoadingPromise;
+ } finally {
+  _expensesLoadingPromise = null;
  }
- var dataRows = headerIdx >= 0 ? json.rows.slice(headerIdx + 1) : json.rows.slice(1);
- var count = 0;
- dataRows.forEach(function(row) {
- if (!row || !row[0] || !row[3]) return;
- var amount = typeof row[3] === 'number' ? row[3] : parseFloat(String(row[3]).replace(/[^0-9.,]/g,'').replace(',','.'));
- if (!amount || amount <= 0) return;
- expensesData.push({
- date: parseDateFromSheet(row[0]) || '',
- category: String(row[1] || 'Прочее').trim(),
- note: String(row[2] || '').trim(),
- amount: amount,
- bank: String(row[4] || '').trim(),
- month: mi
- });
- count++;
- });
- } catch(e) { }
- }
- renderPnL();
 }
 
 function renderPnL() {
