@@ -13475,18 +13475,6 @@ function kbFormatTimeAgo(iso){
  var d = new Date(iso);
  return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2)+'.'+d.getFullYear();
 }
-// Добавление комментария (вызывается кнопкой в карточке)
-window.kbAddComment = function(cardId){
- var card = kbCards.find(function(c){ return c.id === cardId; });
- if(!card) return;
- var input = document.getElementById('kbc-comment-input');
- if(!input) return;
- var text = input.value.trim();
- if(!text) return;
- kbLogEvent(card, 'comment', text);
- input.value = '';
- kbRenderHistory(card);
-};
 // Рендер ленты истории
 function kbRenderHistory(card){
  var box = document.getElementById('kbc-history-list');
@@ -13797,13 +13785,9 @@ function kbOpenCardPage(card) {
  });
  html += '</div></div>';
 
- // === ИСТОРИЯ / КОММЕНТАРИИ ===
+ // === ИСТОРИЯ ЭТАПОВ (автолог, без ручных комментариев — для заметок есть поле «Примечание») ===
  html += '<div class="kbc-section">';
- html += '<div class="kbc-section-title">История и комментарии</div>';
- html += '<div style="display:flex;gap:6px;margin-bottom:10px">';
- html += '<input id="kbc-comment-input" type="text" placeholder="Добавить комментарий..." onkeydown="if(event.key===\'Enter\'){kbAddComment(\''+card.id+'\');event.preventDefault();}" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-primary);font-size:12px;font-family:inherit;outline:none">';
- html += '<button onclick="kbAddComment(\''+card.id+'\')" style="padding:8px 14px;border-radius:8px;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:#A78BFA;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0">Добавить</button>';
- html += '</div>';
+ html += '<div class="kbc-section-title">История изменений</div>';
  html += '<div id="kbc-history-list" style="max-height:260px;overflow-y:auto;padding:2px 4px"></div>';
  html += '</div>';
 
