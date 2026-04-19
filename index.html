@@ -13434,12 +13434,19 @@ function kbGetDays(card) {
 
 // === SLA ТАЙМЕР — сколько дней на текущем этапе ===
 function kbGetStageDays(card){
- if(!card || !card.fields) return 0;
- var iso = card.fields._stageEnteredAt;
- if(!iso) return 0;
- var d = new Date(iso);
- if(isNaN(d)) return 0;
- return Math.floor((Date.now() - d.getTime()) / 86400000);
+ if(!card) return 0;
+ var iso = card.fields && card.fields._stageEnteredAt;
+ if(iso){
+  var d = new Date(iso);
+  if(!isNaN(d)) return Math.floor((Date.now() - d.getTime()) / 86400000);
+ }
+ // Fallback: для карточек без _stageEnteredAt (созданных до фикса) — берём дату оплаты
+ if(card.payDate){
+  var parts = card.payDate.split('.');
+  var pd = parts.length === 3 ? new Date(parts[2]+'-'+parts[1]+'-'+parts[0]) : new Date(card.payDate);
+  if(!isNaN(pd)) return Math.floor((Date.now() - pd.getTime()) / 86400000);
+ }
+ return 0;
 }
 // Пороги SLA (можно потом вынести в настройки)
 var KB_SLA_WARN = 3;     // > 3 дн — жёлтый
