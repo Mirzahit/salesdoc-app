@@ -1472,6 +1472,32 @@ body.light .content td span[style]{color:#2A3042!important}
 .kb-icon-btn:hover{border-color:rgba(59,130,246,.3);color:#60A5FA}
 /* KANBAN FILTER DROPDOWN */
 .kb-filter-dropdown{position:absolute;top:100%;margin-top:4px;background:var(--dark-card);border:1px solid var(--dark-border);border-radius:10px;padding:6px;min-width:160px;z-index:50;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+
+/* Поисковая панель-фильтр (amoCRM-style) */
+.kb-search-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--dark-card);border:1px solid var(--dark-border);border-radius:12px;padding:0;z-index:99;box-shadow:0 16px 48px rgba(0,0,0,.5);min-width:560px;max-width:760px;overflow:hidden}
+.kbsp-grid{display:grid;grid-template-columns:220px 1fr;gap:0;min-height:320px}
+.kbsp-segments{border-right:1px solid var(--dark-border);padding:12px 10px;background:var(--dark-panel);display:flex;flex-direction:column;gap:2px}
+.kbsp-seg-item{padding:9px 14px;border-radius:8px;font-size:12px;color:var(--text-secondary);cursor:pointer;font-weight:500;transition:all .15s;font-family:'Inter',sans-serif;border:1px solid transparent}
+.kbsp-seg-item:hover{background:rgba(99,102,241,.08);color:var(--text-primary)}
+.kbsp-seg-item.active{background:rgba(99,102,241,.15);border-color:rgba(99,102,241,.35);color:#A5B4FC;font-weight:600}
+.kbsp-props{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.kbsp-title{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);font-weight:700;margin-bottom:4px}
+.kbsp-field{display:flex;flex-direction:column;gap:4px}
+.kbsp-field label{font-size:10px;color:var(--text-muted);letter-spacing:.5px;font-weight:500}
+.kbsp-field select,.kbsp-field input{background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:8px;padding:7px 10px;color:var(--text-primary);font-size:12px;font-family:'Inter',sans-serif;outline:none;transition:border-color .15s}
+.kbsp-field select:focus,.kbsp-field input:focus{border-color:rgba(99,102,241,.4)}
+body.light .kb-search-panel{background:#FFFFFF;border-color:#E5E7EB;box-shadow:0 16px 48px rgba(0,0,0,.1)}
+body.light .kbsp-segments{background:#F9FAFB;border-right-color:#E5E7EB}
+body.light .kbsp-seg-item{color:#4B5563}
+body.light .kbsp-seg-item:hover{background:#F3F4F6;color:#111827}
+body.light .kbsp-seg-item.active{background:#EEF2FF;border-color:#C7D2FE;color:#4338CA}
+body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;border-color:#E5E7EB;color:#111827}
+@media (max-width: 720px){
+ .kb-search-panel{min-width:unset;left:-20px;right:-20px;max-width:none}
+ .kbsp-grid{grid-template-columns:1fr}
+ .kbsp-segments{border-right:none;border-bottom:1px solid var(--dark-border);flex-direction:row;flex-wrap:wrap;overflow-x:auto}
+ .kbsp-seg-item{white-space:nowrap;font-size:11px;padding:6px 10px}
+}
 .kb-filter-dropdown .kb-fd-item{padding:7px 12px;border-radius:6px;font-size:12px;color:var(--text-secondary);cursor:pointer;transition:background .15s}
 .kb-filter-dropdown .kb-fd-item:hover{background:rgba(59,130,246,.08);color:var(--text-primary)}
 .kb-filter-dropdown .kb-fd-item.active{background:rgba(59,130,246,.12);color:#60A5FA;font-weight:600}
@@ -2958,32 +2984,60 @@ body.light .content td span[style]{color:#2A3042!important}
    <div class="kb-topbar-left">
     <span class="kb-topbar-stat"><span class="kb-stat-count" id="kb-stat-count">0</span> клиентов<span class="kb-stat-amount" id="kb-stat-amount"></span></span>
    </div>
-   <div class="kb-topbar-center">
+   <div class="kb-topbar-center" style="position:relative">
     <span class="kb-topbar-search-icon"></span>
-    <input class="kb-topbar-search" id="kb-search-input" placeholder="Поиск клиента..." oninput="kbSearchFilter()">
+    <input class="kb-topbar-search" id="kb-search-input" placeholder="Поиск и фильтр..." oninput="kbSearchFilter()" onfocus="kbOpenSearchPanel()" onclick="kbOpenSearchPanel()">
+    <span id="kb-filter-dot" style="display:none;position:absolute;top:6px;right:8px;width:6px;height:6px;border-radius:50%;background:#FBBF24" title="Активен фильтр"></span>
+    <!-- Выпадающая панель фильтров (как в amoCRM) -->
+    <div id="kb-search-panel" class="kb-search-panel" style="display:none">
+     <div class="kbsp-grid">
+      <!-- Сегменты слева -->
+      <div class="kbsp-segments">
+       <div class="kbsp-seg-item" data-seg="all" onclick="kbPickSegment('all')">Все сделки</div>
+       <div class="kbsp-seg-item" data-seg="sla" onclick="kbPickSegment('sla')">&#9201; Застряли (SLA &gt; 7 дн)</div>
+       <div class="kbsp-seg-item" data-seg="noop" onclick="kbPickSegment('noop')">Без оператора</div>
+       <div class="kbsp-seg-item" data-seg="noact" onclick="kbPickSegment('noact')">Без АВР</div>
+       <div class="kbsp-seg-item" data-seg="activated" onclick="kbPickSegment('activated')">Активированные</div>
+      </div>
+      <!-- Свойства справа -->
+      <div class="kbsp-props">
+       <div class="kbsp-title">Свойства сделок</div>
+       <div class="kbsp-field">
+        <label>Оператор</label>
+        <select id="kb-panel-operator" onchange="_kbFilterOp=this.value;kbRenderBoard();kbUpdateFilterDot()"></select>
+       </div>
+       <div class="kbsp-field">
+        <label>Менеджер</label>
+        <select id="kb-panel-manager" onchange="_kbFilterMg=this.value;kbRenderBoard();kbUpdateFilterDot()"></select>
+       </div>
+       <div class="kbsp-field">
+        <label>Этап</label>
+        <select id="kb-panel-stage" onchange="_kbFilterStage=this.value;kbRenderBoard();kbUpdateFilterDot()"><option value="">Любой</option></select>
+       </div>
+       <div class="kbsp-field">
+        <label>Бюджет, ₸ (от — до)</label>
+        <div style="display:flex;gap:6px">
+         <input type="number" id="kb-panel-amt-from" placeholder="от" oninput="_kbFilterAmtFrom=parseFloat(this.value)||0;kbRenderBoard();kbUpdateFilterDot()" style="flex:1">
+         <input type="number" id="kb-panel-amt-to" placeholder="до" oninput="_kbFilterAmtTo=parseFloat(this.value)||0;kbRenderBoard();kbUpdateFilterDot()" style="flex:1">
+        </div>
+       </div>
+       <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="kb-filter-btn" onclick="kbResetFilters()">Сбросить</button>
+        <button class="kb-filter-btn" style="background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.35);color:#60A5FA" onclick="kbCloseSearchPanel()">Применить</button>
+       </div>
+      </div>
+     </div>
+    </div>
    </div>
    <div class="kb-topbar-right">
-    <div style="position:relative" id="kb-op-filter-wrap">
-     <button class="kb-filter-btn" id="kb-op-filter-btn" onclick="kbToggleFilterDD('operator')">Оператор &#9662;</button>
-     <div class="kb-filter-dropdown" id="kb-op-dropdown" style="display:none"></div>
-    </div>
-    <div style="position:relative" id="kb-mg-filter-wrap">
-     <button class="kb-filter-btn" id="kb-mg-filter-btn" onclick="kbToggleFilterDD('manager')">Менеджер &#9662;</button>
-     <div class="kb-filter-dropdown" id="kb-mg-dropdown" style="display:none"></div>
-    </div>
-    <button class="kb-filter-btn" id="kb-qf-sla" onclick="kbToggleQuickFilter('sla')" title="Карточки с SLA > 7 дней на текущем этапе">&#9201; Застряли</button>
-    <button class="kb-filter-btn" id="kb-qf-noop" onclick="kbToggleQuickFilter('noop')" title="Без назначенного оператора">Без оператора</button>
-    <button class="kb-filter-btn" id="kb-qf-noact" onclick="kbToggleQuickFilter('noact')" title="Активированы, но АВР не загружен">Без АВР</button>
-    <label style="display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;border:1px solid var(--dark-border);cursor:pointer;font-size:10px;color:var(--text-muted);user-select:none;transition:all .15s" id="kb-show-activated-wrap" onmouseover="this.style.borderColor='rgba(52,211,153,.3)'" onmouseout="this.style.borderColor='var(--dark-border)'">
-     <input type="checkbox" id="kb-show-activated" onchange="kbToggleActivated()" style="accent-color:#34D399;width:12px;height:12px">
-     <span>Активированные</span>
-    </label>
     <button class="kb-filter-btn" onclick="kbOpenReport()" style="background:rgba(59,130,246,.08)">Отчёт</button>
     <button class="kb-icon-btn" onclick="kbOpenSettings()" title="Настройки">Настр.</button>
     <button class="kb-icon-btn" onclick="kbLoad()" id="kb-refresh-btn" title="Обновить">&#8635;</button>
     <div id="kb-status" style="font-size:10px;color:var(--text-muted);min-width:60px;text-align:right"></div>
    </div>
   </div>
+  <!-- Подложка для закрытия панели фильтров по клику вне -->
+  <div id="kb-search-backdrop" style="display:none;position:fixed;inset:0;z-index:98" onclick="kbCloseSearchPanel()"></div>
   <!-- Скрытые select для совместимости с существующим JS -->
   <select id="kb-filter-operator" style="display:none" onchange="kbRenderBoard()"><option value="">Все</option></select>
   <select id="kb-filter-manager" style="display:none" onchange="kbRenderBoard()"><option value="">Все</option></select>
@@ -13253,25 +13307,95 @@ function kbFillFilters() {
 
 var _kbFilterOp = '';
 var _kbFilterMg = '';
+var _kbFilterStage = '';
+var _kbFilterAmtFrom = 0;
+var _kbFilterAmtTo = 0;
 var _kbShowActivated = false;
-// Быстрые фильтры-тогглы
+// Быстрые фильтры-тогглы (все вместе или по одному — сегменты)
 var _kbQf = { sla:false, noop:false, noact:false };
+
+// Поисковая панель (amoCRM-style)
+window.kbOpenSearchPanel = function(){
+ var p = document.getElementById('kb-search-panel');
+ var b = document.getElementById('kb-search-backdrop');
+ if(!p) return;
+ p.style.display = 'block';
+ if(b) b.style.display = 'block';
+ kbFillPanelSelects();
+ kbSyncPanelSegmentActive();
+};
+window.kbCloseSearchPanel = function(){
+ var p = document.getElementById('kb-search-panel');
+ var b = document.getElementById('kb-search-backdrop');
+ if(p) p.style.display = 'none';
+ if(b) b.style.display = 'none';
+};
+// Заполнить select'ы в панели данными из kbCards
+function kbFillPanelSelects(){
+ var ops = Array.from(new Set(kbCards.map(function(c){return c.operator;}).filter(Boolean))).sort();
+ var mgs = Array.from(new Set(kbCards.map(function(c){return c.manager;}).filter(Boolean))).sort();
+ var stg = (typeof kbColumns !== 'undefined' && kbColumns) ? kbColumns : [];
+ var selOp = document.getElementById('kb-panel-operator');
+ var selMg = document.getElementById('kb-panel-manager');
+ var selSt = document.getElementById('kb-panel-stage');
+ if(selOp){ selOp.innerHTML = '<option value="">Любой</option>' + ops.map(function(o){return '<option value="'+o.replace(/"/g,'&quot;')+'"'+(o===_kbFilterOp?' selected':'')+'>'+o+'</option>';}).join(''); }
+ if(selMg){ selMg.innerHTML = '<option value="">Любой</option>' + mgs.map(function(o){return '<option value="'+o.replace(/"/g,'&quot;')+'"'+(o===_kbFilterMg?' selected':'')+'>'+o+'</option>';}).join(''); }
+ if(selSt){ selSt.innerHTML = '<option value="">Любой</option>' + stg.map(function(o){return '<option value="'+o.replace(/"/g,'&quot;')+'"'+(o===_kbFilterStage?' selected':'')+'>'+o+'</option>';}).join(''); }
+}
+// Выбор сегмента (клик по пункту слева). В сегментах — эксклюзивный выбор.
+window.kbPickSegment = function(seg){
+ // Сброс всех быстрых фильтров и спец-режимов, затем включаем выбранный
+ _kbQf = { sla:false, noop:false, noact:false };
+ _kbShowActivated = false;
+ if(seg === 'sla') _kbQf.sla = true;
+ else if(seg === 'noop') _kbQf.noop = true;
+ else if(seg === 'noact') _kbQf.noact = true;
+ else if(seg === 'activated') _kbShowActivated = true;
+ // Синхронизируем визуал
+ kbSyncPanelSegmentActive();
+ // Обновляем чекбокс «Активированные» если он ещё в DOM (для совместимости)
+ var cb = document.getElementById('kb-show-activated'); if(cb) cb.checked = _kbShowActivated;
+ kbUpdateFilterDot();
+ kbRenderBoard();
+};
+function kbSyncPanelSegmentActive(){
+ var activeKey = 'all';
+ if(_kbQf.sla) activeKey = 'sla';
+ else if(_kbQf.noop) activeKey = 'noop';
+ else if(_kbQf.noact) activeKey = 'noact';
+ else if(_kbShowActivated) activeKey = 'activated';
+ document.querySelectorAll('.kbsp-seg-item').forEach(function(el){
+  el.classList.toggle('active', el.dataset.seg === activeKey);
+ });
+}
+// Сброс всех фильтров
+window.kbResetFilters = function(){
+ _kbFilterOp = ''; _kbFilterMg = ''; _kbFilterStage = '';
+ _kbFilterAmtFrom = 0; _kbFilterAmtTo = 0;
+ _kbQf = { sla:false, noop:false, noact:false };
+ _kbShowActivated = false;
+ kbSearchQuery = '';
+ var inp = document.getElementById('kb-search-input'); if(inp) inp.value = '';
+ ['kb-panel-amt-from','kb-panel-amt-to'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+ kbFillPanelSelects();
+ kbSyncPanelSegmentActive();
+ kbUpdateFilterDot();
+ kbRenderBoard();
+};
+// Показать точку-индикатор активного фильтра
+function kbUpdateFilterDot(){
+ var dot = document.getElementById('kb-filter-dot'); if(!dot) return;
+ var active = !!(_kbFilterOp || _kbFilterMg || _kbFilterStage || _kbFilterAmtFrom || _kbFilterAmtTo
+   || _kbQf.sla || _kbQf.noop || _kbQf.noact || _kbShowActivated || kbSearchQuery);
+ dot.style.display = active ? 'block' : 'none';
+}
+window.kbUpdateFilterDot = kbUpdateFilterDot;
+
+// Обратная совместимость: старая функция kbToggleQuickFilter если где-то вызывается
 window.kbToggleQuickFilter = function(key){
  if(!(key in _kbQf)) return;
  _kbQf[key] = !_kbQf[key];
- // Подсветка активной кнопки
- var btn = document.getElementById('kb-qf-' + key);
- if(btn){
-  if(_kbQf[key]){
-   btn.style.background = 'rgba(251,191,36,.15)';
-   btn.style.borderColor = 'rgba(251,191,36,.4)';
-   btn.style.color = '#FBBF24';
-  } else {
-   btn.style.background = '';
-   btn.style.borderColor = '';
-   btn.style.color = '';
-  }
- }
+ kbUpdateFilterDot();
  kbRenderBoard();
 };
 
@@ -13290,8 +13414,15 @@ function kbGetFiltered() {
   if(c._activated && !_kbShowActivated) return false;
   if(_kbFilterOp && c.operator !== _kbFilterOp) return false;
   if(_kbFilterMg && c.manager !== _kbFilterMg) return false;
+  if(_kbFilterStage && c.stage !== _kbFilterStage) return false;
   if(kbSearchQuery && c.client.toLowerCase().indexOf(kbSearchQuery) < 0) return false;
-  // Быстрые фильтры
+  // Диапазон суммы
+  if(_kbFilterAmtFrom || _kbFilterAmtTo){
+   var amt = parseFloat(c.amount) || 0;
+   if(_kbFilterAmtFrom && amt < _kbFilterAmtFrom) return false;
+   if(_kbFilterAmtTo && amt > _kbFilterAmtTo) return false;
+  }
+  // Быстрые фильтры-сегменты
   if(_kbQf.sla){
    if(c.stage === 'Запущен') return false;
    if(kbGetStageDays(c) <= KB_SLA_DANGER) return false;
@@ -13324,6 +13455,7 @@ function kbRenderSummary() {
 var kbSearchQuery = '';
 function kbSearchFilter() {
  kbSearchQuery = (document.getElementById('kb-search-input').value || '').toLowerCase().trim();
+ kbUpdateFilterDot();
  kbRenderBoard();
 }
 
