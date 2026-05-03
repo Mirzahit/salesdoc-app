@@ -20,33 +20,62 @@ function fmtKZT(n) {
   return Math.round(n).toLocaleString('ru-KZ') + ' ₸';
 }
 
+// v150: формируем расширенный контекст — всё что у агента есть про финансы.
+// Содержит: общие итоги, сводку по месяцам, полный список платежей в компактной форме.
 function buildContextBlock(ctx) {
   if (!ctx || typeof ctx !== 'object') return '';
-  const lines = [
-    '<context>',
-    `Страна: ${ctx.country || '—'}`,
-    `Период: ${ctx.period || '—'}`,
-    `Сегодня: ${ctx.today || '—'}`,
-    `Платежей в периоде: ${ctx.payments_count ?? 0}`,
-    `Сумма всего: ${fmtKZT(ctx.total_amount || 0)}`,
-    `  · оплачено: ${fmtKZT(ctx.paid_amount || 0)}`,
-    `  · в ожидании: ${fmtKZT(ctx.pending_amount || 0)}`,
-  ];
-  if (ctx.by_category && Object.keys(ctx.by_category).length) {
-    lines.push('По статьям:');
-    for (const [k, v] of Object.entries(ctx.by_category)) {
-      lines.push(`  · ${k}: ${fmtKZT(v)}`);
-    }
-  }
-  if (Array.isArray(ctx.top_managers) && ctx.top_managers.length) {
-    lines.push('Топ менеджеров:');
-    ctx.top_managers.forEach((m, i) => {
-      lines.push(`  ${i + 1}. ${m.name} — ${fmtKZT(m.amount)}`);
+  if (ctx.error) return `<context>\nОшибка сборки контекста: ${ctx.error}\n</context>`;
+
+  const out = [];
+  out.push('<context>');
+  out.push(`Страна: ${ctx.country || '—'} · Сегодня: ${ctx.today || '—'} · UI-период (на экране у пользователя): ${ctx.ui_current_period_label || '—'}`);
+  out.push('');
+
+  // Общие итоги (по всем периодам)
+  const t = ctx.totals || {};
+  out.push('## Общие итоги (за все периоды)');
+  out.push(`Платежей: ${t.count ?? 0} · Сумма: ${fmtKZT(t.total||0)} · Оплачено: ${fmtKZT(t.paid||0)} · В ожидании: ${fmtKZT(t.pending||0)}`);
+  out.push(`Сотрудников: ${ctx.employees_count ?? 0} · Актов: ${ctx.acts_count ?? 0}`);
+  out.push('');
+
+  // Сводка по месяцам
+  if (Array.isArray(ctx.by_month) && ctx.by_month.length) {
+    out.push('## Сводка по месяцам');
+    out.push('месяц | платежей | всего | оплачено | в ожидании | топ-менеджер');
+    ctx.by_month.forEach(m => {
+      const top = (m.top_managers && m.top_managers[0]) ? `${m.top_managers[0].name} (${fmtKZT(m.top_managers[0].amount)})` : '—';
+      out.push(`${m.month} | ${m.count} | ${fmtKZT(m.total)} | ${fmtKZT(m.paid)} | ${fmtKZT(m.pending)} | ${top}`);
     });
+    out.push('');
+
+    // По каждому месяцу — детализация по статьям и топ-5 менеджеров
+    out.push('## Детализация по месяцам (статьи + топ менеджеров)');
+    ctx.by_month.forEach(m => {
+      out.push(`### ${m.month}`);
+      if (m.by_category && Object.keys(m.by_category).length) {
+        const cats = Object.entries(m.by_category).sort((a,b)=>b[1]-a[1]);
+        out.push('  статьи: ' + cats.map(([k,v]) => `${k}=${fmtKZT(v)}`).join(' · '));
+      }
+      if (m.top_managers && m.top_managers.length) {
+        out.push('  менеджеры: ' + m.top_managers.map(x => `${x.name}=${fmtKZT(x.amount)}`).join(' · '));
+      }
+    });
+    out.push('');
   }
-  lines.push(`Сотрудников: ${ctx.employees_count ?? 0}, актов: ${ctx.acts_count ?? 0}, всего платежей за все периоды: ${ctx.total_payments_all_periods ?? 0}`);
-  lines.push('</context>');
-  return lines.join('\n');
+
+  // Полный список платежей в компактной форме (CSV-like)
+  if (Array.isArray(ctx.payments) && ctx.payments.length) {
+    out.push(`## Все платежи (${ctx.payments.length} записей)`);
+    out.push('Формат: дата | клиент | сумма ₸ | менеджер | статья | статус | банк | seated');
+    ctx.payments.forEach(p => {
+      out.push(`${p.d}|${p.c}|${p.a}|${p.m}|${p.cat}|${p.s}|${p.b}|${p.seated?'1':'0'}`);
+    });
+    out.push('');
+  }
+
+  out.push('Используй эти данные первыми. Не выдумывай альтернативные цифры. Если нужного среза нет — скажи, какие данные дополнительно нужны.');
+  out.push('</context>');
+  return out.join('\n');
 }
 
 export default async function handler(req, res) {

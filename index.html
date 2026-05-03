@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v149</title>
+<title>SalesDoc — Финансовый Дашборд v150</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7382,36 +7382,82 @@ function asstRenderBubbleHTML(role, text){
  return '<div style="display:flex;gap:10px;'+(isUser?'flex-direction:row-reverse;':'')+'">'+avatar+bubble+'</div>';
 }
 
-// Сборка контекста — что агент видит про текущее состояние дашборда
+// Сборка контекста — что агент видит. v150: полный финансовый контекст —
+// все платежи (компактно) + сводка по месяцам + общие итоги.
 function asstBuildContext(){
  try {
-  const cur = (typeof getPeriodPayments==='function' ? getPeriodPayments(currentPeriod) : payments) || [];
-  const sumAll = cur.reduce(function(s,p){return s+(Number(p.amount)||0);},0);
-  const paidSum = cur.filter(function(p){return p.status==='paid';}).reduce(function(s,p){return s+(Number(p.amount)||0);},0);
-  const pendingSum = cur.filter(function(p){return p.status==='pending';}).reduce(function(s,p){return s+(Number(p.amount)||0);},0);
-  const byCat = {};
-  cur.forEach(function(p){ byCat[p.category||'other'] = (byCat[p.category||'other']||0) + (Number(p.amount)||0); });
-  const byMgr = {};
-  cur.forEach(function(p){ if(!p.managerName) return; byMgr[p.managerName] = (byMgr[p.managerName]||0) + (Number(p.amount)||0); });
-  const topMgr = Object.entries(byMgr).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
-  const periodLabel = (function(){
+  const all = (typeof payments !== 'undefined' ? payments : []) || [];
+
+  // Компактное представление одного платежа: только ключевые поля
+  const compact = all.map(function(p){
+   return {
+    d: p.date || '',
+    c: p.client || '',
+    a: Number(p.amount)||0,
+    m: p.managerName || '',
+    cat: (p.categoryRaw||'').trim() || p.category || '',
+    s: p.status || '',
+    b: p.bank || '',
+    seated: !!p.seated
+   };
+  });
+
+  // Сводка по месяцам (YYYY-MM)
+  const byMonth = {};
+  all.forEach(function(p){
+   var m = (p.date||'').slice(0,7);
+   if(!m) return;
+   if(!byMonth[m]) byMonth[m] = {count:0, total:0, paid:0, pending:0, by_category:{}, by_manager:{}};
+   var x = byMonth[m];
+   var amt = Number(p.amount)||0;
+   x.count++;
+   x.total += amt;
+   if(p.status==='paid') x.paid += amt;
+   if(p.status==='pending') x.pending += amt;
+   var cat = (p.categoryRaw||'').trim() || p.category || '—';
+   x.by_category[cat] = (x.by_category[cat]||0) + amt;
+   var mgr = p.managerName || '—';
+   x.by_manager[mgr] = (x.by_manager[mgr]||0) + amt;
+  });
+  var monthsSorted = Object.keys(byMonth).sort().map(function(k){
+   var v = byMonth[k];
+   var topMgr = Object.entries(v.by_manager).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+   return {
+    month: k,
+    count: v.count,
+    total: v.total,
+    paid: v.paid,
+    pending: v.pending,
+    by_category: v.by_category,
+    top_managers: topMgr.map(function(e){return {name:e[0], amount:e[1]};})
+   };
+  });
+
+  // Общие итоги
+  function sumOf(arr){return arr.reduce(function(s,p){return s+(Number(p.amount)||0);},0);}
+  var totals = {
+   count: all.length,
+   total: sumOf(all),
+   paid: sumOf(all.filter(function(p){return p.status==='paid';})),
+   pending: sumOf(all.filter(function(p){return p.status==='pending';}))
+  };
+
+  // Текущий выбранный период (для подсказки агенту, какая часть в фокусе на UI)
+  var periodLabel = (function(){
    if(currentPeriod==='month' && typeof selectedMonth!=='undefined') return (typeof MONTHS_RU!=='undefined'?MONTHS_RU[selectedMonth.month]:selectedMonth.month+1)+' '+selectedMonth.year;
    if(currentPeriod==='year' && typeof selectedYear!=='undefined') return String(selectedYear.year);
    return 'текущий период';
   })();
+
   return {
    country: currentCountry,
-   period: periodLabel,
    today: new Date().toISOString().slice(0,10),
-   payments_count: cur.length,
-   total_amount: sumAll,
-   paid_amount: paidSum,
-   pending_amount: pendingSum,
-   by_category: byCat,
-   top_managers: topMgr.map(function(e){ return {name:e[0], amount:e[1]}; }),
+   ui_current_period_label: periodLabel,
+   totals: totals,
+   by_month: monthsSorted,
    employees_count: (typeof employees!=='undefined'?employees.length:0),
    acts_count: (typeof acts!=='undefined'?acts.length:0),
-   total_payments_all_periods: (typeof payments!=='undefined'?payments.length:0)
+   payments: compact
   };
  } catch(e){ return { error: 'context_build_failed: '+e.message }; }
 }
