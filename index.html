@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v148</title>
+<title>SalesDoc — Финансовый Дашборд v149</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3903,11 +3903,19 @@ function applyUserAccess() {
  document.getElementById('cab-display-role').textContent=u.pos+' · '+profile.company;
 
  // Show/hide nav items
- const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',ai:'view_ai',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics'};
+ // Примечание: для view "assistant" специально НЕ задан ключ в viewMap — пока Ассистент виден всем.
+ // Когда понадобится гранулярный доступ — добавить assistant:'view_assistant' и прописать
+ // view_assistant:true для нужных ролей в дефолтном access.
+ const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics'};
  document.querySelectorAll('.nav-item[data-view]').forEach(el=>{
  const view=el.dataset.view;
  const key=viewMap[view];
- el.classList.toggle('hidden', key && !u.access[key]);
+ // FIX v149: если view нет в viewMap (key===undefined), classList.toggle(class, undefined)
+ // по спец. DOM ИНВЕРТИРУЕТ класс — т.е. добавляет hidden. Из-за этого новые view-страницы
+ // были скрыты у всех. Разделяем: если в viewMap нет ключа → показываем всем,
+ // иначе — по флагу access.
+ const hide = key ? !u.access[key] : false;
+ el.classList.toggle('hidden', hide);
  });
  // topbar add btn
  // Кнопка Добавить скрыта
