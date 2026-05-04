@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v153</title>
+<title>SalesDoc — Финансовый Дашборд v154</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3165,7 +3165,7 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
  <button class="modal-close" onclick="closeEmpModal()"></button>
  <div class="modal-title" id="emp-modal-title">Добавить сотрудника</div>
  <div class="form-row"><div class="form-group"><label class="form-label">Имя</label><input class="form-input" id="e-name" placeholder="Имя Фамилия"></div><div class="form-group"><label class="form-label">Должность</label><input class="form-input" id="e-pos" placeholder="Оператор тех.поддержки"></div></div>
- <div class="form-row"><div class="form-group"><label class="form-label">Email / Логин</label><input class="form-input" id="e-email" placeholder="user@salesdoc.io"></div><div class="form-group"><label class="form-label">Пароль</label><input class="form-input" id="e-pass" type="password" placeholder="Минимум 4 символа"></div></div>
+ <div class="form-row"><div class="form-group"><label class="form-label">Email / Логин</label><input class="form-input" id="e-email" placeholder="user@salesdoc.io"></div><div class="form-group"><label class="form-label">Пароль</label><input class="form-input" id="e-pass" type="password" placeholder="Минимум 4 символа"><button type="button" id="e-reset-pass-btn" onclick="resetPasswordFromModal()" style="display:none;margin-top:6px;font-size:11px;padding:6px 10px;border-radius:8px;cursor:pointer;border:1px solid rgba(255,183,77,.3);background:rgba(255,183,77,.1);color:#FFB74D;font-family:Inter,sans-serif">🔁 Сбросить на стартовый</button></div></div>
  <div class="form-row"><div class="form-group"><label class="form-label">Роль в системе</label>
  <select class="form-select" id="e-role" onchange="updateAccessChecks()">
  <option value="admin">Администратор</option>
@@ -3532,11 +3532,14 @@ function initEmployees(){
      pass_hash: r[4]||'',
      role: role,
      bonus: parseInt(r[6])||0,
-     active: (r[7]||'').toLowerCase() === 'true',
+     // v154: безопасный парсер — уволен ТОЛЬКО при явном FALSE/0/нет/disabled.
+     // Пустота, TRUE-чекбокс (boolean), любые опечатки — считаем активным.
+     active: !['false','0','нет','no','disabled','уволен'].includes(String(r[7]==null?'':r[7]).trim().toLowerCase()),
      access: Object.assign({}, ROLE_DEFAULTS[role] || ROLE_DEFAULTS.viewer),
      country: r[8]||'',
      // v152: is_temp (колонка J) — если TRUE, фронт после логина форсирует смену пароля
-     is_temp: String(r[9]||'').toString().toLowerCase() === 'true',
+     // v154: расширили — принимаем true (boolean), 'TRUE', '1', 'да', 'yes'
+     is_temp: ['true','1','да','yes'].includes(String(r[9]==null?'':r[9]).trim().toLowerCase()),
      _row: i+1 // 1-based номер строки в Sheet (для write-операций)
     });
    }
@@ -5466,9 +5469,19 @@ function openEmpModal(id=null) {
   activeEl.onchange = function() { if(activeLbl) activeLbl.textContent = this.checked ? 'Работает' : 'Уволен'; activeLbl.style.color = this.checked ? '#81C784' : '#EF5350'; };
  }
  updateAccessChecks(emp?.access);
+ // v154: показываем "Сбросить пароль" только при редактировании существующего
+ var resetBtn = document.getElementById('e-reset-pass-btn');
+ if (resetBtn) resetBtn.style.display = id ? 'inline-block' : 'none';
  document.getElementById('emp-modal').classList.add('open');
 }
 function closeEmpModal(){ document.getElementById('emp-modal').classList.remove('open'); }
+// v154: вызывается из модалки редактирования. Использует ту же логику что и кнопка в карточке.
+async function resetPasswordFromModal(){
+ var editId = parseInt(document.getElementById('e-edit-id').value)||null;
+ if (!editId) return;
+ closeEmpModal();
+ await resetEmpPassword(editId);
+}
 function editEmployee(id){ openEmpModal(id); }
 function deleteEmployee(id) {
  if (!confirm('Удалить сотрудника?')) return;
@@ -5520,6 +5533,11 @@ async function saveEmployee() {
  else { employees.push(data); }
  saveCustomEmployees();
  if(typeof saveEmpAccess === 'function') saveEmpAccess();
+ // v154: если меняли пароль существующего сотрудника — пишем в Sheet, иначе после reload откатится
+ if (editId && newPass) {
+  try { await apiUpdateUserPassword(editId, newPass); }
+  catch(e){ console.warn('updatePassword failed:', e); showNotif('Ошибка', 'Пароль не сохранился в Sheet. Попробуй ещё раз.'); }
+ }
  closeEmpModal(); renderEmployees(); buildQuickChips(); populateEmployeeSelects();
  if(document.getElementById('user-mgmt-body')) renderUserManagement();
  // Применить обновлённые права если редактируем текущего пользователя
