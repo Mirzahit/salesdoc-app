@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v167</title>
+<title>SalesDoc — Финансовый Дашборд v168</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -881,6 +881,46 @@ body.light .sprint-stat{background:rgba(255,255,255,.6);border-color:rgba(15,23,
 .sprint-team{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--text-muted)}
 .sp-avatar{width:22px;height:22px;border-radius:50%;color:#1A1A1A;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;margin-left:-6px;border:2px solid var(--dark-card);font-family:'Space Grotesk','Inter',sans-serif}
 .sp-avatar:first-child{margin-left:0}
+
+/* v168: КАНБАН ВНУТРИ СПРИНТА — glassmorphism */
+.plan-kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media (max-width: 900px){ .plan-kanban{grid-template-columns:repeat(2,1fr)} }
+@media (max-width: 600px){ .plan-kanban{grid-template-columns:1fr} }
+.plan-kb-col{
+ background:rgba(255,255,255,.025);
+ backdrop-filter:blur(18px) saturate(150%);
+ -webkit-backdrop-filter:blur(18px) saturate(150%);
+ border:1px solid rgba(255,255,255,.06);
+ border-radius:14px;padding:12px;min-height:340px;
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.04)
+}
+body.light .plan-kb-col{background:rgba(255,255,255,.5);border-color:rgba(15,23,42,.05)}
+.plan-kb-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;font-weight:700;color:var(--text-primary);letter-spacing:.3px}
+body.light .plan-kb-head{border-bottom-color:rgba(15,23,42,.06)}
+.plan-kb-count{background:rgba(255,255,255,.06);color:var(--text-secondary);padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;border:1px solid rgba(255,255,255,.06)}
+body.light .plan-kb-count{background:rgba(15,23,42,.06);border-color:rgba(15,23,42,.06)}
+.plan-kb-body{min-height:260px}
+.plan-kb-card{
+ background:rgba(255,255,255,.04);
+ backdrop-filter:blur(12px);
+ -webkit-backdrop-filter:blur(12px);
+ border:1px solid rgba(255,255,255,.07);
+ border-left:3px solid var(--text-muted);
+ border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;
+ transition:all .2s
+}
+.plan-kb-card:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.18);transform:translateY(-1px)}
+body.light .plan-kb-card{background:rgba(255,255,255,.7);border-color:rgba(15,23,42,.06)}
+body.light .plan-kb-card:hover{background:rgba(255,255,255,.92);border-color:rgba(15,23,42,.10)}
+.plan-kb-card.s-todo{border-left-color:#9CA3AF}
+.plan-kb-card.s-progress{border-left-color:#3B82F6}
+.plan-kb-card.s-review{border-left-color:#FFA726}
+.plan-kb-card.s-done{border-left-color:#4CAF50;opacity:.7}
+.plan-kb-title{font-size:12px;font-weight:600;color:var(--text-primary);line-height:1.35;margin-bottom:6px}
+.plan-kb-meta{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--text-muted)}
+.plan-kb-points{background:rgba(255,255,255,.06);color:var(--text-secondary);padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;border:1px solid rgba(255,255,255,.05)}
+body.light .plan-kb-points{background:rgba(15,23,42,.06);border-color:rgba(15,23,42,.06)}
+.plan-kb-empty{text-align:center;color:var(--text-muted);font-size:11px;padding:20px 8px;opacity:.6}
 
 /* v162: окончательно гасим старый CSV-дашборд — JS metaCsvUpload иногда включает его обратно */
 #meta-ads-dashboard, #meta-ads-empty { display: none !important; }
@@ -2576,6 +2616,51 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
   </div>
  </div>
  <!-- /PLANNING VIEW -->
+
+ <!-- v168: FULLSCREEN SPRINT BOARD (Канбан внутри спринта) -->
+ <div id="view-plan-sprint" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow-y:auto">
+  <div class="kbc-header">
+   <button class="kbc-back" onclick="planCloseSprint()">&#8592; Планёрки</button>
+   <div class="kbc-title" id="plan-sprint-title">Спринт</div>
+  </div>
+  <div style="padding:24px;max-width:1500px;margin:0 auto">
+   <!-- Header -->
+   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:20px">
+    <div>
+     <div id="plan-sprint-goal" style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;max-width:680px"></div>
+     <div id="plan-sprint-meta" style="font-size:11px;color:var(--text-muted)"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+     <button class="plan-create-btn" onclick="planAddTask()">+ Добавить задачу</button>
+     <button class="plan-create-btn" onclick="planCloseCurrentSprint()" style="background:rgba(76,175,80,.10);border-color:rgba(76,175,80,.25);color:#4CAF50">Закрыть спринт</button>
+    </div>
+   </div>
+
+   <!-- Stats row -->
+   <div id="plan-sprint-stats-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px"></div>
+
+   <!-- Kanban -->
+   <div class="plan-kanban" id="plan-kanban">
+    <div class="plan-kb-col" data-status="todo">
+     <div class="plan-kb-head"><span>Бэклог</span><span class="plan-kb-count" id="plan-kb-count-todo">0</span></div>
+     <div class="plan-kb-body" id="plan-kb-todo"></div>
+    </div>
+    <div class="plan-kb-col" data-status="progress">
+     <div class="plan-kb-head"><span>В работе</span><span class="plan-kb-count" id="plan-kb-count-progress">0</span></div>
+     <div class="plan-kb-body" id="plan-kb-progress"></div>
+    </div>
+    <div class="plan-kb-col" data-status="review">
+     <div class="plan-kb-head"><span>На проверке</span><span class="plan-kb-count" id="plan-kb-count-review">0</span></div>
+     <div class="plan-kb-body" id="plan-kb-review"></div>
+    </div>
+    <div class="plan-kb-col" data-status="done">
+     <div class="plan-kb-head"><span>Готово</span><span class="plan-kb-count" id="plan-kb-count-done">0</span></div>
+     <div class="plan-kb-body" id="plan-kb-done"></div>
+    </div>
+   </div>
+  </div>
+ </div>
+ <!-- /PLAN SPRINT BOARD -->
 
  <!-- FULLSCREEN LTV PAGE -->
  <div id="view-mkt-ltv" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow-y:auto">
@@ -6282,6 +6367,9 @@ function showView(v) {
  var mktTarget = document.getElementById('view-mkt-target');
  if(mktLtv) mktLtv.style.display='none';
  if(mktTarget) mktTarget.style.display='none';
+ // v168: hide planning subpage (Канбан внутри спринта)
+ var planSp = document.getElementById('view-plan-sprint');
+ if(planSp) planSp.style.display='none';
  // Hide knowledge subpages
  var kbOrg = document.getElementById('view-kb-org');
  var kbMat = document.getElementById('view-kb-materials');
@@ -8976,8 +9064,135 @@ window.planCreateSprint = function(){
  planRender();
  if (typeof showNotif === 'function') showNotif('Спринт создан', name + ' · ' + planFmtDate(sp.start) + ' — ' + planFmtDate(sp.end));
 };
+// v168: задачи спринта — отдельный store
+var _planTasksKey = 'plan_tasks_v1';
+var _planCurrentSprintId = null;
+function planLoadTasks(){
+ try { var s = localStorage.getItem(_planTasksKey); if (s) return JSON.parse(s); } catch(e){}
+ // Демо-задачи для первого спринта (Внедрение Гризли)
+ return [
+  { id:101, sprint_id:1, title:'Подписан договор и предоплата', owner:'Мырзахыт', points:2, status:'done' },
+  { id:102, sprint_id:1, title:'Создание учётной записи и тарифа', owner:'Айдос', points:1, status:'done' },
+  { id:103, sprint_id:1, title:'Карта структуры дистрибьютора', owner:'Самат', points:3, status:'done' },
+  { id:104, sprint_id:1, title:'Импорт базы клиентов (4200 ТТ)', owner:'Айдос', points:5, status:'done' },
+  { id:105, sprint_id:1, title:'Установка приложения на 50 устройств', owner:'Самат', points:3, status:'done' },
+  { id:106, sprint_id:1, title:'Интеграция API 1С — настройка обмена', owner:'Айдос', points:8, status:'progress' },
+  { id:107, sprint_id:1, title:'Обучение супервайзеров (12 человек)', owner:'Самат', points:5, status:'progress' },
+  { id:108, sprint_id:1, title:'Настройка ролей и прав доступа', owner:'Айдос', points:3, status:'progress' },
+  { id:109, sprint_id:1, title:'Перенос остатков 1С → SalesDoc', owner:'Айдос', points:5, status:'todo' },
+  { id:110, sprint_id:1, title:'Настройка маршрутов ТП по регионам', owner:'Самат', points:3, status:'todo' },
+  { id:111, sprint_id:1, title:'Импорт прайс-листа (8000 SKU)', owner:'Айдос', points:2, status:'todo' },
+  { id:112, sprint_id:1, title:'Финальная сдача проекта', owner:'Мырзахыт', points:2, status:'todo' }
+ ];
+}
+function planSaveTasks(arr){ try { localStorage.setItem(_planTasksKey, JSON.stringify(arr)); } catch(e){} }
+function planTasksOfSprint(sprintId){ return planLoadTasks().filter(function(t){ return t.sprint_id === sprintId; }); }
+
+// Пересчитываем total/in_progress/done в спринте на основе задач
+function planRecountSprint(sprintId){
+ var tasks = planTasksOfSprint(sprintId);
+ var total = tasks.length;
+ var done = tasks.filter(function(t){return t.status==='done';}).length;
+ var progress = tasks.filter(function(t){return t.status==='progress' || t.status==='review';}).length;
+ var all = planLoadSprints();
+ var i = all.findIndex(function(s){return s.id===sprintId;});
+ if (i >= 0) { all[i].total = total; all[i].done = done; all[i].in_progress = progress; planSaveSprints(all); }
+}
+
 window.planOpenSprint = function(id){
- if (typeof showNotif === 'function') showNotif('Скоро', 'Канбан-доска внутри спринта — в следующем обновлении');
+ var sp = planLoadSprints().find(function(s){return s.id===id;});
+ if (!sp) return;
+ _planCurrentSprintId = id;
+ document.getElementById('plan-sprint-title').textContent = sp.name;
+ document.getElementById('plan-sprint-goal').textContent = sp.goal || '';
+ var totalDays = planDaysBetween(sp.start, sp.end);
+ var dayN = planDayOf(sp.start);
+ document.getElementById('plan-sprint-meta').textContent = planFmtDate(sp.start) + ' — ' + planFmtDate(sp.end) + ' · День ' + dayN + ' из ' + totalDays + ' · ' + (sp.teamNames || '—');
+ document.getElementById('view-plan-sprint').style.display = 'block';
+ planRenderKanban();
+};
+window.planCloseSprint = function(){
+ document.getElementById('view-plan-sprint').style.display = 'none';
+ _planCurrentSprintId = null;
+ // Перерисовать карточку снаружи (могли поменяться счётчики)
+ if (typeof planRender === 'function') planRender();
+};
+
+function planRenderKanban(){
+ if (!_planCurrentSprintId) return;
+ var tasks = planTasksOfSprint(_planCurrentSprintId);
+ var STATUSES = ['todo','progress','review','done'];
+ var statsRow = document.getElementById('plan-sprint-stats-row');
+ if (statsRow) {
+  var totalPoints = tasks.reduce(function(s,t){return s + (parseInt(t.points)||0);}, 0);
+  var donePoints = tasks.filter(function(t){return t.status==='done';}).reduce(function(s,t){return s + (parseInt(t.points)||0);}, 0);
+  var stats = [
+   { l:'Всего задач', v: tasks.length },
+   { l:'Готово', v: tasks.filter(function(t){return t.status==='done';}).length, c:'#4CAF50' },
+   { l:'В работе', v: tasks.filter(function(t){return t.status==='progress';}).length, c:'#3B82F6' },
+   { l:'На проверке', v: tasks.filter(function(t){return t.status==='review';}).length, c:'#FFA726' },
+   { l:'Story Points', v: donePoints + ' / ' + totalPoints }
+  ];
+  statsRow.innerHTML = stats.map(function(s){
+   return '<div class="sprint-stat" style="padding:14px 12px"><div class="sprint-stat-v" '+(s.c?('style="color:'+s.c+'"'):'')+'>'+s.v+'</div><div class="sprint-stat-l" style="margin-top:4px">'+s.l+'</div></div>';
+  }).join('');
+ }
+ STATUSES.forEach(function(st){
+  var box = document.getElementById('plan-kb-'+st);
+  var cnt = document.getElementById('plan-kb-count-'+st);
+  if (!box) return;
+  var arr = tasks.filter(function(t){return t.status===st;});
+  if (cnt) cnt.textContent = arr.length;
+  if (!arr.length) { box.innerHTML = '<div class="plan-kb-empty">Пусто</div>'; return; }
+  box.innerHTML = arr.map(function(t){
+   return '<div class="plan-kb-card s-'+t.status+'" onclick="planTaskNextStatus('+t.id+')" oncontextmenu="event.preventDefault();planTaskDelete('+t.id+');return false;" title="Клик — следующий статус, ПКМ — удалить">'
+    + '<div class="plan-kb-title">'+(t.title||'').replace(/</g,'&lt;')+'</div>'
+    + '<div class="plan-kb-meta"><span>'+(t.owner||'—')+'</span><span class="plan-kb-points">'+(t.points||0)+'</span></div>'
+   + '</div>';
+  }).join('');
+ });
+}
+
+window.planAddTask = function(){
+ if (!_planCurrentSprintId) return;
+ var title = prompt('Что нужно сделать?'); if (!title) return;
+ var owner = prompt('Кто отвечает (имя)?', 'Мырзахыт') || '—';
+ var points = parseInt(prompt('Story points (1=час, 8=почти неделя):', '3') || '3', 10);
+ if (!points || points < 1) points = 1;
+ var all = planLoadTasks();
+ var nextId = (all.reduce(function(m,t){return Math.max(m,t.id||0);},0) || 100) + 1;
+ all.push({ id:nextId, sprint_id:_planCurrentSprintId, title:title, owner:owner, points:points, status:'todo' });
+ planSaveTasks(all);
+ planRecountSprint(_planCurrentSprintId);
+ planRenderKanban();
+};
+window.planTaskNextStatus = function(taskId){
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===taskId;});
+ if (i < 0) return;
+ var order = ['todo','progress','review','done'];
+ var cur = order.indexOf(all[i].status);
+ all[i].status = order[(cur+1) % order.length];
+ planSaveTasks(all);
+ planRecountSprint(all[i].sprint_id);
+ planRenderKanban();
+};
+window.planTaskDelete = function(taskId){
+ if (!confirm('Удалить эту задачу?')) return;
+ var all = planLoadTasks();
+ var sid = (all.find(function(t){return t.id===taskId;})||{}).sprint_id;
+ all = all.filter(function(t){return t.id!==taskId;});
+ planSaveTasks(all);
+ if (sid) planRecountSprint(sid);
+ planRenderKanban();
+};
+window.planCloseCurrentSprint = function(){
+ if (!_planCurrentSprintId) return;
+ if (!confirm('Закрыть спринт? Карточка переедет в архив. Незавершённые задачи останутся в архиве как есть.')) return;
+ var all = planLoadSprints();
+ var i = all.findIndex(function(s){return s.id===_planCurrentSprintId;});
+ if (i >= 0) { all[i].archived = true; planSaveSprints(all); }
+ planCloseSprint();
 };
 window.planInit = function(){
  try { if (!localStorage.getItem(_planSprintsKey)) planSaveSprints(PLAN_DEFAULT_SPRINTS); } catch(e){}
