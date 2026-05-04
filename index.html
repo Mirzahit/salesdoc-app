@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v172</title>
+<title>SalesDoc — Финансовый Дашборд v173</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2713,7 +2713,12 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
    <!-- v169: Burndown + Скорость -->
    <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:20px" id="plan-burndown-row">
     <div class="plan-glass-card">
-     <div class="plan-card-title">Burndown — оставшиеся Story Points</div>
+     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div>
+       <div class="plan-card-title" style="margin-bottom:2px">Сгорание задач по дням</div>
+       <div style="font-size:11px;color:var(--text-muted)">Сколько баллов осталось закрыть. План — серая пунктирная, факт — синяя сплошная, прогноз по текущему темпу — оранжевая.</div>
+      </div>
+     </div>
      <div style="position:relative;height:240px"><canvas id="plan-burndown-chart"></canvas></div>
     </div>
     <div class="plan-glass-card">
@@ -9143,7 +9148,7 @@ function planRenderOverallStats(sprints){
   { l:'Спринтов', v: sprints.length, sub: (atrisk+delayed)+' требуют внимания' },
   { l:'Задач всего', v: totalTasks, sub: progressTasks + ' в работе · ' + reviewTasks + ' на проверке' },
   { l:'Готово задач', v: doneTasks + ' / ' + totalTasks, sub: totalTasks > 0 ? Math.round(doneTasks/totalTasks*100) + '%' : '—', color:'#10B981' },
-  { l:'Story Points', v: doneSP + ' / ' + totalSP, sub: pct + '% выполнено', color:'#3B82F6' },
+  { l:'Баллы сложности', v: doneSP + ' / ' + totalSP, sub: pct + '% выполнено', color:'#3B82F6' },
   { l:'Под угрозой', v: atrisk + delayed, sub: atrisk + ' в риске · ' + delayed + ' просрочены', color: (atrisk+delayed) > 0 ? '#F59E0B' : null }
  ];
  box.innerHTML = stats.map(function(s){
@@ -9282,7 +9287,7 @@ function planRenderKanban(){
    { l:'Готово', v: tasks.filter(function(t){return t.status==='done';}).length, c:'#10B981' },
    { l:'В работе', v: tasks.filter(function(t){return t.status==='progress';}).length, c:'#3B82F6' },
    { l:'На проверке', v: tasks.filter(function(t){return t.status==='review';}).length, c:'#F59E0B' },
-   { l:'Story Points', v: donePoints + ' / ' + totalPoints }
+   { l:'Баллы сложности', v: donePoints + ' / ' + totalPoints }
   ];
   statsRow.innerHTML = stats.map(function(s){
    return '<div class="sprint-stat" style="padding:14px 12px"><div class="sprint-stat-v" '+(s.c?('style="color:'+s.c+'"'):'')+'>'+s.v+'</div><div class="sprint-stat-l" style="margin-top:4px">'+s.l+'</div></div>';
@@ -9308,7 +9313,7 @@ window.planAddTask = function(){
  if (!_planCurrentSprintId) return;
  var title = prompt('Что нужно сделать?'); if (!title) return;
  var owner = prompt('Кто отвечает (имя)?', 'Мырзахыт') || '—';
- var points = parseInt(prompt('Story points (1=час, 8=почти неделя):', '3') || '3', 10);
+ var points = parseInt(prompt('Сложность задачи в баллах (1=час, 3=день, 8=почти неделя):', '3') || '3', 10);
  if (!points || points < 1) points = 1;
  var all = planLoadTasks();
  var nextId = (all.reduce(function(m,t){return Math.max(m,t.id||0);},0) || 100) + 1;
@@ -9361,12 +9366,13 @@ function _planDrawBurndown(canvas, sp, tasks){
  if (!window.Chart) return;
  var totalDays = planDaysBetween(sp.start, sp.end);
  var totalSP = tasks.reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
- var labels = [], idealLine = [], actualLine = [];
+ var labels = [], idealLine = [], actualLine = [], paceLine = [], todayMarker = [];
  var startDate = new Date(sp.start);
  var todayStr = (new Date()).toISOString().slice(0,10);
  var daysSinceStart = Math.max(0, Math.min(planDaysBetween(sp.start, todayStr) - 1, totalDays));
- // Допущение: распределение done равномерно по дням до сегодняшнего, чтобы получить кривую.
  var doneSP = tasks.filter(function(t){return t.status==='done';}).reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
+ // v173: предсказание остатка по текущему темпу — если темп сохранится, к какому дню упадём в 0
+ var paceSPperDay = daysSinceStart > 0 ? doneSP / daysSinceStart : 0;
  for (var i = 0; i <= totalDays; i++) {
   var d = new Date(startDate.getTime() + i*86400000);
   labels.push(('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2));
@@ -9377,19 +9383,78 @@ function _planDrawBurndown(canvas, sp, tasks){
   } else {
    actualLine.push(null);
   }
+  // Прогноз — линия "если темп сохранится"
+  if (i >= daysSinceStart) {
+   var projectedRemain = Math.max(0, totalSP - doneSP - paceSPperDay * (i - daysSinceStart));
+   paceLine.push(Math.round(projectedRemain * 10) / 10);
+  } else paceLine.push(null);
+  // Маркер "сегодня" — точка на actualLine
+  todayMarker.push(i === daysSinceStart ? Math.max(0, totalSP - doneSP) : null);
  }
+ // Gradient под линией факта
+ var ctx = canvas.getContext('2d');
+ var grad = ctx.createLinearGradient(0, 0, 0, canvas.offsetHeight || 240);
+ grad.addColorStop(0, 'rgba(59,130,246,.32)');
+ grad.addColorStop(1, 'rgba(59,130,246,0)');
+
  if (_planBurndownChart) { try { _planBurndownChart.destroy(); } catch(e){} }
- _planBurndownChart = new Chart(canvas.getContext('2d'), {
+ _planBurndownChart = new Chart(ctx, {
   type:'line',
   data:{ labels: labels, datasets:[
-   { label:'Идеал', data: idealLine, borderColor:'rgba(156,163,175,.6)', borderDash:[5,4], borderWidth:1.5, pointRadius:0, fill:false, tension:0 },
-   { label:'Факт', data: actualLine, borderColor:'#3B82F6', backgroundColor:'rgba(59,130,246,.08)', borderWidth:2.5, pointRadius:3, pointBackgroundColor:'#3B82F6', fill:true, tension:.25 }
+   {
+    label:'План на сегодня', data: idealLine,
+    borderColor:'rgba(148,163,184,.55)', borderDash:[6,5], borderWidth:1.5,
+    pointRadius:0, fill:false, tension:0
+   },
+   {
+    label:'Если темп сохранится', data: paceLine,
+    borderColor:'rgba(245,158,11,.65)', borderDash:[3,4], borderWidth:1.5,
+    pointRadius:0, fill:false, tension:.2
+   },
+   {
+    label:'Сделано', data: actualLine,
+    borderColor:'#3B82F6', backgroundColor: grad,
+    borderWidth:3, pointRadius:4, pointHoverRadius:7,
+    pointBackgroundColor:'#3B82F6', pointBorderColor:'#fff', pointBorderWidth:1.5,
+    fill:true, tension:.3
+   },
+   {
+    label:'Сегодня', data: todayMarker,
+    borderColor:'#10B981', backgroundColor:'#10B981',
+    pointRadius:7, pointHoverRadius:9,
+    pointBackgroundColor:'#10B981', pointBorderColor:'#fff', pointBorderWidth:2.5,
+    showLine:false, fill:false
+   }
   ]},
-  options:{ responsive:true, maintainAspectRatio:false,
-   plugins:{ legend:{ labels:{ color:'#9CA3AF', font:{size:11} } }, tooltip:{ backgroundColor:'rgba(0,0,0,.85)', titleColor:'#fff', bodyColor:'#E5E7EB' } },
+  options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+   plugins:{
+    legend:{ position:'top', align:'end', labels:{ color:'#94A3B8', font:{size:11, family:'Inter'}, boxWidth:14, padding:14, usePointStyle:true } },
+    tooltip:{
+     backgroundColor:'rgba(15,34,49,.96)', titleColor:'#E2E8F0', bodyColor:'#CBD5E1',
+     borderColor:'rgba(148,163,184,.18)', borderWidth:1, padding:12, cornerRadius:10,
+     boxPadding:6, titleFont:{size:12,weight:'600'}, bodyFont:{size:12},
+     callbacks:{
+      title: function(items){ return 'День ' + (items[0].dataIndex + 1) + ' · ' + items[0].label; },
+      label: function(ctx){
+       if (ctx.raw === null || ctx.raw === undefined) return null;
+       var v = ctx.raw;
+       if (ctx.dataset.label === 'Сегодня') return 'Сегодня · осталось ' + v + ' баллов';
+       return ctx.dataset.label + ': ' + v + ' баллов';
+      }
+     }
+    }
+   },
    scales:{
-    x:{ ticks:{ color:'#6B7280', font:{size:10} }, grid:{ color:'rgba(255,255,255,.05)' } },
-    y:{ beginAtZero:true, ticks:{ color:'#6B7280', font:{size:10} }, grid:{ color:'rgba(255,255,255,.05)' }, title:{ display:true, text:'Story Points', color:'#9CA3AF', font:{size:10} } }
+    x:{
+     ticks:{ color:'#64748B', font:{size:10}, maxRotation:0, autoSkip:true, autoSkipPadding:12 },
+     grid:{ color:'rgba(148,163,184,.06)', drawTicks:false }
+    },
+    y:{
+     beginAtZero:true,
+     ticks:{ color:'#64748B', font:{size:10}, padding:6 },
+     grid:{ color:'rgba(148,163,184,.06)', drawTicks:false },
+     title:{ display:true, text:'Баллов осталось', color:'#94A3B8', font:{size:10, family:'Inter'}, padding:{bottom:8} }
+    }
    }
   }
  });
@@ -9410,10 +9475,10 @@ function planRenderVelocity(sprint, tasks){
  var willMakeIt = daysToFinish !== null && daysToFinish <= daysLeft;
  var forecast = daysToFinish === null ? '—' : (willMakeIt ? planFmtDate(sprint.end) + ' — успеваем' : 'Не успеваем — нужно ' + daysToFinish + ' дн., осталось ' + daysLeft);
  box.innerHTML =
-  '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Сделано за ' + daysSinceStart + ' дн.</div><div style="font-size:24px;font-weight:700;color:var(--text-primary);font-family:Space Grotesk,Inter,sans-serif">' + doneSP + ' <span style="font-size:12px;color:var(--text-muted);font-weight:400">SP</span></div></div>'
-  + '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Среднее в день</div><div style="font-size:24px;font-weight:700;color:var(--text-primary);font-family:Space Grotesk,Inter,sans-serif">' + avgPerDay.toFixed(1) + ' <span style="font-size:12px;color:var(--text-muted);font-weight:400">SP</span></div></div>'
+  '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Сделано за ' + daysSinceStart + ' дн.</div><div style="font-size:24px;font-weight:700;color:var(--text-primary);font-family:Space Grotesk,Inter,sans-serif">' + doneSP + ' <span style="font-size:12px;color:var(--text-muted);font-weight:400">баллов</span></div></div>'
+  + '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Среднее в день</div><div style="font-size:24px;font-weight:700;color:var(--text-primary);font-family:Space Grotesk,Inter,sans-serif">' + avgPerDay.toFixed(1) + ' <span style="font-size:12px;color:var(--text-muted);font-weight:400">балла</span></div></div>'
   + '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Прогноз закрытия</div><div style="font-size:13px;font-weight:700;color:' + (willMakeIt ? '#10B981' : '#F59E0B') + '">' + forecast + '</div></div>'
-  + '<div style="padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--text-muted);line-height:1.4">' + (totalSP === 0 ? 'Добавь задачи и проставь Story Points чтобы увидеть прогноз.' : ('Осталось ' + spLeft + ' SP. ' + (willMakeIt ? 'Темп достаточен.' : 'Нужно ускоряться.'))) + '</div>';
+  + '<div style="padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--text-muted);line-height:1.4">' + (totalSP === 0 ? 'Добавь задачи и проставь сложность (баллы), чтобы увидеть прогноз.' : ('Осталось ' + spLeft + ' баллов. ' + (willMakeIt ? 'Темп достаточный.' : 'Нужно ускоряться.'))) + '</div>';
 }
 
 // ===== v169: РЕТРОСПЕКТИВА =====
