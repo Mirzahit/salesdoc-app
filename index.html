@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v161</title>
+<title>SalesDoc — Финансовый Дашборд v162</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -833,6 +833,9 @@ body.light .kpi-footer-inline{display:none !important}
 .mkt-channel-stat-val{font-size:16px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif}
 .mkt-channel-cta{font-size:11px;color:var(--text-secondary);font-weight:500}
 .mkt-channel:hover .mkt-channel-cta{color:#3B82F6}
+
+/* v162: окончательно гасим старый CSV-дашборд — JS metaCsvUpload иногда включает его обратно */
+#meta-ads-dashboard, #meta-ads-empty { display: none !important; }
 
 /* v160: Pills период для Таргет страницы */
 .meta-period-pill{padding:7px 14px;border-radius:20px;border:1px solid var(--dark-border);background:transparent;color:var(--text-secondary);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;font-family:Inter,sans-serif;letter-spacing:.2px}
@@ -15363,11 +15366,19 @@ function mktCloseLtvPage() {
  document.getElementById('view-mkt-ltv').style.display = 'none';
 }
 
-// v159: инициализация дашборда Маркетинг при заходе на страницу
-window.mktInitDashboard = function(){
+// v159+v162: инициализация дашборда Маркетинг при заходе на страницу
+window.mktInitDashboard = async function(){
  mktUpdateTargetPreview();
  mktUpdateChannelsPreview();
  mktUpdateLtvPreview();
+ // v162: если расходы ещё не загружены — подтянуть их, чтобы автоматически
+ // посчитать сумму на маркетинг (категория таргет/реклама/маркетинг).
+ try {
+  if (typeof expData !== 'undefined' && Array.isArray(expData) && expData.length === 0 && typeof loadExpenses === 'function') {
+   await loadExpenses();
+   if (typeof mktAutoCalc === 'function') mktAutoCalc();
+  }
+ } catch(e){ console.warn('mktInit: loadExpenses failed', e); }
 };
 async function mktUpdateTargetPreview(){
  try {
