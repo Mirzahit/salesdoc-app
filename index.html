@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v169</title>
+<title>SalesDoc — Финансовый Дашборд v170</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -960,6 +960,23 @@ body.light .plan-backlog-table td{border-bottom-color:rgba(15,23,42,.04)}
 .plan-priority.high{background:rgba(239,83,80,.15);color:#EF5350}
 .plan-priority.mid{background:rgba(255,165,38,.15);color:#FFA726}
 .plan-priority.low{background:rgba(76,175,80,.15);color:#4CAF50}
+
+/* v170: KPI-карточки общей статистики на главной странице */
+.plan-mini-kpi{
+ background:rgba(255,255,255,.035);
+ backdrop-filter:blur(18px) saturate(150%);
+ -webkit-backdrop-filter:blur(18px) saturate(150%);
+ border:1px solid rgba(255,255,255,.08);
+ border-radius:12px;padding:12px 14px;
+ box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+ transition:all .2s
+}
+.plan-mini-kpi:hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14)}
+body.light .plan-mini-kpi{background:rgba(255,255,255,.6);border-color:rgba(15,23,42,.05);box-shadow:0 2px 10px rgba(15,23,42,.04)}
+body.light .plan-mini-kpi:hover{background:rgba(255,255,255,.85)}
+.plan-mini-kpi-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;font-weight:600}
+.plan-mini-kpi-val{font-size:22px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:-.3px;line-height:1}
+.plan-mini-kpi-sub{font-size:10px;color:var(--text-muted);margin-top:4px}
 
 /* v162: окончательно гасим старый CSV-дашборд — JS metaCsvUpload иногда включает его обратно */
 #meta-ads-dashboard, #meta-ads-empty { display: none !important; }
@@ -2635,6 +2652,9 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
     <button class="plan-tab" data-tab="backlog" onclick="planSetTab('backlog',this)">Бэклог</button>
    </div>
   </div>
+
+  <!-- v170: общая статистика по всем активным спринтам -->
+  <div id="plan-overall-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px"></div>
 
   <!-- Summary line + create button -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
@@ -9091,11 +9111,43 @@ window.planSetTab = function(tab, btn){
  if (btn) btn.classList.add('active');
  planRender();
 };
+// v170: общая статистика по выбранной вкладке (активные/архив)
+function planRenderOverallStats(sprints){
+ var box = document.getElementById('plan-overall-stats');
+ if (!box) return;
+ if (!sprints || !sprints.length) { box.innerHTML = ''; return; }
+ var sprintIds = sprints.map(function(s){return s.id;});
+ var allTasks = planLoadTasks().filter(function(t){return sprintIds.indexOf(t.sprint_id) !== -1;});
+ var totalTasks = allTasks.length;
+ var doneTasks = allTasks.filter(function(t){return t.status==='done';}).length;
+ var progressTasks = allTasks.filter(function(t){return t.status==='progress';}).length;
+ var reviewTasks = allTasks.filter(function(t){return t.status==='review';}).length;
+ var totalSP = allTasks.reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
+ var doneSP = allTasks.filter(function(t){return t.status==='done';}).reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
+ var pct = totalSP > 0 ? Math.round((doneSP/totalSP)*100) : 0;
+ var atrisk = sprints.filter(function(s){return s.status==='atrisk';}).length;
+ var delayed = sprints.filter(function(s){return s.status==='delayed';}).length;
+ var stats = [
+  { l:'Спринтов', v: sprints.length, sub: (atrisk+delayed)+' требуют внимания' },
+  { l:'Задач всего', v: totalTasks, sub: progressTasks + ' в работе · ' + reviewTasks + ' на проверке' },
+  { l:'Готово задач', v: doneTasks + ' / ' + totalTasks, sub: totalTasks > 0 ? Math.round(doneTasks/totalTasks*100) + '%' : '—', color:'#4CAF50' },
+  { l:'Story Points', v: doneSP + ' / ' + totalSP, sub: pct + '% выполнено', color:'#3B82F6' },
+  { l:'Под угрозой', v: atrisk + delayed, sub: atrisk + ' в риске · ' + delayed + ' просрочены', color: (atrisk+delayed) > 0 ? '#FFA726' : null }
+ ];
+ box.innerHTML = stats.map(function(s){
+  return '<div class="plan-mini-kpi">'
+   + '<div class="plan-mini-kpi-label">'+s.l+'</div>'
+   + '<div class="plan-mini-kpi-val"'+(s.color?(' style="color:'+s.color+'"'):'')+'>'+s.v+'</div>'
+   + '<div class="plan-mini-kpi-sub">'+s.sub+'</div>'
+  + '</div>';
+ }).join('');
+}
 window.planRender = function(){
  var grid = document.getElementById('plan-sprints-grid');
  var empty = document.getElementById('plan-empty');
  var sumTitle = document.getElementById('plan-summary-title');
  var sumMeta = document.getElementById('plan-summary-meta');
+ var overallBox = document.getElementById('plan-overall-stats');
  if (!grid) return;
  var all = planLoadSprints();
  var list;
@@ -9105,9 +9157,12 @@ window.planRender = function(){
   // v169: реальный бэклог — задачи без sprint_id
   if (sumTitle) sumTitle.textContent = 'Общий бэклог';
   if (sumMeta) sumMeta.textContent = 'Задачи которые ждут попадания в спринт. Клик «→ В спринт» переводит задачу в выбранный активный спринт.';
+  if (overallBox) overallBox.innerHTML = '';
   planRenderBacklog();
   return;
  }
+ // v170: общая статистика над списком спринтов
+ planRenderOverallStats(list);
  if (sumTitle) sumTitle.textContent = list.length + ' ' + (_planTab === 'active' ? 'активных спринтов' : 'архивных спринтов');
  if (sumMeta) {
   var ot = list.filter(function(s){return s.status==='ontrack';}).length;
