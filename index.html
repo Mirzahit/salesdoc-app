@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v150</title>
+<title>SalesDoc — Финансовый Дашборд v151</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3396,12 +3396,14 @@ const ACCESS_KEYS = [
  { key:'view_kanban', label:'Внедрение', group:'Просмотр' },
  { key:'view_marketing', label:'Маркетинг', group:'Просмотр' },
  { key:'view_reports', label:'Отчёты', group:'Просмотр' },
- { key:'view_ai', label:'ИИ', group:'Просмотр' },
+ { key:'view_statistics', label:'Статистики', group:'Просмотр' }, // v151: добавлен (был в ROLE_DEFAULTS, но не в UI)
  { key:'view_knowledge', label:'База знаний', group:'Просмотр' },
  { key:'view_academy', label:'Академия', group:'Просмотр' },
  { key:'view_tests', label:'Тесты', group:'Просмотр' },
  { key:'view_employees', label:'Сотрудники', group:'Просмотр' },
  { key:'view_cabinet', label:'Кабинет', group:'Просмотр' },
+ // Примечание: view_ai удалён в v151 (страница ИИ Мирзахит → заменена Ассистентом).
+ // Ассистент защищён отдельной проверкой по email (только office@salesdoc.io), не через ACCESS_KEYS.
  { key:'add_payments', label:'Добавлять оплаты', group:'Действия' },
  { key:'add_acts', label:'Добавлять акты', group:'Действия' },
  { key:'edit_plans', label:'Редактировать планы', group:'Действия' },
@@ -3410,18 +3412,30 @@ const ACCESS_KEYS = [
 
 const ROLE_LABELS = {
  admin:'Администратор', head:'Руководитель', rop:'РОП',
- manager:'Менеджер', operator:'Оператор', accountant:'Бухгалтер'
+ manager:'Менеджер', operator:'Оператор', accountant:'Бухгалтер', viewer:'Просмотр'
 };
 
+// v151: убран view_ai (ключ удалён); добавлен view_statistics для всех ролей явно;
+// view_assistant НЕ через роли — только хардкод-проверка по email (см. applyUserAccess).
 const ROLE_DEFAULTS = {
- admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_ai:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- operator: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,add_payments:0,add_acts:1,edit_plans:0,manage_employees:0 },
- accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
- viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_ai:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ operator: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,add_payments:0,add_acts:1,edit_plans:0,manage_employees:0 },
+ accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
 };
+
+// v151: Email-список тех, кому разрешён Ассистент. Не через роль — чтобы Arslan
+// (тоже admin, KG Branch) не получил доступ автоматически. Если потом нужно
+// расширить — добавляй сюда email'ы, либо переходи на гранулярный access-флаг.
+const ASSISTANT_ALLOWED_EMAILS = ['office@salesdoc.io'];
+function isAssistantAllowed(user) {
+ if (!user) return false;
+ var em = String(user.email||'').trim().toLowerCase();
+ return ASSISTANT_ALLOWED_EMAILS.indexOf(em) !== -1;
+}
 
 // ============================================================
 // DATA
@@ -3903,17 +3917,18 @@ function applyUserAccess() {
  document.getElementById('cab-display-role').textContent=u.pos+' · '+profile.company;
 
  // Show/hide nav items
- // Примечание: для view "assistant" специально НЕ задан ключ в viewMap — пока Ассистент виден всем.
- // Когда понадобится гранулярный доступ — добавить assistant:'view_assistant' и прописать
- // view_assistant:true для нужных ролей в дефолтном access.
  const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics'};
  document.querySelectorAll('.nav-item[data-view]').forEach(el=>{
  const view=el.dataset.view;
+ // v151: Ассистент — особый случай, проверка по email (не по роли)
+ if (view === 'assistant') {
+  el.classList.toggle('hidden', !isAssistantAllowed(u));
+  return;
+ }
  const key=viewMap[view];
  // FIX v149: если view нет в viewMap (key===undefined), classList.toggle(class, undefined)
- // по спец. DOM ИНВЕРТИРУЕТ класс — т.е. добавляет hidden. Из-за этого новые view-страницы
- // были скрыты у всех. Разделяем: если в viewMap нет ключа → показываем всем,
- // иначе — по флагу access.
+ // по спец. DOM ИНВЕРТИРУЕТ класс — т.е. добавляет hidden.
+ // Разделяем: если в viewMap нет ключа → показываем всем, иначе — по флагу access.
  const hide = key ? !u.access[key] : false;
  el.classList.toggle('hidden', hide);
  });
@@ -5975,6 +5990,19 @@ function _loadAvatarFromCloud() {
 // NAV
 // ============================================================
 function showView(v) {
+ // v151: общая проверка прав — защита от обхода через DevTools (showView('expenses') и т.п.)
+ if (currentUser) {
+  if (v === 'assistant' && !isAssistantAllowed(currentUser)) {
+   try { showNotif('Нет доступа', 'Ассистент доступен только CEO.'); } catch(_){}
+   v = 'dashboard';
+  }
+  var _accessMap = {payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics'};
+  var _need = _accessMap[v];
+  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
+   try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
+   v = 'dashboard';
+  }
+ }
  ['dashboard','payments','plan','keyclients','assistant','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban','statistics'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
@@ -6705,6 +6733,12 @@ async function doLogin() {
  document.getElementById('login-err').textContent = 'Неверный логин или пароль';
  return;
  }
+ // v151 SECURITY: блокируем уволенных
+ if (emp.active === false) {
+ document.getElementById('login-err').textContent = 'Учётная запись отключена. Обратитесь к администратору.';
+ try { localStorage.removeItem('sd_saved_login'); localStorage.removeItem('sd_saved_pass_hash'); localStorage.removeItem('sd_saved_pass'); } catch(e) {}
+ return;
+ }
  currentUser = emp;
 
  // Запомнить меня (сохраняем хеш, не открытый пароль)
@@ -6762,6 +6796,13 @@ async function doLogin() {
    if (!_employeesLoaded) return;
    clearInterval(waitForEmployees);
    var emp = employees.find(function(e){ return (e.email === savedLogin || e.name === savedLogin) && e.pass_hash === savedHash; });
+   // v151 SECURITY: автологин уволенных запрещён
+   if (emp && emp.active === false) {
+    if (errEl) { errEl.style.color = '#EF5350'; errEl.textContent = 'Учётная запись отключена.'; }
+    localStorage.removeItem('sd_saved_pass_hash');
+    localStorage.removeItem('sd_saved_login');
+    emp = null;
+   }
    if (emp) {
     currentUser = emp;
     document.getElementById('login-screen').style.display = 'none';
@@ -7494,7 +7535,8 @@ async function asstSend(){
    body: JSON.stringify({
     agentId: agentId,
     messages: tail,
-    context: asstBuildContext()
+    context: asstBuildContext(),
+    userEmail: (currentUser && currentUser.email) || ''  // v151: серверная защита по email
    })
   });
   const data = await resp.json();

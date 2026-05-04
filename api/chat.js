@@ -92,9 +92,19 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'ANTHROPIC_API_KEY не задан в Vercel env' });
     }
 
-    const { agentId, messages, context } = req.body || {};
+    const { agentId, messages, context, userEmail } = req.body || {};
     if (!agentId || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'Нужны поля {agentId, messages[]}' });
+    }
+
+    // v151 SECURITY: серверная защита — Финансист только для CEO.
+    // Это страховка на случай, если фронт обойдут. Список можно расширить
+    // через ENV ASSISTANT_ALLOWED_EMAILS (через запятую).
+    const allowedRaw = process.env.ASSISTANT_ALLOWED_EMAILS || 'office@salesdoc.io';
+    const allowed = allowedRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const callerEmail = String(userEmail || '').trim().toLowerCase();
+    if (!callerEmail || allowed.indexOf(callerEmail) === -1) {
+      return res.status(403).json({ error: 'Доступ запрещён: ассистент доступен только определённым пользователям.' });
     }
 
     const cfg = loadAgents();
