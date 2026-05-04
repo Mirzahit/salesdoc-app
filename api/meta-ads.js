@@ -56,8 +56,9 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const TOKEN = process.env.META_ACCESS_TOKEN;
-  const ACCOUNT = process.env.META_AD_ACCOUNT_ID;
+  // .trim() — убирает невидимые пробелы/переносы что часто проскальзывают при копи-паст в Vercel UI
+  const TOKEN = (process.env.META_ACCESS_TOKEN || '').trim();
+  const ACCOUNT = (process.env.META_AD_ACCOUNT_ID || '').trim();
   if (!TOKEN || !ACCOUNT) {
     return res.status(500).json({
       error: 'Missing env',
