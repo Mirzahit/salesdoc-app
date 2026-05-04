@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v164</title>
+<title>SalesDoc — Финансовый Дашборд v165</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -833,6 +833,37 @@ body.light .kpi-footer-inline{display:none !important}
 .mkt-channel-stat-val{font-size:16px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif}
 .mkt-channel-cta{font-size:11px;color:var(--text-secondary);font-weight:500}
 .mkt-channel:hover .mkt-channel-cta{color:#3B82F6}
+
+/* v165: PLANNING / SPRINTS */
+.plan-tab{padding:7px 14px;border-radius:8px;border:1px solid var(--dark-border);background:transparent;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;font-family:Inter,sans-serif}
+.plan-tab:hover{border-color:rgba(255,213,79,.4);color:var(--text-primary)}
+.plan-tab.active{background:rgba(255,213,79,.15);border-color:rgba(255,213,79,.4);color:#FFD54F}
+.sprint-card{background:var(--dark-card);border:1px solid var(--dark-border);border-radius:14px;padding:18px;position:relative;overflow:hidden;cursor:pointer;transition:all .2s}
+.sprint-card:hover{border-color:rgba(255,213,79,.4);transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.sprint-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#FFD54F}
+.sprint-card.color-purple::before{background:#AB47BC}
+.sprint-card.color-blue::before{background:#3B82F6}
+.sprint-card.color-green::before{background:#4CAF50}
+.sprint-card.color-orange::before{background:#FF7043}
+.sprint-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
+.sprint-name{font-size:15px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif;line-height:1.25;margin-bottom:4px}
+.sprint-goal{font-size:12px;color:var(--text-muted);line-height:1.4}
+.sprint-status{font-size:9px;padding:3px 8px;border-radius:20px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;flex-shrink:0}
+.sprint-status.ontrack{background:rgba(76,175,80,.15);color:#4CAF50}
+.sprint-status.atrisk{background:rgba(255,165,38,.15);color:#FFA726}
+.sprint-status.delayed{background:rgba(239,83,80,.15);color:#EF5350}
+.sprint-dates{display:flex;gap:10px;font-size:11px;color:var(--text-muted);margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--dark-border);flex-wrap:wrap}
+.sprint-progress{margin-bottom:14px}
+.sprint-progress-label{display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-bottom:6px}
+.sprint-progress-bar{height:6px;background:var(--dark-panel);border-radius:3px;overflow:hidden}
+.sprint-progress-fill{height:100%;border-radius:3px;background:#FFD54F;transition:width .3s}
+.sprint-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.sprint-stat{background:var(--dark-panel);border-radius:8px;padding:8px;text-align:center}
+.sprint-stat-v{font-size:16px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif}
+.sprint-stat-l{font-size:10px;color:var(--text-muted);margin-top:2px;letter-spacing:.3px}
+.sprint-team{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--text-muted)}
+.sp-avatar{width:22px;height:22px;border-radius:50%;color:#1A1A1A;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;margin-left:-6px;border:2px solid var(--dark-card);font-family:'Space Grotesk','Inter',sans-serif}
+.sp-avatar:first-child{margin-left:0}
 
 /* v162: окончательно гасим старый CSV-дашборд — JS metaCsvUpload иногда включает его обратно */
 #meta-ads-dashboard, #meta-ads-empty { display: none !important; }
@@ -1778,6 +1809,7 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
    <div class="nav-popup-title">Инструменты</div>
    <div class="nav-item" data-view="statistics" onclick="showView('statistics')">Статистики</div>
    <div class="nav-item" data-view="marketing" onclick="showView('marketing')">Маркетинг</div>
+   <div class="nav-item" data-view="planning" onclick="showView('planning')">Планёрки</div>
    <div class="nav-item" data-view="knowledge" onclick="showView('knowledge')">База знаний</div>
    <div class="nav-item" data-view="reports" onclick="showView('reports')">Отчёты</div>
    <div class="nav-item" data-view="assistant" onclick="showView('assistant')">Ассистент</div>
@@ -2492,6 +2524,41 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
 
 </div>
  <!-- /MARKETING VIEW -->
+
+ <!-- v165: PLANNING / SPRINTS VIEW -->
+ <div id="view-planning" style="display:none;position:relative">
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+   <div>
+    <div style="font-size:22px;font-weight:700;color:var(--text-primary);letter-spacing:-0.3px">Планёрки</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:3px">Спринты по проектам — план, прогресс, факт</div>
+   </div>
+   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="plan-tab active" data-tab="active" onclick="planSetTab('active',this)">Активные</button>
+    <button class="plan-tab" data-tab="archive" onclick="planSetTab('archive',this)">Архив</button>
+    <button class="plan-tab" data-tab="backlog" onclick="planSetTab('backlog',this)">Бэклог</button>
+   </div>
+  </div>
+
+  <!-- Summary line + create button -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+   <div>
+    <div id="plan-summary-title" style="font-size:14px;font-weight:600;color:var(--text-primary)">— активных спринтов</div>
+    <div id="plan-summary-meta" style="font-size:11px;color:var(--text-muted);margin-top:2px">— на треке · — в риске · — просрочены</div>
+   </div>
+   <button onclick="planCreateSprint()" style="padding:8px 16px;border-radius:8px;background:linear-gradient(135deg,#FFD54F,#FFA726);border:none;color:#1A1A1A;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.2px">+ Создать спринт</button>
+  </div>
+
+  <!-- Sprint cards grid -->
+  <div id="plan-sprints-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px"></div>
+
+  <!-- Empty state -->
+  <div id="plan-empty" style="display:none;text-align:center;padding:60px 20px;color:var(--text-muted)">
+   <div style="font-size:14px;margin-bottom:6px">Активных спринтов пока нет</div>
+   <div style="font-size:11px">Создай первый спринт под проект — задавай задачи на 2 недели, отслеживай прогресс</div>
+  </div>
+ </div>
+ <!-- /PLANNING VIEW -->
 
  <!-- FULLSCREEN LTV PAGE -->
  <div id="view-mkt-ltv" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow-y:auto">
@@ -3538,10 +3605,10 @@ const ROLE_LABELS = {
 // v151: убран view_ai (ключ удалён); добавлен view_statistics для всех ролей явно;
 // view_assistant НЕ через роли — только хардкод-проверка по email (см. applyUserAccess).
 const ROLE_DEFAULTS = {
- admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
  // v155→v156: оператор саппорта. Скрыта вся финансовая инфа.
  // Оставлено: Канбан, Знания, Кабинет, Интеграции (нужны для настройки у клиентов).
  operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
@@ -4077,7 +4144,7 @@ function applyUserAccess() {
  document.getElementById('cab-display-role').textContent=u.pos+' · '+profile.company;
 
  // Show/hide nav items
- const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics'};
+ const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning'};
  document.querySelectorAll('.nav-item[data-view]').forEach(el=>{
  const view=el.dataset.view;
  // v151: Ассистент — особый случай, проверка по email (не по роли)
@@ -6176,19 +6243,21 @@ function showView(v) {
    try { showNotif('Нет доступа', 'Ассистент доступен только CEO.'); } catch(_){}
    v = 'dashboard';
   }
-  var _accessMap = {payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics'};
+  var _accessMap = {payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning'};
   var _need = _accessMap[v];
   if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
    try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
    v = 'dashboard';
   }
  }
- ['dashboard','payments','plan','keyclients','assistant','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban','statistics'].forEach(x=>{
+ ['dashboard','payments','plan','keyclients','assistant','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban','statistics','planning'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
  // v159: инициализация дашборда Маркетинг при заходе
  if (v === 'marketing' && typeof mktInitDashboard === 'function') { try { mktInitDashboard(); } catch(_){} }
+ // v165: инициализация Планёрок при заходе
+ if (v === 'planning' && typeof planInit === 'function') { try { planInit(); } catch(_){} }
  // Hide fullscreen card page when switching views
  document.getElementById('view-kb-card').style.display='none';
  // Hide marketing subpages
@@ -8783,6 +8852,121 @@ window.mktAutoCalc = function() {
 };
 
 // /MARKETING
+
+// ===== v165: ПЛАНЁРКИ / СПРИНТЫ =====
+// MVP — mock-данные в localStorage. После одобрения визуала переедем на Sheets+Apps Script.
+var _planTab = 'active';
+var _planSprintsKey = 'plan_sprints_v1';
+var PLAN_DEFAULT_SPRINTS = [
+ { id:1, name:'Внедрение Гризли', goal:'Полное внедрение SalesDoc для 1150 пользователей с интеграцией 1С', start:'2026-05-04', end:'2026-05-17', status:'ontrack', color:'gold', total:12, in_progress:3, done:5, team:[{n:'АО',c:'#FFD54F'},{n:'С',c:'#AB47BC'},{n:'МЫ',c:'#3B82F6'}], teamNames:'Айдос, Самат, Мырзахыт', archived:false },
+ { id:2, name:'Курс Академия ТП — запуск', goal:'8 модулей упаковать, лендинг + лид-магниты, набор первой группы', start:'2026-05-01', end:'2026-05-14', status:'atrisk', color:'purple', total:10, in_progress:2, done:3, team:[{n:'МЫ',c:'#AB47BC'},{n:'Ю',c:'#4CAF50'}], teamNames:'Мырзахыт, Юлия', archived:false },
+ { id:3, name:'Лендинг SalesDoc v2', goal:'Финальная версия: hero-орбита, секции Features, анимация', start:'2026-05-04', end:'2026-05-17', status:'ontrack', color:'blue', total:8, in_progress:2, done:4, team:[{n:'МЫ',c:'#3B82F6'}], teamNames:'Мырзахыт', archived:false },
+ { id:4, name:'Бот @fmcgsng_sales — деплой', goal:'Загрузить код, подключить Railway, env, протестировать 3 роли', start:'2026-05-04', end:'2026-05-17', status:'ontrack', color:'green', total:6, in_progress:1, done:2, team:[{n:'МЫ',c:'#4CAF50'}], teamNames:'Мырзахыт', archived:false }
+];
+function planLoadSprints(){
+ try { var s = localStorage.getItem(_planSprintsKey); if (s) return JSON.parse(s); } catch(e){}
+ return PLAN_DEFAULT_SPRINTS.slice();
+}
+function planSaveSprints(arr){ try { localStorage.setItem(_planSprintsKey, JSON.stringify(arr)); } catch(e){} }
+function planFmtDate(s){ try { var d = new Date(s); return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2); } catch(e){ return s; } }
+function planDaysBetween(a,b){ return Math.max(1, Math.round((new Date(b)-new Date(a))/86400000)+1); }
+function planDayOf(start){ return Math.max(1, Math.min(planDaysBetween(start, (new Date()).toISOString().slice(0,10)), 99)); }
+function planStatusLabel(s){ return {ontrack:'На треке', atrisk:'Риск', delayed:'Просрочен'}[s] || s; }
+function planRenderSprintCard(sp){
+ var totalDays = planDaysBetween(sp.start, sp.end);
+ var dayN = planDayOf(sp.start);
+ var pct = sp.total > 0 ? Math.round((sp.done / sp.total) * 100) : 0;
+ var daysLeft = totalDays - dayN;
+ var leftLabel = daysLeft > 0 ? ('Осталось ' + daysLeft + ' дн.') : (daysLeft === 0 ? 'Последний день' : 'Просрочен');
+ var leftColor = daysLeft > 3 ? '#4CAF50' : (daysLeft >= 0 ? '#FFA726' : '#EF5350');
+ var fillStyle = sp.color === 'purple' ? 'background:#AB47BC' : sp.color === 'blue' ? 'background:#3B82F6' : sp.color === 'green' ? 'background:#4CAF50' : 'background:#FFD54F';
+ var avatars = (sp.team||[]).map(function(a){ return '<div class="sp-avatar" style="background:'+a.c+'">'+a.n+'</div>'; }).join('');
+ var todoCount = sp.total - sp.in_progress - sp.done;
+ return '<div class="sprint-card color-'+sp.color+'" onclick="planOpenSprint('+sp.id+')">'
+  + '<div class="sprint-head">'
+  +  '<div><div class="sprint-name">'+sp.name+'</div><div class="sprint-goal">'+sp.goal+'</div></div>'
+  +  '<span class="sprint-status '+sp.status+'">'+planStatusLabel(sp.status)+'</span>'
+  + '</div>'
+  + '<div class="sprint-dates">'
+  +  '<span>'+planFmtDate(sp.start)+' — '+planFmtDate(sp.end)+'</span>'
+  +  '<span>День '+dayN+' из '+totalDays+'</span>'
+  +  '<span style="color:'+leftColor+'">'+leftLabel+'</span>'
+  + '</div>'
+  + '<div class="sprint-progress">'
+  +  '<div class="sprint-progress-label"><span>Прогресс</span><span style="color:var(--text-primary);font-weight:600">'+sp.done+' / '+sp.total+' задач</span></div>'
+  +  '<div class="sprint-progress-bar"><div class="sprint-progress-fill" style="width:'+pct+'%;'+fillStyle+'"></div></div>'
+  + '</div>'
+  + '<div class="sprint-stats">'
+  +  '<div class="sprint-stat"><div class="sprint-stat-v">'+todoCount+'</div><div class="sprint-stat-l">Бэклог</div></div>'
+  +  '<div class="sprint-stat"><div class="sprint-stat-v" style="color:#3B82F6">'+sp.in_progress+'</div><div class="sprint-stat-l">В работе</div></div>'
+  +  '<div class="sprint-stat"><div class="sprint-stat-v" style="color:#4CAF50">'+sp.done+'</div><div class="sprint-stat-l">Готово</div></div>'
+  + '</div>'
+  + '<div class="sprint-team">'+avatars+'<span style="margin-left:6px">'+(sp.teamNames||'—')+'</span></div>'
+  + '</div>';
+}
+window.planSetTab = function(tab, btn){
+ _planTab = tab;
+ document.querySelectorAll('.plan-tab').forEach(function(b){ b.classList.remove('active'); });
+ if (btn) btn.classList.add('active');
+ planRender();
+};
+window.planRender = function(){
+ var grid = document.getElementById('plan-sprints-grid');
+ var empty = document.getElementById('plan-empty');
+ var sumTitle = document.getElementById('plan-summary-title');
+ var sumMeta = document.getElementById('plan-summary-meta');
+ if (!grid) return;
+ var all = planLoadSprints();
+ var list;
+ if (_planTab === 'active') list = all.filter(function(s){ return !s.archived; });
+ else if (_planTab === 'archive') list = all.filter(function(s){ return s.archived; });
+ else {
+  grid.innerHTML = '';
+  if (sumTitle) sumTitle.textContent = 'Общий бэклог';
+  if (sumMeta) sumMeta.textContent = 'Задачи которые ждут попадания в спринт. Раздел в разработке.';
+  if (empty) { empty.style.display = 'block'; empty.innerHTML = '<div style="font-size:14px;margin-bottom:6px">Бэклог в разработке</div><div style="font-size:11px">Скоро здесь будет таблица задач которые ждут попадания в спринты с приоритетами и story points.</div>'; }
+  return;
+ }
+ if (sumTitle) sumTitle.textContent = list.length + ' ' + (_planTab === 'active' ? 'активных спринтов' : 'архивных спринтов');
+ if (sumMeta) {
+  var ot = list.filter(function(s){return s.status==='ontrack';}).length;
+  var ar = list.filter(function(s){return s.status==='atrisk';}).length;
+  var de = list.filter(function(s){return s.status==='delayed';}).length;
+  sumMeta.textContent = ot + ' на треке · ' + ar + ' в риске · ' + de + ' просрочены';
+ }
+ if (!list.length) {
+  grid.innerHTML = '';
+  if (empty) empty.style.display = 'block';
+  return;
+ }
+ if (empty) empty.style.display = 'none';
+ grid.innerHTML = list.map(planRenderSprintCard).join('');
+};
+window.planCreateSprint = function(){
+ var name = prompt('Название спринта (например: «Внедрение клиента X»):'); if (!name) return;
+ var goal = prompt('Цель спринта одной фразой:') || '';
+ var weeks = parseInt(prompt('Длительность в неделях (1, 2 или 4):', '2') || '2', 10);
+ if (!weeks || weeks < 1) weeks = 2;
+ var start = new Date(); start.setHours(0,0,0,0);
+ var end = new Date(start.getTime() + (weeks*7-1)*86400000);
+ var ymd = function(d){ return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); };
+ var colors = ['gold','purple','blue','green','orange'];
+ var all = planLoadSprints();
+ var nextId = (all.reduce(function(m,s){return Math.max(m,s.id||0);},0) || 0) + 1;
+ var sp = { id: nextId, name: name, goal: goal, start: ymd(start), end: ymd(end), status:'ontrack', color: colors[(nextId-1) % colors.length], total:0, in_progress:0, done:0, team:[], teamNames:'', archived:false };
+ all.unshift(sp);
+ planSaveSprints(all);
+ planRender();
+ if (typeof showNotif === 'function') showNotif('Спринт создан', name + ' · ' + planFmtDate(sp.start) + ' — ' + planFmtDate(sp.end));
+};
+window.planOpenSprint = function(id){
+ if (typeof showNotif === 'function') showNotif('Скоро', 'Канбан-доска внутри спринта — в следующем обновлении');
+};
+window.planInit = function(){
+ try { if (!localStorage.getItem(_planSprintsKey)) planSaveSprints(PLAN_DEFAULT_SPRINTS); } catch(e){}
+ planRender();
+};
+// /v165
 
 // ===== v158: META ADS — ЖИВЫЕ ДАННЫЕ ИЗ API + ПОНЯТНЫЙ UX =====
 // Endpoint /api/meta-ads (Vercel serverless) проксирует к Meta Graph API.
