@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v175</title>
+<title>SalesDoc — Финансовый Дашборд v176</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2811,11 +2811,21 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
    <div class="form-row"><div class="form-group" style="flex:1">
     <label class="form-label">Длительность (быстрый выбор)</label>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
-     <button type="button" class="psm-quick" onclick="planCreateSetWeeks(1)">1 неделя</button>
-     <button type="button" class="psm-quick active" onclick="planCreateSetWeeks(2)">2 недели</button>
-     <button type="button" class="psm-quick" onclick="planCreateSetWeeks(3)">3 недели</button>
-     <button type="button" class="psm-quick" onclick="planCreateSetWeeks(4)">4 недели</button>
+     <button type="button" class="psm-quick" onclick="planCreateSetDuration(7)">1 неделя</button>
+     <button type="button" class="psm-quick active" onclick="planCreateSetDuration(14)">2 недели</button>
+     <button type="button" class="psm-quick" onclick="planCreateSetDuration(30)">1 месяц</button>
+     <button type="button" class="psm-quick" onclick="planCreateSetDuration(90)">3 месяца</button>
+     <button type="button" class="psm-quick" onclick="planCreateSetDuration(365)">1 год</button>
     </div>
+   </div></div>
+
+   <div class="form-row"><div class="form-group" style="flex:1">
+    <label class="form-label">Приоритет спринта</label>
+    <select class="form-input" id="psm-priority">
+     <option value="mid" selected>Средний</option>
+     <option value="high">Высокий — важный, под наблюдением</option>
+     <option value="low">Низкий — может подождать</option>
+    </select>
    </div></div>
 
    <div class="form-row"><div class="form-group" style="flex:1">
@@ -2855,6 +2865,15 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
     <div class="form-group"><label class="form-label">Дата начала</label><input class="form-input" type="date" id="ptm-start"></div>
     <div class="form-group"><label class="form-label">Дедлайн</label><input class="form-input" type="date" id="ptm-due"></div>
    </div>
+
+   <div class="form-row"><div class="form-group" style="flex:1">
+    <label class="form-label">Приоритет</label>
+    <select class="form-input" id="ptm-priority">
+     <option value="mid" selected>Средний</option>
+     <option value="high">Высокий — срочно</option>
+     <option value="low">Низкий — может подождать</option>
+    </select>
+   </div></div>
    <div id="ptm-due-hint" style="font-size:11px;color:var(--text-muted);margin-top:-6px;margin-bottom:14px"></div>
 
    <div id="ptm-msg" style="font-size:12px;color:#EF4444;margin-bottom:10px;min-height:18px"></div>
@@ -2886,6 +2905,43 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
   </div>
  </div>
  <!-- /close confirm modal -->
+
+ <!-- v176: МОДАЛКА ДОБАВЛЕНИЯ ЗАПИСИ РЕТРОСПЕКТИВЫ -->
+ <div class="modal-overlay" id="plan-retro-modal" onclick="if(event.target.id==='plan-retro-modal')planCloseRetroModal()" style="z-index:10003">
+  <div class="modal" style="max-width:520px">
+   <button class="modal-close" onclick="planCloseRetroModal()"></button>
+   <div class="modal-title" id="prm-title">Запись в ретроспективу</div>
+   <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.5" id="prm-subtitle"></div>
+
+   <div class="form-row"><div class="form-group" style="flex:1">
+    <label class="form-label">Что хочешь зафиксировать</label>
+    <textarea class="form-input" id="prm-text" rows="3" placeholder="Опиши кратко..." style="resize:vertical;min-height:80px;font-family:inherit"></textarea>
+   </div></div>
+
+   <div class="form-row"><div class="form-group" style="flex:1">
+    <label class="form-label">От кого запись</label>
+    <select class="form-input" id="prm-author"></select>
+   </div></div>
+
+   <div id="prm-msg" style="font-size:12px;color:#EF4444;margin-bottom:10px;min-height:18px"></div>
+   <button class="form-submit" onclick="planSubmitRetroModal()" id="prm-submit">ДОБАВИТЬ</button>
+  </div>
+ </div>
+ <!-- /retro modal -->
+
+ <!-- v176: УНИВЕРСАЛЬНАЯ МОДАЛКА ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ -->
+ <div class="modal-overlay" id="plan-del-confirm-modal" onclick="if(event.target.id==='plan-del-confirm-modal')planDelCancel()" style="z-index:10004">
+  <div class="modal" style="max-width:420px">
+   <button class="modal-close" onclick="planDelCancel()"></button>
+   <div class="modal-title" style="color:#EF4444" id="pdc-title">Удалить?</div>
+   <div style="font-size:13px;color:var(--text-secondary);margin-bottom:18px;line-height:1.5" id="pdc-body">Это действие нельзя отменить.</div>
+   <div style="display:flex;gap:10px;justify-content:flex-end">
+    <button onclick="planDelCancel()" class="psm-quick" style="padding:10px 20px;border-radius:10px;font-size:12px">Отмена</button>
+    <button onclick="planDelConfirm()" id="pdc-yes" class="plan-create-btn" style="padding:10px 22px;background:rgba(239,68,68,.10);border-color:rgba(239,68,68,.30);color:#EF4444">Удалить</button>
+   </div>
+  </div>
+ </div>
+ <!-- /del confirm modal -->
 
  <!-- FULLSCREEN LTV PAGE -->
  <div id="view-mkt-ltv" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow-y:auto">
@@ -9223,9 +9279,14 @@ function planRenderSprintCard(sp){
   return '<div class="sp-avatar" style="background:'+c+'">'+(n||'?')+'</div>';
  }).join('');
  var todoCount = sp.total - sp.in_progress - sp.done;
+ // v176: бейдж приоритета спринта
+ var pr = sp.priority || 'mid';
+ var prMap = { high:{l:'Высокий приоритет', c:'#EF4444', bg:'rgba(239,68,68,.12)'}, mid:{l:'Средний', c:'#F59E0B', bg:'rgba(245,158,11,.12)'}, low:{l:'Низкий', c:'#10B981', bg:'rgba(16,185,129,.12)'} };
+ var prInfo = prMap[pr] || prMap.mid;
+ var prBadge = '<span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+prInfo.bg+';color:'+prInfo.c+';margin-right:6px;letter-spacing:.3px">'+prInfo.l.toUpperCase()+'</span>';
  return '<div class="sprint-card color-'+sp.color+'" onclick="planOpenSprint('+sp.id+')">'
   + '<div class="sprint-head">'
-  +  '<div><div class="sprint-name">'+sp.name+'</div><div class="sprint-goal">'+sp.goal+'</div></div>'
+  +  '<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px">'+prBadge+'</div><div class="sprint-name">'+sp.name+'</div><div class="sprint-goal">'+sp.goal+'</div></div>'
   +  '<span class="sprint-status '+sp.status+'">'+planStatusLabel(sp.status)+'</span>'
   + '</div>'
   + '<div class="sprint-dates">'
@@ -9414,7 +9475,8 @@ window.planCreateSprint = function(){
   sel.innerHTML = opts;
  }
  _planRenderTeamChips();
- _planSetActiveQuick(2);
+ _planSetActiveQuick(14);
+ var prEl = document.getElementById('psm-priority'); if (prEl) prEl.value = 'mid';
  // Открыть модалку
  var m = document.getElementById('plan-create-sprint-modal');
  if (m) m.classList.add('open');
@@ -9451,20 +9513,22 @@ function _planRenderTeamChips(){
   return '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 4px 4px 10px;border-radius:14px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#60A5FA;font-size:11px;font-weight:600">'+c.name+'<button type="button" onclick="planRemoveTeamChip('+c.id+')" style="background:rgba(255,255,255,.08);border:none;color:#fff;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;line-height:1;padding:0">×</button></span>';
  }).join('');
 }
-window.planCreateSetWeeks = function(weeks){
- _planSetActiveQuick(weeks);
+// v176: универсальный пресет длительности по дням (1н=7, 2н=14, 1м=30, 3м=90, 1г=365)
+window.planCreateSetDuration = function(days){
+ _planSetActiveQuick(days);
  var startEl = document.getElementById('psm-start');
  var endEl = document.getElementById('psm-end');
  var start = startEl && startEl.value ? new Date(startEl.value) : new Date();
  if (isNaN(start.getTime())) start = new Date();
  start.setHours(0,0,0,0);
- var end = new Date(start.getTime() + (weeks*7-1)*86400000);
+ var end = new Date(start.getTime() + (days-1)*86400000);
  if (startEl) startEl.value = _planYmd(start);
  if (endEl) endEl.value = _planYmd(end);
 };
-function _planSetActiveQuick(weeks){
+function _planSetActiveQuick(days){
  document.querySelectorAll('.psm-quick').forEach(function(b){
-  b.classList.toggle('active', b.textContent.trim().indexOf(weeks+' ')===0 || b.textContent.trim().indexOf(weeks+'')===0);
+  b.classList.remove('active');
+  if (b.getAttribute('onclick') && b.getAttribute('onclick').indexOf(days+')') !== -1) b.classList.add('active');
  });
 }
 window.planSubmitCreateModal = function(){
@@ -9481,7 +9545,8 @@ window.planSubmitCreateModal = function(){
  var nextId = (all.reduce(function(m,s){return Math.max(m,s.id||0);},0) || 0) + 1;
  var teamIds = _planTeamChips.map(function(c){return c.id;});
  var teamNames = _planTeamChips.map(function(c){return c.name;}).join(', ');
- var sp = { id: nextId, name: name, goal: goal, start: startStr, end: endStr, status:'ontrack', color: colors[(nextId-1) % colors.length], total:0, in_progress:0, done:0, team: teamIds, teamNames: teamNames, archived:false };
+ var priority = (document.getElementById('psm-priority').value || 'mid');
+ var sp = { id: nextId, name: name, goal: goal, start: startStr, end: endStr, status:'ontrack', priority: priority, color: colors[(nextId-1) % colors.length], total:0, in_progress:0, done:0, team: teamIds, teamNames: teamNames, archived:false };
  all.unshift(sp);
  planSaveSprints(all);
  planningRender();
@@ -9596,8 +9661,13 @@ function planRenderKanban(){
     var bg = overdue ? 'rgba(239,68,68,.12)' : 'transparent';
     dueHtml = '<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;background:'+bg+';color:'+color+';font-size:10px;font-weight:600">'+(overdue?'⚠ ':'до ')+dueLabel+'</span>';
    }
+   // v176: индикатор приоритета — точка слева от заголовка
+   var prDot = '';
+   if (t.priority === 'high') prDot = '<span title="Высокий приоритет" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#EF4444;margin-right:7px;flex-shrink:0;box-shadow:0 0 6px rgba(239,68,68,.5)"></span>';
+   else if (t.priority === 'low') prDot = '<span title="Низкий приоритет" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10B981;margin-right:7px;flex-shrink:0;opacity:.7"></span>';
+   else if (t.priority === 'mid') prDot = '<span title="Средний приоритет" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#F59E0B;margin-right:7px;flex-shrink:0;opacity:.7"></span>';
    return '<div class="plan-kb-card s-'+t.status+'" onclick="planTaskNextStatus('+t.id+')" oncontextmenu="event.preventDefault();planTaskDelete('+t.id+');return false;" title="Клик — следующий статус, ПКМ — удалить">'
-    + '<div class="plan-kb-title">'+(t.title||'').replace(/</g,'&lt;')+'</div>'
+    + '<div class="plan-kb-title" style="display:flex;align-items:flex-start">'+prDot+'<span style="flex:1">'+(t.title||'').replace(/</g,'&lt;')+'</span></div>'
     + '<div class="plan-kb-meta" style="align-items:center"><span style="display:inline-flex">'+avatars+'</span>'+dueHtml+'</div>'
    + '</div>';
   }).join('');
@@ -9640,6 +9710,7 @@ window.planAddTask = function(){
  if (dueEl)   { dueEl.value = sp.end || ''; dueEl.min = todayStr; dueEl.max = sp.end || ''; }
  if (hintEl)  hintEl.textContent = sp.end ? ('Дедлайн не позже окончания спринта — ' + planFmtDate(sp.end)) : '';
  document.getElementById('ptm-title').value = '';
+ var prEl2 = document.getElementById('ptm-priority'); if (prEl2) prEl2.value = 'mid';
  document.getElementById('ptm-msg').textContent = '';
  document.getElementById('plan-task-modal').classList.add('open');
  setTimeout(function(){ document.getElementById('ptm-title').focus(); }, 50);
@@ -9689,12 +9760,14 @@ window.planSubmitTaskModal = function(){
  var ownerIds = _planOwnerChips.map(function(c){return c.id;});
  var all = planLoadTasks();
  var nextId = (all.reduce(function(m,t){return Math.max(m,t.id||0);},0) || 100) + 1;
+ var priority = (document.getElementById('ptm-priority').value || 'mid');
  all.push({
   id:nextId, sprint_id:_planCurrentSprintId, title:title,
   owners: owners, owner_ids: ownerIds,
   owner: owners.join(', '), // для обратной совместимости с рейтингом
   start_date: startStr || null,
   due_date: dueStr || null,
+  priority: priority,
   status:'todo',
   created_at: (new Date()).toISOString().slice(0,10)
  });
@@ -9715,13 +9788,24 @@ window.planTaskNextStatus = function(taskId){
  planRenderKanban();
 };
 window.planTaskDelete = function(taskId){
- if (!confirm('Удалить эту задачу?')) return;
- var all = planLoadTasks();
- var sid = (all.find(function(t){return t.id===taskId;})||{}).sprint_id;
- all = all.filter(function(t){return t.id!==taskId;});
- planSaveTasks(all);
- if (sid) planRecountSprint(sid);
- planRenderKanban();
+ var task = planLoadTasks().find(function(t){return t.id===taskId;});
+ if (!task) return;
+ var preview = '«' + (task.title||'').slice(0,80) + (task.title && task.title.length > 80 ? '…' : '') + '»';
+ // v176: красивая модалка вместо confirm
+ if (typeof planAskDelete === 'function') {
+  planAskDelete({
+   title: 'Удалить задачу?',
+   body: 'Задача ' + preview + ' будет удалена из спринта. Это нельзя отменить.',
+   onConfirm: function(){
+    var all = planLoadTasks();
+    var sid = (all.find(function(t){return t.id===taskId;})||{}).sprint_id;
+    all = all.filter(function(t){return t.id!==taskId;});
+    planSaveTasks(all);
+    if (sid) planRecountSprint(sid);
+    planRenderKanban();
+   }
+  });
+ }
 };
 // v175: закрытие спринта через красивую модалку (вместо системного confirm)
 window.planCloseCurrentSprint = function(){
@@ -9905,24 +9989,101 @@ function planRenderRetro(sprint){
   }).join('');
  });
 }
+// v176: ретроспектива через красивую модалку (вместо двух prompt подряд)
+var _planRetroType = 'good';
+var _planRetroLabels = {
+ good: { title:'Что получилось хорошо', sub:'Зафиксируй что зашло, чтобы повторить в следующих спринтах.', placeholder:'Например: успели сдать раньше срока за счёт ежедневных стэндапов' },
+ bad: { title:'Что не зашло', sub:'Опиши проблему — потом проще будет её решить.', placeholder:'Например: задачи на интеграцию заняли в 3 раза больше времени' },
+ improve: { title:'Что улучшить в следующем спринте', sub:'Конкретное действие — что меняем со следующего понедельника.', placeholder:'Например: перенести стэндапы на 9:30 и сократить до 10 минут' }
+};
 window.planAddRetro = function(type){
  if (!_planCurrentSprintId) return;
- var text = prompt(type === 'good' ? 'Что получилось хорошо?' : type === 'bad' ? 'Что не зашло?' : 'Что улучшить в следующем спринте?');
- if (!text) return;
- var author = prompt('Кто пишет?', 'Мырзахыт') || 'Мырзахыт';
+ _planRetroType = type;
+ var L = _planRetroLabels[type] || _planRetroLabels.good;
+ document.getElementById('prm-title').textContent = L.title;
+ document.getElementById('prm-subtitle').textContent = L.sub;
+ var ta = document.getElementById('prm-text');
+ ta.value = '';
+ ta.placeholder = L.placeholder;
+ // Заполнить dropdown автора — из команды спринта + остальные сотрудники
+ var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;}) || {};
+ var sel = document.getElementById('prm-author');
+ if (sel && typeof employees !== 'undefined') {
+  var teamIds = (sp.team || []);
+  var inTeamIds = teamIds.filter(function(t){return typeof t === 'number';});
+  var teamMembers = employees.filter(function(e){return inTeamIds.indexOf(e.id) !== -1;});
+  var others = employees.filter(function(e){return e.active!==false && inTeamIds.indexOf(e.id) === -1;});
+  var opts = '';
+  if (teamMembers.length) {
+   opts += '<optgroup label="Команда спринта">';
+   teamMembers.forEach(function(e){ opts += '<option value="'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+'</option>'; });
+   opts += '</optgroup>';
+  }
+  if (others.length) {
+   opts += '<optgroup label="Остальные сотрудники">';
+   others.forEach(function(e){ opts += '<option value="'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+' · '+(e.pos||'')+'</option>'; });
+   opts += '</optgroup>';
+  }
+  if (!opts) opts = '<option value="—">—</option>';
+  sel.innerHTML = opts;
+ }
+ document.getElementById('prm-msg').textContent = '';
+ document.getElementById('plan-retro-modal').classList.add('open');
+ setTimeout(function(){ ta.focus(); }, 50);
+};
+window.planCloseRetroModal = function(){
+ document.getElementById('plan-retro-modal').classList.remove('open');
+};
+window.planSubmitRetroModal = function(){
+ if (!_planCurrentSprintId) return;
+ var text = (document.getElementById('prm-text').value || '').trim();
+ var author = document.getElementById('prm-author').value || '—';
+ var msg = document.getElementById('prm-msg');
+ if (!text) { if (msg) msg.textContent = 'Напиши что хочешь зафиксировать'; return; }
  var all = planLoadRetros();
  var nextId = (all.reduce(function(m,r){return Math.max(m, r.id||0);}, 0) || 0) + 1;
- all.push({ id:nextId, sprint_id:_planCurrentSprintId, type:type, text:text, author:author, date: (new Date()).toISOString().slice(0,10) });
+ all.push({ id:nextId, sprint_id:_planCurrentSprintId, type:_planRetroType, text:text, author:author, date: (new Date()).toISOString().slice(0,10) });
  planSaveRetros(all);
  var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;});
  if (sp) planRenderRetro(sp);
+ planCloseRetroModal();
 };
+
+// v176: универсальная модалка подтверждения удаления — заменяет confirm()
+var _planDelPending = null;
+function planAskDelete(opts){
+ // opts: { title, body, onConfirm }
+ _planDelPending = opts.onConfirm || null;
+ var t = document.getElementById('pdc-title');
+ var b = document.getElementById('pdc-body');
+ if (t) t.textContent = opts.title || 'Удалить?';
+ if (b) b.textContent = opts.body || 'Это действие нельзя отменить.';
+ document.getElementById('plan-del-confirm-modal').classList.add('open');
+}
+window.planDelCancel = function(){
+ _planDelPending = null;
+ document.getElementById('plan-del-confirm-modal').classList.remove('open');
+};
+window.planDelConfirm = function(){
+ var fn = _planDelPending;
+ _planDelPending = null;
+ document.getElementById('plan-del-confirm-modal').classList.remove('open');
+ if (typeof fn === 'function') try { fn(); } catch(e){ console.warn(e); }
+};
+// Перехват старого planDelRetro
 window.planDelRetro = function(id){
- if (!confirm('Удалить запись?')) return;
- var all = planLoadRetros().filter(function(r){return r.id!==id;});
- planSaveRetros(all);
- var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;});
- if (sp) planRenderRetro(sp);
+ var rec = planLoadRetros().find(function(r){return r.id===id;});
+ var preview = rec ? '«' + (rec.text||'').slice(0, 60) + (rec.text && rec.text.length > 60 ? '…' : '') + '»' : 'эту запись';
+ planAskDelete({
+  title: 'Удалить запись из ретро?',
+  body: 'Запись ' + preview + ' будет удалена. Это нельзя отменить.',
+  onConfirm: function(){
+   var all = planLoadRetros().filter(function(r){return r.id!==id;});
+   planSaveRetros(all);
+   var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;});
+   if (sp) planRenderRetro(sp);
+  }
+ });
 };
 
 // ===== v169: БЭКЛОГ =====
