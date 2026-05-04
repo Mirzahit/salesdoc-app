@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v174</title>
+<title>SalesDoc — Финансовый Дашборд v175</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2843,29 +2843,49 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
     <input class="form-input" id="ptm-title" placeholder="Что нужно сделать" autocomplete="off">
    </div></div>
 
+   <div class="form-row"><div class="form-group" style="flex:1">
+    <label class="form-label">Ответственные (можно несколько)</label>
+    <div id="ptm-owner-chips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:32px;padding:6px;border:1px solid var(--dark-border);border-radius:10px;background:rgba(255,255,255,.02);align-items:center"></div>
+    <select class="form-input" id="ptm-owner-select" onchange="planAddOwnerChip(this.value)" style="margin-top:6px">
+     <option value="">+ Добавить ответственного</option>
+    </select>
+   </div></div>
+
    <div class="form-row">
-    <div class="form-group" style="flex:2">
-     <label class="form-label">Ответственный</label>
-     <select class="form-input" id="ptm-owner"></select>
-    </div>
-    <div class="form-group" style="flex:1">
-     <label class="form-label">Сложность (баллы)</label>
-     <select class="form-input" id="ptm-points">
-      <option value="1">1 — час</option>
-      <option value="2">2 — пол-дня</option>
-      <option value="3" selected>3 — день</option>
-      <option value="5">5 — 2-3 дня</option>
-      <option value="8">8 — почти неделя</option>
-      <option value="13">13 — больше недели</option>
-     </select>
-    </div>
+    <div class="form-group"><label class="form-label">Дата начала</label><input class="form-input" type="date" id="ptm-start"></div>
+    <div class="form-group"><label class="form-label">Дедлайн</label><input class="form-input" type="date" id="ptm-due"></div>
    </div>
+   <div id="ptm-due-hint" style="font-size:11px;color:var(--text-muted);margin-top:-6px;margin-bottom:14px"></div>
 
    <div id="ptm-msg" style="font-size:12px;color:#EF4444;margin-bottom:10px;min-height:18px"></div>
    <button class="form-submit" onclick="planSubmitTaskModal()">ДОБАВИТЬ ЗАДАЧУ</button>
   </div>
  </div>
  <!-- /task modal -->
+
+ <!-- v175: МОДАЛКА ПОДТВЕРЖДЕНИЯ ЗАКРЫТИЯ СПРИНТА -->
+ <div class="modal-overlay" id="plan-close-confirm-modal" onclick="if(event.target.id==='plan-close-confirm-modal')planCancelClose()" style="z-index:10003">
+  <div class="modal" style="max-width:460px">
+   <button class="modal-close" onclick="planCancelClose()"></button>
+   <div class="modal-title" style="color:#F59E0B">Завершить спринт?</div>
+   <div style="font-size:13px;color:var(--text-secondary);line-height:1.55;margin-bottom:18px">
+    Спринт <strong id="pcc-sprint-name" style="color:var(--text-primary)">—</strong> переедет в архив.
+    <div style="margin-top:10px;padding:12px 14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.18);border-radius:10px;font-size:12px;color:var(--text-secondary);line-height:1.5">
+     <strong style="color:#F59E0B">Что произойдёт:</strong>
+     <ul style="margin:6px 0 0 0;padding-left:18px">
+      <li>Карточка переедет в раздел «Архив»</li>
+      <li>Незавершённые задачи останутся внутри спринта в архиве</li>
+      <li>Откроется блок «Ретроспектива» — заполнишь что зашло / не зашло / что улучшить</li>
+     </ul>
+    </div>
+   </div>
+   <div style="display:flex;gap:10px;justify-content:flex-end">
+    <button onclick="planCancelClose()" class="psm-quick" style="padding:10px 20px;border-radius:10px;font-size:12px">Отмена</button>
+    <button onclick="planConfirmClose()" class="plan-create-btn" style="padding:10px 22px">Завершить и в архив</button>
+   </div>
+  </div>
+ </div>
+ <!-- /close confirm modal -->
 
  <!-- FULLSCREEN LTV PAGE -->
  <div id="view-mkt-ltv" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow-y:auto">
@@ -9190,7 +9210,18 @@ function planRenderSprintCard(sp){
  var leftLabel = daysLeft > 0 ? ('Осталось ' + daysLeft + ' дн.') : (daysLeft === 0 ? 'Последний день' : 'Просрочен');
  var leftColor = daysLeft > 3 ? '#10B981' : (daysLeft >= 0 ? '#F59E0B' : '#EF4444');
  var fillStyle = sp.color === 'purple' ? 'background:#AB47BC' : sp.color === 'blue' ? 'background:#3B82F6' : sp.color === 'green' ? 'background:#10B981' : 'background:#F59E0B';
- var avatars = (sp.team||[]).map(function(a){ return '<div class="sp-avatar" style="background:'+a.c+'">'+a.n+'</div>'; }).join('');
+ // v175: совместимость старого формата [{n,c}] и нового [id, ...]
+ var _avColors = ['#F59E0B','#AB47BC','#3B82F6','#10B981','#EF4444','#FF7043','#06B6D4','#EC4899'];
+ var avatars = (sp.team||[]).slice(0,4).map(function(t, i){
+  var n, c;
+  if (t && typeof t === 'object') { n = t.n; c = t.c; }
+  else {
+   var emp = (typeof employees !== 'undefined') ? employees.find(function(e){return e.id===t;}) : null;
+   n = emp ? ((emp.name||'').split(' ').map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('')) : '?';
+   c = _avColors[((t||0) + i) % _avColors.length];
+  }
+  return '<div class="sp-avatar" style="background:'+c+'">'+(n||'?')+'</div>';
+ }).join('');
  var todoCount = sp.total - sp.in_progress - sp.done;
  return '<div class="sprint-card color-'+sp.color+'" onclick="planOpenSprint('+sp.id+')">'
   + '<div class="sprint-head">'
@@ -9230,23 +9261,27 @@ function planRenderTeamRating(sprints){
  var allTasks = planLoadTasks().filter(function(t){return sprintIds.indexOf(t.sprint_id)!==-1;});
  if (!allTasks.length) { box.style.display='none'; box.innerHTML=''; return; }
  var todayStr = (new Date()).toISOString().slice(0,10);
- // Группируем по owner
+ // v175: группируем по каждому ответственному (мульти-владельцы — задача учитывается всем)
  var byOwner = {};
  allTasks.forEach(function(t){
-  var o = (t.owner || '—').trim() || '—';
-  if (!byOwner[o]) byOwner[o] = { name:o, total:0, done:0, progress:0, todo:0, review:0, overdue:0, donePoints:0, totalPoints:0 };
-  var b = byOwner[o];
-  b.total++;
-  b.totalPoints += parseInt(t.points)||0;
-  if (t.status==='done') { b.done++; b.donePoints += parseInt(t.points)||0; }
-  else if (t.status==='progress') b.progress++;
-  else if (t.status==='review') b.review++;
-  else b.todo++;
-  // Просрочка — задача не done И сегодня > end_date спринта
-  if (t.status !== 'done') {
-   var spEnd = sprintEndById[t.sprint_id];
-   if (spEnd && todayStr > spEnd) b.overdue++;
-  }
+  var owners = Array.isArray(t.owners) && t.owners.length
+   ? t.owners
+   : (t.owner ? String(t.owner).split(',').map(function(s){return s.trim();}).filter(Boolean) : []);
+  if (!owners.length) owners = ['Без отв.'];
+  // Просрочка — приоритет дедлайна задачи; если его нет — конец спринта
+  var dueRef = t.due_date || sprintEndById[t.sprint_id] || null;
+  var isOverdue = (t.status !== 'done') && dueRef && todayStr > dueRef;
+  owners.forEach(function(o){
+   var name = (o||'').trim() || '—';
+   if (!byOwner[name]) byOwner[name] = { name:name, total:0, done:0, progress:0, todo:0, review:0, overdue:0 };
+   var b = byOwner[name];
+   b.total++;
+   if (t.status==='done') b.done++;
+   else if (t.status==='progress') b.progress++;
+   else if (t.status==='review') b.review++;
+   else b.todo++;
+   if (isOverdue) b.overdue++;
+  });
  });
  var rows = Object.values(byOwner)
   .filter(function(o){return o.name && o.name!=='—';})
@@ -9541,40 +9576,70 @@ function planRenderKanban(){
   var arr = tasks.filter(function(t){return t.status===st;});
   if (cnt) cnt.textContent = arr.length;
   if (!arr.length) { box.innerHTML = '<div class="plan-kb-empty">Пусто</div>'; return; }
+  var todayStr = (new Date()).toISOString().slice(0,10);
   box.innerHTML = arr.map(function(t){
+   // v175: мульти-владельцы — аватары-инициалы (до 2-х + бейдж +N)
+   var ownersList = Array.isArray(t.owners) && t.owners.length ? t.owners : (t.owner ? String(t.owner).split(',').map(function(s){return s.trim();}) : []);
+   var avatars = ownersList.slice(0,2).map(function(n){
+    var initials = (n||'').split(' ').map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('');
+    return '<span title="'+n+'" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(59,130,246,.18);border:1px solid rgba(59,130,246,.35);color:#60A5FA;font-size:9px;font-weight:700;margin-right:-4px">'+initials+'</span>';
+   }).join('');
+   if (ownersList.length > 2) avatars += '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.06);color:var(--text-muted);font-size:9px;font-weight:700">+'+(ownersList.length-2)+'</span>';
+   if (!ownersList.length) avatars = '<span style="font-size:10px;color:var(--text-muted)">без отв.</span>';
+   // v175: дедлайн — красный если просрочен и не done, иначе серый
+   var dueHtml = '';
+   if (t.due_date) {
+    var overdue = todayStr > t.due_date && t.status !== 'done';
+    var d = new Date(t.due_date);
+    var dueLabel = ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2);
+    var color = overdue ? '#EF4444' : 'var(--text-muted)';
+    var bg = overdue ? 'rgba(239,68,68,.12)' : 'transparent';
+    dueHtml = '<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;background:'+bg+';color:'+color+';font-size:10px;font-weight:600">'+(overdue?'⚠ ':'до ')+dueLabel+'</span>';
+   }
    return '<div class="plan-kb-card s-'+t.status+'" onclick="planTaskNextStatus('+t.id+')" oncontextmenu="event.preventDefault();planTaskDelete('+t.id+');return false;" title="Клик — следующий статус, ПКМ — удалить">'
     + '<div class="plan-kb-title">'+(t.title||'').replace(/</g,'&lt;')+'</div>'
-    + '<div class="plan-kb-meta"><span>'+(t.owner||'—')+'</span><span class="plan-kb-points">'+(t.points||0)+'</span></div>'
+    + '<div class="plan-kb-meta" style="align-items:center"><span style="display:inline-flex">'+avatars+'</span>'+dueHtml+'</div>'
    + '</div>';
   }).join('');
  });
 }
 
-// v174: добавление задачи через модалку (вместо 3 prompt'ов подряд)
+// v175: задачи — мульти-выбор ответственных + даты вместо баллов сложности
+var _planOwnerChips = []; // [{id,name}]
 window.planAddTask = function(){
  if (!_planCurrentSprintId) return;
- // Заполняем dropdown владельцев — приоритет участникам команды этого спринта
  var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;}) || {};
- var ownerSel = document.getElementById('ptm-owner');
+ // Заполнить dropdown ответственных
+ var ownerSel = document.getElementById('ptm-owner-select');
  if (ownerSel && typeof employees !== 'undefined') {
   var teamIds = (sp.team || []);
   var teamMembers = employees.filter(function(e){return teamIds.indexOf(e.id) !== -1;});
   var others = employees.filter(function(e){return e.active!==false && teamIds.indexOf(e.id) === -1;});
-  var opts = '';
+  var opts = '<option value="">+ Добавить ответственного</option>';
   if (teamMembers.length) {
    opts += '<optgroup label="Команда спринта">';
-   teamMembers.forEach(function(e){ opts += '<option value="'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+'</option>'; });
+   teamMembers.forEach(function(e){ opts += '<option value="'+e.id+'|'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+'</option>'; });
    opts += '</optgroup>';
   }
   if (others.length) {
    opts += '<optgroup label="Остальные сотрудники">';
-   others.forEach(function(e){ opts += '<option value="'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+' · '+(e.pos||'')+'</option>'; });
+   others.forEach(function(e){ opts += '<option value="'+e.id+'|'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+' · '+(e.pos||'')+'</option>'; });
    opts += '</optgroup>';
   }
-  ownerSel.innerHTML = opts || '<option value="">—</option>';
+  ownerSel.innerHTML = opts;
  }
+ _planOwnerChips = [];
+ _planRenderOwnerChips();
+ // Даты по умолчанию: start = сегодня, due = end спринта (но не позже sprint.end)
+ var today = new Date(); today.setHours(0,0,0,0);
+ var todayStr = _planYmd(today);
+ var startEl = document.getElementById('ptm-start');
+ var dueEl = document.getElementById('ptm-due');
+ var hintEl = document.getElementById('ptm-due-hint');
+ if (startEl) { startEl.value = todayStr; startEl.min = sp.start || todayStr; startEl.max = sp.end || ''; }
+ if (dueEl)   { dueEl.value = sp.end || ''; dueEl.min = todayStr; dueEl.max = sp.end || ''; }
+ if (hintEl)  hintEl.textContent = sp.end ? ('Дедлайн не позже окончания спринта — ' + planFmtDate(sp.end)) : '';
  document.getElementById('ptm-title').value = '';
- document.getElementById('ptm-points').value = '3';
  document.getElementById('ptm-msg').textContent = '';
  document.getElementById('plan-task-modal').classList.add('open');
  setTimeout(function(){ document.getElementById('ptm-title').focus(); }, 50);
@@ -9582,16 +9647,57 @@ window.planAddTask = function(){
 window.planCloseTaskModal = function(){
  document.getElementById('plan-task-modal').classList.remove('open');
 };
+window.planAddOwnerChip = function(value){
+ if (!value) return;
+ var parts = value.split('|');
+ var id = parseInt(parts[0],10), name = parts[1] || '';
+ if (_planOwnerChips.some(function(c){return c.id===id;})) {
+  document.getElementById('ptm-owner-select').value = '';
+  return;
+ }
+ _planOwnerChips.push({ id: id, name: name });
+ _planRenderOwnerChips();
+ document.getElementById('ptm-owner-select').value = '';
+};
+window.planRemoveOwnerChip = function(id){
+ _planOwnerChips = _planOwnerChips.filter(function(c){return c.id!==id;});
+ _planRenderOwnerChips();
+};
+function _planRenderOwnerChips(){
+ var box = document.getElementById('ptm-owner-chips');
+ if (!box) return;
+ if (!_planOwnerChips.length) {
+  box.innerHTML = '<span style="font-size:11px;color:var(--text-muted);padding:4px 8px">Ответственные не выбраны — выбери из списка ниже</span>';
+  return;
+ }
+ box.innerHTML = _planOwnerChips.map(function(c){
+  return '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 4px 4px 10px;border-radius:14px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#60A5FA;font-size:11px;font-weight:600">'+c.name+'<button type="button" onclick="planRemoveOwnerChip('+c.id+')" style="background:rgba(255,255,255,.08);border:none;color:#fff;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;line-height:1;padding:0">×</button></span>';
+ }).join('');
+}
 window.planSubmitTaskModal = function(){
  if (!_planCurrentSprintId) return;
+ var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;}) || {};
  var title = (document.getElementById('ptm-title').value || '').trim();
- var owner = document.getElementById('ptm-owner').value || '';
- var points = parseInt(document.getElementById('ptm-points').value || '3', 10);
+ var startStr = document.getElementById('ptm-start').value;
+ var dueStr = document.getElementById('ptm-due').value;
  var msg = document.getElementById('ptm-msg');
  if (!title) { if (msg) msg.textContent = 'Опиши что нужно сделать'; return; }
+ if (!_planOwnerChips.length) { if (msg) msg.textContent = 'Выбери хотя бы одного ответственного'; return; }
+ if (dueStr && sp.end && dueStr > sp.end) { if (msg) msg.textContent = 'Дедлайн не может быть позже окончания спринта (' + planFmtDate(sp.end) + ')'; return; }
+ if (startStr && dueStr && startStr > dueStr) { if (msg) msg.textContent = 'Дата начала позже дедлайна'; return; }
+ var owners = _planOwnerChips.map(function(c){return c.name;});
+ var ownerIds = _planOwnerChips.map(function(c){return c.id;});
  var all = planLoadTasks();
  var nextId = (all.reduce(function(m,t){return Math.max(m,t.id||0);},0) || 100) + 1;
- all.push({ id:nextId, sprint_id:_planCurrentSprintId, title:title, owner:owner||'—', points:points, status:'todo', created_at: (new Date()).toISOString().slice(0,10) });
+ all.push({
+  id:nextId, sprint_id:_planCurrentSprintId, title:title,
+  owners: owners, owner_ids: ownerIds,
+  owner: owners.join(', '), // для обратной совместимости с рейтингом
+  start_date: startStr || null,
+  due_date: dueStr || null,
+  status:'todo',
+  created_at: (new Date()).toISOString().slice(0,10)
+ });
  planSaveTasks(all);
  planRecountSprint(_planCurrentSprintId);
  planRenderKanban();
@@ -9617,13 +9723,32 @@ window.planTaskDelete = function(taskId){
  if (sid) planRecountSprint(sid);
  planRenderKanban();
 };
+// v175: закрытие спринта через красивую модалку (вместо системного confirm)
 window.planCloseCurrentSprint = function(){
  if (!_planCurrentSprintId) return;
- if (!confirm('Закрыть спринт? Карточка переедет в архив. Незавершённые задачи останутся в архиве как есть.')) return;
+ var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;});
+ if (!sp) return;
+ var nameEl = document.getElementById('pcc-sprint-name');
+ if (nameEl) nameEl.textContent = sp.name || '—';
+ document.getElementById('plan-close-confirm-modal').classList.add('open');
+};
+window.planCancelClose = function(){
+ document.getElementById('plan-close-confirm-modal').classList.remove('open');
+};
+window.planConfirmClose = function(){
+ if (!_planCurrentSprintId) { planCancelClose(); return; }
  var all = planLoadSprints();
  var i = all.findIndex(function(s){return s.id===_planCurrentSprintId;});
  if (i >= 0) { all[i].archived = true; planSaveSprints(all); }
+ planCancelClose();
+ if (typeof showNotif === 'function') {
+  var name = i >= 0 ? all[i].name : '';
+  showNotif('Спринт в архиве', name + ' — теперь можно заполнить ретроспективу');
+ }
+ // Перезагрузить view спринта чтобы появился блок ретро
+ var spId = _planCurrentSprintId;
  planCloseSprint();
+ setTimeout(function(){ if (typeof planOpenSprint === 'function') planOpenSprint(spId); }, 200);
 };
 
 // ===== v169: BURNDOWN + VELOCITY =====
@@ -9640,31 +9765,29 @@ function planRenderBurndown(sprint, tasks){
 function _planDrawBurndown(canvas, sp, tasks){
  if (!window.Chart) return;
  var totalDays = planDaysBetween(sp.start, sp.end);
- var totalSP = tasks.reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
+ // v175: Burndown теперь по числу задач (вместо story points)
+ var totalUnits = tasks.length;
  var labels = [], idealLine = [], actualLine = [], paceLine = [], todayMarker = [];
  var startDate = new Date(sp.start);
  var todayStr = (new Date()).toISOString().slice(0,10);
  var daysSinceStart = Math.max(0, Math.min(planDaysBetween(sp.start, todayStr) - 1, totalDays));
- var doneSP = tasks.filter(function(t){return t.status==='done';}).reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
- // v173: предсказание остатка по текущему темпу — если темп сохранится, к какому дню упадём в 0
- var paceSPperDay = daysSinceStart > 0 ? doneSP / daysSinceStart : 0;
+ var doneUnits = tasks.filter(function(t){return t.status==='done';}).length;
+ var pacePerDay = daysSinceStart > 0 ? doneUnits / daysSinceStart : 0;
  for (var i = 0; i <= totalDays; i++) {
   var d = new Date(startDate.getTime() + i*86400000);
   labels.push(('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2));
-  idealLine.push(Math.max(0, Math.round(totalSP * (1 - i/totalDays) * 10) / 10));
+  idealLine.push(Math.max(0, Math.round(totalUnits * (1 - i/totalDays) * 10) / 10));
   if (i <= daysSinceStart) {
-   var done_at_i = daysSinceStart > 0 ? Math.round(doneSP * (i / daysSinceStart) * 10) / 10 : 0;
-   actualLine.push(Math.max(0, totalSP - done_at_i));
+   var done_at_i = daysSinceStart > 0 ? Math.round(doneUnits * (i / daysSinceStart) * 10) / 10 : 0;
+   actualLine.push(Math.max(0, totalUnits - done_at_i));
   } else {
    actualLine.push(null);
   }
-  // Прогноз — линия "если темп сохранится"
   if (i >= daysSinceStart) {
-   var projectedRemain = Math.max(0, totalSP - doneSP - paceSPperDay * (i - daysSinceStart));
+   var projectedRemain = Math.max(0, totalUnits - doneUnits - pacePerDay * (i - daysSinceStart));
    paceLine.push(Math.round(projectedRemain * 10) / 10);
   } else paceLine.push(null);
-  // Маркер "сегодня" — точка на actualLine
-  todayMarker.push(i === daysSinceStart ? Math.max(0, totalSP - doneSP) : null);
+  todayMarker.push(i === daysSinceStart ? Math.max(0, totalUnits - doneUnits) : null);
  }
  // Gradient под линией факта
  var ctx = canvas.getContext('2d');
@@ -9713,8 +9836,8 @@ function _planDrawBurndown(canvas, sp, tasks){
       label: function(ctx){
        if (ctx.raw === null || ctx.raw === undefined) return null;
        var v = ctx.raw;
-       if (ctx.dataset.label === 'Сегодня') return 'Сегодня · осталось ' + v + ' баллов';
-       return ctx.dataset.label + ': ' + v + ' баллов';
+       if (ctx.dataset.label === 'Сегодня') return 'Сегодня · осталось ' + v + ' задач';
+       return ctx.dataset.label + ': ' + v + ' задач';
       }
      }
     }
@@ -9728,7 +9851,7 @@ function _planDrawBurndown(canvas, sp, tasks){
      beginAtZero:true,
      ticks:{ color:'#64748B', font:{size:10}, padding:6 },
      grid:{ color:'rgba(148,163,184,.06)', drawTicks:false },
-     title:{ display:true, text:'Баллов осталось', color:'#94A3B8', font:{size:10, family:'Inter'}, padding:{bottom:8} }
+     title:{ display:true, text:'Задач осталось', color:'#94A3B8', font:{size:10, family:'Inter'}, padding:{bottom:8} }
     }
    }
   }
@@ -9736,8 +9859,9 @@ function _planDrawBurndown(canvas, sp, tasks){
 }
 function planRenderVelocity(sprint, tasks){
  var box = document.getElementById('plan-velocity-stats'); if (!box) return;
- var totalSP = tasks.reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
- var doneSP = tasks.filter(function(t){return t.status==='done';}).reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
+ // v175: считаем по числу задач (не по баллам сложности)
+ var totalSP = tasks.length;
+ var doneSP = tasks.filter(function(t){return t.status==='done';}).length;
  var totalDays = planDaysBetween(sprint.start, sprint.end);
  var todayStr = (new Date()).toISOString().slice(0,10);
  var daysSinceStart = Math.max(1, Math.min(planDaysBetween(sprint.start, todayStr), totalDays));
@@ -9750,10 +9874,10 @@ function planRenderVelocity(sprint, tasks){
  var willMakeIt = daysToFinish !== null && daysToFinish <= daysLeft;
  var forecast = daysToFinish === null ? '—' : (willMakeIt ? planFmtDate(sprint.end) + ' — успеваем' : 'Не успеваем — нужно ' + daysToFinish + ' дн., осталось ' + daysLeft);
  box.innerHTML =
-  '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Сделано за ' + daysSinceStart + ' дн.</div><div style="font-size:24px;font-weight:700;color:var(--text-primary);font-family:Space Grotesk,Inter,sans-serif">' + doneSP + ' <span style="font-size:12px;color:var(--text-muted);font-weight:400">баллов</span></div></div>'
-  + '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Среднее в день</div><div style="font-size:24px;font-weight:700;color:var(--text-primary);font-family:Space Grotesk,Inter,sans-serif">' + avgPerDay.toFixed(1) + ' <span style="font-size:12px;color:var(--text-muted);font-weight:400">балла</span></div></div>'
+  '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Сделано за ' + daysSinceStart + ' дн.</div><div style="font-size:24px;font-weight:700;color:var(--text-primary);font-family:Space Grotesk,Inter,sans-serif">' + doneSP + ' <span style="font-size:12px;color:var(--text-muted);font-weight:400">задач</span></div></div>'
+  + '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Среднее в день</div><div style="font-size:24px;font-weight:700;color:var(--text-primary);font-family:Space Grotesk,Inter,sans-serif">' + avgPerDay.toFixed(1) + ' <span style="font-size:12px;color:var(--text-muted);font-weight:400">в день</span></div></div>'
   + '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Прогноз закрытия</div><div style="font-size:13px;font-weight:700;color:' + (willMakeIt ? '#10B981' : '#F59E0B') + '">' + forecast + '</div></div>'
-  + '<div style="padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--text-muted);line-height:1.4">' + (totalSP === 0 ? 'Добавь задачи и проставь сложность (баллы), чтобы увидеть прогноз.' : ('Осталось ' + spLeft + ' баллов. ' + (willMakeIt ? 'Темп достаточный.' : 'Нужно ускоряться.'))) + '</div>';
+  + '<div style="padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--text-muted);line-height:1.4">' + (totalSP === 0 ? 'Добавь задачи чтобы увидеть прогноз.' : ('Осталось ' + spLeft + ' задач. ' + (willMakeIt ? 'Темп достаточный.' : 'Нужно ускоряться.'))) + '</div>';
 }
 
 // ===== v169: РЕТРОСПЕКТИВА =====
