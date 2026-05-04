@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v151</title>
+<title>SalesDoc — Финансовый Дашборд v152</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3197,6 +3197,32 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
  </div>
 </div>
 
+<!-- v152: FORCED PASSWORD CHANGE MODAL (показывается при is_temp=TRUE после логина) -->
+<div class="modal-overlay" id="force-pass-modal" style="z-index:10001">
+ <div class="modal" style="max-width:420px">
+ <div class="modal-title">Смена временного пароля</div>
+ <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.5">
+  Сейчас у вас стоит временный пароль. Придумайте свой — длиной не меньше 4 символов.
+  Без смены продолжить работу нельзя.
+ </div>
+ <div class="form-group"><label class="form-label">Новый пароль</label><input class="form-input" id="fp-new" type="password" placeholder="Минимум 4 символа"></div>
+ <div class="form-group"><label class="form-label">Повторите пароль</label><input class="form-input" id="fp-confirm" type="password"></div>
+ <div id="fp-msg" style="font-size:12px;min-height:18px;margin:8px 0"></div>
+ <button class="form-submit" onclick="submitForcePassChange()">СОХРАНИТЬ</button>
+ </div>
+</div>
+
+<!-- v152: RESET PASSWORD INFO MODAL (показ админу после "Сбросить пароль") -->
+<div class="modal-overlay" id="reset-pass-info-modal" onclick="if(event.target.id==='reset-pass-info-modal')closeResetPassInfo()">
+ <div class="modal" style="max-width:460px">
+ <button class="modal-close" onclick="closeResetPassInfo()"></button>
+ <div class="modal-title">Пароль сброшен</div>
+ <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">Скопируй и отправь сотруднику в WhatsApp/Telegram:</div>
+ <pre id="reset-pass-info-text" style="background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:8px;padding:14px;font-size:13px;color:var(--text-primary);white-space:pre-wrap;word-break:break-word;font-family:Inter,sans-serif;line-height:1.6;margin:0"></pre>
+ <button class="form-submit" style="margin-top:14px" onclick="copyResetPassInfo()">📋 СКОПИРОВАТЬ</button>
+ </div>
+</div>
+
 <!-- PLAN MODAL -->
 <div class="modal-overlay" id="plan-modal" onclick="if(event.target.id==='plan-modal')closePlanModal()">
  <div class="modal">
@@ -3438,6 +3464,36 @@ function isAssistantAllowed(user) {
 }
 
 // ============================================================
+// v152: USERS API — write-эндпоинты в Sheet "Users" через Apps Script
+// ============================================================
+// Стартовый пароль для новых сотрудников и при сбросе админом.
+// При успешном входе с этим паролем фронт форсирует смену (is_temp=TRUE).
+const START_PASSWORD = '123456';
+const USERS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
+function _apiUsers(payload){
+ return fetch(USERS_SCRIPT_URL, {
+  method:'POST',
+  headers:{'Content-Type':'text/plain'},
+  body:JSON.stringify(Object.assign({spreadsheetId:ACADEMY_SHEET_ID, sheet:'Users'}, payload))
+ }).then(function(r){ return r.json(); });
+}
+async function apiResetUserPassword(userId){
+ var hash = await sha256(START_PASSWORD);
+ return _apiUsers({action:'resetPassword', userId:userId, passHash:hash});
+}
+async function apiUpdateUserPassword(userId, plainPassword){
+ var hash = await sha256(plainPassword);
+ return _apiUsers({action:'updatePassword', userId:userId, passHash:hash});
+}
+function apiDisableUser(userId){
+ var stamp = 'disabled-' + new Date().toISOString().slice(0,10);
+ return _apiUsers({action:'disableUser', userId:userId, passHash:stamp});
+}
+function apiEnableUser(userId){
+ return _apiUsers({action:'enableUser', userId:userId});
+}
+
+// ============================================================
 // DATA
 // ============================================================
 // РЕАЛЬНЫЕ СОТРУДНИКИ ИЗ GOOGLE ТАБЛИЦЫ «Доходы KZ 2026» 
@@ -3476,7 +3532,10 @@ function initEmployees(){
      bonus: parseInt(r[6])||0,
      active: (r[7]||'').toLowerCase() === 'true',
      access: Object.assign({}, ROLE_DEFAULTS[role] || ROLE_DEFAULTS.viewer),
-     country: r[8]||''
+     country: r[8]||'',
+     // v152: is_temp (колонка J) — если TRUE, фронт после логина форсирует смену пароля
+     is_temp: String(r[9]||'').toString().toLowerCase() === 'true',
+     _row: i+1 // 1-based номер строки в Sheet (для write-операций)
     });
    }
    nextEmpId = employees.length + 1;
@@ -5355,7 +5414,8 @@ function renderEmployees() {
  return '<div class="emp-card role-'+e.role+'" style="opacity:'+(isActive?'1':'.65')+'">'
  +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
  +statusBadge
- +(canManage?'<button onclick="toggleEmpActive('+e.id+')" style="font-size:9px;padding:2px 8px;border-radius:20px;cursor:pointer;border:1px solid var(--dark-border);background:none;color:var(--text-muted);font-family:Inter,sans-serif;letter-spacing:1px">'+(isActive?'УВОЛИТЬ':'ВОССТАНОВИТЬ')+'</button>':'')
+ // v152: безопасное увольнение/восстановление через Apps Script
+ +(canManage?'<button onclick="'+(isActive?'disableEmpFromCard':'enableEmpFromCard')+'('+e.id+')" style="font-size:9px;padding:2px 8px;border-radius:20px;cursor:pointer;border:1px solid var(--dark-border);background:none;color:var(--text-muted);font-family:Inter,sans-serif;letter-spacing:1px">'+(isActive?'УВОЛИТЬ':'ВОССТАНОВИТЬ')+'</button>':'')
  +'</div>'
  +'<div class="emp-avatar" style="background:linear-gradient(135deg,'+roleColors[e.role]+'33,'+roleColors[e.role]+'11);color:'+roleColors[e.role]+'">'+initials+'</div>'
  +'<div class="emp-name">'+e.name+'</div>'
@@ -5369,7 +5429,8 @@ function renderEmployees() {
  +'</div>'
  +(canManage?'<div class="emp-actions">'
  +'<button class="emp-btn emp-btn-edit" onclick="editEmployee('+e.id+')"> Изменить</button>'
- +(e.id!==currentUser?.id?'<button class="emp-btn emp-btn-del" onclick="deleteEmployee('+e.id+')"> Удалить</button>':'<div style="flex:1"></div>')
+ // v152: вместо «Удалить» — безопасный «Сбросить пароль» (увольнение в верхнем правом углу)
+ +(isActive?'<button class="emp-btn emp-btn-edit" style="background:rgba(255,183,77,.1);color:#FFB74D;border-color:rgba(255,183,77,.3)" onclick="resetEmpPassword('+e.id+')">🔁 Сбросить пароль</button>':'<div style="flex:1"></div>')
  +'</div>':'')
  +'</div>';
  }).join('');
@@ -5446,10 +5507,13 @@ async function saveEmployee() {
   passHash = existing ? (existing.pass_hash||'') : '';
  }
  if (newPass) { passHash = await sha256(newPass); }
- else if (!editId) { passHash = await sha256('1234'); } // дефолтный для нового
+ else if (!editId) { passHash = await sha256(START_PASSWORD); } // v152: стартовый пароль для нового
  var activeToggle = document.getElementById('e-active');
  var isActive = activeToggle ? activeToggle.checked : true;
- var data={id:editId||nextEmpId++,name:name,pos:document.getElementById('e-pos').value,email:email,pass_hash:passHash,role:document.getElementById('e-role').value,bonus:parseFloat(document.getElementById('e-bonus').value)||0,access:access,active:isActive};
+ // v152: новый сотрудник — пароль временный (is_temp=TRUE), будет форсированная смена при первом входе
+ var existingTemp = editId ? (employees.find(function(x){return x.id===editId;}) || {}).is_temp : false;
+ var isTemp = !editId ? true : (newPass ? false : !!existingTemp);
+ var data={id:editId||nextEmpId++,name:name,pos:document.getElementById('e-pos').value,email:email,pass_hash:passHash,role:document.getElementById('e-role').value,bonus:parseFloat(document.getElementById('e-bonus').value)||0,access:access,active:isActive,is_temp:isTemp};
  if(editId){ const i=employees.findIndex(e=>e.id===editId); if(i>=0){employees[i]=data;} }
  else { employees.push(data); }
  saveCustomEmployees();
@@ -6780,6 +6844,8 @@ async function doLogin() {
  // Автоматически загрузить свежие данные из Google Таблицы — сразу без задержки
  setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
  syncFromSheets();
+ // v152: если временный пароль — форсируем смену
+ maybeForcePasswordChange();
 }
 
 // Автовход из localStorage при загрузке
@@ -6829,6 +6895,8 @@ async function doLogin() {
     showView('dashboard');
     setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
     syncFromSheets();
+    // v152: если временный пароль — форсируем смену
+    maybeForcePasswordChange();
    } else {
     // Хеш не совпал — показать форму, пусть вводит заново
     if (errEl) { errEl.style.color = '#EF5350'; errEl.textContent = 'Сессия истекла, войдите заново'; }
@@ -7973,9 +8041,13 @@ async function changePassword() {
  // Обновляем хеш пароля
  var newHash = await sha256(newP);
  currentUser.pass_hash = newHash;
+ currentUser.is_temp = false;
  delete currentUser.pass; // убираем открытый пароль если был
  const emp = employees.find(e => e.id === currentUser.id);
- if (emp) { emp.pass_hash = newHash; delete emp.pass; }
+ if (emp) { emp.pass_hash = newHash; emp.is_temp = false; delete emp.pass; }
+
+ // v152: пишем в Sheet — иначе при reload откатится
+ try { await apiUpdateUserPassword(currentUser.id, newP); } catch(e){ console.warn('updatePassword failed:', e); }
 
  // Обновляем "Запомнить меня" с новым хешем
  try {
@@ -7991,6 +8063,131 @@ async function changePassword() {
  document.getElementById('pass-new').value = '';
  document.getElementById('pass-confirm').value = '';
  setTimeout(() => { msg.textContent = ''; }, 3000);
+}
+
+// ============================================================
+// v152: FORCED PASSWORD CHANGE — при is_temp=TRUE после логина
+// ============================================================
+function maybeForcePasswordChange(){
+ if (!currentUser || !currentUser.is_temp) return;
+ var m = document.getElementById('force-pass-modal');
+ if (!m) return;
+ var fpNew = document.getElementById('fp-new');
+ var fpConf = document.getElementById('fp-confirm');
+ var fpMsg = document.getElementById('fp-msg');
+ if (fpNew) fpNew.value = '';
+ if (fpConf) fpConf.value = '';
+ if (fpMsg) fpMsg.textContent = '';
+ m.classList.add('open');
+ setTimeout(function(){ if(fpNew) fpNew.focus(); }, 50);
+}
+async function submitForcePassChange(){
+ var newP = document.getElementById('fp-new').value;
+ var conf = document.getElementById('fp-confirm').value;
+ var msg = document.getElementById('fp-msg');
+ if (!newP || !conf) { msg.style.color='#EF5350'; msg.textContent='Заполните оба поля'; return; }
+ if (newP.length < 4) { msg.style.color='#EF5350'; msg.textContent='Минимум 4 символа'; return; }
+ if (newP !== conf) { msg.style.color='#EF5350'; msg.textContent='Пароли не совпадают'; return; }
+ if (newP === START_PASSWORD) { msg.style.color='#EF5350'; msg.textContent='Нельзя оставлять стартовый пароль'; return; }
+ msg.style.color='#FFB74D'; msg.textContent='Сохраняем...';
+ try {
+  var newHash = await sha256(newP);
+  await apiUpdateUserPassword(currentUser.id, newP);
+  currentUser.pass_hash = newHash;
+  currentUser.is_temp = false;
+  var emp = employees.find(function(e){ return e.id === currentUser.id; });
+  if (emp) { emp.pass_hash = newHash; emp.is_temp = false; }
+  try {
+   if (localStorage.getItem('sd_saved_login')) {
+    localStorage.setItem('sd_saved_pass_hash', newHash);
+    localStorage.removeItem('sd_saved_pass');
+   }
+  } catch(e) {}
+  document.getElementById('force-pass-modal').classList.remove('open');
+  showNotif('Пароль обновлён', 'Запомните его — старый больше не работает');
+ } catch(e) {
+  msg.style.color='#EF5350';
+  msg.textContent='Ошибка сохранения. Попробуйте ещё раз.';
+ }
+}
+// Блокируем закрытие force-modal по Esc и кликам мимо — это и есть "форсированно"
+document.addEventListener('keydown', function(ev){
+ if (ev.key === 'Escape') {
+  var m = document.getElementById('force-pass-modal');
+  if (m && m.classList.contains('open')) ev.stopPropagation();
+ }
+}, true);
+
+// ============================================================
+// v152: ADMIN — Сбросить пароль / Уволить из карточки сотрудника
+// ============================================================
+async function resetEmpPassword(id){
+ var emp = employees.find(function(e){ return e.id === id; });
+ if (!emp) return;
+ if (!confirm('Сбросить пароль ' + emp.name + ' на стартовый "' + START_PASSWORD + '"?\nПри следующем входе сотрудник придумает свой.')) return;
+ try {
+  await apiResetUserPassword(emp.id);
+  emp.pass_hash = await sha256(START_PASSWORD);
+  emp.is_temp = true;
+  showResetPassInfo(emp);
+ } catch(e){
+  showNotif('Ошибка', 'Не удалось сбросить пароль. Проверь Apps Script.');
+ }
+}
+function showResetPassInfo(emp){
+ var text = 'Логин: ' + (emp.email||'') + '\nПароль: ' + START_PASSWORD + '\n\nПри входе попросит сменить — придумаешь свой.';
+ var el = document.getElementById('reset-pass-info-text');
+ if (el) el.textContent = text;
+ var m = document.getElementById('reset-pass-info-modal');
+ if (m) m.classList.add('open');
+}
+function closeResetPassInfo(){ var m=document.getElementById('reset-pass-info-modal'); if(m) m.classList.remove('open'); }
+function copyResetPassInfo(){
+ var el = document.getElementById('reset-pass-info-text');
+ if (!el) return;
+ try {
+  navigator.clipboard.writeText(el.textContent).then(function(){
+   showNotif('Скопировано', 'Текст в буфере обмена');
+  });
+ } catch(e){
+  // fallback
+  var ta = document.createElement('textarea'); ta.value = el.textContent; document.body.appendChild(ta);
+  ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  showNotif('Скопировано', 'Текст в буфере обмена');
+ }
+}
+async function disableEmpFromCard(id){
+ var emp = employees.find(function(e){ return e.id === id; });
+ if (!emp) return;
+ if (emp.id === (currentUser && currentUser.id)) { showNotif('Нельзя', 'Сам себя уволить не можешь'); return; }
+ if (!confirm('Уволить сотрудника ' + emp.name + '?\nИстория платежей и актов сохранится. Восстановить можно кнопкой "ВОССТАНОВИТЬ".')) return;
+ try {
+  await apiDisableUser(emp.id);
+  emp.active = false;
+  emp.pass_hash = 'disabled-' + new Date().toISOString().slice(0,10);
+  saveCustomEmployees();
+  renderEmployees();
+  showNotif('Сотрудник уволен', emp.name);
+ } catch(e){
+  showNotif('Ошибка', 'Не удалось обновить Sheet. Проверь Apps Script.');
+ }
+}
+async function enableEmpFromCard(id){
+ var emp = employees.find(function(e){ return e.id === id; });
+ if (!emp) return;
+ if (!confirm('Восстановить ' + emp.name + '?\nПароль также будет сброшен на стартовый.')) return;
+ try {
+  await apiEnableUser(emp.id);
+  await apiResetUserPassword(emp.id);
+  emp.active = true;
+  emp.pass_hash = await sha256(START_PASSWORD);
+  emp.is_temp = true;
+  saveCustomEmployees();
+  renderEmployees();
+  showResetPassInfo(emp);
+ } catch(e){
+  showNotif('Ошибка', 'Не удалось обновить Sheet. Проверь Apps Script.');
+ }
 }
 //
 
