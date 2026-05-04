@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v173</title>
+<title>SalesDoc — Финансовый Дашборд v174</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -972,6 +972,14 @@ body.light .plan-backlog-table td{border-bottom-color:rgba(15,23,42,.04)}
 .plan-priority.high{background:rgba(239,68,68,.15);color:#EF4444}
 .plan-priority.mid{background:rgba(255,165,38,.15);color:#F59E0B}
 .plan-priority.low{background:rgba(16,185,129,.15);color:#10B981}
+
+/* v174: pills быстрого выбора длительности в модалке создания спринта */
+.psm-quick{padding:7px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.03);color:var(--text-secondary);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;font-family:Inter,sans-serif}
+.psm-quick:hover{border-color:rgba(59,130,246,.3);color:var(--text-primary);background:rgba(255,255,255,.06)}
+.psm-quick.active{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.4);color:#60A5FA}
+body.light .psm-quick{background:rgba(255,255,255,.6);border-color:rgba(15,23,42,.06)}
+body.light .psm-quick:hover{background:rgba(255,255,255,.85);border-color:rgba(15,23,42,.12)}
+body.light .psm-quick.active{background:rgba(79,70,229,.10);border-color:rgba(79,70,229,.30);color:#4F46E5}
 
 /* v170: KPI-карточки общей статистики на главной странице */
 .plan-mini-kpi{
@@ -2668,6 +2676,9 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
   <!-- v170: общая статистика по всем активным спринтам -->
   <div id="plan-overall-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px"></div>
 
+  <!-- v174: Рейтинг команды — кто что закрыл, у кого зависает -->
+  <div id="plan-team-rating" style="display:none;margin-bottom:18px"></div>
+
   <!-- Summary line + create button -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
    <div>
@@ -2774,6 +2785,87 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
   </div>
  </div>
  <!-- /PLAN SPRINT BOARD -->
+
+ <!-- v174: МОДАЛКА СОЗДАНИЯ СПРИНТА — единое окно вместо 5 системных prompt -->
+ <div class="modal-overlay" id="plan-create-sprint-modal" onclick="if(event.target.id==='plan-create-sprint-modal')planCloseCreateModal()" style="z-index:10002">
+  <div class="modal" style="max-width:560px">
+   <button class="modal-close" onclick="planCloseCreateModal()"></button>
+   <div class="modal-title">Новый спринт</div>
+   <div style="font-size:12px;color:var(--text-secondary);margin-bottom:18px;line-height:1.5">Спринт — это период (обычно 1-2 недели), на который команда планирует задачи. В конце спринта смотрим что сделали, и заводим следующий.</div>
+
+   <div class="form-row"><div class="form-group" style="flex:1">
+    <label class="form-label">Название</label>
+    <input class="form-input" id="psm-name" placeholder="Например: Внедрение клиента X" autocomplete="off">
+   </div></div>
+
+   <div class="form-row"><div class="form-group" style="flex:1">
+    <label class="form-label">Цель спринта (одной фразой)</label>
+    <input class="form-input" id="psm-goal" placeholder="Что должно получиться к концу — необязательно" autocomplete="off">
+   </div></div>
+
+   <div class="form-row">
+    <div class="form-group"><label class="form-label">Дата начала</label><input class="form-input" type="date" id="psm-start"></div>
+    <div class="form-group"><label class="form-label">Дата окончания</label><input class="form-input" type="date" id="psm-end"></div>
+   </div>
+
+   <div class="form-row"><div class="form-group" style="flex:1">
+    <label class="form-label">Длительность (быстрый выбор)</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+     <button type="button" class="psm-quick" onclick="planCreateSetWeeks(1)">1 неделя</button>
+     <button type="button" class="psm-quick active" onclick="planCreateSetWeeks(2)">2 недели</button>
+     <button type="button" class="psm-quick" onclick="planCreateSetWeeks(3)">3 недели</button>
+     <button type="button" class="psm-quick" onclick="planCreateSetWeeks(4)">4 недели</button>
+    </div>
+   </div></div>
+
+   <div class="form-row"><div class="form-group" style="flex:1">
+    <label class="form-label">Команда</label>
+    <div id="psm-team-chips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:32px;padding:6px;border:1px solid var(--dark-border);border-radius:10px;background:rgba(255,255,255,.02);align-items:center"></div>
+    <select class="form-input" id="psm-team-select" onchange="planAddTeamChip(this.value)" style="margin-top:6px">
+     <option value="">+ Добавить участника команды</option>
+    </select>
+   </div></div>
+
+   <div id="psm-msg" style="font-size:12px;color:#EF4444;margin-bottom:10px;min-height:18px"></div>
+   <button class="form-submit" onclick="planSubmitCreateModal()">СОЗДАТЬ СПРИНТ</button>
+  </div>
+ </div>
+ <!-- /create sprint modal -->
+
+ <!-- v174: МОДАЛКА ДОБАВЛЕНИЯ ЗАДАЧИ -->
+ <div class="modal-overlay" id="plan-task-modal" onclick="if(event.target.id==='plan-task-modal')planCloseTaskModal()" style="z-index:10002">
+  <div class="modal" style="max-width:520px">
+   <button class="modal-close" onclick="planCloseTaskModal()"></button>
+   <div class="modal-title">Новая задача</div>
+
+   <div class="form-row"><div class="form-group" style="flex:1">
+    <label class="form-label">Описание</label>
+    <input class="form-input" id="ptm-title" placeholder="Что нужно сделать" autocomplete="off">
+   </div></div>
+
+   <div class="form-row">
+    <div class="form-group" style="flex:2">
+     <label class="form-label">Ответственный</label>
+     <select class="form-input" id="ptm-owner"></select>
+    </div>
+    <div class="form-group" style="flex:1">
+     <label class="form-label">Сложность (баллы)</label>
+     <select class="form-input" id="ptm-points">
+      <option value="1">1 — час</option>
+      <option value="2">2 — пол-дня</option>
+      <option value="3" selected>3 — день</option>
+      <option value="5">5 — 2-3 дня</option>
+      <option value="8">8 — почти неделя</option>
+      <option value="13">13 — больше недели</option>
+     </select>
+    </div>
+   </div>
+
+   <div id="ptm-msg" style="font-size:12px;color:#EF4444;margin-bottom:10px;min-height:18px"></div>
+   <button class="form-submit" onclick="planSubmitTaskModal()">ДОБАВИТЬ ЗАДАЧУ</button>
+  </div>
+ </div>
+ <!-- /task modal -->
 
  <!-- FULLSCREEN LTV PAGE -->
  <div id="view-mkt-ltv" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow-y:auto">
@@ -9128,6 +9220,71 @@ window.planSetTab = function(tab, btn){
  if (btn) btn.classList.add('active');
  planningRender();
 };
+// v174: рейтинг команды — кто сколько закрыл, у кого просрочки
+function planRenderTeamRating(sprints){
+ var box = document.getElementById('plan-team-rating');
+ if (!box) return;
+ if (!sprints || !sprints.length) { box.style.display='none'; box.innerHTML=''; return; }
+ var sprintIds = sprints.map(function(s){return s.id;});
+ var sprintEndById = {}; sprints.forEach(function(s){ sprintEndById[s.id] = s.end; });
+ var allTasks = planLoadTasks().filter(function(t){return sprintIds.indexOf(t.sprint_id)!==-1;});
+ if (!allTasks.length) { box.style.display='none'; box.innerHTML=''; return; }
+ var todayStr = (new Date()).toISOString().slice(0,10);
+ // Группируем по owner
+ var byOwner = {};
+ allTasks.forEach(function(t){
+  var o = (t.owner || '—').trim() || '—';
+  if (!byOwner[o]) byOwner[o] = { name:o, total:0, done:0, progress:0, todo:0, review:0, overdue:0, donePoints:0, totalPoints:0 };
+  var b = byOwner[o];
+  b.total++;
+  b.totalPoints += parseInt(t.points)||0;
+  if (t.status==='done') { b.done++; b.donePoints += parseInt(t.points)||0; }
+  else if (t.status==='progress') b.progress++;
+  else if (t.status==='review') b.review++;
+  else b.todo++;
+  // Просрочка — задача не done И сегодня > end_date спринта
+  if (t.status !== 'done') {
+   var spEnd = sprintEndById[t.sprint_id];
+   if (spEnd && todayStr > spEnd) b.overdue++;
+  }
+ });
+ var rows = Object.values(byOwner)
+  .filter(function(o){return o.name && o.name!=='—';})
+  .map(function(o){
+   o.pct = o.total > 0 ? Math.round((o.done/o.total)*100) : 0;
+   o.score = o.pct - (o.overdue * 15); // штраф за просрочки
+   return o;
+  })
+  .sort(function(a,b){ return b.score - a.score; });
+ if (!rows.length) { box.style.display='none'; box.innerHTML=''; return; }
+ box.style.display='block';
+ var medal = ['🥇','🥈','🥉'];
+ var html = '<div class="plan-glass-card">'
+  + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+  +  '<div><div class="plan-card-title" style="margin-bottom:2px">Рейтинг команды</div>'
+  +  '<div style="font-size:11px;color:var(--text-muted)">Кто сколько задач закрыл и у кого зависает. Просрочка — задача не закрыта, а спринт уже закончился.</div></div>'
+  + '</div>'
+  + '<div style="overflow-x:auto"><table class="plan-backlog-table" style="min-width:640px">'
+  + '<thead><tr><th>#</th><th>Сотрудник</th><th>Задач всего</th><th>Готово</th><th>В работе</th><th>Просрочки</th><th>% выполнения</th><th>Балл</th></tr></thead><tbody>'
+  + rows.map(function(o,i){
+   var pctColor = o.pct >= 80 ? '#10B981' : o.pct >= 50 ? '#F59E0B' : '#EF4444';
+   var scoreColor = o.score >= 80 ? '#10B981' : o.score >= 40 ? '#F59E0B' : '#EF4444';
+   var rank = i < 3 ? medal[i] : (i+1)+'.';
+   return '<tr>'
+    + '<td style="font-size:14px">'+rank+'</td>'
+    + '<td><strong style="color:var(--text-primary)">'+o.name+'</strong></td>'
+    + '<td>'+o.total+'</td>'
+    + '<td style="color:#10B981"><strong>'+o.done+'</strong></td>'
+    + '<td>'+(o.progress + o.review)+'</td>'
+    + '<td>'+(o.overdue > 0 ? '<span style="color:#EF4444;font-weight:700">'+o.overdue+'</span>' : '<span style="color:var(--text-muted)">—</span>')+'</td>'
+    + '<td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;max-width:80px;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden"><div style="width:'+o.pct+'%;height:100%;background:'+pctColor+';transition:width .4s"></div></div><span style="color:'+pctColor+';font-weight:700;min-width:36px">'+o.pct+'%</span></div></td>'
+    + '<td><span style="color:'+scoreColor+';font-weight:700">'+Math.max(0, o.score)+'</span></td>'
+   + '</tr>';
+  }).join('')
+  + '</tbody></table></div></div>';
+ box.innerHTML = html;
+}
+
 // v170: общая статистика по выбранной вкладке (активные/архив)
 function planRenderOverallStats(sprints){
  var box = document.getElementById('plan-overall-stats');
@@ -9175,11 +9332,15 @@ window.planningRender = function(){
   if (sumTitle) sumTitle.textContent = 'Общий бэклог';
   if (sumMeta) sumMeta.textContent = 'Задачи которые ждут попадания в спринт. Клик «→ В спринт» переводит задачу в выбранный активный спринт.';
   if (overallBox) overallBox.innerHTML = '';
+  var teamBox = document.getElementById('plan-team-rating');
+  if (teamBox) { teamBox.style.display='none'; teamBox.innerHTML=''; }
   planRenderBacklog();
   return;
  }
  // v170: общая статистика над списком спринтов
  planRenderOverallStats(list);
+ // v174: рейтинг команды
+ planRenderTeamRating(list);
  if (sumTitle) sumTitle.textContent = list.length + ' ' + (_planTab === 'active' ? 'активных спринтов' : 'архивных спринтов');
  if (sumMeta) {
   var ot = list.filter(function(s){return s.status==='ontrack';}).length;
@@ -9195,21 +9356,101 @@ window.planningRender = function(){
  if (empty) empty.style.display = 'none';
  grid.innerHTML = list.map(planRenderSprintCard).join('');
 };
+// v174: единая модалка создания спринта + chips команды + dropdown сотрудников
+var _planTeamChips = []; // [{id,name}]
+function _planYmd(d){ return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 window.planCreateSprint = function(){
- var name = prompt('Название спринта (например: «Внедрение клиента X»):'); if (!name) return;
- var goal = prompt('Цель спринта одной фразой:') || '';
- var weeks = parseInt(prompt('Длительность в неделях (1, 2 или 4):', '2') || '2', 10);
- if (!weeks || weeks < 1) weeks = 2;
+ // Сброс полей
+ _planTeamChips = [];
  var start = new Date(); start.setHours(0,0,0,0);
+ var end = new Date(start.getTime() + 13*86400000); // 2 недели по умолчанию
+ var nameEl = document.getElementById('psm-name'); if (nameEl) nameEl.value = '';
+ var goalEl = document.getElementById('psm-goal'); if (goalEl) goalEl.value = '';
+ var startEl = document.getElementById('psm-start'); if (startEl) startEl.value = _planYmd(start);
+ var endEl = document.getElementById('psm-end'); if (endEl) endEl.value = _planYmd(end);
+ var msgEl = document.getElementById('psm-msg'); if (msgEl) msgEl.textContent = '';
+ // Подгружаем сотрудников в dropdown
+ var sel = document.getElementById('psm-team-select');
+ if (sel && typeof employees !== 'undefined') {
+  var opts = '<option value="">+ Добавить участника команды</option>';
+  employees.filter(function(e){return e.active!==false;}).forEach(function(e){
+   opts += '<option value="'+e.id+'|'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+' · '+(e.pos||e.role||'—')+'</option>';
+  });
+  sel.innerHTML = opts;
+ }
+ _planRenderTeamChips();
+ _planSetActiveQuick(2);
+ // Открыть модалку
+ var m = document.getElementById('plan-create-sprint-modal');
+ if (m) m.classList.add('open');
+ setTimeout(function(){ if (nameEl) nameEl.focus(); }, 50);
+};
+window.planCloseCreateModal = function(){
+ var m = document.getElementById('plan-create-sprint-modal');
+ if (m) m.classList.remove('open');
+};
+window.planAddTeamChip = function(value){
+ if (!value) return;
+ var parts = value.split('|');
+ var id = parseInt(parts[0],10), name = parts[1] || '';
+ if (_planTeamChips.some(function(c){return c.id===id;})) {
+  document.getElementById('psm-team-select').value = '';
+  return;
+ }
+ _planTeamChips.push({ id: id, name: name });
+ _planRenderTeamChips();
+ document.getElementById('psm-team-select').value = '';
+};
+window.planRemoveTeamChip = function(id){
+ _planTeamChips = _planTeamChips.filter(function(c){return c.id!==id;});
+ _planRenderTeamChips();
+};
+function _planRenderTeamChips(){
+ var box = document.getElementById('psm-team-chips');
+ if (!box) return;
+ if (!_planTeamChips.length) {
+  box.innerHTML = '<span style="font-size:11px;color:var(--text-muted);padding:4px 8px">Команда не выбрана — выбери из списка ниже</span>';
+  return;
+ }
+ box.innerHTML = _planTeamChips.map(function(c){
+  return '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 4px 4px 10px;border-radius:14px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#60A5FA;font-size:11px;font-weight:600">'+c.name+'<button type="button" onclick="planRemoveTeamChip('+c.id+')" style="background:rgba(255,255,255,.08);border:none;color:#fff;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;line-height:1;padding:0">×</button></span>';
+ }).join('');
+}
+window.planCreateSetWeeks = function(weeks){
+ _planSetActiveQuick(weeks);
+ var startEl = document.getElementById('psm-start');
+ var endEl = document.getElementById('psm-end');
+ var start = startEl && startEl.value ? new Date(startEl.value) : new Date();
+ if (isNaN(start.getTime())) start = new Date();
+ start.setHours(0,0,0,0);
  var end = new Date(start.getTime() + (weeks*7-1)*86400000);
- var ymd = function(d){ return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); };
+ if (startEl) startEl.value = _planYmd(start);
+ if (endEl) endEl.value = _planYmd(end);
+};
+function _planSetActiveQuick(weeks){
+ document.querySelectorAll('.psm-quick').forEach(function(b){
+  b.classList.toggle('active', b.textContent.trim().indexOf(weeks+' ')===0 || b.textContent.trim().indexOf(weeks+'')===0);
+ });
+}
+window.planSubmitCreateModal = function(){
+ var name = (document.getElementById('psm-name').value || '').trim();
+ var goal = (document.getElementById('psm-goal').value || '').trim();
+ var startStr = document.getElementById('psm-start').value;
+ var endStr = document.getElementById('psm-end').value;
+ var msgEl = document.getElementById('psm-msg');
+ if (!name) { if (msgEl) msgEl.textContent = 'Укажи название спринта'; return; }
+ if (!startStr || !endStr) { if (msgEl) msgEl.textContent = 'Укажи даты начала и окончания'; return; }
+ if (new Date(endStr) < new Date(startStr)) { if (msgEl) msgEl.textContent = 'Окончание не может быть раньше начала'; return; }
  var colors = ['gold','purple','blue','green','orange'];
  var all = planLoadSprints();
  var nextId = (all.reduce(function(m,s){return Math.max(m,s.id||0);},0) || 0) + 1;
- var sp = { id: nextId, name: name, goal: goal, start: ymd(start), end: ymd(end), status:'ontrack', color: colors[(nextId-1) % colors.length], total:0, in_progress:0, done:0, team:[], teamNames:'', archived:false };
+ var teamIds = _planTeamChips.map(function(c){return c.id;});
+ var teamNames = _planTeamChips.map(function(c){return c.name;}).join(', ');
+ var sp = { id: nextId, name: name, goal: goal, start: startStr, end: endStr, status:'ontrack', color: colors[(nextId-1) % colors.length], total:0, in_progress:0, done:0, team: teamIds, teamNames: teamNames, archived:false };
  all.unshift(sp);
  planSaveSprints(all);
  planningRender();
+ planCloseCreateModal();
  if (typeof showNotif === 'function') showNotif('Спринт создан', name + ' · ' + planFmtDate(sp.start) + ' — ' + planFmtDate(sp.end));
 };
 // v168: задачи спринта — отдельный store
@@ -9309,18 +9550,52 @@ function planRenderKanban(){
  });
 }
 
+// v174: добавление задачи через модалку (вместо 3 prompt'ов подряд)
 window.planAddTask = function(){
  if (!_planCurrentSprintId) return;
- var title = prompt('Что нужно сделать?'); if (!title) return;
- var owner = prompt('Кто отвечает (имя)?', 'Мырзахыт') || '—';
- var points = parseInt(prompt('Сложность задачи в баллах (1=час, 3=день, 8=почти неделя):', '3') || '3', 10);
- if (!points || points < 1) points = 1;
+ // Заполняем dropdown владельцев — приоритет участникам команды этого спринта
+ var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;}) || {};
+ var ownerSel = document.getElementById('ptm-owner');
+ if (ownerSel && typeof employees !== 'undefined') {
+  var teamIds = (sp.team || []);
+  var teamMembers = employees.filter(function(e){return teamIds.indexOf(e.id) !== -1;});
+  var others = employees.filter(function(e){return e.active!==false && teamIds.indexOf(e.id) === -1;});
+  var opts = '';
+  if (teamMembers.length) {
+   opts += '<optgroup label="Команда спринта">';
+   teamMembers.forEach(function(e){ opts += '<option value="'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+'</option>'; });
+   opts += '</optgroup>';
+  }
+  if (others.length) {
+   opts += '<optgroup label="Остальные сотрудники">';
+   others.forEach(function(e){ opts += '<option value="'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+' · '+(e.pos||'')+'</option>'; });
+   opts += '</optgroup>';
+  }
+  ownerSel.innerHTML = opts || '<option value="">—</option>';
+ }
+ document.getElementById('ptm-title').value = '';
+ document.getElementById('ptm-points').value = '3';
+ document.getElementById('ptm-msg').textContent = '';
+ document.getElementById('plan-task-modal').classList.add('open');
+ setTimeout(function(){ document.getElementById('ptm-title').focus(); }, 50);
+};
+window.planCloseTaskModal = function(){
+ document.getElementById('plan-task-modal').classList.remove('open');
+};
+window.planSubmitTaskModal = function(){
+ if (!_planCurrentSprintId) return;
+ var title = (document.getElementById('ptm-title').value || '').trim();
+ var owner = document.getElementById('ptm-owner').value || '';
+ var points = parseInt(document.getElementById('ptm-points').value || '3', 10);
+ var msg = document.getElementById('ptm-msg');
+ if (!title) { if (msg) msg.textContent = 'Опиши что нужно сделать'; return; }
  var all = planLoadTasks();
  var nextId = (all.reduce(function(m,t){return Math.max(m,t.id||0);},0) || 100) + 1;
- all.push({ id:nextId, sprint_id:_planCurrentSprintId, title:title, owner:owner, points:points, status:'todo' });
+ all.push({ id:nextId, sprint_id:_planCurrentSprintId, title:title, owner:owner||'—', points:points, status:'todo', created_at: (new Date()).toISOString().slice(0,10) });
  planSaveTasks(all);
  planRecountSprint(_planCurrentSprintId);
  planRenderKanban();
+ planCloseTaskModal();
 };
 window.planTaskNextStatus = function(taskId){
  var all = planLoadTasks();
