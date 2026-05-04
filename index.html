@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v160</title>
+<title>SalesDoc — Финансовый Дашборд v161</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8691,12 +8691,52 @@ window.mktLoadLeads = async function() {
  }
 };
 
+// v161: автоматический подсчёт расхода на маркетинг из раздела Расходы.
+// Ищет записи где в категории/комментарии есть ключевые слова: таргет, реклама,
+// маркетинг, ads, facebook, meta, instagram, инст. Период — из _mktPeriod (week/month).
+window.mktCalcMarketingSpend = function(period) {
+ if (typeof expData === 'undefined' || !Array.isArray(expData) || !expData.length) return { sum: 0, count: 0 };
+ var range = (typeof mktGetDateRange === 'function') ? mktGetDateRange(period) : null;
+ if (!range) return { sum: 0, count: 0 };
+ var keywords = ['таргет','реклама','маркетинг','ads','facebook','meta','instagram','инстаграм','инст',' fb '];
+ var sum = 0, count = 0;
+ expData.forEach(function(e){
+  if (!e || !e.amount) return;
+  var d = new Date(e.date);
+  if (isNaN(d.getTime())) return;
+  if (d < range.start || d > range.end) return;
+  var hay = ' ' + (String(e.category||'') + ' ' + String(e.note||'')).toLowerCase() + ' ';
+  if (keywords.some(function(k){ return hay.indexOf(k) !== -1; })) {
+   sum += parseFloat(e.amount) || 0;
+   count++;
+  }
+ });
+ return { sum: Math.round(sum), count: count };
+};
+
 window.mktAutoCalc = function() {
  var p = _mktPeriod;
  var leadsEl = document.getElementById('mkt-leads');
  var spendEl = document.getElementById('mkt-spend');
  var salesEl = document.getElementById('mkt-sales');
  if (!leadsEl) return;
+
+ // v161: автозаполняем расход из раздела Расходы (если найдены записи "таргет/реклама")
+ var autoSpend = mktCalcMarketingSpend(p);
+ if (spendEl) {
+  if (autoSpend.sum > 0) {
+   spendEl.value = autoSpend.sum;
+   spendEl.readOnly = true;
+   spendEl.title = 'Сумма из раздела Расходы за период (' + autoSpend.count + ' записей с категорией таргет/реклама/маркетинг)';
+   var subEl = spendEl.parentElement && spendEl.parentElement.querySelector('.mkt-main-kpi-sub');
+   if (subEl) subEl.textContent = 'из Расходов · ' + autoSpend.count + ' записей';
+  } else {
+   spendEl.readOnly = false;
+   spendEl.title = '';
+   var subEl2 = spendEl.parentElement && spendEl.parentElement.querySelector('.mkt-main-kpi-sub');
+   if (subEl2) subEl2.textContent = 'не найдено в Расходах · введи вручную ₸';
+  }
+ }
 
  var leads = parseFloat(leadsEl.textContent) || 0;
  var spend = parseFloat(spendEl ? spendEl.value : 0) || 0;
