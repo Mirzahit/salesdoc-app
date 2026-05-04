@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v159</title>
+<title>SalesDoc — Финансовый Дашборд v160</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -833,6 +833,11 @@ body.light .kpi-footer-inline{display:none !important}
 .mkt-channel-stat-val{font-size:16px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif}
 .mkt-channel-cta{font-size:11px;color:var(--text-secondary);font-weight:500}
 .mkt-channel:hover .mkt-channel-cta{color:#3B82F6}
+
+/* v160: Pills период для Таргет страницы */
+.meta-period-pill{padding:7px 14px;border-radius:20px;border:1px solid var(--dark-border);background:transparent;color:var(--text-secondary);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;font-family:Inter,sans-serif;letter-spacing:.2px}
+.meta-period-pill:hover{border-color:rgba(59,130,246,.4);color:var(--text-primary)}
+.meta-period-pill.active{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.4);color:#3B82F6}
 
 /* META ADS KPI */
 .meta-kpi-card{background:var(--dark-panel);border-radius:10px;padding:12px;text-align:center}
@@ -2536,32 +2541,32 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
    <div class="kbc-title">Таргет: Рекламные кабинеты</div>
   </div>
   <div style="padding:24px;max-width:1400px;margin:0 auto">
-   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-    <div>
-     <div style="font-size:11px;color:var(--text-muted)">Meta Ads — данные напрямую через API. CSV загрузка как запасной вариант.</div>
+   <!-- v160: единая шапка — pills периода + действия -->
+   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+     <button class="meta-period-pill" data-period="last_7d" onclick="mktMetaApiSetPeriod('last_7d',this)">7 дней</button>
+     <button class="meta-period-pill active" data-period="last_30d" onclick="mktMetaApiSetPeriod('last_30d',this)">30 дней</button>
+     <button class="meta-period-pill" data-period="last_90d" onclick="mktMetaApiSetPeriod('last_90d',this)">90 дней</button>
+     <button class="meta-period-pill" data-period="this_month" onclick="mktMetaApiSetPeriod('this_month',this)">Этот месяц</button>
+     <button class="meta-period-pill" data-period="last_month" onclick="mktMetaApiSetPeriod('last_month',this)">Прошлый месяц</button>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-     <!-- v157: период для Meta API -->
-     <select id="meta-api-period" onchange="if(window.metaApiAutoload!==false)mktMetaApiLoad()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-card);color:var(--text-primary);font-size:12px;cursor:pointer;font-family:Inter,sans-serif">
-      <option value="last_7d">Последние 7 дней</option>
-      <option value="last_30d" selected>Последние 30 дней</option>
-      <option value="last_90d">Последние 90 дней</option>
-      <option value="this_month">Этот месяц</option>
-      <option value="last_month">Прошлый месяц</option>
-     </select>
-     <!-- v157: главная кнопка — загрузка через Meta API -->
-     <button onclick="mktMetaApiLoad()" id="meta-api-btn" style="padding:8px 18px;border-radius:8px;background:linear-gradient(135deg,#1877F2,#42A5F5);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;letter-spacing:.3px">
-      <span id="meta-api-btn-label">Обновить через Meta API</span>
-     </button>
-     <label style="padding:8px 14px;border-radius:8px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#3B82F6;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px" title="Запасной вариант — если API недоступен">
-      <span>CSV</span>
-      <input type="file" accept=".csv,.tsv,.txt" id="meta-csv-input" onchange="metaCsvUpload(this)" style="display:none" multiple>
+    <div style="display:flex;gap:8px;align-items:center">
+     <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);cursor:pointer">
+      <input type="checkbox" id="meta-api-active-only" checked onchange="mktMetaApiRerenderCamps()">
+      <span>Только активные</span>
      </label>
-     <button onclick="metaExportReport()" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(52,211,153,.25);background:rgba(52,211,153,.08);color:#34D399;font-size:11px;cursor:pointer;font-weight:600" title="Экспорт отчёта в CSV">Экспорт</button>
-     <button onclick="metaCsvClear()" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(239,83,80,.2);background:transparent;color:#EF5350;font-size:11px;cursor:pointer;font-weight:600" title="Очистить все данные">Очистить</button>
+     <button onclick="mktMetaApiLoad()" id="meta-api-btn" style="padding:8px 18px;border-radius:8px;background:linear-gradient(135deg,#1877F2,#42A5F5);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;letter-spacing:.3px">
+      <span id="meta-api-btn-label">Обновить</span>
+     </button>
     </div>
    </div>
-   <div id="meta-csv-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
+   <select id="meta-api-period" style="display:none">
+    <option value="last_7d">7 дней</option>
+    <option value="last_30d" selected>30 дней</option>
+    <option value="last_90d">90 дней</option>
+    <option value="this_month">Этот месяц</option>
+    <option value="last_month">Прошлый месяц</option>
+   </select>
 
    <!-- v158: Главная панель Meta API — на простом языке -->
    <div id="meta-api-kpi" style="display:none;margin-bottom:20px">
@@ -2618,7 +2623,9 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
    </div>
 
    <!-- Dashboard container - hidden until data loaded -->
-   <div id="meta-ads-dashboard" style="display:none">
+   <!-- v160: старый CSV-дашборд скрыт навсегда — заменён живыми данными Meta API сверху.
+        Сохранён в DOM как dead-code чтобы старые функции metaCsvUpload/metaCsvClear не падали. -->
+   <div id="meta-ads-dashboard" style="display:none !important">
 
     <!-- Filter bar -->
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
@@ -2745,12 +2752,8 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
 
    </div><!-- /meta-ads-dashboard -->
 
-   <!-- Empty state -->
-   <div id="meta-ads-empty" style="text-align:center;padding:30px 20px;color:var(--text-muted)">
-    <div style="font-size:32px;margin-bottom:12px"></div>
-    <div style="font-size:13px;margin-bottom:8px">Загрузите CSV из рекламного кабинета</div>
-    <div style="font-size:11px;color:var(--text-muted)">Meta Ads, Google Ads, TikTok Ads — платформа определяется автоматически</div>
-   </div>
+   <!-- v160: Empty state скрыт — теперь дашборд оживает по кнопке Обновить -->
+   <div id="meta-ads-empty" style="display:none"></div>
   </div>
  </div>
  <!-- /FULLSCREEN TARGET ADS PAGE -->
@@ -8787,6 +8790,21 @@ function _metaKpiSmall(id, label, value, sub){
   + (sub ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+sub+'</div>' : '');
 }
 
+// v160: смена периода через pills — обновляет select и сразу перезапрашивает данные
+window.mktMetaApiSetPeriod = function(period, btn){
+ var sel = document.getElementById('meta-api-period');
+ if (sel) sel.value = period;
+ document.querySelectorAll('.meta-period-pill').forEach(function(b){ b.classList.remove('active'); });
+ if (btn) btn.classList.add('active');
+ if (typeof mktMetaApiLoad === 'function') mktMetaApiLoad();
+};
+// v160: перерисовать таблицу кампаний при изменении фильтра active-only (без повторного запроса)
+window.mktMetaApiRerenderCamps = function(){
+ if (_metaApiCache && _metaApiCache.camps) {
+  _metaRenderCampaigns(_metaApiCache.camps.campaigns || [], _metaApiCache.info || {});
+ }
+};
+
 window.mktMetaApiLoad = async function(){
  var btn = document.getElementById('meta-api-btn');
  var lbl = document.getElementById('meta-api-btn-label');
@@ -8945,19 +8963,24 @@ function _metaRenderCampaigns(camps, info){
  var t = document.getElementById('meta-api-camps');
  if (!t) return;
  var cur = (info && info.currency) || 'USD';
- if (!camps.length) {
-  t.innerHTML = '<tbody><tr><td style="padding:20px;text-align:center;color:var(--text-muted)">Нет данных по кампаниям за этот период</td></tr></tbody>';
+ var activeOnly = (document.getElementById('meta-api-active-only')||{}).checked;
+ // v160: фильтр — только активные кампании если флажок включён
+ var filtered = activeOnly ? camps.filter(function(c){ return c.status === 'ACTIVE'; }) : camps.slice();
+ if (!filtered.length) {
+  t.innerHTML = '<tbody><tr><td style="padding:20px;text-align:center;color:var(--text-muted)" colspan="11">'
+   + (activeOnly ? 'Активных кампаний за этот период нет. Сними галочку «Только активные» чтобы увидеть paused-кампании.' : 'Нет данных по кампаниям за этот период.')
+   + '</td></tr></tbody>';
   return;
  }
  // Сортируем — активные сверху, потом по расходу
- camps.sort(function(a,b){
+ filtered.sort(function(a,b){
   var sa = a.status === 'ACTIVE' ? 1 : 0, sb = b.status === 'ACTIVE' ? 1 : 0;
   if (sa !== sb) return sb - sa;
   var spA = a.insights ? parseFloat(a.insights.spend||0) : 0;
   var spB = b.insights ? parseFloat(b.insights.spend||0) : 0;
   return spB - spA;
  });
- var rows = camps.map(function(c){
+ var rows = filtered.map(function(c){
   var ins = c.insights || {};
   var leads = parseFloat(ins.leads_count||0);
   var spend = parseFloat(ins.spend||0);
@@ -8965,22 +8988,24 @@ function _metaRenderCampaigns(camps, info){
   var statusBadge = c.status === 'ACTIVE'
    ? '<span style="font-size:9px;padding:2px 7px;border-radius:20px;background:rgba(76,175,80,.12);color:#4CAF50">Идёт</span>'
    : '<span style="font-size:9px;padding:2px 7px;border-radius:20px;background:var(--dark-panel);color:var(--text-muted)">'+(c.status||'?')+'</span>';
-  return '<tr>'
+  return '<tr style="opacity:'+(c.status==='ACTIVE'?'1':'.55')+'">'
    + '<td style="padding:8px 6px"><div style="font-size:12px;font-weight:600">'+(c.name||'—')+'</div><div style="margin-top:3px">'+statusBadge+'</div></td>'
    + '<td style="text-align:right;padding:8px 6px"><b>'+_metaFmtMoney(ins.spend, cur)+'</b></td>'
-   + '<td style="text-align:right;padding:8px 6px">'+_metaFmtNum(ins.impressions)+'</td>'
-   + '<td style="text-align:right;padding:8px 6px">'+_metaFmtNum(ins.clicks)+'</td>'
    + '<td style="text-align:right;padding:8px 6px;color:'+(leads>0?'#4CAF50':'var(--text-muted)')+'"><b>'+(leads>0?_metaFmtNum(leads):'—')+'</b></td>'
    + '<td style="text-align:right;padding:8px 6px">'+(cpl!==null?_metaFmtMoney(cpl.toFixed(2), cur):'<span style="color:var(--text-muted)">—</span>')+'</td>'
+   + '<td style="text-align:right;padding:8px 6px">'+_metaFmtNum(ins.reach)+'</td>'
+   + '<td style="text-align:right;padding:8px 6px">'+_metaFmtNum(ins.impressions)+'</td>'
+   + '<td style="text-align:right;padding:8px 6px">'+(parseFloat(ins.frequency||0)).toFixed(2)+'</td>'
+   + '<td style="text-align:right;padding:8px 6px">'+_metaFmtNum(ins.clicks)+'</td>'
+   + '<td style="text-align:right;padding:8px 6px">'+_metaFmtPct(ins.ctr)+'</td>'
+   + '<td style="text-align:right;padding:8px 6px">'+_metaFmtMoney(ins.cpc, cur)+'</td>'
+   + '<td style="text-align:right;padding:8px 6px">'+_metaFmtMoney(ins.cpm, cur)+'</td>'
    + '</tr>';
  }).join('');
+ var th = function(label){ return '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">'+label+'</th>'; };
  t.innerHTML = '<thead><tr>'
   + '<th style="text-align:left;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Кампания</th>'
-  + '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Расход</th>'
-  + '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Показы</th>'
-  + '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Клики</th>'
-  + '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Лиды</th>'
-  + '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Цена лида</th>'
+  + th('Расход') + th('Лиды') + th('Цена лида') + th('Охват') + th('Показы') + th('Частота') + th('Клики') + th('CTR') + th('CPC') + th('CPM')
   + '</tr></thead><tbody>' + rows + '</tbody>';
 }
 // /v158
