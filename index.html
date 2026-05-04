@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v156</title>
+<title>SalesDoc — Финансовый Дашборд v157</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2510,11 +2510,23 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
   <div style="padding:24px;max-width:1400px;margin:0 auto">
    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
     <div>
-     <div style="font-size:11px;color:var(--text-muted)">Meta Ads, Google Ads, TikTok Ads — загрузите CSV</div>
+     <div style="font-size:11px;color:var(--text-muted)">Meta Ads — данные напрямую через API. CSV загрузка как запасной вариант.</div>
     </div>
-    <div style="display:flex;gap:8px;align-items:center">
-     <label style="padding:8px 18px;border-radius:8px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#3B82F6;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
-      <span>Загрузить CSV</span>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+     <!-- v157: период для Meta API -->
+     <select id="meta-api-period" onchange="if(window.metaApiAutoload!==false)mktMetaApiLoad()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--dark-border);background:var(--dark-card);color:var(--text-primary);font-size:12px;cursor:pointer;font-family:Inter,sans-serif">
+      <option value="last_7d">Последние 7 дней</option>
+      <option value="last_30d" selected>Последние 30 дней</option>
+      <option value="last_90d">Последние 90 дней</option>
+      <option value="this_month">Этот месяц</option>
+      <option value="last_month">Прошлый месяц</option>
+     </select>
+     <!-- v157: главная кнопка — загрузка через Meta API -->
+     <button onclick="mktMetaApiLoad()" id="meta-api-btn" style="padding:8px 18px;border-radius:8px;background:linear-gradient(135deg,#1877F2,#42A5F5);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;letter-spacing:.3px">
+      <span id="meta-api-btn-label">Обновить через Meta API</span>
+     </button>
+     <label style="padding:8px 14px;border-radius:8px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);color:#3B82F6;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px" title="Запасной вариант — если API недоступен">
+      <span>CSV</span>
       <input type="file" accept=".csv,.tsv,.txt" id="meta-csv-input" onchange="metaCsvUpload(this)" style="display:none" multiple>
      </label>
      <button onclick="metaExportReport()" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(52,211,153,.25);background:rgba(52,211,153,.08);color:#34D399;font-size:11px;cursor:pointer;font-weight:600" title="Экспорт отчёта в CSV">Экспорт</button>
@@ -2522,6 +2534,19 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
     </div>
    </div>
    <div id="meta-csv-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
+
+   <!-- v157: KPI-блок Meta API -->
+   <div id="meta-api-kpi" style="display:none;margin-bottom:16px">
+    <div id="meta-api-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px"></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+     <div class="meta-kpi-card" id="mkpi-spend"></div>
+     <div class="meta-kpi-card" id="mkpi-impressions"></div>
+     <div class="meta-kpi-card" id="mkpi-clicks"></div>
+     <div class="meta-kpi-card" id="mkpi-ctr"></div>
+     <div class="meta-kpi-card" id="mkpi-cpc"></div>
+     <div class="meta-kpi-card" id="mkpi-reach"></div>
+    </div>
+   </div>
 
    <!-- Upload history -->
    <div id="meta-upload-history" style="display:none;margin-bottom:16px">
@@ -8647,6 +8672,80 @@ window.mktAutoCalc = function() {
 };
 
 // /MARKETING
+
+// ===== v157: META ADS — ЖИВЫЕ ДАННЫЕ ИЗ API =====
+// Endpoint /api/meta-ads (Vercel serverless) проксирует к Meta Graph API.
+// ENV: META_ACCESS_TOKEN, META_AD_ACCOUNT_ID, META_BUSINESS_ID — заданы в Vercel.
+var _metaApiCache = null; // { period, summary, days, fetchedAt }
+function _metaApiFmtMoney(v, currency){
+ var n = parseFloat(v||0);
+ if (isNaN(n)) return '—';
+ var sym = currency === 'USD' ? '$' : (currency === 'KZT' ? '₸' : '');
+ return sym + n.toLocaleString('ru-RU', {maximumFractionDigits: 2});
+}
+function _metaApiFmtNum(v){
+ var n = parseInt(v||0, 10);
+ if (isNaN(n)) return '—';
+ return n.toLocaleString('ru-RU');
+}
+function _metaApiFmtPct(v){
+ var n = parseFloat(v||0);
+ if (isNaN(n)) return '—';
+ return n.toFixed(2) + '%';
+}
+function _metaApiKpiCard(label, value, sub){
+ return '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">'+label+'</div>'
+  + '<div style="font-size:22px;font-weight:700;color:var(--text-primary);font-family:\'Space Grotesk\',sans-serif">'+value+'</div>'
+  + (sub ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+sub+'</div>' : '');
+}
+window.mktMetaApiLoad = async function(){
+ var btn = document.getElementById('meta-api-btn');
+ var lbl = document.getElementById('meta-api-btn-label');
+ var statusEl = document.getElementById('meta-api-status');
+ var kpiEl = document.getElementById('meta-api-kpi');
+ var period = (document.getElementById('meta-api-period')||{}).value || 'last_30d';
+ if (btn) btn.disabled = true;
+ if (lbl) lbl.textContent = 'Загрузка...';
+ try {
+  var resp = await fetch('/api/meta-ads?endpoint=account_summary&period=' + encodeURIComponent(period));
+  var data = await resp.json();
+  if (!resp.ok) throw new Error(data.error || ('HTTP '+resp.status));
+  // Также параллельно подтянем account_info для валюты и amount_spent
+  var infoResp = await fetch('/api/meta-ads?endpoint=account_info');
+  var info = infoResp.ok ? await infoResp.json() : {};
+  _metaApiCache = { period: data.period, summary: data.summary, accountInfo: info, fetchedAt: Date.now() };
+  _metaApiRenderKpi(data.summary, info, period);
+  if (kpiEl) kpiEl.style.display = 'block';
+  if (statusEl) {
+   var s = data.summary || {};
+   statusEl.textContent = 'Период: '+(s.date_start||'?')+' — '+(s.date_stop||'?')+' · Аккаунт: '+(info.id||'?')+' · '+(info.currency||'')+' · Обновлено: '+(new Date()).toLocaleTimeString('ru-RU');
+  }
+ } catch(e) {
+  console.error('Meta API load failed:', e);
+  if (statusEl) { statusEl.textContent = 'Ошибка: ' + (e.message||e); statusEl.style.color = '#EF5350'; }
+  if (kpiEl) kpiEl.style.display = 'block';
+ } finally {
+  if (btn) btn.disabled = false;
+  if (lbl) lbl.textContent = 'Обновить через Meta API';
+ }
+};
+function _metaApiRenderKpi(s, info, period){
+ if (!s) {
+  ['mkpi-spend','mkpi-impressions','mkpi-clicks','mkpi-ctr','mkpi-cpc','mkpi-reach'].forEach(function(id){
+   var el = document.getElementById(id); if (el) el.innerHTML = _metaApiKpiCard('Нет данных', '—');
+  });
+  return;
+ }
+ var cur = (info && info.currency) || 'USD';
+ var card = function(id, label, val, sub){ var el = document.getElementById(id); if (el) el.innerHTML = _metaApiKpiCard(label, val, sub); };
+ card('mkpi-spend', 'Расход', _metaApiFmtMoney(s.spend, cur));
+ card('mkpi-impressions', 'Показы', _metaApiFmtNum(s.impressions));
+ card('mkpi-clicks', 'Клики', _metaApiFmtNum(s.clicks));
+ card('mkpi-ctr', 'CTR', _metaApiFmtPct(s.ctr));
+ card('mkpi-cpc', 'CPC', _metaApiFmtMoney(s.cpc, cur));
+ card('mkpi-reach', 'Охват', _metaApiFmtNum(s.reach), 'Частота: '+ (parseFloat(s.frequency||0)).toFixed(2));
+}
+// /v157
 
 // ===== META ADS CSV DASHBOARD =====
 (function(){
