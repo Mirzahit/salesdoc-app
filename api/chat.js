@@ -27,10 +27,12 @@ async function buildMarketingContext(req) {
   const proto = host.includes('localhost') ? 'http' : 'https';
   const base = `${proto}://${host}`;
 
-  // Параллельно тянем сводку 7 дней, 30 дней и список кампаний
-  const [sum7, sum30, daily30, info, camps30] = await Promise.all([
+  // Параллельно тянем сводку 7 дней, 30 дней, ТЕКУЩИЙ календарный месяц,
+  // динамику по дням за last_30d, инфо аккаунта и активные кампании.
+  const [sum7, sum30, sumThisMonth, daily30, info, camps30] = await Promise.all([
     fetch(`${base}/api/meta-ads?endpoint=account_summary&period=last_7d`).then(r => r.json()).catch(e => ({ error: e.message })),
     fetch(`${base}/api/meta-ads?endpoint=account_summary&period=last_30d`).then(r => r.json()).catch(e => ({ error: e.message })),
+    fetch(`${base}/api/meta-ads?endpoint=account_summary&period=this_month`).then(r => r.json()).catch(e => ({ error: e.message })),
     fetch(`${base}/api/meta-ads?endpoint=daily&period=last_30d`).then(r => r.json()).catch(e => ({ error: e.message })),
     fetch(`${base}/api/meta-ads?endpoint=account_info`).then(r => r.json()).catch(e => ({ error: e.message })),
     fetch(`${base}/api/meta-ads?endpoint=campaigns&period=last_30d`).then(r => r.json()).catch(e => ({ error: e.message }))
@@ -43,9 +45,13 @@ async function buildMarketingContext(req) {
   const fmt = v => sym + (parseFloat(v || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }));
   const num = v => Math.round(parseFloat(v || 0)).toLocaleString('en-US');
 
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const monthName = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][today.getUTCMonth()];
+
   const out = ['<context>'];
   out.push(`Аккаунт Meta Ads: ${info.id || '—'} · валюта ${cur} · таймзона ${info.timezone_name || '—'}`);
-  out.push(`Сегодня: ${new Date().toISOString().slice(0, 10)}`);
+  out.push(`Сегодня: ${todayStr} (${today.getUTCDate()} ${monthName} ${today.getUTCFullYear()} г.)`);
   out.push('');
 
   // Сводка last_7d
@@ -62,12 +68,27 @@ async function buildMarketingContext(req) {
     out.push('');
   }
 
-  // Сводка last_30d
+  // Сводка last_30d (rolling 30 — последние 30 дней)
   const s30 = (sum30 && sum30.summary) || {};
   if (s30.spend !== undefined) {
-    out.push('## Последние 30 дней');
+    out.push('## Последние 30 дней (rolling, не календарный месяц)');
+    out.push(`Период: ${s30.date_start} — ${s30.date_stop}`);
     out.push(`Расход: ${fmt(s30.spend)} · Лиды: ${num(s30.leads_count)} · CPL: ${s30.leads_count > 0 ? fmt(parseFloat(s30.spend) / s30.leads_count) : '—'}`);
     out.push(`CTR: ${parseFloat(s30.ctr || 0).toFixed(2)}% · CPC: ${fmt(s30.cpc)} · Охват: ${num(s30.reach)}`);
+    out.push('');
+  }
+
+  // Текущий календарный месяц (this_month) — с 1-го числа по сегодня
+  const sM = (sumThisMonth && sumThisMonth.summary) || {};
+  if (sM.spend !== undefined) {
+    out.push(`## Текущий календарный месяц (${monthName} ${today.getUTCFullYear()})`);
+    out.push(`Период: ${sM.date_start} — ${sM.date_stop}`);
+    out.push(`Расход: ${fmt(sM.spend)} · Лиды: ${num(sM.leads_count)} · CPL: ${sM.leads_count > 0 ? fmt(parseFloat(sM.spend) / sM.leads_count) : '—'}`);
+    out.push(`CTR: ${parseFloat(sM.ctr || 0).toFixed(2)}% · Охват: ${num(sM.reach)}`);
+    out.push('');
+  } else {
+    out.push(`## Текущий календарный месяц (${monthName} ${today.getUTCFullYear()})`);
+    out.push('Данных нет — месяц только начался либо не было показов.');
     out.push('');
   }
 
