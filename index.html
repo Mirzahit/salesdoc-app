@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v158</title>
+<title>SalesDoc — Финансовый Дашборд v159</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -812,6 +812,27 @@ body:not(.light) .kpi-footer-inline .kfi-sep{opacity:.4; margin:0 8px}
 /* В light-теме .kpi-footer-inline не показываем (там свой layout KPI с боковыми чипами) */
 body.light .kpi-footer-inline{display:none !important}
 .kpi-delta.down{color:#EF5350;background:rgba(239,83,80,.1)}
+
+/* v159: MARKETING DASHBOARD */
+.mkt-main-kpi{background:var(--dark-card);border:1px solid var(--dark-border);border-radius:12px;padding:14px 16px;text-align:left;transition:all .2s}
+.mkt-main-kpi:hover{border-color:rgba(59,130,246,.3)}
+.mkt-main-kpi-label{font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;font-weight:500}
+.mkt-main-kpi-val{font-size:26px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:-.4px;line-height:1.05;min-height:30px}
+.mkt-main-kpi-input{width:100%;background:transparent;border:none;border-bottom:1px solid var(--dark-border);padding:2px 0;font-size:26px;font-weight:700;outline:none;font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:-.4px}
+.mkt-main-kpi-input:focus{border-bottom-color:rgba(59,130,246,.4)}
+.mkt-main-kpi-sub{font-size:10px;color:var(--text-muted);margin-top:6px}
+.mkt-channel{background:var(--dark-card);border:1px solid var(--dark-border);border-radius:14px;padding:18px 20px;cursor:pointer;transition:all .25s;position:relative}
+.mkt-channel:hover{border-color:rgba(59,130,246,.4);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.mkt-channel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.mkt-channel-title{font-size:15px;font-weight:700;font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.2px}
+.mkt-channel-arrow{font-size:18px;color:var(--text-muted);transition:transform .2s}
+.mkt-channel:hover .mkt-channel-arrow{transform:translateX(2px);color:var(--text-secondary)}
+.mkt-channel-sub{font-size:11px;color:var(--text-muted);margin-bottom:14px}
+.mkt-channel-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 0;border-top:1px solid var(--dark-border);border-bottom:1px solid var(--dark-border);margin-bottom:12px}
+.mkt-channel-stat-label{font-size:9px;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px}
+.mkt-channel-stat-val{font-size:16px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif}
+.mkt-channel-cta{font-size:11px;color:var(--text-secondary);font-weight:500}
+.mkt-channel:hover .mkt-channel-cta{color:#3B82F6}
 
 /* META ADS KPI */
 .meta-kpi-card{background:var(--dark-panel);border-radius:10px;padding:12px;text-align:center}
@@ -2373,97 +2394,92 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
  <div id="view-marketing" style="display:none;position:relative">
  <button onclick="showDataSources('marketing')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(59,130,246,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'">!</button>
 
+ <!-- v159: Header -->
  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:22px">
- <div>
- <div style="font-size:20px;font-weight:700;color:var(--text-primary);letter-spacing:-0.2px">Маркетинг</div>
- <div style="font-size:12px;color:var(--text-muted);margin-top:3px">Эффективность рекламы</div>
- </div>
- <div style="display:flex;gap:8px;align-items:center">
- <button class="mkt-ptab active" onclick="mktSetPeriod('week',this)" style="padding:8px 18px;font-size:12px;font-weight:700;border:1px solid rgba(59,130,246,0.4);border-radius:8px;cursor:pointer;background:rgba(59,130,246,0.15);color:#3B82F6">Неделя</button>
- <button class="mkt-ptab" onclick="mktSetPeriod('month',this)" style="padding:8px 18px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,0.08);border-radius:8px;cursor:pointer;background:transparent;color:#6A6357">Месяц</button>
- <button onclick="mktLoadLeads()" style="padding:8px 14px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,0.08);border-radius:8px;cursor:pointer;background:transparent;color:#6A6357" title="Обновить лиды из таблицы"></button>
- </div>
- </div>
-
- <!-- 3 карточки верхнего ряда -->
- <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
-
- <!-- ЛИДЫ — автоматически из Google Sheets -->
- <div class="panel" style="padding:20px;text-align:center;border:1px solid rgba(59,130,246,0.3)">
- <div style="font-size:11px;color:#6A6357;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">
- Лидов <span id="mkt-leads-status" style="font-size:10px"></span>
- </div>
- <div id="mkt-leads" style="font-size:40px;font-weight:800;color:#3B82F6;min-height:48px">—</div>
- <div style="font-size:11px;color:#6A6357;margin-top:8px">из Google Таблицы</div>
- </div>
-
- <!-- РАСХОД — ручной ввод -->
- <div class="panel" style="padding:20px;text-align:center;border:1px solid rgba(239,154,154,0.2)">
- <div style="font-size:11px;color:#6A6357;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px"> Расход ₸</div>
- <input id="mkt-spend" type="number" min="0" placeholder="0" oninput="mktAutoCalc()"
- style="width:100%;background:transparent;border:none;border-bottom:1px solid rgba(239,154,154,0.3);color:#EF9A9A;padding:4px 0;font-size:36px;font-weight:800;text-align:center;outline:none;font-family:inherit">
- <div style="font-size:11px;color:#6A6357;margin-top:8px">реклама</div>
- </div>
-
- <!-- ПРОДАЖИ — ручной ввод -->
- <div class="panel" style="padding:20px;text-align:center;border:1px solid rgba(129,199,132,0.2)">
- <div style="font-size:11px;color:#6A6357;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px"> Продажи ₸</div>
- <input id="mkt-sales" type="number" min="0" placeholder="0" oninput="mktAutoCalc()"
- style="width:100%;background:transparent;border:none;border-bottom:1px solid rgba(129,199,132,0.3);color:#81C784;padding:4px 0;font-size:36px;font-weight:800;text-align:center;outline:none;font-family:inherit">
- <div style="font-size:11px;color:#6A6357;margin-top:8px">с рекламы</div>
- </div>
-
- </div>
-
- <!-- 4 авто-метрики -->
- <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
-
- <div class="panel" style="padding:18px;text-align:center">
- <div style="font-size:10px;color:#6A6357;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px"> Прибыль</div>
- <div id="mkt-k-profit" style="font-size:24px;font-weight:800;color:#E8E2D0">—</div>
- <div style="font-size:10px;color:#6A6357;margin-top:6px">продажи − расход</div>
- </div>
-
- <div class="panel" style="padding:18px;text-align:center">
- <div style="font-size:10px;color:#6A6357;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">CPL ₸</div>
- <div id="mkt-cpl" style="font-size:24px;font-weight:800;color:#FFD54F">—</div>
- <div style="font-size:10px;color:#6A6357;margin-top:6px">расход ÷ лиды</div>
- </div>
-
- <div class="panel" style="padding:18px;text-align:center">
- <div style="font-size:10px;color:#6A6357;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">ROAS</div>
- <div id="mkt-roas" style="font-size:24px;font-weight:800;color:#E8E2D0">—</div>
- <div style="font-size:10px;color:#6A6357;margin-top:6px">продажи ÷ расход</div>
- </div>
-
- <div class="panel" style="padding:18px;text-align:center">
- <div style="font-size:10px;color:#6A6357;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">ROI</div>
- <div id="mkt-roi" style="font-size:24px;font-weight:800;color:#E8E2D0">—</div>
- <div style="font-size:10px;color:#6A6357;margin-top:6px">(продажи−расход)÷расход</div>
- </div>
-
- </div>
-
- <!-- Подсказка -->
- <div class="panel" style="padding:14px 18px;display:flex;align-items:center;gap:12px">
- <div style="font-size:20px"></div>
- <div style="font-size:12px;color:#6A6357">Лиды загружаются автоматически из Google Таблицы. Введи расход и продажи — метрики посчитаются сами. для обновления.</div>
- </div>
-
- <!-- NAVIGATION BUTTONS TO SUBPAGES -->
- <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px">
-  <div class="panel" onclick="mktOpenTargetPage()" style="padding:24px;text-align:center;cursor:pointer;border:1px solid rgba(59,130,246,.25);transition:all .2s;position:relative;overflow:hidden" onmouseover="this.style.borderColor='rgba(59,130,246,.5)';this.style.background='rgba(59,130,246,.06)'" onmouseout="this.style.borderColor='rgba(59,130,246,.25)';this.style.background=''">
-   <div style="font-size:28px;margin-bottom:8px">&#127919;</div>
-   <div style="font-size:16px;font-weight:700;color:#3B82F6;letter-spacing:.5px;margin-bottom:4px">Таргет</div>
-   <div style="font-size:11px;color:var(--text-muted)">Meta Ads, Google Ads, TikTok Ads — кампании, KPI, графики</div>
-   <div style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:20px;color:rgba(59,130,246,.3)">&#8594;</div>
+  <div>
+   <div style="font-size:22px;font-weight:700;color:var(--text-primary);letter-spacing:-0.3px">Маркетинг</div>
+   <div style="font-size:12px;color:var(--text-muted);margin-top:3px">Все каналы привлечения и эффективность</div>
   </div>
-  <div class="panel" onclick="mktOpenLtvPage()" style="padding:24px;text-align:center;cursor:pointer;border:1px solid rgba(52,211,153,.25);transition:all .2s;position:relative;overflow:hidden" onmouseover="this.style.borderColor='rgba(52,211,153,.5)';this.style.background='rgba(52,211,153,.06)'" onmouseout="this.style.borderColor='rgba(52,211,153,.25)';this.style.background=''">
-   <div style="font-size:28px;margin-bottom:8px">&#128176;</div>
-   <div style="font-size:16px;font-weight:700;color:#34D399;letter-spacing:.5px;margin-bottom:4px">LTV клиентов</div>
-   <div style="font-size:11px;color:var(--text-muted)">Lifetime Value — сколько клиент приносит за всё время</div>
-   <div style="position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:20px;color:rgba(52,211,153,.3)">&#8594;</div>
+  <div style="display:flex;gap:8px;align-items:center">
+   <button class="mkt-ptab active" onclick="mktSetPeriod('week',this)" style="padding:8px 18px;font-size:12px;font-weight:700;border:1px solid rgba(59,130,246,0.4);border-radius:8px;cursor:pointer;background:rgba(59,130,246,0.15);color:#3B82F6">Неделя</button>
+   <button class="mkt-ptab" onclick="mktSetPeriod('month',this)" style="padding:8px 18px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,0.08);border-radius:8px;cursor:pointer;background:transparent;color:var(--text-muted)">Месяц</button>
+   <button onclick="mktLoadLeads()" style="padding:8px 14px;font-size:12px;font-weight:600;border:1px solid var(--dark-border);border-radius:8px;cursor:pointer;background:transparent;color:var(--text-secondary)" title="Обновить лиды из таблицы">Обновить</button>
   </div>
+ </div>
+
+ <!-- v159: Главные KPI — стройная сетка из 6 -->
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:22px">
+  <div class="mkt-main-kpi"><div class="mkt-main-kpi-label">Лидов</div><div id="mkt-leads" class="mkt-main-kpi-val" style="color:#3B82F6">—</div><div id="mkt-leads-status" class="mkt-main-kpi-sub">из Google Таблицы</div></div>
+  <div class="mkt-main-kpi"><div class="mkt-main-kpi-label">Расход</div><input id="mkt-spend" type="number" min="0" placeholder="0" oninput="mktAutoCalc()" class="mkt-main-kpi-input" style="color:#EF9A9A"><div class="mkt-main-kpi-sub">введи вручную ₸</div></div>
+  <div class="mkt-main-kpi"><div class="mkt-main-kpi-label">Продажи</div><input id="mkt-sales" type="number" min="0" placeholder="0" oninput="mktAutoCalc()" class="mkt-main-kpi-input" style="color:#81C784"><div class="mkt-main-kpi-sub">введи вручную ₸</div></div>
+  <div class="mkt-main-kpi"><div class="mkt-main-kpi-label">Прибыль</div><div id="mkt-k-profit" class="mkt-main-kpi-val">—</div><div class="mkt-main-kpi-sub">продажи − расход</div></div>
+  <div class="mkt-main-kpi"><div class="mkt-main-kpi-label">CPL</div><div id="mkt-cpl" class="mkt-main-kpi-val" style="color:#FFD54F">—</div><div class="mkt-main-kpi-sub">цена лида ₸</div></div>
+  <div class="mkt-main-kpi"><div class="mkt-main-kpi-label">ROAS</div><div id="mkt-roas" class="mkt-main-kpi-val">—</div><div class="mkt-main-kpi-sub">продажи ÷ расход</div></div>
+ </div>
+
+ <!-- v159: Модули каналов — современная сетка с превью -->
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+
+  <!-- Таргет — живые данные из Meta API -->
+  <div class="mkt-channel" onclick="mktOpenTargetPage()">
+   <div class="mkt-channel-head">
+    <div class="mkt-channel-title" style="color:#3B82F6">Таргет</div>
+    <div class="mkt-channel-arrow">→</div>
+   </div>
+   <div class="mkt-channel-sub">Meta Ads · подключено по API</div>
+   <div class="mkt-channel-stats" id="mkt-preview-target">
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Расход</div><div class="mkt-channel-stat-val">—</div></div>
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Клики</div><div class="mkt-channel-stat-val">—</div></div>
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Лиды</div><div class="mkt-channel-stat-val">—</div></div>
+   </div>
+   <div class="mkt-channel-cta">Открыть аналитику</div>
+  </div>
+
+  <!-- Instagram -->
+  <div class="mkt-channel" onclick="mktOpenInstagram()">
+   <div class="mkt-channel-head">
+    <div class="mkt-channel-title" style="color:#E1306C">Instagram</div>
+    <div class="mkt-channel-arrow">→</div>
+   </div>
+   <div class="mkt-channel-sub">Подписчики, охват, посты</div>
+   <div class="mkt-channel-stats">
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Подписчики</div><div class="mkt-channel-stat-val" id="mkt-ig-followers">—</div></div>
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Охват/нед</div><div class="mkt-channel-stat-val" id="mkt-ig-reach">—</div></div>
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Посты/нед</div><div class="mkt-channel-stat-val" id="mkt-ig-posts">—</div></div>
+   </div>
+   <div class="mkt-channel-cta" id="mkt-ig-cta">Не подключено · нажми чтобы настроить</div>
+  </div>
+
+  <!-- Telegram канал -->
+  <div class="mkt-channel" onclick="mktOpenTelegram()">
+   <div class="mkt-channel-head">
+    <div class="mkt-channel-title" style="color:#229ED9">Telegram</div>
+    <div class="mkt-channel-arrow">→</div>
+   </div>
+   <div class="mkt-channel-sub">Канал, подписчики, просмотры</div>
+   <div class="mkt-channel-stats">
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Подписчики</div><div class="mkt-channel-stat-val" id="mkt-tg-subs">—</div></div>
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Просмотры</div><div class="mkt-channel-stat-val" id="mkt-tg-views">—</div></div>
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Посты/нед</div><div class="mkt-channel-stat-val" id="mkt-tg-posts">—</div></div>
+   </div>
+   <div class="mkt-channel-cta" id="mkt-tg-cta">Не подключено · нажми чтобы настроить</div>
+  </div>
+
+  <!-- LTV -->
+  <div class="mkt-channel" onclick="mktOpenLtvPage()">
+   <div class="mkt-channel-head">
+    <div class="mkt-channel-title" style="color:#34D399">LTV клиентов</div>
+    <div class="mkt-channel-arrow">→</div>
+   </div>
+   <div class="mkt-channel-sub">Lifetime Value — сколько клиент приносит за всё время</div>
+   <div class="mkt-channel-stats">
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Средний LTV</div><div class="mkt-channel-stat-val" id="mkt-preview-ltv">—</div></div>
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Ср. срок</div><div class="mkt-channel-stat-val" id="mkt-preview-ltv-months">—</div></div>
+    <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Клиентов</div><div class="mkt-channel-stat-val" id="mkt-preview-ltv-count">—</div></div>
+   </div>
+   <div class="mkt-channel-cta">Полный расчёт</div>
+  </div>
+
  </div>
 
 </div>
@@ -6165,6 +6181,8 @@ function showView(v) {
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
+ // v159: инициализация дашборда Маркетинг при заходе
+ if (v === 'marketing' && typeof mktInitDashboard === 'function') { try { mktInitDashboard(); } catch(_){} }
  // Hide fullscreen card page when switching views
  document.getElementById('view-kb-card').style.display='none';
  // Hide marketing subpages
@@ -15279,6 +15297,95 @@ function mktOpenLtvPage() {
 function mktCloseLtvPage() {
  document.getElementById('view-mkt-ltv').style.display = 'none';
 }
+
+// v159: инициализация дашборда Маркетинг при заходе на страницу
+window.mktInitDashboard = function(){
+ mktUpdateTargetPreview();
+ mktUpdateChannelsPreview();
+ mktUpdateLtvPreview();
+};
+async function mktUpdateTargetPreview(){
+ try {
+  var resp = await fetch('/api/meta-ads?endpoint=account_summary&period=last_7d');
+  if (!resp.ok) throw new Error('http ' + resp.status);
+  var data = await resp.json();
+  if (data.error) throw new Error(data.error);
+  var s = data.summary || {};
+  var info = null;
+  try { var ir = await fetch('/api/meta-ads?endpoint=account_info'); if (ir.ok) info = await ir.json(); } catch(_){}
+  var cur = (info && info.currency) || 'USD';
+  var sym = cur === 'USD' ? '$' : (cur === 'KZT' ? '₸' : '');
+  var spend = parseFloat(s.spend||0);
+  var clicks = parseFloat(s.clicks||0);
+  var leads = parseFloat(s.leads_count||0);
+  var box = document.getElementById('mkt-preview-target');
+  if (!box) return;
+  box.innerHTML =
+   '<div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Расход 7д</div><div class="mkt-channel-stat-val">'+sym+spend.toLocaleString('ru-RU',{maximumFractionDigits:0})+'</div></div>'
+   + '<div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Клики</div><div class="mkt-channel-stat-val">'+Math.round(clicks).toLocaleString('ru-RU')+'</div></div>'
+   + '<div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Лиды</div><div class="mkt-channel-stat-val" style="color:'+(leads>0?'#4CAF50':'var(--text-muted)')+'">'+(leads>0?Math.round(leads).toLocaleString('ru-RU'):'—')+'</div></div>';
+ } catch(e) {
+  // оставляем "—" если API недоступен — показываем дискретно
+  var box = document.getElementById('mkt-preview-target');
+  if (box) box.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:6px 0">Данные подгрузятся когда откроешь раздел</div>';
+ }
+}
+function mktUpdateChannelsPreview(){
+ // Instagram / Telegram — пока ручной ввод метрик в localStorage. Полноценное API подключение — будущая задача.
+ try {
+  var ig = JSON.parse(localStorage.getItem('mkt_ig_data') || 'null');
+  if (ig && ig.followers) {
+   document.getElementById('mkt-ig-followers').textContent = ig.followers.toLocaleString('ru-RU');
+   document.getElementById('mkt-ig-reach').textContent = ig.reach ? ig.reach.toLocaleString('ru-RU') : '—';
+   document.getElementById('mkt-ig-posts').textContent = ig.posts || '—';
+   document.getElementById('mkt-ig-cta').textContent = '@' + (ig.handle||'instagram') + ' · нажми чтобы изменить';
+  }
+  var tg = JSON.parse(localStorage.getItem('mkt_tg_data') || 'null');
+  if (tg && tg.subs) {
+   document.getElementById('mkt-tg-subs').textContent = tg.subs.toLocaleString('ru-RU');
+   document.getElementById('mkt-tg-views').textContent = tg.views ? tg.views.toLocaleString('ru-RU') : '—';
+   document.getElementById('mkt-tg-posts').textContent = tg.posts || '—';
+   document.getElementById('mkt-tg-cta').textContent = '@' + (tg.channel||'channel') + ' · нажми чтобы изменить';
+  }
+ } catch(e){}
+}
+function mktUpdateLtvPreview(){
+ // Если LTV уже посчитан на странице LTV — берём оттуда
+ var avgEl = document.getElementById('ltv-avg');
+ var monthsEl = document.getElementById('ltv-avg-months');
+ var totalEl = document.getElementById('ltv-total-clients');
+ var pa = document.getElementById('mkt-preview-ltv');
+ var pm = document.getElementById('mkt-preview-ltv-months');
+ var pc = document.getElementById('mkt-preview-ltv-count');
+ if (avgEl && avgEl.textContent && avgEl.textContent !== '--') {
+  if (pa) pa.textContent = avgEl.textContent;
+  if (pm) pm.textContent = (monthsEl && monthsEl.textContent !== '--') ? monthsEl.textContent : '—';
+  if (pc) pc.textContent = (totalEl && totalEl.textContent !== '--') ? totalEl.textContent : '—';
+ }
+}
+// v159: подключение Instagram — пока ручной ввод метрик
+window.mktOpenInstagram = function(){
+ var saved = JSON.parse(localStorage.getItem('mkt_ig_data') || '{}');
+ var handle = prompt('Никнейм Instagram (без @):', saved.handle || '');
+ if (handle === null) return;
+ var followers = parseInt(prompt('Сколько подписчиков сейчас?', saved.followers || '') || '0', 10);
+ var reach = parseInt(prompt('Охват за неделю (примерно):', saved.reach || '') || '0', 10);
+ var posts = parseInt(prompt('Сколько постов в неделю?', saved.posts || '') || '0', 10);
+ localStorage.setItem('mkt_ig_data', JSON.stringify({handle:handle.replace(/^@/,''), followers, reach, posts}));
+ mktUpdateChannelsPreview();
+ if (typeof showNotif === 'function') showNotif('Instagram', 'Метрики сохранены. Полноценное API-подключение — добавим позже.');
+};
+window.mktOpenTelegram = function(){
+ var saved = JSON.parse(localStorage.getItem('mkt_tg_data') || '{}');
+ var channel = prompt('Никнейм канала Telegram (без @):', saved.channel || '');
+ if (channel === null) return;
+ var subs = parseInt(prompt('Сколько подписчиков сейчас?', saved.subs || '') || '0', 10);
+ var views = parseInt(prompt('Среднее количество просмотров поста:', saved.views || '') || '0', 10);
+ var posts = parseInt(prompt('Сколько постов в неделю?', saved.posts || '') || '0', 10);
+ localStorage.setItem('mkt_tg_data', JSON.stringify({channel:channel.replace(/^@/,''), subs, views, posts}));
+ mktUpdateChannelsPreview();
+ if (typeof showNotif === 'function') showNotif('Telegram', 'Метрики сохранены. API канала Telegram — добавим позже.');
+};
 
 // ============================================================
 // АКТЫ ВЫПОЛНЕННЫХ РАБОТ + БОНУСЫ ОПЕРАТОРОВ
