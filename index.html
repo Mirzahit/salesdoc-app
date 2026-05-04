@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v168</title>
+<title>SalesDoc — Финансовый Дашборд v169</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -921,6 +921,45 @@ body.light .plan-kb-card:hover{background:rgba(255,255,255,.92);border-color:rgb
 .plan-kb-points{background:rgba(255,255,255,.06);color:var(--text-secondary);padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;border:1px solid rgba(255,255,255,.05)}
 body.light .plan-kb-points{background:rgba(15,23,42,.06);border-color:rgba(15,23,42,.06)}
 .plan-kb-empty{text-align:center;color:var(--text-muted);font-size:11px;padding:20px 8px;opacity:.6}
+
+/* v169: общая стеклянная карточка для Burndown / Велосити / Ретро / Бэклога */
+.plan-glass-card{
+ background:rgba(255,255,255,.035);
+ backdrop-filter:blur(20px) saturate(160%);
+ -webkit-backdrop-filter:blur(20px) saturate(160%);
+ border:1px solid rgba(255,255,255,.08);
+ border-radius:16px;padding:18px;
+ box-shadow:0 4px 24px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.04)
+}
+body.light .plan-glass-card{background:rgba(255,255,255,.55);border-color:rgba(0,0,0,.06);box-shadow:0 4px 18px rgba(15,23,42,.06)}
+.plan-card-title{font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:14px;font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:.2px}
+
+/* Ретроспектива */
+.plan-retro-col{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:12px;padding:12px}
+body.light .plan-retro-col{background:rgba(255,255,255,.55);border-color:rgba(15,23,42,.04)}
+.plan-retro-head{font-size:12px;font-weight:700;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.06);letter-spacing:.3px}
+body.light .plan-retro-head{border-bottom-color:rgba(15,23,42,.06)}
+.plan-retro-item{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:10px;font-size:12px;line-height:1.45;color:var(--text-secondary);margin-bottom:8px;cursor:default;position:relative}
+body.light .plan-retro-item{background:rgba(255,255,255,.7);border-color:rgba(15,23,42,.05)}
+.plan-retro-item-del{position:absolute;top:6px;right:8px;font-size:11px;color:var(--text-muted);cursor:pointer;opacity:0;transition:opacity .15s;padding:2px 6px;border-radius:4px}
+.plan-retro-item:hover .plan-retro-item-del{opacity:.7}
+.plan-retro-item-del:hover{opacity:1;background:rgba(239,83,80,.15);color:#EF5350}
+.plan-retro-add{width:100%;padding:7px;background:transparent;border:1px dashed rgba(255,255,255,.10);border-radius:8px;color:var(--text-muted);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.plan-retro-add:hover{border-color:rgba(255,255,255,.25);color:var(--text-primary);background:rgba(255,255,255,.04)}
+body.light .plan-retro-add{border-color:rgba(15,23,42,.10)}
+body.light .plan-retro-add:hover{border-color:rgba(15,23,42,.25);background:rgba(15,23,42,.04)}
+
+/* Бэклог-таблица */
+.plan-backlog-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+.plan-backlog-table th{text-align:left;font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)}
+body.light .plan-backlog-table th{border-bottom-color:rgba(15,23,42,.06)}
+.plan-backlog-table td{padding:12px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--text-primary)}
+body.light .plan-backlog-table td{border-bottom-color:rgba(15,23,42,.04)}
+.plan-backlog-table tr:hover td{background:rgba(255,255,255,.02)}
+.plan-priority{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.3px}
+.plan-priority.high{background:rgba(239,83,80,.15);color:#EF5350}
+.plan-priority.mid{background:rgba(255,165,38,.15);color:#FFA726}
+.plan-priority.low{background:rgba(76,175,80,.15);color:#4CAF50}
 
 /* v162: окончательно гасим старый CSV-дашборд — JS metaCsvUpload иногда включает его обратно */
 #meta-ads-dashboard, #meta-ads-empty { display: none !important; }
@@ -2638,6 +2677,43 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
 
    <!-- Stats row -->
    <div id="plan-sprint-stats-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px"></div>
+
+   <!-- v169: Burndown + Скорость -->
+   <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:20px" id="plan-burndown-row">
+    <div class="plan-glass-card">
+     <div class="plan-card-title">Burndown — оставшиеся Story Points</div>
+     <div style="position:relative;height:240px"><canvas id="plan-burndown-chart"></canvas></div>
+    </div>
+    <div class="plan-glass-card">
+     <div class="plan-card-title">Скорость команды</div>
+     <div id="plan-velocity-stats" style="display:grid;gap:14px"></div>
+    </div>
+   </div>
+
+   <!-- v169: Ретроспектива — показывается только для архивных спринтов -->
+   <div id="plan-retro-block" style="display:none;margin-bottom:20px">
+    <div class="plan-glass-card">
+     <div class="plan-card-title">Ретроспектива</div>
+     <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">Что зашло, что нет, что улучшить — заполняйте после закрытия. Через 3-5 спринтов в правой колонке накопятся повторяющиеся проблемы.</div>
+     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px">
+      <div class="plan-retro-col">
+       <div class="plan-retro-head" style="color:#4CAF50">Что получилось</div>
+       <div id="plan-retro-good" class="plan-retro-list"></div>
+       <button onclick="planAddRetro('good')" class="plan-retro-add">+ Добавить</button>
+      </div>
+      <div class="plan-retro-col">
+       <div class="plan-retro-head" style="color:#EF5350">Что не зашло</div>
+       <div id="plan-retro-bad" class="plan-retro-list"></div>
+       <button onclick="planAddRetro('bad')" class="plan-retro-add">+ Добавить</button>
+      </div>
+      <div class="plan-retro-col">
+       <div class="plan-retro-head" style="color:#FFA726">Что улучшить</div>
+       <div id="plan-retro-improve" class="plan-retro-list"></div>
+       <button onclick="planAddRetro('improve')" class="plan-retro-add">+ Добавить</button>
+      </div>
+     </div>
+    </div>
+   </div>
 
    <!-- Kanban -->
    <div class="plan-kanban" id="plan-kanban">
@@ -9026,10 +9102,10 @@ window.planRender = function(){
  if (_planTab === 'active') list = all.filter(function(s){ return !s.archived; });
  else if (_planTab === 'archive') list = all.filter(function(s){ return s.archived; });
  else {
-  grid.innerHTML = '';
+  // v169: реальный бэклог — задачи без sprint_id
   if (sumTitle) sumTitle.textContent = 'Общий бэклог';
-  if (sumMeta) sumMeta.textContent = 'Задачи которые ждут попадания в спринт. Раздел в разработке.';
-  if (empty) { empty.style.display = 'block'; empty.innerHTML = '<div style="font-size:14px;margin-bottom:6px">Бэклог в разработке</div><div style="font-size:11px">Скоро здесь будет таблица задач которые ждут попадания в спринты с приоритетами и story points.</div>'; }
+  if (sumMeta) sumMeta.textContent = 'Задачи которые ждут попадания в спринт. Клик «→ В спринт» переводит задачу в выбранный активный спринт.';
+  planRenderBacklog();
   return;
  }
  if (sumTitle) sumTitle.textContent = list.length + ' ' + (_planTab === 'active' ? 'активных спринтов' : 'архивных спринтов');
@@ -9110,6 +9186,11 @@ window.planOpenSprint = function(id){
  document.getElementById('plan-sprint-meta').textContent = planFmtDate(sp.start) + ' — ' + planFmtDate(sp.end) + ' · День ' + dayN + ' из ' + totalDays + ' · ' + (sp.teamNames || '—');
  document.getElementById('view-plan-sprint').style.display = 'block';
  planRenderKanban();
+ // v169: Burndown + Velocity + Ретро (если архив)
+ var tasks = planTasksOfSprint(id);
+ planRenderBurndown(sp, tasks);
+ planRenderVelocity(sp, tasks);
+ planRenderRetro(sp);
 };
 window.planCloseSprint = function(){
  document.getElementById('view-plan-sprint').style.display = 'none';
@@ -9121,6 +9202,9 @@ window.planCloseSprint = function(){
 function planRenderKanban(){
  if (!_planCurrentSprintId) return;
  var tasks = planTasksOfSprint(_planCurrentSprintId);
+ // v169: перерисовать burndown и velocity на каждое изменение задач
+ var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;});
+ if (sp) { try { planRenderBurndown(sp, tasks); planRenderVelocity(sp, tasks); } catch(_){} }
  var STATUSES = ['todo','progress','review','done'];
  var statsRow = document.getElementById('plan-sprint-stats-row');
  if (statsRow) {
@@ -9193,6 +9277,183 @@ window.planCloseCurrentSprint = function(){
  var i = all.findIndex(function(s){return s.id===_planCurrentSprintId;});
  if (i >= 0) { all[i].archived = true; planSaveSprints(all); }
  planCloseSprint();
+};
+
+// ===== v169: BURNDOWN + VELOCITY =====
+var _planBurndownChart = null;
+function _planEnsureChart(cb){
+ if (typeof Chart !== 'undefined') return cb();
+ if (typeof ensureChartJS === 'function') return ensureChartJS(cb);
+ var s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js'; s.onload = cb; document.head.appendChild(s);
+}
+function planRenderBurndown(sprint, tasks){
+ var canvas = document.getElementById('plan-burndown-chart'); if (!canvas) return;
+ _planEnsureChart(function(){ _planDrawBurndown(canvas, sprint, tasks); });
+}
+function _planDrawBurndown(canvas, sp, tasks){
+ if (!window.Chart) return;
+ var totalDays = planDaysBetween(sp.start, sp.end);
+ var totalSP = tasks.reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
+ var labels = [], idealLine = [], actualLine = [];
+ var startDate = new Date(sp.start);
+ var todayStr = (new Date()).toISOString().slice(0,10);
+ var daysSinceStart = Math.max(0, Math.min(planDaysBetween(sp.start, todayStr) - 1, totalDays));
+ // Допущение: распределение done равномерно по дням до сегодняшнего, чтобы получить кривую.
+ var doneSP = tasks.filter(function(t){return t.status==='done';}).reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
+ for (var i = 0; i <= totalDays; i++) {
+  var d = new Date(startDate.getTime() + i*86400000);
+  labels.push(('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2));
+  idealLine.push(Math.max(0, Math.round(totalSP * (1 - i/totalDays) * 10) / 10));
+  if (i <= daysSinceStart) {
+   var done_at_i = daysSinceStart > 0 ? Math.round(doneSP * (i / daysSinceStart) * 10) / 10 : 0;
+   actualLine.push(Math.max(0, totalSP - done_at_i));
+  } else {
+   actualLine.push(null);
+  }
+ }
+ if (_planBurndownChart) { try { _planBurndownChart.destroy(); } catch(e){} }
+ _planBurndownChart = new Chart(canvas.getContext('2d'), {
+  type:'line',
+  data:{ labels: labels, datasets:[
+   { label:'Идеал', data: idealLine, borderColor:'rgba(156,163,175,.6)', borderDash:[5,4], borderWidth:1.5, pointRadius:0, fill:false, tension:0 },
+   { label:'Факт', data: actualLine, borderColor:'#3B82F6', backgroundColor:'rgba(59,130,246,.08)', borderWidth:2.5, pointRadius:3, pointBackgroundColor:'#3B82F6', fill:true, tension:.25 }
+  ]},
+  options:{ responsive:true, maintainAspectRatio:false,
+   plugins:{ legend:{ labels:{ color:'#9CA3AF', font:{size:11} } }, tooltip:{ backgroundColor:'rgba(0,0,0,.85)', titleColor:'#fff', bodyColor:'#E5E7EB' } },
+   scales:{
+    x:{ ticks:{ color:'#6B7280', font:{size:10} }, grid:{ color:'rgba(255,255,255,.05)' } },
+    y:{ beginAtZero:true, ticks:{ color:'#6B7280', font:{size:10} }, grid:{ color:'rgba(255,255,255,.05)' }, title:{ display:true, text:'Story Points', color:'#9CA3AF', font:{size:10} } }
+   }
+  }
+ });
+}
+function planRenderVelocity(sprint, tasks){
+ var box = document.getElementById('plan-velocity-stats'); if (!box) return;
+ var totalSP = tasks.reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
+ var doneSP = tasks.filter(function(t){return t.status==='done';}).reduce(function(a,t){return a + (parseInt(t.points)||0);}, 0);
+ var totalDays = planDaysBetween(sprint.start, sprint.end);
+ var todayStr = (new Date()).toISOString().slice(0,10);
+ var daysSinceStart = Math.max(1, Math.min(planDaysBetween(sprint.start, todayStr), totalDays));
+ var avgPerDay = (doneSP / daysSinceStart) || 0;
+ var spLeft = totalSP - doneSP;
+ var daysToFinish = avgPerDay > 0 ? Math.ceil(spLeft / avgPerDay) : null;
+ var endDate = new Date(sprint.end);
+ var todayDate = new Date(); todayDate.setHours(0,0,0,0);
+ var daysLeft = Math.max(0, Math.round((endDate - todayDate)/86400000));
+ var willMakeIt = daysToFinish !== null && daysToFinish <= daysLeft;
+ var forecast = daysToFinish === null ? '—' : (willMakeIt ? planFmtDate(sprint.end) + ' — успеваем' : 'Не успеваем — нужно ' + daysToFinish + ' дн., осталось ' + daysLeft);
+ box.innerHTML =
+  '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Сделано за ' + daysSinceStart + ' дн.</div><div style="font-size:24px;font-weight:700;color:var(--text-primary);font-family:Space Grotesk,Inter,sans-serif">' + doneSP + ' <span style="font-size:12px;color:var(--text-muted);font-weight:400">SP</span></div></div>'
+  + '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Среднее в день</div><div style="font-size:24px;font-weight:700;color:var(--text-primary);font-family:Space Grotesk,Inter,sans-serif">' + avgPerDay.toFixed(1) + ' <span style="font-size:12px;color:var(--text-muted);font-weight:400">SP</span></div></div>'
+  + '<div><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Прогноз закрытия</div><div style="font-size:13px;font-weight:700;color:' + (willMakeIt ? '#4CAF50' : '#FFA726') + '">' + forecast + '</div></div>'
+  + '<div style="padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--text-muted);line-height:1.4">' + (totalSP === 0 ? 'Добавь задачи и проставь Story Points чтобы увидеть прогноз.' : ('Осталось ' + spLeft + ' SP. ' + (willMakeIt ? 'Темп достаточен.' : 'Нужно ускоряться.'))) + '</div>';
+}
+
+// ===== v169: РЕТРОСПЕКТИВА =====
+var _planRetrosKey = 'plan_retros_v1';
+function planLoadRetros(){ try { var s = localStorage.getItem(_planRetrosKey); if (s) return JSON.parse(s); } catch(e){} return []; }
+function planSaveRetros(arr){ try { localStorage.setItem(_planRetrosKey, JSON.stringify(arr)); } catch(e){} }
+function planRetrosOfSprint(sprintId, type){
+ return planLoadRetros().filter(function(r){ return r.sprint_id === sprintId && r.type === type; });
+}
+function planRenderRetro(sprint){
+ var block = document.getElementById('plan-retro-block');
+ if (!block) return;
+ if (!sprint.archived) { block.style.display = 'none'; return; }
+ block.style.display = 'block';
+ ['good','bad','improve'].forEach(function(type){
+  var box = document.getElementById('plan-retro-' + type);
+  if (!box) return;
+  var items = planRetrosOfSprint(sprint.id, type);
+  if (!items.length) { box.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:8px 4px;opacity:.6">Пусто. Добавь первую запись ↓</div>'; return; }
+  box.innerHTML = items.map(function(r){
+   return '<div class="plan-retro-item">' + (r.text||'').replace(/</g,'&lt;')
+    + '<div style="font-size:10px;color:var(--text-muted);margin-top:6px">— ' + (r.author||'аноним') + ' · ' + (r.date||'') + '</div>'
+    + '<span class="plan-retro-item-del" onclick="planDelRetro(' + r.id + ')">✕</span>'
+   + '</div>';
+  }).join('');
+ });
+}
+window.planAddRetro = function(type){
+ if (!_planCurrentSprintId) return;
+ var text = prompt(type === 'good' ? 'Что получилось хорошо?' : type === 'bad' ? 'Что не зашло?' : 'Что улучшить в следующем спринте?');
+ if (!text) return;
+ var author = prompt('Кто пишет?', 'Мырзахыт') || 'Мырзахыт';
+ var all = planLoadRetros();
+ var nextId = (all.reduce(function(m,r){return Math.max(m, r.id||0);}, 0) || 0) + 1;
+ all.push({ id:nextId, sprint_id:_planCurrentSprintId, type:type, text:text, author:author, date: (new Date()).toISOString().slice(0,10) });
+ planSaveRetros(all);
+ var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;});
+ if (sp) planRenderRetro(sp);
+};
+window.planDelRetro = function(id){
+ if (!confirm('Удалить запись?')) return;
+ var all = planLoadRetros().filter(function(r){return r.id!==id;});
+ planSaveRetros(all);
+ var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;});
+ if (sp) planRenderRetro(sp);
+};
+
+// ===== v169: БЭКЛОГ =====
+// Задачи без sprint_id (или с sprint_id=null) — общий бэклог. Показывается на вкладке Бэклог в главной странице.
+var PLAN_DEFAULT_BACKLOG = [
+ { id:201, sprint_id:null, title:'Подготовить договор для Сайрам Нан', project:'Внедрение Сайрам Нан', priority:'high', points:3 },
+ { id:202, sprint_id:null, title:'Снять видео для Reels — 5 шт', project:'Контент FMCG SNG', priority:'mid', points:5 },
+ { id:203, sprint_id:null, title:'Регламент amoCRM — финализация', project:'Внутренние процессы', priority:'mid', points:3 },
+ { id:204, sprint_id:null, title:'Trophy app — рестайлинг под Whoop', project:'Trophy', priority:'low', points:8 }
+];
+function planEnsureBacklog(){
+ var all = planLoadTasks();
+ if (!all.some(function(t){return !t.sprint_id;})) {
+  PLAN_DEFAULT_BACKLOG.forEach(function(t){ if (!all.find(function(x){return x.id===t.id;})) all.push(Object.assign({status:'todo'}, t)); });
+  planSaveTasks(all);
+ }
+}
+function planRenderBacklog(){
+ var grid = document.getElementById('plan-sprints-grid');
+ var empty = document.getElementById('plan-empty');
+ if (!grid) return;
+ planEnsureBacklog();
+ var all = planLoadTasks().filter(function(t){return !t.sprint_id;});
+ var pr = { high:'Высокий', mid:'Средний', low:'Низкий' };
+ if (!all.length) { grid.innerHTML = ''; if (empty) { empty.style.display='block'; empty.innerHTML='<div style="font-size:14px;margin-bottom:6px">Бэклог пуст</div><div style="font-size:11px">Добавь задачу через кнопку в спринте — потом сможешь её сюда вернуть, если решишь отложить.</div>'; } return; }
+ if (empty) empty.style.display = 'none';
+ var rows = all.sort(function(a,b){
+  var w = { high:0, mid:1, low:2 };
+  return (w[a.priority]||9) - (w[b.priority]||9);
+ }).map(function(t){
+  return '<tr>'
+   + '<td><strong style="color:var(--text-primary)">' + (t.title||'').replace(/</g,'&lt;') + '</strong></td>'
+   + '<td style="color:var(--text-muted)">' + (t.project||'—') + '</td>'
+   + '<td><span class="plan-priority ' + t.priority + '">' + (pr[t.priority]||t.priority) + '</span></td>'
+   + '<td>' + (t.points||0) + '</td>'
+   + '<td><button class="plan-create-btn" style="padding:5px 12px;font-size:10px" onclick="planMoveToSprint(' + t.id + ')">→ В спринт</button></td>'
+  + '</tr>';
+ }).join('');
+ grid.innerHTML = '<div class="plan-glass-card" style="grid-column:1/-1;overflow-x:auto">'
+  + '<div class="plan-card-title">Общий бэклог — задачи которые ждут попадания в спринт</div>'
+  + '<table class="plan-backlog-table">'
+  +  '<thead><tr><th>Задача</th><th>Проект</th><th>Приоритет</th><th>SP</th><th>Действие</th></tr></thead>'
+  +  '<tbody>' + rows + '</tbody>'
+  + '</table>'
+ + '</div>';
+}
+window.planMoveToSprint = function(taskId){
+ var active = planLoadSprints().filter(function(s){return !s.archived;});
+ if (!active.length) { alert('Нет активных спринтов. Сначала создай спринт.'); return; }
+ var list = active.map(function(s,i){ return (i+1)+'. '+s.name; }).join('\n');
+ var pick = prompt('В какой спринт перевести? Введи номер:\n\n'+list, '1');
+ var idx = parseInt(pick,10) - 1;
+ if (isNaN(idx) || idx < 0 || idx >= active.length) return;
+ var target = active[idx];
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===taskId;});
+ if (i < 0) return;
+ all[i].sprint_id = target.id;
+ all[i].status = 'todo';
+ planSaveTasks(all);
+ planRecountSprint(target.id);
+ planRenderBacklog();
 };
 window.planInit = function(){
  try { if (!localStorage.getItem(_planSprintsKey)) planSaveSprints(PLAN_DEFAULT_SPRINTS); } catch(e){}
