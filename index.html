@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v157</title>
+<title>SalesDoc — Финансовый Дашборд v158</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -817,6 +817,18 @@ body.light .kpi-footer-inline{display:none !important}
 .meta-kpi-card{background:var(--dark-panel);border-radius:10px;padding:12px;text-align:center}
 .meta-kpi-label{font-size:10px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
 .meta-kpi-val{font-size:20px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif}
+/* v158: главные KPI с человеческими подписями */
+.meta-kpi-big{background:var(--dark-card);border:1px solid var(--dark-border);border-radius:14px;padding:18px 20px;position:relative;transition:all .2s}
+.meta-kpi-big:hover{border-color:rgba(59,130,246,.4);transform:translateY(-1px)}
+.meta-kpi-big-label{font-size:12px;color:var(--text-secondary);margin-bottom:6px;font-weight:500;letter-spacing:.2px;display:flex;align-items:center;gap:6px}
+.meta-kpi-big-help{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--dark-panel);border:1px solid var(--dark-border);color:var(--text-muted);font-size:10px;cursor:help;font-weight:700}
+.meta-kpi-big-help:hover{color:#3B82F6;border-color:rgba(59,130,246,.4)}
+.meta-kpi-big-val{font-size:30px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif;letter-spacing:-.5px;line-height:1.05}
+.meta-kpi-big-trend{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;margin-top:6px;padding:3px 8px;border-radius:20px}
+.meta-kpi-big-trend.up-good{background:rgba(76,175,80,.12);color:#4CAF50}
+.meta-kpi-big-trend.up-bad{background:rgba(239,83,80,.12);color:#EF5350}
+.meta-kpi-big-trend.flat{background:var(--dark-panel);color:var(--text-muted)}
+.meta-kpi-big-sub{font-size:11px;color:var(--text-muted);margin-top:4px}
 .meta-month-card{background:var(--dark-card);border:1px solid var(--dark-border);border-radius:10px;padding:12px;text-align:center}
 .meta-month-card .month-name{font-size:11px;color:var(--text-muted);margin-bottom:4px}
 .meta-month-card .month-spend{font-size:18px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk','Inter',sans-serif}
@@ -2535,16 +2547,51 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
    </div>
    <div id="meta-csv-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;display:none"></div>
 
-   <!-- v157: KPI-блок Meta API -->
-   <div id="meta-api-kpi" style="display:none;margin-bottom:16px">
-    <div id="meta-api-status" style="font-size:11px;color:var(--text-muted);margin-bottom:8px"></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
-     <div class="meta-kpi-card" id="mkpi-spend"></div>
-     <div class="meta-kpi-card" id="mkpi-impressions"></div>
+   <!-- v158: Главная панель Meta API — на простом языке -->
+   <div id="meta-api-kpi" style="display:none;margin-bottom:20px">
+    <div id="meta-api-status" style="font-size:11px;color:var(--text-muted);margin-bottom:14px"></div>
+
+    <!-- Главные 4 KPI: на простом языке, крупно -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px">
+     <div class="meta-kpi-big" id="mkpi-spend"></div>
+     <div class="meta-kpi-big" id="mkpi-leads"></div>
+     <div class="meta-kpi-big" id="mkpi-cpl"></div>
+     <div class="meta-kpi-big" id="mkpi-impressions"></div>
+    </div>
+
+    <!-- Доп. метрики помельче -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:18px">
      <div class="meta-kpi-card" id="mkpi-clicks"></div>
      <div class="meta-kpi-card" id="mkpi-ctr"></div>
      <div class="meta-kpi-card" id="mkpi-cpc"></div>
      <div class="meta-kpi-card" id="mkpi-reach"></div>
+    </div>
+
+    <!-- График по дням -->
+    <div style="background:var(--dark-card);border:1px solid var(--dark-border);border-radius:14px;padding:18px;margin-bottom:14px">
+     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div>
+       <div style="font-size:13px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk',sans-serif">Расход и лиды по дням</div>
+       <div style="font-size:11px;color:var(--text-muted)">Видишь когда были скачки в трате и в результатах</div>
+      </div>
+     </div>
+     <div style="position:relative;height:260px"><canvas id="meta-api-daily-chart"></canvas></div>
+    </div>
+
+    <!-- Таблица кампаний -->
+    <div style="background:var(--dark-card);border:1px solid var(--dark-border);border-radius:14px;padding:18px">
+     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div>
+       <div style="font-size:13px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk',sans-serif">Кампании</div>
+       <div style="font-size:11px;color:var(--text-muted)">Сравни какая работает лучше — по цене лида и расходу</div>
+      </div>
+     </div>
+     <div style="overflow-x:auto"><table id="meta-api-camps" class="data-table" style="font-size:12px;width:100%"></table></div>
+    </div>
+
+    <!-- Подсказка если лидов нет -->
+    <div id="meta-api-no-leads-hint" style="display:none;margin-top:14px;padding:14px 16px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:12px;font-size:12px;color:var(--text-secondary);line-height:1.55">
+     <b style="color:#FBBF24">Лиды не считаются</b> — Meta видит расход и клики, но не видит сколько из них стало лидами. Чтобы посчитать: либо <b>установи Meta Pixel на salesdoc.io</b> (5 минут работы веб-разработчика), либо настрой кампанию на <b>цель «Лидогенерация»</b> с формой Meta. Без этого «Цена лида» не считается.
     </div>
    </div>
 
@@ -8673,31 +8720,55 @@ window.mktAutoCalc = function() {
 
 // /MARKETING
 
-// ===== v157: META ADS — ЖИВЫЕ ДАННЫЕ ИЗ API =====
+// ===== v158: META ADS — ЖИВЫЕ ДАННЫЕ ИЗ API + ПОНЯТНЫЙ UX =====
 // Endpoint /api/meta-ads (Vercel serverless) проксирует к Meta Graph API.
-// ENV: META_ACCESS_TOKEN, META_AD_ACCOUNT_ID, META_BUSINESS_ID — заданы в Vercel.
-var _metaApiCache = null; // { period, summary, days, fetchedAt }
-function _metaApiFmtMoney(v, currency){
+// ENV: META_ACCESS_TOKEN, META_AD_ACCOUNT_ID, META_BUSINESS_ID.
+var _metaApiCache = null;
+var _metaApiDailyChart = null;
+
+function _metaFmtMoney(v, currency){
  var n = parseFloat(v||0);
- if (isNaN(n)) return '—';
- var sym = currency === 'USD' ? '$' : (currency === 'KZT' ? '₸' : '');
+ if (isNaN(n) || !isFinite(n)) return '—';
+ var sym = currency === 'USD' ? '$' : (currency === 'KZT' ? '₸ ' : '');
  return sym + n.toLocaleString('ru-RU', {maximumFractionDigits: 2});
 }
-function _metaApiFmtNum(v){
- var n = parseInt(v||0, 10);
+function _metaFmtNum(v){
+ var n = parseFloat(v||0);
  if (isNaN(n)) return '—';
- return n.toLocaleString('ru-RU');
+ return Math.round(n).toLocaleString('ru-RU');
 }
-function _metaApiFmtPct(v){
+function _metaFmtPct(v){
  var n = parseFloat(v||0);
  if (isNaN(n)) return '—';
  return n.toFixed(2) + '%';
 }
-function _metaApiKpiCard(label, value, sub){
- return '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">'+label+'</div>'
-  + '<div style="font-size:22px;font-weight:700;color:var(--text-primary);font-family:\'Space Grotesk\',sans-serif">'+value+'</div>'
+// Расчёт изменения относительно предыдущего периода. lowerIsBetter=true для расход/CPL/CPC.
+function _metaTrendBadge(currentVal, prevVal, lowerIsBetter){
+ var c = parseFloat(currentVal||0), p = parseFloat(prevVal||0);
+ if (!isFinite(c) || !isFinite(p) || p === 0) return '';
+ var pct = ((c - p) / p) * 100;
+ if (Math.abs(pct) < 0.5) return '<span class="meta-kpi-big-trend flat">≈ как в прошлом периоде</span>';
+ var arrow = pct > 0 ? '↑' : '↓';
+ // Изменение в "хорошую" сторону: либо рост и lowerIsBetter=false, либо падение и lowerIsBetter=true
+ var good = (pct > 0 && !lowerIsBetter) || (pct < 0 && lowerIsBetter);
+ var cls = good ? 'up-good' : 'up-bad';
+ return '<span class="meta-kpi-big-trend '+cls+'">'+arrow+' '+Math.abs(pct).toFixed(0)+'% к прошлому периоду</span>';
+}
+function _metaKpiBig(id, label, value, helpText, trendHtml, sub){
+ var el = document.getElementById(id); if (!el) return;
+ var help = helpText ? '<span class="meta-kpi-big-help" title="'+helpText.replace(/"/g,'&quot;')+'">?</span>' : '';
+ el.innerHTML = '<div class="meta-kpi-big-label">'+label+help+'</div>'
+  + '<div class="meta-kpi-big-val">'+value+'</div>'
+  + (trendHtml || '')
+  + (sub ? '<div class="meta-kpi-big-sub">'+sub+'</div>' : '');
+}
+function _metaKpiSmall(id, label, value, sub){
+ var el = document.getElementById(id); if (!el) return;
+ el.innerHTML = '<div class="meta-kpi-label">'+label+'</div>'
+  + '<div class="meta-kpi-val">'+value+'</div>'
   + (sub ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+sub+'</div>' : '');
 }
+
 window.mktMetaApiLoad = async function(){
  var btn = document.getElementById('meta-api-btn');
  var lbl = document.getElementById('meta-api-btn-label');
@@ -8705,47 +8776,196 @@ window.mktMetaApiLoad = async function(){
  var kpiEl = document.getElementById('meta-api-kpi');
  var period = (document.getElementById('meta-api-period')||{}).value || 'last_30d';
  if (btn) btn.disabled = true;
- if (lbl) lbl.textContent = 'Загрузка...';
+ if (lbl) lbl.textContent = 'Загружаю...';
  try {
-  var resp = await fetch('/api/meta-ads?endpoint=account_summary&period=' + encodeURIComponent(period));
-  var data = await resp.json();
-  if (!resp.ok) throw new Error(data.error || ('HTTP '+resp.status));
-  // Также параллельно подтянем account_info для валюты и amount_spent
-  var infoResp = await fetch('/api/meta-ads?endpoint=account_info');
+  // Параллельно: summary с предыдущим периодом, daily breakdown, account_info, campaigns
+  var [sumResp, dailyResp, infoResp, campsResp] = await Promise.all([
+   fetch('/api/meta-ads?endpoint=account_summary&period=' + encodeURIComponent(period)),
+   fetch('/api/meta-ads?endpoint=daily&period=' + encodeURIComponent(period)),
+   fetch('/api/meta-ads?endpoint=account_info'),
+   fetch('/api/meta-ads?endpoint=campaigns&period=' + encodeURIComponent(period))
+  ]);
+  var sumData = await sumResp.json();
+  if (!sumResp.ok) throw new Error(sumData.error || ('HTTP '+sumResp.status));
+  var dailyData = dailyResp.ok ? await dailyResp.json() : { days: [] };
   var info = infoResp.ok ? await infoResp.json() : {};
-  _metaApiCache = { period: data.period, summary: data.summary, accountInfo: info, fetchedAt: Date.now() };
-  _metaApiRenderKpi(data.summary, info, period);
+  var campsData = campsResp.ok ? await campsResp.json() : { campaigns: [] };
+
+  _metaApiCache = { period, sum: sumData, daily: dailyData, info, camps: campsData, fetchedAt: Date.now() };
+
+  _metaRenderMain(sumData, info);
+  _metaRenderDailyChart(dailyData.days || [], info);
+  _metaRenderCampaigns(campsData.campaigns || [], info);
+
   if (kpiEl) kpiEl.style.display = 'block';
   if (statusEl) {
-   var s = data.summary || {};
-   statusEl.textContent = 'Период: '+(s.date_start||'?')+' — '+(s.date_stop||'?')+' · Аккаунт: '+(info.id||'?')+' · '+(info.currency||'')+' · Обновлено: '+(new Date()).toLocaleTimeString('ru-RU');
+   var s = sumData.summary || {};
+   statusEl.style.color = '';
+   statusEl.textContent = 'Период: '+(s.date_start||'?')+' — '+(s.date_stop||'?')
+    + ' · Аккаунт: '+(info.id||'?')
+    + ' · Валюта: '+(info.currency||'')
+    + ' · Обновлено: '+(new Date()).toLocaleTimeString('ru-RU');
   }
  } catch(e) {
   console.error('Meta API load failed:', e);
-  if (statusEl) { statusEl.textContent = 'Ошибка: ' + (e.message||e); statusEl.style.color = '#EF5350'; }
+  if (statusEl) { statusEl.textContent = 'Ошибка загрузки: ' + (e.message||e); statusEl.style.color = '#EF5350'; }
   if (kpiEl) kpiEl.style.display = 'block';
  } finally {
   if (btn) btn.disabled = false;
   if (lbl) lbl.textContent = 'Обновить через Meta API';
  }
 };
-function _metaApiRenderKpi(s, info, period){
+
+function _metaRenderMain(sumData, info){
+ var s = sumData && sumData.summary;
+ var p = sumData && sumData.previous;
+ var cur = (info && info.currency) || 'USD';
  if (!s) {
-  ['mkpi-spend','mkpi-impressions','mkpi-clicks','mkpi-ctr','mkpi-cpc','mkpi-reach'].forEach(function(id){
-   var el = document.getElementById(id); if (el) el.innerHTML = _metaApiKpiCard('Нет данных', '—');
+  ['mkpi-spend','mkpi-leads','mkpi-cpl','mkpi-impressions'].forEach(function(id){
+   _metaKpiBig(id, 'Нет данных', '—', null, '', null);
   });
   return;
  }
- var cur = (info && info.currency) || 'USD';
- var card = function(id, label, val, sub){ var el = document.getElementById(id); if (el) el.innerHTML = _metaApiKpiCard(label, val, sub); };
- card('mkpi-spend', 'Расход', _metaApiFmtMoney(s.spend, cur));
- card('mkpi-impressions', 'Показы', _metaApiFmtNum(s.impressions));
- card('mkpi-clicks', 'Клики', _metaApiFmtNum(s.clicks));
- card('mkpi-ctr', 'CTR', _metaApiFmtPct(s.ctr));
- card('mkpi-cpc', 'CPC', _metaApiFmtMoney(s.cpc, cur));
- card('mkpi-reach', 'Охват', _metaApiFmtNum(s.reach), 'Частота: '+ (parseFloat(s.frequency||0)).toFixed(2));
+
+ // Главные 4 — на простом языке + tooltip + тренд
+ _metaKpiBig('mkpi-spend',
+  'Сколько потратили',
+  _metaFmtMoney(s.spend, cur),
+  'Сколько денег ушло на рекламу за выбранный период.',
+  _metaTrendBadge(s.spend, p && p.spend, true),
+  'За весь период'
+ );
+
+ var leads = parseFloat(s.leads_count || 0);
+ var prevLeads = p ? parseFloat(p.leads_count || 0) : 0;
+ _metaKpiBig('mkpi-leads',
+  'Сколько лидов получили',
+  leads > 0 ? _metaFmtNum(leads) : '—',
+  'Сколько людей оставили заявку, зарегистрировались или подписались. Считается из событий Meta — нужен Pixel на сайте или цель «Лидогенерация» в кампании.',
+  leads > 0 ? _metaTrendBadge(leads, prevLeads, false) : '',
+  leads > 0 ? null : 'Нет событий лидов'
+ );
+
+ var cpl = (leads > 0) ? (parseFloat(s.spend) / leads) : null;
+ var prevCpl = (prevLeads > 0 && p) ? (parseFloat(p.spend) / prevLeads) : null;
+ _metaKpiBig('mkpi-cpl',
+  'Цена одного лида',
+  cpl !== null ? _metaFmtMoney(cpl.toFixed(2), cur) : '—',
+  'Сколько стоит один полученный лид. Считается как «потрачено / количество лидов». Чем ниже — тем выгоднее реклама.',
+  cpl !== null && prevCpl !== null ? _metaTrendBadge(cpl, prevCpl, true) : '',
+  cpl === null ? 'Лидов нет — не считается' : null
+ );
+
+ _metaKpiBig('mkpi-impressions',
+  'Сколько раз показали',
+  _metaFmtNum(s.impressions),
+  'Общее количество показов рекламы. Один человек может увидеть несколько раз — это всё считается отдельно.',
+  _metaTrendBadge(s.impressions, p && p.impressions, false),
+  null
+ );
+
+ // Доп. метрики
+ _metaKpiSmall('mkpi-clicks', 'Сколько раз нажали', _metaFmtNum(s.clicks), 'Кликов на рекламу');
+ _metaKpiSmall('mkpi-ctr', 'Кликабельность', _metaFmtPct(s.ctr), 'CTR — % людей, которые кликают');
+ _metaKpiSmall('mkpi-cpc', 'Цена клика', _metaFmtMoney(s.cpc, cur), 'CPC — сколько стоит один клик');
+ _metaKpiSmall('mkpi-reach', 'Уникальных людей', _metaFmtNum(s.reach), 'Частота: '+(parseFloat(s.frequency||0)).toFixed(2)+' показа на человека');
+
+ // Подсказка про пиксель если лидов нет
+ var hint = document.getElementById('meta-api-no-leads-hint');
+ if (hint) hint.style.display = (leads === 0) ? 'block' : 'none';
 }
-// /v157
+
+function _metaEnsureChart(cb){
+ if (typeof Chart !== 'undefined') return cb();
+ if (typeof ensureChartJS === 'function') return ensureChartJS(cb);
+ var s = document.createElement('script');
+ s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
+ s.onload = cb; document.head.appendChild(s);
+}
+function _metaRenderDailyChart(days, info){
+ var canvas = document.getElementById('meta-api-daily-chart');
+ if (!canvas || !days || !days.length) return;
+ _metaEnsureChart(function(){ _metaDrawDailyChart(canvas, days, info); });
+}
+function _metaDrawDailyChart(canvas, days, info){
+ if (!window.Chart) return;
+ var labels = days.map(function(d){
+  var dt = new Date(d.date_start);
+  return dt.toLocaleDateString('ru-RU', {day:'2-digit', month:'short'});
+ });
+ var spendArr = days.map(function(d){ return parseFloat(d.spend||0); });
+ var leadsArr = days.map(function(d){ return parseFloat(d.leads_count||0); });
+ var hasLeads = leadsArr.some(function(v){ return v > 0; });
+
+ if (_metaApiDailyChart) { try{_metaApiDailyChart.destroy();}catch(e){} }
+ _metaApiDailyChart = new Chart(canvas.getContext('2d'), {
+  type: 'bar',
+  data: {
+   labels: labels,
+   datasets: [
+    { label: 'Расход ' + ((info&&info.currency)||''), data: spendArr, backgroundColor: 'rgba(59,130,246,.6)', borderRadius: 4, yAxisID: 'y' },
+    ...(hasLeads ? [{ label: 'Лиды', data: leadsArr, type: 'line', borderColor: '#4CAF50', backgroundColor: 'rgba(76,175,80,.15)', tension: .3, fill: true, yAxisID: 'y1', pointRadius: 3 }] : [])
+   ]
+  },
+  options: {
+   responsive: true,
+   maintainAspectRatio: false,
+   plugins: {
+    legend: { labels: { color: '#9CA3AF', font: { size: 11 } } },
+    tooltip: { backgroundColor: 'rgba(0,0,0,.85)', titleColor: '#fff', bodyColor: '#E5E7EB' }
+   },
+   scales: {
+    x: { ticks: { color: '#6B7280', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+    y: { type: 'linear', position: 'left', ticks: { color: '#6B7280', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' }, title: { display: true, text: 'Расход', color: '#9CA3AF', font: { size: 10 } } },
+    ...(hasLeads ? { y1: { type: 'linear', position: 'right', ticks: { color: '#4CAF50', font: { size: 10 } }, grid: { display: false }, title: { display: true, text: 'Лиды', color: '#4CAF50', font: { size: 10 } } } } : {})
+   }
+  }
+ });
+}
+
+function _metaRenderCampaigns(camps, info){
+ var t = document.getElementById('meta-api-camps');
+ if (!t) return;
+ var cur = (info && info.currency) || 'USD';
+ if (!camps.length) {
+  t.innerHTML = '<tbody><tr><td style="padding:20px;text-align:center;color:var(--text-muted)">Нет данных по кампаниям за этот период</td></tr></tbody>';
+  return;
+ }
+ // Сортируем — активные сверху, потом по расходу
+ camps.sort(function(a,b){
+  var sa = a.status === 'ACTIVE' ? 1 : 0, sb = b.status === 'ACTIVE' ? 1 : 0;
+  if (sa !== sb) return sb - sa;
+  var spA = a.insights ? parseFloat(a.insights.spend||0) : 0;
+  var spB = b.insights ? parseFloat(b.insights.spend||0) : 0;
+  return spB - spA;
+ });
+ var rows = camps.map(function(c){
+  var ins = c.insights || {};
+  var leads = parseFloat(ins.leads_count||0);
+  var spend = parseFloat(ins.spend||0);
+  var cpl = leads > 0 ? (spend/leads) : null;
+  var statusBadge = c.status === 'ACTIVE'
+   ? '<span style="font-size:9px;padding:2px 7px;border-radius:20px;background:rgba(76,175,80,.12);color:#4CAF50">Идёт</span>'
+   : '<span style="font-size:9px;padding:2px 7px;border-radius:20px;background:var(--dark-panel);color:var(--text-muted)">'+(c.status||'?')+'</span>';
+  return '<tr>'
+   + '<td style="padding:8px 6px"><div style="font-size:12px;font-weight:600">'+(c.name||'—')+'</div><div style="margin-top:3px">'+statusBadge+'</div></td>'
+   + '<td style="text-align:right;padding:8px 6px"><b>'+_metaFmtMoney(ins.spend, cur)+'</b></td>'
+   + '<td style="text-align:right;padding:8px 6px">'+_metaFmtNum(ins.impressions)+'</td>'
+   + '<td style="text-align:right;padding:8px 6px">'+_metaFmtNum(ins.clicks)+'</td>'
+   + '<td style="text-align:right;padding:8px 6px;color:'+(leads>0?'#4CAF50':'var(--text-muted)')+'"><b>'+(leads>0?_metaFmtNum(leads):'—')+'</b></td>'
+   + '<td style="text-align:right;padding:8px 6px">'+(cpl!==null?_metaFmtMoney(cpl.toFixed(2), cur):'<span style="color:var(--text-muted)">—</span>')+'</td>'
+   + '</tr>';
+ }).join('');
+ t.innerHTML = '<thead><tr>'
+  + '<th style="text-align:left;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Кампания</th>'
+  + '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Расход</th>'
+  + '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Показы</th>'
+  + '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Клики</th>'
+  + '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Лиды</th>'
+  + '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Цена лида</th>'
+  + '</tr></thead><tbody>' + rows + '</tbody>';
+}
+// /v158
 
 // ===== META ADS CSV DASHBOARD =====
 (function(){
