@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v170</title>
+<title>SalesDoc — Финансовый Дашборд v171</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6455,7 +6455,7 @@ function showView(v) {
  // v159: инициализация дашборда Маркетинг при заходе
  if (v === 'marketing' && typeof mktInitDashboard === 'function') { try { mktInitDashboard(); } catch(_){} }
  // v165: инициализация Планёрок при заходе
- if (v === 'planning' && typeof planInit === 'function') { try { planInit(); } catch(_){} }
+ if (v === 'planning' && typeof planningInit === 'function') { try { planningInit(); } catch(_){} }
  // Hide fullscreen card page when switching views
  document.getElementById('view-kb-card').style.display='none';
  // Hide marketing subpages
@@ -9109,7 +9109,7 @@ window.planSetTab = function(tab, btn){
  _planTab = tab;
  document.querySelectorAll('.plan-tab').forEach(function(b){ b.classList.remove('active'); });
  if (btn) btn.classList.add('active');
- planRender();
+ planningRender();
 };
 // v170: общая статистика по выбранной вкладке (активные/архив)
 function planRenderOverallStats(sprints){
@@ -9142,7 +9142,7 @@ function planRenderOverallStats(sprints){
   + '</div>';
  }).join('');
 }
-window.planRender = function(){
+window.planningRender = function(){
  var grid = document.getElementById('plan-sprints-grid');
  var empty = document.getElementById('plan-empty');
  var sumTitle = document.getElementById('plan-summary-title');
@@ -9192,7 +9192,7 @@ window.planCreateSprint = function(){
  var sp = { id: nextId, name: name, goal: goal, start: ymd(start), end: ymd(end), status:'ontrack', color: colors[(nextId-1) % colors.length], total:0, in_progress:0, done:0, team:[], teamNames:'', archived:false };
  all.unshift(sp);
  planSaveSprints(all);
- planRender();
+ planningRender();
  if (typeof showNotif === 'function') showNotif('Спринт создан', name + ' · ' + planFmtDate(sp.start) + ' — ' + planFmtDate(sp.end));
 };
 // v168: задачи спринта — отдельный store
@@ -9251,7 +9251,7 @@ window.planCloseSprint = function(){
  document.getElementById('view-plan-sprint').style.display = 'none';
  _planCurrentSprintId = null;
  // Перерисовать карточку снаружи (могли поменяться счётчики)
- if (typeof planRender === 'function') planRender();
+ if (typeof planningRender === 'function') planningRender();
 };
 
 function planRenderKanban(){
@@ -9510,9 +9510,9 @@ window.planMoveToSprint = function(taskId){
  planRecountSprint(target.id);
  planRenderBacklog();
 };
-window.planInit = function(){
+window.planningInit = function(){
  try { if (!localStorage.getItem(_planSprintsKey)) planSaveSprints(PLAN_DEFAULT_SPRINTS); } catch(e){}
- planRender();
+ planningRender();
 };
 // /v165
 
