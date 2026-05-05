@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v183</title>
+<title>SalesDoc — Финансовый Дашборд v184</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7486,6 +7486,9 @@ async function doLogin() {
  applyUserAccess();
  loadAvatar();
  applyTheme(localStorage.getItem('sd-theme') || 'dark');
+ // v184: автоподнятие облака Планёрок сразу после логина — если KV пустой,
+ // а у тебя есть локальные данные, они уйдут наверх без ручного открытия страницы.
+ try { if (typeof planSyncFetch === 'function') planSyncFetch(true); } catch(_){}
  // Привязка к стране: если у пользователя задана country — переключить и скрыть switcher
  if (currentUser.country) {
   switchCountry(currentUser.country);
@@ -7535,6 +7538,7 @@ async function doLogin() {
     applyUserAccess();
     loadAvatar();
     applyTheme(localStorage.getItem('sd-theme') || 'dark');
+    try { if (typeof planSyncFetch === 'function') planSyncFetch(true); } catch(_){}
     if (currentUser.country) {
      switchCountry(currentUser.country);
      var cs = document.getElementById('country-switcher');
