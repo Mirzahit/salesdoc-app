@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v177</title>
+<title>SalesDoc — Финансовый Дашборд v178</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2750,11 +2750,19 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
    <!-- v169: Burndown + Скорость -->
    <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:20px" id="plan-burndown-row">
     <div class="plan-glass-card">
-     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <div>
-       <div class="plan-card-title" style="margin-bottom:2px">Сгорание задач по дням</div>
-       <div style="font-size:11px;color:var(--text-muted)">Сколько баллов осталось закрыть. План — серая пунктирная, факт — синяя сплошная, прогноз по текущему темпу — оранжевая.</div>
+       <div class="plan-card-title" style="margin-bottom:2px">Прогресс по задачам</div>
+       <div style="font-size:11px;color:var(--text-muted);max-width:560px;line-height:1.5">График показывает сколько задач ещё <strong>не закрыто</strong>. Сравниваем где должны были быть (план) с тем что есть (факт) и куда придём если темп не изменится.</div>
       </div>
+      <div id="plan-burndown-verdict" style="font-size:12px;font-weight:600;padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.03);max-width:340px;line-height:1.45"></div>
+     </div>
+     <!-- v178: визуальная легенда с пояснениями -->
+     <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:14px;font-size:11px;color:var(--text-secondary)">
+      <span style="display:inline-flex;align-items:center;gap:6px"><svg width="22" height="6"><line x1="1" y1="3" x2="21" y2="3" stroke="rgba(148,163,184,.6)" stroke-width="1.5" stroke-dasharray="4,3"/></svg> <strong style="color:var(--text-primary)">План</strong> — где должны были быть</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><svg width="22" height="6"><line x1="1" y1="3" x2="21" y2="3" stroke="#3B82F6" stroke-width="2.5"/></svg> <strong style="color:var(--text-primary)">Сделано</strong> — реальная динамика закрытий</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><svg width="22" height="6"><line x1="1" y1="3" x2="21" y2="3" stroke="rgba(245,158,11,.7)" stroke-width="1.5" stroke-dasharray="2,3"/></svg> <strong style="color:var(--text-primary)">Прогноз</strong> — куда придём при текущем темпе</span>
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10B981;border:2px solid #fff;box-shadow:0 0 0 1px #10B981"></span> <strong style="color:var(--text-primary)">Сегодня</strong></span>
      </div>
      <div style="position:relative;height:240px"><canvas id="plan-burndown-chart"></canvas></div>
     </div>
@@ -10032,6 +10040,40 @@ function _planEnsureChart(cb){
 function planRenderBurndown(sprint, tasks){
  var canvas = document.getElementById('plan-burndown-chart'); if (!canvas) return;
  _planEnsureChart(function(){ _planDrawBurndown(canvas, sprint, tasks); });
+ _planRenderBurndownVerdict(sprint, tasks);
+}
+// v178: динамический вердикт — что говорит график простыми словами
+function _planRenderBurndownVerdict(sp, tasks){
+ var box = document.getElementById('plan-burndown-verdict'); if (!box) return;
+ var total = tasks.length;
+ var done = tasks.filter(function(t){return t.status==='done';}).length;
+ var totalDays = planDaysBetween(sp.start, sp.end);
+ var todayStr = (new Date()).toISOString().slice(0,10);
+ var daysSinceStart = Math.max(0, Math.min(planDaysBetween(sp.start, todayStr) - 1, totalDays));
+ var planByToday = totalDays > 0 ? Math.round(total * (daysSinceStart / totalDays) * 10) / 10 : 0;
+ var diff = done - planByToday;
+ var html = '';
+ var color = '';
+ if (total === 0) {
+  html = 'Добавь задачи чтобы увидеть прогресс.';
+  color = 'var(--text-muted)';
+ } else if (done >= total) {
+  html = '<strong>Все ' + total + ' задач закрыты.</strong> 🎉';
+  color = '#10B981';
+ } else if (Math.abs(diff) < 0.5) {
+  html = '<strong>Идём ровно по плану.</strong><br>День ' + (daysSinceStart+1) + ' из ' + totalDays + ' · закрыто ' + done + ' из ' + total + '.';
+  color = '#10B981';
+ } else if (diff > 0) {
+  html = '<strong>Опережаем план на ' + Math.abs(Math.round(diff*10)/10) + ' задач.</strong><br>День ' + (daysSinceStart+1) + ' из ' + totalDays + ' · закрыто ' + done + ' из ' + total + '.';
+  color = '#10B981';
+ } else {
+  html = '<strong>Отстаём на ' + Math.abs(Math.round(diff*10)/10) + ' задач.</strong><br>День ' + (daysSinceStart+1) + ' из ' + totalDays + ' · нужно ускоряться.';
+  color = '#F59E0B';
+ }
+ box.style.color = color;
+ box.style.borderColor = color === 'var(--text-muted)' ? 'rgba(255,255,255,.06)' : (color + '33');
+ box.style.background = color === 'var(--text-muted)' ? 'rgba(255,255,255,.03)' : (color + '14');
+ box.innerHTML = html;
 }
 function _planDrawBurndown(canvas, sp, tasks){
  if (!window.Chart) return;
@@ -10054,7 +10096,8 @@ function _planDrawBurndown(canvas, sp, tasks){
   } else {
    actualLine.push(null);
   }
-  if (i >= daysSinceStart) {
+  // v178: прогноз-линию не рисуем если темп = 0 (бесполезно — горизонталь которая путает)
+  if (i >= daysSinceStart && pacePerDay > 0) {
    var projectedRemain = Math.max(0, totalUnits - doneUnits - pacePerDay * (i - daysSinceStart));
    paceLine.push(Math.round(projectedRemain * 10) / 10);
   } else paceLine.push(null);
@@ -10097,7 +10140,7 @@ function _planDrawBurndown(canvas, sp, tasks){
   ]},
   options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
    plugins:{
-    legend:{ position:'top', align:'end', labels:{ color:'#94A3B8', font:{size:11, family:'Inter'}, boxWidth:14, padding:14, usePointStyle:true } },
+    legend:{ display:false }, // v178: своя HTML-легенда сверху, понятнее
     tooltip:{
      backgroundColor:'rgba(15,34,49,.96)', titleColor:'#E2E8F0', bodyColor:'#CBD5E1',
      borderColor:'rgba(148,163,184,.18)', borderWidth:1, padding:12, cornerRadius:10,
