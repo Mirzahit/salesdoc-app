@@ -77,18 +77,32 @@ export default async function handler(req, res) {
   }
 
   const force = req.query && (req.query.force === '1' || req.query.force === 'true');
+  const clear = req.query && (req.query.clear === '1' || req.query.clear === 'true');
 
   try {
     const current = await kvGet(KV_KEY);
     let parsed = null;
     try { parsed = current ? (typeof current === 'string' ? JSON.parse(current) : current) : null; } catch {}
 
+    // Режим очистки: пишем пустое состояние с updated_at:0, чтобы следующий
+    // planSyncFetch посчитал serverEmpty=true и залил данные из localStorage.
+    if (clear) {
+      const emptyState = { sprints: [], tasks: [], retros: [], updated_at: 0, updated_by: 'planning-init-clear' };
+      await kvSet(KV_KEY, JSON.stringify(emptyState));
+      return res.status(200).send(html(200, `
+        <div class="ok">Готово. KV очищен. Сейчас там пусто.</div>
+        <p>Дальше: открой <a href="/">приложение</a> → «Планёрки». Твои локальные данные автоматически уйдут в облако (увидишь зелёный бейдж «Синхронизировано»).</p>
+        <p>После этого попроси других пользователей сделать <code>Ctrl+Shift+R</code> или открыть <a href="/api/reset">/api/reset</a> — они увидят твои спринты.</p>
+      `));
+    }
+
     const hasData = parsed && parsed.updated_at && Array.isArray(parsed.sprints) && parsed.sprints.length > 0;
 
     if (hasData && !force) {
       return res.status(200).send(html(200, `
         <div class="warn">В KV уже есть данные (${parsed.sprints.length} спринт(ов), updated_at: ${new Date(parsed.updated_at).toLocaleString('ru-RU')}). Не перезаписываю.</div>
-        <p>Если хочешь принудительно перезаписать дефолтами:<br><a href="/api/planning-init?force=1">/api/planning-init?force=1</a></p>
+        <p>Чтобы принудительно перезаписать дефолтами:<br><a href="/api/planning-init?force=1">/api/planning-init?force=1</a></p>
+        <p>Чтобы очистить KV (и потом залить свои данные через приложение):<br><a href="/api/planning-init?clear=1">/api/planning-init?clear=1</a></p>
         <p>Текущее содержимое:</p><pre>${JSON.stringify(parsed, null, 2).slice(0, 2000)}</pre>
         <p><a href="/">Назад в приложение</a></p>
       `));
