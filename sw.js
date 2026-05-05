@@ -1,7 +1,7 @@
 // ВАЖНО: при каждом значимом релизе бампать CACHE_NAME синхронно с <title> в index.html.
 // Иначе SW отдаёт пользователям закэшированный старый index.html и новые фичи (страницы, скрипты)
 // становятся видны только после ручного Ctrl+Shift+R. См. CLAUDE.md → раздел про SW.
-var CACHE_NAME = 'salesdoc-v182';
+var CACHE_NAME = 'salesdoc-v183';
 var PRECACHE = ['/', '/manifest.json', '/icon-192.svg'];
 
 self.addEventListener('install', function(e) {
@@ -36,6 +36,15 @@ self.addEventListener('fetch', function(e) {
   // (Cache API не поддерживает POST → ломался синк Планёрок).
   if (e.request.method !== 'GET') return;
   if (url.indexOf('/api/') !== -1) return;
+  // v183: index.html (и любые навигационные запросы) — всегда из сети, никогда из кэша.
+  // Это убирает залипание старой версии у пользователей: новый релиз сразу виден,
+  // SW перерегистрируется, хук в index.html делает auto-reload. Офлайн — фолбэк на кэш.
+  if (e.request.mode === 'navigate' || e.request.destination === 'document') {
+    e.respondWith(
+      fetch(e.request).catch(function(){ return caches.match('/') || caches.match(e.request); })
+    );
+    return;
+  }
   // Google API, Apps Script, Telegram — network only, но кэшируем ответы
   if (url.indexOf('googleapis.com') !== -1 || url.indexOf('script.google') !== -1 || url.indexOf('api.telegram') !== -1) {
     e.respondWith(
