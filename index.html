@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v194</title>
+<title>SalesDoc — Финансовый Дашборд v195</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2992,7 +2992,20 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
   <div class="modal" style="max-width:580px">
    <button class="modal-close" onclick="planCloseTaskDetail()"></button>
    <div class="modal-title" id="ptd-title" style="margin-bottom:8px">Задача</div>
-   <div id="ptd-meta" style="font-size:11px;color:var(--text-muted);margin-bottom:18px;display:flex;flex-wrap:wrap;gap:10px"></div>
+   <div id="ptd-meta" style="font-size:11px;color:var(--text-muted);margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px"></div>
+
+   <!-- v195: Даты (редактируемые) -->
+   <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+    <div style="flex:1;min-width:140px">
+     <label class="form-label" style="font-size:10px;color:var(--text-muted);margin-bottom:4px;display:block">Начало</label>
+     <input type="date" id="ptd-start-date" class="form-input" onchange="planUpdateTaskDates()" style="width:100%">
+    </div>
+    <div style="flex:1;min-width:140px">
+     <label class="form-label" style="font-size:10px;color:var(--text-muted);margin-bottom:4px;display:block">Дедлайн</label>
+     <input type="date" id="ptd-due-date" class="form-input" onchange="planUpdateTaskDates()" style="width:100%">
+    </div>
+   </div>
+   <div id="ptd-dates-msg" style="font-size:11px;color:#EF4444;margin-top:-12px;margin-bottom:14px;min-height:14px"></div>
 
    <!-- Подзадачи -->
    <div style="margin-bottom:16px">
@@ -10258,6 +10271,10 @@ window.planOpenTaskDetail = function(taskId){
  // v194: теги
  _planRenderTags(t);
  var tagInp = document.getElementById('ptd-tag-input'); if (tagInp) tagInp.value = '';
+ // v195: даты
+ var sd = document.getElementById('ptd-start-date'); if (sd) sd.value = t.start_date || '';
+ var dd = document.getElementById('ptd-due-date'); if (dd) dd.value = t.due_date || '';
+ var dm = document.getElementById('ptd-dates-msg'); if (dm) dm.textContent = '';
  var actBox = document.getElementById('ptd-activity-list');
  if (actBox) actBox.style.display = 'none'; // схлопнута по умолчанию
  var lUrl = document.getElementById('ptd-link-url'); if (lUrl) lUrl.value = '';
@@ -10523,6 +10540,67 @@ window.planDeleteTag = function(tag){
  _planRenderTags(all[i]);
  _planRenderActivity(all[i]);
  if (typeof planRenderKanban === 'function') planRenderKanban();
+};
+
+// v195: редактирование дат начала/дедлайна прямо в модалке
+window.planUpdateTaskDates = function(){
+ if (!_planOpenTaskId) return;
+ var sd = document.getElementById('ptd-start-date');
+ var dd = document.getElementById('ptd-due-date');
+ var msg = document.getElementById('ptd-dates-msg');
+ var newStart = sd ? (sd.value || '') : '';
+ var newDue = dd ? (dd.value || '') : '';
+ if (msg) msg.textContent = '';
+ if (newStart && newDue && newStart > newDue) {
+  if (msg) msg.textContent = 'Дата начала позже дедлайна';
+  return;
+ }
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===_planOpenTaskId;});
+ if (i < 0) return;
+ var sp = planLoadSprints().find(function(s){return s.id===all[i].sprint_id;}) || {};
+ if (newDue && sp.end && newDue > sp.end) {
+  if (msg) msg.textContent = 'Дедлайн позже окончания спринта (' + planFmtDate(sp.end) + ')';
+  return;
+ }
+ var oldStart = all[i].start_date || '';
+ var oldDue = all[i].due_date || '';
+ var changes = [];
+ if (newStart !== oldStart) {
+  all[i].start_date = newStart || null;
+  changes.push('начало: ' + (oldStart ? planFmtDate(oldStart) : '—') + ' → ' + (newStart ? planFmtDate(newStart) : '—'));
+ }
+ if (newDue !== oldDue) {
+  all[i].due_date = newDue || null;
+  changes.push('дедлайн: ' + (oldDue ? planFmtDate(oldDue) : '—') + ' → ' + (newDue ? planFmtDate(newDue) : '—'));
+ }
+ if (!changes.length) return;
+ _planLogActivity(all, i, 'dates', 'изменил(а) ' + changes.join(', '));
+ planSaveTasks(all);
+ _planRenderActivity(all[i]);
+ // обновим мета-блок наверху модалки и канбан
+ if (typeof planRenderKanban === 'function') planRenderKanban();
+ // перерисовать meta — проще ребут модалки без скрытия (быстро обновим только meta)
+ var t = all[i];
+ var meta = [];
+ var owners = Array.isArray(t.owners) && t.owners.length ? t.owners : (t.owner ? String(t.owner).split(',').map(function(s){return s.trim();}).filter(Boolean) : []);
+ if (owners.length) meta.push('<span><strong style="color:var(--text-secondary)">Ответственные:</strong> '+owners.join(', ')+'</span>');
+ if (t.due_date) {
+  var todayStr = (new Date()).toISOString().slice(0,10);
+  var overdue = todayStr > t.due_date && t.status !== 'done';
+  meta.push('<span style="color:'+(overdue?'#EF4444':'var(--text-secondary)')+'"><strong>Дедлайн:</strong> '+(overdue?'⚠ ':'')+planFmtDate(t.due_date)+'</span>');
+ }
+ if (t.priority) {
+  var prMap = { high:{l:'Высокий', c:'#EF4444'}, mid:{l:'Средний', c:'#F59E0B'}, low:{l:'Низкий', c:'#10B981'} };
+  var p = prMap[t.priority] || prMap.mid;
+  meta.push('<span style="color:'+p.c+'"><strong>Приоритет:</strong> '+p.l+'</span>');
+ }
+ if (t.status) {
+  var stLabel = { todo:'Бэклог', progress:'В работе', review:'На проверке', done:'Готово' };
+  meta.push('<span><strong style="color:var(--text-secondary)">Статус:</strong> '+(stLabel[t.status]||t.status)+'</span>');
+ }
+ var metaEl = document.getElementById('ptd-meta');
+ if (metaEl) metaEl.innerHTML = meta.join('');
 };
 
 // v177: drag-and-drop задач между колонками канбана
