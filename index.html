@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v179</title>
+<title>SalesDoc — Финансовый Дашборд v180</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -657,7 +657,7 @@ body:not(.light){background-image:radial-gradient(ellipse 80% 60% at 15% 10%, rg
 .nav-item:hover{background:rgba(255,255,255,.08);color:#fff}
 .nav-item.active{background:rgba(59,130,246,0.15);color:#fff;border:none;box-shadow:none}
 .nav-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold-bright);border-radius:0 2px 2px 0}
-.nav-item.hidden{display:none}
+.nav-item.hidden,.nav-item-solo.hidden{display:none}
 .nav-item-solo{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;cursor:pointer;transition:all .2s;font-size:9px;font-weight:600;letter-spacing:.3px;color:rgba(255,255,255,.45);margin-bottom:0;text-align:center;width:100%;border-radius:0;position:relative}
 .nav-item-solo:hover{background:rgba(255,255,255,.08);color:#fff}
 .nav-item-solo.active{background:rgba(59,130,246,.15);color:#fff;border:none}
@@ -2690,7 +2690,10 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px">
    <div>
     <div style="font-size:22px;font-weight:700;color:var(--text-primary);letter-spacing:-0.3px">Планёрки</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-top:3px">Спринты по проектам — план, прогресс, факт</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:3px;flex-wrap:wrap">
+     <div style="font-size:12px;color:var(--text-muted)">Спринты по проектам — план, прогресс, факт</div>
+     <div id="plan-sync-badge" data-state="loading" style="font-size:10px;font-weight:600;color:#F59E0B;letter-spacing:.3px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)">Синхронизация…</div>
+    </div>
    </div>
    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <button class="plan-tab active" data-tab="active" onclick="planSetTab('active',this)">Активные</button>
@@ -4589,6 +4592,8 @@ let profile={name:'',role:'',email:'',company:'SalesDoc'};
 function applyUserAccess() {
  if (!currentUser) return;
  const u=currentUser;
+ // v180: операторы (Айдос/Самат/Акбар) дашборд НЕ видят, даже если флаг где-то остался выставленным
+ if (u.role === 'operator' && u.access) { u.access.view_dashboard = 0; }
  document.getElementById('ub-name').textContent=u.name.split(' ')[0]+' '+(u.name.split(' ')[1]||'');
  document.getElementById('ub-role').textContent=(ROLE_LABELS||{})[u.role]||{admin:'Администратор',head:'Руководитель',rop:'РОП',manager:'Менеджер',operator:'Оператор',accountant:'Бухгалтер',viewer:'Просмотр'}[u.role]||u.role;
  document.getElementById('ub-avatar').textContent=u.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
@@ -4597,18 +4602,15 @@ function applyUserAccess() {
  document.getElementById('cab-display-role').textContent=u.pos+' · '+profile.company;
 
  // Show/hide nav items
+ // v180: фильтруем И обычные пункты, И solo-кнопку «Дашборд» (она `nav-item-solo`).
  const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning'};
- document.querySelectorAll('.nav-item[data-view]').forEach(el=>{
+ document.querySelectorAll('.nav-item[data-view],.nav-item-solo[data-view]').forEach(el=>{
  const view=el.dataset.view;
- // v151: Ассистент — особый случай, проверка по email (не по роли)
  if (view === 'assistant') {
   el.classList.toggle('hidden', !isAssistantAllowed(u));
   return;
  }
  const key=viewMap[view];
- // FIX v149: если view нет в viewMap (key===undefined), classList.toggle(class, undefined)
- // по спец. DOM ИНВЕРТИРУЕТ класс — т.е. добавляет hidden.
- // Разделяем: если в viewMap нет ключа → показываем всем, иначе — по флагу access.
  const hide = key ? !u.access[key] : false;
  el.classList.toggle('hidden', hide);
  });
@@ -6689,18 +6691,31 @@ function _loadAvatarFromCloud() {
 // ============================================================
 // NAV
 // ============================================================
+// v180: на какую страницу редиректить юзера, если у него нет доступа к запрошенной
+// или если он только что залогинился. Для CEO/менеджеров — дашборд; для операторов — Канбан/Планёрки.
+function defaultViewForUser(u){
+ if (!u || !u.access) return 'dashboard';
+ var preferred = ['dashboard','kanban','planning','knowledge','cabinet'];
+ var keyMap = {dashboard:'view_dashboard',kanban:'view_kanban',planning:'view_planning',knowledge:'view_knowledge',cabinet:'view_cabinet'};
+ for (var i = 0; i < preferred.length; i++) {
+  var k = keyMap[preferred[i]];
+  if (u.access[k] === 1 || u.access[k] === true) return preferred[i];
+ }
+ return 'cabinet';
+}
 function showView(v) {
  // v151: общая проверка прав — защита от обхода через DevTools (showView('expenses') и т.п.)
+ // v180: 'dashboard' тоже под проверкой — операторы (Айдос/Самат/Акбар) дашборд не видят.
  if (currentUser) {
   if (v === 'assistant' && !isAssistantAllowed(currentUser)) {
    try { showNotif('Нет доступа', 'Ассистент доступен только CEO.'); } catch(_){}
-   v = 'dashboard';
+   v = defaultViewForUser(currentUser);
   }
-  var _accessMap = {payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning'};
+  var _accessMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning'};
   var _need = _accessMap[v];
   if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
    try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
-   v = 'dashboard';
+   v = defaultViewForUser(currentUser);
   }
  }
  ['dashboard','payments','plan','keyclients','assistant','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban','statistics','planning'].forEach(x=>{
@@ -7483,7 +7498,7 @@ async function doLogin() {
  updateCountrySwitcherUI();
  initCalendar();
  renderAll();
- showView('dashboard');
+ showView(defaultViewForUser(currentUser));
  // Автоматически загрузить свежие данные из Google Таблицы — сразу без задержки
  setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
  syncFromSheets();
@@ -7535,7 +7550,7 @@ async function doLogin() {
     updateCountrySwitcherUI();
     initCalendar();
     renderAll();
-    showView('dashboard');
+    showView(defaultViewForUser(currentUser));
     setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
     syncFromSheets();
     // v152: если временный пароль — форсируем смену
@@ -9310,20 +9325,133 @@ window.mktAutoCalc = function() {
 // /MARKETING
 
 // ===== v165: ПЛАНЁРКИ / СПРИНТЫ =====
-// MVP — mock-данные в localStorage. После одобрения визуала переедем на Sheets+Apps Script.
+// v180: общий стор через /api/planning (Vercel KV). localStorage остаётся как офлайн-кэш.
 var _planTab = 'active';
 var _planSprintsKey = 'plan_sprints_v1';
+var _planTasksKey = 'plan_tasks_v1';      // объявлено и ниже — оставляем для совместимости
+var _planRetrosKey = 'plan_retros_v1';
 var PLAN_DEFAULT_SPRINTS = [
  { id:1, name:'Внедрение Гризли', goal:'Полное внедрение SalesDoc для 1150 пользователей с интеграцией 1С', start:'2026-05-04', end:'2026-05-17', status:'ontrack', color:'gold', total:12, in_progress:3, done:5, team:[{n:'АО',c:'#F59E0B'},{n:'С',c:'#AB47BC'},{n:'МЫ',c:'#3B82F6'}], teamNames:'Айдос, Самат, Мырзахыт', archived:false },
  { id:2, name:'Курс Академия ТП — запуск', goal:'8 модулей упаковать, лендинг + лид-магниты, набор первой группы', start:'2026-05-01', end:'2026-05-14', status:'atrisk', color:'purple', total:10, in_progress:2, done:3, team:[{n:'МЫ',c:'#AB47BC'},{n:'Ю',c:'#10B981'}], teamNames:'Мырзахыт, Юлия', archived:false },
  { id:3, name:'Лендинг SalesDoc v2', goal:'Финальная версия: hero-орбита, секции Features, анимация', start:'2026-05-04', end:'2026-05-17', status:'ontrack', color:'blue', total:8, in_progress:2, done:4, team:[{n:'МЫ',c:'#3B82F6'}], teamNames:'Мырзахыт', archived:false },
  { id:4, name:'Бот @fmcgsng_sales — деплой', goal:'Загрузить код, подключить Railway, env, протестировать 3 роли', start:'2026-05-04', end:'2026-05-17', status:'ontrack', color:'green', total:6, in_progress:1, done:2, team:[{n:'МЫ',c:'#10B981'}], teamNames:'Мырзахыт', archived:false }
 ];
+
+// v180: облачное состояние. null — ещё не загружено. После planSyncFetch() становится {sprints,tasks,retros,updated_at}.
+var _planCloud = null;
+var _planSyncTimer = null;
+var _planSyncBusy = false;
+
 function planLoadSprints(){
+ if (_planCloud && Array.isArray(_planCloud.sprints)) return _planCloud.sprints.slice();
  try { var s = localStorage.getItem(_planSprintsKey); if (s) return JSON.parse(s); } catch(e){}
  return PLAN_DEFAULT_SPRINTS.slice();
 }
-function planSaveSprints(arr){ try { localStorage.setItem(_planSprintsKey, JSON.stringify(arr)); } catch(e){} }
+function planSaveSprints(arr){
+ if (!_planCloud) _planCloud = { sprints:[], tasks:[], retros:[], updated_at:0 };
+ _planCloud.sprints = arr;
+ try { localStorage.setItem(_planSprintsKey, JSON.stringify(arr)); } catch(e){}
+ planSchedulePush();
+}
+
+// v180: синхронизация с облаком
+function planUpdateSyncBadge(state){
+ var el = document.getElementById('plan-sync-badge');
+ if (!el) return;
+ var labels = {
+  loading: { text: 'Синхронизация…', color: '#F59E0B' },
+  saving:  { text: 'Сохраняю…',     color: '#F59E0B' },
+  synced:  { text: 'Синхронизировано', color: '#10B981' },
+  offline: { text: 'Локальный режим — нет связи', color: '#EF4444' }
+ };
+ var s = labels[state] || labels.loading;
+ el.textContent = s.text;
+ el.style.color = s.color;
+ el.dataset.state = state || 'loading';
+}
+function planMigrateFromLocalStorage(){
+ var s=[], t=[], r=[];
+ try { var ss = localStorage.getItem(_planSprintsKey); if (ss) s = JSON.parse(ss); } catch(_){}
+ try { var tt = localStorage.getItem(_planTasksKey); if (tt) t = JSON.parse(tt); } catch(_){}
+ try { var rr = localStorage.getItem(_planRetrosKey); if (rr) r = JSON.parse(rr); } catch(_){}
+ return { sprints: Array.isArray(s)?s:[], tasks: Array.isArray(t)?t:[], retros: Array.isArray(r)?r:[], updated_at: 0 };
+}
+async function planSyncFetch(silent){
+ if (_planSyncBusy) return;
+ _planSyncBusy = true;
+ if (!silent) planUpdateSyncBadge('loading');
+ try {
+  var r = await fetch('/api/planning', { cache: 'no-store' });
+  if (!r.ok) {
+   // 503 = KV не настроен; 5xx = сбой. Падаем в локальный режим.
+   throw new Error('HTTP ' + r.status);
+  }
+  var data = await r.json();
+  var serverEmpty = !data || (!data.updated_at && (!data.sprints || data.sprints.length === 0));
+  if (serverEmpty) {
+   // Первый запуск: облако пустое — заливаем то, что лежит в localStorage (или дефолт).
+   var local = planMigrateFromLocalStorage();
+   if (!local.sprints.length) local.sprints = PLAN_DEFAULT_SPRINTS.slice();
+   _planCloud = local;
+   planSchedulePush(true);
+  } else {
+   _planCloud = {
+    sprints: Array.isArray(data.sprints) ? data.sprints : [],
+    tasks:   Array.isArray(data.tasks)   ? data.tasks   : [],
+    retros:  Array.isArray(data.retros)  ? data.retros  : [],
+    updated_at: data.updated_at || 0
+   };
+   try {
+    localStorage.setItem(_planSprintsKey, JSON.stringify(_planCloud.sprints));
+    localStorage.setItem(_planTasksKey,   JSON.stringify(_planCloud.tasks));
+    localStorage.setItem(_planRetrosKey,  JSON.stringify(_planCloud.retros));
+   } catch(_){}
+  }
+  planUpdateSyncBadge('synced');
+ } catch(e) {
+  // Облако недоступно — работаем по localStorage
+  if (!_planCloud) _planCloud = planMigrateFromLocalStorage();
+  if (!_planCloud.sprints.length) _planCloud.sprints = PLAN_DEFAULT_SPRINTS.slice();
+  planUpdateSyncBadge('offline');
+ } finally {
+  _planSyncBusy = false;
+ }
+}
+function planSchedulePush(immediate){
+ if (_planSyncTimer) clearTimeout(_planSyncTimer);
+ _planSyncTimer = setTimeout(planSyncPush, immediate ? 0 : 500);
+}
+async function planSyncPush(){
+ if (!_planCloud) return;
+ var badge = document.getElementById('plan-sync-badge');
+ var prev = badge ? badge.dataset.state : null;
+ planUpdateSyncBadge('saving');
+ try {
+  var r = await fetch('/api/planning', {
+   method: 'POST',
+   headers: { 'Content-Type': 'application/json' },
+   body: JSON.stringify({
+    sprints: _planCloud.sprints || [],
+    tasks:   _planCloud.tasks   || [],
+    retros:  _planCloud.retros  || [],
+    client_updated_at: _planCloud.updated_at || 0,
+    updated_by: (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.name || null) : null
+   })
+  });
+  if (r.status === 409) {
+   // кто-то перезаписал — перечитываем и перерисовываем
+   await planSyncFetch(true);
+   if (typeof planningRender === 'function') { try { planningRender(); } catch(_){} }
+   return;
+  }
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  var j = await r.json();
+  if (j && j.updated_at) _planCloud.updated_at = j.updated_at;
+  planUpdateSyncBadge('synced');
+ } catch(e) {
+  planUpdateSyncBadge('offline');
+ }
+}
 function planFmtDate(s){ try { var d = new Date(s); return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2); } catch(e){ return s; } }
 function planDaysBetween(a,b){ return Math.max(1, Math.round((new Date(b)-new Date(a))/86400000)+1); }
 function planDayOf(start){ return Math.max(1, Math.min(planDaysBetween(start, (new Date()).toISOString().slice(0,10)), 99)); }
@@ -9757,28 +9885,33 @@ window.planDeleteSprint = function(id){
 window.planDeleteCurrentSprint = function(){
  if (_planCurrentSprintId) planDeleteSprint(_planCurrentSprintId);
 };
-// v168: задачи спринта — отдельный store
-var _planTasksKey = 'plan_tasks_v1';
+// v168: задачи спринта — отдельный store. v180: читаем/пишем через _planCloud (см. выше).
 var _planCurrentSprintId = null;
+var PLAN_DEFAULT_TASKS = [
+ { id:101, sprint_id:1, title:'Подписан договор и предоплата', owner:'Мырзахыт', points:2, status:'done' },
+ { id:102, sprint_id:1, title:'Создание учётной записи и тарифа', owner:'Айдос', points:1, status:'done' },
+ { id:103, sprint_id:1, title:'Карта структуры дистрибьютора', owner:'Самат', points:3, status:'done' },
+ { id:104, sprint_id:1, title:'Импорт базы клиентов (4200 ТТ)', owner:'Айдос', points:5, status:'done' },
+ { id:105, sprint_id:1, title:'Установка приложения на 50 устройств', owner:'Самат', points:3, status:'done' },
+ { id:106, sprint_id:1, title:'Интеграция API 1С — настройка обмена', owner:'Айдос', points:8, status:'progress' },
+ { id:107, sprint_id:1, title:'Обучение супервайзеров (12 человек)', owner:'Самат', points:5, status:'progress' },
+ { id:108, sprint_id:1, title:'Настройка ролей и прав доступа', owner:'Айдос', points:3, status:'progress' },
+ { id:109, sprint_id:1, title:'Перенос остатков 1С → SalesDoc', owner:'Айдос', points:5, status:'todo' },
+ { id:110, sprint_id:1, title:'Настройка маршрутов ТП по регионам', owner:'Самат', points:3, status:'todo' },
+ { id:111, sprint_id:1, title:'Импорт прайс-листа (8000 SKU)', owner:'Айдос', points:2, status:'todo' },
+ { id:112, sprint_id:1, title:'Финальная сдача проекта', owner:'Мырзахыт', points:2, status:'todo' }
+];
 function planLoadTasks(){
+ if (_planCloud && Array.isArray(_planCloud.tasks)) return _planCloud.tasks.slice();
  try { var s = localStorage.getItem(_planTasksKey); if (s) return JSON.parse(s); } catch(e){}
- // Демо-задачи для первого спринта (Внедрение Гризли)
- return [
-  { id:101, sprint_id:1, title:'Подписан договор и предоплата', owner:'Мырзахыт', points:2, status:'done' },
-  { id:102, sprint_id:1, title:'Создание учётной записи и тарифа', owner:'Айдос', points:1, status:'done' },
-  { id:103, sprint_id:1, title:'Карта структуры дистрибьютора', owner:'Самат', points:3, status:'done' },
-  { id:104, sprint_id:1, title:'Импорт базы клиентов (4200 ТТ)', owner:'Айдос', points:5, status:'done' },
-  { id:105, sprint_id:1, title:'Установка приложения на 50 устройств', owner:'Самат', points:3, status:'done' },
-  { id:106, sprint_id:1, title:'Интеграция API 1С — настройка обмена', owner:'Айдос', points:8, status:'progress' },
-  { id:107, sprint_id:1, title:'Обучение супервайзеров (12 человек)', owner:'Самат', points:5, status:'progress' },
-  { id:108, sprint_id:1, title:'Настройка ролей и прав доступа', owner:'Айдос', points:3, status:'progress' },
-  { id:109, sprint_id:1, title:'Перенос остатков 1С → SalesDoc', owner:'Айдос', points:5, status:'todo' },
-  { id:110, sprint_id:1, title:'Настройка маршрутов ТП по регионам', owner:'Самат', points:3, status:'todo' },
-  { id:111, sprint_id:1, title:'Импорт прайс-листа (8000 SKU)', owner:'Айдос', points:2, status:'todo' },
-  { id:112, sprint_id:1, title:'Финальная сдача проекта', owner:'Мырзахыт', points:2, status:'todo' }
- ];
+ return PLAN_DEFAULT_TASKS.slice();
 }
-function planSaveTasks(arr){ try { localStorage.setItem(_planTasksKey, JSON.stringify(arr)); } catch(e){} }
+function planSaveTasks(arr){
+ if (!_planCloud) _planCloud = { sprints:[], tasks:[], retros:[], updated_at:0 };
+ _planCloud.tasks = arr;
+ try { localStorage.setItem(_planTasksKey, JSON.stringify(arr)); } catch(e){}
+ planSchedulePush();
+}
 function planTasksOfSprint(sprintId){ return planLoadTasks().filter(function(t){ return t.sprint_id === sprintId; }); }
 
 // Пересчитываем total/in_progress/done в спринте на основе задач
@@ -10333,10 +10466,18 @@ function planRenderVelocity(sprint, tasks){
   + '<div style="padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--text-muted);line-height:1.4">' + (totalSP === 0 ? 'Добавь задачи чтобы увидеть прогноз.' : ('Осталось ' + spLeft + ' задач. ' + (willMakeIt ? 'Темп достаточный.' : 'Нужно ускоряться.'))) + '</div>';
 }
 
-// ===== v169: РЕТРОСПЕКТИВА =====
-var _planRetrosKey = 'plan_retros_v1';
-function planLoadRetros(){ try { var s = localStorage.getItem(_planRetrosKey); if (s) return JSON.parse(s); } catch(e){} return []; }
-function planSaveRetros(arr){ try { localStorage.setItem(_planRetrosKey, JSON.stringify(arr)); } catch(e){} }
+// ===== v169: РЕТРОСПЕКТИВА. v180: через _planCloud.
+function planLoadRetros(){
+ if (_planCloud && Array.isArray(_planCloud.retros)) return _planCloud.retros.slice();
+ try { var s = localStorage.getItem(_planRetrosKey); if (s) return JSON.parse(s); } catch(e){}
+ return [];
+}
+function planSaveRetros(arr){
+ if (!_planCloud) _planCloud = { sprints:[], tasks:[], retros:[], updated_at:0 };
+ _planCloud.retros = arr;
+ try { localStorage.setItem(_planRetrosKey, JSON.stringify(arr)); } catch(e){}
+ planSchedulePush();
+}
 function planRetrosOfSprint(sprintId, type){
  return planLoadRetros().filter(function(r){ return r.sprint_id === sprintId && r.type === type; });
 }
@@ -10516,10 +10657,24 @@ window.planMoveToSprint = function(taskId){
  planRecountSprint(target.id);
  planRenderBacklog();
 };
-window.planningInit = function(){
- try { if (!localStorage.getItem(_planSprintsKey)) planSaveSprints(PLAN_DEFAULT_SPRINTS); } catch(e){}
+window.planningInit = async function(){
+ // v180: при первом заходе тянем облако; дальше — фоновое обновление, чтобы не моргало.
+ if (!_planCloud) {
+  await planSyncFetch();
+ } else {
+  planSyncFetch(true);
+ }
  planningRender();
 };
+// v180: при возврате на вкладку — обновляем данные, чтобы не разъезжалось между сотрудниками
+document.addEventListener('visibilitychange', function(){
+ if (document.visibilityState === 'visible') {
+  var view = document.getElementById('view-planning');
+  if (view && view.style.display !== 'none') {
+   planSyncFetch(true).then(function(){ try { planningRender(); } catch(_){} });
+  }
+ }
+});
 // /v165
 
 // ===== v158: META ADS — ЖИВЫЕ ДАННЫЕ ИЗ API + ПОНЯТНЫЙ UX =====
