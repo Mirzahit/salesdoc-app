@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v178</title>
+<title>SalesDoc — Финансовый Дашборд v179</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -933,6 +933,13 @@ body.light .plan-kb-card:hover{background:rgba(255,255,255,.92);border-color:rgb
 .plan-kb-points{background:rgba(255,255,255,.06);color:var(--text-secondary);padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;border:1px solid rgba(255,255,255,.05)}
 body.light .plan-kb-points{background:rgba(15,23,42,.06);border-color:rgba(15,23,42,.06)}
 .plan-kb-empty{text-align:center;color:var(--text-muted);font-size:11px;padding:20px 8px;opacity:.6}
+/* v179: иконка-открыть + бейдж подзадач на канбан-карточке */
+.plan-kb-card{position:relative}
+.plan-kb-edit{position:absolute;top:6px;right:6px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:13px;opacity:0;transition:opacity .15s}
+.plan-kb-card:hover .plan-kb-edit{opacity:.7}
+.plan-kb-edit:hover{opacity:1!important;background:rgba(255,255,255,.08);color:var(--text-primary)}
+.plan-kb-subbadge{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.05);color:var(--text-muted);font-size:10px;font-weight:600;margin-left:6px}
+.plan-kb-subbadge.complete{background:rgba(16,185,129,.12);color:#10B981}
 /* v177: drag-and-drop состояния */
 .plan-kb-card[draggable="true"]{user-select:none}
 .plan-kb-card.dragging{opacity:.45;transform:rotate(-1deg) scale(.98);cursor:grabbing}
@@ -2976,6 +2983,35 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
   </div>
  </div>
  <!-- /del confirm modal -->
+
+ <!-- v179: МОДАЛКА ДЕТАЛИ ЗАДАЧИ + ПОДЗАДАЧИ -->
+ <div class="modal-overlay" id="plan-task-detail-modal" onclick="if(event.target.id==='plan-task-detail-modal')planCloseTaskDetail()" style="z-index:10003">
+  <div class="modal" style="max-width:580px">
+   <button class="modal-close" onclick="planCloseTaskDetail()"></button>
+   <div class="modal-title" id="ptd-title" style="margin-bottom:8px">Задача</div>
+   <div id="ptd-meta" style="font-size:11px;color:var(--text-muted);margin-bottom:18px;display:flex;flex-wrap:wrap;gap:10px"></div>
+
+   <!-- Подзадачи -->
+   <div style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+     <div style="font-size:12px;font-weight:700;color:var(--text-primary);letter-spacing:.3px">Подзадачи</div>
+     <div id="ptd-sub-progress" style="font-size:11px;color:var(--text-muted)"></div>
+    </div>
+    <div id="ptd-sub-bar" style="height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;margin-bottom:12px"><div id="ptd-sub-bar-fill" style="height:100%;background:#10B981;width:0%;transition:width .3s"></div></div>
+    <div id="ptd-sub-list" style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:6px">
+     <input id="ptd-sub-input" class="form-input" placeholder="Что ещё нужно сделать?" style="flex:1" onkeydown="if(event.key==='Enter')planAddSubtask()">
+     <button class="plan-create-btn" onclick="planAddSubtask()" style="padding:9px 16px">+</button>
+    </div>
+   </div>
+
+   <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
+    <button onclick="planTaskDeleteFromDetail()" class="psm-quick" style="padding:9px 16px;border-color:rgba(239,68,68,.25);color:#EF4444">Удалить задачу</button>
+    <button onclick="planCloseTaskDetail()" class="plan-create-btn">Готово</button>
+   </div>
+  </div>
+ </div>
+ <!-- /task detail modal -->
 
  <!-- FULLSCREEN LTV PAGE -->
  <div id="view-mkt-ltv" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow-y:auto">
@@ -9834,9 +9870,15 @@ function planRenderKanban(){
    if (t.priority === 'high') prDot = '<span title="Высокий приоритет" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#EF4444;margin-right:7px;flex-shrink:0;box-shadow:0 0 6px rgba(239,68,68,.5)"></span>';
    else if (t.priority === 'low') prDot = '<span title="Низкий приоритет" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10B981;margin-right:7px;flex-shrink:0;opacity:.7"></span>';
    else if (t.priority === 'mid') prDot = '<span title="Средний приоритет" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#F59E0B;margin-right:7px;flex-shrink:0;opacity:.7"></span>';
-   return '<div class="plan-kb-card s-'+t.status+'" draggable="true" ondragstart="planDragStart(event,'+t.id+')" ondragend="planDragEnd(this)" onclick="planTaskNextStatus('+t.id+')" oncontextmenu="event.preventDefault();planTaskDelete('+t.id+');return false;" title="Перетащи в другую колонку или клик — следующий статус. ПКМ — удалить.">'
-    + '<div class="plan-kb-title" style="display:flex;align-items:flex-start">'+prDot+'<span style="flex:1">'+(t.title||'').replace(/</g,'&lt;')+'</span></div>'
-    + '<div class="plan-kb-meta" style="align-items:center"><span style="display:inline-flex">'+avatars+'</span>'+dueHtml+'</div>'
+   // v179: бейдж подзадач если есть
+   var subs = Array.isArray(t.subtasks) ? t.subtasks : [];
+   var subDone = subs.filter(function(s){return s && s.done;}).length;
+   var subBadge = subs.length ? '<span class="plan-kb-subbadge'+(subDone===subs.length?' complete':'')+'" title="Подзадачи">☑ '+subDone+'/'+subs.length+'</span>' : '';
+   var editBtn = '<button class="plan-kb-edit" onclick="event.stopPropagation();planOpenTaskDetail('+t.id+')" title="Открыть задачу">✎</button>';
+   return '<div class="plan-kb-card s-'+t.status+'" draggable="true" ondragstart="planDragStart(event,'+t.id+')" ondragend="planDragEnd(this)" onclick="planTaskNextStatus('+t.id+')" oncontextmenu="event.preventDefault();planTaskDelete('+t.id+');return false;" title="Перетащи / клик — следующий статус. ✎ — детали и подзадачи. ПКМ — удалить.">'
+    + editBtn
+    + '<div class="plan-kb-title" style="display:flex;align-items:flex-start;padding-right:24px">'+prDot+'<span style="flex:1">'+(t.title||'').replace(/</g,'&lt;')+'</span></div>'
+    + '<div class="plan-kb-meta" style="align-items:center"><span style="display:inline-flex;align-items:center">'+avatars+subBadge+'</span>'+dueHtml+'</div>'
    + '</div>';
   }).join('');
  });
@@ -9944,6 +9986,103 @@ window.planSubmitTaskModal = function(){
  planRenderKanban();
  planCloseTaskModal();
 };
+// v179: модалка детали задачи + подзадачи
+var _planOpenTaskId = null;
+window.planOpenTaskDetail = function(taskId){
+ var t = planLoadTasks().find(function(x){return x.id===taskId;});
+ if (!t) return;
+ _planOpenTaskId = taskId;
+ // Заголовок
+ document.getElementById('ptd-title').textContent = t.title || 'Задача';
+ // Мета-информация — аватары, дедлайн, приоритет
+ var meta = [];
+ var owners = Array.isArray(t.owners) && t.owners.length ? t.owners : (t.owner ? String(t.owner).split(',').map(function(s){return s.trim();}).filter(Boolean) : []);
+ if (owners.length) meta.push('<span><strong style="color:var(--text-secondary)">Ответственные:</strong> '+owners.join(', ')+'</span>');
+ if (t.due_date) {
+  var todayStr = (new Date()).toISOString().slice(0,10);
+  var overdue = todayStr > t.due_date && t.status !== 'done';
+  meta.push('<span style="color:'+(overdue?'#EF4444':'var(--text-secondary)')+'"><strong>Дедлайн:</strong> '+(overdue?'⚠ ':'')+planFmtDate(t.due_date)+'</span>');
+ }
+ if (t.priority) {
+  var prMap = { high:{l:'Высокий', c:'#EF4444'}, mid:{l:'Средний', c:'#F59E0B'}, low:{l:'Низкий', c:'#10B981'} };
+  var p = prMap[t.priority] || prMap.mid;
+  meta.push('<span style="color:'+p.c+'"><strong>Приоритет:</strong> '+p.l+'</span>');
+ }
+ if (t.status) {
+  var stLabel = { todo:'Бэклог', progress:'В работе', review:'На проверке', done:'Готово' };
+  meta.push('<span><strong style="color:var(--text-secondary)">Статус:</strong> '+(stLabel[t.status]||t.status)+'</span>');
+ }
+ document.getElementById('ptd-meta').innerHTML = meta.join('');
+ // Подзадачи
+ _planRenderSubtasks(t);
+ document.getElementById('ptd-sub-input').value = '';
+ document.getElementById('plan-task-detail-modal').classList.add('open');
+ setTimeout(function(){ document.getElementById('ptd-sub-input').focus(); }, 50);
+};
+window.planCloseTaskDetail = function(){
+ _planOpenTaskId = null;
+ document.getElementById('plan-task-detail-modal').classList.remove('open');
+};
+function _planRenderSubtasks(t){
+ var box = document.getElementById('ptd-sub-list'); if (!box) return;
+ var subs = Array.isArray(t.subtasks) ? t.subtasks : [];
+ var done = subs.filter(function(s){return s && s.done;}).length;
+ var pct = subs.length ? Math.round((done/subs.length)*100) : 0;
+ document.getElementById('ptd-sub-progress').textContent = subs.length ? (done + ' из ' + subs.length + ' · ' + pct + '%') : 'Пусто — добавь первый шаг ниже';
+ document.getElementById('ptd-sub-bar-fill').style.width = pct + '%';
+ if (!subs.length) { box.innerHTML = ''; return; }
+ box.innerHTML = subs.map(function(s){
+  return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.04);margin-bottom:6px">'
+   + '<input type="checkbox" '+(s.done?'checked':'')+' onchange="planToggleSubtask('+s.id+',this.checked)" style="cursor:pointer;width:16px;height:16px;accent-color:#10B981">'
+   + '<div style="flex:1;font-size:12px;color:'+(s.done?'var(--text-muted)':'var(--text-primary)')+';'+(s.done?'text-decoration:line-through':'')+'">'+(s.title||'').replace(/</g,'&lt;')+'</div>'
+   + '<button onclick="planDeleteSubtask('+s.id+')" title="Удалить" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:4px 8px;border-radius:4px" onmouseover="this.style.color=\'#EF4444\';this.style.background=\'rgba(239,68,68,.10)\'" onmouseout="this.style.color=\'var(--text-muted)\';this.style.background=\'none\'">×</button>'
+  + '</div>';
+ }).join('');
+}
+window.planAddSubtask = function(){
+ if (!_planOpenTaskId) return;
+ var inp = document.getElementById('ptd-sub-input');
+ var text = (inp.value || '').trim(); if (!text) return;
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===_planOpenTaskId;});
+ if (i < 0) return;
+ if (!Array.isArray(all[i].subtasks)) all[i].subtasks = [];
+ var nextId = (all[i].subtasks.reduce(function(m,s){return Math.max(m, s.id||0);}, 0) || 0) + 1;
+ all[i].subtasks.push({ id: nextId, title: text, done: false });
+ planSaveTasks(all);
+ inp.value = '';
+ _planRenderSubtasks(all[i]);
+ if (typeof planRenderKanban === 'function') planRenderKanban();
+};
+window.planToggleSubtask = function(subId, isDone){
+ if (!_planOpenTaskId) return;
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===_planOpenTaskId;});
+ if (i < 0) return;
+ var subs = all[i].subtasks || [];
+ var s = subs.find(function(x){return x.id===subId;});
+ if (s) s.done = !!isDone;
+ planSaveTasks(all);
+ _planRenderSubtasks(all[i]);
+ if (typeof planRenderKanban === 'function') planRenderKanban();
+};
+window.planDeleteSubtask = function(subId){
+ if (!_planOpenTaskId) return;
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===_planOpenTaskId;});
+ if (i < 0) return;
+ all[i].subtasks = (all[i].subtasks || []).filter(function(s){return s.id!==subId;});
+ planSaveTasks(all);
+ _planRenderSubtasks(all[i]);
+ if (typeof planRenderKanban === 'function') planRenderKanban();
+};
+window.planTaskDeleteFromDetail = function(){
+ if (!_planOpenTaskId) return;
+ var taskId = _planOpenTaskId;
+ planCloseTaskDetail();
+ if (typeof planTaskDelete === 'function') planTaskDelete(taskId);
+};
+
 // v177: drag-and-drop задач между колонками канбана
 window.planDragStart = function(event, taskId){
  try { event.dataTransfer.setData('text/plain', String(taskId)); event.dataTransfer.effectAllowed = 'move'; } catch(_){}
