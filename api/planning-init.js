@@ -22,10 +22,11 @@ async function kvGet(key) {
 
 async function kvSet(key, value) {
   const { url, token } = kvEnv();
+  const body = typeof value === 'string' ? value : JSON.stringify(value);
   const r = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(value)
+    headers: { Authorization: `Bearer ${token}` },
+    body
   });
   if (!r.ok) throw new Error(`KV SET ${r.status}`);
   return true;

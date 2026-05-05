@@ -25,10 +25,13 @@ async function kvGet(key) {
 async function kvSet(key, value) {
   const { url, token } = kvEnv();
   if (!url || !token) throw new Error('KV not configured');
+  // Upstash REST: тело — это сам value-as-string. НЕ оборачиваем повторно.
+  // Раньше тут было JSON.stringify(value) при value уже = JSON.stringify(obj) — двойное кодирование.
+  const body = typeof value === 'string' ? value : JSON.stringify(value);
   const r = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(value)
+    headers: { Authorization: `Bearer ${token}` },
+    body
   });
   if (!r.ok) throw new Error(`KV SET ${r.status}`);
   return true;
