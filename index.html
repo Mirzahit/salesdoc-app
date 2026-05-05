@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v193</title>
+<title>SalesDoc — Финансовый Дашборд v194</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3005,6 +3005,16 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
     <div style="display:flex;gap:6px">
      <input id="ptd-sub-input" class="form-input" placeholder="Что ещё нужно сделать?" style="flex:1" onkeydown="if(event.key==='Enter')planAddSubtask()">
      <button class="plan-create-btn" onclick="planAddSubtask()" style="padding:9px 16px">+</button>
+    </div>
+   </div>
+
+   <!-- v194: Теги -->
+   <div style="margin-bottom:16px">
+    <div style="font-size:12px;font-weight:700;color:var(--text-primary);letter-spacing:.3px;margin-bottom:10px">Теги</div>
+    <div id="ptd-tags-list" style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:6px"></div>
+    <div style="display:flex;gap:6px">
+     <input id="ptd-tag-input" class="form-input" placeholder="bug, hot, client-X..." style="flex:1" onkeydown="if(event.key==='Enter')planAddTag()">
+     <button class="plan-create-btn" onclick="planAddTag()" style="padding:9px 16px">+</button>
     </div>
    </div>
 
@@ -9679,6 +9689,30 @@ function planRenderOverallStats(sprints){
   + '</div>';
  }).join('');
 }
+// v194: видимость спринтов для пользователя.
+// admin/head/rop видят всё; остальные видят только спринты где они в команде
+// (имя в teamNames либо они владельцы хотя бы одной задачи спринта).
+function planUserSeesSprint(sp){
+ try {
+  if (!currentUser) return true;
+  var role = currentUser.role || '';
+  if (role === 'admin' || role === 'head' || role === 'rop') return true;
+  var name = String(currentUser.name||'').trim().toLowerCase();
+  if (!name) return true;
+  var tn = String(sp.teamNames||'').toLowerCase();
+  if (tn && tn.indexOf(name) !== -1) return true;
+  // или участник как owner задач спринта
+  var allTasks = planLoadTasks();
+  var found = allTasks.some(function(t){
+   if (t.sprint_id !== sp.id) return false;
+   if (Array.isArray(t.owners) && t.owners.some(function(o){ return String(o).toLowerCase() === name; })) return true;
+   if (Array.isArray(t.owner_ids) && currentUser.id && t.owner_ids.indexOf(currentUser.id) !== -1) return true;
+   if (t.owner && String(t.owner).toLowerCase().indexOf(name) !== -1) return true;
+   return false;
+  });
+  return found;
+ } catch(_) { return true; }
+}
 window.planningRender = function(){
  var grid = document.getElementById('plan-sprints-grid');
  var empty = document.getElementById('plan-empty');
@@ -9686,7 +9720,7 @@ window.planningRender = function(){
  var sumMeta = document.getElementById('plan-summary-meta');
  var overallBox = document.getElementById('plan-overall-stats');
  if (!grid) return;
- var all = planLoadSprints();
+ var all = planLoadSprints().filter(planUserSeesSprint);
  var list;
  if (_planTab === 'active') list = all.filter(function(s){ return !s.archived; });
  else if (_planTab === 'archive') list = all.filter(function(s){ return s.archived; });
@@ -10065,8 +10099,18 @@ function planRenderKanban(){
    var subDone = subs.filter(function(s){return s && s.done;}).length;
    var subBadge = subs.length ? '<span class="plan-kb-subbadge'+(subDone===subs.length?' complete':'')+'" title="Подзадачи">☑ '+subDone+'/'+subs.length+'</span>' : '';
    // v193: клик по карточке — открыть детали (главное действие). Drag по-прежнему меняет статус.
+   // v194: цветные чипы тегов под заголовком
+   var tagsHtml = '';
+   var tags = Array.isArray(t.tags) ? t.tags : [];
+   if (tags.length) {
+    tagsHtml = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 6px">' + tags.slice(0,5).map(function(tag){
+     var c = _planTagColor(tag);
+     return '<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:8px;background:'+c.bg+';border:1px solid '+c.border+';color:'+c.fg+';letter-spacing:.2px">#'+_planEsc(tag)+'</span>';
+    }).join('') + '</div>';
+   }
    return '<div class="plan-kb-card s-'+t.status+'" draggable="true" ondragstart="planDragStart(event,'+t.id+')" ondragend="planDragEnd(this)" onclick="planOpenTaskDetail('+t.id+')" title="Клик — открыть. Перетащи — сменить статус.">'
     + '<div class="plan-kb-title" style="display:flex;align-items:flex-start">'+prDot+'<span style="flex:1">'+(t.title||'').replace(/</g,'&lt;')+'</span></div>'
+    + tagsHtml
     + '<div class="plan-kb-meta" style="align-items:center"><span style="display:inline-flex;align-items:center">'+avatars+subBadge+'</span>'+dueHtml+'</div>'
    + '</div>';
   }).join('');
@@ -10211,6 +10255,9 @@ window.planOpenTaskDetail = function(taskId){
  _planRenderLinks(t);
  _planRenderComments(t);
  _planRenderActivity(t);
+ // v194: теги
+ _planRenderTags(t);
+ var tagInp = document.getElementById('ptd-tag-input'); if (tagInp) tagInp.value = '';
  var actBox = document.getElementById('ptd-activity-list');
  if (actBox) actBox.style.display = 'none'; // схлопнута по умолчанию
  var lUrl = document.getElementById('ptd-link-url'); if (lUrl) lUrl.value = '';
@@ -10282,6 +10329,15 @@ window.planTaskDeleteFromDetail = function(){
  planCloseTaskDetail();
  if (typeof planTaskDelete === 'function') planTaskDelete(taskId);
 };
+
+// v194: цвет тега из его текста (детерминированный hue по hash)
+function _planTagColor(tag){
+ var s = String(tag||'').toLowerCase();
+ var h = 0; for (var i = 0; i < s.length; i++) h = ((h<<5)-h + s.charCodeAt(i)) | 0;
+ var hue = Math.abs(h) % 360;
+ return { bg: 'hsla('+hue+',70%,50%,.16)', border: 'hsla('+hue+',70%,55%,.35)', fg: 'hsl('+hue+',75%,72%)' };
+}
+function _planNormTag(s){ return String(s||'').trim().replace(/^#/, '').slice(0, 24); }
 
 // v192: ссылки / комментарии / история изменений на задаче
 function _planEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
@@ -10419,6 +10475,54 @@ window.planToggleActivity = function(){
   var n = (Array.isArray(t.activity) ? t.activity.length : 0);
   toggle.textContent = (isOpen ? 'показать ▾' : 'скрыть ▴') + (n ? ' (' + n + ')' : '');
  }
+};
+
+// v194: теги задачи
+function _planRenderTags(t){
+ var box = document.getElementById('ptd-tags-list'); if (!box) return;
+ var tags = Array.isArray(t.tags) ? t.tags : [];
+ if (!tags.length) { box.innerHTML = '<div style="font-size:11px;color:var(--text-muted)">Тегов нет. Добавь, чтобы фильтровать (bug, hot, client-X...).</div>'; return; }
+ box.innerHTML = tags.map(function(tag){
+  var c = _planTagColor(tag);
+  return '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:14px;background:'+c.bg+';border:1px solid '+c.border+';color:'+c.fg+';font-size:11px;font-weight:600;letter-spacing:.2px">'
+   + '#' + _planEsc(tag)
+   + '<button onclick="planDeleteTag(\''+_planEsc(tag).replace(/'/g,"\\'")+'\')" style="background:none;border:none;color:inherit;cursor:pointer;padding:0;font-size:14px;line-height:1;opacity:.65">×</button>'
+   + '</span>';
+ }).join('');
+}
+window.planAddTag = function(){
+ if (!_planOpenTaskId) return;
+ var inp = document.getElementById('ptd-tag-input');
+ var raw = (inp.value || '').trim();
+ if (!raw) return;
+ var tags = raw.split(/[,\s]+/).map(_planNormTag).filter(Boolean);
+ if (!tags.length) return;
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===_planOpenTaskId;});
+ if (i < 0) return;
+ if (!Array.isArray(all[i].tags)) all[i].tags = [];
+ var added = [];
+ tags.forEach(function(tag){
+  if (all[i].tags.indexOf(tag) === -1) { all[i].tags.push(tag); added.push(tag); }
+ });
+ if (added.length) _planLogActivity(all, i, 'tag_add', 'добавил(а) тег(и): ' + added.map(function(x){return '#'+x;}).join(', '));
+ planSaveTasks(all);
+ inp.value = '';
+ _planRenderTags(all[i]);
+ _planRenderActivity(all[i]);
+ if (typeof planRenderKanban === 'function') planRenderKanban();
+};
+window.planDeleteTag = function(tag){
+ if (!_planOpenTaskId) return;
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===_planOpenTaskId;});
+ if (i < 0) return;
+ all[i].tags = (all[i].tags || []).filter(function(x){return x !== tag;});
+ _planLogActivity(all, i, 'tag_del', 'убрал(а) тег: #' + tag);
+ planSaveTasks(all);
+ _planRenderTags(all[i]);
+ _planRenderActivity(all[i]);
+ if (typeof planRenderKanban === 'function') planRenderKanban();
 };
 
 // v177: drag-and-drop задач между колонками канбана
