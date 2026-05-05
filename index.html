@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v184</title>
+<title>SalesDoc — Финансовый Дашборд v185</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2692,7 +2692,7 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
     <div style="font-size:22px;font-weight:700;color:var(--text-primary);letter-spacing:-0.3px">Планёрки</div>
     <div style="display:flex;align-items:center;gap:10px;margin-top:3px;flex-wrap:wrap">
      <div style="font-size:12px;color:var(--text-muted)">Спринты по проектам — план, прогресс, факт</div>
-     <div id="plan-sync-badge" data-state="loading" style="font-size:10px;font-weight:600;color:#F59E0B;letter-spacing:.3px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)">Синхронизация…</div>
+     <div id="plan-sync-badge" data-state="loading" onclick="planForcePush()" title="Кликни чтобы принудительно залить локальные данные в облако" style="font-size:10px;font-weight:600;color:#F59E0B;letter-spacing:.3px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);cursor:pointer">Синхронизация…</div>
     </div>
    </div>
    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -9425,6 +9425,28 @@ function planSchedulePush(immediate){
  if (_planSyncTimer) clearTimeout(_planSyncTimer);
  _planSyncTimer = setTimeout(planSyncPush, immediate ? 0 : 500);
 }
+// v184: ручной форс-пуш — клик по бейджу. Заливает текущее состояние (или localStorage, если облако ещё не загружено) в KV.
+window.planForcePush = async function(){
+ try {
+  if (!_planCloud) {
+   _planCloud = planMigrateFromLocalStorage();
+   if (!_planCloud.sprints.length) _planCloud.sprints = PLAN_DEFAULT_SPRINTS.slice();
+  }
+  _planCloud.updated_at = 0; // сбросить, чтобы сервер не ругался на конфликт
+  planUpdateSyncBadge('saving');
+  await planSyncPush();
+  // Дополнительный fetch чтобы убедиться что сервер реально принял
+  var r = await fetch('/api/planning', { cache: 'no-store' });
+  var j = await r.json();
+  if (j && j.updated_at && j.sprints && j.sprints.length) {
+   try { showNotif('Готово', 'В облако ушло ' + j.sprints.length + ' спринт(ов)'); } catch(_){}
+  } else {
+   try { showNotif('Не получилось', 'Сервер ответил пустым. Проверь Vercel KV.'); } catch(_){}
+  }
+ } catch(e) {
+  try { showNotif('Ошибка', String(e && e.message || e)); } catch(_){}
+ }
+};
 async function planSyncPush(){
  if (!_planCloud) return;
  var badge = document.getElementById('plan-sync-badge');
