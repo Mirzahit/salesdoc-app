@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v176</title>
+<title>SalesDoc — Финансовый Дашборд v177</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -933,6 +933,11 @@ body.light .plan-kb-card:hover{background:rgba(255,255,255,.92);border-color:rgb
 .plan-kb-points{background:rgba(255,255,255,.06);color:var(--text-secondary);padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;border:1px solid rgba(255,255,255,.05)}
 body.light .plan-kb-points{background:rgba(15,23,42,.06);border-color:rgba(15,23,42,.06)}
 .plan-kb-empty{text-align:center;color:var(--text-muted);font-size:11px;padding:20px 8px;opacity:.6}
+/* v177: drag-and-drop состояния */
+.plan-kb-card[draggable="true"]{user-select:none}
+.plan-kb-card.dragging{opacity:.45;transform:rotate(-1deg) scale(.98);cursor:grabbing}
+.plan-kb-col.dragover{background:rgba(59,130,246,.10);border-color:rgba(59,130,246,.45);box-shadow:inset 0 0 0 1px rgba(59,130,246,.25)}
+body.light .plan-kb-col.dragover{background:rgba(79,70,229,.06);border-color:rgba(79,70,229,.30)}
 
 /* v169: общая стеклянная карточка для Burndown / Велосити / Ретро / Бэклога */
 .plan-glass-card{
@@ -972,6 +977,20 @@ body.light .plan-backlog-table td{border-bottom-color:rgba(15,23,42,.04)}
 .plan-priority.high{background:rgba(239,68,68,.15);color:#EF4444}
 .plan-priority.mid{background:rgba(255,165,38,.15);color:#F59E0B}
 .plan-priority.low{background:rgba(16,185,129,.15);color:#10B981}
+
+/* v177: меню-троеточие на карточке спринта */
+.plan-menu-wrap{position:relative;display:inline-block}
+.plan-menu-btn{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:18px;line-height:1;letter-spacing:1px;transition:all .15s}
+.plan-menu-btn:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.10);color:var(--text-primary)}
+body.light .plan-menu-btn:hover{background:rgba(15,23,42,.04);border-color:rgba(15,23,42,.06)}
+.plan-menu-popup{position:absolute;top:34px;right:0;min-width:170px;background:rgba(21,48,67,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(148,163,184,.18);border-radius:10px;padding:6px;z-index:50;box-shadow:0 12px 32px rgba(0,0,0,.4);display:none}
+body.light .plan-menu-popup{background:rgba(255,255,255,.98);border-color:rgba(15,23,42,.10);box-shadow:0 12px 32px rgba(15,23,42,.18)}
+.plan-menu-popup.open{display:block}
+.plan-menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:6px;border:none;background:transparent;color:var(--text-primary);font-size:12px;font-weight:500;cursor:pointer;text-align:left;font-family:Inter,sans-serif;transition:background .12s}
+.plan-menu-item:hover{background:rgba(255,255,255,.06)}
+body.light .plan-menu-item:hover{background:rgba(15,23,42,.05)}
+.plan-menu-item.danger{color:#EF4444}
+.plan-menu-item.danger:hover{background:rgba(239,68,68,.10)}
 
 /* v174: pills быстрого выбора длительности в модалке создания спринта */
 .psm-quick{padding:7px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.03);color:var(--text-secondary);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;font-family:Inter,sans-serif}
@@ -2715,6 +2734,13 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
      <button class="plan-create-btn" onclick="planAddTask()">+ Добавить задачу</button>
      <button class="plan-create-btn" onclick="planCloseCurrentSprint()" style="background:rgba(16,185,129,.10);border-color:rgba(16,185,129,.25);color:#10B981">Закрыть спринт</button>
+     <div class="plan-menu-wrap">
+      <button class="plan-menu-btn" onclick="planToggleMenu('plan-sprint-header-menu')" title="Меню" style="width:38px;height:38px;font-size:20px">⋯</button>
+      <div class="plan-menu-popup" id="plan-sprint-header-menu">
+       <button class="plan-menu-item" onclick="planEditCurrentSprint();planCloseAllMenus()">✎ Редактировать</button>
+       <button class="plan-menu-item danger" onclick="planDeleteCurrentSprint();planCloseAllMenus()">🗑 Удалить спринт</button>
+      </div>
+     </div>
     </div>
    </div>
 
@@ -2765,19 +2791,19 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
 
    <!-- Kanban -->
    <div class="plan-kanban" id="plan-kanban">
-    <div class="plan-kb-col" data-status="todo">
+    <div class="plan-kb-col" data-status="todo" ondragover="planDragOver(event,this)" ondragleave="planDragLeave(this)" ondrop="planDropTask(event,'todo',this)">
      <div class="plan-kb-head"><span>Бэклог</span><span class="plan-kb-count" id="plan-kb-count-todo">0</span></div>
      <div class="plan-kb-body" id="plan-kb-todo"></div>
     </div>
-    <div class="plan-kb-col" data-status="progress">
+    <div class="plan-kb-col" data-status="progress" ondragover="planDragOver(event,this)" ondragleave="planDragLeave(this)" ondrop="planDropTask(event,'progress',this)">
      <div class="plan-kb-head"><span>В работе</span><span class="plan-kb-count" id="plan-kb-count-progress">0</span></div>
      <div class="plan-kb-body" id="plan-kb-progress"></div>
     </div>
-    <div class="plan-kb-col" data-status="review">
+    <div class="plan-kb-col" data-status="review" ondragover="planDragOver(event,this)" ondragleave="planDragLeave(this)" ondrop="planDropTask(event,'review',this)">
      <div class="plan-kb-head"><span>На проверке</span><span class="plan-kb-count" id="plan-kb-count-review">0</span></div>
      <div class="plan-kb-body" id="plan-kb-review"></div>
     </div>
-    <div class="plan-kb-col" data-status="done">
+    <div class="plan-kb-col" data-status="done" ondragover="planDragOver(event,this)" ondragleave="planDragLeave(this)" ondrop="planDropTask(event,'done',this)">
      <div class="plan-kb-head"><span>Готово</span><span class="plan-kb-count" id="plan-kb-count-done">0</span></div>
      <div class="plan-kb-body" id="plan-kb-done"></div>
     </div>
@@ -2790,8 +2816,8 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
  <div class="modal-overlay" id="plan-create-sprint-modal" onclick="if(event.target.id==='plan-create-sprint-modal')planCloseCreateModal()" style="z-index:10002">
   <div class="modal" style="max-width:560px">
    <button class="modal-close" onclick="planCloseCreateModal()"></button>
-   <div class="modal-title">Новый спринт</div>
-   <div style="font-size:12px;color:var(--text-secondary);margin-bottom:18px;line-height:1.5">Спринт — это период (обычно 1-2 недели), на который команда планирует задачи. В конце спринта смотрим что сделали, и заводим следующий.</div>
+   <div class="modal-title" id="psm-modal-title">Новый спринт</div>
+   <div style="font-size:12px;color:var(--text-secondary);margin-bottom:18px;line-height:1.5" id="psm-modal-sub">Спринт — это период (обычно 1-2 недели), на который команда планирует задачи. В конце спринта смотрим что сделали, и заводим следующий.</div>
 
    <div class="form-row"><div class="form-group" style="flex:1">
     <label class="form-label">Название</label>
@@ -2837,7 +2863,7 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
    </div></div>
 
    <div id="psm-msg" style="font-size:12px;color:#EF4444;margin-bottom:10px;min-height:18px"></div>
-   <button class="form-submit" onclick="planSubmitCreateModal()">СОЗДАТЬ СПРИНТ</button>
+   <button class="form-submit" onclick="planSubmitCreateModal()" id="psm-submit-btn">СОЗДАТЬ СПРИНТ</button>
   </div>
  </div>
  <!-- /create sprint modal -->
@@ -9284,10 +9310,22 @@ function planRenderSprintCard(sp){
  var prMap = { high:{l:'Высокий приоритет', c:'#EF4444', bg:'rgba(239,68,68,.12)'}, mid:{l:'Средний', c:'#F59E0B', bg:'rgba(245,158,11,.12)'}, low:{l:'Низкий', c:'#10B981', bg:'rgba(16,185,129,.12)'} };
  var prInfo = prMap[pr] || prMap.mid;
  var prBadge = '<span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+prInfo.bg+';color:'+prInfo.c+';margin-right:6px;letter-spacing:.3px">'+prInfo.l.toUpperCase()+'</span>';
+ // v177: меню-троеточие — редактировать / удалить
+ var menuId = 'plan-menu-sp-' + sp.id;
+ var menuHtml = '<div class="plan-menu-wrap" onclick="event.stopPropagation()">'
+  + '<button class="plan-menu-btn" onclick="planToggleMenu(\''+menuId+'\')" title="Меню">⋯</button>'
+  + '<div class="plan-menu-popup" id="'+menuId+'">'
+  +   '<button class="plan-menu-item" onclick="planEditSprint('+sp.id+');planCloseAllMenus()">✎ Редактировать</button>'
+  +   '<button class="plan-menu-item danger" onclick="planDeleteSprint('+sp.id+');planCloseAllMenus()">🗑 Удалить спринт</button>'
+  + '</div>'
+  + '</div>';
  return '<div class="sprint-card color-'+sp.color+'" onclick="planOpenSprint('+sp.id+')">'
   + '<div class="sprint-head">'
   +  '<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px">'+prBadge+'</div><div class="sprint-name">'+sp.name+'</div><div class="sprint-goal">'+sp.goal+'</div></div>'
-  +  '<span class="sprint-status '+sp.status+'">'+planStatusLabel(sp.status)+'</span>'
+  +  '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'
+  +    '<span class="sprint-status '+sp.status+'">'+planStatusLabel(sp.status)+'</span>'
+  +    menuHtml
+  +  '</div>'
   + '</div>'
   + '<div class="sprint-dates">'
   +  '<span>'+planFmtDate(sp.start)+' — '+planFmtDate(sp.end)+'</span>'
@@ -9453,9 +9491,31 @@ window.planningRender = function(){
  grid.innerHTML = list.map(planRenderSprintCard).join('');
 };
 // v174: единая модалка создания спринта + chips команды + dropdown сотрудников
+// v177: + режим редактирования (planEditSprint), меню-троеточие (planToggleMenu),
+//       удаление спринта (planDeleteSprint)
 var _planTeamChips = []; // [{id,name}]
+var _planEditingSprintId = null; // null = create, иначе id редактируемого
+
+// v177: меню-троеточие (toggle / close-all)
+window.planToggleMenu = function(menuId){
+ var el = document.getElementById(menuId);
+ if (!el) return;
+ var wasOpen = el.classList.contains('open');
+ planCloseAllMenus();
+ if (!wasOpen) {
+  el.classList.add('open');
+  setTimeout(function(){
+   document.addEventListener('click', planCloseAllMenus, { once:true });
+  }, 0);
+ }
+};
+window.planCloseAllMenus = function(){
+ document.querySelectorAll('.plan-menu-popup.open').forEach(function(el){ el.classList.remove('open'); });
+};
+
 function _planYmd(d){ return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 window.planCreateSprint = function(){
+ _planEditingSprintId = null;
  // Сброс полей
  _planTeamChips = [];
  var start = new Date(); start.setHours(0,0,0,0);
@@ -9477,6 +9537,10 @@ window.planCreateSprint = function(){
  _planRenderTeamChips();
  _planSetActiveQuick(14);
  var prEl = document.getElementById('psm-priority'); if (prEl) prEl.value = 'mid';
+ // Заголовок и кнопка под create-режим
+ var ttl = document.getElementById('psm-modal-title'); if (ttl) ttl.textContent = 'Новый спринт';
+ var sub = document.getElementById('psm-modal-sub'); if (sub) sub.textContent = 'Спринт — это период (обычно 1-2 недели), на который команда планирует задачи. В конце спринта смотрим что сделали, и заводим следующий.';
+ var btn = document.getElementById('psm-submit-btn'); if (btn) btn.textContent = 'СОЗДАТЬ СПРИНТ';
  // Открыть модалку
  var m = document.getElementById('plan-create-sprint-modal');
  if (m) m.classList.add('open');
@@ -9546,12 +9610,108 @@ window.planSubmitCreateModal = function(){
  var teamIds = _planTeamChips.map(function(c){return c.id;});
  var teamNames = _planTeamChips.map(function(c){return c.name;}).join(', ');
  var priority = (document.getElementById('psm-priority').value || 'mid');
+ // v177: режим редактирования
+ if (_planEditingSprintId) {
+  var idx = all.findIndex(function(s){return s.id===_planEditingSprintId;});
+  if (idx >= 0) {
+   all[idx] = Object.assign({}, all[idx], {
+    name: name, goal: goal, start: startStr, end: endStr, priority: priority,
+    team: teamIds, teamNames: teamNames
+   });
+   planSaveSprints(all);
+   planningRender();
+   planCloseCreateModal();
+   if (typeof showNotif === 'function') showNotif('Спринт обновлён', name);
+   // Если открыта детальная страница этого спринта — перерисовать meta
+   if (_planCurrentSprintId === _planEditingSprintId && typeof planOpenSprint === 'function') {
+    planOpenSprint(_planEditingSprintId);
+   }
+   _planEditingSprintId = null;
+  }
+  return;
+ }
  var sp = { id: nextId, name: name, goal: goal, start: startStr, end: endStr, status:'ontrack', priority: priority, color: colors[(nextId-1) % colors.length], total:0, in_progress:0, done:0, team: teamIds, teamNames: teamNames, archived:false };
  all.unshift(sp);
  planSaveSprints(all);
  planningRender();
  planCloseCreateModal();
  if (typeof showNotif === 'function') showNotif('Спринт создан', name + ' · ' + planFmtDate(sp.start) + ' — ' + planFmtDate(sp.end));
+};
+
+// v177: открыть модалку в режиме редактирования
+window.planEditSprint = function(id){
+ var sp = planLoadSprints().find(function(s){return s.id===id;});
+ if (!sp) return;
+ _planEditingSprintId = id;
+ // Подгружаем dropdown сотрудников + заполняем chips команды
+ var sel = document.getElementById('psm-team-select');
+ if (sel && typeof employees !== 'undefined') {
+  var opts = '<option value="">+ Добавить участника команды</option>';
+  employees.filter(function(e){return e.active!==false;}).forEach(function(e){
+   opts += '<option value="'+e.id+'|'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+' · '+(e.pos||e.role||'—')+'</option>';
+  });
+  sel.innerHTML = opts;
+ }
+ // Восстановить chips команды (поддержка обоих форматов: id-числа и {n,c}-объекты)
+ _planTeamChips = [];
+ (sp.team || []).forEach(function(t){
+  if (typeof t === 'number' && typeof employees !== 'undefined') {
+   var emp = employees.find(function(e){return e.id===t;});
+   if (emp) _planTeamChips.push({ id: emp.id, name: emp.name });
+  } else if (t && typeof t === 'object' && typeof t.id === 'number' && t.name) {
+   _planTeamChips.push({ id: t.id, name: t.name });
+  }
+ });
+ _planRenderTeamChips();
+ // Заполнить поля
+ document.getElementById('psm-name').value = sp.name || '';
+ document.getElementById('psm-goal').value = sp.goal || '';
+ document.getElementById('psm-start').value = sp.start || '';
+ document.getElementById('psm-end').value = sp.end || '';
+ document.getElementById('psm-priority').value = sp.priority || 'mid';
+ document.getElementById('psm-msg').textContent = '';
+ // Подсветить пилюлю длительности по факту дней
+ try { _planSetActiveQuick(planDaysBetween(sp.start, sp.end)); } catch(_){}
+ // Заголовок и кнопка под edit-режим
+ document.getElementById('psm-modal-title').textContent = 'Редактировать спринт';
+ document.getElementById('psm-modal-sub').textContent = 'Поменяй что нужно и сохрани. Существующие задачи останутся как есть.';
+ document.getElementById('psm-submit-btn').textContent = 'СОХРАНИТЬ ИЗМЕНЕНИЯ';
+ // Открыть
+ document.getElementById('plan-create-sprint-modal').classList.add('open');
+ setTimeout(function(){ document.getElementById('psm-name').focus(); }, 50);
+};
+window.planEditCurrentSprint = function(){
+ if (_planCurrentSprintId) planEditSprint(_planCurrentSprintId);
+};
+
+// v177: удаление спринта (через универсальную модалку подтверждения)
+window.planDeleteSprint = function(id){
+ var sp = planLoadSprints().find(function(s){return s.id===id;});
+ if (!sp) return;
+ var taskCount = planLoadTasks().filter(function(t){return t.sprint_id===id;}).length;
+ var bodyText = 'Спринт «' + (sp.name||'') + '» будет удалён.';
+ if (taskCount > 0) bodyText += ' Вместе с ним удалятся ' + taskCount + ' задач(и).';
+ bodyText += ' Это нельзя отменить.';
+ if (typeof planAskDelete === 'function') {
+  planAskDelete({
+   title: 'Удалить спринт?',
+   body: bodyText,
+   onConfirm: function(){
+    var allSp = planLoadSprints().filter(function(s){return s.id!==id;});
+    planSaveSprints(allSp);
+    var allT = planLoadTasks().filter(function(t){return t.sprint_id!==id;});
+    planSaveTasks(allT);
+    var allR = planLoadRetros().filter(function(r){return r.sprint_id!==id;});
+    planSaveRetros(allR);
+    if (_planCurrentSprintId === id) { _planCurrentSprintId = null; if (typeof planCloseSprint === 'function') planCloseSprint(); }
+    planningRender();
+    if (typeof showNotif === 'function') showNotif('Спринт удалён', sp.name||'');
+   }
+  });
+ }
+};
+window.planDeleteCurrentSprint = function(){
+ if (_planCurrentSprintId) planDeleteSprint(_planCurrentSprintId);
 };
 // v168: задачи спринта — отдельный store
 var _planTasksKey = 'plan_tasks_v1';
@@ -9666,7 +9826,7 @@ function planRenderKanban(){
    if (t.priority === 'high') prDot = '<span title="Высокий приоритет" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#EF4444;margin-right:7px;flex-shrink:0;box-shadow:0 0 6px rgba(239,68,68,.5)"></span>';
    else if (t.priority === 'low') prDot = '<span title="Низкий приоритет" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10B981;margin-right:7px;flex-shrink:0;opacity:.7"></span>';
    else if (t.priority === 'mid') prDot = '<span title="Средний приоритет" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#F59E0B;margin-right:7px;flex-shrink:0;opacity:.7"></span>';
-   return '<div class="plan-kb-card s-'+t.status+'" onclick="planTaskNextStatus('+t.id+')" oncontextmenu="event.preventDefault();planTaskDelete('+t.id+');return false;" title="Клик — следующий статус, ПКМ — удалить">'
+   return '<div class="plan-kb-card s-'+t.status+'" draggable="true" ondragstart="planDragStart(event,'+t.id+')" ondragend="planDragEnd(this)" onclick="planTaskNextStatus('+t.id+')" oncontextmenu="event.preventDefault();planTaskDelete('+t.id+');return false;" title="Перетащи в другую колонку или клик — следующий статус. ПКМ — удалить.">'
     + '<div class="plan-kb-title" style="display:flex;align-items:flex-start">'+prDot+'<span style="flex:1">'+(t.title||'').replace(/</g,'&lt;')+'</span></div>'
     + '<div class="plan-kb-meta" style="align-items:center"><span style="display:inline-flex">'+avatars+'</span>'+dueHtml+'</div>'
    + '</div>';
@@ -9776,6 +9936,33 @@ window.planSubmitTaskModal = function(){
  planRenderKanban();
  planCloseTaskModal();
 };
+// v177: drag-and-drop задач между колонками канбана
+window.planDragStart = function(event, taskId){
+ try { event.dataTransfer.setData('text/plain', String(taskId)); event.dataTransfer.effectAllowed = 'move'; } catch(_){}
+ if (event.currentTarget && event.currentTarget.classList) event.currentTarget.classList.add('dragging');
+};
+window.planDragEnd = function(el){ if (el && el.classList) el.classList.remove('dragging'); };
+window.planDragOver = function(event, col){
+ event.preventDefault();
+ try { event.dataTransfer.dropEffect = 'move'; } catch(_){}
+ if (col && col.classList) col.classList.add('dragover');
+};
+window.planDragLeave = function(col){ if (col && col.classList) col.classList.remove('dragover'); };
+window.planDropTask = function(event, newStatus, col){
+ event.preventDefault();
+ if (col && col.classList) col.classList.remove('dragover');
+ var taskId = parseInt(event.dataTransfer.getData('text/plain'), 10);
+ if (!taskId) return;
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===taskId;});
+ if (i < 0) return;
+ if (all[i].status === newStatus) return;
+ all[i].status = newStatus;
+ planSaveTasks(all);
+ planRecountSprint(all[i].sprint_id);
+ planRenderKanban();
+};
+
 window.planTaskNextStatus = function(taskId){
  var all = planLoadTasks();
  var i = all.findIndex(function(t){return t.id===taskId;});
