@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v191</title>
+<title>SalesDoc — Финансовый Дашборд v192</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3006,6 +3006,37 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
      <input id="ptd-sub-input" class="form-input" placeholder="Что ещё нужно сделать?" style="flex:1" onkeydown="if(event.key==='Enter')planAddSubtask()">
      <button class="plan-create-btn" onclick="planAddSubtask()" style="padding:9px 16px">+</button>
     </div>
+   </div>
+
+   <!-- v192: Ссылки на внешнее (Google Doc, Figma, amoCRM, GitHub etc.) -->
+   <div style="margin-bottom:16px">
+    <div style="font-size:12px;font-weight:700;color:var(--text-primary);letter-spacing:.3px;margin-bottom:10px">Ссылки</div>
+    <div id="ptd-links-list" style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+     <input id="ptd-link-url" class="form-input" placeholder="https://..." style="flex:2;min-width:160px" onkeydown="if(event.key==='Enter')planAddLink()">
+     <input id="ptd-link-label" class="form-input" placeholder="Подпись (необязательно)" style="flex:1;min-width:120px" onkeydown="if(event.key==='Enter')planAddLink()">
+     <button class="plan-create-btn" onclick="planAddLink()" style="padding:9px 16px">+</button>
+    </div>
+   </div>
+
+   <!-- v192: Комментарии -->
+   <div style="margin-bottom:16px">
+    <div style="font-size:12px;font-weight:700;color:var(--text-primary);letter-spacing:.3px;margin-bottom:10px">Комментарии</div>
+    <div id="ptd-comments-list" style="margin-bottom:10px;max-height:240px;overflow-y:auto"></div>
+    <div style="display:flex;gap:6px">
+     <textarea id="ptd-comment-input" class="form-input" placeholder="Написать комментарий..." rows="2" style="flex:1;resize:vertical;min-height:42px;font-family:inherit" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))planAddComment()"></textarea>
+     <button class="plan-create-btn" onclick="planAddComment()" style="padding:9px 16px;align-self:stretch">Отправить</button>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);margin-top:4px">Ctrl+Enter — отправить</div>
+   </div>
+
+   <!-- v192: История изменений -->
+   <div style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;cursor:pointer" onclick="planToggleActivity()">
+     <div style="font-size:12px;font-weight:700;color:var(--text-primary);letter-spacing:.3px">История изменений</div>
+     <div id="ptd-activity-toggle" style="font-size:11px;color:var(--text-muted)">показать ▾</div>
+    </div>
+    <div id="ptd-activity-list" style="display:none;max-height:240px;overflow-y:auto;font-size:11px;color:var(--text-secondary);line-height:1.5"></div>
    </div>
 
    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
@@ -10140,6 +10171,8 @@ window.planSubmitTaskModal = function(){
   status:'todo',
   created_at: (new Date()).toISOString().slice(0,10)
  });
+ // v192: запись «создал задачу» в историю
+ _planLogActivity(all, all.length - 1, 'created', 'создал(а) задачу');
  planSaveTasks(all);
  planRecountSprint(_planCurrentSprintId);
  planRenderKanban();
@@ -10175,6 +10208,15 @@ window.planOpenTaskDetail = function(taskId){
  // Подзадачи
  _planRenderSubtasks(t);
  document.getElementById('ptd-sub-input').value = '';
+ // v192: ссылки, комментарии, история
+ _planRenderLinks(t);
+ _planRenderComments(t);
+ _planRenderActivity(t);
+ var actBox = document.getElementById('ptd-activity-list');
+ if (actBox) actBox.style.display = 'none'; // схлопнута по умолчанию
+ var lUrl = document.getElementById('ptd-link-url'); if (lUrl) lUrl.value = '';
+ var lLab = document.getElementById('ptd-link-label'); if (lLab) lLab.value = '';
+ var cInp = document.getElementById('ptd-comment-input'); if (cInp) cInp.value = '';
  document.getElementById('plan-task-detail-modal').classList.add('open');
  setTimeout(function(){ document.getElementById('ptd-sub-input').focus(); }, 50);
 };
@@ -10242,6 +10284,144 @@ window.planTaskDeleteFromDetail = function(){
  if (typeof planTaskDelete === 'function') planTaskDelete(taskId);
 };
 
+// v192: ссылки / комментарии / история изменений на задаче
+function _planEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+function _planUserName(){ try { return (currentUser && currentUser.name) ? currentUser.name : 'Кто-то'; } catch(_) { return 'Кто-то'; } }
+function _planFmtTs(ts){
+ if (!ts) return '';
+ try {
+  var d = new Date(ts), now = new Date();
+  var sameDay = d.toDateString() === now.toDateString();
+  var hh = ('0'+d.getHours()).slice(-2), mm = ('0'+d.getMinutes()).slice(-2);
+  if (sameDay) return 'сегодня ' + hh + ':' + mm;
+  var dd = ('0'+d.getDate()).slice(-2), mo = ('0'+(d.getMonth()+1)).slice(-2);
+  return dd + '.' + mo + ' ' + hh + ':' + mm;
+ } catch(_) { return ''; }
+}
+function _planLogActivity(taskArr, idx, type, details){
+ // taskArr — текущий массив задач (мутируем); idx — индекс задачи; type — короткое имя; details — текст
+ if (!taskArr[idx]) return;
+ if (!Array.isArray(taskArr[idx].activity)) taskArr[idx].activity = [];
+ var nextId = (taskArr[idx].activity.reduce(function(m,a){return Math.max(m, a.id||0);}, 0) || 0) + 1;
+ taskArr[idx].activity.push({ id: nextId, ts: Date.now(), author: _planUserName(), type: type, details: details||'' });
+}
+function _planRenderLinks(t){
+ var box = document.getElementById('ptd-links-list'); if (!box) return;
+ var links = Array.isArray(t.links) ? t.links : [];
+ if (!links.length) { box.innerHTML = '<div style="font-size:11px;color:var(--text-muted)">Пусто. Добавь ссылку на Google Doc, Figma, amoCRM и т.п.</div>'; return; }
+ box.innerHTML = links.map(function(l){
+  var label = l.label || l.url;
+  var safeUrl = _planEsc(l.url);
+  return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.04);margin-bottom:6px">'
+   + '<span style="font-size:13px">↗</span>'
+   + '<a href="'+safeUrl+'" target="_blank" rel="noopener" style="flex:1;font-size:12px;color:#60A5FA;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_planEsc(label)+'</a>'
+   + '<button onclick="planDeleteLink('+l.id+')" title="Удалить" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:4px 8px;border-radius:4px">×</button>'
+  + '</div>';
+ }).join('');
+}
+window.planAddLink = function(){
+ if (!_planOpenTaskId) return;
+ var urlInp = document.getElementById('ptd-link-url');
+ var labelInp = document.getElementById('ptd-link-label');
+ var url = (urlInp.value || '').trim();
+ if (!url) return;
+ if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+ var label = (labelInp.value || '').trim();
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===_planOpenTaskId;});
+ if (i < 0) return;
+ if (!Array.isArray(all[i].links)) all[i].links = [];
+ var nextId = (all[i].links.reduce(function(m,l){return Math.max(m, l.id||0);}, 0) || 0) + 1;
+ all[i].links.push({ id: nextId, url: url, label: label });
+ _planLogActivity(all, i, 'link_add', 'добавил(а) ссылку: ' + (label || url));
+ planSaveTasks(all);
+ urlInp.value = ''; labelInp.value = '';
+ _planRenderLinks(all[i]);
+ _planRenderActivity(all[i]);
+};
+window.planDeleteLink = function(linkId){
+ if (!_planOpenTaskId) return;
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===_planOpenTaskId;});
+ if (i < 0) return;
+ var removed = (all[i].links || []).find(function(l){return l.id===linkId;});
+ all[i].links = (all[i].links || []).filter(function(l){return l.id!==linkId;});
+ if (removed) _planLogActivity(all, i, 'link_del', 'убрал(а) ссылку: ' + (removed.label || removed.url));
+ planSaveTasks(all);
+ _planRenderLinks(all[i]);
+ _planRenderActivity(all[i]);
+};
+function _planRenderComments(t){
+ var box = document.getElementById('ptd-comments-list'); if (!box) return;
+ var comments = Array.isArray(t.comments) ? t.comments.slice().sort(function(a,b){return (a.ts||0) - (b.ts||0);}) : [];
+ if (!comments.length) { box.innerHTML = '<div style="font-size:11px;color:var(--text-muted)">Пока нет комментариев.</div>'; return; }
+ box.innerHTML = comments.map(function(c){
+  var initials = (c.author||'?').split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2).toUpperCase();
+  return '<div style="display:flex;gap:10px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.04);margin-bottom:8px">'
+   + '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,rgba(96,165,250,.25),rgba(96,165,250,.1));color:#60A5FA;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+_planEsc(initials)+'</div>'
+   + '<div style="flex:1;min-width:0">'
+    + '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;margin-bottom:4px">'
+     + '<strong style="color:var(--text-primary)">'+_planEsc(c.author||'')+'</strong>'
+     + '<span style="color:var(--text-muted)">'+_planFmtTs(c.ts)+'</span>'
+    + '</div>'
+    + '<div style="font-size:12px;color:var(--text-secondary);white-space:pre-wrap;word-break:break-word">'+_planEsc(c.text||'')+'</div>'
+   + '</div>'
+   + '<button onclick="planDeleteComment('+c.id+')" title="Удалить" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:4px 8px;border-radius:4px;align-self:flex-start">×</button>'
+  + '</div>';
+ }).join('');
+}
+window.planAddComment = function(){
+ if (!_planOpenTaskId) return;
+ var inp = document.getElementById('ptd-comment-input');
+ var text = (inp.value || '').trim(); if (!text) return;
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===_planOpenTaskId;});
+ if (i < 0) return;
+ if (!Array.isArray(all[i].comments)) all[i].comments = [];
+ var nextId = (all[i].comments.reduce(function(m,c){return Math.max(m, c.id||0);}, 0) || 0) + 1;
+ all[i].comments.push({ id: nextId, ts: Date.now(), author: _planUserName(), text: text });
+ _planLogActivity(all, i, 'comment', 'оставил(а) комментарий');
+ planSaveTasks(all);
+ inp.value = '';
+ _planRenderComments(all[i]);
+ _planRenderActivity(all[i]);
+};
+window.planDeleteComment = function(commentId){
+ if (!_planOpenTaskId) return;
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===_planOpenTaskId;});
+ if (i < 0) return;
+ all[i].comments = (all[i].comments || []).filter(function(c){return c.id!==commentId;});
+ planSaveTasks(all);
+ _planRenderComments(all[i]);
+};
+function _planRenderActivity(t){
+ var box = document.getElementById('ptd-activity-list'); if (!box) return;
+ var items = Array.isArray(t.activity) ? t.activity.slice().sort(function(a,b){return (b.ts||0) - (a.ts||0);}) : [];
+ var toggle = document.getElementById('ptd-activity-toggle');
+ if (toggle) toggle.textContent = (box.style.display === 'block' ? 'скрыть ▴' : 'показать ▾') + (items.length ? ' (' + items.length + ')' : '');
+ if (!items.length) { box.innerHTML = '<div style="color:var(--text-muted)">История пуста.</div>'; return; }
+ box.innerHTML = items.map(function(a){
+  return '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)">'
+   + '<span style="color:var(--text-muted)">'+_planFmtTs(a.ts)+'</span> · '
+   + '<strong style="color:var(--text-primary)">'+_planEsc(a.author||'')+'</strong> '
+   + _planEsc(a.details||a.type||'')
+  + '</div>';
+ }).join('');
+}
+window.planToggleActivity = function(){
+ var box = document.getElementById('ptd-activity-list');
+ var toggle = document.getElementById('ptd-activity-toggle');
+ if (!box) return;
+ var isOpen = box.style.display === 'block';
+ box.style.display = isOpen ? 'none' : 'block';
+ if (toggle) {
+  var t = planLoadTasks().find(function(x){return x.id===_planOpenTaskId;}) || {};
+  var n = (Array.isArray(t.activity) ? t.activity.length : 0);
+  toggle.textContent = (isOpen ? 'показать ▾' : 'скрыть ▴') + (n ? ' (' + n + ')' : '');
+ }
+};
+
 // v177: drag-and-drop задач между колонками канбана
 window.planDragStart = function(event, taskId){
  try { event.dataTransfer.setData('text/plain', String(taskId)); event.dataTransfer.effectAllowed = 'move'; } catch(_){}
@@ -10263,7 +10443,11 @@ window.planDropTask = function(event, newStatus, col){
  var i = all.findIndex(function(t){return t.id===taskId;});
  if (i < 0) return;
  if (all[i].status === newStatus) return;
+ var stLabel = { todo:'Бэклог', progress:'В работе', review:'На проверке', done:'Готово' };
+ var oldStatus = all[i].status;
  all[i].status = newStatus;
+ // v192: автозапись в историю
+ _planLogActivity(all, i, 'status', 'перевёл(а): ' + (stLabel[oldStatus]||oldStatus) + ' → ' + (stLabel[newStatus]||newStatus));
  planSaveTasks(all);
  planRecountSprint(all[i].sprint_id);
  planRenderKanban();
@@ -10275,7 +10459,11 @@ window.planTaskNextStatus = function(taskId){
  if (i < 0) return;
  var order = ['todo','progress','review','done'];
  var cur = order.indexOf(all[i].status);
- all[i].status = order[(cur+1) % order.length];
+ var stLabel = { todo:'Бэклог', progress:'В работе', review:'На проверке', done:'Готово' };
+ var oldStatus = all[i].status;
+ var newStatus = order[(cur+1) % order.length];
+ all[i].status = newStatus;
+ _planLogActivity(all, i, 'status', 'перевёл(а): ' + (stLabel[oldStatus]||oldStatus) + ' → ' + (stLabel[newStatus]||newStatus));
  planSaveTasks(all);
  planRecountSprint(all[i].sprint_id);
  planRenderKanban();
