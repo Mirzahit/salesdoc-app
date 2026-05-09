@@ -52,7 +52,7 @@
 
 --text          #F1F7F2
 --text-2        #B8CFC0
---text-muted    #8FAA9A
+--text-soft     #8FAA9A          (намеренно НЕ --text-muted — старая переменная остаётся со своим значением)
 --text-faint    #5F8070
 
 --accent        #28623A
@@ -60,22 +60,23 @@
 --accent-bg     rgba(40,98,58,.15)
 --accent-text   #4DAB68
 
---success       #28623A          (= accent)
---success-text  #4DAB68
---success-bg    rgba(40,98,58,.15)
+/* Семантика — префикс --ds- чтобы не пересекаться с существующими --success/--info/--danger/--warning */
+--ds-success       #28623A      (= accent)
+--ds-success-text  #4DAB68
+--ds-success-bg    rgba(40,98,58,.15)
 
---info          #35577D          (Navy Mirage accent)
---info-text     #6B8FB8
---info-bg       rgba(53,87,125,.18)
+--ds-info          #35577D      (Navy Mirage accent)
+--ds-info-text     #6B8FB8
+--ds-info-bg       rgba(53,87,125,.18)
 
---danger        #C13A40          (Crimson Velvet, поднят для контраста — в рефе #6B1E23 слишком тёмный для алерта)
---danger-text   #D67075
---danger-bg     rgba(193,58,64,.15)
---danger-deep   #6B1E23          (для фоновых пилюль/градиентов в духе референса)
+--ds-danger        #C13A40      (Crimson Velvet, поднят для контраста — в рефе #6B1E23 слишком тёмный для алерта)
+--ds-danger-text   #D67075
+--ds-danger-bg     rgba(193,58,64,.15)
+--ds-danger-deep   #6B1E23      (для фоновых пилюль/градиентов в духе референса)
 
---warning       #D97706          (amber, не из рефов — нужен в UX)
---warning-text  #F59E0B
---warning-bg    rgba(217,119,6,.15)
+--ds-warning       #D97706      (amber, не из рефов — нужен в UX)
+--ds-warning-text  #F59E0B
+--ds-warning-bg    rgba(217,119,6,.15)
 ```
 
 ### 3.2 Light theme (переключатель сохраняется)
@@ -92,7 +93,7 @@
 
 --text          #0F2027
 --text-2        #3A5048
---text-muted    #6B7C72
+--text-soft     #6B7C72
 --text-faint    #95A89B
 
 --accent        #1F4D2D
@@ -100,9 +101,9 @@
 --accent-bg     rgba(40,98,58,.10)
 --accent-text   #1F4D2D
 
---info          #2D4768
---danger        #A02D33
---warning       #B45309
+--ds-info       #2D4768
+--ds-danger     #A02D33
+--ds-warning    #B45309
 ```
 
 ## 4. Типографическая шкала
