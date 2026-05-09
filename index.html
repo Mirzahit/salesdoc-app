@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v207</title>
+<title>SalesDoc — Финансовый Дашборд v208</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2837,6 +2837,32 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
  height:40px;
  font-size:14px;
 }
+/* ============================================================
+   v208 — Гигиена KPI-карточки
+   1. Скрываем легаси .kpi-right (M2M/A2A чипы) — они продолжали
+      висеть absolute top/right из-за более позднего блока на стр.
+      ~1740 и перебивали v207-намерение спрятать их. Делаем !hide
+      в самом конце style — последнее слово.
+   2. .kpi-value: nowrap, чтобы число и ₸ не разрывались на 2 строки.
+   3. .kpi-currency / .kpi-value span — единый стиль валютного
+      суффикса (мелкий, soft, без letter-spacing).
+   4. Footer-inline: тонкая граница и пробелы между лейблом и
+      значением — чтобы «Апр 4.4М ₸ · Май'25 нет данных» читалось.
+   ============================================================ */
+body:not(.light) .kpi-card .kpi-right{display:none!important}
+body:not(.light) .kpi-left{padding-right:0!important}
+.kpi-value{white-space:nowrap!important}
+.kpi-value span,.kpi-value .kpi-currency,.plan-sum-val .kpi-currency{
+ font-size:.55em!important;
+ color:var(--text-soft)!important;
+ font-weight:500!important;
+ letter-spacing:0!important;
+ margin-left:3px!important;
+}
+.kpi-footer-inline{display:flex!important;flex-direction:column!important;gap:2px!important}
+.kpi-footer-inline .kfi-row{display:flex!important;justify-content:space-between!important;align-items:baseline!important;gap:8px!important}
+.kpi-footer-inline .kfi-lbl{color:var(--text-muted,#94A3B8)!important;font-size:.92em!important;flex-shrink:0!important;margin-right:0!important}
+.kpi-footer-inline .kfi-val{color:var(--text-soft,#CBD5E1)!important;font-variant-numeric:tabular-nums!important;text-align:right!important}
 </style>
 
 </head>
@@ -6049,7 +6075,8 @@ function renderAll() {
  var deltaEl = document.getElementById('delta-avg-new');
  if(deltaEl) { deltaEl.textContent = newCount + ' новых клиентов'; deltaEl.className = 'kpi-delta ' + (newCount > 0 ? 'up' : 'down'); }
  })();
- ['license','sub','impl','integ','total'].forEach(k=>{ const el=document.getElementById('delta-'+k); if(el)el.textContent='↑ —'; });
+ /* v208: убираем заглушку «↑ —» — пока нет реальных Δ-данных, дельта-пилюлю прячем целиком */
+ ['license','sub','impl','integ','total'].forEach(k=>{ const el=document.getElementById('delta-'+k); if(el){ el.textContent=''; el.style.display='none'; } });
  renderBarChart(ps); renderPlanBars(license,sub,impl); if(typeof renderPnL==='function') renderPnL();
  renderRecentPayments(ps.slice(-5).reverse());
  if(typeof renderRecognizedRevenue==='function') renderRecognizedRevenue();
@@ -13052,8 +13079,8 @@ function parsePlanData(rows) {
  var plan = parseFloat(col3) || 0;
  var fact = parseFloat(col4) || 0;
  var pct = plan > 0 ? fact / plan : 0;
- var forecast = cv(6);
- forecast = (forecast !== '' && !isNaN(forecast)) ? parseFloat(forecast) : null;
+ var forecast = parseFloat(cv(6));
+ if (!isFinite(forecast)) forecast = null; /* v208: пробельные строки выдавали NaN → "NaN%" в карточке */
  curAgent.kpis.push({
  num: col0,
  name: col1.trim(),
@@ -13069,8 +13096,8 @@ function parsePlanData(rows) {
  var plan2 = parseFloat(col3) || 0;
  var fact2 = parseFloat(col4) || 0;
  var pct2 = plan2 > 0 ? fact2 / plan2 : 0;
- var forecast2 = cv(6);
- forecast2 = (forecast2 !== '' && !isNaN(forecast2)) ? parseFloat(forecast2) : null;
+ var forecast2 = parseFloat(cv(6));
+ if (!isFinite(forecast2)) forecast2 = null; /* v208: тот же гард для секции Курс */
  curAgent.kpis.push({
  num: col0,
  name: col1.trim(),
@@ -13100,16 +13127,16 @@ function planRender(data) {
  var pct = data.totalPlan > 0 ? data.totalFact / data.totalPlan * 100 : 0;
  var pctColor = pct >= 80 ? '#10B981' : pct >= 50 ? '#F59E0B' : '#EF4444';
  sumBar.innerHTML =
- '<div class="plan-sum-card"><div class="plan-sum-val" style="color:var(--gold-bright)">' + fmtNum(data.totalPlan) + ' '+_CUR+'</div><div class="plan-sum-lbl">План продаж</div></div>' +
- '<div class="plan-sum-card"><div class="plan-sum-val" style="color:#10B981">' + fmtNum(data.totalFact) + ' '+_CUR+'</div><div class="plan-sum-lbl">ФАКТ ПРОДАЖ</div></div>' +
+ '<div class="plan-sum-card"><div class="plan-sum-val" style="color:var(--gold-bright)">' + fmtNum(data.totalPlan) + '<span class="kpi-currency">'+_CUR+'</span></div><div class="plan-sum-lbl">План продаж</div></div>' +
+ '<div class="plan-sum-card"><div class="plan-sum-val" style="color:#10B981">' + fmtNum(data.totalFact) + '<span class="kpi-currency">'+_CUR+'</span></div><div class="plan-sum-lbl">ФАКТ ПРОДАЖ</div></div>' +
  '<div class="plan-sum-card"><div class="plan-sum-val" style="color:' + pctColor + '">' + Math.round(pct) + '%</div><div class="plan-sum-lbl">ВЫПОЛНЕНИЕ</div></div>' +
- '<div class="plan-sum-card"><div class="plan-sum-val" style="color:#F87171">' + fmtNum(data.totalRemain) + ' '+_CUR+'</div><div class="plan-sum-lbl">ОСТАТОК</div></div>' +
+ '<div class="plan-sum-card"><div class="plan-sum-val" style="color:#F87171">' + fmtNum(data.totalRemain) + '<span class="kpi-currency">'+_CUR+'</span></div><div class="plan-sum-lbl">ОСТАТОК</div></div>' +
  (function(){
  if (data.doneDays > 0 && data.workDays > 0 && data.totalFact > 0) {
  var forecast = Math.round(data.totalFact / data.doneDays * data.workDays);
  var fcPct = data.totalPlan > 0 ? forecast / data.totalPlan * 100 : 0;
  var fcColor = fcPct >= 80 ? '#10B981' : fcPct >= 50 ? '#F59E0B' : '#EF4444';
- return '<div class="plan-sum-card"><div class="plan-sum-val" style="color:' + fcColor + '">' + fmtNum(forecast) + ' '+_CUR+'</div><div class="plan-sum-lbl">ПРОГНОЗ</div><div style="font-size:10px;color:' + fcColor + ';margin-top:2px"> ' + Math.round(fcPct) + '% плана</div></div>';
+ return '<div class="plan-sum-card"><div class="plan-sum-val" style="color:' + fcColor + '">' + fmtNum(forecast) + '<span class="kpi-currency">'+_CUR+'</span></div><div class="plan-sum-lbl">ПРОГНОЗ</div><div style="font-size:10px;color:' + fcColor + ';margin-top:2px"> ' + Math.round(fcPct) + '% плана</div></div>';
  }
  return '';
  })();
@@ -19080,8 +19107,9 @@ function kbRender() {
    var sub2raw = c2 && c2.querySelector('.kpi-chip-sub') ? c2.querySelector('.kpi-chip-sub').textContent.trim() : '';
    var m1 = sub1.match(/к\s+(\S+)/); var period1 = m1 ? m1[1] : 'Март';
    var m2 = sub2raw.match(/к\s+(\S+)/); var period2 = m2 ? m2[1] : "Апр'25";
-   var v1 = prev1 || 'нет данных';
-   var v2 = prev2 || (sub2raw.toLowerCase().indexOf('нет') >= 0 ? 'нет данных' : sub2raw || 'нет данных');
+   /* v208: footer на 2 строки, длинное «нет данных» → лаконичный «—» */
+   var v1 = prev1 || '—';
+   var v2 = prev2 || (sub2raw.toLowerCase().indexOf('нет') >= 0 ? '—' : sub2raw || '—');
    var kLeft = card.querySelector('.kpi-left') || card.querySelector('.kpi-card-inner') || card;
    var footer = kLeft.querySelector('.kpi-footer-inline');
    if (!footer) {
@@ -19089,9 +19117,8 @@ function kbRender() {
     footer.className = 'kpi-footer-inline';
     kLeft.appendChild(footer);
    }
-   footer.innerHTML = '<span class="kfi-lbl">' + period1 + '</span>' + v1 +
-                      '<span class="kfi-sep">·</span>' +
-                      '<span class="kfi-lbl">' + period2 + '</span>' + v2;
+   footer.innerHTML = '<div class="kfi-row"><span class="kfi-lbl">' + period1 + ':</span><span class="kfi-val">' + v1 + '</span></div>' +
+                      '<div class="kfi-row"><span class="kfi-lbl">' + period2 + ':</span><span class="kfi-val">' + v2 + '</span></div>';
   });
  }
  window.__renderKpiFooters = renderKpiFooters;
