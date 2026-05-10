@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v210</title>
+<title>SalesDoc — Финансовый Дашборд v211</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2971,6 +2971,92 @@ body:not(.light) .plan-kpi-pct[style*="#F87171"]{
 body:not(.light) .plan-kpi-pct[style*="rgb(245"],
 body:not(.light) .plan-kpi-pct[style*="#F59E0B"]{
  color:#FCD34D!important;
+}
+/* ============================================================
+   v211 — Унификация всех карточек: единая Emerald-поверхность
+   везде. CSS-only, JS/markup не трогаем. Inline-стили
+   перебиваются через [style*="..."]+!important.
+
+   Цели:
+   1. Ключевые клиенты: «Золотые» BLUE → Emerald, общая поверхность
+      glass для всех 3 тиров. Sheen-stripe сверху.
+   2. Топ-10 крупнейших: BLUE → Emerald gradient бары и текст.
+   3. Топ-10 мелких: RED → soft danger gradient, не кричит.
+   4. Все .kc-card / .kc-top-panel — единая glass-поверхность.
+   ============================================================ */
+
+/* (1) kc-card: единая поверхность + sheen-stripe per tier */
+body:not(.light) #kc-cat-gold[style],
+body:not(.light) #kc-cat-silver[style],
+body:not(.light) #kc-cat-red[style]{
+ background:var(--glass-2-bg,rgba(15,23,42,.55))!important;
+ backdrop-filter:blur(12px) saturate(120%)!important;
+ -webkit-backdrop-filter:blur(12px) saturate(120%)!important;
+}
+body:not(.light) #kc-cat-gold[style]{border:1px solid rgba(16,185,129,.3)!important}
+body:not(.light) #kc-cat-silver[style]{border:1px solid rgba(148,163,184,.22)!important}
+body:not(.light) #kc-cat-red[style]{border:1px solid rgba(239,68,68,.3)!important}
+.kc-card{position:relative!important;overflow:hidden!important;border-radius:14px!important}
+.kc-card::after{
+ content:''!important;position:absolute!important;
+ top:0!important;left:0!important;right:0!important;
+ height:2px!important;z-index:2!important;
+}
+#kc-cat-gold::after{
+ background:linear-gradient(90deg,rgba(16,185,129,0),#10B981 22%,#34D399 50%,#10B981 78%,rgba(16,185,129,0))!important;
+}
+#kc-cat-silver::after{
+ background:linear-gradient(90deg,rgba(148,163,184,0),#94A3B8 30%,#CBD5E1 50%,#94A3B8 70%,rgba(148,163,184,0))!important;
+ opacity:.5!important;
+}
+#kc-cat-red::after{
+ background:linear-gradient(90deg,rgba(239,68,68,0),#EF4444 22%,#FCA5A5 50%,#EF4444 78%,rgba(239,68,68,0))!important;
+}
+
+/* (2) «Золотые»: BLUE → Emerald (icon, label, stats, descriptions) */
+#kc-cat-gold [style*="#60A5FA"]{color:#10B981!important}
+#kc-cat-gold [style*="rgba(96,165,250,0.6)"]{color:rgba(16,185,129,.7)!important}
+#kc-cat-gold [style*="rgba(96,165,250,0.5)"]{color:rgba(16,185,129,.55)!important}
+#kc-cat-gold [style*="rgba(96,165,250,0.4)"]{color:rgba(16,185,129,.45)!important}
+
+/* (3) Top-10 panels: glass-поверхность вместо тинтов */
+body:not(.light) .kc-top-panel[style]{
+ background:var(--glass-2-bg,rgba(15,23,42,.55))!important;
+ backdrop-filter:blur(12px) saturate(120%)!important;
+ -webkit-backdrop-filter:blur(12px) saturate(120%)!important;
+}
+body:not(.light) .kc-top-panel[style*="rgba(96,165,250"]{
+ border-color:rgba(16,185,129,.22)!important;
+}
+body:not(.light) .kc-top-panel[style*="rgba(239,68,68"]{
+ border-color:rgba(239,68,68,.18)!important;
+}
+
+/* (4) Top-10 «крупнейших»: header + badge + бары BLUE → Emerald */
+#kc-top10-big [style*="#60A5FA"]{color:#10B981!important}
+#kc-top10-big [style*="rgba(96,165,250,0.8)"]{color:rgba(16,185,129,.85)!important}
+.kc-top-panel [style*="color:#60A5FA"]{color:#10B981!important}
+.kc-top-panel [style*="background:rgba(96,165,250,0.15)"]{
+ background:rgba(16,185,129,.15)!important;
+}
+.kc-top-panel [style*="border:1px solid rgba(96,165,250,0.25)"]{
+ border-color:rgba(16,185,129,.3)!important;
+}
+
+/* (5) Бары топ-10: Emerald для big, soft danger gradient для small */
+#kc-top10-big .kc-top-bar[style*="background"]{
+ background:linear-gradient(90deg,#10B981,#34D399)!important;
+ box-shadow:0 0 6px rgba(16,185,129,.35)!important;
+}
+#kc-top10-big .kc-top-bar-wrap[style*="background"]{
+ background:rgba(16,185,129,.08)!important;
+}
+#kc-top10-small .kc-top-bar[style*="background"]{
+ background:linear-gradient(90deg,rgba(239,68,68,.65),rgba(252,165,165,.7))!important;
+ box-shadow:0 0 6px rgba(239,68,68,.22)!important;
+}
+#kc-top10-small .kc-top-bar-wrap[style*="background"]{
+ background:rgba(239,68,68,.06)!important;
 }
 </style>
 
