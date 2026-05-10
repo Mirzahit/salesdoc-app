@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v221</title>
+<title>SalesDoc — Финансовый Дашборд v222</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2752,7 +2752,8 @@ body.light .content td span[style]{color:#2A3042!important}
 .kb-scroll-dot.active{background:rgba(148,163,184,.35)}
 .kb-column{width:280px;min-width:280px;flex-shrink:0;background:rgba(17,24,39,.5);border:1px solid var(--dark-border);border-radius:14px;display:flex;flex-direction:column;max-height:calc(100vh - 130px)}
 .kb-column-header{padding:10px 14px 8px;display:flex;flex-direction:column;gap:2px;border-bottom:1px solid var(--dark-border);position:relative}
-.kb-column-header::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--col-color,#60A5FA);border-radius:0 0 2px 2px}
+/* v222: убрана цветная полоса сверху колонки канбана (этапы воронки) — пользователь не хочет «линий сверху» */
+.kb-column-header::before{display:none}
 .kb-column-header .kb-col-row{display:flex;align-items:center;justify-content:space-between;width:100%}
 .kb-column-header .kb-col-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-secondary)}
 .kb-column-header .kb-col-count{font-size:10px;background:rgba(59,130,246,.15);color:#60A5FA;padding:2px 8px;border-radius:10px;font-weight:600}
@@ -14486,7 +14487,8 @@ function intgRender() {
  var allData = intgData;
  if (filterCountry) allData = allData.filter(function(r){ return r.country === filterCountry; });
  var types = ['Интеграция','Доработка','Разработка'];
- var typeColors = {'Интеграция':'#4A90D9','Доработка':'#FF7043','Разработка':'#AB47BC'};
+ // v222: Emerald Depth + Navy Mirage вместо ярко-синего/оранжевого/фиолетового
+ var typeColors = {'Интеграция':'#4DAB68','Доработка':'#C49A52','Разработка':'#5A85B5'};
  var psEl = document.getElementById('intg-period-stats');
  if (psEl) {
   var statsHtml = '<div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:10px;font-weight:600">ВЫПОЛНЕНО ЗА ' + periodLabel.toUpperCase() + '</div>';
@@ -14502,9 +14504,11 @@ function intgRender() {
    var hasPlan = type === 'Интеграция';
    var plan = hasPlan ? INTG_PLAN : 0;
    var pct = hasPlan ? Math.round(doneP / plan * 100) : 0;
-   var barColor = hasPlan ? (pct >= 80 ? '#10B981' : pct >= 50 ? '#F59E0B' : '#EF4444') : '#10B981';
+   // v222: Emerald Depth для прогресса
+   var barColor = hasPlan ? (pct >= 80 ? '#4DAB68' : pct >= 50 ? '#C49A52' : '#C13A40') : '#4DAB68';
    var barW = hasPlan ? Math.min(100, pct) : 100;
-   statsHtml += '<div style="background:rgba(17,24,39,.4);border:1px solid var(--dark-border);border-radius:12px;padding:14px;border-top:3px solid '+tc+'">';
+   // v222: убрана верхняя цветная полоса (border-top), цвет остаётся в тексте метки
+   statsHtml += '<div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:16px;box-shadow:var(--sh-1)">';
    statsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
    statsHtml += '<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:'+tc+'">'+type.toUpperCase()+'</span>';
    if (hasPlan) statsHtml += '<span style="font-size:10px;color:var(--text-muted)">план: '+plan+'</span>';
@@ -14517,7 +14521,7 @@ function intgRender() {
    statsHtml += '<div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;margin-bottom:6px;overflow:hidden">';
    statsHtml += '<div style="height:100%;width:'+barW+'%;background:'+barColor+';border-radius:3px"></div></div>';
    statsHtml += '<div style="display:flex;justify-content:space-between;font-size:10px">';
-   statsHtml += '<span style="color:#F59E0B">'+inWork+' в работе</span>';
+   statsHtml += '<span style="color:#C49A52">'+inWork+' в работе</span>';
    if (hasPlan) statsHtml += '<span style="color:var(--text-muted)">осталось '+ Math.max(0, plan - doneP)+'</span>';
    else statsHtml += '<span style="color:var(--text-muted)">всего '+allOfType.length+'</span>';
    statsHtml += '</div></div>';
@@ -14525,8 +14529,8 @@ function intgRender() {
   statsHtml += '</div>';
   var totalCancelledP = allData.filter(function(r){ return r.status==='Отменено' && (isInPeriod(r.dateDone) || isInPeriod(r.deadline)); }).length;
   statsHtml += '<div style="font-size:10px;color:var(--text-muted);text-align:center;border-top:1px solid rgba(255,255,255,.06);padding-top:8px">';
-  statsHtml += 'Итого за '+periodLabel+': <span style="color:#10B981;font-weight:700">'+totalDonePeriod+' выполнено</span> / <span style="color:#F59E0B;font-weight:700">'+totalInWork+' в работе</span>';
-  if (totalCancelledP > 0) statsHtml += ' / <span style="color:#EF4444;font-weight:700">'+totalCancelledP+' отменено</span>';
+  statsHtml += 'Итого за '+periodLabel+': <span style="color:#4DAB68;font-weight:700">'+totalDonePeriod+' выполнено</span> / <span style="color:#C49A52;font-weight:700">'+totalInWork+' в работе</span>';
+  if (totalCancelledP > 0) statsHtml += ' / <span style="color:#C13A40;font-weight:700">'+totalCancelledP+' отменено</span>';
   statsHtml += '</div>';
   psEl.innerHTML = statsHtml;
  }
@@ -14543,10 +14547,11 @@ function intgRender() {
    if (isDone) pkgDone[pkg] = (pkgDone[pkg]||0) + 1;
    if (isWork) pkgInWork[pkg] = (pkgInWork[pkg]||0) + 1;
   });
+  // v222: Emerald Depth + Navy Mirage вместо разноцветья
   var pkgStyleMap = {
-   'Стандарт':['#B4B2A9','rgba(136,135,128,.12)'],'стандарт Плюс':['#85B7EB','rgba(74,144,217,.12)'],
-   'Стандарт Плюс':['#85B7EB','rgba(74,144,217,.12)'],'Стандарт+':['#85B7EB','rgba(74,144,217,.12)'],
-   'Премиум':['#93C5FD','rgba(59,130,246,.12)'],'Не указан':['#6A6357','rgba(255,255,255,.04)']
+   'Стандарт':['#95A89B','rgba(149,168,155,.12)'],'стандарт Плюс':['#5A85B5','rgba(90,133,181,.12)'],
+   'Стандарт Плюс':['#5A85B5','rgba(90,133,181,.12)'],'Стандарт+':['#5A85B5','rgba(90,133,181,.12)'],
+   'Премиум':['#4DAB68','rgba(77,171,104,.14)'],'Не указан':['#6B7C72','rgba(255,255,255,.04)']
   };
   // Собираем все пакеты (done + inWork)
   var allPkgs = {};
@@ -14649,7 +14654,8 @@ function intgRender() {
   if (d.indexOf('-') >= 0) return d.split('-').reverse().join('.');
   return d;
  };
- var typeBorder = {'Интеграция':'#4A90D9','Доработка':'#FF7043','Разработка':'#AB47BC'};
+ // v222: Emerald Depth + Navy Mirage + amber вместо ярко-синего/оранжевого/фиолетового
+ var typeBorder = {'Интеграция':'#4DAB68','Доработка':'#C49A52','Разработка':'#5A85B5'};
  var showQueue = (filterStatus === 'Выполняется' || filterStatus === 'В очереди' || filterStatus === 'Очередь' || filterStatus === 'Тестируют' || filterStatus === '');
 
  function buildCard(r, queueNum) {
@@ -14658,24 +14664,26 @@ function intgRender() {
   if (deadline && r.status !== 'Готово' && r.status !== 'Отменено') {
    try { isOverdue = parseD(r.deadline) < new Date(); } catch(e){}
   }
-  var countryBadge = (r.country && r.country !== '\u2014') ? '<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;background:'+(r.country==='KG'?'rgba(171,71,188,.15)':'rgba(74,144,217,.15)')+';color:'+(r.country==='KG'?'#CE93D8':'#85B7EB')+'">'+r.country+'</span>' : '';
-  var pkgColors = {'Стандарт':['rgba(136,135,128,.15)','#B4B2A9'],'Стандарт+':['rgba(74,144,217,.15)','#85B7EB'],'стандарт Плюс':['rgba(74,144,217,.15)','#85B7EB'],'Стандарт Плюс':['rgba(74,144,217,.15)','#85B7EB'],'Премиум':['rgba(59,130,246,.15)','#93C5FD']};
+  var countryBadge = (r.country && r.country !== '\u2014') ? '<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;background:'+(r.country==='KG'?'rgba(90,133,181,.15)':'rgba(77,171,104,.14)')+';color:'+(r.country==='KG'?'#5A85B5':'#4DAB68')+'">'+r.country+'</span>' : '';
+  // v222: Emerald Depth + Navy Mirage для пакетов
+  var pkgColors = {'Стандарт':['rgba(149,168,155,.15)','#95A89B'],'Стандарт+':['rgba(90,133,181,.15)','#5A85B5'],'стандарт Плюс':['rgba(90,133,181,.15)','#5A85B5'],'Стандарт Плюс':['rgba(90,133,181,.15)','#5A85B5'],'Премиум':['rgba(77,171,104,.18)','#4DAB68']};
   var pkgKey = r.package || '';
   var pkgStyle = pkgColors[pkgKey] || pkgColors[pkgKey.charAt(0).toUpperCase()+pkgKey.slice(1)] || null;
   var pkgBadge = (pkgKey && pkgStyle) ? '<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:4px;background:'+pkgStyle[0]+';color:'+pkgStyle[1]+';letter-spacing:.3px">'+pkgKey.toUpperCase()+'</span>' : (pkgKey ? '<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.06);color:#94A3B8;letter-spacing:.3px">'+pkgKey.toUpperCase()+'</span>' : '');
   var badges = '<div style="display:flex;gap:4px;margin-left:auto;flex-shrink:0">' + pkgBadge + countryBadge + '</div>';
-  var h = '<div class="intg-card" onclick="this.classList.toggle(\'intg-open\')" style="background:#0F172A;border-radius:10px;padding:10px 12px;cursor:pointer;transition:all .15s;margin-bottom:6px;border:1px solid rgba(255,255,255,.04)">';
+  // v222: карточка интеграции — Emerald Depth токены, без синих акцентов
+  var h = '<div class="intg-card" onclick="this.classList.toggle(\'intg-open\')" style="background:var(--surface-2);border-radius:10px;padding:10px 12px;cursor:pointer;transition:all .15s;margin-bottom:6px;border:1px solid var(--border-faint)">';
   h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">';
-  if (queueNum > 0) h += '<div style="width:20px;height:20px;border-radius:50%;background:rgba(59,130,246,.15);color:#93C5FD;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:Space Grotesk,sans-serif">'+queueNum+'</div>';
+  if (queueNum > 0) h += '<div style="width:20px;height:20px;border-radius:50%;background:var(--accent-bg);color:var(--accent-text);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:Inter,sans-serif">'+queueNum+'</div>';
   h += '<div style="font-size:12px;font-weight:700;color:#E2E8F0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'+(r.status==='Отменено'?';text-decoration:line-through;opacity:.5':'')+'">'+r.company+'</div>';
   h += badges + '</div>';
   if (r.operator && r.operator !== '\u2014') h += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;padding:1px 0"><span style="color:#475569">Оператор</span><span style="color:#94A3B8;display:inline-flex;align-items:center;gap:5px">'+renderAvatar(r.operator,'avatar-sm')+'<span>'+r.operator+'</span></span></div>';
-  if (deadline) h += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0"><span style="color:#475569">'+(r.status==='Готово'?'Выполнено':'Срок')+'</span><span style="color:'+(isOverdue?'#EF4444':r.status==='Готово'?'#10B981':'#94A3B8')+';font-weight:'+(isOverdue?'700':'400')+'">'+(isOverdue?'ПРОСРОЧЕН ':'')+deadline+'</span></div>';
-  if (r.state && r.state !== '\u2014' && r.state !== 'Нормально') h += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0"><span style="color:#475569">Состояние</span><span style="color:#F59E0B;font-weight:600">'+r.state+'</span></div>';
+  if (deadline) h += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0"><span style="color:#475569">'+(r.status==='Готово'?'Выполнено':'Срок')+'</span><span style="color:'+(isOverdue?'#C13A40':r.status==='Готово'?'#4DAB68':'#94A3B8')+';font-weight:'+(isOverdue?'700':'400')+'">'+(isOverdue?'ПРОСРОЧЕН ':'')+deadline+'</span></div>';
+  if (r.state && r.state !== '\u2014' && r.state !== 'Нормально') h += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0"><span style="color:#475569">Состояние</span><span style="color:#C49A52;font-weight:600">'+r.state+'</span></div>';
   h += '<div class="intg-detail" style="display:none;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06);font-size:10px">';
   if (r.manager && r.manager !== '\u2014') h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:1px 0"><span style="color:#475569">Менеджер</span><span style="color:#94A3B8;display:inline-flex;align-items:center;gap:5px">'+renderAvatar(r.manager,'avatar-sm')+'<span>'+r.manager+'</span></span></div>';
   if (fmtD(r.dateStart)) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Взято в работу</span><span style="color:#94A3B8">'+fmtD(r.dateStart)+'</span></div>';
-  if (r.status === 'Готово' && fmtD(r.dateDone)) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Дата исполнения</span><span style="color:#10B981">'+fmtD(r.dateDone)+'</span></div>';
+  if (r.status === 'Готово' && fmtD(r.dateDone)) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Дата исполнения</span><span style="color:#4DAB68">'+fmtD(r.dateDone)+'</span></div>';
   if (r.login) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Логин/пароль</span><span style="color:#94A3B8;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.login.replace(/"/g,'&quot;')+'">'+r.login+'</span></div>';
   if (r.server) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Сервер</span><span style="color:#94A3B8;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.server.replace(/"/g,'&quot;')+'">'+r.server+'</span></div>';
   if (r.contact) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Контакт</span><span style="color:#94A3B8">'+r.contact+'</span></div>';
@@ -14702,7 +14710,8 @@ function intgRender() {
   }
   typeItems.sort(function(a,b){ return parseD(a.dateStart) - parseD(b.dateStart); });
 
-  var html = '<div style="background:rgba(17,24,39,.4);border:1px solid var(--dark-border);border-radius:14px;padding:12px;display:flex;flex-direction:column;border-top:3px solid '+tc+'">';
+  // v222: убрана верхняя цветная полоса (3px border-top), карточка нейтральная
+  var html = '<div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:18px;padding:14px;display:flex;flex-direction:column;box-shadow:var(--sh-1)">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;margin-bottom:8px">';
   html += '<span style="font-family:Space Grotesk,sans-serif;font-size:12px;letter-spacing:1.5px;color:'+tc+'">'+type.toUpperCase()+'</span>';
   html += '<span style="font-size:11px;font-weight:700;color:'+tc+'">'+typeItems.length+'</span></div>';
@@ -14724,7 +14733,7 @@ function intgRender() {
  if (!document.getElementById('intg-card-style')) {
   var s = document.createElement('style');
   s.id = 'intg-card-style';
-  s.textContent = '.intg-open .intg-detail{display:block!important}.intg-card:hover{border-color:rgba(59,130,246,.25)!important}';
+  s.textContent = '.intg-open .intg-detail{display:block!important}.intg-card:hover{border-color:var(--border-strong)!important;background:var(--surface-3)!important}';
   document.head.appendChild(s);
  }
 
