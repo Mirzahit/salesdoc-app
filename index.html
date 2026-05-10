@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v211</title>
+<title>SalesDoc — Финансовый Дашборд v212</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4528,15 +4528,15 @@ body:not(.light) .kc-top-panel[style*="rgba(239,68,68"]{
  <div class="panel-title">Структура расходов</div>
  <div style="display:flex;align-items:center;gap:20px;justify-content:center;padding:10px 0">
  <svg viewBox="0 0 140 140" width="130" height="130">
- <circle cx="70" cy="70" r="58" fill="none" stroke="var(--dark-border)" stroke-width="16"/>
- <circle id="exp-d1" cx="70" cy="70" r="58" fill="none" stroke="#EF4444" stroke-width="16" stroke-linecap="round"/>
- <circle id="exp-d2" cx="70" cy="70" r="58" fill="none" stroke="#4A90D9" stroke-width="16" stroke-linecap="round"/>
- <circle id="exp-d3" cx="70" cy="70" r="58" fill="none" stroke="#10B981" stroke-width="16" stroke-linecap="round"/>
- <circle id="exp-d4" cx="70" cy="70" r="58" fill="none" stroke="#F59E0B" stroke-width="16" stroke-linecap="round"/>
- <circle id="exp-d5" cx="70" cy="70" r="58" fill="none" stroke="#AB47BC" stroke-width="16" stroke-linecap="round"/>
- <circle id="exp-d6" cx="70" cy="70" r="58" fill="none" stroke="#FF7043" stroke-width="16" stroke-linecap="round"/>
- <text id="exp-donut-pct" x="70" y="66" text-anchor="middle" fill="var(--gold-bright)" font-size="22" font-family="'Space Grotesk',sans-serif">0%</text>
- <text x="70" y="82" text-anchor="middle" fill="var(--text-muted)" font-size="8" font-family="'Inter',sans-serif" letter-spacing="1">ТОП</text>
+ <circle cx="70" cy="70" r="58" fill="none" stroke="var(--border-faint)" stroke-width="16"/>
+ <circle id="exp-d1" cx="70" cy="70" r="58" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
+ <circle id="exp-d2" cx="70" cy="70" r="58" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
+ <circle id="exp-d3" cx="70" cy="70" r="58" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
+ <circle id="exp-d4" cx="70" cy="70" r="58" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
+ <circle id="exp-d5" cx="70" cy="70" r="58" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
+ <circle id="exp-d6" cx="70" cy="70" r="58" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
+ <text id="exp-donut-pct" x="70" y="66" text-anchor="middle" fill="var(--accent-text)" font-size="22" font-weight="600" font-family="'Inter',sans-serif" class="num">0%</text>
+ <text x="70" y="82" text-anchor="middle" fill="var(--text-soft)" font-size="8" font-family="'Inter',sans-serif" letter-spacing="1">ТОП</text>
  </svg>
  <div id="exp-donut-legend" style="font-size:12px"></div>
  </div>
@@ -4553,7 +4553,7 @@ body:not(.light) .kc-top-panel[style*="rgba(239,68,68"]{
  <select id="exp-filter-bank" onchange="expRenderTable()" style="padding:6px 10px;font-size:11px;border-radius:6px;border:1px solid var(--dark-border);background:var(--dark-panel);color:var(--text-light);font-family:'Inter',sans-serif">
  <option value="">Все банки</option>
  </select>
- <span id="exp-filter-sum" style="font-size:11px;color:var(--gold-bright);font-weight:700;margin-left:auto"></span>
+ <span id="exp-filter-sum" class="num" style="font-size:11px;color:var(--accent-text);font-weight:700;margin-left:auto"></span>
  </div>
  <div style="overflow-x:auto">
  <table class="data-table"><thead><tr>
@@ -13859,12 +13859,20 @@ var EXP_TABS = (function(){
 })();
 var expTabIdx = 0;
 var expData = []; // {date, category, note, amount, bank}
+// v212: монохромная Emerald-шкала + 1 muted-blue для контраста, без вырвиглазных оранжевого/красного
 var EXP_COLORS = {
- 'ЗП':'#EF4444','Аренда':'#4A90D9','Услуги':'#10B981','Налоги':'#F59E0B',
- 'бонус':'#AB47BC','Банк':'#FF7043','Прочее':'#78909C','Возврат':'#26A69A',
- 'Такси':'#F59E0B','Офис':'#5C6BC0'
+ 'ЗП':'#28623A','Аренда':'#4DAB68','Услуги':'#34794A','Налоги':'#7FCB95',
+ 'бонус':'#A8DCB5','Банк':'#6B8FB8','Прочее':'#6B7C72','Возврат':'#4DAB68',
+ 'Такси':'#95A89B','Офис':'#2D4768'
 };
-function expColor(cat) { return EXP_COLORS[cat] || '#78909C'; }
+// Палитра-фолбэк по индексу (для категорий не в словаре)
+var EXP_FALLBACK = ['#28623A','#4DAB68','#34794A','#7FCB95','#6B8FB8','#A8DCB5','#6B7C72','#2D4768','#95A89B'];
+var _expFbIdx = {};
+function expColor(cat) {
+ if (EXP_COLORS[cat]) return EXP_COLORS[cat];
+ if (!(cat in _expFbIdx)) _expFbIdx[cat] = Object.keys(_expFbIdx).length % EXP_FALLBACK.length;
+ return EXP_FALLBACK[_expFbIdx[cat]];
+}
 
 function expGetTabByCalendar() {
  var y = selectedMonth.year, m = selectedMonth.month;
@@ -14075,7 +14083,7 @@ function expRenderDonut(cats, catMap, total) {
  var pct = Math.round(v / t * 100);
  var tip = document.getElementById('chart-tooltip');
  tip.innerHTML = '<div class="chart-tooltip-title" style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;border-radius:50%;background:'+expColor(c)+'"></div>'+c.toUpperCase()+'</div>' +
- '<div class="chart-tooltip-row"><div class="chart-tooltip-label">Сумма</div><div class="chart-tooltip-val" style="color:#EF4444">'+fmtFull(v)+' '+_CUR+'</div></div>' +
+ '<div class="chart-tooltip-row"><div class="chart-tooltip-label">Сумма</div><div class="chart-tooltip-val">'+fmtFull(v)+' '+_CUR+'</div></div>' +
  '<div class="chart-tooltip-row"><div class="chart-tooltip-label">Доля</div><div class="chart-tooltip-val" style="color:'+expColor(c)+'">'+pct+'%</div></div>' +
  '<div class="chart-tooltip-row"><div class="chart-tooltip-label">Операций</div><div class="chart-tooltip-val">'+expData.filter(function(x){return x.category===c;}).length+'</div></div>';
  tip.classList.add('visible');
@@ -17045,7 +17053,7 @@ function reportGenerate(type) {
    var totalExp = me.reduce(function(s,e){return s+(e.amount||0);},0);
    var byCatE = {};
    me.forEach(function(e){var cat=e.category||e.article||'Прочее';byCatE[cat]=(byCatE[cat]||0)+(e.amount||0);});
-   var html4 = '<div style="padding:14px;background:rgba(239,68,68,.08);border-radius:10px;border:1px solid rgba(239,68,68,.2);margin-bottom:16px"><div style="font-size:11px;color:var(--text-muted)">Итого расходов</div><div style="font-size:20px;font-weight:700;color:#EF4444">'+fmtFull(totalExp)+'</div></div>';
+   var html4 = '<div style="padding:14px;background:var(--accent-bg);border-radius:10px;border:1px solid var(--border);margin-bottom:16px"><div style="font-size:11px;color:var(--text-soft)">Итого расходов</div><div style="font-size:20px;font-weight:700;color:var(--accent-text)" class="num">'+fmtFull(totalExp)+'</div></div>';
    html4 += '<table class="data-table"><thead><tr><th>Категория</th><th>Сумма</th><th>Доля</th></tr></thead><tbody>';
    Object.keys(byCatE).sort(function(a,b){return byCatE[b]-byCatE[a];}).forEach(function(cat){
     var pct = totalExp>0?(byCatE[cat]/totalExp*100).toFixed(1):'0';
