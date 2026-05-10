@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v209</title>
+<title>SalesDoc — Финансовый Дашборд v210</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2951,6 +2951,27 @@ body:not(.light) .plan-kpi-bar-wrap{
  background:linear-gradient(90deg,var(--ds-primary,#10B981),#34D399)!important;
  box-shadow:0 0 10px rgba(16,185,129,.4)!important;
 }
+/* ============================================================
+   v210 — Менеджерские KPI-бары: единая Emerald-палитра вместо
+   светофора (red/amber/green). Семантика статуса остаётся в
+   border-left агента и в numeric % справа. Бар = только длина.
+   Перебивает inline-стили через [style*="background"]+!important.
+   ============================================================ */
+.plan-kpi-bar[style*="background"]{
+ background:linear-gradient(90deg,var(--ds-primary,#10B981),#34D399)!important;
+}
+/* Текстовые % рядом с баром — оставляем семантику, но мягче:
+   красный/жёлтый из светофора → темнее, чтобы не кричать рядом
+   с Emerald-баром. */
+body:not(.light) .plan-kpi-pct[style*="rgb(239"],
+body:not(.light) .plan-kpi-pct[style*="#EF4444"],
+body:not(.light) .plan-kpi-pct[style*="#F87171"]{
+ color:#FCA5A5!important;
+}
+body:not(.light) .plan-kpi-pct[style*="rgb(245"],
+body:not(.light) .plan-kpi-pct[style*="#F59E0B"]{
+ color:#FCD34D!important;
+}
 </style>
 
 </head>
@@ -3316,7 +3337,8 @@ body:not(.light) .plan-kpi-bar-wrap{
  </div>
 
  <!-- SUMMARY BAR -->
- <div id="plan-summary-bar" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px"></div>
+ <!-- v210: auto-fit вместо repeat(4,1fr) — 5 KPI становятся в одну строку, симметрия восстановлена -->
+ <div id="plan-summary-bar" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px"></div>
 
  <!-- DAYS PROGRESS -->
  <div class="panel" id="plan-days-panel" style="margin-bottom:16px;display:none">
