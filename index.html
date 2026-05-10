@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v225</title>
+<title>SalesDoc — Финансовый Дашборд v226</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -621,6 +621,40 @@ body.light ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.30);background
 .crm-empty-ico{font-size:36px;opacity:.3;margin-bottom:14px}
 .crm-empty-msg{margin-bottom:8px;font-weight:500;color:var(--text-2)}
 .crm-empty-hint{font-size:12px;color:var(--text-soft)}
+/* ============================================================
+   DESIGN SYSTEM v226 — Контакты клиента (localStorage)
+   ============================================================ */
+.crm-contacts-list{display:flex;flex-direction:column;gap:0;background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;overflow:hidden}
+.crm-contact-row{display:flex;gap:12px;padding:14px 18px;align-items:center;border-bottom:1px solid var(--border-faint);transition:background var(--t-fast)}
+.crm-contact-row:last-child{border-bottom:none}
+.crm-contact-row:hover{background:var(--surface-2)}
+.crm-contact-avatar{width:36px;height:36px;border-radius:50%;background:var(--surface-3);color:var(--text);font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'Inter',sans-serif;letter-spacing:-0.01em}
+.crm-contact-avatar.r-ceo{background:var(--accent-bg);color:var(--accent-text)}
+.crm-contact-avatar.r-it{background:rgba(94,92,224,.18);color:#5E5CE0}
+.crm-contact-avatar.r-bh{background:rgba(255,159,10,.18);color:var(--ds-warning-text)}
+.crm-contact-avatar.r-sv{background:rgba(48,209,88,.18);color:var(--done)}
+.crm-contact-info{flex:1;min-width:0}
+.crm-contact-name{font-size:14px;font-weight:600;letter-spacing:-0.01em;color:var(--text);text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+.crm-contact-role{font-size:12px;color:var(--text-soft);margin-top:2px}
+.crm-contact-actions{display:flex;gap:6px;flex-shrink:0}
+.crm-contact-edit,.crm-contact-del{width:30px;height:30px;border-radius:8px;background:transparent;border:1px solid var(--border);color:var(--text-soft);font-size:13px;cursor:pointer;transition:all var(--t-fast);font-family:'Inter',sans-serif;display:inline-flex;align-items:center;justify-content:center}
+.crm-contact-edit:hover{background:var(--accent-bg);color:var(--accent-text);border-color:rgba(10,132,255,.30)}
+.crm-contact-del:hover{background:rgba(255,69,58,.16);color:#FF6B5C;border-color:rgba(255,69,58,.30)}
+.crm-contacts-add{margin-top:14px;padding:12px 16px;width:100%;background:var(--accent-bg);color:var(--accent-text);border:1px dashed rgba(10,132,255,.30);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all var(--t-fast)}
+.crm-contacts-add:hover{background:var(--accent);color:#FFF;border-style:solid}
+/* Modal — общая для всех CRM модалок */
+.crm-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.60);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;animation:crmModalFade var(--t-base)}
+@keyframes crmModalFade{from{opacity:0}to{opacity:1}}
+.crm-modal{background:var(--surface);border-radius:18px;border:1px solid var(--border-strong);box-shadow:var(--sh-3);padding:24px;width:440px;max-width:calc(100vw - 40px);max-height:calc(100vh - 80px);overflow-y:auto;animation:crmModalSlide var(--t-base)}
+@keyframes crmModalSlide{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+.crm-modal-title{font-size:18px;font-weight:700;letter-spacing:-0.02em;margin-bottom:16px;color:var(--text)}
+.crm-field{margin-bottom:12px}
+.crm-field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-soft);font-weight:600;margin-bottom:5px}
+.crm-field input,.crm-field select,.crm-field textarea{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border-color var(--t-fast);box-sizing:border-box}
+.crm-field input:focus,.crm-field select:focus,.crm-field textarea:focus{border-color:var(--accent)}
+.crm-field textarea{resize:vertical;min-height:60px}
+.crm-field-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.crm-modal-actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
 /* DESIGN SYSTEM v217 — переопределение legacy токенов на Emerald Depth + Navy Mirage.
    Старые компоненты которые ссылаются на --gold-* / --dark-* / --info / --success
    автоматически получают новый вид. */
@@ -18473,6 +18507,12 @@ function kbOpenCardPage(card) {
  // Рендерим ленту истории после вставки HTML (в pane history)
  kbRenderHistory(card);
 
+ // v226: обновить counter контактов сразу при открытии карточки
+ if(typeof crmContactsForClient === 'function'){
+  var cn = document.getElementById('crm-cnt-cn');
+  if(cn) cn.textContent = crmContactsForClient(card.client).length;
+ }
+
  // Sidebar: activity feed
  kbRenderCardFeed(card);
 
@@ -18486,7 +18526,142 @@ function crmActivateTab(btn){
  document.querySelectorAll('.crm-tabs .crm-tab').forEach(function(t){ t.classList.toggle('active', t === btn); });
  document.querySelectorAll('.crm-tab-pane').forEach(function(p){ p.hidden = p.dataset.pane !== tab; });
  var card = window._kbCurrentCard; if(!card) return;
- // в v226+ здесь lazy-load contacts/files/calendar
+ // v226: Контакты
+ if(tab === 'contacts'){ crmContactsRender(card.client); }
+ // в v227+ здесь добавятся files, calendar
+}
+
+// v226: CRM Контакты — localStorage хранение
+// Структура: localStorage['crm_contacts'] = JSON массив объектов
+// {id, client, name, role, phone, whatsapp, telegram, email, notes, created_at, created_by}
+
+var CRM_CONTACTS_KEY = 'crm_contacts';
+
+// XSS-эскейп; в проекте kbEsc объявлен лишь как defensive-вызов — здесь определяем безопасно.
+if(typeof window.kbEsc !== 'function'){
+ window.kbEsc = function(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); };
+}
+
+function crmContactsAll(){
+ try { return JSON.parse(localStorage.getItem(CRM_CONTACTS_KEY) || '[]') || []; }
+ catch(e){ return []; }
+}
+
+function crmContactsSaveAll(arr){
+ try { localStorage.setItem(CRM_CONTACTS_KEY, JSON.stringify(arr)); return true; }
+ catch(e){ if(typeof kbShowToast==='function') kbShowToast('Ошибка сохранения (localStorage переполнен?)'); return false; }
+}
+
+function crmContactsForClient(client){
+ return crmContactsAll().filter(function(c){ return c.client === client; });
+}
+
+function crmContactsRender(client){
+ var pane = document.getElementById('crm-pane-contacts');
+ if(!pane) return;
+ var list = crmContactsForClient(client);
+ var cnt = document.getElementById('crm-cnt-cn');
+ if(cnt) cnt.textContent = list.length;
+ var html = '';
+ if(!list.length){
+  html = '<div class="crm-empty"><div class="crm-empty-ico">👥</div><div class="crm-empty-msg">Контактов пока нет</div><div class="crm-empty-hint">Добавьте директора, IT-админа, бухгалтера, супервайзеров</div></div>';
+ } else {
+  html = '<div class="crm-contacts-list">';
+  list.forEach(function(c){
+   var initials = (c.name || '').split(' ').slice(0,2).map(function(p){ return (p[0]||''); }).join('').toUpperCase();
+   var roleClass = ({ 'Директор':'r-ceo', 'IT':'r-it', 'Бухгалтер':'r-bh', 'Супервайзер':'r-sv' })[c.role] || '';
+   var phoneText = c.phone || '';
+   html += '<div class="crm-contact-row">'
+    + '<div class="crm-contact-avatar ' + roleClass + '">' + kbEsc(initials || '?') + '</div>'
+    + '<div class="crm-contact-info">'
+    + '<div class="crm-contact-name">' + kbEsc(c.name || '') + '</div>'
+    + '<div class="crm-contact-role">' + kbEsc(c.role || '') + (phoneText ? ' · ' + kbEsc(phoneText) : '') + '</div>'
+    + '</div>'
+    + '<div class="crm-contact-actions">'
+    + '<button class="crm-contact-edit" onclick="crmContactOpenModal(\'' + (client||'').replace(/'/g,"\\'") + '\',\'' + c.id + '\')" title="Редактировать">✎</button>'
+    + '<button class="crm-contact-del" onclick="crmContactDelete(\'' + c.id + '\',\'' + (client||'').replace(/'/g,"\\'") + '\')" title="Удалить">×</button>'
+    + '</div>'
+    + '</div>';
+  });
+  html += '</div>';
+ }
+ html += '<button class="crm-contacts-add" onclick="crmContactOpenModal(\'' + (client||'').replace(/'/g,"\\'") + '\')">+ Добавить контакт</button>';
+ pane.innerHTML = html;
+}
+
+function crmContactOpenModal(client, contactId){
+ var c = contactId ? (crmContactsAll().find(function(x){ return x.id === contactId; }) || {}) : {};
+ var roleOptions = ['Директор','IT','Бухгалтер','Супервайзер','Прочее'].map(function(r){
+  return '<option value="' + kbEsc(r) + '"' + (c.role === r ? ' selected' : '') + '>' + kbEsc(r) + '</option>';
+ }).join('');
+ var bg = document.createElement('div');
+ bg.className = 'crm-modal-bg';
+ bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
+ var modalHtml = '<div class="crm-modal" onclick="event.stopPropagation()">'
+  + '<div class="crm-modal-title">' + (contactId ? 'Редактировать контакт' : 'Новый контакт') + '</div>'
+  + '<div class="crm-field"><label>ФИО *</label><input id="cnt-name" value="' + kbEsc(c.name || '') + '" autocomplete="name"></div>'
+  + '<div class="crm-field"><label>Роль</label><select id="cnt-role">' + roleOptions + '</select></div>'
+  + '<div class="crm-field"><label>Телефон</label><input id="cnt-phone" type="tel" value="' + kbEsc(c.phone || '') + '" placeholder="+7 7XX XXX XX XX"></div>'
+  + '<div class="crm-field-row">'
+  + '<div class="crm-field"><label>WhatsApp</label><input id="cnt-whatsapp" value="' + kbEsc(c.whatsapp || '') + '"></div>'
+  + '<div class="crm-field"><label>Telegram</label><input id="cnt-telegram" value="' + kbEsc(c.telegram || '') + '" placeholder="@username"></div>'
+  + '</div>'
+  + '<div class="crm-field"><label>Email</label><input id="cnt-email" type="email" value="' + kbEsc(c.email || '') + '"></div>'
+  + '<div class="crm-field"><label>Заметки</label><textarea id="cnt-notes" rows="2">' + kbEsc(c.notes || '') + '</textarea></div>'
+  + '<div class="crm-modal-actions">'
+  + '<button class="crm-action outline" onclick="this.closest(\'.crm-modal-bg\').remove()">Отмена</button>'
+  + '<button class="crm-action" onclick="crmContactSave(\'' + (client||'').replace(/'/g,"\\'") + '\',' + (contactId ? '\'' + contactId + '\'' : 'null') + ')">Сохранить</button>'
+  + '</div>'
+  + '</div>';
+ bg.innerHTML = modalHtml;
+ document.body.appendChild(bg);
+ setTimeout(function(){ var inp = document.getElementById('cnt-name'); if(inp) inp.focus(); }, 50);
+}
+
+function crmContactSave(client, contactId){
+ var name = (document.getElementById('cnt-name').value || '').trim();
+ if(!name){ if(typeof kbShowToast==='function') kbShowToast('Заполните ФИО'); return; }
+ var data = {
+  id: contactId || ('c_' + Date.now() + '_' + Math.random().toString(36).slice(2,5)),
+  client: client,
+  name: name,
+  role: document.getElementById('cnt-role').value,
+  phone: (document.getElementById('cnt-phone').value || '').trim(),
+  whatsapp: (document.getElementById('cnt-whatsapp').value || '').trim(),
+  telegram: (document.getElementById('cnt-telegram').value || '').trim(),
+  email: (document.getElementById('cnt-email').value || '').trim(),
+  notes: (document.getElementById('cnt-notes').value || '').trim(),
+  created_at: contactId ? undefined : new Date().toISOString(),
+  created_by: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || 'unknown'
+ };
+ var all = crmContactsAll();
+ if(contactId){
+  var idx = all.findIndex(function(x){ return x.id === contactId; });
+  if(idx >= 0){
+   var existing = all[idx];
+   data.created_at = existing.created_at;
+   data.created_by = existing.created_by || data.created_by;
+   all[idx] = data;
+  } else {
+   all.push(data);
+  }
+ } else {
+  all.push(data);
+ }
+ if(crmContactsSaveAll(all)){
+  if(typeof kbShowToast === 'function') kbShowToast(contactId ? 'Контакт обновлён' : 'Контакт добавлен');
+  var bg = document.querySelector('.crm-modal-bg'); if(bg) bg.remove();
+  crmContactsRender(client);
+ }
+}
+
+function crmContactDelete(id, client){
+ if(!confirm('Удалить контакт?')) return;
+ var all = crmContactsAll().filter(function(c){ return c.id !== id; });
+ if(crmContactsSaveAll(all)){
+  if(typeof kbShowToast === 'function') kbShowToast('Контакт удалён');
+  crmContactsRender(client);
+ }
 }
 
 function kbRenderCardFeed(card) {
