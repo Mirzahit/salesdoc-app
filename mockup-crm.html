@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SalesDoc — CRM Mockup (карточка + календарь)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+ --bg:#000;--surface:#1C1C1E;--surface-2:#2C2C2E;--surface-3:#3A3A3C;
+ --border:rgba(255,255,255,.08);--border-strong:rgba(255,255,255,.16);--hairline:rgba(255,255,255,.06);
+ --text:#FFF;--text-2:rgba(235,235,245,.60);--text-soft:rgba(235,235,245,.45);--text-faint:rgba(235,235,245,.30);
+ /* iOS systemBlue — primary accent (как Apple Mail/Notes/Settings) */
+ --accent:#0A84FF;--accent-bright:#5AC8FA;--accent-deep:#003D7A;--accent-bg:rgba(10,132,255,.16);
+ --gradient-deep:linear-gradient(135deg,#0A84FF,#003D7A);
+ /* iOS systemColors — для статусов и тегов */
+ --done:#30D158;--done-bg:rgba(48,209,88,.18); /* systemGreen — только для completed */
+ --p1:#FF453A;--p2:#FF9F0A;--p3:#FFD60A;--p4:#0A84FF;
+ --indigo:#5E5CE0;--orange:#FF9F0A;--red:#FF453A;--teal:#5AC8FA;
+ --blue:#0A84FF;--blue-bright:#5AC8FA; /* legacy aliases для обратной совместимости в этом мокапе */
+ --r-md:14px;--r-lg:18px;--r-xl:24px;
+ --sh-1:0 1px 2px rgba(0,0,0,.40);
+ --sh-2:0 8px 24px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.30);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:'Inter','-apple-system','SF Pro Display',system-ui,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-0.01em;background:var(--bg);color:var(--text);min-height:100vh}
+body{padding:32px;display:flex;flex-direction:column;gap:48px;max-width:1400px;margin:0 auto}
+.section-title{font-size:13px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:20px}
+.large-title{font-size:34px;font-weight:800;letter-spacing:-0.04em;line-height:1.05;margin-bottom:6px}
+.large-sub{font-size:15px;color:var(--text-2);font-weight:500}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit}
+
+/* ============== CRM CARD ============== */
+.card-wrap{background:var(--surface);border-radius:var(--r-xl);border:1px solid var(--hairline);box-shadow:var(--sh-2);overflow:hidden}
+.card-head{padding:24px 28px 20px;display:grid;grid-template-columns:1fr auto;gap:24px;align-items:start;border-bottom:1px solid var(--hairline)}
+.card-name{font-size:24px;font-weight:700;letter-spacing:-0.025em;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.card-name .badge-stage{font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;background:var(--accent-bg);color:var(--accent-bright);letter-spacing:.5px;text-transform:uppercase}
+.card-meta{display:flex;gap:18px;margin-top:8px;font-size:13px;color:var(--text-2);flex-wrap:wrap}
+.card-meta b{color:var(--text);font-weight:600}
+.card-actions{display:flex;gap:8px;align-items:center}
+.action-btn{padding:8px 14px;border-radius:10px;background:var(--accent-bg);color:var(--accent-bright);border:1px solid rgba(10,132,255,.30);font-size:13px;font-weight:600}
+.action-btn.outline{background:transparent;color:var(--text-2);border:1px solid var(--border)}
+.action-btn:hover{background:var(--accent);color:#FFF}
+
+/* Pipeline */
+.pipeline{display:flex;gap:6px;padding:18px 28px 14px;background:var(--surface-3);overflow-x:auto}
+.pipe-step{flex:1;min-width:120px;background:var(--surface);border:1px solid var(--hairline);border-radius:10px;padding:10px 12px;font-size:11px;color:var(--text-soft);position:relative;cursor:pointer;transition:.18s}
+.pipe-step.done{background:var(--accent-bg);color:var(--accent-bright);border-color:rgba(10,132,255,.30)}
+.pipe-step.done::after{content:'✓';position:absolute;top:8px;right:10px;font-weight:700}
+.pipe-step.active{background:#FFF;color:#000;border-color:#FFF;font-weight:700}
+.pipe-step.active::after{content:'●';position:absolute;top:6px;right:10px;color:var(--accent-bright)}
+.pipe-step .pipe-label{display:block;font-weight:600;letter-spacing:.3px;text-transform:uppercase;font-size:10px;margin-bottom:2px;opacity:.8}
+.pipe-step .pipe-name{font-size:12px;font-weight:600}
+
+/* Tabs inside card */
+.card-tabs{display:flex;gap:0;padding:0 28px;border-bottom:1px solid var(--hairline);background:var(--surface)}
+.card-tab{padding:14px 18px;font-size:14px;font-weight:600;color:var(--text-soft);border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.005em}
+.card-tab:hover{color:var(--text-2)}
+.card-tab.active{color:var(--accent-bright);border-bottom-color:var(--accent-bright)}
+.card-tab .count{display:inline-block;margin-left:6px;font-size:11px;background:var(--surface-3);color:var(--text-2);padding:1px 7px;border-radius:999px;font-weight:600}
+.card-tab.active .count{background:var(--accent-bg);color:var(--accent-bright)}
+
+.card-body{padding:28px;display:grid;grid-template-columns:1.4fr 1fr;gap:28px}
+
+/* Checklists block */
+.cl-block{display:flex;flex-direction:column;gap:18px}
+.cl-stage{background:var(--surface);border:1px solid var(--hairline);border-radius:14px;padding:18px 20px}
+.cl-stage-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.cl-stage-name{font-size:14px;font-weight:700;letter-spacing:-0.01em}
+.cl-stage-pct{font-size:12px;color:var(--accent-bright);font-weight:700;font-variant-numeric:tabular-nums}
+.cl-progress{height:4px;background:var(--surface-3);border-radius:2px;margin-bottom:14px;overflow:hidden}
+.cl-progress-fill{height:100%;background:var(--done);border-radius:2px;transition:width .4s}
+.cl-item{display:flex;gap:10px;padding:8px 0;font-size:13px;color:var(--text);align-items:flex-start}
+.cl-check{width:18px;height:18px;border:1.5px solid var(--text-faint);border-radius:5px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s}
+/* Галочка "выполнено" — iOS systemGreen (только статус, не основной акцент) */
+.cl-check.on{background:var(--done);border-color:var(--done);color:#000;font-weight:700;font-size:12px}
+.cl-text{flex:1;letter-spacing:-0.005em}
+.cl-text.done{color:var(--text-soft);text-decoration:line-through}
+.cl-meta{font-size:11px;color:var(--text-soft);margin-top:2px}
+
+/* Right column */
+.right-col{display:flex;flex-direction:column;gap:20px}
+
+/* Contacts */
+.contacts{background:var(--surface);border:1px solid var(--hairline);border-radius:14px;padding:18px 20px}
+.contacts-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.contacts-title{font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-2)}
+.contacts-add{padding:5px 11px;border-radius:8px;background:var(--accent-bg);color:var(--accent-bright);border:none;font-size:12px;font-weight:600}
+.contact-row{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--hairline);align-items:center}
+.contact-row:last-child{border-bottom:none}
+.contact-avatar{width:34px;height:34px;border-radius:50%;background:var(--surface-3);color:var(--text);font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.contact-avatar.gm{background:var(--accent-bg);color:var(--accent-bright)}
+.contact-avatar.bh{background:rgba(53,87,125,.30);color:var(--blue-bright)}
+.contact-avatar.it{background:rgba(196,154,82,.20);color:var(--orange)}
+.contact-info{flex:1;min-width:0}
+.contact-name{font-size:13px;font-weight:600;letter-spacing:-0.01em;color:var(--text)}
+.contact-role{font-size:11px;color:var(--text-soft)}
+.contact-actions{display:flex;gap:6px}
+.contact-btn{width:30px;height:30px;border-radius:8px;background:var(--surface-3);color:var(--text-2);border:none;font-size:14px;display:flex;align-items:center;justify-content:center;transition:.18s}
+.contact-btn:hover{background:var(--accent-bg);color:var(--accent-bright)}
+
+/* Files */
+.files{background:var(--surface);border:1px solid var(--hairline);border-radius:14px;padding:18px 20px}
+.files-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.file-row{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--hairline);align-items:center;cursor:pointer;transition:.15s}
+.file-row:last-child{border-bottom:none}
+.file-row:hover{margin:0 -12px;padding-left:12px;padding-right:12px;background:var(--surface-3);border-radius:8px;border-bottom-color:transparent}
+.file-icon{width:36px;height:36px;border-radius:9px;background:var(--accent-bg);color:var(--accent-bright);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
+.file-icon.pdf{background:rgba(193,58,64,.18);color:#D67075}
+.file-icon.doc{background:rgba(53,87,125,.20);color:var(--blue-bright)}
+.file-icon.img{background:rgba(196,154,82,.20);color:var(--orange)}
+.file-info{flex:1;min-width:0}
+.file-name{font-size:13px;font-weight:600;color:var(--text);letter-spacing:-0.01em;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+.file-meta{font-size:11px;color:var(--text-soft);margin-top:1px}
+
+/* Mini-calendar inside card */
+.mini-cal{background:var(--surface);border:1px solid var(--hairline);border-radius:14px;padding:18px 20px}
+.mc-event{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--hairline);align-items:flex-start}
+.mc-event:last-child{border-bottom:none}
+.mc-date{width:44px;height:44px;border-radius:10px;background:var(--surface-3);display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;font-variant-numeric:tabular-nums}
+.mc-date.upcoming{background:var(--accent-bg);color:var(--accent-bright)}
+.mc-date .mc-day{font-size:18px;font-weight:700;line-height:1}
+.mc-date .mc-mon{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-soft);margin-top:2px}
+.mc-date.upcoming .mc-mon{color:var(--accent-bright)}
+.mc-info{flex:1;min-width:0}
+.mc-title{font-size:13px;font-weight:600;letter-spacing:-0.01em}
+.mc-time{font-size:11px;color:var(--text-soft);margin-top:2px;display:flex;gap:8px;align-items:center}
+.mc-tag{padding:1px 7px;border-radius:5px;font-size:10px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.mc-tag.training{background:rgba(48,209,88,.18);color:var(--accent-bright)}
+.mc-tag.meeting{background:rgba(53,87,125,.18);color:var(--blue-bright)}
+.mc-tag.deadline{background:rgba(193,58,64,.18);color:#D67075}
+
+/* ============== CALENDAR PAGE ============== */
+.cal-page{background:var(--surface);border-radius:var(--r-xl);border:1px solid var(--hairline);box-shadow:var(--sh-2);padding:28px;display:grid;grid-template-columns:280px 1fr;gap:28px}
+.cal-side{display:flex;flex-direction:column;gap:18px}
+.cal-mini-grid{background:var(--surface-3);border-radius:14px;padding:14px}
+.cal-mini-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.cal-mini-month{font-size:14px;font-weight:700;letter-spacing:-0.01em}
+.cal-mini-arrow{width:26px;height:26px;border-radius:8px;background:var(--surface);color:var(--text-2);border:none;font-size:14px;font-weight:600}
+.cal-mini-grid table{width:100%;border-collapse:collapse}
+.cal-mini-grid th{font-size:10px;font-weight:600;color:var(--text-faint);padding:6px 0;text-transform:uppercase;letter-spacing:.5px}
+.cal-mini-grid td{font-size:12px;font-variant-numeric:tabular-nums;text-align:center;padding:6px 0;color:var(--text-2);cursor:pointer;border-radius:8px}
+.cal-mini-grid td.today{background:var(--accent-bright);color:#000;font-weight:700;border-radius:8px}
+.cal-mini-grid td.has-event{position:relative}
+.cal-mini-grid td.has-event::after{content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--accent-bright)}
+.cal-mini-grid td.muted{color:var(--text-faint)}
+
+.cal-filter{background:var(--surface-3);border-radius:14px;padding:14px}
+.cal-filter-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-soft);margin-bottom:10px}
+.cal-fopt{display:flex;align-items:center;justify-content:space-between;padding:8px 0;font-size:13px;cursor:pointer}
+.cal-fopt label{display:flex;align-items:center;gap:10px;cursor:pointer}
+.cal-fopt .dot{width:10px;height:10px;border-radius:3px}
+.cal-fopt .count{font-size:11px;color:var(--text-soft);font-weight:600;font-variant-numeric:tabular-nums}
+
+.cal-main{display:flex;flex-direction:column;min-height:600px}
+.cal-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.cal-title{font-size:28px;font-weight:800;letter-spacing:-0.025em}
+.cal-view-toggle{display:flex;background:var(--surface-3);border-radius:10px;padding:3px;gap:2px}
+.cal-view-toggle button{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;color:var(--text-soft);background:transparent;border:none}
+.cal-view-toggle button.on{background:var(--surface);color:var(--text);box-shadow:var(--sh-1)}
+
+.cal-week-grid{display:grid;grid-template-columns:60px repeat(7,1fr);border-top:1px solid var(--hairline);border-left:1px solid var(--hairline);border-radius:10px;overflow:hidden}
+.cal-week-grid > div{border-right:1px solid var(--hairline);border-bottom:1px solid var(--hairline);padding:6px 8px;font-size:11px;min-height:50px;position:relative}
+.cal-week-grid .cwh{background:var(--surface-3);font-weight:700;color:var(--text-2);text-align:center;padding:10px 0}
+.cal-week-grid .cwh.today{background:var(--accent-bg);color:var(--accent-bright)}
+.cal-week-grid .cwh-time{background:var(--surface-3);color:var(--text-faint);font-size:10px;text-align:right;padding-right:10px;padding-top:8px}
+.cal-event{position:absolute;left:4px;right:4px;background:rgba(10,132,255,.30);border-left:3px solid var(--accent-bright);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--text);font-weight:600}
+.cal-event.meeting{background:rgba(53,87,125,.30);border-left-color:var(--blue-bright)}
+.cal-event.deadline{background:rgba(193,58,64,.20);border-left-color:#D67075}
+.cal-event-time{font-size:10px;color:var(--text-2);font-weight:500;margin-top:1px}
+</style>
+</head>
+<body>
+
+<!-- ===== CRM CLIENT CARD ===== -->
+<section>
+ <div class="section-title">КАРТОЧКА КЛИЕНТА</div>
+ <div class="card-wrap">
+  <div class="card-head">
+   <div>
+    <div class="card-name">ТОО El-product <span class="badge-stage">Настройка сервера</span></div>
+    <div class="card-meta">
+     <span><b>199 000 ₸</b> · Премиум</span>
+     <span>Оператор <b>Айдос Хапез</b></span>
+     <span>Менеджер Юлия</span>
+     <span>На этапе 6 дн</span>
+    </div>
+   </div>
+   <div class="card-actions">
+    <button class="action-btn outline">Передать</button>
+    <button class="action-btn">Активировать ›</button>
+   </div>
+  </div>
+
+  <div class="pipeline">
+   <div class="pipe-step done"><span class="pipe-label">Этап 1</span><span class="pipe-name">В очереди</span></div>
+   <div class="pipe-step done"><span class="pipe-label">Этап 2</span><span class="pipe-name">Взят в работу</span></div>
+   <div class="pipe-step active"><span class="pipe-label">Этап 3</span><span class="pipe-name">Настройка сервера</span></div>
+   <div class="pipe-step"><span class="pipe-label">Этап 4</span><span class="pipe-name">Обуч. полевых</span></div>
+   <div class="pipe-step"><span class="pipe-label">Этап 5</span><span class="pipe-name">Обуч. офисных</span></div>
+   <div class="pipe-step"><span class="pipe-label">Финиш</span><span class="pipe-name">Активирован</span></div>
+  </div>
+
+  <div class="card-tabs">
+   <div class="card-tab active">Чек-листы <span class="count">12/24</span></div>
+   <div class="card-tab">Контакты <span class="count">4</span></div>
+   <div class="card-tab">Файлы <span class="count">7</span></div>
+   <div class="card-tab">Календарь <span class="count">3</span></div>
+   <div class="card-tab">История</div>
+  </div>
+
+  <div class="card-body">
+
+   <!-- LEFT: Detailed checklists per stage -->
+   <div class="cl-block">
+
+    <div class="cl-stage">
+     <div class="cl-stage-head">
+      <div class="cl-stage-name">Этап 2 · Взят в работу</div>
+      <div class="cl-stage-pct">3/3 · 100%</div>
+     </div>
+     <div class="cl-progress"><div class="cl-progress-fill" style="width:100%;background:var(--accent-bright)"></div></div>
+     <div class="cl-item"><div class="cl-check on">✓</div><div class="cl-text done">Подписан акт первичного контакта<div class="cl-meta">Айдос · 04.05</div></div></div>
+     <div class="cl-item"><div class="cl-check on">✓</div><div class="cl-text done">Получены реквизиты сервера<div class="cl-meta">Айдос · 04.05</div></div></div>
+     <div class="cl-item"><div class="cl-check on">✓</div><div class="cl-text done">Заполнена анкета компании<div class="cl-meta">Хапез · 05.05</div></div></div>
+    </div>
+
+    <div class="cl-stage" style="border:1px solid rgba(10,132,255,.30);background:rgba(10,132,255,.05)">
+     <div class="cl-stage-head">
+      <div class="cl-stage-name" style="color:var(--accent-bright)">Этап 3 · Настройка сервера (текущий)</div>
+      <div class="cl-stage-pct">2/5 · 40%</div>
+     </div>
+     <div class="cl-progress"><div class="cl-progress-fill" style="width:40%"></div></div>
+     <div class="cl-item"><div class="cl-check on">✓</div><div class="cl-text done">Сервер развернут<div class="cl-meta">Айдос · 06.05</div></div></div>
+     <div class="cl-item"><div class="cl-check on">✓</div><div class="cl-text done">Установлено ПО версии 2.18<div class="cl-meta">Айдос · 06.05</div></div></div>
+     <div class="cl-item"><div class="cl-check"></div><div class="cl-text">Импортирован справочник товаров (1С)<div class="cl-meta">не сделано</div></div></div>
+     <div class="cl-item"><div class="cl-check"></div><div class="cl-text">Заведены пользователи системы<div class="cl-meta">не сделано</div></div></div>
+     <div class="cl-item"><div class="cl-check"></div><div class="cl-text">Настроены маршруты торговых представителей<div class="cl-meta">не сделано</div></div></div>
+    </div>
+
+    <div class="cl-stage" style="opacity:.55">
+     <div class="cl-stage-head">
+      <div class="cl-stage-name">Этап 4 · Обучение полевых</div>
+      <div class="cl-stage-pct">0/4</div>
+     </div>
+     <div class="cl-progress"><div class="cl-progress-fill" style="width:0%"></div></div>
+     <div class="cl-item"><div class="cl-check"></div><div class="cl-text">Назначен ответственный супервайзер</div></div>
+     <div class="cl-item"><div class="cl-check"></div><div class="cl-text">Проведён онлайн-инструктаж</div></div>
+     <div class="cl-item"><div class="cl-check"></div><div class="cl-text">Проведён выезд оператора</div></div>
+     <div class="cl-item"><div class="cl-check"></div><div class="cl-text">Подписан акт обучения</div></div>
+    </div>
+
+   </div>
+
+   <!-- RIGHT: contacts + files + mini-calendar -->
+   <div class="right-col">
+
+    <div class="contacts">
+     <div class="contacts-head">
+      <div class="contacts-title">Контакты клиента</div>
+      <button class="contacts-add">+ Добавить</button>
+     </div>
+     <div class="contact-row">
+      <div class="contact-avatar gm">МД</div>
+      <div class="contact-info"><div class="contact-name">Малик Досмаганбетов</div><div class="contact-role">Директор · +7 701 234 56 78</div></div>
+     </div>
+     <div class="contact-row">
+      <div class="contact-avatar it">АТ</div>
+      <div class="contact-info"><div class="contact-name">Аскар Турлыбеков</div><div class="contact-role">IT-администратор · +7 705 123 45 67</div></div>
+     </div>
+     <div class="contact-row">
+      <div class="contact-avatar bh">НБ</div>
+      <div class="contact-info"><div class="contact-name">Нурлан Бектасов</div><div class="contact-role">Главный супервайзер · +7 707 555 66 77</div></div>
+     </div>
+     <div class="contact-row">
+      <div class="contact-avatar">ГС</div>
+      <div class="contact-info"><div class="contact-name">Гульнара Серикова</div><div class="contact-role">Бухгалтер · +7 702 333 44 55</div></div>
+     </div>
+    </div>
+
+    <div class="files">
+     <div class="contacts-head">
+      <div class="contacts-title">Файлы</div>
+      <button class="contacts-add">+ Загрузить</button>
+     </div>
+     <div class="file-row">
+      <div class="file-icon pdf">PDF</div>
+      <div class="file-info"><div class="file-name">Договор внедрения.pdf</div><div class="file-meta">2.3 МБ · 04.05.2026</div></div>
+     </div>
+     <div class="file-row">
+      <div class="file-icon doc">DOC</div>
+      <div class="file-info"><div class="file-name">Техническое задание.docx</div><div class="file-meta">156 КБ · 04.05.2026</div></div>
+     </div>
+     <div class="file-row">
+      <div class="file-icon">XLS</div>
+      <div class="file-info"><div class="file-name">Справочник товаров.xlsx</div><div class="file-meta">4.1 МБ · 05.05.2026</div></div>
+     </div>
+     <div class="file-row">
+      <div class="file-icon img">PNG</div>
+      <div class="file-info"><div class="file-name">Схема серверной (3 файла).zip</div><div class="file-meta">12 МБ · 06.05.2026</div></div>
+     </div>
+    </div>
+
+    <div class="mini-cal">
+     <div class="contacts-head">
+      <div class="contacts-title">Ближайшие события</div>
+      <button class="contacts-add">+ Создать</button>
+     </div>
+     <div class="mc-event">
+      <div class="mc-date upcoming"><div class="mc-day">12</div><div class="mc-mon">МАЙ</div></div>
+      <div class="mc-info"><div class="mc-title">Обучение полевых сотрудников (онлайн)</div><div class="mc-time">10:00–12:00 · Айдос Хапез <span class="mc-tag training">Обучение</span></div></div>
+     </div>
+     <div class="mc-event">
+      <div class="mc-date"><div class="mc-day">14</div><div class="mc-mon">МАЙ</div></div>
+      <div class="mc-info"><div class="mc-title">Выезд на склад клиента</div><div class="mc-time">09:00–17:00 · Алматы, ул. Райымбек 100 <span class="mc-tag meeting">Выезд</span></div></div>
+     </div>
+     <div class="mc-event">
+      <div class="mc-date"><div class="mc-day">17</div><div class="mc-mon">МАЙ</div></div>
+      <div class="mc-info"><div class="mc-title">Дедлайн активации (SLA 14 дней)</div><div class="mc-time">23:59 <span class="mc-tag deadline">Дедлайн</span></div></div>
+     </div>
+    </div>
+
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- ===== TICKTICK-STYLE CALENDAR / TASKS ===== -->
+<style>
+.tt-page{background:var(--surface);border-radius:var(--r-xl);border:1px solid var(--hairline);box-shadow:var(--sh-2);display:grid;grid-template-columns:240px 1fr 320px;min-height:780px;overflow:hidden}
+.tt-side{background:var(--surface-3);border-right:1px solid var(--hairline);padding:18px 12px;display:flex;flex-direction:column;gap:4px}
+.tt-side h4{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-faint);padding:14px 10px 6px;margin-bottom:0}
+.tt-side h4:first-child{padding-top:4px}
+.tt-li{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;font-size:14px;color:var(--text-2);cursor:pointer;letter-spacing:-0.005em;transition:.15s}
+.tt-li:hover{background:rgba(255,255,255,.04);color:var(--text)}
+.tt-li.on{background:var(--accent-bg);color:var(--accent-bright);font-weight:600}
+.tt-li .tt-ico{width:18px;flex-shrink:0;text-align:center;font-size:14px;opacity:.7}
+.tt-li.on .tt-ico{opacity:1}
+.tt-li .tt-name{flex:1;margin-left:8px}
+.tt-li .tt-num{font-size:11px;font-weight:600;color:var(--text-soft);font-variant-numeric:tabular-nums}
+.tt-li.on .tt-num{color:var(--accent-bright)}
+.tt-li .tt-pdot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+
+.tt-main{display:flex;flex-direction:column;min-width:0}
+.tt-toolbar{padding:18px 28px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--hairline);background:var(--surface)}
+.tt-h1{font-size:24px;font-weight:800;letter-spacing:-0.025em}
+.tt-h1-sub{font-size:13px;color:var(--text-soft);font-weight:500;margin-top:2px}
+.tt-view-toggle{display:flex;background:var(--surface-3);border-radius:10px;padding:3px;gap:2px}
+.tt-view-toggle button{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;color:var(--text-soft);background:transparent;border:none}
+.tt-view-toggle button.on{background:var(--surface);color:var(--text);box-shadow:var(--sh-1)}
+
+.tt-list{flex:1;overflow-y:auto;padding:0 28px 28px}
+.tt-day-head{display:flex;align-items:baseline;gap:12px;padding:24px 0 10px;border-bottom:1px solid var(--hairline);position:sticky;top:0;background:var(--surface);z-index:10}
+.tt-day-head .d-num{font-size:20px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums}
+.tt-day-head .d-mon{font-size:13px;color:var(--text-soft);font-weight:600;letter-spacing:.4px;text-transform:uppercase}
+.tt-day-head .d-rel{font-size:12px;color:var(--accent-bright);font-weight:600;margin-left:auto}
+.tt-day-head .d-overdue{color:#D67075}
+.tt-task{display:flex;gap:12px;padding:12px 6px;border-bottom:1px solid var(--hairline);align-items:center;cursor:grab;transition:.15s}
+.tt-task:hover{background:rgba(255,255,255,.02);margin:0 -12px;padding-left:18px;padding-right:18px;border-radius:10px;border-bottom-color:transparent}
+.tt-cb{width:20px;height:20px;border:1.7px solid var(--text-faint);border-radius:50%;flex-shrink:0;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;background:transparent}
+.tt-cb.p1{border-color:#D67075}
+.tt-cb.p2{border-color:var(--orange)}
+.tt-cb.p3{border-color:var(--accent-bright)}
+.tt-cb.done{background:var(--done);border-color:var(--done);color:#000;font-weight:700;font-size:11px}
+.tt-task-info{flex:1;min-width:0}
+.tt-task-title{font-size:14px;font-weight:500;color:var(--text);letter-spacing:-0.005em;line-height:1.3}
+.tt-task.done .tt-task-title{color:var(--text-soft);text-decoration:line-through}
+.tt-task-meta{display:flex;gap:10px;align-items:center;margin-top:5px;font-size:11px;color:var(--text-soft);flex-wrap:wrap}
+.tt-task-meta .m-time{font-variant-numeric:tabular-nums;color:var(--text-2);font-weight:500}
+.tt-task-meta .m-time.m-overdue{color:#D67075;font-weight:600}
+.tt-task-meta .m-tag{padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;background:var(--surface-3);color:var(--text-2)}
+.tt-task-meta .m-tag.training{background:rgba(48,209,88,.18);color:var(--accent-bright)}
+.tt-task-meta .m-tag.meeting{background:rgba(53,87,125,.18);color:var(--blue-bright)}
+.tt-task-meta .m-tag.deadline{background:rgba(193,58,64,.18);color:#D67075}
+.tt-task-meta .m-client{color:var(--text-2);font-weight:500;display:inline-flex;align-items:center;gap:5px}
+.tt-task-meta .m-op{display:inline-flex;align-items:center;gap:5px}
+.tt-op-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+.tt-quickadd{padding:14px 28px;border-top:1px solid var(--hairline);background:var(--surface);display:flex;gap:8px;align-items:center}
+.tt-qa-input{flex:1;background:var(--surface-3);border:1px solid var(--hairline);border-radius:10px;padding:9px 14px;color:var(--text);font-size:14px;outline:none;letter-spacing:-0.005em}
+.tt-qa-input::placeholder{color:var(--text-soft)}
+.tt-qa-btn{padding:9px 16px;background:var(--accent);color:#FFF;border:none;border-radius:10px;font-size:13px;font-weight:600}
+
+.tt-right{background:var(--surface-3);border-left:1px solid var(--hairline);padding:18px 18px 24px;display:flex;flex-direction:column;gap:18px}
+.tt-mini-cal{background:var(--surface);border-radius:14px;padding:14px}
+.tt-mini-cal table{width:100%;border-collapse:collapse}
+.tt-mini-cal th{font-size:10px;font-weight:600;color:var(--text-faint);padding:6px 0;text-transform:uppercase;letter-spacing:.5px}
+.tt-mini-cal td{font-size:12px;font-variant-numeric:tabular-nums;text-align:center;padding:6px 0;color:var(--text-2);cursor:pointer;border-radius:6px}
+.tt-mini-cal td.today{background:var(--accent-bright);color:#000;font-weight:700}
+.tt-mini-cal td.has{position:relative}
+.tt-mini-cal td.has::after{content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--accent-bright)}
+.tt-mini-cal td.muted{color:var(--text-faint)}
+.tt-mini-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.tt-mini-month{font-size:14px;font-weight:700;letter-spacing:-0.01em}
+
+.tt-detail{background:var(--surface);border-radius:14px;padding:16px}
+.tt-detail-title{font-size:14px;font-weight:700;letter-spacing:-0.01em;margin-bottom:8px}
+.tt-detail-row{display:flex;gap:8px;font-size:12px;color:var(--text-2);padding:5px 0;align-items:center}
+.tt-detail-row b{color:var(--text);font-weight:600}
+.tt-detail-row .lbl{color:var(--text-soft);width:90px;font-size:11px;letter-spacing:.3px;text-transform:uppercase;font-weight:600}
+</style>
+
+<section>
+ <div class="section-title">КАЛЕНДАРЬ / ЗАДАЧИ (TickTick-стиль)</div>
+ <div class="tt-page">
+
+  <!-- LEFT SIDEBAR — smart lists + filters -->
+  <aside class="tt-side">
+   <h4>Списки</h4>
+   <div class="tt-li on"><span class="tt-ico">📅</span><span class="tt-name">Сегодня</span><span class="tt-num">5</span></div>
+   <div class="tt-li"><span class="tt-ico">⏭</span><span class="tt-name">Завтра</span><span class="tt-num">3</span></div>
+   <div class="tt-li"><span class="tt-ico">📆</span><span class="tt-name">7 дней</span><span class="tt-num">12</span></div>
+   <div class="tt-li"><span class="tt-ico">⚠</span><span class="tt-name" style="color:#D67075">Просрочено</span><span class="tt-num" style="color:#D67075">2</span></div>
+   <div class="tt-li"><span class="tt-ico">📥</span><span class="tt-name">Без даты</span><span class="tt-num">4</span></div>
+   <div class="tt-li"><span class="tt-ico">✓</span><span class="tt-name">Выполненные</span><span class="tt-num">38</span></div>
+
+   <h4>Операторы</h4>
+   <div class="tt-li"><span class="tt-pdot" style="background:var(--blue-bright)"></span><span class="tt-name">Айдос</span><span class="tt-num">8</span></div>
+   <div class="tt-li"><span class="tt-pdot" style="background:var(--accent-bright)"></span><span class="tt-name">Акбар</span><span class="tt-num">5</span></div>
+   <div class="tt-li"><span class="tt-pdot" style="background:var(--orange)"></span><span class="tt-name">Самат</span><span class="tt-num">3</span></div>
+
+   <h4>Тип события</h4>
+   <div class="tt-li"><span class="tt-pdot" style="background:var(--accent-bright)"></span><span class="tt-name">Обучения</span><span class="tt-num">6</span></div>
+   <div class="tt-li"><span class="tt-pdot" style="background:var(--blue-bright)"></span><span class="tt-name">Встречи / выезды</span><span class="tt-num">4</span></div>
+   <div class="tt-li"><span class="tt-pdot" style="background:#D67075"></span><span class="tt-name">Дедлайны</span><span class="tt-num">3</span></div>
+   <div class="tt-li"><span class="tt-pdot" style="background:var(--orange)"></span><span class="tt-name">Прочее</span><span class="tt-num">3</span></div>
+  </aside>
+
+  <!-- MAIN — agenda list -->
+  <main class="tt-main">
+   <div class="tt-toolbar">
+    <div>
+     <div class="tt-h1">Сегодня</div>
+     <div class="tt-h1-sub">Понедельник, 12 мая · 5 задач</div>
+    </div>
+    <div class="tt-view-toggle">
+     <button class="on">Список</button>
+     <button>Календарь</button>
+    </div>
+   </div>
+
+   <div class="tt-list">
+
+    <!-- OVERDUE -->
+    <div class="tt-day-head">
+     <span class="d-num">⚠</span>
+     <span class="d-mon">Просрочено</span>
+     <span class="d-rel d-overdue">2</span>
+    </div>
+    <div class="tt-task">
+     <div class="tt-cb p1"></div>
+     <div class="tt-task-info">
+      <div class="tt-task-title">Подписать акт обучения с TOO ATTILA2023</div>
+      <div class="tt-task-meta">
+       <span class="m-time m-overdue">9 мая, 18:00 · −3 дн</span>
+       <span class="m-tag deadline">Дедлайн</span>
+       <span class="m-client">📎 ТОО ATTILA2023</span>
+       <span class="m-op"><span class="tt-op-dot" style="background:var(--blue-bright)"></span>Айдос</span>
+      </div>
+     </div>
+    </div>
+    <div class="tt-task">
+     <div class="tt-cb p2"></div>
+     <div class="tt-task-info">
+      <div class="tt-task-title">Обзвонить клиентов с зависшим внедрением</div>
+      <div class="tt-task-meta">
+       <span class="m-time m-overdue">10 мая · −2 дн</span>
+       <span class="m-tag">Прочее</span>
+       <span class="m-op"><span class="tt-op-dot" style="background:var(--blue-bright)"></span>Айдос</span>
+      </div>
+     </div>
+    </div>
+
+    <!-- TODAY -->
+    <div class="tt-day-head">
+     <span class="d-num">12</span>
+     <span class="d-mon">Понедельник, мая</span>
+     <span class="d-rel">Сегодня</span>
+    </div>
+    <div class="tt-task">
+     <div class="tt-cb p3"></div>
+     <div class="tt-task-info">
+      <div class="tt-task-title">Обучение полевых сотрудников (онлайн)</div>
+      <div class="tt-task-meta">
+       <span class="m-time">10:00 — 12:00</span>
+       <span class="m-tag training">Обучение</span>
+       <span class="m-client">📎 ТОО El-product</span>
+       <span class="m-op"><span class="tt-op-dot" style="background:var(--blue-bright)"></span>Айдос</span>
+      </div>
+     </div>
+    </div>
+    <div class="tt-task">
+     <div class="tt-cb p3"></div>
+     <div class="tt-task-info">
+      <div class="tt-task-title">Импорт справочника товаров viakom</div>
+      <div class="tt-task-meta">
+       <span class="m-time">14:00 — 16:00</span>
+       <span class="m-tag training">Настройка</span>
+       <span class="m-client">📎 viakom</span>
+       <span class="m-op"><span class="tt-op-dot" style="background:var(--accent-bright)"></span>Акбар</span>
+      </div>
+     </div>
+    </div>
+    <div class="tt-task done">
+     <div class="tt-cb done">✓</div>
+     <div class="tt-task-info">
+      <div class="tt-task-title">Утренний созвон с операторами</div>
+      <div class="tt-task-meta">
+       <span class="m-time">09:00 — 09:30</span>
+       <span class="m-tag meeting">Встреча</span>
+      </div>
+     </div>
+    </div>
+
+    <!-- TOMORROW -->
+    <div class="tt-day-head">
+     <span class="d-num">13</span>
+     <span class="d-mon">Вторник, мая</span>
+     <span class="d-rel">Завтра</span>
+    </div>
+    <div class="tt-task">
+     <div class="tt-cb p2"></div>
+     <div class="tt-task-info">
+      <div class="tt-task-title">Демо-презентация для ТОО ATTILA2023</div>
+      <div class="tt-task-meta">
+       <span class="m-time">10:00 — 11:00</span>
+       <span class="m-tag meeting">Встреча</span>
+       <span class="m-client">📎 ТОО ATTILA2023</span>
+       <span class="m-op"><span class="tt-op-dot" style="background:var(--orange)"></span>Самат</span>
+      </div>
+     </div>
+    </div>
+    <div class="tt-task">
+     <div class="tt-cb p3"></div>
+     <div class="tt-task-info">
+      <div class="tt-task-title">Заведение пользователей b-trade</div>
+      <div class="tt-task-meta">
+       <span class="m-time">15:00 — 16:00</span>
+       <span class="m-tag training">Настройка</span>
+       <span class="m-client">📎 b-trade</span>
+       <span class="m-op"><span class="tt-op-dot" style="background:var(--blue-bright)"></span>Айдос</span>
+      </div>
+     </div>
+    </div>
+
+    <!-- 14 May -->
+    <div class="tt-day-head">
+     <span class="d-num">14</span>
+     <span class="d-mon">Среда, мая</span>
+    </div>
+    <div class="tt-task">
+     <div class="tt-cb p1"></div>
+     <div class="tt-task-info">
+      <div class="tt-task-title">Выезд на склад клиента (целый день)</div>
+      <div class="tt-task-meta">
+       <span class="m-time">09:00 — 17:00</span>
+       <span class="m-tag meeting">Выезд</span>
+       <span class="m-client">📎 ТОО El-product</span>
+       <span class="m-op"><span class="tt-op-dot" style="background:var(--blue-bright)"></span>Айдос</span>
+      </div>
+     </div>
+    </div>
+
+    <!-- 17 May -->
+    <div class="tt-day-head">
+     <span class="d-num">17</span>
+     <span class="d-mon">Суббота, мая</span>
+    </div>
+    <div class="tt-task">
+     <div class="tt-cb p1"></div>
+     <div class="tt-task-info">
+      <div class="tt-task-title">Дедлайн активации (SLA 14 дней)</div>
+      <div class="tt-task-meta">
+       <span class="m-time">23:59</span>
+       <span class="m-tag deadline">Дедлайн</span>
+       <span class="m-client">📎 ТОО El-product</span>
+      </div>
+     </div>
+    </div>
+
+   </div>
+
+   <div class="tt-quickadd">
+    <span style="color:var(--text-soft);font-weight:600;font-size:18px">+</span>
+    <input class="tt-qa-input" placeholder="Добавить задачу… например: «Завтра 10:00 встреча с ТОО El-product»">
+    <button class="tt-qa-btn">Создать</button>
+   </div>
+  </main>
+
+  <!-- RIGHT — mini calendar + selected task detail -->
+  <aside class="tt-right">
+   <div class="tt-mini-cal">
+    <div class="tt-mini-head">
+     <button class="cal-mini-arrow">‹</button>
+     <div class="tt-mini-month">Май 2026</div>
+     <button class="cal-mini-arrow">›</button>
+    </div>
+    <table>
+     <thead><tr><th>пн</th><th>вт</th><th>ср</th><th>чт</th><th>пт</th><th>сб</th><th>вс</th></tr></thead>
+     <tbody>
+      <tr><td class="muted">28</td><td class="muted">29</td><td class="muted">30</td><td>1</td><td>2</td><td>3</td><td>4</td></tr>
+      <tr><td>5</td><td>6</td><td>7</td><td>8</td><td class="has">9</td><td class="has">10</td><td>11</td></tr>
+      <tr><td class="today">12</td><td class="has">13</td><td class="has">14</td><td>15</td><td class="has">16</td><td class="has">17</td><td>18</td></tr>
+      <tr><td>19</td><td class="has">20</td><td>21</td><td>22</td><td>23</td><td>24</td><td>25</td></tr>
+      <tr><td>26</td><td>27</td><td class="has">28</td><td>29</td><td>30</td><td>31</td><td class="muted">1</td></tr>
+     </tbody>
+    </table>
+   </div>
+
+   <div class="tt-detail">
+    <div class="tt-detail-title">Обучение полевых сотрудников (онлайн)</div>
+    <div class="tt-detail-row"><span class="lbl">Время</span><b>12 мая, 10:00 — 12:00</b></div>
+    <div class="tt-detail-row"><span class="lbl">Клиент</span>📎 ТОО El-product</div>
+    <div class="tt-detail-row"><span class="lbl">Оператор</span><span class="tt-op-dot" style="background:var(--blue-bright)"></span>Айдос Хапез</div>
+    <div class="tt-detail-row"><span class="lbl">Тип</span><span class="m-tag training">Обучение</span></div>
+    <div class="tt-detail-row"><span class="lbl">Место</span>Zoom · zoom.us/j/8821</div>
+    <div class="tt-detail-row" style="margin-top:8px;color:var(--text-2);font-size:12px;line-height:1.5;display:block">
+     Подключить 8 торговых представителей. Показать сценарий приёма заказа в офлайн, проверка GPS-меток, синхронизация. Раздать памятки.
+    </div>
+   </div>
+  </aside>
+
+ </div>
+</section>
+
+</body>
+</html>
