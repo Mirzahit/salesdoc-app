@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v218</title>
+<title>SalesDoc — Финансовый Дашборд v219</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3231,10 +3231,10 @@ body:not(.light) .kc-top-panel[style*="rgba(239,68,68"]{
  <div class="login-err" id="login-err"></div>
  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:0 2px">
  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'Inter',sans-serif;font-size:12px;color:var(--text-muted)">
- <input type="checkbox" id="remember-me" style="width:14px;height:14px;accent-color:#3B82F6;cursor:pointer">
+ <input type="checkbox" id="remember-me" checked style="width:14px;height:14px;accent-color:#28623A;cursor:pointer">
  Запомнить меня
  </label>
- <span onclick="window.open('https://t.me/passwordsdbot','_blank')" style="color:#3B82F6;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;opacity:0.8">Забыли пароль?</span>
+ <span onclick="window.open('https://t.me/passwordsdbot','_blank')" style="color:var(--accent-text);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;opacity:0.8">Забыли пароль?</span>
  </div>
  <button class="login-btn" onclick="doLogin()">ВОЙТИ</button>
  </div>
@@ -14978,15 +14978,34 @@ window.addEventListener('offline',function(){
 if('serviceWorker' in navigator){
  navigator.serviceWorker.register('/sw.js').then(function(reg){
   reg.update();
-  // Если появился новый SW — сразу активируем и перезагружаем страницу
+  // v218: вместо принудительного reload (выкидывал пользователя из приложения) —
+  // показываем тост «Доступно обновление», пользователь сам решает когда применить
   reg.addEventListener('updatefound', function(){
    var nw = reg.installing;
    if(!nw) return;
    nw.addEventListener('statechange', function(){
     if(nw.state==='installed' && navigator.serviceWorker.controller){
-     // Обновление подъехало — триггерим reload чтобы не показывать старую версию
-     try{ nw.postMessage({type:'SKIP_WAITING'}); }catch(e){}
-     setTimeout(function(){ try{ location.reload(); }catch(e){} }, 200);
+     try{
+      if(document.getElementById('sd-update-toast')) return;
+      var t = document.createElement('div');
+      t.id = 'sd-update-toast';
+      t.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;background:rgba(28,28,30,.92);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);color:#FFF;padding:14px 18px;border-radius:14px;font-family:Inter,sans-serif;font-size:13px;font-weight:500;box-shadow:0 16px 48px rgba(0,0,0,.50),0 4px 12px rgba(0,0,0,.30);display:flex;align-items:center;gap:14px;border:1px solid rgba(255,255,255,.10);max-width:340px';
+      var msg = document.createElement('span');
+      msg.textContent = 'Доступна новая версия';
+      var btn = document.createElement('button');
+      btn.textContent = 'Обновить';
+      btn.style.cssText = 'background:#28623A;color:#FFF;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif';
+      btn.onclick = function(){
+       try{ nw.postMessage({type:'SKIP_WAITING'}); }catch(e){}
+       setTimeout(function(){ try{ location.reload(); }catch(e){} }, 200);
+      };
+      var close = document.createElement('span');
+      close.textContent = '×';
+      close.style.cssText = 'cursor:pointer;color:rgba(255,255,255,.50);font-size:18px;line-height:1;padding:0 4px';
+      close.onclick = function(){ t.remove(); };
+      t.appendChild(msg); t.appendChild(btn); t.appendChild(close);
+      document.body.appendChild(t);
+     }catch(e){}
     }
    });
   });
