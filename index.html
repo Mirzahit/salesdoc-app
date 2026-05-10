@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v224</title>
+<title>SalesDoc — Финансовый Дашборд v225</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -585,6 +585,42 @@ body.light ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.30);background
 /* Тени с синим — на нейтральные */
 [style*="box-shadow:0 4px 20px rgba(59,130,246"],
 [style*="box-shadow: 0 4px 20px rgba(59,130,246"]{box-shadow:var(--sh-2)!important}
+/* ============================================================
+   DESIGN SYSTEM v225 — CRM client card (pipeline + tabs)
+   ============================================================ */
+.crm-card-head{display:flex;align-items:center;gap:16px;width:100%}
+.crm-card-name{font-size:24px;font-weight:700;letter-spacing:-0.025em;display:flex;align-items:center;gap:12px;flex-wrap:wrap;color:var(--text)}
+.crm-card-name .badge-stage{font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;background:var(--accent-bg);color:var(--accent-text);letter-spacing:.5px;text-transform:uppercase}
+.crm-card-meta{display:flex;gap:18px;margin-top:8px;font-size:13px;color:var(--text-2);flex-wrap:wrap}
+.crm-card-meta b{color:var(--text);font-weight:600}
+.crm-card-actions{display:flex;gap:8px;align-items:center}
+.crm-action{padding:8px 14px;border-radius:10px;background:var(--accent-bg);color:var(--accent-text);border:1px solid rgba(10,132,255,.30);font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all var(--t-fast)}
+.crm-action.outline{background:transparent;color:var(--text-2);border:1px solid var(--border)}
+.crm-action:hover:not(:disabled){background:var(--accent);color:#FFF;border-color:var(--accent)}
+.crm-action:disabled{opacity:.4;cursor:not-allowed}
+/* Pipeline */
+.crm-pipeline{display:flex;gap:6px;padding:16px 32px 12px;background:var(--surface-3);overflow-x:auto}
+.crm-pipe-step{flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border-faint);border-radius:10px;padding:10px 12px;font-size:11px;color:var(--text-soft);position:relative;cursor:pointer;transition:all var(--t-fast)}
+.crm-pipe-step:hover{border-color:var(--border-strong)}
+.crm-pipe-step.done{background:var(--done-bg);color:var(--done);border-color:rgba(48,209,88,.30)}
+.crm-pipe-step.done::after{content:'\2713';position:absolute;top:8px;right:10px;font-weight:700;color:var(--done)}
+.crm-pipe-step.active{background:var(--text);color:#000;border-color:var(--text);font-weight:700}
+.crm-pipe-step.active::after{content:'\25CF';position:absolute;top:6px;right:10px;color:var(--accent)}
+.crm-pipe-step .pipe-label{display:block;font-weight:600;letter-spacing:.3px;text-transform:uppercase;font-size:10px;margin-bottom:2px;opacity:.8}
+.crm-pipe-step .pipe-name{font-size:12px;font-weight:600}
+/* Tabs */
+.crm-tabs{display:flex;gap:0;padding:0 32px;border-bottom:1px solid var(--border-faint);background:var(--surface);overflow-x:auto}
+.crm-tab{padding:14px 18px;font-size:14px;font-weight:600;color:var(--text-soft);border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.005em;background:transparent;border-left:none;border-right:none;border-top:none;font-family:'Inter',sans-serif;white-space:nowrap;transition:all var(--t-fast)}
+.crm-tab:hover{color:var(--text-2)}
+.crm-tab.active{color:var(--accent-text);border-bottom-color:var(--accent-text)}
+.crm-tab .count{display:inline-block;margin-left:6px;font-size:11px;background:var(--surface-3);color:var(--text-2);padding:1px 7px;border-radius:999px;font-weight:600}
+.crm-tab.active .count{background:var(--accent-bg);color:var(--accent-text)}
+.crm-tab-pane{padding:24px 32px;min-height:400px}
+.crm-tab-pane[hidden]{display:none}
+.crm-empty{text-align:center;padding:60px 20px;color:var(--text-soft);font-size:14px}
+.crm-empty-ico{font-size:36px;opacity:.3;margin-bottom:14px}
+.crm-empty-msg{margin-bottom:8px;font-weight:500;color:var(--text-2)}
+.crm-empty-hint{font-size:12px;color:var(--text-soft)}
 /* DESIGN SYSTEM v217 — переопределение legacy токенов на Emerald Depth + Navy Mirage.
    Старые компоненты которые ссылаются на --gold-* / --dark-* / --info / --success
    автоматически получают новый вид. */
@@ -5057,9 +5093,11 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <!-- FULLSCREEN CARD PAGE -->
  <div id="view-kb-card">
   <div class="kbc-header">
-   <button class="kbc-back" onclick="kbCloseCardPage()">&#8592; Доска</button>
-   <div class="kbc-title" id="kbc-title"></div>
-   <div class="kbc-stage-badge" id="kbc-stage-badge"></div>
+   <div class="crm-card-head">
+    <button class="kbc-back" onclick="kbCloseCardPage()">&#8592; Доска</button>
+    <div class="kbc-title crm-card-name" id="kbc-title"></div>
+    <div class="kbc-stage-badge" id="kbc-stage-badge"></div>
+   </div>
   </div>
   <div class="kbc-body">
    <div class="kbc-main" id="kbc-main"></div>
@@ -18150,6 +18188,7 @@ function kbOpenCard(card) {
 
 function kbOpenCardPage(card) {
  kbCurrentCard = card;
+ window._kbCurrentCard = card; // v225: для crmActivateTab и lazy-load в будущих релизах
  var days = kbGetDays(card);
  var prog = kbChecklistProgress(card);
  var opColor = KB_OP_COLORS[card.operator] || '#AB47BC';
@@ -18254,11 +18293,11 @@ function kbOpenCardPage(card) {
  });
  html += '</div></div>';
 
- // === ИСТОРИЯ ЭТАПОВ (автолог, без ручных комментариев — для заметок есть поле «Примечание») ===
- html += '<div class="kbc-section">';
- html += '<div class="kbc-section-title">История изменений</div>';
- html += '<div id="kbc-history-list" style="max-height:260px;overflow-y:auto;padding:2px 4px"></div>';
- html += '</div>';
+ // === ИСТОРИЯ ЭТАПОВ (v225: переехала в pane "История") ===
+ var historyHtml = '<div class="kbc-section">';
+ historyHtml += '<div class="kbc-section-title">История изменений</div>';
+ historyHtml += '<div id="kbc-history-list" style="max-height:600px;overflow-y:auto;padding:2px 4px"></div>';
+ historyHtml += '</div>';
 
  // Checklist -- фильтр по этапу + сворачиваемый
  var stageItems = kbGetChecklistForStage(card.stage);
@@ -18303,7 +18342,7 @@ function kbOpenCardPage(card) {
  } else {
   var hasAct = acts[actKey] && acts[actKey].fileName;
   if(hasAct) {
-   html += '<button onclick="kbActivateCard(\''+card.id+'\')" style="padding:10px 20px;border-radius:10px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#10B981;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Активировать</button>';
+   html += '<button data-action="activate" onclick="kbActivateCard(\''+card.id+'\')" style="padding:10px 20px;border-radius:10px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#10B981;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Активировать</button>';
   } else {
    html += '<button disabled style="padding:10px 20px;border-radius:10px;background:var(--dark-panel);border:1px solid var(--dark-border);color:var(--text-muted);font-size:13px;font-weight:600;cursor:not-allowed;font-family:inherit;opacity:.5" title="Сначала загрузите АВР">Активировать (нужен АВР)</button>';
   }
@@ -18386,12 +18425,52 @@ function kbOpenCardPage(card) {
   html += '</div>';
  }
 
+ // === v225: NEW PIPELINE (горизонтальная воронка) ===
+ var newPipeHtml = '<div class="crm-pipeline">';
+ kbColumns.forEach(function(col, i){
+  var cls = i < curStageIdx ? 'done' : (i === curStageIdx ? 'active' : '');
+  var safeCol = String(col).replace(/'/g,"\\'");
+  newPipeHtml += '<div class="crm-pipe-step '+cls+'" onclick="kbMoveCard(window._kbCurrentCard, \''+safeCol+'\')">';
+  newPipeHtml += '<span class="pipe-label">Этап '+(i+1)+'</span>';
+  newPipeHtml += '<span class="pipe-name">'+(typeof kbEsc==='function'?kbEsc(col):col)+'</span>';
+  newPipeHtml += '</div>';
+ });
+ newPipeHtml += '</div>';
+
+ // === v225: TABS ===
+ var tabsHtml = '<div class="crm-tabs">';
+ tabsHtml += '<button class="crm-tab active" data-tab="checklists" onclick="crmActivateTab(this)">Чек-листы <span class="count" id="crm-cnt-cl">'+(stageItems&&stageItems.length?clDone+'/'+clTotal:'—')+'</span></button>';
+ tabsHtml += '<button class="crm-tab" data-tab="contacts" onclick="crmActivateTab(this)">Контакты <span class="count" id="crm-cnt-cn">—</span></button>';
+ tabsHtml += '<button class="crm-tab" data-tab="files" onclick="crmActivateTab(this)">Файлы <span class="count" id="crm-cnt-fi">'+(actData&&actData.fileName?'1':'—')+'</span></button>';
+ tabsHtml += '<button class="crm-tab" data-tab="calendar" onclick="crmActivateTab(this)">Календарь <span class="count" id="crm-cnt-ev">—</span></button>';
+ tabsHtml += '<button class="crm-tab" data-tab="history" onclick="crmActivateTab(this)">История</button>';
+ tabsHtml += '</div>';
+
+ // === v225: 5 PANES ===
+ var panesHtml = '';
+ // Pane 1 — Чек-листы (существующая рабочая зона: fields/checklist/tasks/АВР/operator)
+ panesHtml += '<div class="crm-tab-pane" data-pane="checklists" id="crm-pane-checklists">'+html+'</div>';
+ // Pane 2 — Контакты (empty-state)
+ panesHtml += '<div class="crm-tab-pane" hidden data-pane="contacts" id="crm-pane-contacts">';
+ panesHtml += '<div class="crm-empty"><div class="crm-empty-ico">👥</div><div class="crm-empty-msg">Контактов пока нет</div><div class="crm-empty-hint">Подключение в v226 — следующий релиз</div></div>';
+ panesHtml += '</div>';
+ // Pane 3 — Файлы (empty-state)
+ panesHtml += '<div class="crm-tab-pane" hidden data-pane="files" id="crm-pane-files">';
+ panesHtml += '<div class="crm-empty"><div class="crm-empty-ico">📎</div><div class="crm-empty-msg">Файлов пока нет</div><div class="crm-empty-hint">Подключение в v227</div></div>';
+ panesHtml += '</div>';
+ // Pane 4 — Календарь (empty-state)
+ panesHtml += '<div class="crm-tab-pane" hidden data-pane="calendar" id="crm-pane-calendar">';
+ panesHtml += '<div class="crm-empty"><div class="crm-empty-ico">📅</div><div class="crm-empty-msg">Событий пока нет</div><div class="crm-empty-hint">Подключение в v229</div></div>';
+ panesHtml += '</div>';
+ // Pane 5 — История (kbc-history-list переехал сюда)
+ panesHtml += '<div class="crm-tab-pane" hidden data-pane="history" id="crm-pane-history">'+historyHtml+'</div>';
+
  var mainEl = document.getElementById('kbc-main');
  mainEl.innerHTML = '';
- mainEl.appendChild(pipEl);
- mainEl.insertAdjacentHTML('beforeend', html);
+ // v225: новая структура — pipeline + tabs + panes. Старый pipEl (kbc-pipeline-container) больше не вставляется.
+ mainEl.insertAdjacentHTML('beforeend', newPipeHtml + tabsHtml + panesHtml);
 
- // Рендерим ленту истории после вставки HTML
+ // Рендерим ленту истории после вставки HTML (в pane history)
  kbRenderHistory(card);
 
  // Sidebar: activity feed
@@ -18399,6 +18478,15 @@ function kbOpenCardPage(card) {
 
  // Show fullscreen
  document.getElementById('view-kb-card').style.display = 'flex';
+}
+
+// v225: переключение табов карточки клиента
+function crmActivateTab(btn){
+ var tab = btn.dataset.tab;
+ document.querySelectorAll('.crm-tabs .crm-tab').forEach(function(t){ t.classList.toggle('active', t === btn); });
+ document.querySelectorAll('.crm-tab-pane').forEach(function(p){ p.hidden = p.dataset.pane !== tab; });
+ var card = window._kbCurrentCard; if(!card) return;
+ // в v226+ здесь lazy-load contacts/files/calendar
 }
 
 function kbRenderCardFeed(card) {
