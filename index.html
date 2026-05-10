@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v219</title>
+<title>SalesDoc — Финансовый Дашборд v220</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3219,8 +3219,38 @@ body:not(.light) .kc-top-panel[style*="rgba(239,68,68"]{
 }
 </style>
 
+<script>
+// v220: persistent-session — мгновенно скрываем форму логина если есть сохранённый вход.
+// Запускается ДО рендера body, форма даже не успевает мелькнуть.
+(function(){
+ try{
+  var login = localStorage.getItem('sd_saved_login');
+  var hash = localStorage.getItem('sd_saved_pass_hash');
+  if(login && hash){
+   document.documentElement.setAttribute('data-auto-login','1');
+  }
+ }catch(e){}
+})();
+</script>
+<style>
+/* v220: при автологине — login-screen вообще не показывается, виден только splash */
+html[data-auto-login="1"] #login-screen{display:none!important}
+#sd-splash{position:fixed;inset:0;z-index:9998;display:none;align-items:center;justify-content:center;background:#000;color:#FFF;font-family:'Inter',sans-serif;flex-direction:column;gap:24px}
+html[data-auto-login="1"] #sd-splash{display:flex}
+#sd-splash .sd-splash-logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,#28623A 0%,#0F2027 100%);display:flex;align-items:center;justify-content:center;color:#F1F7F2;font-weight:800;font-size:28px;box-shadow:0 8px 24px rgba(40,98,58,.40),inset 0 1px 0 rgba(255,255,255,.12);letter-spacing:-0.02em}
+#sd-splash .sd-splash-spinner{width:24px;height:24px;border:2.5px solid rgba(255,255,255,.12);border-top-color:#4DAB68;border-radius:50%;animation:sd-spin 0.8s linear infinite}
+#sd-splash .sd-splash-text{font-size:13px;color:rgba(235,235,245,.45);letter-spacing:-0.01em;font-weight:500}
+@keyframes sd-spin{to{transform:rotate(360deg)}}
+body.light #sd-splash{background:#F2F2F7;color:#000}
+body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
+</style>
 </head>
 <body>
+<div id="sd-splash" aria-hidden="true">
+ <div class="sd-splash-logo">S</div>
+ <div class="sd-splash-spinner"></div>
+ <div class="sd-splash-text">Загрузка…</div>
+</div>
 <!-- LOGIN SCREEN -->
 <div class="login-screen" id="login-screen">
  <div class="login-box">
@@ -8917,6 +8947,9 @@ async function doLogin() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('sidebar').style.display = 'flex';
     document.getElementById('main-app').style.display = 'block';
+    // v220: скрыть splash после успешного автологина
+    document.documentElement.removeAttribute('data-auto-login');
+    var sp = document.getElementById('sd-splash'); if(sp) sp.remove();
     applyUserAccess();
     loadAvatar();
     applyTheme(localStorage.getItem('sd-theme') || 'dark');
@@ -8946,6 +8979,9 @@ async function doLogin() {
     if (errEl) { errEl.style.color = '#EF4444'; errEl.textContent = 'Сессия истекла, войдите заново'; }
     localStorage.removeItem('sd_saved_pass_hash');
     localStorage.removeItem('sd_saved_login');
+    // v220: убрать splash и показать форму логина
+    document.documentElement.removeAttribute('data-auto-login');
+    var sp2 = document.getElementById('sd-splash'); if(sp2) sp2.remove();
    }
   }, 200);
   setTimeout(function(){ clearInterval(waitForEmployees); }, 10000);
@@ -8959,6 +8995,13 @@ async function doLogin() {
 
 function doLogout() {
  currentUser = null;
+ // v220: при выходе чистим saved-credentials, чтобы при следующем заходе была форма
+ try {
+  localStorage.removeItem('sd_saved_login');
+  localStorage.removeItem('sd_saved_pass_hash');
+  localStorage.removeItem('sd_saved_pass');
+ } catch(e){}
+ document.documentElement.removeAttribute('data-auto-login');
  document.getElementById('login-email').value = '';
  document.getElementById('login-pass').value = '';
  document.getElementById('login-err').textContent = '';
