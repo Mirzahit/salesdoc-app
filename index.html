@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v234</title>
+<title>SalesDoc — Финансовый Дашборд v235</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18894,7 +18894,7 @@ function kbSaveToSheet(card, oldStage, newStage) {
   category: card.category,
   manager: card.manager,
   amount: card.amount,
-  checklist: card.checklist ? card.checklist.join(',') : ''
+  checklist: card.checklist ? (typeof card.checklist==='string'?card.checklist:Array.isArray(card.checklist)?card.checklist.join(','):JSON.stringify(card.checklist||{})) : ''
  };
  fetch(KB_SCRIPT_URL, {
   method: 'POST',
@@ -19571,7 +19571,7 @@ function kbSetOperatorPage(cardId, operator) {
    category: card.category,
    manager: card.manager,
    amount: card.amount,
-   checklist: card.checklist ? card.checklist.join(',') : ''
+   checklist: card.checklist ? (typeof card.checklist==='string'?card.checklist:Array.isArray(card.checklist)?card.checklist.join(','):JSON.stringify(card.checklist||{})) : ''
   };
   fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
    body:JSON.stringify(payload)
@@ -19639,7 +19639,7 @@ function kbToggleCheck(cardId, idx) {
  kbRenderBoard();
  if(KB_SCRIPT_URL) {
   fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
-   body:JSON.stringify({action:'updateChecklist',sheetId:KB_SHEET_ID,row:card._row,checklist:card.checklist.join(',')})
+   body:JSON.stringify({action:'updateChecklist',sheetId:KB_SHEET_ID,row:card._row,checklist:(typeof card.checklist==='string'?card.checklist:Array.isArray(card.checklist)?card.checklist.join(','):JSON.stringify(card.checklist||{}))})
   }).catch(function(e){ console.error('KB checklist save error:', e); });
  }
 }
