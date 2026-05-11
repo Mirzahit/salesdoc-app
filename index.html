@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v248</title>
+<title>SalesDoc — Финансовый Дашборд v249</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -778,14 +778,14 @@ body.light ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.30);background
 .sd-chart-head{margin-bottom:14px}
 .sd-chart-title{font-size:14px;font-weight:700;letter-spacing:-0.01em;color:var(--text)}
 .sd-chart-sub{font-size:11px;color:var(--text-soft);margin-top:3px;letter-spacing:.3px}
-.sd-chart{height:180px;position:relative;padding:6px 0}
-.sd-chart svg{width:100%;height:100%;overflow:visible}
-.sd-chart .axis-y{stroke:var(--border-faint);stroke-width:1;stroke-dasharray:3 3}
-.sd-chart .axis-label{font-size:9px;fill:var(--text-soft);font-family:'Inter',sans-serif}
+.sd-chart{height:200px;position:relative;padding:10px 0 26px}
+.sd-chart svg{width:100%;height:100%;overflow:visible;display:block}
+.sd-chart .axis-y{stroke:var(--border-faint);stroke-width:.5;stroke-dasharray:3 3}
+.sd-chart .axis-label{font-size:8px;fill:var(--text-soft);font-family:'Inter',sans-serif}
 .sd-chart .line{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
 .sd-chart .area{fill:url(#sdGrad);opacity:.20}
-.sd-chart .dot{fill:var(--accent);stroke:var(--surface);stroke-width:2}
-.sd-chart .x-label{font-size:9px;fill:var(--text-soft);text-anchor:middle;font-family:'Inter',sans-serif}
+.sd-chart .dot{fill:var(--accent);stroke:var(--surface);stroke-width:1}
+.sd-chart .x-label{font-size:8px;fill:var(--text-soft);text-anchor:middle;font-family:'Inter',sans-serif;letter-spacing:-.3px}
 .sd-bars{display:flex;flex-direction:column;gap:10px;padding:6px 0}
 .sd-bar-row{display:grid;grid-template-columns:140px 1fr 60px;gap:10px;align-items:center;font-size:12px}
 .sd-bar-label{color:var(--text-2);font-weight:500;letter-spacing:-0.005em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -19055,19 +19055,30 @@ function supportChartActivations(cards){
  var maxV = Math.max(1, Math.max.apply(null, buckets.map(function(b){return b.count;})));
  var total = buckets.reduce(function(s,b){return s+b.count;}, 0);
  if(sub) sub.textContent = 'Активировано за '+supportPeriodLabel()+': '+total;
- // SVG line chart
- var W = 100, H = 100; // viewBox в %
- var stepX = W / Math.max(1, buckets.length - 1);
- var pts = buckets.map(function(b, i){ return [i * stepX, H - (b.count / maxV) * (H - 20) - 10]; });
- var d = pts.map(function(p, i){ return (i ? 'L' : 'M') + p[0].toFixed(2) + ',' + p[1].toFixed(2); }).join(' ');
- var area = d + ' L' + pts[pts.length-1][0].toFixed(2) + ',' + H + ' L' + pts[0][0].toFixed(2) + ',' + H + ' Z';
- var dots = pts.map(function(p){ return '<circle class="dot" cx="'+p[0].toFixed(2)+'" cy="'+p[1].toFixed(2)+'" r="0.8"/>'; }).join('');
- var labels = buckets.map(function(b, i){ return '<text class="x-label" x="'+(i*stepX).toFixed(2)+'" y="'+(H+6)+'">'+b.label+'</text>'; }).join('');
- el.innerHTML = '<svg viewBox="0 0 '+W+' '+(H+12)+'" preserveAspectRatio="none">'
-  + '<defs><linearGradient id="sdGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity=".6"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>'
-  + '<line class="axis-y" x1="0" y1="'+H+'" x2="'+W+'" y2="'+H+'"/>'
-  + '<path class="area" d="'+area+'"/>'
-  + '<path class="line" d="'+d+'"/>'
+ // SVG line chart — широкий viewBox чтобы лейблы не накладывались
+ var W = 400, H = 140, LH = 18; // плоский viewBox (px), labels height
+ var pad = 14; // отступ от левого/правого края
+ var stepX = (W - pad*2) / Math.max(1, buckets.length - 1);
+ var pts = buckets.map(function(b, i){ return [pad + i * stepX, H - (b.count / maxV) * (H - 16) - 8]; });
+ var lineD = pts.map(function(p, i){ return (i ? 'L' : 'M') + p[0].toFixed(2) + ',' + p[1].toFixed(2); }).join(' ');
+ var areaD = lineD + ' L' + pts[pts.length-1][0].toFixed(2) + ',' + H + ' L' + pts[0][0].toFixed(2) + ',' + H + ' Z';
+ var dots = pts.map(function(p, i){ return '<circle class="dot" cx="'+p[0].toFixed(2)+'" cy="'+p[1].toFixed(2)+'" r="3"/><title>'+buckets[i].count+'</title>'; }).join('');
+ // Каждый второй лейбл если >8 столбиков чтобы не пересекались
+ var labelEvery = buckets.length > 8 ? 2 : 1;
+ var labels = buckets.map(function(b, i){
+  if(i % labelEvery !== 0 && i !== buckets.length-1) return '';
+  return '<text class="x-label" x="'+(pad+i*stepX).toFixed(2)+'" y="'+(H+12)+'">'+b.label+'</text>';
+ }).join('');
+ // Y axis grid (3 линии)
+ var yGrid = [0.33, 0.66, 1].map(function(f){
+  var y = H - f * (H - 16) - 8;
+  return '<line class="axis-y" x1="0" y1="'+y.toFixed(2)+'" x2="'+W+'" y2="'+y.toFixed(2)+'"/>';
+ }).join('');
+ el.innerHTML = '<svg viewBox="0 0 '+W+' '+(H+LH)+'" preserveAspectRatio="none">'
+  + '<defs><linearGradient id="sdGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity=".5"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>'
+  + yGrid
+  + '<path class="area" d="'+areaD+'"/>'
+  + '<path class="line" d="'+lineD+'"/>'
   + dots
   + labels
   + '</svg>';
