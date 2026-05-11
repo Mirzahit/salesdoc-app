@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v247</title>
+<title>SalesDoc — Финансовый Дашборд v248</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -767,6 +767,42 @@ body.light ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.30);background
 .sd-risk-action{padding:6px 14px;border-radius:8px;background:var(--accent-bg);color:var(--accent-text);border:1px solid rgba(10,132,255,.30);font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap}
 .sd-risk-action:hover{background:var(--accent);color:#FFF}
 .sd-empty{text-align:center;padding:40px 20px;color:var(--text-soft);font-size:14px}
+/* v248: фильтры + графики */
+.sd-filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sd-select{background:var(--surface-3);border:1px solid var(--border-faint);border-radius:10px;padding:7px 14px;color:var(--text);font-size:13px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;outline:none;transition:all var(--t-fast)}
+.sd-select:hover{border-color:var(--border-strong)}
+.sd-select:focus{border-color:var(--accent)}
+.sd-charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px}
+@media(max-width:900px){.sd-charts-row{grid-template-columns:1fr}}
+.sd-chart-card{padding:18px 20px}
+.sd-chart-head{margin-bottom:14px}
+.sd-chart-title{font-size:14px;font-weight:700;letter-spacing:-0.01em;color:var(--text)}
+.sd-chart-sub{font-size:11px;color:var(--text-soft);margin-top:3px;letter-spacing:.3px}
+.sd-chart{height:180px;position:relative;padding:6px 0}
+.sd-chart svg{width:100%;height:100%;overflow:visible}
+.sd-chart .axis-y{stroke:var(--border-faint);stroke-width:1;stroke-dasharray:3 3}
+.sd-chart .axis-label{font-size:9px;fill:var(--text-soft);font-family:'Inter',sans-serif}
+.sd-chart .line{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.sd-chart .area{fill:url(#sdGrad);opacity:.20}
+.sd-chart .dot{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+.sd-chart .x-label{font-size:9px;fill:var(--text-soft);text-anchor:middle;font-family:'Inter',sans-serif}
+.sd-bars{display:flex;flex-direction:column;gap:10px;padding:6px 0}
+.sd-bar-row{display:grid;grid-template-columns:140px 1fr 60px;gap:10px;align-items:center;font-size:12px}
+.sd-bar-label{color:var(--text-2);font-weight:500;letter-spacing:-0.005em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-bar-track{height:10px;background:var(--surface-3);border-radius:5px;overflow:hidden;position:relative}
+.sd-bar-fill{height:100%;border-radius:5px;transition:width .4s cubic-bezier(.32,.72,0,1);background:var(--accent)}
+.sd-bar-fill.f-done{background:var(--done)}
+.sd-bar-fill.f-warn{background:#FF9F0A}
+.sd-bar-fill.f-red{background:#FF453A}
+.sd-bar-value{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);font-size:13px}
+.sd-bars-stacked .sd-bar-track{display:flex;height:14px}
+.sd-bars-stacked .sd-bar-seg{height:100%;transition:width .4s}
+.sd-bars-stacked .sd-bar-seg.s-active{background:var(--accent)}
+.sd-bars-stacked .sd-bar-seg.s-done{background:var(--done)}
+.sd-bars-stacked .sd-bar-seg.s-overdue{background:#FF453A}
+.sd-legend{display:flex;gap:14px;margin-top:14px;font-size:11px;color:var(--text-soft);flex-wrap:wrap}
+.sd-legend-item{display:inline-flex;align-items:center;gap:6px}
+.sd-legend-dot{width:10px;height:10px;border-radius:2px}
 
 /* ============================================================
    DESIGN SYSTEM v230 — Календарь TickTick-style
@@ -5336,7 +5372,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  <!-- /CALENDAR VIEW -->
 
- <!-- v246: Дашборд тех.поддержки -->
+ <!-- v246+v248: Дашборд тех.поддержки -->
  <div id="view-supportdash" style="display:none">
   <div class="sd-page">
    <div class="sd-head">
@@ -5344,13 +5380,55 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
      <div class="sd-h1">Тех.поддержка</div>
      <div class="sd-sub">Метрики операторов, риски, клиенты под контролем</div>
     </div>
-    <div class="sd-period">
-     <button class="sd-pbtn on" data-period="month" onclick="supportSetPeriod('month',this)">Месяц</button>
-     <button class="sd-pbtn" data-period="quarter" onclick="supportSetPeriod('quarter',this)">Квартал</button>
-     <button class="sd-pbtn" data-period="all" onclick="supportSetPeriod('all',this)">Всё время</button>
+    <div class="sd-filters">
+     <select class="sd-select" id="sd-filter-op" onchange="supportSetOperator(this.value)">
+      <option value="">Все операторы</option>
+     </select>
+     <div class="sd-period">
+      <button class="sd-pbtn" data-period="week" onclick="supportSetPeriod('week',this)">Неделя</button>
+      <button class="sd-pbtn on" data-period="month" onclick="supportSetPeriod('month',this)">Месяц</button>
+      <button class="sd-pbtn" data-period="quarter" onclick="supportSetPeriod('quarter',this)">Квартал</button>
+      <button class="sd-pbtn" data-period="year" onclick="supportSetPeriod('year',this)">Год</button>
+      <button class="sd-pbtn" data-period="all" onclick="supportSetPeriod('all',this)">Всё</button>
+     </div>
     </div>
    </div>
    <div class="sd-kpis" id="sd-kpis"></div>
+
+   <div class="sd-charts-row">
+    <div class="sd-card sd-chart-card">
+     <div class="sd-chart-head">
+      <div class="sd-chart-title">📈 Активации по неделям</div>
+      <div class="sd-chart-sub" id="sd-chart-activations-sub"></div>
+     </div>
+     <div class="sd-chart" id="sd-chart-activations"></div>
+    </div>
+    <div class="sd-card sd-chart-card">
+     <div class="sd-chart-head">
+      <div class="sd-chart-title">🪜 Распределение по этапам</div>
+      <div class="sd-chart-sub" id="sd-chart-stages-sub"></div>
+     </div>
+     <div class="sd-bars" id="sd-chart-stages"></div>
+    </div>
+   </div>
+
+   <div class="sd-charts-row">
+    <div class="sd-card sd-chart-card">
+     <div class="sd-chart-head">
+      <div class="sd-chart-title">👥 Нагрузка операторов</div>
+      <div class="sd-chart-sub">Активные / Завершённые / Просроченные задачи</div>
+     </div>
+     <div class="sd-bars sd-bars-stacked" id="sd-chart-ops"></div>
+    </div>
+    <div class="sd-card sd-chart-card">
+     <div class="sd-chart-head">
+      <div class="sd-chart-title">⏱ Среднее время на этапе</div>
+      <div class="sd-chart-sub">Где буксует воронка</div>
+     </div>
+     <div class="sd-bars" id="sd-chart-aging"></div>
+    </div>
+   </div>
+
    <div class="sd-section-title">Рейтинг операторов</div>
    <div class="sd-card"><div class="sd-table-wrap"><table class="sd-table" id="sd-ops-table"></table></div></div>
    <div class="sd-section-title">🚨 Клиенты под контролем</div>
@@ -18761,8 +18839,8 @@ function crmCalendarInit(){
  crmCalRender();
 }
 
-// v246: Дашборд тех.поддержки
-var supportState = { period: 'month' };
+// v246+v248: Дашборд тех.поддержки
+var supportState = { period: 'month', operator: '' };
 
 function supportSetPeriod(p, btn){
  supportState.period = p;
@@ -18770,37 +18848,54 @@ function supportSetPeriod(p, btn){
  supportRender();
 }
 
+function supportSetOperator(op){
+ supportState.operator = op || '';
+ supportRender();
+}
+
+function supportPeriodDays(){
+ switch(supportState.period){
+  case 'week': return 7;
+  case 'month': return 31;
+  case 'quarter': return 92;
+  case 'year': return 366;
+  default: return null; // all
+ }
+}
+
 function supportPeriodFilter(dateStr){
  if(!dateStr) return false;
- var now = new Date();
- var d;
- if(dateStr.indexOf('.') >= 0){
-  // формат "DD.MM.YYYY"
-  var parts = dateStr.split('.');
-  if(parts.length === 3) d = new Date(parts[2]+'-'+parts[1]+'-'+parts[0]);
- } else if(dateStr.indexOf('-') >= 0){
-  d = new Date(dateStr+'T00:00:00');
- } else {
-  d = new Date(dateStr);
- }
+ var d = parsePayDate(dateStr) || (function(){ try { return new Date(dateStr); } catch(e){ return null; } })();
  if(!d || isNaN(d)) return false;
- if(supportState.period === 'all') return true;
- var diff = (now - d) / (1000 * 60 * 60 * 24);
- if(supportState.period === 'month') return diff <= 31;
- if(supportState.period === 'quarter') return diff <= 92;
- return true;
+ var days = supportPeriodDays();
+ if(days === null) return true;
+ var diff = (new Date() - d) / (1000 * 60 * 60 * 24);
+ return diff <= days;
 }
 
 function supportInit(){
  if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
   try { kbLoad(); } catch(e){}
  }
+ // Заполнить dropdown операторов
+ var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
+ var sel = document.getElementById('sd-filter-op');
+ if(sel && sel.children.length <= 1){
+  ops.forEach(function(op){
+   var opt = document.createElement('option');
+   opt.value = op; opt.textContent = op;
+   sel.appendChild(opt);
+  });
+ }
  supportRender();
 }
 
 function supportRender(){
- var cards = (typeof kbCards !== 'undefined' && kbCards) ? kbCards : [];
- var events = (typeof crmEventsAll === 'function') ? crmEventsAll() : [];
+ var rawCards = (typeof kbCards !== 'undefined' && kbCards) ? kbCards : [];
+ var rawEvents = (typeof crmEventsAll === 'function') ? crmEventsAll() : [];
+ // Применяем фильтр оператора (если задан)
+ var cards = supportState.operator ? rawCards.filter(function(c){ return c.operator === supportState.operator; }) : rawCards;
+ var events = supportState.operator ? rawEvents.filter(function(e){ return e.operator === supportState.operator; }) : rawEvents;
  var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
  var todayStr = (new Date()).toISOString().slice(0,10);
 
@@ -18915,10 +19010,158 @@ function supportRender(){
    }).join('');
   }
  }
+ // v248: графики
+ supportRenderCharts(cards, events, ops, todayStr);
 }
 
 function supportPeriodLabel(){
- return supportState.period === 'month' ? 'месяц' : (supportState.period === 'quarter' ? 'квартал' : 'всё время');
+ switch(supportState.period){
+  case 'week': return 'неделю';
+  case 'month': return 'месяц';
+  case 'quarter': return 'квартал';
+  case 'year': return 'год';
+  default: return 'всё время';
+ }
+}
+
+// v248: рендер графиков
+function supportRenderCharts(cards, events, ops, todayStr){
+ supportChartActivations(cards);
+ supportChartStages(cards);
+ supportChartOpsLoad(events, ops);
+ supportChartAging(cards);
+}
+
+// 1. Активации по неделям
+function supportChartActivations(cards){
+ var el = document.getElementById('sd-chart-activations');
+ var sub = document.getElementById('sd-chart-activations-sub');
+ if(!el) return;
+ var days = supportPeriodDays() || 365;
+ var weeks = Math.max(4, Math.min(26, Math.ceil(days / 7)));
+ var now = new Date();
+ var buckets = [];
+ for(var i = weeks - 1; i >= 0; i--){
+  var end = new Date(now); end.setDate(end.getDate() - i * 7);
+  var start = new Date(end); start.setDate(start.getDate() - 6);
+  buckets.push({start:start, end:end, count:0, label:('0'+end.getDate()).slice(-2)+'.'+('0'+(end.getMonth()+1)).slice(-2)});
+ }
+ cards.forEach(function(c){
+  if(!c.activDate) return;
+  var d = parsePayDate(c.activDate);
+  if(!d || isNaN(d)) return;
+  buckets.forEach(function(b){ if(d >= b.start && d <= b.end) b.count++; });
+ });
+ var maxV = Math.max(1, Math.max.apply(null, buckets.map(function(b){return b.count;})));
+ var total = buckets.reduce(function(s,b){return s+b.count;}, 0);
+ if(sub) sub.textContent = 'Активировано за '+supportPeriodLabel()+': '+total;
+ // SVG line chart
+ var W = 100, H = 100; // viewBox в %
+ var stepX = W / Math.max(1, buckets.length - 1);
+ var pts = buckets.map(function(b, i){ return [i * stepX, H - (b.count / maxV) * (H - 20) - 10]; });
+ var d = pts.map(function(p, i){ return (i ? 'L' : 'M') + p[0].toFixed(2) + ',' + p[1].toFixed(2); }).join(' ');
+ var area = d + ' L' + pts[pts.length-1][0].toFixed(2) + ',' + H + ' L' + pts[0][0].toFixed(2) + ',' + H + ' Z';
+ var dots = pts.map(function(p){ return '<circle class="dot" cx="'+p[0].toFixed(2)+'" cy="'+p[1].toFixed(2)+'" r="0.8"/>'; }).join('');
+ var labels = buckets.map(function(b, i){ return '<text class="x-label" x="'+(i*stepX).toFixed(2)+'" y="'+(H+6)+'">'+b.label+'</text>'; }).join('');
+ el.innerHTML = '<svg viewBox="0 0 '+W+' '+(H+12)+'" preserveAspectRatio="none">'
+  + '<defs><linearGradient id="sdGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity=".6"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>'
+  + '<line class="axis-y" x1="0" y1="'+H+'" x2="'+W+'" y2="'+H+'"/>'
+  + '<path class="area" d="'+area+'"/>'
+  + '<path class="line" d="'+d+'"/>'
+  + dots
+  + labels
+  + '</svg>';
+}
+
+// 2. Распределение по этапам
+function supportChartStages(cards){
+ var el = document.getElementById('sd-chart-stages');
+ var sub = document.getElementById('sd-chart-stages-sub');
+ if(!el) return;
+ var stages = (typeof kbColumns !== 'undefined') ? kbColumns : [];
+ if(!stages.length){ el.innerHTML = '<div class="sd-empty">Нет данных по этапам</div>'; return; }
+ var counts = {};
+ stages.forEach(function(s){ counts[s] = 0; });
+ cards.forEach(function(c){ if(c.stage && counts.hasOwnProperty(c.stage)) counts[c.stage]++; });
+ var max = Math.max(1, Math.max.apply(null, Object.values(counts)));
+ if(sub) sub.textContent = 'Всего на канбане: '+cards.length;
+ el.innerHTML = stages.map(function(s){
+  var v = counts[s] || 0;
+  var pct = Math.round(v / max * 100);
+  return '<div class="sd-bar-row">'
+   + '<div class="sd-bar-label">'+kbEsc(s)+'</div>'
+   + '<div class="sd-bar-track"><div class="sd-bar-fill" style="width:'+pct+'%"></div></div>'
+   + '<div class="sd-bar-value">'+v+'</div>'
+   + '</div>';
+ }).join('');
+}
+
+// 3. Нагрузка операторов (stacked: active / done / overdue)
+function supportChartOpsLoad(events, ops){
+ var el = document.getElementById('sd-chart-ops');
+ if(!el) return;
+ if(!ops.length){ el.innerHTML = '<div class="sd-empty">Нет операторов</div>'; return; }
+ var todayStr = (new Date()).toISOString().slice(0,10);
+ var stats = ops.map(function(op){
+  var opE = events.filter(function(e){ return e.operator === op; });
+  var done = opE.filter(function(e){ return e.status === 'done'; }).length;
+  var overdue = opE.filter(function(e){ return e.status !== 'done' && e.date && e.date < todayStr; }).length;
+  var active = opE.length - done - overdue;
+  return { op:op, total:opE.length, done:done, overdue:overdue, active:Math.max(0,active) };
+ });
+ var max = Math.max(1, Math.max.apply(null, stats.map(function(s){return s.total;})));
+ var html = stats.map(function(s){
+  var tw = Math.round(s.total / max * 100);
+  if(s.total === 0){
+   return '<div class="sd-bar-row"><div class="sd-bar-label">'+kbEsc(s.op)+'</div><div class="sd-bar-track"></div><div class="sd-bar-value">0</div></div>';
+  }
+  var aw = Math.round(s.active / s.total * tw);
+  var dw = Math.round(s.done / s.total * tw);
+  var ow = Math.max(0, tw - aw - dw);
+  return '<div class="sd-bar-row">'
+   + '<div class="sd-bar-label">'+kbEsc(s.op)+'</div>'
+   + '<div class="sd-bar-track">'
+   + '<div class="sd-bar-seg s-active" style="width:'+aw+'%"></div>'
+   + '<div class="sd-bar-seg s-done" style="width:'+dw+'%"></div>'
+   + '<div class="sd-bar-seg s-overdue" style="width:'+ow+'%"></div>'
+   + '</div>'
+   + '<div class="sd-bar-value">'+s.total+'</div>'
+   + '</div>';
+ }).join('');
+ html += '<div class="sd-legend">'
+  + '<div class="sd-legend-item"><span class="sd-legend-dot" style="background:var(--accent)"></span>Активные</div>'
+  + '<div class="sd-legend-item"><span class="sd-legend-dot" style="background:var(--done)"></span>Выполнено</div>'
+  + '<div class="sd-legend-item"><span class="sd-legend-dot" style="background:#FF453A"></span>Просрочено</div>'
+  + '</div>';
+ el.innerHTML = html;
+}
+
+// 4. Среднее время на этапе — где буксует
+function supportChartAging(cards){
+ var el = document.getElementById('sd-chart-aging');
+ if(!el) return;
+ var stages = (typeof kbColumns !== 'undefined') ? kbColumns : [];
+ if(!stages.length){ el.innerHTML = '<div class="sd-empty">Нет данных</div>'; return; }
+ var sumDays = {}, countDays = {};
+ stages.forEach(function(s){ sumDays[s] = 0; countDays[s] = 0; });
+ cards.forEach(function(c){
+  if(c.stage && stages.indexOf(c.stage) >= 0){
+   var days = (typeof kbGetStageDays === 'function') ? kbGetStageDays(c) : 0;
+   sumDays[c.stage] += days;
+   countDays[c.stage]++;
+  }
+ });
+ var avgs = stages.map(function(s){ return { stage:s, avg: countDays[s] ? Math.round(sumDays[s]/countDays[s]) : 0 }; });
+ var max = Math.max(1, Math.max.apply(null, avgs.map(function(a){return a.avg;})));
+ el.innerHTML = avgs.map(function(a){
+  var pct = Math.round(a.avg / max * 100);
+  var fillClass = a.avg > 14 ? 'f-red' : (a.avg > 7 ? 'f-warn' : 'f-done');
+  return '<div class="sd-bar-row">'
+   + '<div class="sd-bar-label">'+kbEsc(a.stage)+'</div>'
+   + '<div class="sd-bar-track"><div class="sd-bar-fill '+fillClass+'" style="width:'+pct+'%"></div></div>'
+   + '<div class="sd-bar-value">'+a.avg+' дн</div>'
+   + '</div>';
+ }).join('');
 }
 
 function supportOpenCard(cardId){
