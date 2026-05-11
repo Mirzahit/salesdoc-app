@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v264</title>
+<title>SalesDoc — Финансовый Дашборд v265</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -893,6 +893,24 @@ body.light .kpi-card:hover{border-color:rgba(0,0,0,.12)!important;box-shadow:0 4
 [style*="border-left:"][style*="3px solid"], [style*="border-left: 3px solid"]{
  border-left:none!important; border:1px solid var(--border-faint)!important
 }
+
+/* ============================================================
+   v265 — Канбан как воронка AmoCRM:
+   - Колонки шире (320px) для лучшего визуального ритма
+   - Карточки чуть плотнее, никаких цветных полос-маркеров
+   - Заголовки колонок крупнее, как в Amo
+   ============================================================ */
+.kb-column{width:320px!important;min-width:320px!important;background:rgba(17,24,39,.4)!important;border-radius:10px!important}
+.kb-column-header{padding:12px 16px 10px!important}
+.kb-column-header .kb-col-title{font-size:12px!important;color:var(--text)!important;letter-spacing:.5px!important;text-transform:none!important;font-weight:700!important}
+.kb-column-header .kb-col-count{background:var(--amo-blue-soft)!important;color:var(--amo-blue)!important;font-size:11px!important;padding:3px 10px!important;border-radius:12px!important}
+.kb-column-header .kb-col-info{font-size:10px!important;color:var(--text-muted)!important;margin-top:4px!important}
+.kb-card{padding:12px 14px!important;border-left:none!important;border:1px solid var(--border-faint)!important;border-radius:8px!important}
+.kb-card:hover{border-color:var(--amo-blue)!important;transform:none!important;box-shadow:0 2px 8px rgba(33,150,243,.12)!important}
+.kb-card .kb-client{font-size:13px!important;font-weight:600!important;color:var(--text)!important;margin-bottom:8px!important}
+body.light .kb-column{background:#F8F9FB!important;border:1px solid #E5E7EB!important}
+body.light .kb-card{background:#FFFFFF!important;border:1px solid #E5E7EB!important}
+body.light .kb-card:hover{border-color:var(--amo-blue)!important}
 
 /* ============================================================
  DESIGN SYSTEM v230 — Календарь TickTick-style
@@ -3241,9 +3259,16 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
 .kbc-title{font-size:18px;font-weight:700;color:var(--text-primary);font-family:'Space Grotesk',sans-serif;flex:1}
 .kbc-stage-badge{font-size:11px;font-weight:700;padding:5px 16px;border-radius:20px;background:rgba(59,130,246,.12);color:#60A5FA;border:1px solid rgba(59,130,246,.25);letter-spacing:.5px}
 /* v229: layout fix — main колонка большая (для pipeline + табов), sidebar узкий 320px */
-.kbc-body{display:grid;grid-template-columns:1fr 320px;gap:0;flex:1;overflow:hidden}
-@media(max-width:1100px){.kbc-body{grid-template-columns:1fr}.kbc-sidebar{display:none}}
+/* v265: AmoCRM-style 3-колоночная карточка клиента */
+.kbc-body{display:grid;grid-template-columns:280px 1fr 360px;gap:0;flex:1;overflow:hidden}
+@media(max-width:1280px){.kbc-body{grid-template-columns:240px 1fr 300px}}
+@media(max-width:1100px){.kbc-body{grid-template-columns:1fr}.kbc-info,.kbc-sidebar{display:none}}
 .kbc-main{padding:16px 20px;overflow-y:auto;max-height:100%}
+.kbc-info{border-right:1px solid var(--dark-border);display:flex;flex-direction:column;background:rgba(17,24,39,.25);overflow-y:auto;padding:14px 16px;gap:14px}
+.kbc-info-section{display:flex;flex-direction:column;gap:6px}
+.kbc-info-label{font-size:10px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;font-weight:700}
+.kbc-info-value{font-size:13px;color:var(--text);font-weight:600;word-wrap:break-word}
+.kbc-info-divider{height:1px;background:var(--dark-border);margin:2px 0}
 .kbc-sidebar{border-left:1px solid var(--dark-border);display:flex;flex-direction:column;background:rgba(17,24,39,.3);overflow:hidden}
 .kbc-section{margin-bottom:16px}
 .kbc-section-title{font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:8px}
@@ -5672,6 +5697,8 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  </div>
  <div class="kbc-body">
+ <!-- v265: левая колонка — статичные данные клиента (как в AmoCRM) -->
+ <div class="kbc-info" id="kbc-info"></div>
  <div class="kbc-main" id="kbc-main"></div>
  <div class="kbc-sidebar">
  <div class="kbc-sidebar-header">Активность</div>
@@ -20914,6 +20941,79 @@ function kbRenderCardFeed(card) {
  });
  }
  document.getElementById('kbc-feed').innerHTML = html;
+
+ // v265: левая колонка «О клиенте» — статичные данные клиента (AmoCRM-style)
+ kbRenderClientInfo(card);
+}
+
+// v265: рендер левой колонки карточки клиента — компактные блоки данных
+function kbRenderClientInfo(card){
+ var el = document.getElementById('kbc-info');
+ if(!el) return;
+ var fmtAmt = function(n){ return n ? String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,' ') + ' ₸' : '—'; };
+ var opColor = (typeof KB_OP_COLORS !== 'undefined' && KB_OP_COLORS[card.operator]) || '#888';
+ var daysOnStage = (typeof kbGetStageDays === 'function') ? kbGetStageDays(card) : 0;
+ var html = ''
+ + '<div class="kbc-info-section">'
+ + '<div class="kbc-info-label">Сумма сделки</div>'
+ + '<div class="kbc-info-value" style="font-size:18px;font-family:\'Space Grotesk\',sans-serif">'+fmtAmt(card.amount)+'</div>'
+ + '</div>'
+ + '<div class="kbc-info-divider"></div>'
+ + '<div class="kbc-info-section">'
+ + '<div class="kbc-info-label">Этап</div>'
+ + '<div class="kbc-info-value">'+kbEsc(card.stage||'—')+'</div>'
+ + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+daysOnStage+' дн на этапе</div>'
+ + '</div>'
+ + '<div class="kbc-info-divider"></div>'
+ + '<div class="kbc-info-section">'
+ + '<div class="kbc-info-label">Оператор</div>'
+ + (card.operator ?
+ '<div class="kbc-info-value" style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:50%;background:'+opColor+'"></span><span>'+kbEsc(card.operator)+'</span></div>'
+ : '<div style="font-size:12px;color:var(--text-muted)">Не назначен</div>')
+ + '</div>'
+ + '<div class="kbc-info-divider"></div>'
+ + '<div class="kbc-info-section">'
+ + '<div class="kbc-info-label">Менеджер продаж</div>'
+ + '<div class="kbc-info-value">'+kbEsc(card.manager||'—')+'</div>'
+ + '</div>'
+ + '<div class="kbc-info-divider"></div>'
+ + '<div class="kbc-info-section">'
+ + '<div class="kbc-info-label">Категория</div>'
+ + '<div class="kbc-info-value" style="font-size:12px">'+kbEsc(card.category||'—')+'</div>'
+ + '</div>';
+ if(card.payDate){
+ html += '<div class="kbc-info-divider"></div>'
+ + '<div class="kbc-info-section">'
+ + '<div class="kbc-info-label">Дата оплаты</div>'
+ + '<div class="kbc-info-value" style="font-size:12px">'+kbEsc(card.payDate)+'</div>'
+ + '</div>';
+ }
+ if(card.activDate){
+ html += '<div class="kbc-info-divider"></div>'
+ + '<div class="kbc-info-section">'
+ + '<div class="kbc-info-label">Дата активации</div>'
+ + '<div class="kbc-info-value" style="font-size:12px;color:#30D158">'+kbEsc(card.activDate)+'</div>'
+ + '</div>';
+ }
+ // Контакты клиента (из crm_contacts) — если есть
+ if(typeof crmContactsForClient === 'function'){
+ var contacts = crmContactsForClient(card.client) || [];
+ if(contacts.length){
+ html += '<div class="kbc-info-divider"></div>'
+ + '<div class="kbc-info-section">'
+ + '<div class="kbc-info-label">Контакты ('+contacts.length+')</div>';
+ contacts.slice(0,3).forEach(function(c){
+ html += '<div style="font-size:12px;color:var(--text);margin-top:6px;line-height:1.5">'
+ + '<div style="font-weight:600">'+kbEsc(c.name||'')+'</div>'
+ + (c.role ? '<div style="color:var(--text-muted);font-size:11px">'+kbEsc(c.role)+'</div>' : '')
+ + (c.phone ? '<div style="color:var(--accent);font-size:11px">'+kbEsc(c.phone)+'</div>' : '')
+ + '</div>';
+ });
+ if(contacts.length > 3) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">+ ещё '+(contacts.length-3)+'</div>';
+ html += '</div>';
+ }
+ }
+ el.innerHTML = html;
 }
 
 function kbCloseCardPage() {
