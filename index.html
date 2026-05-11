@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v270</title>
+<title>SalesDoc — Финансовый Дашборд v271</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5714,6 +5714,20 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
 
  <div id="morning-content" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(360px, 1fr));gap:16px"></div>
+
+ <!-- v271: Инсайты Финдиректора (AI) -->
+ <div id="morning-ai-section" style="margin-top:20px;display:none">
+ <div style="background:var(--dark-card);border:1px solid var(--border-faint);border-radius:14px;padding:18px 22px">
+ <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+ <div>
+ <div style="font-size:11px;color:var(--amo-blue);letter-spacing:2px;text-transform:uppercase;font-weight:700">Инсайты Финдиректора</div>
+ <div id="morning-ai-meta" style="font-size:11px;color:var(--text-muted);margin-top:4px">AI-анализ финансов и операций</div>
+ </div>
+ <button id="morning-ai-btn" onclick="morningAnalyze()" style="padding:8px 16px;background:var(--amo-blue-soft);color:var(--amo-blue);border:1px solid var(--amo-blue);border-radius:8px;cursor:pointer;font-weight:600;font-size:12px">Обновить анализ</button>
+ </div>
+ <div id="morning-ai-body" style="font-size:13px;color:var(--text);line-height:1.7"></div>
+ </div>
+ </div>
  </div>
  <!-- /MORNING VIEW -->
 
@@ -7320,6 +7334,199 @@ function renderPlanFactStrip(ps, factTotal){
  + '</div>';
 }
 
+// ===== v271: AI-инсайты Финдиректора на странице Утро =====
+var MORNING_AI_KEY = 'sd_morning_ai_cache';
+var MORNING_AI_TTL = 6 * 60 * 60 * 1000; // 6 часов
+
+function morningShowAiSection(){
+ // Показываем секцию только для CEO (тех у кого Ассистент доступен)
+ if(typeof isAssistantAllowed === 'function' && currentUser && isAssistantAllowed(currentUser)){
+ var s = document.getElementById('morning-ai-section');
+ if(s) s.style.display = 'block';
+ morningLoadAiCache();
+ }
+}
+
+function morningLoadAiCache(){
+ try {
+ var raw = localStorage.getItem(MORNING_AI_KEY);
+ if(!raw) return;
+ var data = JSON.parse(raw);
+ if(!data || !data.text || !data.ts) return;
+ var age = Date.now() - data.ts;
+ morningRenderInsights(data.text, data.ts, age > MORNING_AI_TTL);
+ } catch(_){}
+}
+
+function morningRenderInsights(text, ts, stale){
+ var body = document.getElementById('morning-ai-body');
+ var meta = document.getElementById('morning-ai-meta');
+ if(!body) return;
+ // Превращаем markdown-like ответ в HTML
+ var html = text
+ .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+ .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+ .replace(/\n\n+/g, '</p><p style="margin:10px 0">')
+ .replace(/\n/g, '<br>');
+ // Подсветить классификационные пилюли в начале строк (Внимание / Возможность / Тренд)
+ html = html.replace(/(Внимание|Срочно|Риск)/g, '<span style="color:#EF4444;font-weight:700">$1</span>');
+ html = html.replace(/(Возможность|Идея|Рекомендую)/g, '<span style="color:#10B981;font-weight:700">$1</span>');
+ html = html.replace(/(Тренд|Заметка|Наблюдение)/g, '<span style="color:#F59E0B;font-weight:700">$1</span>');
+ body.innerHTML = '<p style="margin:0">' + html + '</p>';
+ if(meta && ts){
+ var d = new Date(ts);
+ var when = d.toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+ meta.textContent = (stale ? 'Кэш устарел · ' : 'Свежий анализ · ') + when;
+ meta.style.color = stale ? 'var(--text-muted)' : 'var(--text-soft)';
+ }
+}
+
+async function morningAnalyze(){
+ var btn = document.getElementById('morning-ai-btn');
+ var body = document.getElementById('morning-ai-body');
+ var meta = document.getElementById('morning-ai-meta');
+ if(btn){ btn.disabled = true; btn.textContent = 'Анализирую...'; }
+ if(body) body.innerHTML = '<div style="color:var(--text-muted);padding:14px 0">Собираю контекст и отправляю в Финдиректора...</div>';
+ try {
+ // === Собираем контекст ===
+ var ctx = morningBuildAiContext();
+ // === Промпт ===
+ var prompt = 'Ты Финдиректор SalesDoc. На основе данных ниже найди 3-5 коротких проактивных инсайтов для CEO. '
+ + 'Каждый инсайт = одно ключевое наблюдение + конкретная рекомендация (1-2 предложения).\n\n'
+ + 'Формат каждого инсайта:\n'
+ + '**[Категория]** *Заголовок инсайта.* Краткое объяснение. **Рекомендую:** что делать.\n\n'
+ + 'Категории на выбор: Внимание / Возможность / Тренд.\n\n'
+ + 'Что цепляет CEO: критические риски, неэффективное распределение ресурсов, упущенные деньги, '
+ + 'тренды по неделям, действия которые принесут деньги завтра.\n\n'
+ + 'Не повторяй очевидное (это и так в KPI). Не лей воду. Никаких эмодзи. Будь конкретен — называй имена, суммы, дни.';
+
+ var resp = await fetch('/api/chat', {
+ method:'POST',
+ headers:{'Content-Type':'application/json'},
+ body: JSON.stringify({
+ agentId: 'finance',
+ messages: [{role:'user', content: prompt}],
+ context: ctx,
+ userEmail: (currentUser && currentUser.email) || ''
+ })
+ });
+ var data = await resp.json();
+ if(!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+ var text = data.reply || 'Финдиректор не вернул ответ.';
+ // Сохраним в кэш
+ try {
+ localStorage.setItem(MORNING_AI_KEY, JSON.stringify({text: text, ts: Date.now()}));
+ } catch(_){}
+ morningRenderInsights(text, Date.now(), false);
+ } catch(e){
+ if(body) body.innerHTML = '<div style="color:#EF4444;padding:14px 0">Ошибка: ' + (e.message||e) + '</div>';
+ } finally {
+ if(btn){ btn.disabled = false; btn.textContent = 'Обновить анализ'; }
+ }
+}
+
+function morningBuildAiContext(){
+ var lines = ['<context>'];
+ var now = new Date();
+ lines.push('Сегодня: ' + now.toISOString().slice(0,10));
+ // План/факт
+ try {
+ var pPlan = (planGetPlan('new_sales') + planGetPlan('subscription'));
+ var ps = getPeriodPayments('month');
+ var pFact = ps.reduce(function(s,p){return s+p.amount;},0);
+ if(pPlan){
+ var totalDays = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+ var daysPassed = now.getDate();
+ var pace = daysPassed ? Math.round(pFact/daysPassed) : 0;
+ var forecast = Math.round(pace * totalDays);
+ lines.push('');
+ lines.push('ПЛАН/ФАКТ ' + (now.getMonth()+1) + '/' + now.getFullYear() + ' (день ' + daysPassed + '/' + totalDays + ')');
+ lines.push('План: ' + pPlan.toLocaleString('ru-KZ') + ' ₸');
+ lines.push('Факт: ' + pFact.toLocaleString('ru-KZ') + ' ₸ (' + Math.round(pFact/pPlan*100) + '%)');
+ lines.push('Темп: ' + pace.toLocaleString('ru-KZ') + ' ₸/день');
+ lines.push('Прогноз: ' + forecast.toLocaleString('ru-KZ') + ' ₸ (' + Math.round(forecast/pPlan*100) + '%)');
+ }
+ } catch(_){}
+ // Канбан
+ try {
+ var cards = (typeof kbCards !== 'undefined' && kbCards) ? kbCards : [];
+ var notActivated = cards.filter(function(c){ return c.stage !== 'Активирован' && !c.activDate; });
+ lines.push('');
+ lines.push('КАНБАН ВНЕДРЕНИЯ');
+ lines.push('Всего на канбане: ' + cards.length + ', не активированы: ' + notActivated.length);
+ var byStage = {};
+ notActivated.forEach(function(c){ byStage[c.stage] = (byStage[c.stage]||0)+1; });
+ Object.keys(byStage).forEach(function(s){ lines.push(' Этап «'+s+'»: ' + byStage[s] + ' карточек'); });
+ var byOp = {};
+ notActivated.forEach(function(c){ var o = c.operator||'(нет оператора)'; byOp[o] = (byOp[o]||0)+1; });
+ lines.push('По операторам:');
+ Object.keys(byOp).forEach(function(o){ lines.push(' ' + o + ': ' + byOp[o]); });
+ // Aging — карточки > 14 дн
+ var stuck = notActivated.filter(function(c){
+ var d = (typeof kbGetStageDays === 'function') ? kbGetStageDays(c) : 0;
+ return d > 14;
+ }).map(function(c){
+ var d = (typeof kbGetStageDays === 'function') ? kbGetStageDays(c) : 0;
+ return c.client + ' (' + c.stage + ', ' + d + 'д, ' + (c.operator||'нет') + ', ' + (Number(c.amount)||0).toLocaleString('ru-KZ') + '₸)';
+ });
+ if(stuck.length){
+ lines.push('Застряли > 14 дней (' + stuck.length + '):');
+ stuck.slice(0,10).forEach(function(s){ lines.push(' - ' + s); });
+ }
+ } catch(_){}
+ // Действующие клиенты
+ try {
+ if(typeof acGetActiveClients === 'function'){
+ var ac = acGetActiveClients();
+ var totalMrr = ac.reduce(function(s,c){return s+(Number(c.monthlySum)||0);},0);
+ lines.push('');
+ lines.push('ДЕЙСТВУЮЩИЕ КЛИЕНТЫ');
+ lines.push('Всего: ' + ac.length + ', общая MRR: ' + Math.round(totalMrr).toLocaleString('ru-KZ') + ' ₸/мес');
+ var bySeg = {};
+ ac.forEach(function(c){ bySeg[c.segment||'D'] = (bySeg[c.segment||'D']||0)+1; });
+ var segOrder = ['A+','A','B','C','D'];
+ lines.push('Сегменты:');
+ segOrder.forEach(function(s){ if(bySeg[s]) lines.push(' ' + s + ': ' + bySeg[s]); });
+ // Топ по абонплате
+ var topMrr = ac.slice().sort(function(a,b){return (b.monthlySum||0)-(a.monthlySum||0);}).slice(0,5);
+ lines.push('Топ-5 по абонплате:');
+ topMrr.forEach(function(c){ lines.push(' - ' + c.client + ' (' + c.monthlySum.toLocaleString('ru-KZ') + ' ₸/мес, сегмент ' + c.segment + ')'); });
+ }
+ } catch(_){}
+ // Средний чек по менеджерам (если данные доступны)
+ try {
+ var ps2 = getPeriodPayments('month');
+ var byMgr = {};
+ ps2.forEach(function(p){
+ var name = (p.managerName || empName(p.employee)||'').trim();
+ if(!name || name === '-') return;
+ if(!byMgr[name]) byMgr[name] = { newClients:{}, totalNew:0, count:0 };
+ byMgr[name].count++;
+ var raw = String(p.categoryRaw||'').toLowerCase();
+ if(raw === 'новый клиент' || (raw.indexOf('нов')>=0 && raw.indexOf('клиент')>=0)){
+ byMgr[name].newClients[String(p.client||'').toLowerCase().trim()] = true;
+ byMgr[name].totalNew += Number(p.amount)||0;
+ }
+ });
+ var mgrLines = [];
+ Object.keys(byMgr).forEach(function(name){
+ var b = byMgr[name];
+ var newCnt = Object.keys(b.newClients).length;
+ if(newCnt > 0){
+ var avg = Math.round(b.totalNew/newCnt);
+ mgrLines.push(name + ': ' + newCnt + ' новых клиентов, ср.чек ' + avg.toLocaleString('ru-KZ') + ' ₸');
+ }
+ });
+ if(mgrLines.length){
+ lines.push('');
+ lines.push('СРЕДНИЙ ЧЕК ПО МЕНЕДЖЕРАМ (за месяц)');
+ mgrLines.forEach(function(l){ lines.push(' ' + l); });
+ }
+ } catch(_){}
+ lines.push('</context>');
+ return lines.join('\n');
+}
+
 // v267-268: морнинг — подгружает kbCards и clients-kz.json при первом заходе,
 // потом ещё раз перерисовывает через 3 и 8 сек если данные приехали с задержкой.
 var _morningRetryTimers = [];
@@ -7814,6 +8021,8 @@ function morningRender(){
  }
 
  contEl.innerHTML = html;
+ // v271: после основного контента — секция AI-инсайтов (только для CEO)
+ if(typeof morningShowAiSection === 'function') morningShowAiSection();
 }
 
 function renderAvgCheckManagers(ps) {
