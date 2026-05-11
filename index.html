@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v258</title>
+<title>SalesDoc — Финансовый Дашборд v259</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19430,36 +19430,42 @@ function acNormName(s){
 function acGetActiveClients(){
  // v252: Канонический список действующих клиентов KZ — из clients-kz.json (254 клиента,
  // монтаж 26.3M tg, 5985 лицензий). Дополняем данными из payments + kbCards (если есть).
- // Если KZ-кэш не загружен — fallback на построение из payments.
+ // v258-fix: payments.client хранит ХОСТ (subdomain) типа "karat", а не полное имя.
+ // В clients-kz.json есть отдельные поля name и host — матчим по host, а не по имени.
  var kzItems = AC_KZ_CACHE || [];
- var payByName = {};
+ var payByHost = {};
  if(typeof payments !== 'undefined' && payments){
  payments.forEach(function(p){
- var name = p && (p.client || p.cl || p.compName);
- if(!name) return;
- var keyLow = acNormName(name);
- if(!keyLow) return;
- if(!payByName[keyLow]) payByName[keyLow] = { totalAmount: 0, payCount: 0, lastPay: null };
- payByName[keyLow].payCount++;
- payByName[keyLow].totalAmount += parseFloat(p.amount || p.am) || 0;
+ var host = String(p && (p.client || p.cl || p.compName) || '').trim().toLowerCase();
+ if(!host) return;
+ if(!payByHost[host]) payByHost[host] = { totalAmount: 0, payCount: 0, lastPay: null };
+ payByHost[host].payCount++;
+ payByHost[host].totalAmount += parseFloat(p.amount || p.am) || 0;
  var d = (typeof parseDateFromSheet === 'function' && p.date) ? parseDateFromSheet(p.date) : (p.date ? new Date(p.date) : null);
- if(d && !isNaN(d) && (!payByName[keyLow].lastPay || d > payByName[keyLow].lastPay)) payByName[keyLow].lastPay = d;
+ if(d && !isNaN(d) && (!payByHost[host].lastPay || d > payByHost[host].lastPay)) payByHost[host].lastPay = d;
  });
  }
  var cards = (typeof kbCards !== 'undefined' && kbCards) ? kbCards : [];
- var cardByName = {};
- cards.forEach(function(c){ if(c.client) cardByName[acNormName(c.client)] = c; });
+ // Канбан-карточки иногда хранят полное имя «ТОО Карат», иногда host. Индексируем по обоим.
+ var cardByKey = {};
+ cards.forEach(function(c){
+ if(!c.client) return;
+ cardByKey[acNormName(c.client)] = c;
+ var host = String(c.client).trim().toLowerCase();
+ cardByKey[host] = c;
+ });
 
  // Источник: либо canonical KZ список, либо payments если кэш не загружен
  var result = [];
  var seen = {};
  (kzItems.length ? kzItems : []).forEach(function(item){
  var name = item.name;
- var keyLow = acNormName(name);
+ var host = String(item.host||'').trim().toLowerCase();
+ var keyLow = host || acNormName(name);
  if(seen[keyLow]) return;
  seen[keyLow] = 1;
- var pay = payByName[keyLow] || {};
- var card = cardByName[keyLow] || null;
+ var pay = (host && payByHost[host]) || payByHost[acNormName(name)] || {};
+ var card = cardByKey[host] || cardByKey[acNormName(name)] || null;
  var daysSince = pay.lastPay ? Math.floor((new Date() - pay.lastPay) / 86400000) : 999;
  result.push({
  client: name, host: item.host || '',
@@ -19479,13 +19485,13 @@ function acGetActiveClients(){
  });
  // Fallback: если KZ-кэш пустой и есть payments — берём оттуда
  if(!result.length && Object.keys(payByName).length){
- Object.keys(payByName).forEach(function(keyLow){
- var pay = payByName[keyLow];
- var origName = (cardByName[keyLow] && cardByName[keyLow].client) || keyLow;
- var card = cardByName[keyLow];
+ Object.keys(payByHost).forEach(function(host){
+ var pay = payByHost[host];
+ var card = cardByKey[host];
+ var origName = (card && card.client) || host;
  var daysSince = pay.lastPay ? Math.floor((new Date() - pay.lastPay) / 86400000) : 999;
  result.push({
- client: origName, host: '', monthlyQty: 0, monthlySum: 0,
+ client: origName, host: host, monthlyQty: 0, monthlySum: 0,
  operator: card ? (card.operator||'') : '', activDate: card?(card.activDate||''):'',
  stage: card?card.stage:'', cardId: card?card.id:null,
  lastPayDate: pay.lastPay, totalAmount: pay.totalAmount, payCount: pay.payCount,
