@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v238</title>
+<title>SalesDoc — Финансовый Дашборд v239</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18301,12 +18301,27 @@ function crmRenderChecklists(card){
  var stages = (typeof kbColumns !== 'undefined' && kbColumns) || Object.keys(KB_DEFAULT_CHECKLISTS);
  var curIdx = stages.indexOf(card.stage);
  var html = '<div class="crm-cl-block">';
+ // v238: показываем только чек-лист текущего этапа. Если этап не определён или пустой —
+ // покажем сообщение что чек-листа нет.
+ var effectiveIdx = curIdx;
+ if(effectiveIdx < 0){
+  // card.stage не в kbColumns — найдём первый этап с непустым шаблоном
+  for(var ti=0; ti<stages.length; ti++){
+   var t = stages[ti];
+   if((card.checklist && card.checklist[t] && card.checklist[t].length) || (KB_DEFAULT_CHECKLISTS[t]||[]).length){
+    effectiveIdx = ti; break;
+   }
+  }
+ }
  stages.forEach(function(stage, sidx){
+  if(sidx !== effectiveIdx) return;
   var items = (card.checklist && card.checklist[stage]) || [];
-  if(!items.length) return;
-  // v238: показываем ТОЛЬКО чек-лист текущего этапа — каждый этап = свой чек-лист
-  if(sidx !== curIdx) return;
   var template = (KB_DEFAULT_CHECKLISTS[stage] || []);
+  if(!items.length && !template.length){
+   // Этап без шаблона (например «Активирован») — показываем сообщение
+   html += '<div class="crm-cl-stage cl-active"><div class="crm-cl-head"><div class="crm-cl-name">Этап ' + (sidx + 1) + ' · ' + kbEsc(stage) + '</div></div><div style="font-size:13px;color:var(--text-soft);padding:8px 0">Для этого этапа чек-лист не предусмотрен.</div></div>';
+   return;
+  }
   var done = 0; items.forEach(function(b){ if(b) done++; });
   var pct = items.length ? Math.round(done / items.length * 100) : 0;
   var stageClass = 'cl-active';
