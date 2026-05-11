@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v265</title>
+<title>SalesDoc — Финансовый Дашборд v266</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3710,6 +3710,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <button class="country-btn" data-country="KG" onclick="switchCountry('KG')">KG</button>
  </div>
  <div class="nav-section">
+ <div class="nav-item-solo nav-btn" data-view="morning" onclick="showView('morning')"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle class="nav-icon-stroke" cx="10" cy="10" r="3" stroke-width="1.5"/><path class="nav-icon-stroke" d="M10 2v2M10 16v2M2 10h2M16 10h2M4.5 4.5l1.4 1.4M14.1 14.1l1.4 1.4M4.5 15.5l1.4-1.4M14.1 5.9l1.4-1.4" stroke-width="1.5" stroke-linecap="round"/></svg><div class="nav-label">Утро</div></div>
  <div class="nav-item-solo nav-btn active" data-view="dashboard" onclick="showView('dashboard')"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect class="nav-icon-stroke" x="3" y="3" width="6" height="6" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="11" y="3" width="6" height="4" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="3" y="11" width="6" height="4" rx="1.5" stroke-width="1.5"/><rect class="nav-icon-stroke" x="11" y="9" width="6" height="8" rx="1.5" stroke-width="1.5"/></svg><div class="nav-label">Дашборд</div></div>
 
  <div class="nav-group" onclick="navGroupTouch(this)">
@@ -3829,6 +3830,10 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <!-- DASHBOARD -->
  <div id="view-dashboard">
  <button onclick="showDataSources('dashboard')" title="Источники данных" style="position:absolute;right:8px;top:68px;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(59,130,246,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'">!</button>
+
+ <!-- v266: План/факт пилюля — сразу видно «на треке» / «отстаём» -->
+ <div id="plan-fact-strip" style="margin-bottom:18px"></div>
+
  <div class="kpi-grid">
  <div class="kpi-card" data-kpi-type="license" style="cursor:pointer"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Новые лицензии</div><div class="kpi-value" id="kpi-license">0 <span>₸</span></div><div class="kpi-delta up" id="delta-license">0%</div></div><div class="kpi-divider"></div>
  <div class="kpi-right">
@@ -5687,6 +5692,17 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  <!-- /BOTADMIN VIEW -->
 
+ <!-- v266: УТРЕННИЙ ДАЙДЖЕСТ CEO -->
+ <div id="view-morning" style="display:none">
+ <div style="margin-bottom:20px">
+ <div style="font-family:'Space Grotesk','Inter',sans-serif;font-size:24px;color:var(--text);font-weight:700" id="morning-greeting">Доброе утро</div>
+ <div style="font-size:12px;color:var(--text-muted);margin-top:4px" id="morning-date"></div>
+ </div>
+
+ <div id="morning-content" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(360px, 1fr));gap:16px"></div>
+ </div>
+ <!-- /MORNING VIEW -->
+
  <!-- FULLSCREEN CARD PAGE -->
  <div id="view-kb-card">
  <div class="kbc-header">
@@ -7168,9 +7184,258 @@ function renderAll() {
  setupKpiTooltips(ps);
  renderM2MA2A(ps);
  renderAvgCheckManagers(ps);
+ renderPlanFactStrip(ps, total);
  // Если страница Статистики открыта — перерисовать с новым selectedMonth
  var statView = document.getElementById('view-statistics');
  if(statView && statView.style.display!=='none' && typeof statInit==='function') statInit();
+}
+
+// v266: жирная плашка «План vs Факт месяца» + прогноз исходя из текущего темпа.
+// Сразу видно «на треке / отстаём / обгоняем» без захода в отчёты.
+function renderPlanFactStrip(ps, factTotal){
+ var el = document.getElementById('plan-fact-strip');
+ if(!el) return;
+ // План = новые продажи + абонплата (если planLastData загружен)
+ var plan = 0;
+ try { plan = (planGetPlan && (planGetPlan('new_sales') + planGetPlan('subscription'))) || 0; } catch(_){}
+ // Если плана нет (loadData ещё не пришёл) — не рисуем плашку
+ if(!plan){ el.innerHTML = ''; return; }
+ // Прошедшие/всего дней в выбранном месяце
+ var sel = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth : {year:new Date().getFullYear(), month:new Date().getMonth()};
+ var now = new Date();
+ var inCurrentMonth = (sel.year === now.getFullYear() && sel.month === now.getMonth());
+ var totalDays = new Date(sel.year, sel.month+1, 0).getDate();
+ var daysPassed = inCurrentMonth ? now.getDate() : totalDays;
+ var pace = daysPassed > 0 ? Math.round(factTotal / daysPassed) : 0;
+ var forecast = Math.round(pace * totalDays);
+ var pctOfPlan = plan ? Math.round(factTotal / plan * 100) : 0;
+ var forecastPct = plan ? Math.round(forecast / plan * 100) : 0;
+ var status, statusColor, statusBg;
+ if(!inCurrentMonth){ status = 'Месяц закрыт'; statusColor = 'var(--text-muted)'; statusBg = 'rgba(148,163,184,.1)'; }
+ else if(forecastPct >= 100){ status = 'На треке · прогноз +' + (forecastPct-100) + '% к плану'; statusColor = '#10B981'; statusBg = 'rgba(16,185,129,.08)'; }
+ else if(forecastPct >= 80){ status = 'Близко: прогноз ' + forecastPct + '% от плана'; statusColor = '#F59E0B'; statusBg = 'rgba(245,158,11,.08)'; }
+ else { status = 'Отстаём: прогноз ' + forecastPct + '% от плана'; statusColor = '#EF4444'; statusBg = 'rgba(239,68,68,.08)'; }
+ var monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+ var cur = (typeof COUNTRY_CONFIG!=='undefined' && COUNTRY_CONFIG[currentCountry]) ? COUNTRY_CONFIG[currentCountry].currency : '₸';
+ var barW = Math.min(100, Math.max(0, pctOfPlan));
+ var barColor = forecastPct >= 100 ? '#10B981' : forecastPct >= 80 ? '#F59E0B' : '#EF4444';
+ // Маркер «где должны быть по дням»
+ var paceMark = Math.min(100, Math.round(daysPassed / totalDays * 100));
+ el.innerHTML = ''
+ + '<div style="background:var(--dark-card);border:1px solid var(--border-faint);border-radius:14px;padding:18px 22px;position:relative;overflow:hidden">'
+ + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:14px">'
+ + '<div>'
+ + '<div style="font-size:10px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">План месяца</div>'
+ + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:24px;font-weight:700;color:var(--text)">'+monthNames[sel.month]+' '+sel.year+' · день '+daysPassed+' из '+totalDays+'</div>'
+ + '</div>'
+ + '<div style="font-size:11px;color:'+statusColor+';background:'+statusBg+';padding:6px 12px;border-radius:20px;font-weight:600;align-self:center">'+status+'</div>'
+ + '</div>'
+ // Три блока: План / Факт / Прогноз
+ + '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:18px;margin-bottom:14px">'
+ + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">План</div>'
+ + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(plan)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+'</span></div></div>'
+ + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Факт сейчас</div>'
+ + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:700;color:'+barColor+'">'+fmt(factTotal)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+' · '+pctOfPlan+'%</span></div></div>'
+ + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Прогноз на конец месяца</div>'
+ + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(forecast)+' <span style="font-size:12px;color:'+statusColor+'">'+cur+' · '+forecastPct+'%</span></div></div>'
+ + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Темп / день</div>'
+ + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(pace)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+'/день</span></div></div>'
+ + '</div>'
+ // Прогресс-бар
+ + '<div style="position:relative;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden">'
+ + '<div style="position:absolute;left:0;top:0;height:100%;width:'+barW+'%;background:'+barColor+';border-radius:4px;transition:width .5s"></div>'
+ + (inCurrentMonth ? '<div style="position:absolute;left:'+paceMark+'%;top:-4px;width:2px;height:16px;background:var(--text-muted);opacity:.5" title="Где должны быть по дням"></div>' : '')
+ + '</div>'
+ + '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:6px"><span>0%</span><span>50%</span><span>100% · план</span></div>'
+ + '</div>';
+}
+
+// v266: Утренний дайджест CEO — собирает 5 блоков информации:
+// (1) Требует решения · (2) Ожидается на неделе · (3) Риски · (4) Что вчера · (5) Прогноз месяца
+function morningRender(){
+ var greetEl = document.getElementById('morning-greeting');
+ var dateEl = document.getElementById('morning-date');
+ var contEl = document.getElementById('morning-content');
+ if(!contEl) return;
+ var now = new Date();
+ var hour = now.getHours();
+ var greet = hour < 12 ? 'Доброе утро' : (hour < 17 ? 'Добрый день' : 'Добрый вечер');
+ var name = (currentUser && currentUser.name) ? currentUser.name.split(' ')[0] : '';
+ if(greetEl) greetEl.textContent = greet + (name ? ', ' + name : '');
+ var days = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+ var months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+ if(dateEl) dateEl.textContent = days[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
+
+ // Собираем данные
+ var todayStr = now.toISOString().slice(0,10);
+ var weekEnd = new Date(now.getTime() + 7*86400000).toISOString().slice(0,10);
+ var cards = (typeof kbCards !== 'undefined' && kbCards) ? kbCards : [];
+ var pays = (typeof payments !== 'undefined' && payments) ? payments : [];
+ var events = (typeof crmEventsAll === 'function') ? crmEventsAll() : [];
+
+ // === БЛОК 1: ТРЕБУЕТ РЕШЕНИЯ ===
+ var decisions = [];
+ // Карточки на этапе > 14 дней
+ var stuck = cards.filter(function(c){
+ if(c.stage === 'Активирован' || c.activDate) return false;
+ var d = (typeof kbGetStageDays === 'function') ? kbGetStageDays(c) : 0;
+ return d > 14;
+ }).sort(function(a,b){
+ return ((typeof kbGetStageDays==='function')?kbGetStageDays(b):0) - ((typeof kbGetStageDays==='function')?kbGetStageDays(a):0);
+ });
+ stuck.slice(0,3).forEach(function(c){
+ var d = (typeof kbGetStageDays === 'function') ? kbGetStageDays(c) : 0;
+ var op = c.operator || 'нет оператора';
+ decisions.push({
+ title: c.client + ' — ' + d + ' дн на «' + c.stage + '»',
+ sub: 'Оператор: ' + op + '. Эскалировать или поменять оператора?',
+ view: 'kanban'
+ });
+ });
+ // Непривязанные карточки
+ var noOp = cards.filter(function(c){ return !c.operator && c.stage !== 'Активирован' && !c.activDate; });
+ if(noOp.length >= 5){
+ decisions.push({
+ title: noOp.length + ' клиентов без оператора',
+ sub: 'Назначить операторов или распределить автоматически',
+ view: 'kanban'
+ });
+ }
+ // Просроченные события
+ var overdue = events.filter(function(e){ return e.status !== 'done' && e.date && e.date < todayStr; });
+ if(overdue.length){
+ decisions.push({
+ title: overdue.length + ' просроченных задач',
+ sub: 'У ' + (overdue[0].operator || 'кого-то') + ' и других — нужно реакция',
+ view: 'calendar'
+ });
+ }
+
+ // === БЛОК 2: ОЖИДАЕТСЯ НА НЕДЕЛЕ ===
+ var weekItems = [];
+ var weekTasks = events.filter(function(e){ return e.status !== 'done' && e.date && e.date >= todayStr && e.date <= weekEnd; });
+ // Активации (карточки на этапе «Активация»)
+ var activSoon = cards.filter(function(c){ return c.stage === 'Активация'; });
+ if(activSoon.length){
+ weekItems.push({label:'Активации в работе', value: activSoon.length + ' клиентов', detail: activSoon.slice(0,3).map(function(c){return c.client;}).join(', ')});
+ }
+ // События на неделе сгруппированно по типу
+ var byType = {};
+ weekTasks.forEach(function(e){
+ var t = e.type || 'other';
+ byType[t] = (byType[t]||0) + 1;
+ });
+ var typeNames = {meeting:'встреч', training:'обучений', deadline:'дедлайнов', other:'задач'};
+ Object.keys(byType).forEach(function(t){
+ weekItems.push({label: typeNames[t]||t, value: byType[t]});
+ });
+ if(!weekItems.length) weekItems.push({label:'На неделе тихо', value:'нет запланированных событий'});
+
+ // === БЛОК 3: РИСКИ ===
+ var risks = [];
+ // Действующие клиенты которые > 30 дней не платили
+ if(typeof acGetActiveClients === 'function'){
+ try {
+ var ac = acGetActiveClients();
+ var highRisk = ac.filter(function(c){ return c.risk === 'high' && c.monthlySum > 0; }).sort(function(a,b){ return b.monthlySum - a.monthlySum; });
+ if(highRisk.length){
+ var totalSum = highRisk.reduce(function(s,c){return s + (c.monthlySum||0);}, 0);
+ risks.push({title: highRisk.length + ' клиентов не платят > 30 дн', sub: 'Сумма абонплаты: ' + fmt(totalSum) + ' ₸/мес. Топ: ' + highRisk.slice(0,3).map(function(c){return c.client;}).join(', ')});
+ }
+ } catch(_){}
+ }
+ // Канбан-aging
+ if(stuck.length > 5){
+ risks.push({title: stuck.length + ' клиентов застряли на этапах > 14 дн', sub: 'Это блокирует ' + Math.round(stuck.reduce(function(s,c){return s+(c.amount||0);},0)/1000) + 'К ₸ выручки внедрения'});
+ }
+
+ // === БЛОК 4: ПЛАН/ФАКТ МЕСЯЦА ===
+ var planSection = null;
+ try {
+ var pPlan = (planGetPlan('new_sales') + planGetPlan('subscription'));
+ var ps = getPeriodPayments('month');
+ var pFact = ps.reduce(function(s,p){return s+p.amount;},0);
+ if(pPlan){
+ var totalDays = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+ var daysPassed = now.getDate();
+ var pace = daysPassed ? Math.round(pFact/daysPassed) : 0;
+ var forecast = Math.round(pace * totalDays);
+ var pct = Math.round(pFact/pPlan*100);
+ var fc = Math.round(forecast/pPlan*100);
+ planSection = {
+ label: 'План мая',
+ plan: pPlan,
+ fact: pFact,
+ forecast: forecast,
+ pct: pct,
+ fc: fc,
+ daysPassed: daysPassed,
+ totalDays: totalDays
+ };
+ }
+ } catch(_){}
+
+ // ===== РЕНДЕР =====
+ var html = '';
+ // Карточка 1: Решения
+ html += '<div class="morning-card" style="background:var(--dark-card);border:1px solid var(--border-faint);border-radius:14px;padding:18px 20px">';
+ html += '<div style="font-size:11px;color:#EF4444;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:14px">Требует решения</div>';
+ if(decisions.length){
+ decisions.forEach(function(d){
+ html += '<div onclick="showView(\''+d.view+'\')" style="padding:10px 0;border-bottom:1px solid var(--border-faint);cursor:pointer;transition:background .15s" onmouseover="this.style.background=\'rgba(239,68,68,.04)\'" onmouseout="this.style.background=\'transparent\'">';
+ html += '<div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:3px">'+kbEsc(d.title)+'</div>';
+ html += '<div style="font-size:11px;color:var(--text-muted)">'+kbEsc(d.sub)+'</div>';
+ html += '</div>';
+ });
+ } else {
+ html += '<div style="font-size:13px;color:var(--text-muted);padding:14px 0">Срочных решений нет. Хороший день.</div>';
+ }
+ html += '</div>';
+
+ // Карточка 2: Неделя
+ html += '<div class="morning-card" style="background:var(--dark-card);border:1px solid var(--border-faint);border-radius:14px;padding:18px 20px">';
+ html += '<div style="font-size:11px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:14px">Эта неделя</div>';
+ weekItems.forEach(function(it){
+ html += '<div style="padding:10px 0;border-bottom:1px solid var(--border-faint)">';
+ html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">';
+ html += '<div style="font-size:13px;color:var(--text)">'+kbEsc(it.label)+'</div>';
+ html += '<div style="font-size:13px;color:var(--accent);font-weight:700">'+kbEsc(String(it.value))+'</div>';
+ html += '</div>';
+ if(it.detail) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">'+kbEsc(it.detail)+'</div>';
+ html += '</div>';
+ });
+ html += '</div>';
+
+ // Карточка 3: Риски
+ html += '<div class="morning-card" style="background:var(--dark-card);border:1px solid var(--border-faint);border-radius:14px;padding:18px 20px">';
+ html += '<div style="font-size:11px;color:#F59E0B;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:14px">Риски</div>';
+ if(risks.length){
+ risks.forEach(function(r){
+ html += '<div style="padding:10px 0;border-bottom:1px solid var(--border-faint)">';
+ html += '<div style="font-size:13px;color:var(--text);font-weight:600;margin-bottom:3px">'+kbEsc(r.title)+'</div>';
+ html += '<div style="font-size:11px;color:var(--text-muted)">'+kbEsc(r.sub)+'</div>';
+ html += '</div>';
+ });
+ } else {
+ html += '<div style="font-size:13px;color:var(--text-muted);padding:14px 0">Рисков не вижу.</div>';
+ }
+ html += '</div>';
+
+ // Карточка 4: План/факт
+ if(planSection){
+ var color = planSection.fc >= 100 ? '#10B981' : planSection.fc >= 80 ? '#F59E0B' : '#EF4444';
+ var status = planSection.fc >= 100 ? 'На треке' : planSection.fc >= 80 ? 'Близко' : 'Отстаём';
+ html += '<div class="morning-card" style="background:var(--dark-card);border:1px solid var(--border-faint);border-radius:14px;padding:18px 20px">';
+ html += '<div style="font-size:11px;color:'+color+';letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:14px">'+status+'</div>';
+ html += '<div style="margin-bottom:14px"><span style="font-family:\'Space Grotesk\',sans-serif;font-size:28px;font-weight:700;color:'+color+'">'+planSection.pct+'%</span> <span style="font-size:13px;color:var(--text-muted)">плана выполнено</span></div>';
+ html += '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px"><span>Факт: '+fmt(planSection.fact)+' ₸</span><span>План: '+fmt(planSection.plan)+' ₸</span></div>';
+ html += '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:'+Math.min(100,planSection.pct)+'%;background:'+color+'"></div></div>';
+ html += '<div style="font-size:12px;color:var(--text)">Прогноз: <b style="color:'+color+'">'+fmt(planSection.forecast)+' ₸</b> (' + planSection.fc + '%)</div>';
+ html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">День '+planSection.daysPassed+' из '+planSection.totalDays+'</div>';
+ html += '</div>';
+ }
+
+ contEl.innerHTML = html;
 }
 
 function renderAvgCheckManagers(ps) {
@@ -8869,14 +9134,14 @@ function showView(v) {
  try { showNotif('Нет доступа', 'Ассистент доступен только CEO.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
- var _accessMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',botadmin:'view_botadmin'};
+ var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',botadmin:'view_botadmin'};
  var _need = _accessMap[v];
  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
  }
- ['dashboard','payments','plan','keyclients','assistant','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban','statistics','planning','calendar','supportdash','activeclients','botadmin'].forEach(x=>{
+ ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban','statistics','planning','calendar','supportdash','activeclients','botadmin'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
@@ -8949,6 +9214,7 @@ function showView(v) {
  if(v==='reports') reportsInit();
  if(v==='kanban'){if(!window._kbLoaded){kbLoad();window._kbLoaded=true;}else{kbRenderBoard();}}
  if(v==='botadmin'){ if(typeof botAdminInit==='function') botAdminInit(); }
+ if(v==='morning'){ if(typeof morningRender==='function') morningRender(); }
 }
 
 // DATA SOURCES INFO (динамически из COUNTRY_CONFIG)
