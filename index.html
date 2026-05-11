@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v261</title>
+<title>SalesDoc — Финансовый Дашборд v262</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7076,7 +7076,7 @@ function renderAll() {
  var pct = calcPct(m.cur, m.prev);
  if(pct === null){ el.style.display = 'none'; return; }
  var up = pct >= 0;
- el.innerHTML = (up?'▲ +':'▼ ') + Math.abs(pct) + '% к ' + prevLabel;
+ el.innerHTML = (up?'+':'−') + Math.abs(pct) + '% к ' + prevLabel;
  el.className = 'kpi-delta ' + (up?'up':'down');
  el.style.display = '';
  });
@@ -8215,18 +8215,17 @@ function showCredentialsModal(name, email, password, roleLabel){
  var copyText = name + '\nЛогин: ' + email + '\nПароль: ' + password + '\nРоль: ' + roleLabel + '\n(первый вход — попросит сменить пароль)';
  bg.innerHTML = ''
  + '<div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:24px 28px;min-width:380px;max-width:480px;box-shadow:0 24px 60px rgba(0,0,0,.4)">'
- + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><div style="width:32px;height:32px;border-radius:50%;background:rgba(16,185,129,.15);color:#10b981;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700">✓</div>'
- + '<div style="font-size:18px;font-weight:700;color:var(--text)">Учётные данные созданы</div></div>'
- + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Передай сотруднику любым удобным способом. При первом входе он будет вынужден сменить пароль.</div>'
+ + '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px">Учётные данные созданы</div>'
+ + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Передай сотруднику любым удобным способом. При первом входе он сменит пароль.</div>'
  + '<div style="background:var(--surface-2);border:1px solid var(--border-faint);border-radius:10px;padding:14px 16px;margin-bottom:14px;font-family:monospace;font-size:13px;line-height:1.7">'
  + '<div><span style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1.5px">ИМЯ</span><div style="color:var(--text);font-weight:600">' + (name||'') + '</div></div>'
  + '<div style="margin-top:8px"><span style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1.5px">ЛОГИН (EMAIL)</span><div style="color:var(--accent);user-select:all">' + (email||'') + '</div></div>'
- + '<div style="margin-top:8px"><span style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1.5px">ВРЕМЕННЫЙ ПАРОЛЬ</span><div style="color:#fbbf24;font-weight:700;font-size:16px;letter-spacing:1px;user-select:all">' + (password||'') + '</div></div>'
+ + '<div style="margin-top:8px"><span style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1.5px">ВРЕМЕННЫЙ ПАРОЛЬ</span><div style="color:var(--text);font-weight:700;font-size:16px;letter-spacing:1px;user-select:all">' + (password||'') + '</div></div>'
  + '<div style="margin-top:8px"><span style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1.5px">РОЛЬ</span><div style="color:var(--text)">' + (roleLabel||'') + '</div></div>'
  + '</div>'
  + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
- + '<button id="creds-copy-btn" style="flex:1;min-width:140px;padding:10px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">📋 Скопировать всё</button>'
- + '<button id="creds-wa-btn" style="padding:10px 14px;background:rgba(37,211,102,.15);color:#25D366;border:1px solid rgba(37,211,102,.3);border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">WhatsApp</button>'
+ + '<button id="creds-copy-btn" style="flex:1;min-width:140px;padding:10px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Скопировать</button>'
+ + '<button id="creds-wa-btn" style="padding:10px 14px;background:var(--surface-2);color:var(--text);border:1px solid var(--border-faint);border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">WhatsApp</button>'
  + '<button id="creds-close-btn" style="padding:10px 14px;background:transparent;color:var(--text-soft);border:1px solid var(--border-faint);border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Закрыть</button>'
  + '</div>'
  + '</div>';
@@ -8234,14 +8233,13 @@ function showCredentialsModal(name, email, password, roleLabel){
  var copyBtn = document.getElementById('creds-copy-btn');
  copyBtn.onclick = function(){
  navigator.clipboard.writeText(copyText).then(function(){
- copyBtn.innerHTML = '✓ Скопировано';
+ copyBtn.innerHTML = 'Скопировано';
  copyBtn.style.background = '#10b981';
- setTimeout(function(){ copyBtn.innerHTML = '📋 Скопировать всё'; copyBtn.style.background = 'var(--accent)'; }, 1500);
+ setTimeout(function(){ copyBtn.innerHTML = 'Скопировать'; copyBtn.style.background = 'var(--accent)'; }, 1500);
  }).catch(function(){
- // fallback для старых браузеров
  var ta = document.createElement('textarea'); ta.value = copyText; document.body.appendChild(ta);
  ta.select(); try{ document.execCommand('copy'); }catch(_){} ta.remove();
- copyBtn.innerHTML = '✓ Скопировано';
+ copyBtn.innerHTML = 'Скопировано';
  });
  };
  document.getElementById('creds-wa-btn').onclick = function(){
@@ -11150,7 +11148,7 @@ function setChip(id, cur, prev, prevLabel) {
  var diff = cur - prev;
  var pct = calcPct(cur, prev);
  var pctStr = (pct !== null && Math.abs(pct) <= 999)
- ? ((pct >= 0 ? '▲ +' : '▼ ') + pct + '%')
+ ? ((pct >= 0 ? '+' : '') + pct + '%')
  : '';
 
  el.className = 'kpi-chip ' + (diff >= 0 ? 'chip-up' : 'chip-down');
@@ -19193,10 +19191,10 @@ async function botAdminTest(){
  try {
  var r = await fetch(url, {method:'GET'});
  var j = await r.json();
- if(j.ok){ res.textContent = '✓ Бот отвечает. Время сервера: ' + j.time; res.style.color = '#10b981'; }
- else { res.textContent = '✗ Ответ есть, но ok!=true: ' + JSON.stringify(j).slice(0,100); res.style.color = '#f59e0b'; }
+ if(j.ok){ res.textContent = 'Бот отвечает. Время сервера: ' + j.time; res.style.color = '#10b981'; }
+ else { res.textContent = 'Ответ есть, но ok != true: ' + JSON.stringify(j).slice(0,100); res.style.color = '#f59e0b'; }
  } catch(e){
- res.textContent = '✗ Бот не отвечает: ' + e.message; res.style.color = 'var(--ds-danger,#ef4444)';
+ res.textContent = 'Бот не отвечает: ' + e.message; res.style.color = 'var(--ds-danger,#ef4444)';
  }
 }
 async function botAdminInit(){
@@ -19253,11 +19251,11 @@ function botAdminRenderOps(rows){
  html += '<tr style="border-top:1px solid var(--border-faint)">'
  + '<td style="padding:10px 6px">'+kbEsc(name)+'</td>'
  + '<td style="padding:10px 6px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:'+(role==='ceo'?'#fbbf24':'var(--accent)')+'">'+role+'</span></td>'
- + '<td style="padding:10px 6px">'+(linked?'<span style="color:#10b981">✓ да</span>':'<span style="color:var(--text-muted)">нет</span>')+'</td>'
+ + '<td style="padding:10px 6px">'+(linked?'<span style="color:#10b981">да</span>':'<span style="color:var(--text-muted)">нет</span>')+'</td>'
  + '<td style="padding:10px 6px;font-family:monospace;font-size:11px;color:var(--text-muted)">'+kbEsc(tgId||'—')+'</td>'
  + '<td style="padding:10px 6px;font-family:monospace;font-size:11px;color:'+(code?'#f59e0b':'var(--text-muted)')+'">'+kbEsc(code||'—')+'</td>'
  + '<td style="padding:10px 6px;text-align:right">'
- + (!linked ? '<button onclick="botAdminGenCode(\''+kbEsc(name).replace(/\x27/g,"\\\x27")+'\')" style="padding:4px 10px;font-size:11px;background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:6px;cursor:pointer">'+(code?'↻ Новый код':'Сгенерировать')+'</button>' : '')
+ + (!linked ? '<button onclick="botAdminGenCode(\''+kbEsc(name).replace(/\x27/g,"\\\x27")+'\')" style="padding:4px 10px;font-size:11px;background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:6px;cursor:pointer">'+(code?'Новый код':'Сгенерировать')+'</button>' : '')
  + '</td>'
  + '</tr>';
  }
