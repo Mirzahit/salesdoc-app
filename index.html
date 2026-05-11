@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v232</title>
+<title>SalesDoc — Финансовый Дашборд v233</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -606,6 +606,9 @@ body.light ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.30);background
 .crm-pipe-step.done::after{content:'\2713';position:absolute;top:8px;right:10px;font-weight:700;color:var(--done)}
 .crm-pipe-step.active{background:var(--text);color:#000;border-color:var(--text);font-weight:700}
 .crm-pipe-step.active::after{content:'\25CF';position:absolute;top:6px;right:10px;color:var(--accent)}
+/* v233: подсветка следующего этапа когда чеклист текущего 100% */
+.crm-pipe-step.ready-next{border-color:var(--done);background:rgba(48,209,88,.10);animation:crmPipePulse 1.6s ease-in-out infinite}
+@keyframes crmPipePulse{0%,100%{box-shadow:0 0 0 0 rgba(48,209,88,.40)}50%{box-shadow:0 0 0 6px rgba(48,209,88,0)}}
 .crm-pipe-step .pipe-label{display:block;font-weight:600;letter-spacing:.3px;text-transform:uppercase;font-size:9px;margin-bottom:2px;opacity:.7}
 .crm-pipe-step .pipe-name{font-size:11px;font-weight:600;line-height:1.2}
 .crm-pipe-step.done::after,.crm-pipe-step.active::after{font-size:11px;top:4px;right:6px}
@@ -18330,6 +18333,10 @@ function crmRenderChecklists(card){
 function crmChecklistToggle(cardId, stage, idx){
  var card = (typeof kbCards !== 'undefined' && kbCards) ? kbCards.find(function(c){ return c.id === cardId; }) : null;
  if(!card || !card.checklist || !card.checklist[stage]) return;
+ // v233: переключаем только если этап — текущий или прошлый (не будущий)
+ var curStageIdx = (typeof kbColumns !== 'undefined') ? kbColumns.indexOf(card.stage) : -1;
+ var thisStageIdx = (typeof kbColumns !== 'undefined') ? kbColumns.indexOf(stage) : -1;
+ if(curStageIdx >= 0 && thisStageIdx > curStageIdx) return; // будущий этап не редактируется
  card.checklist[stage][idx] = card.checklist[stage][idx] ? 0 : 1;
  if(typeof KB_SCRIPT_URL !== 'undefined' && KB_SCRIPT_URL && card._row){
   fetch(KB_SCRIPT_URL, {
@@ -18339,6 +18346,27 @@ function crmChecklistToggle(cardId, stage, idx){
  }
  crmRenderChecklists(card);
  if(typeof crmUpdateActivateBtn === 'function') crmUpdateActivateBtn(card);
+ // v233: если чеклист текущего этапа стал 100% — toast с CTA перехода
+ if(stage === card.stage){
+  var p = kbChecklistStageProgress(card);
+  if(p.total > 0 && p.done === p.total){
+   var nextIdx = curStageIdx + 1;
+   var nextStage = (typeof kbColumns !== 'undefined' && nextIdx < kbColumns.length) ? kbColumns[nextIdx] : null;
+   if(nextStage && typeof kbShowToast === 'function'){
+    kbShowToast('✓ Этап «'+stage+'» завершён! Перейти на «'+nextStage+'»?');
+    // CTA-button добавим через setTimeout — отдельный toast не предусмотрен в API
+    setTimeout(function(){
+     if(confirm('Этап «'+stage+'» завершён 100%. Перейти на следующий этап «'+nextStage+'»?')){
+      if(typeof kbMoveCard === 'function') kbMoveCard(card, nextStage);
+      // перерендер карточки (kbOpenCardPage если она открыта)
+      if(typeof kbOpenCardPage === 'function' && document.getElementById('view-kb-card').style.display !== 'none'){
+       kbOpenCardPage(card);
+      }
+     }
+    }, 200);
+   }
+  }
+ }
 }
 
 // v228: блокировка кнопки «Активировать» пока чеклист текущего этапа не 100%
@@ -19068,10 +19096,14 @@ function kbOpenCardPage(card) {
   html += '</div>';
  }
 
- // === v225: NEW PIPELINE (горизонтальная воронка) ===
+ // === v225: NEW PIPELINE (горизонтальная воронка) + v233: подсветка следующего шага если чеклист 100% ===
  var newPipeHtml = '<div class="crm-pipeline">';
+ var stageProg = (typeof kbChecklistStageProgress === 'function') ? kbChecklistStageProgress(card) : {done:0,total:0};
+ var stageDone = stageProg.total === 0 || stageProg.done === stageProg.total;
  kbColumns.forEach(function(col, i){
   var cls = i < curStageIdx ? 'done' : (i === curStageIdx ? 'active' : '');
+  // v233: следующий после текущего получает «ready-next» класс если чеклист текущего этапа закрыт
+  if(i === curStageIdx + 1 && stageDone) cls = 'ready-next';
   var safeCol = String(col).replace(/'/g,"\\'");
   newPipeHtml += '<div class="crm-pipe-step '+cls+'" onclick="kbMoveCard(window._kbCurrentCard, \''+safeCol+'\')">';
   newPipeHtml += '<span class="pipe-label">Этап '+(i+1)+'</span>';
@@ -19160,12 +19192,12 @@ function crmRenderClientCalendar(client){
  var clientEvents = all.filter(function(e){ return e.client === client; });
  var cnt = document.getElementById('crm-cnt-ev');
  if(cnt) cnt.textContent = clientEvents.length;
+ var clientEsc = (client||'').replace(/\x27/g,"\\\x27");
  if(!clientEvents.length){
   pane.innerHTML = '<div class="crm-empty"><div class="crm-empty-ico">📅</div><div class="crm-empty-msg">Событий для этого клиента пока нет</div><div class="crm-empty-hint">Запланируйте обучение, встречу или дедлайн</div></div>'
-   + '<button class="crm-contacts-add" onclick="crmEventOpenModalForClient(\''+(client||'').replace(/\x27/g,"\\\x27")+'\')">+ Создать событие</button>';
+   + '<button class="crm-contacts-add" onclick="crmEventOpenModalForClient(\''+clientEsc+'\')">+ Создать событие</button>';
   return;
  }
- // Группировка по дням, сортировка по дате
  var today = crmDateStr(new Date());
  clientEvents.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || (a.time_start||'').localeCompare(b.time_start||''); });
  var html = '<div style="margin-bottom:14px">';
@@ -19182,11 +19214,32 @@ function crmRenderClientCalendar(client){
    html += '<div class="tt-day-head" style="position:static"><span class="d-num">'+dnum+'</span><span class="d-mon">'+kbEsc(dmon)+'</span>'+rel+'</div>';
    lastDay = k;
   }
-  html += crmCalTaskHtml(e, today);
+  // v233: в карточке клиента task-click открывает модалку редактирования (нет right-sidebar для select)
+  html += crmCalTaskHtmlForCard(e, today);
  });
  html += '</div>'
-  + '<button class="crm-contacts-add" onclick="crmEventOpenModalForClient(\''+(client||'').replace(/\x27/g,"\\\x27")+'\')">+ Создать событие</button>';
+  + '<button class="crm-contacts-add" onclick="crmEventOpenModalForClient(\''+clientEsc+'\')">+ Создать событие</button>';
  pane.innerHTML = html;
+}
+
+// v233: версия задачи без crmCalSelect (для контекста где нет tt-right)
+function crmCalTaskHtmlForCard(e, today){
+ var pcls = 'p'+(e.priority || 4);
+ var done = e.status === 'done' ? ' done' : '';
+ var cb = done ? '<div class="tt-cb done">✓</div>' : '<div class="tt-cb '+pcls+'" onclick="event.stopPropagation();crmEventToggleDone(\''+e.id+'\');crmRenderClientCalendar(\''+(e.client||'').replace(/\x27/g,"\\\x27")+'\')"></div>';
+ var time = e.time_start ? (e.time_start + (e.time_end ? ' — '+e.time_end : '')) : '';
+ var overdue = e.date && e.date < today && e.status !== 'done';
+ var typeLabel = ({training:'Обучение',meeting:'Встреча',deadline:'Дедлайн',other:'Прочее'})[e.type] || e.type || 'Задача';
+ var opColor = (e.operator && typeof KB_OP_COLORS !== 'undefined' && KB_OP_COLORS[e.operator]) || '#888';
+ return '<div class="tt-task'+done+'" onclick="crmEventOpenModal(\''+e.id+'\')">'
+  + cb
+  + '<div class="tt-task-info">'
+  + '<div class="tt-task-title">'+kbEsc(e.title || '')+'</div>'
+  + '<div class="tt-task-meta">'
+  + (time ? '<span class="m-time'+(overdue?' m-overdue':'')+'">'+kbEsc(time)+'</span>' : '')
+  + '<span class="m-tag '+(e.type||'other')+'">'+kbEsc(typeLabel)+'</span>'
+  + (e.operator ? '<span class="m-op"><span class="tt-op-dot" style="background:'+opColor+'"></span>'+kbEsc(e.operator)+'</span>' : '')
+  + '</div></div></div>';
 }
 
 // v232: открыть модалку события с предзаполненным клиентом
