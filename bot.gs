@@ -46,7 +46,7 @@ var DEFAULT_SLA = [
  ['Активация', 2]
 ];
 
-// ─────────── ENTRY POINTS ───────────
+// ===== ENTRY POINTS =====
 
 function doGet(e){
  return ContentService.createTextOutput(JSON.stringify({ok:true, time:new Date().toISOString()}))
@@ -64,7 +64,7 @@ function doPost(e){
  return ContentService.createTextOutput('ok');
 }
 
-// ─────────── INIT ───────────
+// ===== INIT =====
 
 function initSheets(){
  var ss = SpreadsheetApp.openById(SHEET_ID);
@@ -85,7 +85,7 @@ function initSheets(){
  }
 }
 
-// ─────────── HANDLE MESSAGE ───────────
+// ===== HANDLE MESSAGE =====
 
 function handleMessage(msg){
  var chatId = msg.chat.id;
@@ -137,7 +137,7 @@ function handleMessage(msg){
  }
 }
 
-// ─────────── HANDLE CALLBACK (нажатия inline-кнопок) ───────────
+// ===== HANDLE CALLBACK (нажатия inline-кнопок) =====
 
 function handleCallback(cb){
  var chatId = cb.message.chat.id;
@@ -206,7 +206,7 @@ function handleCallback(cb){
  answerCallback(cb.id);
 }
 
-// ─────────── MENUS ───────────
+// ===== MENUS =====
 
 function sendMenu(chatId, op){
  var keyboard = [
@@ -312,7 +312,7 @@ function sendSlaStatus(chatId){
  sendMessage(chatId, txt);
 }
 
-// ─────────── TRIGGERS ───────────
+// ===== TRIGGERS =====
 
 function dailyMorning(){
  var ops = listOperators().filter(function(o){ return o.active && o.telegram_id; });
@@ -401,7 +401,7 @@ function deliverEvent(type, target, payload){
  });
 }
 
-// ─────────── SHEETS HELPERS ───────────
+// ===== SHEETS HELPERS =====
 
 function listOperators(){
  var ss = SpreadsheetApp.openById(SHEET_ID);
@@ -563,7 +563,7 @@ function logError(where, err){
  } catch(e){}
 }
 
-// ─────────── TELEGRAM API ───────────
+// ===== TELEGRAM API =====
 
 function sendMessage(chatId, text, keyboard){
  var payload = {chat_id: chatId, text: text, parse_mode: 'HTML'};
@@ -595,7 +595,7 @@ function answerCallback(callbackId, text){
  } catch(e){}
 }
 
-// ─────────── UTILS ───────────
+// ===== UTILS =====
 
 function todayISO(){ return Utilities.formatDate(new Date(),'Asia/Almaty','yyyy-MM-dd'); }
 function fmtNum(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' '); }
