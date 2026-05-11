@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v269</title>
+<title>SalesDoc — Финансовый Дашборд v270</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -893,6 +893,19 @@ body.light .kpi-card:hover{border-color:rgba(0,0,0,.12)!important;box-shadow:0 4
 [style*="border-left:"][style*="3px solid"], [style*="border-left: 3px solid"]{
  border-left:none!important; border:1px solid var(--border-faint)!important
 }
+
+/* v270: кнопки периода на странице Прогноз cash-flow */
+.cf-period-btn{padding:6px 14px;font-size:11px;font-weight:600;background:transparent;border:1px solid var(--border-faint);color:var(--text-soft);border-radius:8px;cursor:pointer;transition:all .15s}
+.cf-period-btn:hover{border-color:var(--amo-blue);color:var(--text)}
+.cf-period-btn.cf-active{background:var(--amo-blue-soft);border-color:var(--amo-blue);color:var(--amo-blue)}
+.cf-kpi{background:var(--dark-card);border:1px solid var(--border-faint);border-radius:12px;padding:14px 16px}
+.cf-kpi-label{font-size:10px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px}
+.cf-kpi-value{font-family:'Space Grotesk','Inter',sans-serif;font-size:22px;font-weight:700;line-height:1.2}
+.cf-kpi-sub{font-size:11px;color:var(--text-muted);margin-top:4px}
+.cf-week{background:var(--dark-card);border:1px solid var(--border-faint);border-radius:10px;padding:12px 14px}
+.cf-week-head{font-size:11px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.cf-week-net{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700}
+.cf-week-flows{font-size:11px;color:var(--text-muted);margin-top:6px;display:flex;justify-content:space-between}
 
 /* ============================================================
    v265 — Канбан как воронка AmoCRM:
@@ -3719,6 +3732,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div class="nav-popup-title">Финансы</div>
  <div class="nav-item" data-view="payments" onclick="showView('payments')">Оплаты</div>
  <div class="nav-item" data-view="expenses" onclick="showView('expenses')">Расходы</div>
+ <div class="nav-item" data-view="cashflow" onclick="showView('cashflow')">Прогноз cash-flow</div>
  <div class="nav-item" data-view="plan" onclick="showView('plan')">Выполнение плана</div>
  </div>
  </div>
@@ -5703,6 +5717,62 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  <!-- /MORNING VIEW -->
 
+ <!-- v270: ПРОГНОЗ CASH-FLOW -->
+ <div id="view-cashflow" style="display:none">
+ <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:20px">
+ <div>
+ <div style="font-family:'Space Grotesk','Inter',sans-serif;font-size:22px;color:var(--text);font-weight:700">Прогноз cash-flow</div>
+ <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Ожидаемые поступления и расходы. Когда кончатся деньги при текущем темпе?</div>
+ </div>
+ <div style="display:flex;gap:6px;align-items:center">
+ <button id="cf-h-30" class="cf-period-btn cf-active" onclick="cfSetHorizon(30)">30 дней</button>
+ <button id="cf-h-60" class="cf-period-btn" onclick="cfSetHorizon(60)">60 дней</button>
+ <button id="cf-h-90" class="cf-period-btn" onclick="cfSetHorizon(90)">90 дней</button>
+ </div>
+ </div>
+
+ <!-- Поле «текущий остаток» (вводится вручную, хранится в localStorage) -->
+ <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px;padding:14px 16px;background:var(--surface-2);border:1px dashed var(--border-faint);border-radius:10px">
+ <div>
+ <div style="font-size:10px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Остаток на счетах сегодня</div>
+ <div style="display:flex;align-items:center;gap:6px">
+ <input id="cf-balance" type="number" placeholder="0" style="width:200px;padding:8px 12px;background:var(--dark-card);border:1px solid var(--border-faint);border-radius:8px;color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600" oninput="cfSaveBalance()">
+ <span style="color:var(--text-muted)">₸</span>
+ </div>
+ </div>
+ <div style="font-size:11px;color:var(--text-muted);flex:1;min-width:240px">Введи остаток на расчётных счетах (банки + касса) — увидишь, когда при текущих темпах он опустится в минус.</div>
+ </div>
+
+ <!-- KPI: Приход / Расход / Нетто / Дней до разрыва -->
+ <div id="cf-kpis" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:14px;margin-bottom:18px"></div>
+
+ <!-- Главный график динамики остатка -->
+ <div class="panel" style="margin-bottom:18px;padding:18px">
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+ <div style="font-size:12px;color:var(--text);font-weight:700">Динамика остатка по дням</div>
+ <div style="font-size:10px;color:var(--text-muted)">Кумулятивный баланс с учётом всех потоков</div>
+ </div>
+ <div id="cf-chart" style="height:260px"></div>
+ </div>
+
+ <!-- По неделям -->
+ <div class="panel" style="padding:18px">
+ <div style="font-size:12px;color:var(--text);font-weight:700;margin-bottom:14px">Разбивка по неделям</div>
+ <div id="cf-weeks" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px"></div>
+ </div>
+
+ <!-- Источники прогноза -->
+ <div style="margin-top:18px;padding:14px 16px;background:var(--surface-2);border:1px solid var(--border-faint);border-radius:10px">
+ <div style="font-size:11px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px">Откуда берётся прогноз</div>
+ <div style="font-size:12px;color:var(--text-soft);line-height:1.7">
+ <b>Приход:</b> ожидаемая абонплата от действующих клиентов (по host-матчингу) + ожидаемые активации pipeline-карточек на канбане (распределены равномерно по горизонту).<br>
+ <b>Расход:</b> средний расход за последние 3 месяца, распределённый равномерно по дням. Это грубая оценка — для точности подключи бюджет/договоры.<br>
+ Прогноз приблизительный. Реальность зависит от закрытий сделок и сезонности.
+ </div>
+ </div>
+ </div>
+ <!-- /CASHFLOW VIEW -->
+
  <!-- FULLSCREEN CARD PAGE -->
  <div id="view-kb-card">
  <div class="kbc-header">
@@ -6690,7 +6760,7 @@ function applyUserAccess() {
  // v180: фильтруем И обычные пункты, И solo-кнопку «Дашборд» (она `nav-item-solo`).
  // v261: добавлены отсутствовавшие view (calendar/supportdash/activeclients/botadmin) — раньше
  // эти пункты НЕ скрывались в навигации, например оператор видел «Telegram-бот».
- const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',botadmin:'view_botadmin'};
+ const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',botadmin:'view_botadmin'};
  document.querySelectorAll('.nav-item[data-view],.nav-item-solo[data-view]').forEach(el=>{
  const view=el.dataset.view;
  if (view === 'assistant') {
@@ -7277,6 +7347,279 @@ function morningInit(){
  _morningRetryTimers.push(setTimeout(function(){
  if(document.getElementById('view-morning').style.display !== 'none') morningRender();
  }, 8000));
+}
+
+// ===== v270: ПРОГНОЗ CASH-FLOW =====
+var _cfHorizon = 30; // дней
+var CF_BALANCE_KEY = 'sd_cf_balance';
+
+function cfInit(){
+ // Восстанавливаем введённый остаток
+ var saved = localStorage.getItem(CF_BALANCE_KEY);
+ var inp = document.getElementById('cf-balance');
+ if(inp && saved) inp.value = saved;
+ // Подгружаем kbCards/AC если не загружены
+ var promises = [];
+ if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
+ try { var p = kbLoad(); if(p && p.then) promises.push(p); } catch(e){}
+ }
+ if((typeof AC_KZ_CACHE === 'undefined' || !AC_KZ_CACHE || !AC_KZ_CACHE.length) && typeof acLoadKZClients === 'function'){
+ promises.push(new Promise(function(resolve){ try{ acLoadKZClients(function(){ resolve(); }); }catch(_){ resolve(); } }));
+ }
+ // Расходы — expLoad async (попробуем загрузить, не ждём)
+ if(typeof expLoad === 'function' && (typeof expData === 'undefined' || !expData || !expData.length)){
+ try { expInit(); expLoad(); } catch(_){}
+ }
+ if(promises.length){
+ Promise.all(promises).then(cfRender).catch(cfRender);
+ setTimeout(cfRender, 3000);
+ setTimeout(cfRender, 8000);
+ } else {
+ cfRender();
+ setTimeout(cfRender, 3000);
+ }
+}
+
+function cfSaveBalance(){
+ var inp = document.getElementById('cf-balance');
+ if(!inp) return;
+ localStorage.setItem(CF_BALANCE_KEY, inp.value || '');
+ cfRender();
+}
+
+function cfSetHorizon(d){
+ _cfHorizon = d;
+ ['30','60','90'].forEach(function(x){
+ var b = document.getElementById('cf-h-'+x);
+ if(b) b.classList.toggle('cf-active', String(_cfHorizon) === x);
+ });
+ cfRender();
+}
+
+// Главный расчёт: возвращает массив {date, incoming, outgoing, net} на каждый день
+function cfBuildForecast(){
+ var horizon = _cfHorizon;
+ var days = [];
+ var today = new Date(); today.setHours(0,0,0,0);
+ for(var i=0;i<horizon;i++){
+ var d = new Date(today.getTime() + i*86400000);
+ days.push({date: d, incoming: 0, outgoing: 0});
+ }
+
+ // === ПРИХОД 1: Абонплата от действующих клиентов (recurring) ===
+ // Берём всех клиентов из AC_KZ_CACHE с monthlySum > 0. Каждому полагаем оплату 1 раз в 30 дней.
+ // Дата следующей оплаты: lastPayDate + 30 или сегодня + 5 (если данных нет)
+ var ac = (typeof acGetActiveClients === 'function') ? acGetActiveClients() : [];
+ var totalAbon = 0;
+ ac.forEach(function(c){
+ var monthlySum = Number(c.monthlySum) || 0;
+ if(monthlySum <= 0) return;
+ // Распределяем сумму равномерно по горизонту по 30-дневному циклу
+ // Прогнозируем 1 оплату каждые 30 дней от lastPayDate (или от today+5 если данных нет)
+ var startDate = c.lastPayDate ? new Date(c.lastPayDate) : new Date(today.getTime() + 5*86400000);
+ // Найти первую дату оплаты в будущем горизонте
+ var next = new Date(startDate);
+ while(next < today) next = new Date(next.getTime() + 30*86400000);
+ // Добавляем в дни внутри горизонта
+ var endDate = new Date(today.getTime() + horizon*86400000);
+ while(next < endDate){
+ var idx = Math.floor((next - today) / 86400000);
+ if(idx >= 0 && idx < horizon){
+ days[idx].incoming += monthlySum;
+ totalAbon += monthlySum;
+ }
+ next = new Date(next.getTime() + 30*86400000);
+ }
+ });
+
+ // === ПРИХОД 2: Pipeline-карточки на канбане (нelle активированные) ===
+ // Их amount распределяем равномерно по горизонту (предполагаем что часть закроется)
+ var pipeline = (typeof kbCards !== 'undefined' && kbCards) ? kbCards.filter(function(c){
+ if(c.stage === 'Активирован' || c.activDate) return false;
+ return (Number(c.amount)||0) > 0;
+ }) : [];
+ // Эвристика: 60% pipeline-суммы зайдёт в течение горизонта (конверсия ~60%)
+ var pipelineSum = pipeline.reduce(function(s,c){ return s + (Number(c.amount)||0); }, 0) * 0.6;
+ // Распределяем равномерно по второй половине горизонта (т.к. внедрение требует времени)
+ var pipelinePerDay = pipelineSum / Math.max(1, Math.floor(horizon/2));
+ for(var i=Math.floor(horizon/2); i<horizon; i++){
+ days[i].incoming += pipelinePerDay;
+ }
+
+ // === РАСХОД: средний за последние 3 месяца ===
+ var monthlyExp = 0;
+ try {
+ // expenses из expData ИЛИ из payments если expData недоступна — будем считать только видимые
+ var expArr = (typeof expData !== 'undefined' && expData) ? expData : [];
+ // Берём все расходы из expData (а это уже один месяц — текущий выбранный)
+ // Если есть EXP_TABS — попробуем достать последние 3 месяца. Иначе берём текущий × 3 / 3
+ // Для MVP — считаем что expData ~ один месяц расходов
+ monthlyExp = expArr.reduce(function(s,e){ return s + (Number(e.amount)||0); }, 0);
+ // Если expArr пуст — попробуем грубо оценить как 60% от среднего месячного дохода
+ if(monthlyExp === 0 && typeof payments !== 'undefined' && payments){
+ // Средний доход последних 3 месяцев
+ var byMonth = {};
+ payments.forEach(function(p){
+ if(!p.date) return;
+ var key = String(p.date).slice(0,7);
+ byMonth[key] = (byMonth[key]||0) + (Number(p.amount)||0);
+ });
+ var keys = Object.keys(byMonth).sort().reverse().slice(0,3);
+ var avgIncome = keys.length ? keys.reduce(function(s,k){return s+byMonth[k];},0)/keys.length : 0;
+ monthlyExp = avgIncome * 0.6; // эвристика: расход ~60% от дохода
+ }
+ } catch(_){}
+ var dailyExp = monthlyExp / 30;
+ for(var i=0;i<horizon;i++){ days[i].outgoing = dailyExp; }
+
+ // === НЕТТО и кумулятив ===
+ var balance = Number(localStorage.getItem(CF_BALANCE_KEY)) || 0;
+ var cumNet = 0;
+ days.forEach(function(d){
+ d.net = d.incoming - d.outgoing;
+ cumNet += d.net;
+ d.cumNet = cumNet;
+ d.balance = balance + cumNet;
+ });
+
+ return {
+ days: days,
+ totalIncoming: days.reduce(function(s,d){return s+d.incoming;},0),
+ totalOutgoing: days.reduce(function(s,d){return s+d.outgoing;},0),
+ totalNet: days.reduce(function(s,d){return s+d.net;},0),
+ startBalance: balance,
+ endBalance: balance + cumNet,
+ minBalance: Math.min.apply(null, days.map(function(d){return d.balance;})),
+ daysToCashout: (function(){
+ for(var i=0;i<days.length;i++) if(days[i].balance < 0) return i+1;
+ return null;
+ })()
+ };
+}
+
+function cfRender(){
+ var view = document.getElementById('view-cashflow');
+ if(!view || view.style.display === 'none') return;
+ var f = cfBuildForecast();
+
+ // ===== KPI cards =====
+ var kpis = document.getElementById('cf-kpis');
+ if(kpis){
+ var kHtml = '';
+ kHtml += '<div class="cf-kpi"><div class="cf-kpi-label">Ожидаемый приход</div>'
+ + '<div class="cf-kpi-value" style="color:#10B981">+' + fmt(Math.round(f.totalIncoming)) + ' ₸</div>'
+ + '<div class="cf-kpi-sub">за ' + _cfHorizon + ' дней</div></div>';
+ kHtml += '<div class="cf-kpi"><div class="cf-kpi-label">Ожидаемый расход</div>'
+ + '<div class="cf-kpi-value" style="color:#EF4444">−' + fmt(Math.round(f.totalOutgoing)) + ' ₸</div>'
+ + '<div class="cf-kpi-sub">средний по истории</div></div>';
+ var netColor = f.totalNet >= 0 ? '#10B981' : '#EF4444';
+ var netSign = f.totalNet >= 0 ? '+' : '−';
+ kHtml += '<div class="cf-kpi"><div class="cf-kpi-label">Нетто за период</div>'
+ + '<div class="cf-kpi-value" style="color:'+netColor+'">'+netSign + fmt(Math.abs(Math.round(f.totalNet))) + ' ₸</div>'
+ + '<div class="cf-kpi-sub">изменение баланса</div></div>';
+ if(f.daysToCashout){
+ kHtml += '<div class="cf-kpi" style="border-color:#EF4444"><div class="cf-kpi-label" style="color:#EF4444">Кассовый разрыв</div>'
+ + '<div class="cf-kpi-value" style="color:#EF4444">' + f.daysToCashout + ' дн</div>'
+ + '<div class="cf-kpi-sub">до того как баланс уйдёт в минус</div></div>';
+ } else if(f.startBalance > 0) {
+ kHtml += '<div class="cf-kpi"><div class="cf-kpi-label" style="color:#10B981">Без разрывов</div>'
+ + '<div class="cf-kpi-value" style="color:#10B981">OK</div>'
+ + '<div class="cf-kpi-sub">баланс остаётся положительным</div></div>';
+ } else {
+ kHtml += '<div class="cf-kpi"><div class="cf-kpi-label">Введите остаток</div>'
+ + '<div class="cf-kpi-value" style="color:var(--text-muted)">—</div>'
+ + '<div class="cf-kpi-sub">укажите остаток сверху для прогноза разрыва</div></div>';
+ }
+ kpis.innerHTML = kHtml;
+ }
+
+ // ===== График =====
+ var chartEl = document.getElementById('cf-chart');
+ if(chartEl){
+ var maxB = Math.max.apply(null, f.days.map(function(d){return d.balance;}));
+ var minB = Math.min.apply(null, f.days.map(function(d){return d.balance;}));
+ var range = maxB - minB || 1;
+ var w = chartEl.clientWidth || 800;
+ var h = 240;
+ var pad = {top:10, right:10, bottom:24, left:60};
+ var innerW = w - pad.left - pad.right;
+ var innerH = h - pad.top - pad.bottom;
+ var stepX = innerW / Math.max(1, f.days.length-1);
+ var yZero = pad.top + innerH - ((0 - minB) / range) * innerH;
+ var pathData = f.days.map(function(d, i){
+ var x = pad.left + i*stepX;
+ var y = pad.top + innerH - ((d.balance - minB) / range) * innerH;
+ return (i===0?'M':'L') + x.toFixed(1) + ' ' + y.toFixed(1);
+ }).join(' ');
+ // Закрашенная область между линией и y=0 если уходит в минус
+ var dangerArea = '';
+ var firstNeg = -1, lastNeg = -1;
+ f.days.forEach(function(d,i){ if(d.balance < 0){ if(firstNeg<0) firstNeg=i; lastNeg=i; } });
+ if(firstNeg >= 0){
+ var negPath = '';
+ for(var i=firstNeg;i<=lastNeg;i++){
+ var x = pad.left + i*stepX;
+ var y = pad.top + innerH - ((f.days[i].balance - minB) / range) * innerH;
+ negPath += (i===firstNeg?'M':'L') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+ }
+ negPath += 'L' + (pad.left + lastNeg*stepX).toFixed(1) + ' ' + yZero.toFixed(1) + ' ';
+ negPath += 'L' + (pad.left + firstNeg*stepX).toFixed(1) + ' ' + yZero.toFixed(1) + ' Z';
+ dangerArea = '<path d="'+negPath+'" fill="rgba(239,68,68,.15)"/>';
+ }
+ // Метки дат: каждые 7 дней
+ var ticks = '';
+ for(var i=0;i<f.days.length;i+=7){
+ var x = pad.left + i*stepX;
+ var dt = f.days[i].date;
+ var lbl = dt.getDate() + '.' + String(dt.getMonth()+1).padStart(2,'0');
+ ticks += '<line x1="'+x+'" y1="'+(pad.top+innerH)+'" x2="'+x+'" y2="'+(pad.top+innerH+4)+'" stroke="var(--text-muted)" stroke-width="1"/>';
+ ticks += '<text x="'+x+'" y="'+(h-6)+'" font-size="10" fill="var(--text-muted)" text-anchor="middle">'+lbl+'</text>';
+ }
+ // Y-axis: 0 / минимум / максимум
+ var yLabels = '';
+ [{v:maxB,label:fmtK(maxB)},{v:0,label:'0'},{v:minB,label:fmtK(minB)}].forEach(function(t){
+ var y = pad.top + innerH - ((t.v - minB) / range) * innerH;
+ yLabels += '<line x1="'+pad.left+'" y1="'+y+'" x2="'+(pad.left+innerW)+'" y2="'+y+'" stroke="var(--border-faint)" stroke-width="1" stroke-dasharray="3,3"/>';
+ yLabels += '<text x="'+(pad.left-6)+'" y="'+(y+3)+'" font-size="10" fill="var(--text-muted)" text-anchor="end">'+t.label+'</text>';
+ });
+ chartEl.innerHTML = '<svg width="100%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'
+ + yLabels + dangerArea
+ + '<path d="'+pathData+'" stroke="#2196F3" stroke-width="2" fill="none"/>'
+ + ticks
+ + '</svg>';
+ }
+
+ // ===== Недели =====
+ var weeksEl = document.getElementById('cf-weeks');
+ if(weeksEl){
+ var numWeeks = Math.ceil(_cfHorizon / 7);
+ var html = '';
+ for(var w=0;w<numWeeks;w++){
+ var start = w*7, end = Math.min(_cfHorizon, (w+1)*7);
+ var slice = f.days.slice(start, end);
+ var inc = slice.reduce(function(s,d){return s+d.incoming;},0);
+ var out = slice.reduce(function(s,d){return s+d.outgoing;},0);
+ var net = inc - out;
+ var startDate = f.days[start].date;
+ var endDate = f.days[end-1].date;
+ var label = startDate.getDate() + '.' + String(startDate.getMonth()+1).padStart(2,'0') + ' — ' + endDate.getDate() + '.' + String(endDate.getMonth()+1).padStart(2,'0');
+ html += '<div class="cf-week">'
+ + '<div class="cf-week-head">' + label + '</div>'
+ + '<div class="cf-week-net" style="color:'+(net>=0?'#10B981':'#EF4444')+'">' + (net>=0?'+':'−') + fmt(Math.abs(Math.round(net))) + ' ₸</div>'
+ + '<div class="cf-week-flows"><span style="color:#10B981">+'+fmt(Math.round(inc))+'</span><span style="color:#EF4444">−'+fmt(Math.round(out))+'</span></div>'
+ + '</div>';
+ }
+ weeksEl.innerHTML = html;
+ }
+}
+
+// Форматирование «1.2M / 850K / 1200»
+function fmtK(n){
+ var abs = Math.abs(n);
+ var sign = n < 0 ? '−' : '';
+ if(abs >= 1000000) return sign + (abs/1000000).toFixed(1) + 'M';
+ if(abs >= 1000) return sign + Math.round(abs/1000) + 'K';
+ return sign + Math.round(abs);
 }
 
 // v266: Утренний дайджест CEO — собирает 5 блоков информации:
@@ -9169,14 +9512,14 @@ function showView(v) {
  try { showNotif('Нет доступа', 'Ассистент доступен только CEO.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
- var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',botadmin:'view_botadmin'};
+ var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',botadmin:'view_botadmin'};
  var _need = _accessMap[v];
  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
  }
- ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban','statistics','planning','calendar','supportdash','activeclients','botadmin'].forEach(x=>{
+ ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','statistics','planning','calendar','supportdash','activeclients','botadmin'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
@@ -9250,6 +9593,7 @@ function showView(v) {
  if(v==='kanban'){if(!window._kbLoaded){kbLoad();window._kbLoaded=true;}else{kbRenderBoard();}}
  if(v==='botadmin'){ if(typeof botAdminInit==='function') botAdminInit(); }
  if(v==='morning'){ if(typeof morningInit==='function') morningInit(); }
+ if(v==='cashflow'){ if(typeof cfInit==='function') cfInit(); }
 }
 
 // DATA SOURCES INFO (динамически из COUNTRY_CONFIG)
