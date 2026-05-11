@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v233</title>
+<title>SalesDoc — Финансовый Дашборд v234</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -699,6 +699,17 @@ body.light ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.30);background
 .crm-cl-cb.disabled{cursor:not-allowed;opacity:.5}
 .crm-cl-text{flex:1;font-size:13px;color:var(--text);letter-spacing:-0.005em;line-height:1.4}
 .crm-cl-text.done{color:var(--text-soft);text-decoration:line-through}
+/* v234: модалка «Этап завершён» — кастомная вместо браузерного confirm */
+.crm-stage-modal{text-align:center;padding:32px 28px;width:380px;max-width:calc(100vw - 40px)}
+.crm-stage-modal-icon{width:64px;height:64px;border-radius:50%;background:var(--done-bg);color:var(--done);font-size:32px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;box-shadow:0 0 0 6px rgba(48,209,88,.08)}
+.crm-stage-modal-title{font-size:20px;font-weight:700;letter-spacing:-0.02em;color:var(--text);margin-bottom:8px}
+.crm-stage-modal-sub{font-size:14px;color:var(--text-2);line-height:1.5;margin-bottom:18px;letter-spacing:-0.005em}
+.crm-stage-modal-next{background:var(--surface-2);border:1px solid var(--border-faint);border-radius:12px;padding:14px 16px;margin-bottom:6px;text-align:left}
+.crm-stage-modal-next-label{font-size:10px;color:var(--text-soft);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:4px}
+.crm-stage-modal-next-name{font-size:15px;color:var(--accent-text);font-weight:700;letter-spacing:-0.01em}
+.crm-stage-modal-actions{margin-top:20px;justify-content:stretch;gap:10px}
+.crm-stage-modal-actions .crm-action{flex:1;padding:12px 16px;font-size:14px;justify-content:center;text-align:center}
+.crm-stage-modal-actions .crm-action.outline{flex:0 0 auto;min-width:100px}
 /* ============================================================
    DESIGN SYSTEM v230 — Календарь TickTick-style
    ============================================================ */
@@ -18346,27 +18357,76 @@ function crmChecklistToggle(cardId, stage, idx){
  }
  crmRenderChecklists(card);
  if(typeof crmUpdateActivateBtn === 'function') crmUpdateActivateBtn(card);
- // v233: если чеклист текущего этапа стал 100% — toast с CTA перехода
+ // v234: если чеклист текущего этапа стал 100% — кастомная модалка в стиле приложения
  if(stage === card.stage){
   var p = kbChecklistStageProgress(card);
   if(p.total > 0 && p.done === p.total){
    var nextIdx = curStageIdx + 1;
    var nextStage = (typeof kbColumns !== 'undefined' && nextIdx < kbColumns.length) ? kbColumns[nextIdx] : null;
-   if(nextStage && typeof kbShowToast === 'function'){
-    kbShowToast('✓ Этап «'+stage+'» завершён! Перейти на «'+nextStage+'»?');
-    // CTA-button добавим через setTimeout — отдельный toast не предусмотрен в API
-    setTimeout(function(){
-     if(confirm('Этап «'+stage+'» завершён 100%. Перейти на следующий этап «'+nextStage+'»?')){
-      if(typeof kbMoveCard === 'function') kbMoveCard(card, nextStage);
-      // перерендер карточки (kbOpenCardPage если она открыта)
-      if(typeof kbOpenCardPage === 'function' && document.getElementById('view-kb-card').style.display !== 'none'){
-       kbOpenCardPage(card);
-      }
-     }
-    }, 200);
+   if(nextStage){
+    crmStageCompleteModal(card, stage, nextStage);
    }
   }
  }
+}
+
+// v234: красивая модалка завершения этапа (вместо браузерного confirm)
+function crmStageCompleteModal(card, completedStage, nextStage){
+ if(document.getElementById('crm-stage-complete-modal')) return;
+ var bg = document.createElement('div');
+ bg.className = 'crm-modal-bg';
+ bg.id = 'crm-stage-complete-modal';
+ bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
+ var modal = document.createElement('div');
+ modal.className = 'crm-modal crm-stage-modal';
+ modal.onclick = function(e){ e.stopPropagation(); };
+ // Header — иконка успеха
+ var icon = document.createElement('div');
+ icon.className = 'crm-stage-modal-icon';
+ icon.textContent = '✓';
+ modal.appendChild(icon);
+ var title = document.createElement('div');
+ title.className = 'crm-stage-modal-title';
+ title.textContent = 'Этап завершён';
+ modal.appendChild(title);
+ var sub = document.createElement('div');
+ sub.className = 'crm-stage-modal-sub';
+ sub.textContent = 'Все пункты этапа «' + completedStage + '» отмечены. Перейти на следующий этап?';
+ modal.appendChild(sub);
+ var nextBox = document.createElement('div');
+ nextBox.className = 'crm-stage-modal-next';
+ var nextLabel = document.createElement('div');
+ nextLabel.className = 'crm-stage-modal-next-label';
+ nextLabel.textContent = 'Следующий этап';
+ var nextName = document.createElement('div');
+ nextName.className = 'crm-stage-modal-next-name';
+ nextName.textContent = nextStage;
+ nextBox.appendChild(nextLabel);
+ nextBox.appendChild(nextName);
+ modal.appendChild(nextBox);
+ // Actions
+ var actions = document.createElement('div');
+ actions.className = 'crm-modal-actions crm-stage-modal-actions';
+ var btnLater = document.createElement('button');
+ btnLater.className = 'crm-action outline';
+ btnLater.textContent = 'Остаться';
+ btnLater.onclick = function(){ bg.remove(); };
+ var btnGo = document.createElement('button');
+ btnGo.className = 'crm-action';
+ btnGo.textContent = 'Перейти на «' + nextStage + '» ›';
+ btnGo.onclick = function(){
+  bg.remove();
+  if(typeof kbMoveCard === 'function') kbMoveCard(card, nextStage);
+  if(typeof kbOpenCardPage === 'function' && document.getElementById('view-kb-card').style.display !== 'none'){
+   kbOpenCardPage(card);
+  }
+ };
+ actions.appendChild(btnLater);
+ actions.appendChild(btnGo);
+ modal.appendChild(actions);
+ bg.appendChild(modal);
+ document.body.appendChild(bg);
+ setTimeout(function(){ btnGo.focus(); }, 80);
 }
 
 // v228: блокировка кнопки «Активировать» пока чеклист текущего этапа не 100%
