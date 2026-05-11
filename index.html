@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v242</title>
+<title>SalesDoc — Финансовый Дашборд v243</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -668,6 +668,9 @@ body.light ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.30);background
 .crm-cl-stage.cl-future{opacity:.55}
 .crm-cl-stage.cl-past{opacity:.72;background:var(--surface-3)}
 .crm-cl-stage.cl-past .crm-cl-name{color:var(--text-2)}
+.crm-cl-locked{background:rgba(255,159,10,.12);border:1px solid rgba(255,159,10,.20);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--ds-warning-text);margin-bottom:10px;line-height:1.4}
+.crm-cl-cb.on{cursor:pointer;position:relative}
+.crm-cl-cb.on:hover{box-shadow:0 0 0 3px rgba(255,69,58,.22)}
 .crm-cl-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:12px}
 .crm-cl-name{font-size:14px;font-weight:700;letter-spacing:-0.01em;color:var(--text)}
 .crm-cl-stage.cl-active .crm-cl-name{color:var(--accent-text)}
@@ -690,6 +693,9 @@ body.light ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.30);background
 .crm-cl-stage.cl-future{opacity:.55}
 .crm-cl-stage.cl-past{opacity:.72;background:var(--surface-3)}
 .crm-cl-stage.cl-past .crm-cl-name{color:var(--text-2)}
+.crm-cl-locked{background:rgba(255,159,10,.12);border:1px solid rgba(255,159,10,.20);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--ds-warning-text);margin-bottom:10px;line-height:1.4}
+.crm-cl-cb.on{cursor:pointer;position:relative}
+.crm-cl-cb.on:hover{box-shadow:0 0 0 3px rgba(255,69,58,.22)}
 .crm-cl-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:12px}
 .crm-cl-name{font-size:14px;font-weight:700;letter-spacing:-0.01em;color:var(--text)}
 .crm-cl-stage.cl-active .crm-cl-name{color:var(--accent-text)}
@@ -18305,27 +18311,47 @@ function crmRenderChecklists(card){
  var stages = (typeof kbColumns !== 'undefined' && kbColumns) || Object.keys(KB_DEFAULT_CHECKLISTS);
  var curIdx = stages.indexOf(card.stage);
  var html = '<div class="crm-cl-block">';
- // v242: показываем ВСЕ этапы (просмотр открыт), но редактировать можно только текущий.
- // Переход на следующий этап блокируется в kbMoveCard если чек-лист текущего не 100%.
+ // v243: каждый этап = свой чек-лист. Показываем ТОЛЬКО чек-лист текущего этапа.
+ // Pipeline-click переключает на любой этап → виден его чек-лист.
+ // Чекбоксы кликабельны только если все ПРЕДЫДУЩИЕ этапы 100%
+ // (предыдущий не выполнен → текущий read-only, нельзя «перепрыгнуть»).
+
+ // Вычислить какой предыдущий этап не закрыт (если есть)
+ function prevUnclosedStage(){
+  for(var i=0; i<curIdx; i++){
+   var st = stages[i];
+   var items = (card.checklist && card.checklist[st]) || [];
+   var template = (KB_DEFAULT_CHECKLISTS[st] || []);
+   if(!items.length && !template.length) continue;
+   var d = 0; items.forEach(function(b){ if(b) d++; });
+   if(d < items.length) return st;
+  }
+  return null;
+ }
+ var blockingStage = curIdx > 0 ? prevUnclosedStage() : null;
+
+ var effectiveIdx = curIdx >= 0 ? curIdx : 0;
  stages.forEach(function(stage, sidx){
+  if(sidx !== effectiveIdx) return;
   var items = (card.checklist && card.checklist[stage]) || [];
   var template = (KB_DEFAULT_CHECKLISTS[stage] || []);
-  if(!items.length && !template.length) return; // пропускаем пустые шаблоны (например «Активирован»)
+  if(!items.length && !template.length){
+   html += '<div class="crm-cl-stage cl-active"><div class="crm-cl-head"><div class="crm-cl-name">Этап ' + (sidx + 1) + ' · ' + kbEsc(stage) + '</div></div><div style="font-size:13px;color:var(--text-soft);padding:8px 0">Для этого этапа чек-лист не предусмотрен.</div></div>';
+   return;
+  }
   var done = 0; items.forEach(function(b){ if(b) done++; });
   var pct = items.length ? Math.round(done / items.length * 100) : 0;
-  var isActive = sidx === curIdx;
-  var isPast = curIdx >= 0 && sidx < curIdx;
-  var isFuture = curIdx >= 0 && sidx > curIdx;
-  var stageClass = isActive ? 'cl-active' : (isPast ? 'cl-past' : (isFuture ? 'cl-future' : ''));
-  var label = isActive ? ' (текущий)' : (isPast ? ' (пройден)' : (isFuture ? ' (предстоит)' : ''));
-  // Редактирование — только на текущем этапе
-  var canToggle = isActive;
-  html += '<div class="crm-cl-stage ' + stageClass + '">'
+  // Можно редактировать только если предыдущие закрыты
+  var canToggle = !blockingStage;
+  html += '<div class="crm-cl-stage cl-active">'
    + '<div class="crm-cl-head">'
-   + '<div class="crm-cl-name">Этап ' + (sidx + 1) + ' · ' + kbEsc(stage) + label + '</div>'
+   + '<div class="crm-cl-name">Этап ' + (sidx + 1) + ' · ' + kbEsc(stage) + ' (текущий)</div>'
    + '<div class="crm-cl-pct">' + done + '/' + items.length + ' · ' + pct + '%</div>'
    + '</div>'
    + '<div class="crm-cl-bar"><div class="crm-cl-bar-fill" style="width:' + pct + '%"></div></div>';
+  if(blockingStage){
+   html += '<div class="crm-cl-locked">🔒 Сначала закройте чек-лист этапа «' + kbEsc(blockingStage) + '» — тогда сможете отмечать пункты здесь.</div>';
+  }
   items.forEach(function(b, idx){
    var itemLabel = template[idx] || ('Пункт ' + (idx + 1));
    var cbClass = (b ? 'on' : '') + (canToggle ? '' : ' disabled');
