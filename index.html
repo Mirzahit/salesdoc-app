@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v240</title>
+<title>SalesDoc — Финансовый Дашборд v241</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18372,6 +18372,19 @@ function crmChecklistToggle(cardId, stage, idx){
  }
  crmRenderChecklists(card);
  if(typeof crmUpdateActivateBtn === 'function') crmUpdateActivateBtn(card);
+ // v241: обновить .ready-next подсветку на pipeline после toggle (если этап 100%)
+ if(typeof kbColumns !== 'undefined'){
+  var pipeSteps = document.querySelectorAll('.crm-pipe-step');
+  if(pipeSteps.length){
+   var sp2 = kbChecklistStageProgress(card);
+   var stageDone = sp2.total === 0 || sp2.done === sp2.total;
+   var cIdx = kbColumns.indexOf(card.stage);
+   pipeSteps.forEach(function(step, i){
+    step.classList.remove('ready-next');
+    if(i === cIdx + 1 && stageDone) step.classList.add('ready-next');
+   });
+  }
+ }
  // v236: чеклист 100% — только мягкий feedback (тост + пульсация next step в pipeline).
  // Автоматический переход через модалку убран — оператор сам решает когда переключаться.
  if(stage === card.stage){
