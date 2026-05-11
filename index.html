@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v266</title>
+<title>SalesDoc — Финансовый Дашборд v267</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7250,6 +7250,23 @@ function renderPlanFactStrip(ps, factTotal){
  + '</div>';
 }
 
+// v267: морнинг — ждём подгрузки kbCards и clients-kz.json чтобы карточки не были пустыми
+function morningInit(){
+ var greetEl = document.getElementById('morning-greeting');
+ if(greetEl) greetEl.textContent = 'Загружаю данные…';
+ var promises = [];
+ // Канбан-карточки
+ if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
+ try { var p = kbLoad(); if(p && p.then) promises.push(p); } catch(e){}
+ }
+ // Список действующих клиентов
+ if((typeof AC_KZ_CACHE === 'undefined' || !AC_KZ_CACHE || !AC_KZ_CACHE.length) && typeof acLoadKZClients === 'function'){
+ promises.push(new Promise(function(resolve){ try{ acLoadKZClients(function(){ resolve(); }); }catch(_){ resolve(); } }));
+ }
+ if(!promises.length){ morningRender(); return; }
+ Promise.all(promises).then(function(){ morningRender(); }).catch(function(){ morningRender(); });
+}
+
 // v266: Утренний дайджест CEO — собирает 5 блоков информации:
 // (1) Требует решения · (2) Ожидается на неделе · (3) Риски · (4) Что вчера · (5) Прогноз месяца
 function morningRender(){
@@ -9214,7 +9231,7 @@ function showView(v) {
  if(v==='reports') reportsInit();
  if(v==='kanban'){if(!window._kbLoaded){kbLoad();window._kbLoaded=true;}else{kbRenderBoard();}}
  if(v==='botadmin'){ if(typeof botAdminInit==='function') botAdminInit(); }
- if(v==='morning'){ if(typeof morningRender==='function') morningRender(); }
+ if(v==='morning'){ if(typeof morningInit==='function') morningInit(); }
 }
 
 // DATA SOURCES INFO (динамически из COUNTRY_CONFIG)
