@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v268</title>
+<title>SalesDoc — Финансовый Дашборд v269</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7362,20 +7362,26 @@ function morningRender(){
 
  // === БЛОК 3: РИСКИ ===
  var risks = [];
- // Действующие клиенты которые > 30 дней не платили
+ // Действующие клиенты которые > 30 дней не платили — НО только если матчинг работает
+ // (если все 254 показываются как «не платил» — это не риск, это баг сматча).
  if(typeof acGetActiveClients === 'function'){
  try {
  var ac = acGetActiveClients();
- var highRisk = ac.filter(function(c){ return c.risk === 'high' && c.monthlySum > 0; }).sort(function(a,b){ return b.monthlySum - a.monthlySum; });
+ // Сколько клиентов имеют payCount > 0 — если ноль таких, матчинг не сработал, риски скрываем
+ var withPays = ac.filter(function(c){ return (c.payCount||0) > 0; }).length;
+ if(withPays > 0){
+ var highRisk = ac.filter(function(c){ return c.risk === 'high' && (c.payCount||0) > 0 && c.daysSincePay > 30 && c.daysSincePay < 999 && c.monthlySum > 0; }).sort(function(a,b){ return b.monthlySum - a.monthlySum; });
  if(highRisk.length){
- var totalSum = highRisk.reduce(function(s,c){return s + (c.monthlySum||0);}, 0);
- risks.push({title: highRisk.length + ' клиентов не платят > 30 дн', sub: 'Сумма абонплаты: ' + fmt(totalSum) + ' ₸/мес. Топ: ' + highRisk.slice(0,3).map(function(c){return c.client;}).join(', ')});
+ var totalSum = highRisk.reduce(function(s,c){return s + (Number(c.monthlySum)||0);}, 0);
+ risks.push({title: highRisk.length + ' клиентов не платят > 30 дн', sub: 'Сумма абонплаты: ' + fmt(Math.round(totalSum)) + ' ₸/мес. Топ: ' + highRisk.slice(0,3).map(function(c){return c.client;}).join(', ')});
+ }
  }
  } catch(_){}
  }
- // Канбан-aging
+ // Канбан-aging: явно приводим amount к Number чтобы reduce не конкатил строки
  if(stuck.length > 5){
- risks.push({title: stuck.length + ' клиентов застряли на этапах > 14 дн', sub: 'Это блокирует ' + Math.round(stuck.reduce(function(s,c){return s+(c.amount||0);},0)/1000) + 'К ₸ выручки внедрения'});
+ var stuckSum = stuck.reduce(function(s,c){ return s + (Number(c.amount)||0); }, 0);
+ risks.push({title: stuck.length + ' клиентов застряли на этапах > 14 дн', sub: 'Это блокирует ' + fmt(Math.round(stuckSum)) + ' ₸ выручки внедрения'});
  }
 
  // === БЛОК 4: ПЛАН/ФАКТ МЕСЯЦА ===
