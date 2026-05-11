@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v249</title>
+<title>SalesDoc — Финансовый Дашборд v250</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -803,6 +803,13 @@ body.light ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.30);background
 .sd-legend{display:flex;gap:14px;margin-top:14px;font-size:11px;color:var(--text-soft);flex-wrap:wrap}
 .sd-legend-item{display:inline-flex;align-items:center;gap:6px}
 .sd-legend-dot{width:10px;height:10px;border-radius:2px}
+/* v250: Действующие клиенты — теги */
+.ac-tag-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.ac-tag{display:inline-flex;align-items:center;padding:2px 6px;border-radius:5px;font-size:13px;background:var(--surface-3);cursor:default}
+.ac-tag-edit{width:22px;height:22px;border-radius:5px;background:var(--surface-3);border:1px dashed var(--border-strong);color:var(--text-soft);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;transition:all var(--t-fast)}
+.ac-tag-edit:hover{background:var(--accent-bg);color:var(--accent-text);border-color:var(--accent);border-style:solid}
+.ac-tag-row-modal{display:flex;align-items:flex-start;padding:12px 14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border-faint);margin-bottom:8px;cursor:pointer;transition:background var(--t-fast)}
+.ac-tag-row-modal:hover{background:var(--surface-3)}
 
 /* ============================================================
    DESIGN SYSTEM v230 — Календарь TickTick-style
@@ -3621,6 +3628,10 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
     <svg class="nav-icon-stroke" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l3-3 4 4 5-5 6 6"/><circle cx="6" cy="9" r="1.5"/><circle cx="10" cy="13" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="21" cy="14" r="1.5"/></svg>
     <span class="nav-label">Тех.поддержка</span>
    </div>
+   <div class="nav-item" data-view="activeclients" onclick="showView('activeclients')">
+    <svg class="nav-icon-stroke" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M3 21v-1a6 6 0 0112 0v1"/><circle cx="17" cy="6" r="3"/><path d="M21 15v-1a4 4 0 00-7-2.6"/></svg>
+    <span class="nav-label">Действующие клиенты</span>
+   </div>
   </div>
  </div>
 
@@ -5437,6 +5448,56 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  <!-- /SUPPORTDASH VIEW -->
 
+ <!-- v250: Действующие клиенты -->
+ <div id="view-activeclients" style="display:none">
+  <div class="sd-page">
+   <div class="sd-head">
+    <div>
+     <div class="sd-h1">Действующие клиенты</div>
+     <div class="sd-sub">Активированные клиенты, churn risk, абонплата, теги</div>
+    </div>
+    <div class="sd-filters">
+     <select class="sd-select" id="ac-filter-op" onchange="acSetOperator(this.value)">
+      <option value="">Все операторы</option>
+     </select>
+     <select class="sd-select" id="ac-filter-risk" onchange="acSetRisk(this.value)">
+      <option value="">Все риски</option>
+      <option value="high">🔴 High risk</option>
+      <option value="med">🟡 Med risk</option>
+      <option value="low">🟢 Low risk</option>
+     </select>
+     <select class="sd-select" id="ac-filter-tag" onchange="acSetTag(this.value)">
+      <option value="">Все теги</option>
+      <option value="risk">⚠ Риск</option>
+      <option value="problem">🔥 Проблема</option>
+      <option value="working">🛠 В работе</option>
+      <option value="ok">✓ Норма</option>
+     </select>
+    </div>
+   </div>
+   <div class="sd-kpis" id="ac-kpis"></div>
+   <div class="sd-charts-row">
+    <div class="sd-card sd-chart-card">
+     <div class="sd-chart-head">
+      <div class="sd-chart-title">🎯 Распределение по риску</div>
+      <div class="sd-chart-sub" id="ac-risk-sub"></div>
+     </div>
+     <div class="sd-bars" id="ac-risk-bars"></div>
+    </div>
+    <div class="sd-card sd-chart-card">
+     <div class="sd-chart-head">
+      <div class="sd-chart-title">🏷 Теги клиентов</div>
+      <div class="sd-chart-sub">Ручная разметка операторов</div>
+     </div>
+     <div class="sd-bars" id="ac-tags-bars"></div>
+    </div>
+   </div>
+   <div class="sd-section-title">Все клиенты <span id="ac-count" style="color:var(--text-soft);font-weight:500;text-transform:none;letter-spacing:0;font-size:13px"></span></div>
+   <div class="sd-card"><div class="sd-table-wrap"><table class="sd-table" id="ac-table"></table></div></div>
+  </div>
+ </div>
+ <!-- /ACTIVECLIENTS VIEW -->
+
  <!-- FULLSCREEN CARD PAGE -->
  <div id="view-kb-card">
   <div class="kbc-header">
@@ -5867,13 +5928,13 @@ const ROLE_LABELS = {
 // v151: убран view_ai (ключ удалён); добавлен view_statistics для всех ролей явно;
 // view_assistant НЕ через роли — только хардкод-проверка по email (см. applyUserAccess).
 const ROLE_DEFAULTS = {
- admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
  // v155→v156: оператор саппорта. Скрыта вся финансовая инфа.
  // v166: добавлены Планёрки (доступны всем — там не финансы, а задачи команды).
- operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
  accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
  viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
 };
@@ -8518,14 +8579,14 @@ function showView(v) {
    try { showNotif('Нет доступа', 'Ассистент доступен только CEO.'); } catch(_){}
    v = defaultViewForUser(currentUser);
   }
-  var _accessMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash'};
+  var _accessMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients'};
   var _need = _accessMap[v];
   if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
    try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
    v = defaultViewForUser(currentUser);
   }
  }
- ['dashboard','payments','plan','keyclients','assistant','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban','statistics','planning','calendar','supportdash'].forEach(x=>{
+ ['dashboard','payments','plan','keyclients','assistant','cabinet','marketing','expenses','integrations','tests','knowledge','academy','reports','kanban','statistics','planning','calendar','supportdash','activeclients'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
@@ -8535,6 +8596,7 @@ function showView(v) {
  if (v === 'calendar' && typeof crmCalendarInit === 'function') { try { crmCalendarInit(); } catch(_){} }
  // v246: Дашборд тех.поддержки
  if (v === 'supportdash' && typeof supportInit === 'function') { try { supportInit(); } catch(_){} }
+ if (v === 'activeclients' && typeof acInit === 'function') { try { acInit(); } catch(_){} }
  // v165: инициализация Планёрок при заходе
  if (v === 'planning' && typeof planningInit === 'function') { try { planningInit(); } catch(_){} }
  // Hide fullscreen card page when switching views
@@ -8555,7 +8617,7 @@ function showView(v) {
  // Hide statistics subpage
  var statPage = document.getElementById('view-stat-page');
  if(statPage) statPage.style.display='none';
- const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Ключевые клиенты',assistant:'Ассистент',cabinet:'Личный кабинет',marketing:'Маркетинг',expenses:'Расходы',integrations:'Очередь интеграции',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Внедрение',statistics:'Статистики — ИЦО',calendar:'Календарь',supportdash:'Тех.поддержка'};
+ const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Ключевые клиенты',assistant:'Ассистент',cabinet:'Личный кабинет',marketing:'Маркетинг',expenses:'Расходы',integrations:'Очередь интеграции',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Внедрение',statistics:'Статистики — ИЦО',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Действующие клиенты'};
  document.getElementById('page-title').textContent=titles[v]||v;
  // Подсветка активного пункта в nav
  document.querySelectorAll('.nav-item[data-view]').forEach(function(el){
@@ -19173,6 +19235,236 @@ function supportChartAging(cards){
    + '<div class="sd-bar-value">'+a.avg+' дн</div>'
    + '</div>';
  }).join('');
+}
+
+// ============================================================
+// v250: Действующие клиенты (Phase 2 MVP)
+// ============================================================
+var AC_TAGS_KEY = 'crm_client_tags'; // localStorage: { clientName: ['risk','problem','working','ok'] }
+var acState = { operator: '', risk: '', tag: '' };
+
+function acTagsAll(){
+ try { return JSON.parse(localStorage.getItem(AC_TAGS_KEY) || '{}') || {}; }
+ catch(e){ return {}; }
+}
+function acTagsSaveAll(obj){
+ try { localStorage.setItem(AC_TAGS_KEY, JSON.stringify(obj)); return true; }
+ catch(e){ return false; }
+}
+function acGetTags(client){
+ var all = acTagsAll(); return (all[client] || []);
+}
+function acToggleTag(client, tag){
+ var all = acTagsAll();
+ var arr = all[client] || [];
+ var i = arr.indexOf(tag);
+ if(i >= 0) arr.splice(i, 1); else arr.push(tag);
+ if(arr.length) all[client] = arr; else delete all[client];
+ acTagsSaveAll(all);
+ acRender();
+}
+
+// Последняя оплата клиента
+function acLastPayment(client){
+ if(typeof payments === 'undefined' || !payments) return null;
+ var lastD = null, lastAmt = 0;
+ payments.forEach(function(p){
+  if(!p) return;
+  var clientName = p.client || p.cl || p.compName || '';
+  if(clientName !== client) return;
+  var d = (typeof parseDateFromSheet === 'function' && p.date) ? parseDateFromSheet(p.date) : (p.date ? new Date(p.date) : null);
+  if(!d || isNaN(d)) return;
+  if(!lastD || d > lastD){ lastD = d; lastAmt = parseFloat(p.amount || p.am || 0) || 0; }
+ });
+ return lastD ? { date: lastD, amount: lastAmt } : null;
+}
+
+function acDaysSinceLastPay(client){
+ var lp = acLastPayment(client);
+ if(!lp) return 999;
+ return Math.floor((new Date() - lp.date) / 86400000);
+}
+
+function acRiskLevel(client){
+ var tags = acGetTags(client);
+ // ручной тег risk → high. ok → low. problem → med.
+ if(tags.indexOf('risk') >= 0) return 'high';
+ if(tags.indexOf('ok') >= 0) return 'low';
+ var days = acDaysSinceLastPay(client);
+ if(days > 60) return 'high';
+ if(days > 30) return 'med';
+ return 'low';
+}
+
+function acGetActiveClients(){
+ // Активные = карточки с activDate (прошли активацию)
+ if(typeof kbCards === 'undefined' || !kbCards) return [];
+ return kbCards.filter(function(c){ return c.activDate; }).map(function(c){
+  var lp = acLastPayment(c.client);
+  return {
+   client: c.client, operator: c.operator || '', manager: c.manager || '',
+   activDate: c.activDate, amount: parseFloat(c.amount) || 0, tariff: c.tariff || '',
+   cardId: c.id, country: c.country || '',
+   lastPayDate: lp ? lp.date : null,
+   lastPayAmount: lp ? lp.amount : 0,
+   daysSincePay: acDaysSinceLastPay(c.client),
+   risk: acRiskLevel(c.client),
+   tags: acGetTags(c.client)
+  };
+ });
+}
+
+function acSetOperator(op){ acState.operator = op || ''; acRender(); }
+function acSetRisk(r){ acState.risk = r || ''; acRender(); }
+function acSetTag(t){ acState.tag = t || ''; acRender(); }
+
+function acInit(){
+ if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
+  try { kbLoad(); } catch(e){}
+ }
+ // Заполнить dropdown операторов
+ var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
+ var sel = document.getElementById('ac-filter-op');
+ if(sel && sel.children.length <= 1){
+  ops.forEach(function(op){
+   var opt = document.createElement('option');
+   opt.value = op; opt.textContent = op;
+   sel.appendChild(opt);
+  });
+ }
+ acRender();
+}
+
+function acRender(){
+ var all = acGetActiveClients();
+ var filtered = all.filter(function(c){
+  if(acState.operator && c.operator !== acState.operator) return false;
+  if(acState.risk && c.risk !== acState.risk) return false;
+  if(acState.tag && c.tags.indexOf(acState.tag) < 0) return false;
+  return true;
+ });
+
+ // Counter
+ var cnt = document.getElementById('ac-count');
+ if(cnt) cnt.textContent = '· ' + filtered.length + ' из ' + all.length;
+
+ // KPIs
+ var high = all.filter(function(c){return c.risk === 'high';}).length;
+ var med = all.filter(function(c){return c.risk === 'med';}).length;
+ var low = all.filter(function(c){return c.risk === 'low';}).length;
+ var avgDays = all.length ? Math.round(all.reduce(function(s,c){return s + (c.daysSincePay === 999 ? 0 : c.daysSincePay);}, 0) / all.length) : 0;
+ var inWork = all.filter(function(c){return c.tags.indexOf('working') >= 0;}).length;
+
+ var kpisEl = document.getElementById('ac-kpis');
+ if(kpisEl){
+  kpisEl.innerHTML = ''
+   + '<div class="sd-kpi"><div class="sd-kpi-label">Всего активных</div><div class="sd-kpi-value">'+all.length+'</div><div class="sd-kpi-foot">с датой активации</div></div>'
+   + '<div class="sd-kpi"><div class="sd-kpi-label l-red">High risk</div><div class="sd-kpi-value">'+high+'</div><div class="sd-kpi-foot">могут уйти</div></div>'
+   + '<div class="sd-kpi"><div class="sd-kpi-label l-orange">Med risk</div><div class="sd-kpi-value">'+med+'</div><div class="sd-kpi-foot">требуют внимания</div></div>'
+   + '<div class="sd-kpi"><div class="sd-kpi-label l-green">Low risk</div><div class="sd-kpi-value">'+low+'</div><div class="sd-kpi-foot">платят регулярно</div></div>';
+ }
+
+ // Risk bars
+ var rb = document.getElementById('ac-risk-bars');
+ if(rb){
+  var maxR = Math.max(1, high, med, low);
+  rb.innerHTML = ''
+   + acRiskBar('🔴 High (60+ дн)', high, maxR, 'f-red')
+   + acRiskBar('🟡 Med (31-60 дн)', med, maxR, 'f-warn')
+   + acRiskBar('🟢 Low (0-30 дн)', low, maxR, 'f-done');
+  var rsub = document.getElementById('ac-risk-sub');
+  if(rsub) rsub.textContent = 'Средняя давность оплаты: ' + avgDays + ' дн';
+ }
+
+ // Tags bars
+ var tb = document.getElementById('ac-tags-bars');
+ if(tb){
+  var tagCounts = { risk:0, problem:0, working:0, ok:0 };
+  all.forEach(function(c){ c.tags.forEach(function(t){ if(tagCounts.hasOwnProperty(t)) tagCounts[t]++; }); });
+  var noTags = all.filter(function(c){return !c.tags.length;}).length;
+  var maxT = Math.max(1, tagCounts.risk, tagCounts.problem, tagCounts.working, tagCounts.ok, noTags);
+  tb.innerHTML = ''
+   + acRiskBar('⚠ Риск', tagCounts.risk, maxT, 'f-red')
+   + acRiskBar('🔥 Проблема', tagCounts.problem, maxT, 'f-warn')
+   + acRiskBar('🛠 В работе', tagCounts.working, maxT, '')
+   + acRiskBar('✓ Норма', tagCounts.ok, maxT, 'f-done')
+   + acRiskBar('— Без тега', noTags, maxT, '');
+ }
+
+ // Table
+ var tbl = document.getElementById('ac-table');
+ if(tbl){
+  var thead = '<thead><tr><th>Клиент</th><th>Оператор</th><th>Активирован</th><th class="num">Посл. оплата</th><th class="num">Дн. назад</th><th>Риск</th><th>Теги</th><th>Действия</th></tr></thead><tbody>';
+  if(!filtered.length){
+   tbl.innerHTML = thead + '<tr><td colspan="8" class="sd-empty">Нет клиентов по фильтру</td></tr></tbody>';
+  } else {
+   filtered.sort(function(a,b){
+    var ord = {high:0, med:1, low:2};
+    return (ord[a.risk] - ord[b.risk]) || (b.daysSincePay - a.daysSincePay);
+   });
+   var body = filtered.map(function(c){
+    var opColor = (typeof KB_OP_COLORS !== 'undefined' && c.operator && KB_OP_COLORS[c.operator]) || '#888';
+    var riskCls = c.risk === 'high' ? 's-bad' : (c.risk === 'med' ? 's-mid' : 's-good');
+    var riskLabel = c.risk === 'high' ? 'High' : (c.risk === 'med' ? 'Med' : 'Low');
+    var lpStr = c.lastPayDate ? c.lastPayDate.toLocaleDateString('ru-RU') : '—';
+    var lpAmt = c.lastPayAmount ? Math.round(c.lastPayAmount).toLocaleString('ru-RU') + ' ₸' : '';
+    var daysStr = c.daysSincePay === 999 ? '—' : c.daysSincePay;
+    var daysColor = c.daysSincePay > 60 ? '#FF6B5C' : (c.daysSincePay > 30 ? '#FFB340' : 'inherit');
+    var tagsHtml = c.tags.map(function(t){
+     var labels = {risk:'⚠', problem:'🔥', working:'🛠', ok:'✓'};
+     return '<span class="ac-tag" title="'+t+'">'+(labels[t]||t)+'</span>';
+    }).join('');
+    var clientEsc = (c.client || '').replace(/'/g, "\\'");
+    return '<tr>'
+     + '<td><b>'+kbEsc(c.client)+'</b>'+(c.country?' <span style="font-size:10px;color:var(--text-soft)">'+c.country+'</span>':'')+'</td>'
+     + '<td><div class="sd-op-cell"><span class="sd-op-dot" style="background:'+opColor+'"></span>'+kbEsc(c.operator || '—')+'</div></td>'
+     + '<td>'+kbEsc(c.activDate || '—')+'</td>'
+     + '<td class="num">'+lpStr+(lpAmt?' <div style="font-size:11px;color:var(--text-soft);font-weight:400">'+lpAmt+'</div>':'')+'</td>'
+     + '<td class="num" style="color:'+daysColor+'">'+daysStr+'</td>'
+     + '<td><span class="sd-score '+riskCls+'">'+riskLabel+'</span></td>'
+     + '<td><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" onclick="acTagModal(\''+clientEsc+'\')">+</button></div></td>'
+     + '<td>'+(c.cardId ? '<button class="sd-risk-action" onclick="supportOpenCard(\''+c.cardId+'\')">Открыть</button>' : '')+'</td>'
+     + '</tr>';
+   }).join('');
+   tbl.innerHTML = thead + body + '</tbody>';
+  }
+ }
+}
+
+function acRiskBar(label, value, max, fillClass){
+ var pct = max ? Math.round(value / max * 100) : 0;
+ return '<div class="sd-bar-row">'
+  + '<div class="sd-bar-label">'+label+'</div>'
+  + '<div class="sd-bar-track"><div class="sd-bar-fill '+fillClass+'" style="width:'+pct+'%"></div></div>'
+  + '<div class="sd-bar-value">'+value+'</div>'
+  + '</div>';
+}
+
+function acTagModal(client){
+ var current = acGetTags(client);
+ var bg = document.createElement('div');
+ bg.className = 'crm-modal-bg';
+ bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
+ var tagOpts = [
+  {key:'risk', label:'⚠ Риск ухода', desc:'Клиент может уйти — обзвонить, прояснить ситуацию'},
+  {key:'problem', label:'🔥 Проблема', desc:'Технический сбой / открытая жалоба'},
+  {key:'working', label:'🛠 В работе', desc:'Идёт активная работа над улучшением'},
+  {key:'ok', label:'✓ Норма', desc:'Всё хорошо, риск низкий, отслеживать не нужно'}
+ ];
+ var clientEsc = client.replace(/'/g, "\\'");
+ var html = '<div class="crm-modal" onclick="event.stopPropagation()">'
+  + '<div class="crm-modal-title">Теги клиента</div>'
+  + '<div style="font-size:13px;color:var(--text-2);margin-bottom:14px">' + kbEsc(client) + '</div>';
+ tagOpts.forEach(function(t){
+  var on = current.indexOf(t.key) >= 0;
+  html += '<label class="ac-tag-row-modal" onclick="event.preventDefault();acToggleTag(\''+clientEsc+'\',\''+t.key+'\');this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">'
+   + '<input type="checkbox" '+(on?'checked':'')+' style="margin-right:10px;pointer-events:none">'
+   + '<div><div style="font-weight:600;color:var(--text);font-size:14px">'+t.label+'</div><div style="font-size:12px;color:var(--text-soft);margin-top:3px">'+t.desc+'</div></div>'
+   + '</label>';
+ });
+ html += '<div class="crm-modal-actions"><button class="crm-action" onclick="this.closest(\'.crm-modal-bg\').remove()">Готово</button></div></div>';
+ bg.innerHTML = html;
+ document.body.appendChild(bg);
 }
 
 function supportOpenCard(cardId){
