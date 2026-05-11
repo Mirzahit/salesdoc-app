@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v255</title>
+<title>SalesDoc — Финансовый Дашборд v256</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8687,6 +8687,10 @@ function showView(v) {
  document.querySelectorAll('.nav-group.touch-open,.nav-group.hover-open').forEach(function(g){ g.classList.remove('touch-open'); g.classList.remove('hover-open'); });
  if(v==='cabinet'){renderCabinetPlans();renderPlanHistory();renderCabinetV83();loadAvatar();}
  if(v==='employees')renderEmployees();
+ // v255-fix: дашборд и оплаты не пере-рендерились при возврате на view — KPI оставались
+ // нулевыми, если data из Sheets долетела ПОСЛЕ initial renderAll(). Принудительно перерисовываем.
+ if(v==='dashboard' && typeof payments!=='undefined' && payments && payments.length){ try{ renderAll(); }catch(_){} }
+ if(v==='payments' && typeof payments!=='undefined' && payments && payments.length){ try{ renderAllPayments(); }catch(_){} }
  if(v==='keyclients')renderKeyClients();
  if(v==='assistant'){asstInit();}
  if(v==='plan'&&!planLastData){planInit();planLoad();} else if(v==='plan'){planInit();}
