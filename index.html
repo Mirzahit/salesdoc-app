@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v252</title>
+<title>SalesDoc — Финансовый Дашборд v253</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -810,6 +810,11 @@ body.light ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.30);background
 .ac-tag-edit:hover{background:var(--accent-bg);color:var(--accent-text);border-color:var(--accent);border-style:solid}
 .ac-tag-row-modal{display:flex;align-items:flex-start;padding:12px 14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border-faint);margin-bottom:8px;cursor:pointer;transition:background var(--t-fast)}
 .ac-tag-row-modal:hover{background:var(--surface-3)}
+/* v253: заголовок сегмента в таблице */
+.ac-seg-head td{padding:0;background:transparent;border-bottom:none}
+.ac-seg-row{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;background:var(--surface-2);margin-top:8px;border-radius:10px}
+.ac-seg-name{font-size:15px;font-weight:700;letter-spacing:-0.01em}
+.ac-seg-stats{font-size:12px;color:var(--text-soft);font-weight:600;letter-spacing:-0.005em}
 
 /* ============================================================
  DESIGN SYSTEM v230 — Календарь TickTick-style
@@ -5465,6 +5470,14 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <option value="high">High risk</option>
  <option value="med">Med risk</option>
  <option value="low">Low risk</option>
+ </select>
+ <select class="sd-select" id="ac-filter-segment" onchange="acSetSegment(this.value)">
+ <option value="">Все сегменты</option>
+ <option value="A+">A+ (50+ польз.)</option>
+ <option value="A">A (21-50)</option>
+ <option value="B">B (11-20)</option>
+ <option value="C">C (5-10)</option>
+ <option value="D">D (1-4)</option>
  </select>
  <select class="sd-select" id="ac-filter-tag" onchange="acSetTag(this.value)">
  <option value="">Все теги</option>
@@ -19240,9 +19253,29 @@ function supportChartAging(cards){
 // ============================================================
 // v250: Действующие клиенты (Phase 2 MVP)
 // ============================================================
-var AC_TAGS_KEY = 'crm_client_tags'; // localStorage: { clientName: ['risk','problem','working','ok'] }
-var AC_KZ_CACHE = null; // загружается из /clients-kz.json
-var acState = { operator: '', risk: '', tag: '' };
+var AC_TAGS_KEY = 'crm_client_tags';
+var AC_KZ_CACHE = null;
+var acState = { operator: '', risk: '', tag: '', segment: '' };
+
+// v253: сегменты клиентов по кол-ву пользователей (qty)
+var AC_SEGMENTS = [
+ { key:'A+', min:51, max:Infinity, label:'A+', name:'A+ Сегмент', desc:'50+ пользователей', color:'#5E5CE0' },
+ { key:'A',  min:21, max:50,       label:'A',  name:'A Сегмент',  desc:'21-50 пользователей', color:'#0A84FF' },
+ { key:'B',  min:11, max:20,       label:'B',  name:'B Сегмент',  desc:'11-20 пользователей', color:'#5AC8FA' },
+ { key:'C',  min:5,  max:10,       label:'C',  name:'C Сегмент',  desc:'5-10 пользователей',  color:'#FF9F0A' },
+ { key:'D',  min:1,  max:4,        label:'D',  name:'D Сегмент',  desc:'1-4 пользователя',    color:'#8E8E93' }
+];
+function acGetSegment(qty){
+ var n = parseInt(qty) || 0;
+ for(var i=0;i<AC_SEGMENTS.length;i++){
+  if(n >= AC_SEGMENTS[i].min && n <= AC_SEGMENTS[i].max) return AC_SEGMENTS[i].key;
+ }
+ return null;
+}
+function acSegmentMeta(key){
+ for(var i=0;i<AC_SEGMENTS.length;i++){ if(AC_SEGMENTS[i].key === key) return AC_SEGMENTS[i]; }
+ return null;
+}
 
 function acLoadKZClients(cb){
  if(AC_KZ_CACHE){ cb(AC_KZ_CACHE); return; }
@@ -19341,6 +19374,7 @@ function acGetActiveClients(){
  result.push({
  client: name, host: item.host || '',
  monthlyQty: item.qty || 0, monthlySum: item.sum || 0,
+ segment: acGetSegment(item.qty),
  operator: card ? (card.operator || '') : '',
  activDate: card ? (card.activDate || '') : '',
  stage: card ? card.stage : '',
@@ -19385,6 +19419,7 @@ function acRiskLevelByDays(client, days){
 function acSetOperator(op){ acState.operator = op || ''; acRender(); }
 function acSetRisk(r){ acState.risk = r || ''; acRender(); }
 function acSetTag(t){ acState.tag = t || ''; acRender(); }
+function acSetSegment(s){ acState.segment = s || ''; acRender(); }
 
 function acInit(){
  if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
@@ -19409,6 +19444,7 @@ function acRender(){
  if(acState.operator && c.operator !== acState.operator) return false;
  if(acState.risk && c.risk !== acState.risk) return false;
  if(acState.tag && c.tags.indexOf(acState.tag) < 0) return false;
+ if(acState.segment && c.segment !== acState.segment) return false;
  return true;
  });
 
@@ -19416,21 +19452,36 @@ function acRender(){
  var cnt = document.getElementById('ac-count');
  if(cnt) cnt.textContent = '· ' + filtered.length + ' из ' + all.length;
 
- // KPIs
+ // v253: KPI по сегментам клиентов
+ var segStats = {};
+ AC_SEGMENTS.forEach(function(s){ segStats[s.key] = { count:0, sum:0, licenses:0 }; });
+ all.forEach(function(c){
+  if(c.segment && segStats[c.segment]){
+   segStats[c.segment].count++;
+   segStats[c.segment].sum += c.monthlySum || 0;
+   segStats[c.segment].licenses += c.monthlyQty || 0;
+  }
+ });
+ var fmtSum = function(n){ return Math.round(n).toLocaleString('ru-RU') + ' ₸'; };
+ var kpisEl = document.getElementById('ac-kpis');
+ if(kpisEl){
+  var khtml = '';
+  AC_SEGMENTS.forEach(function(s){
+   var st = segStats[s.key];
+   khtml += '<div class="sd-kpi" style="border-left:3px solid '+s.color+';cursor:pointer" onclick="acSetSegment(acState.segment===\''+s.key+'\'?\'\':\''+s.key+'\');document.getElementById(\'ac-filter-segment\').value=acState.segment">'
+    + '<div class="sd-kpi-label" style="color:'+s.color+'">'+s.label+'</div>'
+    + '<div class="sd-kpi-value">'+st.count+'</div>'
+    + '<div class="sd-kpi-foot">'+s.desc+' · '+st.licenses+' лиц.</div>'
+    + '<div class="sd-kpi-foot" style="margin-top:4px;font-weight:600;color:var(--text-2)">'+fmtSum(st.sum)+'/мес</div>'
+    + '</div>';
+  });
+  kpisEl.innerHTML = khtml;
+ }
+ // Risk счёты для бар-чарта
  var high = all.filter(function(c){return c.risk === 'high';}).length;
  var med = all.filter(function(c){return c.risk === 'med';}).length;
  var low = all.filter(function(c){return c.risk === 'low';}).length;
  var avgDays = all.length ? Math.round(all.reduce(function(s,c){return s + (c.daysSincePay === 999 ? 0 : c.daysSincePay);}, 0) / all.length) : 0;
- var inWork = all.filter(function(c){return c.tags.indexOf('working') >= 0;}).length;
-
- var kpisEl = document.getElementById('ac-kpis');
- if(kpisEl){
- kpisEl.innerHTML = ''
- + '<div class="sd-kpi"><div class="sd-kpi-label">Всего активных</div><div class="sd-kpi-value">'+all.length+'</div><div class="sd-kpi-foot">с датой активации</div></div>'
- + '<div class="sd-kpi"><div class="sd-kpi-label l-red">High risk</div><div class="sd-kpi-value">'+high+'</div><div class="sd-kpi-foot">могут уйти</div></div>'
- + '<div class="sd-kpi"><div class="sd-kpi-label l-orange">Med risk</div><div class="sd-kpi-value">'+med+'</div><div class="sd-kpi-foot">требуют внимания</div></div>'
- + '<div class="sd-kpi"><div class="sd-kpi-label l-green">Low risk</div><div class="sd-kpi-value">'+low+'</div><div class="sd-kpi-foot">платят регулярно</div></div>';
- }
 
  // Risk bars
  var rb = document.getElementById('ac-risk-bars');
@@ -19460,42 +19511,61 @@ function acRender(){
  }
 
  // Table
+ // v253: таблица с группировкой по сегментам (заголовок-строка для каждого сегмента)
  var tbl = document.getElementById('ac-table');
  if(tbl){
- var thead = '<thead><tr><th>Клиент</th><th>Оператор</th><th>Активирован</th><th class="num">Посл. оплата</th><th class="num">Дн. назад</th><th>Риск</th><th>Теги</th><th>Действия</th></tr></thead><tbody>';
- if(!filtered.length){
- tbl.innerHTML = thead + '<tr><td colspan="8" class="sd-empty">Нет клиентов по фильтру</td></tr></tbody>';
- } else {
- filtered.sort(function(a,b){
- var ord = {high:0, med:1, low:2};
- return (ord[a.risk] - ord[b.risk]) || (b.daysSincePay - a.daysSincePay);
- });
- var body = filtered.map(function(c){
- var opColor = (typeof KB_OP_COLORS !== 'undefined' && c.operator && KB_OP_COLORS[c.operator]) || '#888';
- var riskCls = c.risk === 'high' ? 's-bad' : (c.risk === 'med' ? 's-mid' : 's-good');
- var riskLabel = c.risk === 'high' ? 'High' : (c.risk === 'med' ? 'Med' : 'Low');
- var lpStr = c.lastPayDate ? c.lastPayDate.toLocaleDateString('ru-RU') : '—';
- var lpAmt = c.lastPayAmount ? Math.round(c.lastPayAmount).toLocaleString('ru-RU') + ' ₸' : '';
- var daysStr = c.daysSincePay === 999 ? '—' : c.daysSincePay;
- var daysColor = c.daysSincePay > 60 ? '#FF6B5C' : (c.daysSincePay > 30 ? '#FFB340' : 'inherit');
- var tagsHtml = c.tags.map(function(t){
- var labels = {risk:'', problem:'', working:'', ok:''};
- return '<span class="ac-tag" title="'+t+'">'+(labels[t]||t)+'</span>';
- }).join('');
- var clientEsc = (c.client || '').replace(/'/g, "\\'");
- return '<tr>'
- + '<td><b>'+kbEsc(c.client)+'</b>'+(c.country?' <span style="font-size:10px;color:var(--text-soft)">'+c.country+'</span>':'')+'</td>'
- + '<td><div class="sd-op-cell"><span class="sd-op-dot" style="background:'+opColor+'"></span>'+kbEsc(c.operator || '—')+'</div></td>'
- + '<td>'+kbEsc(c.activDate || c.stage || '—')+'</td>'
- + '<td class="num">'+lpStr+(lpAmt?' <div style="font-size:11px;color:var(--text-soft);font-weight:400">'+lpAmt+'</div>':'')+'</td>'
- + '<td class="num" style="color:'+daysColor+'">'+daysStr+'</td>'
- + '<td><span class="sd-score '+riskCls+'">'+riskLabel+'</span></td>'
- + '<td><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" onclick="acTagModal(\''+clientEsc+'\')">+</button></div></td>'
- + '<td>'+(c.cardId ? '<button class="sd-risk-action" onclick="supportOpenCard(\''+c.cardId+'\')">Открыть</button>' : '')+'</td>'
- + '</tr>';
- }).join('');
- tbl.innerHTML = thead + body + '</tbody>';
- }
+  var thead = '<thead><tr><th>Клиент</th><th>Хост</th><th class="num">Польз.</th><th class="num">Абонплата</th><th>Оператор</th><th class="num">Дн. без оплаты</th><th>Риск</th><th>Теги</th><th>Действия</th></tr></thead><tbody>';
+  if(!filtered.length){
+   tbl.innerHTML = thead + '<tr><td colspan="9" class="sd-empty">Нет клиентов по фильтру</td></tr></tbody>';
+  } else {
+   var groups = {};
+   AC_SEGMENTS.forEach(function(s){ groups[s.key] = []; });
+   filtered.forEach(function(c){
+    var k = c.segment || 'D';
+    if(!groups[k]) groups[k] = [];
+    groups[k].push(c);
+   });
+   var body = '';
+   AC_SEGMENTS.forEach(function(s){
+    var rows = groups[s.key] || [];
+    if(!rows.length) return;
+    var grpSum = rows.reduce(function(a,c){return a + (c.monthlySum||0);}, 0);
+    var grpLic = rows.reduce(function(a,c){return a + (c.monthlyQty||0);}, 0);
+    body += '<tr class="ac-seg-head"><td colspan="9">'
+     + '<div class="ac-seg-row" style="border-left:3px solid '+s.color+'">'
+     + '<div class="ac-seg-name" style="color:'+s.color+'">'+s.name+' <span style="color:var(--text-soft);font-weight:500">· '+s.desc+'</span></div>'
+     + '<div class="ac-seg-stats">'+rows.length+' клиентов · '+grpLic+' лиц. · '+fmtSum(grpSum)+'/мес</div>'
+     + '</div></td></tr>';
+    rows.sort(function(a,b){
+     var ord = {high:0, med:1, low:2};
+     return (ord[a.risk] - ord[b.risk]) || ((b.monthlySum||0) - (a.monthlySum||0));
+    });
+    body += rows.map(function(c){
+     var opColor = (typeof KB_OP_COLORS !== 'undefined' && c.operator && KB_OP_COLORS[c.operator]) || '#888';
+     var riskCls = c.risk === 'high' ? 's-bad' : (c.risk === 'med' ? 's-mid' : 's-good');
+     var riskLabel = c.risk === 'high' ? 'High' : (c.risk === 'med' ? 'Med' : 'Low');
+     var daysStr = c.daysSincePay === 999 ? 'не платил' : c.daysSincePay;
+     var daysColor = c.daysSincePay > 60 ? '#FF6B5C' : (c.daysSincePay > 30 ? '#FFB340' : 'inherit');
+     var tagsHtml = c.tags.map(function(t){
+      var labels = {risk:'Риск', problem:'Проблема', working:'В работе', ok:'Норма'};
+      return '<span class="ac-tag" title="'+t+'">'+(labels[t]||t)+'</span>';
+     }).join('');
+     var clientEsc = (c.client || '').replace(/'/g, "\\'");
+     return '<tr>'
+      + '<td><b>'+kbEsc(c.client)+'</b></td>'
+      + '<td style="color:var(--text-soft);font-size:12px">'+kbEsc(c.host||'—')+'</td>'
+      + '<td class="num">'+(c.monthlyQty||0)+'</td>'
+      + '<td class="num">'+(c.monthlySum?fmtSum(c.monthlySum):'—')+'</td>'
+      + '<td><div class="sd-op-cell"><span class="sd-op-dot" style="background:'+opColor+'"></span>'+kbEsc(c.operator || '—')+'</div></td>'
+      + '<td class="num" style="color:'+daysColor+'">'+daysStr+'</td>'
+      + '<td><span class="sd-score '+riskCls+'">'+riskLabel+'</span></td>'
+      + '<td><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" onclick="acTagModal(\''+clientEsc+'\')">+</button></div></td>'
+      + '<td>'+(c.cardId ? '<button class="sd-risk-action" onclick="supportOpenCard(\''+c.cardId+'\')">Открыть</button>' : '')+'</td>'
+      + '</tr>';
+    }).join('');
+   });
+   tbl.innerHTML = thead + body + '</tbody>';
+  }
  }
 }
 
