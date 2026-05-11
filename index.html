@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v243</title>
+<title>SalesDoc — Финансовый Дашборд v244</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19963,17 +19963,9 @@ function kbSaveSettings() {
 // --- CHECKLIST CHECK ON DRAG-DROP MOVE ---
 function kbMoveCard(card, newStage) {
  var oldStage = card.stage;
- // Checklist warning for forward moves
- var curIdx = kbColumns.indexOf(oldStage);
- var newIdx = kbColumns.indexOf(newStage);
- if(newIdx > curIdx) {
-  // v228: проверка по чеклисту ТЕКУЩЕГО этапа (а не суммарного по всем)
-  var prog = (typeof kbChecklistStageProgress === 'function') ? kbChecklistStageProgress(card) : kbChecklistProgress(card);
-  if(prog.total > 0 && prog.done < prog.total) {
-   kbShowToast('Сначала закройте чеклист этапа «'+oldStage+'» ('+prog.done+'/'+prog.total+')');
-   return;
-  }
- }
+ // v244: блокировка forward без 100% убрана — pipeline-click всегда переключает
+ // (защита от «перепрыгивания» теперь в crmChecklistToggle через canToggle/blockingStage:
+ // галочки на этапе не ставятся пока предыдущие не закрыты).
  card.stage = newStage;
  // SLA: обновить дату входа на новый этап
  if(!card.fields) card.fields = {};
