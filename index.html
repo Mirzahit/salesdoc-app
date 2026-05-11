@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v235</title>
+<title>SalesDoc — Финансовый Дашборд v236</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18357,14 +18357,15 @@ function crmChecklistToggle(cardId, stage, idx){
  }
  crmRenderChecklists(card);
  if(typeof crmUpdateActivateBtn === 'function') crmUpdateActivateBtn(card);
- // v234: если чеклист текущего этапа стал 100% — кастомная модалка в стиле приложения
+ // v236: чеклист 100% — только мягкий feedback (тост + пульсация next step в pipeline).
+ // Автоматический переход через модалку убран — оператор сам решает когда переключаться.
  if(stage === card.stage){
   var p = kbChecklistStageProgress(card);
   if(p.total > 0 && p.done === p.total){
    var nextIdx = curStageIdx + 1;
    var nextStage = (typeof kbColumns !== 'undefined' && nextIdx < kbColumns.length) ? kbColumns[nextIdx] : null;
-   if(nextStage){
-    crmStageCompleteModal(card, stage, nextStage);
+   if(nextStage && typeof kbShowToast === 'function'){
+    kbShowToast('✓ Этап «'+stage+'» завершён. Можно переключиться на «'+nextStage+'» через pipeline.');
    }
   }
  }
