@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v267</title>
+<title>SalesDoc — Финансовый Дашборд v268</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7250,21 +7250,33 @@ function renderPlanFactStrip(ps, factTotal){
  + '</div>';
 }
 
-// v267: морнинг — ждём подгрузки kbCards и clients-kz.json чтобы карточки не были пустыми
+// v267-268: морнинг — подгружает kbCards и clients-kz.json при первом заходе,
+// потом ещё раз перерисовывает через 3 и 8 сек если данные приехали с задержкой.
+var _morningRetryTimers = [];
 function morningInit(){
- var greetEl = document.getElementById('morning-greeting');
- if(greetEl) greetEl.textContent = 'Загружаю данные…';
+ // Сначала отрисуем что есть (план/факт всегда есть)
+ morningRender();
  var promises = [];
- // Канбан-карточки
  if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
  try { var p = kbLoad(); if(p && p.then) promises.push(p); } catch(e){}
  }
- // Список действующих клиентов
  if((typeof AC_KZ_CACHE === 'undefined' || !AC_KZ_CACHE || !AC_KZ_CACHE.length) && typeof acLoadKZClients === 'function'){
  promises.push(new Promise(function(resolve){ try{ acLoadKZClients(function(){ resolve(); }); }catch(_){ resolve(); } }));
  }
- if(!promises.length){ morningRender(); return; }
+ // Отменим старые таймеры
+ _morningRetryTimers.forEach(function(t){ clearTimeout(t); });
+ _morningRetryTimers = [];
+ // После Promise.all — перерисуем
+ if(promises.length){
  Promise.all(promises).then(function(){ morningRender(); }).catch(function(){ morningRender(); });
+ }
+ // Страховочные пересборки — на случай если kbLoad/AC возвращаются медленнее обычного
+ _morningRetryTimers.push(setTimeout(function(){
+ if(document.getElementById('view-morning').style.display !== 'none') morningRender();
+ }, 3000));
+ _morningRetryTimers.push(setTimeout(function(){
+ if(document.getElementById('view-morning').style.display !== 'none') morningRender();
+ }, 8000));
 }
 
 // v266: Утренний дайджест CEO — собирает 5 блоков информации:
