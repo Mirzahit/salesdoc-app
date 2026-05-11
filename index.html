@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v231</title>
+<title>SalesDoc — Финансовый Дашборд v232</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18539,7 +18539,13 @@ function crmCalRender(){ crmCalRenderSide(); crmCalRenderToolbar(); crmCalRender
 function crmCalSetList(key){ crmCalState.list = key; crmCalRender(); }
 function crmCalSetOperator(name){ crmCalState.operator = crmCalState.operator === name ? null : name; crmCalRender(); }
 function crmCalSelect(id){ crmCalState.selectedId = id; crmCalRenderRight(); }
-function crmCalendarInit(){ crmCalState.selectedId = null; crmCalRender(); }
+function crmCalendarInit(){
+ crmCalState.selectedId = null;
+ if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
+  try { kbLoad(); } catch(e){}
+ }
+ crmCalRender();
+}
 
 function crmEventToggleDone(id){
  var all = crmEventsAll();
@@ -18571,12 +18577,13 @@ function crmEventOpenModal(eventId){
  var prioOptions = [[1,'P1 (срочно)'],[2,'P2 (важно)'],[3,'P3 (норм)'],[4,'P4 (обычно)']].map(function(p){
   return '<option value="'+p[0]+'"'+((e.priority||4)===p[0]?' selected':'')+'>'+p[1]+'</option>';
  }).join('');
- var clientList = '';
- if(typeof kbCards !== 'undefined' && kbCards){
-  var clients = {};
-  kbCards.forEach(function(c){ if(c.client) clients[c.client] = 1; });
-  clientList = '<option value="">— не указан —</option>' + Object.keys(clients).sort().map(function(cl){
-   return '<option value="'+kbEsc(cl)+'"'+(e.client===cl?' selected':'')+'>'+kbEsc(cl)+'</option>';
+ // v232: клиент — datalist autocomplete (можно ввести вручную если kbCards ещё не загружены)
+ var clientDatalist = '';
+ if(typeof kbCards !== 'undefined' && kbCards && kbCards.length){
+  var clientsSet = {};
+  kbCards.forEach(function(c){ if(c.client) clientsSet[c.client] = 1; });
+  clientDatalist = Object.keys(clientsSet).sort().map(function(cl){
+   return '<option value="'+kbEsc(cl)+'">';
   }).join('');
  }
  var bg = document.createElement('div');
@@ -18593,7 +18600,7 @@ function crmEventOpenModal(eventId){
   + '<div class="crm-field"><label>Тип</label><select id="ev-type">'+typeOptions+'</select></div>'
   + '<div class="crm-field"><label>Приоритет</label><select id="ev-priority">'+prioOptions+'</select></div>'
   + '</div>'
-  + '<div class="crm-field"><label>Клиент</label><select id="ev-client">'+clientList+'</select></div>'
+  + '<div class="crm-field"><label>Клиент</label><input id="ev-client" list="ev-client-list" value="'+kbEsc(e.client||'')+'" placeholder="Начните вводить название..."><datalist id="ev-client-list">'+clientDatalist+'</datalist></div>'
   + '<div class="crm-field"><label>Оператор</label><select id="ev-operator">'+opOptions+'</select></div>'
   + '<div class="crm-field"><label>Место / Заметки</label><textarea id="ev-notes" rows="2">'+kbEsc(e.notes||'')+'</textarea></div>'
   + '<div class="crm-modal-actions">'
@@ -19124,6 +19131,14 @@ function kbOpenCardPage(card) {
  // v228: рендер детальных чеклистов по этапам + блокировка кнопки активации
  if(typeof crmRenderChecklists === 'function') crmRenderChecklists(card);
  if(typeof crmUpdateActivateBtn === 'function') crmUpdateActivateBtn(card);
+ // v232: обновить counter таба «Календарь» сразу при открытии карточки
+ if(typeof crmEventsAll === 'function'){
+  var evCnt = document.getElementById('crm-cnt-ev');
+  if(evCnt){
+   var n = crmEventsAll().filter(function(e){ return e.client === card.client; }).length;
+   evCnt.textContent = n;
+  }
+ }
 }
 
 // v225: переключение табов карточки клиента
@@ -19132,9 +19147,55 @@ function crmActivateTab(btn){
  document.querySelectorAll('.crm-tabs .crm-tab').forEach(function(t){ t.classList.toggle('active', t === btn); });
  document.querySelectorAll('.crm-tab-pane').forEach(function(p){ p.hidden = p.dataset.pane !== tab; });
  var card = window._kbCurrentCard; if(!card) return;
- // v226: Контакты
  if(tab === 'contacts'){ crmContactsRender(card.client); }
- // в v227+ здесь добавятся files, calendar
+ // v232: Календарь для конкретного клиента
+ if(tab === 'calendar' && typeof crmRenderClientCalendar === 'function'){ crmRenderClientCalendar(card.client); }
+}
+
+// v232: рендер событий конкретного клиента в табе «Календарь» карточки
+function crmRenderClientCalendar(client){
+ var pane = document.getElementById('crm-pane-calendar');
+ if(!pane) return;
+ var all = (typeof crmEventsAll === 'function') ? crmEventsAll() : [];
+ var clientEvents = all.filter(function(e){ return e.client === client; });
+ var cnt = document.getElementById('crm-cnt-ev');
+ if(cnt) cnt.textContent = clientEvents.length;
+ if(!clientEvents.length){
+  pane.innerHTML = '<div class="crm-empty"><div class="crm-empty-ico">📅</div><div class="crm-empty-msg">Событий для этого клиента пока нет</div><div class="crm-empty-hint">Запланируйте обучение, встречу или дедлайн</div></div>'
+   + '<button class="crm-contacts-add" onclick="crmEventOpenModalForClient(\''+(client||'').replace(/\x27/g,"\\\x27")+'\')">+ Создать событие</button>';
+  return;
+ }
+ // Группировка по дням, сортировка по дате
+ var today = crmDateStr(new Date());
+ clientEvents.sort(function(a,b){ return (a.date||'').localeCompare(b.date||'') || (a.time_start||'').localeCompare(b.time_start||''); });
+ var html = '<div style="margin-bottom:14px">';
+ var lastDay = null;
+ clientEvents.forEach(function(e){
+  var k = e.date || 'nodate';
+  if(k !== lastDay){
+   var d = k === 'nodate' ? null : new Date(k+'T00:00:00');
+   var dnum = d ? d.getDate() : '∅';
+   var dmon = d ? d.toLocaleDateString('ru-RU',{weekday:'long',month:'long'}) : 'Без даты';
+   var rel = '';
+   if(k === today) rel = '<span class="d-rel">Сегодня</span>';
+   else if(d && k < today) rel = '<span class="d-rel d-overdue">Просрочено</span>';
+   html += '<div class="tt-day-head" style="position:static"><span class="d-num">'+dnum+'</span><span class="d-mon">'+kbEsc(dmon)+'</span>'+rel+'</div>';
+   lastDay = k;
+  }
+  html += crmCalTaskHtml(e, today);
+ });
+ html += '</div>'
+  + '<button class="crm-contacts-add" onclick="crmEventOpenModalForClient(\''+(client||'').replace(/\x27/g,"\\\x27")+'\')">+ Создать событие</button>';
+ pane.innerHTML = html;
+}
+
+// v232: открыть модалку события с предзаполненным клиентом
+function crmEventOpenModalForClient(client){
+ crmEventOpenModal();
+ setTimeout(function(){
+  var inp = document.getElementById('ev-client');
+  if(inp) inp.value = client;
+ }, 60);
 }
 
 // v226: CRM Контакты — localStorage хранение
