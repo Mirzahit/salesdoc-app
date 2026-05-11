@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v260</title>
+<title>SalesDoc — Финансовый Дашборд v261</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6014,22 +6014,27 @@ function closeSidebar(){
 // ACCESS RIGHTS DEFINITIONS
 // ============================================================
 const ACCESS_KEYS = [
- { key:'view_dashboard', label:'Дашборд', group:'Просмотр' },
- { key:'view_payments', label:'Оплаты', group:'Просмотр' },
- { key:'view_acts', label:'Акты работ', group:'Просмотр' },
- { key:'view_plan', label:'Выполнение плана', group:'Просмотр' },
- { key:'view_keyclients', label:'Ключевые клиенты', group:'Просмотр' },
- { key:'view_expenses', label:'Расходы', group:'Просмотр' },
- { key:'view_integrations', label:'Очередь интеграции', group:'Просмотр' },
- { key:'view_kanban', label:'Внедрение', group:'Просмотр' },
- { key:'view_marketing', label:'Маркетинг', group:'Просмотр' },
- { key:'view_reports', label:'Отчёты', group:'Просмотр' },
- { key:'view_statistics', label:'Статистики', group:'Просмотр' }, // v151: добавлен (был в ROLE_DEFAULTS, но не в UI)
- { key:'view_knowledge', label:'База знаний', group:'Просмотр' },
- { key:'view_academy', label:'Академия', group:'Просмотр' },
- { key:'view_tests', label:'Тесты', group:'Просмотр' },
- { key:'view_employees', label:'Сотрудники', group:'Просмотр' },
- { key:'view_cabinet', label:'Кабинет', group:'Просмотр' },
+ { key:'view_dashboard', label:'Дашборд (Обзор финансов)', group:'Финансы' },
+ { key:'view_payments', label:'Оплаты', group:'Финансы' },
+ { key:'view_acts', label:'Акты работ', group:'Финансы' },
+ { key:'view_plan', label:'Выполнение плана', group:'Финансы' },
+ { key:'view_expenses', label:'Расходы', group:'Финансы' },
+ { key:'view_reports', label:'Отчёты', group:'Финансы' },
+ { key:'view_keyclients', label:'Ключевые клиенты', group:'Клиенты' },
+ { key:'view_kanban', label:'Внедрение (канбан)', group:'Клиенты' },
+ { key:'view_integrations', label:'Очередь интеграции', group:'Клиенты' },
+ { key:'view_supportdash', label:'Тех.поддержка (дашборд)', group:'Клиенты' }, // v261
+ { key:'view_activeclients', label:'Действующие клиенты', group:'Клиенты' }, // v261
+ { key:'view_calendar', label:'Календарь задач', group:'Команда' }, // v261
+ { key:'view_planning', label:'Планёрки / спринты', group:'Команда' }, // v261
+ { key:'view_statistics', label:'Статистики', group:'Команда' },
+ { key:'view_marketing', label:'Маркетинг', group:'Команда' },
+ { key:'view_knowledge', label:'База знаний', group:'Команда' },
+ { key:'view_academy', label:'Академия', group:'Команда' },
+ { key:'view_tests', label:'Тесты', group:'Команда' },
+ { key:'view_employees', label:'Сотрудники', group:'Управление' },
+ { key:'view_cabinet', label:'Кабинет', group:'Управление' },
+ { key:'view_botadmin', label:'Telegram-бот (настройка)', group:'Управление' }, // v261
  // Примечание: view_ai удалён в v151 (страница ИИ Мирзахит → заменена Ассистентом).
  // Ассистент защищён отдельной проверкой по email (только office@salesdoc.io), не через ACCESS_KEYS.
  { key:'add_payments', label:'Добавлять оплаты', group:'Действия' },
@@ -6045,16 +6050,22 @@ const ROLE_LABELS = {
 
 // v151: убран view_ai (ключ удалён); добавлен view_statistics для всех ролей явно;
 // view_assistant НЕ через роли — только хардкод-проверка по email (см. applyUserAccess).
+// v261: явные роли — кто что видит. Группы:
+// admin: всё (CEO)
+// head: всё, но без manage_employees (это только у admin)
+// rop: всё кроме настроек (botadmin), но видит финансы
+// manager: продажи и план, без HR/настроек/тех.поддержки
+// operator: канбан/тех.поддержка/действующие/календарь — без финансов
+// accountant: финансы и расходы — без канбана/маркетинга/HR
+// viewer: только просмотр финансов и команды
 const ROLE_DEFAULTS = {
- admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- // v155→v156: оператор саппорта. Скрыта вся финансовая инфа.
- // v166: добавлены Планёрки (доступны всем — там не финансы, а задачи команды).
- operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
- accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:0,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
- viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_botadmin:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_botadmin:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:1,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:0,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:0,manage_employees:0 },
+ viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:0,view_supportdash:0,view_activeclients:0,view_botadmin:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
 };
 
 // v151: Email-список тех, кому разрешён Ассистент. Не через роль — чтобы Arslan
@@ -6588,7 +6599,9 @@ function applyUserAccess() {
 
  // Show/hide nav items
  // v180: фильтруем И обычные пункты, И solo-кнопку «Дашборд» (она `nav-item-solo`).
- const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning'};
+ // v261: добавлены отсутствовавшие view (calendar/supportdash/activeclients/botadmin) — раньше
+ // эти пункты НЕ скрывались в навигации, например оператор видел «Telegram-бот».
+ const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',botadmin:'view_botadmin'};
  document.querySelectorAll('.nav-item[data-view],.nav-item-solo[data-view]').forEach(el=>{
  const view=el.dataset.view;
  if (view === 'assistant') {
@@ -8181,7 +8194,60 @@ async function saveEmployee() {
  if(document.getElementById('user-mgmt-body')) renderUserManagement();
  // Применить обновлённые права если редактируем текущего пользователя
  if(editId && currentUser && currentUser.id === editId) { currentUser.access = data.access; applyUserAccess(); }
- showNotif('Сотрудник сохранён',name);
+ // v261: при СОЗДАНИИ нового / СБРОСЕ пароля — показываем CEO выданные creds для передачи сотруднику
+ if(!editId || newPass){
+ var passToShow = newPass || START_PASSWORD;
+ showCredentialsModal(name, email, passToShow, ROLE_LABELS[data.role] || data.role);
+ } else {
+ showNotif('Сотрудник сохранён', name);
+ }
+}
+
+// v261: модалка «Учётные данные выданы» — показывается после создания нового пользователя
+// или после сброса пароля, чтобы CEO мог одной кнопкой скопировать строку для передачи.
+function showCredentialsModal(name, email, password, roleLabel){
+ var existing = document.getElementById('creds-modal-bg');
+ if(existing) existing.remove();
+ var bg = document.createElement('div');
+ bg.id = 'creds-modal-bg';
+ bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:99999;display:flex;align-items:center;justify-content:center';
+ bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
+ var copyText = name + '\nЛогин: ' + email + '\nПароль: ' + password + '\nРоль: ' + roleLabel + '\n(первый вход — попросит сменить пароль)';
+ bg.innerHTML = ''
+ + '<div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:24px 28px;min-width:380px;max-width:480px;box-shadow:0 24px 60px rgba(0,0,0,.4)">'
+ + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><div style="width:32px;height:32px;border-radius:50%;background:rgba(16,185,129,.15);color:#10b981;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700">✓</div>'
+ + '<div style="font-size:18px;font-weight:700;color:var(--text)">Учётные данные созданы</div></div>'
+ + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Передай сотруднику любым удобным способом. При первом входе он будет вынужден сменить пароль.</div>'
+ + '<div style="background:var(--surface-2);border:1px solid var(--border-faint);border-radius:10px;padding:14px 16px;margin-bottom:14px;font-family:monospace;font-size:13px;line-height:1.7">'
+ + '<div><span style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1.5px">ИМЯ</span><div style="color:var(--text);font-weight:600">' + (name||'') + '</div></div>'
+ + '<div style="margin-top:8px"><span style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1.5px">ЛОГИН (EMAIL)</span><div style="color:var(--accent);user-select:all">' + (email||'') + '</div></div>'
+ + '<div style="margin-top:8px"><span style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1.5px">ВРЕМЕННЫЙ ПАРОЛЬ</span><div style="color:#fbbf24;font-weight:700;font-size:16px;letter-spacing:1px;user-select:all">' + (password||'') + '</div></div>'
+ + '<div style="margin-top:8px"><span style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1.5px">РОЛЬ</span><div style="color:var(--text)">' + (roleLabel||'') + '</div></div>'
+ + '</div>'
+ + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+ + '<button id="creds-copy-btn" style="flex:1;min-width:140px;padding:10px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">📋 Скопировать всё</button>'
+ + '<button id="creds-wa-btn" style="padding:10px 14px;background:rgba(37,211,102,.15);color:#25D366;border:1px solid rgba(37,211,102,.3);border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">WhatsApp</button>'
+ + '<button id="creds-close-btn" style="padding:10px 14px;background:transparent;color:var(--text-soft);border:1px solid var(--border-faint);border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Закрыть</button>'
+ + '</div>'
+ + '</div>';
+ document.body.appendChild(bg);
+ var copyBtn = document.getElementById('creds-copy-btn');
+ copyBtn.onclick = function(){
+ navigator.clipboard.writeText(copyText).then(function(){
+ copyBtn.innerHTML = '✓ Скопировано';
+ copyBtn.style.background = '#10b981';
+ setTimeout(function(){ copyBtn.innerHTML = '📋 Скопировать всё'; copyBtn.style.background = 'var(--accent)'; }, 1500);
+ }).catch(function(){
+ // fallback для старых браузеров
+ var ta = document.createElement('textarea'); ta.value = copyText; document.body.appendChild(ta);
+ ta.select(); try{ document.execCommand('copy'); }catch(_){} ta.remove();
+ copyBtn.innerHTML = '✓ Скопировано';
+ });
+ };
+ document.getElementById('creds-wa-btn').onclick = function(){
+ window.open('https://wa.me/?text=' + encodeURIComponent(copyText), '_blank');
+ };
+ document.getElementById('creds-close-btn').onclick = function(){ bg.remove(); };
 }
 
 function populateEmployeeSelects() {
@@ -8732,7 +8798,7 @@ function showView(v) {
  try { showNotif('Нет доступа', 'Ассистент доступен только CEO.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
- var _accessMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients'};
+ var _accessMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',botadmin:'view_botadmin'};
  var _need = _accessMap[v];
  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
@@ -10841,6 +10907,12 @@ async function resetEmpPassword(id){
  }
 }
 function showResetPassInfo(emp){
+ // v261: используем единую модалку credentials (с WhatsApp/Копировать)
+ if(typeof showCredentialsModal === 'function'){
+ var roleLabel = (typeof ROLE_LABELS!=='undefined' && ROLE_LABELS[emp.role]) || emp.role || '';
+ return showCredentialsModal(emp.name, emp.email, START_PASSWORD, roleLabel);
+ }
+ // Fallback на старую модалку
  var text = 'Логин: ' + (emp.email||'') + '\nПароль: ' + START_PASSWORD + '\n\nПри входе попросит сменить — придумаешь свой.';
  var el = document.getElementById('reset-pass-info-text');
  if (el) el.textContent = text;
