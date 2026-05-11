@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v257</title>
+<title>SalesDoc — Финансовый Дашборд v258</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18011,7 +18011,8 @@ function kbLoad() {
  var logUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Лог');
  var kbDataUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Карточки');
 
- Promise.all([fetch(settingsUrl).then(r=>r.text()), fetch(logUrl).then(r=>r.text()), fetch(kbDataUrl).then(r=>r.text())])
+ // v257-fix: возвращаем Promise чтобы supportInit/acInit могли дождаться завершения
+ return Promise.all([fetch(settingsUrl).then(r=>r.text()), fetch(logUrl).then(r=>r.text()), fetch(kbDataUrl).then(r=>r.text())])
  .then(function(results) {
  // Parse settings
  var sRows = kbParseCsv(results[0]);
@@ -19021,9 +19022,6 @@ function supportPeriodFilter(dateStr){
 }
 
 function supportInit(){
- if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
- try { kbLoad(); } catch(e){}
- }
  // Заполнить dropdown операторов
  var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
  var sel = document.getElementById('sd-filter-op');
@@ -19033,6 +19031,13 @@ function supportInit(){
  opt.value = op; opt.textContent = op;
  sel.appendChild(opt);
  });
+ }
+ // v257-fix: если kbCards ещё нет — ждём окончания kbLoad и потом рендерим,
+ // иначе KPI остаются нулями и таблица пустая на первом заходе.
+ if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
+ var p;
+ try { p = kbLoad(); } catch(e){}
+ if(p && typeof p.then === 'function'){ p.then(supportRender).catch(function(){ supportRender(); }); return; }
  }
  supportRender();
 }
@@ -19410,6 +19415,18 @@ function acRiskLevel(client){
  return 'low';
 }
 
+// v257: нормализация имени компании — убираем ТОО / ИП / OOO / кавычки / лишние пробелы,
+// чтобы «ТОО "ViZaVi Company"» и «ViZaVi Company» матчились между payments и clients-kz.json.
+function acNormName(s){
+ if(!s) return '';
+ return String(s)
+ .toLowerCase()
+ .replace(/[«»"'`„"]/g, '')
+ .replace(/^\s*(тоо|ип|ооо|too|tov|ао|пк|кх|чп|ип\.|ip)\s+/i, '')
+ .replace(/\s+/g, ' ')
+ .trim();
+}
+
 function acGetActiveClients(){
  // v252: Канонический список действующих клиентов KZ — из clients-kz.json (254 клиента,
  // монтаж 26.3M tg, 5985 лицензий). Дополняем данными из payments + kbCards (если есть).
@@ -19420,7 +19437,8 @@ function acGetActiveClients(){
  payments.forEach(function(p){
  var name = p && (p.client || p.cl || p.compName);
  if(!name) return;
- var keyLow = String(name).trim().toLowerCase();
+ var keyLow = acNormName(name);
+ if(!keyLow) return;
  if(!payByName[keyLow]) payByName[keyLow] = { totalAmount: 0, payCount: 0, lastPay: null };
  payByName[keyLow].payCount++;
  payByName[keyLow].totalAmount += parseFloat(p.amount || p.am) || 0;
@@ -19430,14 +19448,14 @@ function acGetActiveClients(){
  }
  var cards = (typeof kbCards !== 'undefined' && kbCards) ? kbCards : [];
  var cardByName = {};
- cards.forEach(function(c){ if(c.client) cardByName[String(c.client).trim().toLowerCase()] = c; });
+ cards.forEach(function(c){ if(c.client) cardByName[acNormName(c.client)] = c; });
 
  // Источник: либо canonical KZ список, либо payments если кэш не загружен
  var result = [];
  var seen = {};
  (kzItems.length ? kzItems : []).forEach(function(item){
  var name = item.name;
- var keyLow = name.toLowerCase();
+ var keyLow = acNormName(name);
  if(seen[keyLow]) return;
  seen[keyLow] = 1;
  var pay = payByName[keyLow] || {};
@@ -19494,9 +19512,6 @@ function acSetTag(t){ acState.tag = t || ''; acRender(); }
 function acSetSegment(s){ acState.segment = s || ''; acRender(); }
 
 function acInit(){
- if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
- try { kbLoad(); } catch(e){}
- }
  var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
  var sel = document.getElementById('ac-filter-op');
  if(sel && sel.children.length <= 1){
@@ -19506,8 +19521,13 @@ function acInit(){
  sel.appendChild(opt);
  });
  }
- // v252: загрузить канонический список KZ-клиентов
- acLoadKZClients(function(){ acRender(); });
+ // v257-fix: дождаться kbLoad чтобы операторы/этапы из канбана корректно
+ // подтянулись в карточки клиентов (acGetActiveClients использует kbCards).
+ var loadKb = (typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'
+  ? (function(){ try{ return kbLoad(); }catch(e){ return null; } })() : null;
+ var renderAfter = function(){ acLoadKZClients(function(){ acRender(); }); };
+ if(loadKb && typeof loadKb.then === 'function'){ loadKb.then(renderAfter).catch(renderAfter); }
+ else { renderAfter(); }
 }
 
 function acRender(){
