@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v250</title>
+<title>SalesDoc — Финансовый Дашборд v251</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19297,21 +19297,58 @@ function acRiskLevel(client){
 }
 
 function acGetActiveClients(){
- // Активные = карточки с activDate (прошли активацию)
- if(typeof kbCards === 'undefined' || !kbCards) return [];
- return kbCards.filter(function(c){ return c.activDate; }).map(function(c){
-  var lp = acLastPayment(c.client);
+ // v250.1: Активные = все уникальные клиенты которые когда-либо платили
+ // (берём из payments, дополняем данными из kbCards если есть)
+ if(typeof payments === 'undefined' || !payments) return [];
+ var byClient = {};
+ payments.forEach(function(p){
+  var name = p && (p.client || p.cl || p.compName);
+  if(!name) return;
+  if(!byClient[name]){
+   byClient[name] = { client: name, totalAmount: 0, payCount: 0, firstPay: null, lastPay: null };
+  }
+  byClient[name].payCount++;
+  byClient[name].totalAmount += parseFloat(p.amount || p.am) || 0;
+  var d = (typeof parseDateFromSheet === 'function' && p.date) ? parseDateFromSheet(p.date) : (p.date ? new Date(p.date) : null);
+  if(d && !isNaN(d)){
+   if(!byClient[name].firstPay || d < byClient[name].firstPay) byClient[name].firstPay = d;
+   if(!byClient[name].lastPay || d > byClient[name].lastPay) byClient[name].lastPay = d;
+  }
+ });
+ var cards = (typeof kbCards !== 'undefined' && kbCards) ? kbCards : [];
+ return Object.keys(byClient).map(function(name){
+  var b = byClient[name];
+  // привязка к канбан-карточке если есть
+  var card = cards.find(function(c){ return c.client === name; });
+  var daysSince = b.lastPay ? Math.floor((new Date() - b.lastPay) / 86400000) : 999;
   return {
-   client: c.client, operator: c.operator || '', manager: c.manager || '',
-   activDate: c.activDate, amount: parseFloat(c.amount) || 0, tariff: c.tariff || '',
-   cardId: c.id, country: c.country || '',
-   lastPayDate: lp ? lp.date : null,
-   lastPayAmount: lp ? lp.amount : 0,
-   daysSincePay: acDaysSinceLastPay(c.client),
-   risk: acRiskLevel(c.client),
-   tags: acGetTags(c.client)
+   client: name,
+   operator: card ? (card.operator || '') : '',
+   manager: card ? (card.manager || '') : '',
+   activDate: card ? (card.activDate || '') : '',
+   stage: card ? card.stage : '',
+   cardId: card ? card.id : null,
+   country: card ? (card.country || '') : '',
+   firstPayDate: b.firstPay,
+   lastPayDate: b.lastPay,
+   lastPayAmount: 0, // будет высчитан ниже
+   totalAmount: b.totalAmount,
+   payCount: b.payCount,
+   daysSincePay: daysSince,
+   risk: acRiskLevelByDays(name, daysSince),
+   tags: acGetTags(name)
   };
  });
+}
+
+// Версия без обращения к acDaysSinceLastPay (мы уже имеем daysSince)
+function acRiskLevelByDays(client, days){
+ var tags = acGetTags(client);
+ if(tags.indexOf('risk') >= 0) return 'high';
+ if(tags.indexOf('ok') >= 0) return 'low';
+ if(days > 60) return 'high';
+ if(days > 30) return 'med';
+ return 'low';
 }
 
 function acSetOperator(op){ acState.operator = op || ''; acRender(); }
@@ -19418,7 +19455,7 @@ function acRender(){
     return '<tr>'
      + '<td><b>'+kbEsc(c.client)+'</b>'+(c.country?' <span style="font-size:10px;color:var(--text-soft)">'+c.country+'</span>':'')+'</td>'
      + '<td><div class="sd-op-cell"><span class="sd-op-dot" style="background:'+opColor+'"></span>'+kbEsc(c.operator || '—')+'</div></td>'
-     + '<td>'+kbEsc(c.activDate || '—')+'</td>'
+     + '<td>'+kbEsc(c.activDate || c.stage || '—')+'</td>'
      + '<td class="num">'+lpStr+(lpAmt?' <div style="font-size:11px;color:var(--text-soft);font-weight:400">'+lpAmt+'</div>':'')+'</td>'
      + '<td class="num" style="color:'+daysColor+'">'+daysStr+'</td>'
      + '<td><span class="sd-score '+riskCls+'">'+riskLabel+'</span></td>'
