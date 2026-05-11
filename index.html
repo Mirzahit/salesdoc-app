@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v256</title>
+<title>SalesDoc — Финансовый Дашборд v257</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6962,8 +6962,40 @@ function renderAll() {
  var deltaEl = document.getElementById('delta-avg-new');
  if(deltaEl) { deltaEl.textContent = newCount + ' новых клиентов'; deltaEl.className = 'kpi-delta ' + (newCount > 0 ? 'up' : 'down'); }
  })();
- /* v208: убираем заглушку «↑ —» — пока нет реальных Δ-данных, дельта-пилюлю прячем целиком */
- ['license','sub','impl','integ','total'].forEach(k=>{ const el=document.getElementById('delta-'+k); if(el){ el.textContent=''; el.style.display='none'; } });
+ /* v257: реальная Δ vs предыдущий месяц — показываем процент роста/спада */
+ (function renderDeltaPills(){
+ var curM, curY;
+ if (typeof selectedMonth !== 'undefined' && selectedMonth) { curM = selectedMonth.month; curY = selectedMonth.year; }
+ else { var _n = new Date(); curM = _n.getMonth(); curY = _n.getFullYear(); }
+ var prevM = curM > 0 ? curM - 1 : 11;
+ var prevY = curM > 0 ? curY : curY - 1;
+ var prevPay = payments.filter(function(p){
+ if(!p.date) return false;
+ var d = new Date(p.date+'T00:00:00');
+ return d.getMonth() === prevM && d.getFullYear() === prevY;
+ });
+ var MONTHS = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+ var prevLabel = MONTHS[prevM] + (prevY!==curY?"'"+String(prevY).slice(2):'');
+ var mapping = {
+ 'license':{cur:license, prev:sumByCategory(prevPay,'license')},
+ 'sub':{cur:sub, prev:sumByCategory(prevPay,'subscription')},
+ 'impl':{cur:impl, prev:sumByCategory(prevPay,'implementation')},
+ 'integ':{cur:integ, prev:sumByCategory(prevPay,'integration')},
+ 'total':{cur:total, prev:prevPay.reduce(function(s,p){return s+p.amount;},0)}
+ };
+ Object.keys(mapping).forEach(function(k){
+ var el = document.getElementById('delta-'+k);
+ if(!el) return;
+ var m = mapping[k];
+ if(!m.prev){ el.textContent = 'нов. ' + prevLabel; el.className = 'kpi-delta'; el.style.display = ''; return; }
+ var pct = calcPct(m.cur, m.prev);
+ if(pct === null){ el.style.display = 'none'; return; }
+ var up = pct >= 0;
+ el.innerHTML = (up?'▲ +':'▼ ') + Math.abs(pct) + '% к ' + prevLabel;
+ el.className = 'kpi-delta ' + (up?'up':'down');
+ el.style.display = '';
+ });
+ })();
  renderBarChart(ps); renderPlanBars(license,sub,impl); if(typeof renderPnL==='function') renderPnL();
  renderRecentPayments(ps.slice(-5).reverse());
  if(typeof renderRecognizedRevenue==='function') renderRecognizedRevenue();
@@ -6987,32 +7019,35 @@ function renderAvgCheckManagers(ps) {
  var el = document.getElementById('avg-check-managers');
  if (!el) return;
 
- // Только активные менеджеры (без admin/Мирзахит)
- var activeManagers = employees.filter(function(e){ return e.active !== false && e.role === 'manager'; });
- var mgrStats = activeManagers.map(function(emp) {
- var ePays = ps.filter(function(p){ return p.employee === emp.id; });
- // Шаг 1: находим клиентов у которых есть строка «новый клиент»
- var newClients = {};
- ePays.forEach(function(p){
+ // v257: группируем по managerName (текстовое имя из листа), а не по employee.id —
+ // в Sheets employee=1 (admin/основатель), а реальный менеджер хранится в managerName.
+ // Старый код по emp.id всегда возвращал 0 клиентов.
+ var byMgr = {}; // mgrName -> { newClients:{}, payments:[] }
+ ps.forEach(function(p){
+ var mName = (p.managerName || empName(p.employee) || '').trim();
+ if(!mName || mName === '-') return;
+ if(!byMgr[mName]) byMgr[mName] = { newClients:{}, payments:[] };
+ byMgr[mName].payments.push(p);
  var raw = String(p.categoryRaw||'').toLowerCase().trim();
- if (raw === 'новый клиент' || (raw.indexOf('нов') >= 0 && raw.indexOf('клиент') >= 0)) {
- newClients[p.client.toLowerCase()] = p.client;
+ if(raw === 'новый клиент' || (raw.indexOf('нов') >= 0 && raw.indexOf('клиент') >= 0)){
+ byMgr[mName].newClients[String(p.client||'').toLowerCase().trim()] = true;
  }
  });
- var newClientCount = Object.keys(newClients).length;
- if (newClientCount === 0) return null;
- // Шаг 2: суммируем ВСЕ оплаты этих клиентов (нов.клиент + нов внедрение + нов интеграция), без абон.платы
- var newTotal = 0;
- var newDeals = 0;
- ePays.forEach(function(p){
- if (!newClients[p.client.toLowerCase()]) return;
+
+ var mgrStats = Object.keys(byMgr).map(function(name){
+ var bucket = byMgr[name];
+ var newClientCount = Object.keys(bucket.newClients).length;
+ if(newClientCount === 0) return null;
+ var newTotal = 0, newDeals = 0;
+ bucket.payments.forEach(function(p){
+ if(!bucket.newClients[String(p.client||'').toLowerCase().trim()]) return;
  var cat = String(p.categoryRaw||'').toLowerCase();
- if (cat.indexOf('абон') >= 0 || p.category === 'subscription') return;
+ if(cat.indexOf('абон') >= 0 || p.category === 'subscription') return;
  newTotal += p.amount;
  newDeals++;
  });
- var eAvg = newClientCount > 0 ? Math.round(newTotal / newClientCount) : 0;
- return { name: emp.name, clients: newClientCount, total: newTotal, deals: newDeals, avg: eAvg };
+ var eAvg = Math.round(newTotal / newClientCount);
+ return { name: name, clients: newClientCount, total: newTotal, deals: newDeals, avg: eAvg };
  }).filter(function(m){ return m !== null; }).sort(function(a,b){ return b.avg - a.avg; });
 
  if (!mgrStats.length) {
