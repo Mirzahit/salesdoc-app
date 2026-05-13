@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v276</title>
+<title>SalesDoc — Финансовый Дашборд v277</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5627,6 +5627,19 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div class="sd-chart-sub">Ручная разметка операторов</div>
  </div>
  <div class="sd-bars" id="ac-tags-bars"></div>
+ </div>
+ </div>
+ <!-- v277: несматченные платежи — ручное связывание -->
+ <div id="ac-unmatched-section" style="display:none;margin-bottom:16px">
+ <div class="sd-card" style="padding:14px 16px;background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.25)">
+ <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="acToggleUnmatched()">
+ <div>
+ <div style="font-size:12px;color:#F59E0B;font-weight:700;letter-spacing:1px;text-transform:uppercase">Платежи без клиента <span id="ac-unmatched-count">0</span></div>
+ <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Эти платежи не привязаны ни к одному клиенту в базе. Привяжи вручную — программа запомнит на будущее.</div>
+ </div>
+ <div id="ac-unmatched-toggle" style="color:var(--text-muted);font-size:18px">▾</div>
+ </div>
+ <div id="ac-unmatched-list" style="display:none;margin-top:14px;border-top:1px solid var(--border-faint);padding-top:14px"></div>
  </div>
  </div>
  <div class="sd-section-title">Все клиенты <span id="ac-count" style="color:var(--text-soft);font-weight:500;text-transform:none;letter-spacing:0;font-size:13px"></span></div>
@@ -20756,12 +20769,81 @@ function acNormName(s){
  .trim();
 }
 
+// v277: ручные override-привязки «pay-host → имя клиента». Хранятся в localStorage.
+// Используются при многозначных или сложных случаях, когда автоматика не нашла.
+var AC_OVERRIDE_KEY = 'sd_pay_overrides';
+function acGetOverrides(){ try { return JSON.parse(localStorage.getItem(AC_OVERRIDE_KEY) || '{}'); } catch(e){ return {}; } }
+function acSetOverride(payHost, clientName){
+ var ov = acGetOverrides();
+ if(clientName) ov[payHost] = clientName; else delete ov[payHost];
+ localStorage.setItem(AC_OVERRIDE_KEY, JSON.stringify(ov));
+}
+
+// v277: UI — раскрыть/свернуть блок несматченных
+function acToggleUnmatched(){
+ var list = document.getElementById('ac-unmatched-list');
+ var toggle = document.getElementById('ac-unmatched-toggle');
+ if(!list) return;
+ var hidden = list.style.display === 'none';
+ list.style.display = hidden ? 'block' : 'none';
+ if(toggle) toggle.textContent = hidden ? '▴' : '▾';
+}
+
+// v277: рендер списка несматченных платежей с дропдауном для ручной привязки
+function acRenderUnmatched(){
+ var section = document.getElementById('ac-unmatched-section');
+ var list = document.getElementById('ac-unmatched-list');
+ var cntEl = document.getElementById('ac-unmatched-count');
+ if(!section || !list) return;
+ var items = window._acUnmatchedPays || [];
+ if(!items.length){ section.style.display = 'none'; return; }
+ section.style.display = 'block';
+ if(cntEl) cntEl.textContent = '· ' + items.length;
+ // Опции клиентов для дропдауна (из AC_KZ_CACHE)
+ var clientOpts = (AC_KZ_CACHE || []).map(function(c){
+ return '<option value="'+kbEsc(c.name)+'">'+kbEsc(c.name)+'</option>';
+ }).join('');
+ // Топ-30 несматченных (по убыванию суммы)
+ var html = '';
+ items.slice(0, 30).forEach(function(it){
+ var amt = Math.round(it.pay.totalAmount || 0);
+ var lastPay = it.pay.lastPay ? new Date(it.pay.lastPay).toLocaleDateString('ru-RU') : '—';
+ html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-faint);flex-wrap:wrap">'
+ + '<div style="flex:1;min-width:200px">'
+ + '<div style="font-family:monospace;font-size:13px;color:var(--text);font-weight:600">'+kbEsc(it.host)+'</div>'
+ + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+it.pay.payCount+' платеж'+(it.pay.payCount===1?'':'ей')+' · '+amt.toLocaleString('ru-RU')+' ₸ · последний '+lastPay+'</div>'
+ + '</div>'
+ + '<select id="ac-link-'+kbEsc(it.host).replace(/[^a-z0-9_-]/gi,'_')+'" style="flex:1;min-width:200px;padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-faint);border-radius:6px;color:var(--text);font-size:12px">'
+ + '<option value="">— выбрать клиента —</option>'
+ + clientOpts
+ + '</select>'
+ + '<button onclick="acLinkUnmatched(\''+kbEsc(it.host).replace(/\x27/g,"\\\x27")+'\')" style="padding:6px 14px;background:var(--amo-blue);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Привязать</button>'
+ + '</div>';
+ });
+ if(items.length > 30) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:10px">...и ещё '+(items.length-30)+' (скрыто, привяжи топ-30 сначала)</div>';
+ list.innerHTML = html;
+}
+
+// v277: связать pay-host с именем клиента вручную
+function acLinkUnmatched(payHost){
+ var safeId = payHost.replace(/[^a-z0-9_-]/gi,'_');
+ var sel = document.getElementById('ac-link-'+safeId);
+ if(!sel || !sel.value){ alert('Выбери клиента из списка'); return; }
+ acSetOverride(payHost, sel.value);
+ // Перерисовать список действующих клиентов и блок несматченных
+ if(typeof acRender === 'function') acRender();
+ if(typeof acRenderUnmatched === 'function') acRenderUnmatched();
+ if(typeof kbShowToast === 'function') kbShowToast('«'+payHost+'» привязан к «'+sel.value+'»');
+}
+
 function acGetActiveClients(){
- // v252: Канонический список действующих клиентов KZ — из clients-kz.json (254 клиента,
- // монтаж 26.3M tg, 5985 лицензий). Дополняем данными из payments + kbCards (если есть).
- // v258-fix: payments.client хранит ХОСТ (subdomain) типа "karat", а не полное имя.
- // В clients-kz.json есть отдельные поля name и host — матчим по host, а не по имени.
+ // v277: новая логика матчинга — нормализация + подстрока + ручные override.
+ // Цель: чтобы «karat-pv» / «karat2» / «ТОО Карат» в платежах сматчились с
+ // одним клиентом «ТОО Карат (host=karat)» из clients-kz.json.
  var kzItems = AC_KZ_CACHE || [];
+ var overrides = acGetOverrides();
+
+ // 1. Группируем платежи по полю client (это host или имя — что в Sheets вписано)
  var payByHost = {};
  if(typeof payments !== 'undefined' && payments){
  payments.forEach(function(p){
@@ -20774,27 +20856,73 @@ function acGetActiveClients(){
  if(d && !isNaN(d) && (!payByHost[host].lastPay || d > payByHost[host].lastPay)) payByHost[host].lastPay = d;
  });
  }
+
  var cards = (typeof kbCards !== 'undefined' && kbCards) ? kbCards : [];
- // Канбан-карточки иногда хранят полное имя «ТОО Карат», иногда host. Индексируем по обоим.
  var cardByKey = {};
  cards.forEach(function(c){
  if(!c.client) return;
  cardByKey[acNormName(c.client)] = c;
- var host = String(c.client).trim().toLowerCase();
- cardByKey[host] = c;
+ cardByKey[String(c.client).trim().toLowerCase()] = c;
  });
 
- // Источник: либо canonical KZ список, либо payments если кэш не загружен
+ // 2. Для каждого pay-host пытаемся определить к какому kz-клиенту он относится.
+ // Возвращаем имя клиента или null если не нашли.
+ var payHostToClient = {}; // map: payHost → kzItem.name (или null)
+ Object.keys(payByHost).forEach(function(payHost){
+ // 2.1 — Ручной override: высший приоритет
+ if(overrides[payHost]){ payHostToClient[payHost] = overrides[payHost]; return; }
+ var payHostNorm = acNormName(payHost);
+ var bestMatch = null;
+ var bestScore = 0;
+ (kzItems || []).forEach(function(item){
+ var itemHost = String(item.host||'').trim().toLowerCase();
+ var itemNorm = acNormName(item.name||'');
+ var score = 0;
+ // a) точное совпадение по host
+ if(itemHost && itemHost === payHost) score = 100;
+ // b) payHost начинается с itemHost + разделитель (karat-pv ← karat)
+ else if(itemHost && itemHost.length >= 4 && (
+ payHost === itemHost ||
+ payHost.indexOf(itemHost + '-') === 0 ||
+ payHost.indexOf(itemHost + '_') === 0 ||
+ payHost.indexOf(itemHost + '.') === 0
+ )) score = 90;
+ // c) itemHost начинается с payHost (karat ← karat-pv в kz-списке) — реже
+ else if(payHost && payHost.length >= 4 && itemHost && itemHost.indexOf(payHost) === 0) score = 85;
+ // d) точное совпадение нормализованного имени
+ else if(itemNorm && itemNorm === payHostNorm) score = 80;
+ // e) нормализованное имя клиента — префикс payHost (для случаев когда в платежах русское имя)
+ else if(itemNorm && itemNorm.length >= 4 && payHostNorm.indexOf(itemNorm) === 0) score = 70;
+ if(score > bestScore){ bestScore = score; bestMatch = item.name; }
+ });
+ // Привязываем только если совпадение достаточно сильное (score >= 70)
+ payHostToClient[payHost] = (bestScore >= 70) ? bestMatch : null;
+ });
+
+ // 3. Агрегируем платежи на каждого kz-клиента
+ var aggByClient = {}; // map: clientName → {totalAmount, payCount, lastPay, hosts:[]}
+ Object.keys(payByHost).forEach(function(payHost){
+ var clientName = payHostToClient[payHost];
+ if(!clientName) return;
+ if(!aggByClient[clientName]) aggByClient[clientName] = { totalAmount: 0, payCount: 0, lastPay: null, hosts: [] };
+ var p = payByHost[payHost];
+ aggByClient[clientName].totalAmount += p.totalAmount;
+ aggByClient[clientName].payCount += p.payCount;
+ aggByClient[clientName].hosts.push(payHost);
+ if(p.lastPay && (!aggByClient[clientName].lastPay || p.lastPay > aggByClient[clientName].lastPay))
+ aggByClient[clientName].lastPay = p.lastPay;
+ });
+
+ // 4. Собираем итоговый список действующих клиентов
  var result = [];
  var seen = {};
  (kzItems.length ? kzItems : []).forEach(function(item){
  var name = item.name;
- var host = String(item.host||'').trim().toLowerCase();
- var keyLow = host || acNormName(name);
+ var keyLow = (String(item.host||'').trim().toLowerCase()) || acNormName(name);
  if(seen[keyLow]) return;
  seen[keyLow] = 1;
- var pay = (host && payByHost[host]) || payByHost[acNormName(name)] || {};
- var card = cardByKey[host] || cardByKey[acNormName(name)] || null;
+ var pay = aggByClient[name] || { totalAmount:0, payCount:0, lastPay:null, hosts:[] };
+ var card = cardByKey[String(item.host||'').trim().toLowerCase()] || cardByKey[acNormName(name)] || null;
  var daysSince = pay.lastPay ? Math.floor((new Date() - pay.lastPay) / 86400000) : 999;
  result.push({
  client: name, host: item.host || '',
@@ -20807,13 +20935,21 @@ function acGetActiveClients(){
  lastPayDate: pay.lastPay || null,
  totalAmount: pay.totalAmount || 0,
  payCount: pay.payCount || 0,
+ matchedHosts: pay.hosts,
  daysSincePay: daysSince,
  risk: acRiskLevelByDays(name, daysSince),
  tags: acGetTags(name)
  });
  });
- // Fallback: если KZ-кэш пустой и есть payments — берём оттуда
- if(!result.length && Object.keys(payByName).length){
+
+ // 5. Несматченные платежи — для ручного связывания через UI
+ window._acUnmatchedPays = Object.keys(payByHost)
+ .filter(function(h){ return !payHostToClient[h]; })
+ .map(function(h){ return { host: h, pay: payByHost[h] }; })
+ .sort(function(a,b){ return (b.pay.totalAmount||0) - (a.pay.totalAmount||0); });
+
+ // Fallback: KZ-кэш пустой → строим из payments напрямую
+ if(!result.length && Object.keys(payByHost).length){
  Object.keys(payByHost).forEach(function(host){
  var pay = payByHost[host];
  var card = cardByKey[host];
@@ -20994,6 +21130,8 @@ function acRender(){
    tbl.innerHTML = thead + body + '</tbody>';
   }
  }
+ // v277: после основной таблицы — блок несматченных платежей
+ if(typeof acRenderUnmatched === 'function') acRenderUnmatched();
 }
 
 function acRiskBar(label, value, max, fillClass){
