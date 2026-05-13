@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v271</title>
+<title>SalesDoc — Финансовый Дашборд v272</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -14991,14 +14991,24 @@ window.mktInit = function() {
 })();
 // /META ADS CSV
 
-var PLAN_TABS = [
- {label:'Апрель 2026', name:'Апрель', year:2026, month:3},
- {label:'Март 2026', name:'Март', year:2026, month:2},
- {label:'Февраль 2026', name:'февраль 26', year:2026, month:1},
- {label:'Январь 2026', name:'Январь 26', year:2026, month:0},
- {label:'Декабрь 2025', name:'Декабрь 25', year:2025, month:11},
- {label:'Ноябрь 2025', name:'Ноябрь 25', year:2025, month:10},
-];
+// v272: PLAN_TABS строится динамически от текущего месяца назад на 13 мес.
+// Имена листов в Светофоре: текущий год — «Май», прошлый — «Май 25»; для name
+// в planLoad есть fallback через несколько вариантов (имена меняются вручную в Sheets).
+var PLAN_MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+function planBuildTabs(){
+ var now = new Date();
+ var tabs = [];
+ for(var i=0; i<13; i++){
+ var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+ var y = d.getFullYear(), m = d.getMonth();
+ var monthName = PLAN_MONTHS_RU[m];
+ // Если это текущий год — имя без суффикса; если прошлый/более старый — с двузначным годом
+ var name = (y === now.getFullYear()) ? monthName : monthName + ' ' + String(y).slice(2);
+ tabs.push({label: monthName + ' ' + y, name: name, year: y, month: m});
+ }
+ return tabs;
+}
+var PLAN_TABS = planBuildTabs();
 var planTabIdx = 0;
 var planLastData = null;
 
@@ -15645,13 +15655,33 @@ async function planLoad() {
 
  var tab = PLAN_TABS[planTabIdx] || PLAN_TABS[0];
  var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(tab.name) + '&spreadsheetId=' + kpiSheetId + '&range=A1:G60';
+ // v272: пробуем несколько вариантов имени листа — пользователь может назвать
+ // как «Май», «Май 26», «май 26», «Май 2026». Берём первое что отдаст данные.
+ var monthName = PLAN_MONTHS_RU[tab.month];
+ var yy = String(tab.year).slice(2);
+ var nameVariants = [
+ tab.name,
+ monthName,
+ monthName + ' ' + yy,
+ monthName + ' ' + tab.year,
+ monthName.toLowerCase(),
+ monthName.toLowerCase() + ' ' + yy,
+ ].filter(function(v, i, a){ return v && a.indexOf(v) === i; });
 
+ var lastErr = null, gotData = null;
+ for(var i = 0; i < nameVariants.length; i++){
  try {
+ var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(nameVariants[i]) + '&spreadsheetId=' + kpiSheetId + '&range=A1:G60';
  var resp = await fetch(url);
  var asData = await resp.json();
- if (!asData.rows || asData.rows.length < 2) throw new Error('Нет данных');
- var rows = asData.rows.map(function(r) {
+ if (asData.rows && asData.rows.length >= 2) { gotData = asData; tab.name = nameVariants[i]; break; }
+ lastErr = asData.error || 'Нет данных в листе «' + nameVariants[i] + '»';
+ } catch(e){ lastErr = e.message; }
+ }
+
+ try {
+ if (!gotData) throw new Error(lastErr || 'Не нашёл лист с планом для ' + tab.label);
+ var rows = gotData.rows.map(function(r) {
  return { c: r.map(function(v) { return { v: v, f: null }; }) };
  });
  var data = parsePlanData(rows);
@@ -15659,6 +15689,8 @@ async function planLoad() {
  planRender(data);
  // Обновляем средний чек на дашборде из данных Светофора
  try { renderAvgCheckManagers(getPeriodPayments(currentPeriod)); } catch(e) {}
+ // v272: пере-рендерим план/факт плашку — теперь с правильным месяцем
+ try { if(typeof renderAll === 'function' && document.getElementById('view-dashboard').style.display !== 'none') renderAll(); } catch(e) {}
  if (st) st.textContent = '';
  } catch(e) {
  if (st) st.textContent = ' Ошибка: ' + e.message;
