@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v274</title>
+<title>SalesDoc — Финансовый Дашборд v275</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7274,8 +7274,48 @@ function renderAll() {
  if(statView && statView.style.display!=='none' && typeof statInit==='function') statInit();
 }
 
+// v275: рабочие дни KZ/KG (пн-пт минус государственные праздники)
+var HOLIDAYS_KZ = {
+ // Формат 'YYYY-MM-DD'. Источник: оф. производственный календарь РК на 2026
+ '2026-01-01':1,'2026-01-02':1,'2026-01-07':1,
+ '2026-03-08':1,'2026-03-09':1,'2026-03-21':1,'2026-03-22':1,'2026-03-23':1,
+ '2026-05-01':1,'2026-05-07':1,'2026-05-09':1,
+ '2026-07-06':1,'2026-08-30':1,
+ '2026-10-25':1,'2026-12-16':1,'2026-12-17':1
+};
+var HOLIDAYS_KG = {
+ // Производственный календарь КР на 2026
+ '2026-01-01':1,'2026-01-07':1,
+ '2026-02-23':1,'2026-03-08':1,'2026-03-21':1,
+ '2026-05-01':1,'2026-05-05':1,'2026-05-09':1,
+ '2026-08-31':1,'2026-11-07':1
+};
+function isWorkDay(date, country){
+ var day = date.getDay(); // 0=вс, 6=сб
+ if(day === 0 || day === 6) return false;
+ var key = date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
+ var holidays = country === 'KG' ? HOLIDAYS_KG : HOLIDAYS_KZ;
+ if(holidays[key]) return false;
+ return true;
+}
+function workDaysInMonth(year, month, country){
+ var totalDays = new Date(year, month+1, 0).getDate();
+ var n = 0;
+ for(var d=1; d<=totalDays; d++){
+ if(isWorkDay(new Date(year, month, d), country)) n++;
+ }
+ return n;
+}
+function workDaysPassed(year, month, dayInclusive, country){
+ var n = 0;
+ for(var d=1; d<=dayInclusive; d++){
+ if(isWorkDay(new Date(year, month, d), country)) n++;
+ }
+ return n;
+}
+
 // v266: жирная плашка «План vs Факт месяца» + прогноз исходя из текущего темпа.
-// Сразу видно «на треке / отстаём / обгоняем» без захода в отчёты.
+// v275: темп считается по рабочим дням (пн-пт минус государственные праздники).
 function renderPlanFactStrip(ps, factTotal){
  var el = document.getElementById('plan-fact-strip');
  if(!el) return;
@@ -7291,14 +7331,18 @@ function renderPlanFactStrip(ps, factTotal){
  });
  }
  if(!plan){ el.innerHTML = ''; return; }
- // Прошедшие/всего дней в выбранном месяце
+ // v275: считаем темп по РАБОЧИМ дням, а не календарным
  var sel = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth : {year:new Date().getFullYear(), month:new Date().getMonth()};
  var now = new Date();
  var inCurrentMonth = (sel.year === now.getFullYear() && sel.month === now.getMonth());
- var totalDays = new Date(sel.year, sel.month+1, 0).getDate();
+ var cc = (typeof currentCountry !== 'undefined') ? currentCountry : 'KZ';
+ var totalDays = new Date(sel.year, sel.month+1, 0).getDate(); // календарные — для отображения «день N из M» и прогресс-бара
  var daysPassed = inCurrentMonth ? now.getDate() : totalDays;
- var pace = daysPassed > 0 ? Math.round(factTotal / daysPassed) : 0;
- var forecast = Math.round(pace * totalDays);
+ var totalWorkDays = workDaysInMonth(sel.year, sel.month, cc);
+ var workDaysDone = inCurrentMonth ? workDaysPassed(sel.year, sel.month, now.getDate(), cc) : totalWorkDays;
+ // Темп / прогноз — по рабочим дням
+ var pace = workDaysDone > 0 ? Math.round(factTotal / workDaysDone) : 0;
+ var forecast = Math.round(pace * totalWorkDays);
  var pctOfPlan = plan ? Math.round(factTotal / plan * 100) : 0;
  var forecastPct = plan ? Math.round(forecast / plan * 100) : 0;
  var status, statusColor, statusBg;
@@ -7312,10 +7356,10 @@ function renderPlanFactStrip(ps, factTotal){
  var barColor = forecastPct >= 100 ? '#10B981' : forecastPct >= 80 ? '#F59E0B' : '#EF4444';
  // Маркер «где должны быть по дням»
  var paceMark = Math.min(100, Math.round(daysPassed / totalDays * 100));
- // v274: «Нужный темп» — сколько ₸/день надо чтобы выйти на план, и во сколько раз быстрее текущего.
- var daysLeft = Math.max(0, totalDays - daysPassed);
+ // v274-275: «Нужный темп» — сколько ₸/рабочий день надо чтобы выйти на план
+ var workDaysLeft = Math.max(0, totalWorkDays - workDaysDone);
  var needed = plan - factTotal;
- var requiredPace = (inCurrentMonth && daysLeft > 0 && needed > 0) ? Math.round(needed / daysLeft) : null;
+ var requiredPace = (inCurrentMonth && workDaysLeft > 0 && needed > 0) ? Math.round(needed / workDaysLeft) : null;
  var paceMultiplier = (requiredPace && pace > 0) ? (requiredPace / pace) : null;
  var paceColor = !requiredPace ? 'var(--text)' : (paceMultiplier <= 1 ? '#10B981' : paceMultiplier <= 2 ? '#F59E0B' : '#EF4444');
  var paceHint = !inCurrentMonth ? '' : (
@@ -7328,7 +7372,8 @@ function renderPlanFactStrip(ps, factTotal){
  + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:14px">'
  + '<div>'
  + '<div style="font-size:10px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">План месяца</div>'
- + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:24px;font-weight:700;color:var(--text)">'+monthNames[sel.month]+' '+sel.year+' · день '+daysPassed+' из '+totalDays+'</div>'
+ + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:24px;font-weight:700;color:var(--text)">'+monthNames[sel.month]+' '+sel.year+' · рабочий день '+workDaysDone+' из '+totalWorkDays+'</div>'
+ + '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">календарный день '+daysPassed+' из '+totalDays+'</div>'
  + '</div>'
  + '<div style="font-size:11px;color:'+statusColor+';background:'+statusBg+';padding:6px 12px;border-radius:20px;font-weight:600;align-self:center">'+status+'</div>'
  + '</div>'
@@ -7341,10 +7386,10 @@ function renderPlanFactStrip(ps, factTotal){
  + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Прогноз на конец месяца</div>'
  + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(forecast)+' <span style="font-size:12px;color:'+statusColor+'">'+cur+' · '+forecastPct+'%</span></div></div>'
  + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Текущий темп</div>'
- + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(pace)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+'/день</span></div>'
- + '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">средняя выручка с начала месяца</div></div>'
+ + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(pace)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+'/раб.день</span></div>'
+ + '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">средняя выручка за рабочий день</div></div>'
  + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Нужный темп</div>'
- + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:700;color:'+paceColor+'">'+(requiredPace ? fmt(requiredPace) : '—')+' <span style="font-size:12px;color:var(--text-muted)">'+(requiredPace ? cur+'/день' : '')+'</span></div>'
+ + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:700;color:'+paceColor+'">'+(requiredPace ? fmt(requiredPace) : '—')+' <span style="font-size:12px;color:var(--text-muted)">'+(requiredPace ? cur+'/раб.день' : '')+'</span></div>'
  + '<div style="font-size:10px;color:'+paceColor+';margin-top:2px;font-weight:600">'+paceHint+'</div></div>'
  + '</div>'
  // Прогресс-бар
