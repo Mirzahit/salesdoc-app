@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v273</title>
+<title>SalesDoc — Финансовый Дашборд v274</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7312,6 +7312,17 @@ function renderPlanFactStrip(ps, factTotal){
  var barColor = forecastPct >= 100 ? '#10B981' : forecastPct >= 80 ? '#F59E0B' : '#EF4444';
  // Маркер «где должны быть по дням»
  var paceMark = Math.min(100, Math.round(daysPassed / totalDays * 100));
+ // v274: «Нужный темп» — сколько ₸/день надо чтобы выйти на план, и во сколько раз быстрее текущего.
+ var daysLeft = Math.max(0, totalDays - daysPassed);
+ var needed = plan - factTotal;
+ var requiredPace = (inCurrentMonth && daysLeft > 0 && needed > 0) ? Math.round(needed / daysLeft) : null;
+ var paceMultiplier = (requiredPace && pace > 0) ? (requiredPace / pace) : null;
+ var paceColor = !requiredPace ? 'var(--text)' : (paceMultiplier <= 1 ? '#10B981' : paceMultiplier <= 2 ? '#F59E0B' : '#EF4444');
+ var paceHint = !inCurrentMonth ? '' : (
+ !requiredPace ? 'план уже выполнен' :
+ (paceMultiplier <= 1 ? 'текущий темп достаточен' :
+ ('нужно ускориться × ' + paceMultiplier.toFixed(1)))
+ );
  el.innerHTML = ''
  + '<div style="background:var(--dark-card);border:1px solid var(--border-faint);border-radius:14px;padding:18px 22px;position:relative;overflow:hidden">'
  + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:14px">'
@@ -7321,7 +7332,7 @@ function renderPlanFactStrip(ps, factTotal){
  + '</div>'
  + '<div style="font-size:11px;color:'+statusColor+';background:'+statusBg+';padding:6px 12px;border-radius:20px;font-weight:600;align-self:center">'+status+'</div>'
  + '</div>'
- // Три блока: План / Факт / Прогноз
+ // Блоки: План / Факт / Прогноз / Текущий темп / Нужный темп
  + '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:18px;margin-bottom:14px">'
  + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">План</div>'
  + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(plan)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+'</span></div></div>'
@@ -7329,8 +7340,12 @@ function renderPlanFactStrip(ps, factTotal){
  + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:700;color:'+barColor+'">'+fmt(factTotal)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+' · '+pctOfPlan+'%</span></div></div>'
  + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Прогноз на конец месяца</div>'
  + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(forecast)+' <span style="font-size:12px;color:'+statusColor+'">'+cur+' · '+forecastPct+'%</span></div></div>'
- + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Темп / день</div>'
- + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(pace)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+'/день</span></div></div>'
+ + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Текущий темп</div>'
+ + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(pace)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+'/день</span></div>'
+ + '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">средняя выручка с начала месяца</div></div>'
+ + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Нужный темп</div>'
+ + '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:22px;font-weight:700;color:'+paceColor+'">'+(requiredPace ? fmt(requiredPace) : '—')+' <span style="font-size:12px;color:var(--text-muted)">'+(requiredPace ? cur+'/день' : '')+'</span></div>'
+ + '<div style="font-size:10px;color:'+paceColor+';margin-top:2px;font-weight:600">'+paceHint+'</div></div>'
  + '</div>'
  // Прогресс-бар
  + '<div style="position:relative;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden">'
