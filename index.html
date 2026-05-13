@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v277</title>
+<title>SalesDoc — Финансовый Дашборд v278</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -893,6 +893,21 @@ body.light .kpi-card:hover{border-color:rgba(0,0,0,.12)!important;box-shadow:0 4
 [style*="border-left:"][style*="3px solid"], [style*="border-left: 3px solid"]{
  border-left:none!important; border:1px solid var(--border-faint)!important
 }
+
+/* v278: bulk-операции на канбане — чекбокс на карточке + плавающая панель */
+.kb-card-check{position:absolute;top:8px;left:8px;width:16px;height:16px;border-radius:4px;border:1.5px solid var(--border-faint);background:transparent;cursor:pointer;opacity:.5;transition:all .15s;z-index:2}
+.kb-card:hover .kb-card-check{opacity:1}
+.kb-card-check.on{background:var(--amo-blue);border-color:var(--amo-blue);opacity:1}
+.kb-card-check.on::after{content:'';position:absolute;left:4px;top:1px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.kb-card.kb-selected{border-color:var(--amo-blue)!important;box-shadow:0 0 0 1px var(--amo-blue) inset!important;background:rgba(33,150,243,.04)!important}
+.kb-card{padding-left:30px!important}
+.kb-bulk-panel{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--dark-card);border:1px solid var(--amo-blue);border-radius:12px;padding:12px 18px;display:none;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:9999;flex-wrap:wrap}
+.kb-bulk-panel.show{display:flex}
+.kb-bulk-count{font-size:13px;font-weight:700;color:var(--amo-blue)}
+.kb-bulk-action{padding:7px 14px;font-size:12px;font-weight:600;background:var(--amo-blue-soft);border:1px solid var(--amo-blue);color:var(--amo-blue);border-radius:8px;cursor:pointer}
+.kb-bulk-action:hover{background:var(--amo-blue);color:#fff}
+.kb-bulk-close{padding:7px 12px;font-size:12px;background:transparent;border:1px solid var(--border-faint);color:var(--text-soft);border-radius:8px;cursor:pointer}
+.kb-bulk-select{padding:7px 10px;font-size:12px;background:var(--surface-2);border:1px solid var(--border-faint);color:var(--text);border-radius:8px;font-weight:600}
 
 /* v270: кнопки периода на странице Прогноз cash-flow */
 .cf-period-btn{padding:6px 14px;font-size:11px;font-weight:600;background:transparent;border:1px solid var(--border-faint);color:var(--text-soft);border-radius:8px;cursor:pointer;transition:all .15s}
@@ -5436,6 +5451,15 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
 
  <!-- KANBAN / ВНЕДРЕНИЕ VIEW -->
  <div id="view-kanban" style="display:none;position:relative;flex-direction:column;height:calc(100vh - 70px)">
+ <!-- v278: плавающая панель bulk-операций (появляется когда выбраны карточки) -->
+ <div id="kb-bulk-panel" class="kb-bulk-panel">
+ <span class="kb-bulk-count" id="kb-bulk-count">0 выбрано</span>
+ <select id="kb-bulk-op" class="kb-bulk-select"><option value="">— назначить оператора —</option></select>
+ <button class="kb-bulk-action" onclick="kbBulkAssignOperator()">Назначить</button>
+ <select id="kb-bulk-stage" class="kb-bulk-select"><option value="">— перенести на этап —</option></select>
+ <button class="kb-bulk-action" onclick="kbBulkMoveStage()">Перенести</button>
+ <button class="kb-bulk-close" onclick="kbBulkClear()">Снять выбор</button>
+ </div>
  <!-- Компактный тулбар -->
  <div class="kb-topbar">
  <div class="kb-topbar-left">
@@ -21291,9 +21315,113 @@ function crmEventSave(eventId){
  crmCalRender();
 }
 
+// ===== v278: BULK-ОПЕРАЦИИ НА КАНБАНЕ =====
+window._kbSelected = new Set();
+
+function kbToggleSelect(cardId){
+ if(_kbSelected.has(cardId)) _kbSelected.delete(cardId);
+ else _kbSelected.add(cardId);
+ kbBulkUpdatePanel();
+ // Перерисуем чекбокс на конкретной карточке
+ var cardEl = document.querySelector('.kb-card[data-id="'+cardId+'"]');
+ if(cardEl){
+ cardEl.classList.toggle('kb-selected', _kbSelected.has(cardId));
+ var cb = cardEl.querySelector('.kb-card-check');
+ if(cb) cb.classList.toggle('on', _kbSelected.has(cardId));
+ }
+}
+
+function kbBulkClear(){
+ _kbSelected.clear();
+ kbBulkUpdatePanel();
+ // Снять подсветку со всех карточек
+ document.querySelectorAll('.kb-card.kb-selected').forEach(function(el){
+ el.classList.remove('kb-selected');
+ var cb = el.querySelector('.kb-card-check'); if(cb) cb.classList.remove('on');
+ });
+}
+
+function kbBulkUpdatePanel(){
+ var panel = document.getElementById('kb-bulk-panel');
+ var cnt = document.getElementById('kb-bulk-count');
+ if(!panel) return;
+ var n = _kbSelected.size;
+ panel.classList.toggle('show', n > 0);
+ if(cnt) cnt.textContent = n + ' выбрано';
+ if(n === 0) return;
+ // Заполнить дропдауны операторов и этапов (один раз)
+ var opSel = document.getElementById('kb-bulk-op');
+ if(opSel && opSel.children.length <= 1){
+ (typeof kbOperators !== 'undefined' ? kbOperators : []).forEach(function(op){
+ var o = document.createElement('option'); o.value = op; o.textContent = op; opSel.appendChild(o);
+ });
+ }
+ var stageSel = document.getElementById('kb-bulk-stage');
+ if(stageSel && stageSel.children.length <= 1){
+ (typeof kbColumns !== 'undefined' ? kbColumns : []).forEach(function(s){
+ var o = document.createElement('option'); o.value = s; o.textContent = s; stageSel.appendChild(o);
+ });
+ }
+}
+
+async function kbBulkAssignOperator(){
+ var opSel = document.getElementById('kb-bulk-op');
+ if(!opSel || !opSel.value){ alert('Выбери оператора'); return; }
+ var op = opSel.value;
+ var ids = Array.from(_kbSelected);
+ if(!confirm('Назначить «'+op+'» оператором для '+ids.length+' карточек?')) return;
+ var ok = 0;
+ for(var i=0;i<ids.length;i++){
+ var card = kbCards.find(function(c){ return c.id === ids[i]; });
+ if(!card) continue;
+ card.operator = op;
+ try {
+ if(typeof KB_SCRIPT_URL !== 'undefined' && KB_SCRIPT_URL && card._row){
+ await fetch(KB_SCRIPT_URL, {
+ method:'POST', headers:{'Content-Type':'text/plain'},
+ body: JSON.stringify({action:'updateCard', row: card._row, operator: op})
+ });
+ }
+ ok++;
+ } catch(e){}
+ }
+ if(typeof kbShowToast === 'function') kbShowToast('Оператор «'+op+'» назначен на '+ok+' карточек');
+ kbBulkClear();
+ if(typeof kbRenderBoard === 'function') kbRenderBoard();
+}
+
+async function kbBulkMoveStage(){
+ var sel = document.getElementById('kb-bulk-stage');
+ if(!sel || !sel.value){ alert('Выбери этап'); return; }
+ var stage = sel.value;
+ var ids = Array.from(_kbSelected);
+ if(!confirm('Перенести '+ids.length+' карточек на этап «'+stage+'»?')) return;
+ var ok = 0;
+ for(var i=0;i<ids.length;i++){
+ var card = kbCards.find(function(c){ return c.id === ids[i]; });
+ if(!card) continue;
+ var oldStage = card.stage;
+ card.stage = stage;
+ try {
+ if(typeof KB_SCRIPT_URL !== 'undefined' && KB_SCRIPT_URL && card._row){
+ await fetch(KB_SCRIPT_URL, {
+ method:'POST', headers:{'Content-Type':'text/plain'},
+ body: JSON.stringify({action:'moveCard', row: card._row, stage: stage, oldStage: oldStage, who: (currentUser && currentUser.name) || 'Bulk'})
+ });
+ }
+ ok++;
+ } catch(e){}
+ }
+ if(typeof kbShowToast === 'function') kbShowToast('Перенесено '+ok+' карточек на «'+stage+'»');
+ kbBulkClear();
+ if(typeof kbRenderBoard === 'function') kbRenderBoard();
+}
+
 function kbCreateCardEl(card) {
  var el = document.createElement('div');
  el.className = 'kb-card';
+ // v278: подсветка выбранных карточек в bulk-режиме
+ if(window._kbSelected && _kbSelected.has(card.id)) el.classList.add('kb-selected');
  el.draggable = true;
  el.dataset.id = card.id;
  el.dataset.row = card._row;
@@ -21320,6 +21448,9 @@ function kbCreateCardEl(card) {
  var hasNext = curIdx >= 0 && curIdx < kbColumns.length - 1;
 
  var html = '';
+ // v278: маленький чекбокс в левом верхнем углу карточки для bulk-выбора
+ var checked = window._kbSelected && _kbSelected.has(card.id);
+ html += '<div class="kb-card-check'+(checked?' on':'')+'" onclick="event.stopPropagation();kbToggleSelect(\''+card.id+'\')"></div>';
  if(hasNext) html += '<button class="kb-next-btn" onclick="event.stopPropagation();kbNextStage(\''+card.id+'\')">' + kbColumns[curIdx+1] + ' &#8250;</button>';
  html += '<div class="kb-client">' + card.client + '</div>';
  html += '<div class="kb-meta">';
