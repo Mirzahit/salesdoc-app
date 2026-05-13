@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v279</title>
+<title>SalesDoc — Финансовый Дашборд v280</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3863,6 +3863,9 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <!-- v266: План/факт пилюля — сразу видно «на треке» / «отстаём» -->
  <div id="plan-fact-strip" style="margin-bottom:18px"></div>
 
+ <!-- v280: AI-виджет Финдиректора на дашборде (только для CEO) -->
+ <div id="ai-w-dashboard-container"></div>
+
  <div class="kpi-grid">
  <div class="kpi-card" data-kpi-type="license" style="cursor:pointer"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Новые лицензии</div><div class="kpi-value" id="kpi-license">0 <span>₸</span></div><div class="kpi-delta up" id="delta-license">0%</div></div><div class="kpi-divider"></div>
  <div class="kpi-right">
@@ -4418,6 +4421,9 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <!-- MARKETING VIEW -->
  <div id="view-marketing" style="display:none;position:relative">
  <button onclick="showDataSources('marketing')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(59,130,246,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'">!</button>
+
+ <!-- v280: AI-виджет Маркетолога -->
+ <div id="ai-w-marketing-container"></div>
 
  <!-- v159: Header -->
  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:22px">
@@ -5505,6 +5511,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  <div class="kb-topbar-right">
  <button class="kb-filter-btn" onclick="kbOpenReport()" style="background:rgba(59,130,246,.08)">Отчёт</button>
+ <button class="kb-filter-btn" id="kb-ai-btn" onclick="kbAiInsights()" style="background:rgba(33,150,243,.12);color:var(--amo-blue);border:1px solid var(--amo-blue);display:none">AI-анализ</button>
  <button class="kb-icon-btn" onclick="kbOpenSettings()" title="Настройки">Настр.</button>
  <button class="kb-icon-btn" onclick="kbLoad()" id="kb-refresh-btn" title="Обновить">&#8635;</button>
  <div id="kb-status" style="font-size:10px;color:var(--text-muted);min-width:60px;text-align:right"></div>
@@ -5653,6 +5660,9 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div class="sd-bars" id="ac-tags-bars"></div>
  </div>
  </div>
+ <!-- v280: AI-виджет Customer Success на странице Действующие клиенты -->
+ <div id="ai-w-clients-container"></div>
+
  <!-- v277: несматченные платежи — ручное связывание -->
  <div id="ac-unmatched-section" style="display:none;margin-bottom:16px">
  <div class="sd-card" style="padding:14px 16px;background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.25)">
@@ -7436,6 +7446,278 @@ function renderPlanFactStrip(ps, factTotal){
  + '</div>'
  + '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:6px"><span>0%</span><span>50%</span><span>100% · план</span></div>'
  + '</div>';
+}
+
+// ===== v280: УНИВЕРСАЛЬНЫЙ AI-ВИДЖЕТ ДЛЯ СТРАНИЦ =====
+// Используется на: Дашборд / Действующие клиенты / Внедрение / Маркетинг.
+// Каждой странице — свой agentId и свой context-builder.
+// Кэш 6 часов в localStorage, ключ: sd_ai_w_<widgetId>.
+var AI_WIDGETS = {
+ 'ai-w-dashboard': { agent: 'financier', title: 'Инсайты Финдиректора', sub: 'AI-анализ плана, факта, тренда', contextFn: 'aiCtxDashboard' },
+ 'ai-w-clients': { agent: 'customer', title: 'Инсайты по клиентам', sub: 'Customer Success — риски оттока, апсейл', contextFn: 'aiCtxClients' },
+ 'ai-w-kanban': { agent: 'integrator', title: 'Инсайты по внедрению', sub: 'Узкие места канбана и операторов', contextFn: 'aiCtxKanban' },
+ 'ai-w-marketing': { agent: 'marketing', title: 'Инсайты Маркетолога', sub: 'Анализ Meta Ads и каналов', contextFn: 'aiCtxMarketing' }
+};
+var AI_WIDGET_TTL = 6 * 60 * 60 * 1000;
+
+function aiWidgetCacheKey(widgetId){ return 'sd_ai_w_' + widgetId; }
+
+function aiWidgetHtml(widgetId){
+ var w = AI_WIDGETS[widgetId];
+ if(!w) return '';
+ return '<div id="' + widgetId + '" class="ai-widget" style="background:var(--dark-card);border:1px solid var(--border-faint);border-radius:14px;padding:16px 20px;margin-bottom:16px;display:none">'
+ + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">'
+ + '<div>'
+ + '<div style="font-size:11px;color:var(--amo-blue);letter-spacing:2px;text-transform:uppercase;font-weight:700">'+w.title+'</div>'
+ + '<div class="ai-widget-meta" style="font-size:11px;color:var(--text-muted);margin-top:4px">'+w.sub+'</div>'
+ + '</div>'
+ + '<button class="ai-widget-btn" onclick="aiWidgetRefresh(\''+widgetId+'\')" style="padding:7px 14px;background:var(--amo-blue-soft);color:var(--amo-blue);border:1px solid var(--amo-blue);border-radius:8px;cursor:pointer;font-weight:600;font-size:12px">Обновить анализ</button>'
+ + '</div>'
+ + '<div class="ai-widget-body" style="font-size:13px;color:var(--text);line-height:1.7"></div>'
+ + '</div>';
+}
+
+function aiWidgetShow(widgetId){
+ if(!(currentUser && typeof isAssistantAllowed === 'function' && isAssistantAllowed(currentUser))) return;
+ // Если виджета нет в DOM — добавляем в контейнер (для страниц где есть placeholder)
+ var el = document.getElementById(widgetId);
+ if(!el){
+ var container = document.getElementById(widgetId + '-container');
+ if(container){ container.innerHTML = aiWidgetHtml(widgetId); el = document.getElementById(widgetId); }
+ }
+ if(!el) return; // нет ни виджета, ни контейнера — пропускаем
+ el.style.display = 'block';
+ // Подтянуть кэш
+ try {
+ var raw = localStorage.getItem(aiWidgetCacheKey(widgetId));
+ if(raw){
+ var data = JSON.parse(raw);
+ if(data && data.text && data.ts){
+ var stale = (Date.now() - data.ts) > AI_WIDGET_TTL;
+ aiWidgetRenderText(widgetId, data.text, data.ts, stale);
+ }
+ }
+ } catch(_){}
+}
+
+function aiWidgetRenderText(widgetId, text, ts, stale){
+ var el = document.getElementById(widgetId);
+ if(!el) return;
+ var body = el.querySelector('.ai-widget-body');
+ var meta = el.querySelector('.ai-widget-meta');
+ if(!body) return;
+ var html = String(text||'')
+ .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+ .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+ .replace(/\n\n+/g, '</p><p style="margin:10px 0">')
+ .replace(/\n/g, '<br>');
+ html = html.replace(/(Внимание|Срочно|Риск)/g, '<span style="color:#EF4444;font-weight:700">$1</span>');
+ html = html.replace(/(Возможность|Идея|Рекомендую)/g, '<span style="color:#10B981;font-weight:700">$1</span>');
+ html = html.replace(/(Тренд|Заметка|Наблюдение)/g, '<span style="color:#F59E0B;font-weight:700">$1</span>');
+ body.innerHTML = '<p style="margin:0">' + html + '</p>';
+ if(meta && ts){
+ var w = AI_WIDGETS[widgetId];
+ var d = new Date(ts).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+ meta.textContent = (stale ? 'Кэш устарел · ' : 'Свежий анализ · ') + d;
+ }
+}
+
+async function aiWidgetRefresh(widgetId){
+ var w = AI_WIDGETS[widgetId];
+ if(!w) return;
+ var el = document.getElementById(widgetId);
+ if(!el) return;
+ var btn = el.querySelector('.ai-widget-btn');
+ var body = el.querySelector('.ai-widget-body');
+ if(btn){ btn.disabled = true; btn.textContent = 'Анализирую...'; }
+ if(body) body.innerHTML = '<div style="color:var(--text-muted);padding:10px 0">Собираю контекст и отправляю в '+w.title.replace('Инсайты ','')+'...</div>';
+ try {
+ var ctxFn = window[w.contextFn];
+ var ctx = (typeof ctxFn === 'function') ? ctxFn() : '<context>пусто</context>';
+ var prompt = 'На основе данных ниже найди 3-5 коротких проактивных инсайтов для CEO. Каждый — одно ключевое наблюдение + конкретная рекомендация (1-2 предложения).\n\nФормат: **[Категория]** *Заголовок.* Объяснение. **Рекомендую:** что делать.\n\nКатегории: Внимание / Возможность / Тренд.\n\nБудь конкретен — имена, суммы, дни. Не повторяй очевидное (это и так в KPI). Никаких эмодзи.';
+ var resp = await fetch('/api/chat', {
+ method:'POST', headers:{'Content-Type':'application/json'},
+ body: JSON.stringify({
+ agentId: w.agent,
+ messages: [{role:'user', content: prompt}],
+ context: ctx,
+ userEmail: (currentUser && currentUser.email) || ''
+ })
+ });
+ var data = await resp.json();
+ if(!resp.ok) throw new Error(data.error || ('HTTP '+resp.status));
+ var text = data.reply || 'Агент не вернул ответ.';
+ try { localStorage.setItem(aiWidgetCacheKey(widgetId), JSON.stringify({text: text, ts: Date.now()})); } catch(_){}
+ aiWidgetRenderText(widgetId, text, Date.now(), false);
+ } catch(e){
+ if(body) body.innerHTML = '<div style="color:#EF4444;padding:10px 0">Ошибка: ' + (e.message||e) + '</div>';
+ } finally {
+ if(btn){ btn.disabled = false; btn.textContent = 'Обновить анализ'; }
+ }
+}
+
+// ===== КОНТЕКСТ-СБОРЩИКИ ДЛЯ ВИДЖЕТОВ =====
+function aiCtxDashboard(){
+ var lines = ['<context>'];
+ var now = new Date();
+ lines.push('Сегодня: ' + now.toISOString().slice(0,10));
+ try {
+ var pPlan = (planGetPlan('new_sales') + planGetPlan('subscription'));
+ var ps = getPeriodPayments('month');
+ var pFact = ps.reduce(function(s,p){return s+p.amount;},0);
+ var cc = (typeof currentCountry !== 'undefined') ? currentCountry : 'KZ';
+ var totalWD = workDaysInMonth(now.getFullYear(), now.getMonth(), cc);
+ var doneWD = workDaysPassed(now.getFullYear(), now.getMonth(), now.getDate(), cc);
+ var pace = doneWD ? Math.round(pFact/doneWD) : 0;
+ var forecast = Math.round(pace * totalWD);
+ lines.push('');
+ lines.push('ПЛАН/ФАКТ МЕСЯЦА (рабочий день ' + doneWD + '/' + totalWD + ')');
+ if(pPlan){
+ lines.push('План: ' + pPlan.toLocaleString('ru-KZ') + ' ₸');
+ lines.push('Факт: ' + pFact.toLocaleString('ru-KZ') + ' ₸ (' + Math.round(pFact/pPlan*100) + '%)');
+ lines.push('Темп: ' + pace.toLocaleString('ru-KZ') + ' ₸/рабочий день');
+ lines.push('Прогноз: ' + forecast.toLocaleString('ru-KZ') + ' ₸ (' + Math.round(forecast/pPlan*100) + '%)');
+ var requiredPace = Math.round((pPlan - pFact) / Math.max(1, totalWD - doneWD));
+ lines.push('Нужный темп до конца месяца: ' + requiredPace.toLocaleString('ru-KZ') + ' ₸/раб.день');
+ }
+ // KPI по категориям
+ lines.push('');
+ lines.push('ПЛАТЕЖИ ПО КАТЕГОРИЯМ ЗА МЕСЯЦ:');
+ var byCat = {};
+ ps.forEach(function(p){ byCat[p.category||'other'] = (byCat[p.category||'other']||0) + (Number(p.amount)||0); });
+ Object.keys(byCat).forEach(function(c){ lines.push(' '+c+': ' + Math.round(byCat[c]).toLocaleString('ru-KZ') + ' ₸'); });
+ // Прошлый месяц для сравнения
+ var prevM = now.getMonth() > 0 ? now.getMonth()-1 : 11;
+ var prevY = now.getMonth() > 0 ? now.getFullYear() : now.getFullYear()-1;
+ var prevPays = (typeof payments !== 'undefined' && payments) ? payments.filter(function(p){
+ if(!p.date) return false;
+ var d = new Date(p.date+'T00:00:00');
+ return d.getMonth() === prevM && d.getFullYear() === prevY;
+ }) : [];
+ if(prevPays.length){
+ var prevTotal = prevPays.reduce(function(s,p){return s+(Number(p.amount)||0);},0);
+ lines.push('');
+ lines.push('ПРЕДЫДУЩИЙ МЕСЯЦ (' + (prevM+1) + '/' + prevY + '): ' + Math.round(prevTotal).toLocaleString('ru-KZ') + ' ₸ итого');
+ }
+ } catch(_){}
+ lines.push('</context>');
+ return lines.join('\n');
+}
+
+function aiCtxClients(){
+ var lines = ['<context>'];
+ lines.push('Сегодня: ' + new Date().toISOString().slice(0,10));
+ try {
+ if(typeof acGetActiveClients === 'function'){
+ var ac = acGetActiveClients();
+ var totalMrr = ac.reduce(function(s,c){return s+(Number(c.monthlySum)||0);},0);
+ lines.push('');
+ lines.push('ДЕЙСТВУЮЩИЕ КЛИЕНТЫ');
+ lines.push('Всего: ' + ac.length + ', совокупный MRR: ' + Math.round(totalMrr).toLocaleString('ru-KZ') + ' ₸/мес');
+ // По сегментам
+ var bySeg = {};
+ ac.forEach(function(c){ var s=c.segment||'D'; if(!bySeg[s]) bySeg[s]={cnt:0,mrr:0}; bySeg[s].cnt++; bySeg[s].mrr+=Number(c.monthlySum)||0; });
+ lines.push('Сегменты:');
+ ['A+','A','B','C','D'].forEach(function(s){ if(bySeg[s]) lines.push(' '+s+': '+bySeg[s].cnt+' клиентов, '+Math.round(bySeg[s].mrr).toLocaleString('ru-KZ')+' ₸/мес'); });
+ // Топ-10 по MRR
+ var topMrr = ac.slice().sort(function(a,b){return (b.monthlySum||0)-(a.monthlySum||0);}).slice(0,10);
+ lines.push('');
+ lines.push('ТОП-10 ПО АБОНПЛАТЕ:');
+ topMrr.forEach(function(c){
+ lines.push(' '+c.client+' ('+c.segment+'): '+Number(c.monthlySum).toLocaleString('ru-KZ')+' ₸/мес, '+(c.payCount||0)+' платежей, последний '+(c.daysSincePay===999?'не зафиксирован':c.daysSincePay+' дн назад'));
+ });
+ // Риски — те у кого реально есть платежи но не платят > 30 дн
+ var risky = ac.filter(function(c){ return (c.payCount||0) > 0 && c.daysSincePay > 30 && c.daysSincePay < 999; })
+ .sort(function(a,b){ return (b.monthlySum||0)-(a.monthlySum||0); });
+ if(risky.length){
+ lines.push('');
+ lines.push('В РИСКЕ ОТТОКА (> 30 дн без оплаты, есть история платежей):');
+ risky.slice(0,10).forEach(function(c){
+ lines.push(' '+c.client+' ('+c.segment+'): '+c.daysSincePay+' дн, '+Number(c.monthlySum).toLocaleString('ru-KZ')+' ₸/мес');
+ });
+ }
+ // Несматченные
+ var unm = (window._acUnmatchedPays || []).length;
+ if(unm > 0){
+ lines.push('');
+ lines.push('ВНИМАНИЕ: ' + unm + ' уникальных hosts в платежах не привязаны к клиентам — нужен ручной матчинг через UI.');
+ }
+ }
+ } catch(_){}
+ lines.push('</context>');
+ return lines.join('\n');
+}
+
+function aiCtxKanban(){
+ var lines = ['<context>'];
+ lines.push('Сегодня: ' + new Date().toISOString().slice(0,10));
+ try {
+ var cards = (typeof kbCards !== 'undefined' && kbCards) ? kbCards : [];
+ var notAct = cards.filter(function(c){ return c.stage !== 'Активирован' && !c.activDate; });
+ lines.push('');
+ lines.push('КАНБАН ВНЕДРЕНИЯ');
+ lines.push('Всего карточек: ' + cards.length + ', не активированы: ' + notAct.length);
+ // По этапам
+ var byStage = {};
+ notAct.forEach(function(c){ byStage[c.stage] = (byStage[c.stage]||0)+1; });
+ lines.push('Распределение по этапам:');
+ Object.keys(byStage).forEach(function(s){ lines.push(' «'+s+'»: ' + byStage[s]); });
+ // По операторам
+ var byOp = {};
+ notAct.forEach(function(c){ var o = c.operator||'(нет оператора)'; byOp[o] = (byOp[o]||0)+1; });
+ lines.push('Нагрузка операторов:');
+ Object.keys(byOp).forEach(function(o){ lines.push(' '+o+': '+byOp[o]+' карточек'); });
+ // Aging
+ var aging = notAct.map(function(c){
+ var d = (typeof kbGetStageDays === 'function') ? kbGetStageDays(c) : 0;
+ return {client:c.client, stage:c.stage, days:d, operator:c.operator||'нет', amount:Number(c.amount)||0};
+ }).filter(function(x){ return x.days > 14; }).sort(function(a,b){ return b.days-a.days; });
+ if(aging.length){
+ var stuckSum = aging.reduce(function(s,x){return s+x.amount;},0);
+ lines.push('');
+ lines.push('ЗАСТРЯЛИ > 14 ДНЕЙ (блокирует '+Math.round(stuckSum).toLocaleString('ru-KZ')+' ₸):');
+ aging.slice(0,15).forEach(function(x){
+ lines.push(' '+x.client+' — этап «'+x.stage+'» уже '+x.days+' дн, оператор '+x.operator+', '+x.amount.toLocaleString('ru-KZ')+' ₸');
+ });
+ }
+ // Активации за последний месяц
+ var activated = cards.filter(function(c){ return c.activDate; });
+ var thisMonth = new Date().getMonth();
+ var thisYear = new Date().getFullYear();
+ var actThisMonth = activated.filter(function(c){
+ try { var d = new Date(c.activDate); return d.getMonth()===thisMonth && d.getFullYear()===thisYear; } catch(_){ return false; }
+ });
+ lines.push('');
+ lines.push('АКТИВАЦИИ: всего ' + activated.length + ', в этом месяце ' + actThisMonth.length);
+ } catch(_){}
+ lines.push('</context>');
+ return lines.join('\n');
+}
+
+function aiCtxMarketing(){
+ // Маркетолог получает контекст с Meta Ads на серверной стороне (buildMarketingContext в /api/chat).
+ // Достаточно передать минимальный клиентский контекст.
+ return '<context>\nСегодня: ' + new Date().toISOString().slice(0,10) + '\nКонтекст Meta Ads подтянется на сервере.\n</context>';
+}
+
+// v280: AI-оверлей для канбана (Внедрение) — открывается по кнопке «AI-анализ»
+function kbAiInsights(){
+ var existing = document.getElementById('kb-ai-overlay');
+ if(existing){ existing.remove(); return; }
+ var overlay = document.createElement('div');
+ overlay.id = 'kb-ai-overlay';
+ overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:60px 20px;overflow-y:auto';
+ overlay.onclick = function(e){ if(e.target === overlay) overlay.remove(); };
+ overlay.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;max-width:720px;width:100%;padding:20px 24px;box-shadow:0 24px 60px rgba(0,0,0,.4)">'
+ + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">'
+ + '<div><div style="font-size:18px;color:var(--text);font-weight:700">Инсайты по внедрению</div>'
+ + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">AI-анализ канбана, операторов, SLA</div></div>'
+ + '<button onclick="document.getElementById(\'kb-ai-overlay\').remove()" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:20px;padding:0 6px">×</button>'
+ + '</div>'
+ + aiWidgetHtml('ai-w-kanban')
+ + '</div>';
+ document.body.appendChild(overlay);
+ aiWidgetShow('ai-w-kanban');
 }
 
 // ===== v271: AI-инсайты Финдиректора на странице Утро =====
@@ -9918,6 +10200,17 @@ function showView(v) {
  if(v==='botadmin'){ if(typeof botAdminInit==='function') botAdminInit(); }
  if(v==='morning'){ if(typeof morningInit==='function') morningInit(); }
  if(v==='cashflow'){ if(typeof cfInit==='function') cfInit(); }
+ // v280: AI-виджеты на ключевых страницах (только для CEO)
+ if(typeof aiWidgetShow === 'function'){
+ if(v==='dashboard') aiWidgetShow('ai-w-dashboard');
+ if(v==='activeclients') aiWidgetShow('ai-w-clients');
+ if(v==='marketing') aiWidgetShow('ai-w-marketing');
+ // Канбан — отдельная кнопка в топбаре, открывает оверлей
+ if(v==='kanban'){
+ var btn = document.getElementById('kb-ai-btn');
+ if(btn && currentUser && typeof isAssistantAllowed === 'function' && isAssistantAllowed(currentUser)) btn.style.display = '';
+ }
+ }
 }
 
 // DATA SOURCES INFO (динамически из COUNTRY_CONFIG)
