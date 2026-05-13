@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v272</title>
+<title>SalesDoc — Финансовый Дашборд v273</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7279,10 +7279,17 @@ function renderAll() {
 function renderPlanFactStrip(ps, factTotal){
  var el = document.getElementById('plan-fact-strip');
  if(!el) return;
- // План = новые продажи + абонплата (если planLastData загружен)
+ // План = только то что реально есть в planLastData (Светофор KPI), без старых
+ // hardcode-фоллбэков типа plans['week'].subscription=300000 — они показывали
+ // мусорный «План 300 000 ₸» когда настоящий план ещё не подгрузился.
  var plan = 0;
- try { plan = (planGetPlan && (planGetPlan('new_sales') + planGetPlan('subscription'))) || 0; } catch(_){}
- // Если плана нет (loadData ещё не пришёл) — не рисуем плашку
+ if(typeof planLastData !== 'undefined' && planLastData && planLastData.agents){
+ planLastData.agents.forEach(function(a){
+ a.kpis.forEach(function(k){
+ if(String(k.name||'').toLowerCase().indexOf('продаж') >= 0) plan += (Number(k.plan)||0);
+ });
+ });
+ }
  if(!plan){ el.innerHTML = ''; return; }
  // Прошедшие/всего дней в выбранном месяце
  var sel = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth : {year:new Date().getFullYear(), month:new Date().getMonth()};
@@ -9786,6 +9793,13 @@ function showView(v) {
  // v255-fix: дашборд и оплаты не пере-рендерились при возврате на view — KPI оставались
  // нулевыми, если data из Sheets долетела ПОСЛЕ initial renderAll(). Принудительно перерисовываем.
  if(v==='dashboard' && typeof payments!=='undefined' && payments && payments.length){ try{ renderAll(); }catch(_){} }
+ // v273: на дашборде нужны реальные планы для плашки «План месяца» — подтягиваем
+ // план Светофора если он ещё не загружен, потом перерисовываем дашборд.
+ if(v==='dashboard' && !planLastData && typeof planLoad === 'function' && !window._planLoadingForDash){
+ window._planLoadingForDash = true;
+ try { planInit(); } catch(_){}
+ planLoad().then(function(){ window._planLoadingForDash = false; try { renderAll(); } catch(_){} }).catch(function(){ window._planLoadingForDash = false; });
+ }
  if(v==='payments' && typeof payments!=='undefined' && payments && payments.length){ try{ renderAllPayments(); }catch(_){} }
  if(v==='keyclients')renderKeyClients();
  if(v==='assistant'){asstInit();}
