@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v278</title>
+<title>SalesDoc — Финансовый Дашборд v279</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7539,15 +7539,17 @@ function morningBuildAiContext(){
  var ps = getPeriodPayments('month');
  var pFact = ps.reduce(function(s,p){return s+p.amount;},0);
  if(pPlan){
- var totalDays = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
- var daysPassed = now.getDate();
- var pace = daysPassed ? Math.round(pFact/daysPassed) : 0;
- var forecast = Math.round(pace * totalDays);
+ // v279: считаем по рабочим дням, синхронно с дашбордом
+ var cc = (typeof currentCountry !== 'undefined') ? currentCountry : 'KZ';
+ var totalWorkDays = workDaysInMonth(now.getFullYear(), now.getMonth(), cc);
+ var workDaysDone = workDaysPassed(now.getFullYear(), now.getMonth(), now.getDate(), cc);
+ var pace = workDaysDone ? Math.round(pFact/workDaysDone) : 0;
+ var forecast = Math.round(pace * totalWorkDays);
  lines.push('');
- lines.push('ПЛАН/ФАКТ ' + (now.getMonth()+1) + '/' + now.getFullYear() + ' (день ' + daysPassed + '/' + totalDays + ')');
+ lines.push('ПЛАН/ФАКТ ' + (now.getMonth()+1) + '/' + now.getFullYear() + ' (рабочий день ' + workDaysDone + '/' + totalWorkDays + ')');
  lines.push('План: ' + pPlan.toLocaleString('ru-KZ') + ' ₸');
  lines.push('Факт: ' + pFact.toLocaleString('ru-KZ') + ' ₸ (' + Math.round(pFact/pPlan*100) + '%)');
- lines.push('Темп: ' + pace.toLocaleString('ru-KZ') + ' ₸/день');
+ lines.push('Темп: ' + pace.toLocaleString('ru-KZ') + ' ₸/рабочий день');
  lines.push('Прогноз: ' + forecast.toLocaleString('ru-KZ') + ' ₸ (' + Math.round(forecast/pPlan*100) + '%)');
  }
  } catch(_){}
@@ -8039,16 +8041,18 @@ function morningRender(){
  }
 
  // === БЛОК 4: ПЛАН/ФАКТ МЕСЯЦА ===
+ // v279: считаем по рабочим дням — синхронно с плашкой на дашборде
  var planSection = null;
  try {
  var pPlan = (planGetPlan('new_sales') + planGetPlan('subscription'));
  var ps = getPeriodPayments('month');
  var pFact = ps.reduce(function(s,p){return s+p.amount;},0);
  if(pPlan){
- var totalDays = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
- var daysPassed = now.getDate();
- var pace = daysPassed ? Math.round(pFact/daysPassed) : 0;
- var forecast = Math.round(pace * totalDays);
+ var cc_ = (typeof currentCountry !== 'undefined') ? currentCountry : 'KZ';
+ var totalWorkDays = workDaysInMonth(now.getFullYear(), now.getMonth(), cc_);
+ var workDaysDone = workDaysPassed(now.getFullYear(), now.getMonth(), now.getDate(), cc_);
+ var pace = workDaysDone ? Math.round(pFact/workDaysDone) : 0;
+ var forecast = Math.round(pace * totalWorkDays);
  var pct = Math.round(pFact/pPlan*100);
  var fc = Math.round(forecast/pPlan*100);
  planSection = {
@@ -8058,8 +8062,8 @@ function morningRender(){
  forecast: forecast,
  pct: pct,
  fc: fc,
- daysPassed: daysPassed,
- totalDays: totalDays
+ daysPassed: workDaysDone,
+ totalDays: totalWorkDays
  };
  }
  } catch(_){}
@@ -8120,7 +8124,7 @@ function morningRender(){
  html += '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px"><span>Факт: '+fmt(planSection.fact)+' ₸</span><span>План: '+fmt(planSection.plan)+' ₸</span></div>';
  html += '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:'+Math.min(100,planSection.pct)+'%;background:'+color+'"></div></div>';
  html += '<div style="font-size:12px;color:var(--text)">Прогноз: <b style="color:'+color+'">'+fmt(planSection.forecast)+' ₸</b> (' + planSection.fc + '%)</div>';
- html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">День '+planSection.daysPassed+' из '+planSection.totalDays+'</div>';
+ html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Рабочий день '+planSection.daysPassed+' из '+planSection.totalDays+'</div>';
  html += '</div>';
  }
 
