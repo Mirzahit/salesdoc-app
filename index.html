@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v280</title>
+<title>SalesDoc — Финансовый Дашборд v281</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5827,7 +5827,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div style="font-size:11px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px">Откуда берётся прогноз</div>
  <div style="font-size:12px;color:var(--text-soft);line-height:1.7">
  <b>Приход:</b> ожидаемая абонплата от действующих клиентов (по host-матчингу) + ожидаемые активации pipeline-карточек на канбане (распределены равномерно по горизонту).<br>
- <b>Расход:</b> средний расход за последние 3 месяца, распределённый равномерно по дням. Это грубая оценка — для точности подключи бюджет/договоры.<br>
+ <b>Расход:</b> среднее за 3 закрытых месяца расходов из Sheets. Делится на ПОСТОЯННЫЕ (статьи, которые есть в каждом из 3-х месяцев — аренда/ЗП/налоги) и ПЕРЕМЕННЫЕ (единичные — маркетинг/разовые покупки). Распределяется равномерно по дням горизонта.<br>
  Прогноз приблизительный. Реальность зависит от закрытий сделок и сезонности.
  </div>
  </div>
@@ -7961,10 +7961,8 @@ function cfInit(){
  if((typeof AC_KZ_CACHE === 'undefined' || !AC_KZ_CACHE || !AC_KZ_CACHE.length) && typeof acLoadKZClients === 'function'){
  promises.push(new Promise(function(resolve){ try{ acLoadKZClients(function(){ resolve(); }); }catch(_){ resolve(); } }));
  }
- // Расходы — expLoad async (попробуем загрузить, не ждём)
- if(typeof expLoad === 'function' && (typeof expData === 'undefined' || !expData || !expData.length)){
- try { expInit(); expLoad(); } catch(_){}
- }
+ // v281: тянем расходы за 3 последних закрытых месяца для точного прогноза
+ promises.push(cfLoadHistoricalExpenses(3));
  if(promises.length){
  Promise.all(promises).then(cfRender).catch(cfRender);
  setTimeout(cfRender, 3000);
@@ -7972,6 +7970,91 @@ function cfInit(){
  } else {
  cfRender();
  setTimeout(cfRender, 3000);
+ }
+}
+
+// v281: подгружает 3 закрытых месяца расходов из Sheets, считает среднее
+// и разделяет на постоянные (есть в каждом мес) и переменные.
+window._cfHistExp = null; // { monthlyConstant, monthlyVariable, byCategory: {...}, monthsCount }
+async function cfLoadHistoricalExpenses(monthsBack){
+ try {
+ var now = new Date();
+ var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
+ var sheetId = (typeof EXP_SHEET_ID !== 'undefined' ? EXP_SHEET_ID : (COUNTRY_CONFIG[currentCountry]||{}).EXP_SHEET_ID);
+ if(!sheetId) return;
+ var EXP_MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+ var byMonth = []; // [{name, byCategory:{cat:sum}}]
+ for(var i=1; i<=monthsBack; i++){ // i=1 — прошлый закрытый месяц
+ var d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+ var label = EXP_MONTHS_RU[d.getMonth()] + ' ' + d.getFullYear();
+ var altLabel = EXP_MONTHS_RU[d.getMonth()]; // KG-формат без года
+ var found = null;
+ for(var n=0; n<2 && !found; n++){
+ var name = n===0 ? label : altLabel;
+ try {
+ var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(name) + '&spreadsheetId=' + sheetId + '&range=A1:E100';
+ var resp = await fetch(url);
+ var json = await resp.json();
+ if(json.rows && json.rows.length >= 2) found = json.rows;
+ } catch(e){}
+ }
+ if(!found) continue;
+ // Найти строку-заголовок (Дата|Статья|Примечание|Сумма|Банк)
+ var headerIdx = -1;
+ for(var hi=0; hi<found.length; hi++){
+ if(found[hi] && String(found[hi][0]||'').toLowerCase() === 'дата'){ headerIdx = hi; break; }
+ }
+ var dataRows = headerIdx >= 0 ? found.slice(headerIdx + 1) : found.slice(1);
+ var byCat = {};
+ dataRows.forEach(function(row){
+ if(!row || !row[1] || !row[3]) return;
+ var amount = typeof row[3] === 'number' ? row[3] : parseFloat(String(row[3]).replace(/[^0-9.,]/g,'').replace(',','.'));
+ if(!amount || amount <= 0) return;
+ var cat = String(row[1] || 'Прочее').trim();
+ byCat[cat] = (byCat[cat] || 0) + amount;
+ });
+ byMonth.push({ name: label, byCategory: byCat });
+ }
+ if(!byMonth.length) return;
+
+ // Среднее по категории за загруженные месяцы
+ var avgByCategory = {};
+ var allCats = {};
+ byMonth.forEach(function(m){ Object.keys(m.byCategory).forEach(function(c){ allCats[c] = true; }); });
+ Object.keys(allCats).forEach(function(cat){
+ var sum = 0, occur = 0;
+ byMonth.forEach(function(m){
+ if(m.byCategory[cat]){ sum += m.byCategory[cat]; occur++; }
+ });
+ avgByCategory[cat] = { avg: sum / byMonth.length, occurMonths: occur, totalMonths: byMonth.length };
+ });
+
+ // Постоянные = присутствуют в каждом загруженном месяце
+ // Переменные = в части месяцев (1 или 2 из 3)
+ var monthlyConstant = 0, monthlyVariable = 0;
+ var constCats = {}, varCats = {};
+ Object.keys(avgByCategory).forEach(function(cat){
+ var info = avgByCategory[cat];
+ if(info.occurMonths === info.totalMonths){
+ monthlyConstant += info.avg;
+ constCats[cat] = Math.round(info.avg);
+ } else {
+ monthlyVariable += info.avg;
+ varCats[cat] = Math.round(info.avg);
+ }
+ });
+
+ window._cfHistExp = {
+ monthlyConstant: Math.round(monthlyConstant),
+ monthlyVariable: Math.round(monthlyVariable),
+ totalMonthly: Math.round(monthlyConstant + monthlyVariable),
+ constCats: constCats,
+ varCats: varCats,
+ monthsCount: byMonth.length,
+ monthsLoaded: byMonth.map(function(m){return m.name;})
+ };
+ } catch(e){
+ console.warn('cfLoadHistoricalExpenses error:', e);
  }
 }
 
@@ -8041,30 +8124,43 @@ function cfBuildForecast(){
  days[i].incoming += pipelinePerDay;
  }
 
- // === РАСХОД: средний за последние 3 месяца ===
- var monthlyExp = 0;
+ // === РАСХОД ===
+ // v281: используем средние за 3 закрытых месяца (из window._cfHistExp).
+ // Раскладываем на постоянные (равномерно по дням) и переменные (равномерно тоже,
+ // но с пометкой что это менее точно).
+ var monthlyConstant = 0, monthlyVariable = 0, monthlyExp = 0;
+ var historySource = '';
  try {
- // expenses из expData ИЛИ из payments если expData недоступна — будем считать только видимые
+ if(window._cfHistExp && window._cfHistExp.totalMonthly > 0){
+ monthlyConstant = window._cfHistExp.monthlyConstant;
+ monthlyVariable = window._cfHistExp.monthlyVariable;
+ monthlyExp = window._cfHistExp.totalMonthly;
+ historySource = 'avg-' + window._cfHistExp.monthsCount + 'mo';
+ } else {
+ // Fallback: текущий expData
  var expArr = (typeof expData !== 'undefined' && expData) ? expData : [];
- // Берём все расходы из expData (а это уже один месяц — текущий выбранный)
- // Если есть EXP_TABS — попробуем достать последние 3 месяца. Иначе берём текущий × 3 / 3
- // Для MVP — считаем что expData ~ один месяц расходов
  monthlyExp = expArr.reduce(function(s,e){ return s + (Number(e.amount)||0); }, 0);
- // Если expArr пуст — попробуем грубо оценить как 60% от среднего месячного дохода
+ historySource = 'current-only';
  if(monthlyExp === 0 && typeof payments !== 'undefined' && payments){
- // Средний доход последних 3 месяцев
- var byMonth = {};
+ // Совсем нет данных — грубая эвристика 60% от среднего дохода
+ var byMonth2 = {};
  payments.forEach(function(p){
  if(!p.date) return;
  var key = String(p.date).slice(0,7);
- byMonth[key] = (byMonth[key]||0) + (Number(p.amount)||0);
+ byMonth2[key] = (byMonth2[key]||0) + (Number(p.amount)||0);
  });
- var keys = Object.keys(byMonth).sort().reverse().slice(0,3);
- var avgIncome = keys.length ? keys.reduce(function(s,k){return s+byMonth[k];},0)/keys.length : 0;
- monthlyExp = avgIncome * 0.6; // эвристика: расход ~60% от дохода
+ var keys = Object.keys(byMonth2).sort().reverse().slice(0,3);
+ var avgIncome = keys.length ? keys.reduce(function(s,k){return s+byMonth2[k];},0)/keys.length : 0;
+ monthlyExp = avgIncome * 0.6;
+ historySource = 'estimate-60pct-of-income';
+ }
+ monthlyVariable = monthlyExp;
  }
  } catch(_){}
- var dailyExp = monthlyExp / 30;
+ // Распределяем равномерно по дням горизонта (используя 30-дневный baseline)
+ var dailyConstant = monthlyConstant / 30;
+ var dailyVariable = monthlyVariable / 30;
+ var dailyExp = dailyConstant + dailyVariable;
  for(var i=0;i<horizon;i++){ days[i].outgoing = dailyExp; }
 
  // === НЕТТО и кумулятив ===
@@ -8082,6 +8178,10 @@ function cfBuildForecast(){
  totalIncoming: days.reduce(function(s,d){return s+d.incoming;},0),
  totalOutgoing: days.reduce(function(s,d){return s+d.outgoing;},0),
  totalNet: days.reduce(function(s,d){return s+d.net;},0),
+ // v281: разбивка расходов для UI
+ monthlyConstant: monthlyConstant,
+ monthlyVariable: monthlyVariable,
+ historySource: historySource,
  startBalance: balance,
  endBalance: balance + cumNet,
  minBalance: Math.min.apply(null, days.map(function(d){return d.balance;})),
@@ -8104,9 +8204,21 @@ function cfRender(){
  kHtml += '<div class="cf-kpi"><div class="cf-kpi-label">Ожидаемый приход</div>'
  + '<div class="cf-kpi-value" style="color:#10B981">+' + fmt(Math.round(f.totalIncoming)) + ' ₸</div>'
  + '<div class="cf-kpi-sub">за ' + _cfHorizon + ' дней</div></div>';
+ // v281: расход с разбивкой постоянные/переменные
+ var sub = 'средний по истории';
+ if(f.historySource === 'avg-3mo' || (f.historySource||'').indexOf('avg-') === 0){
+ sub = 'среднее за 3 закрытых месяца';
+ } else if(f.historySource === 'estimate-60pct-of-income'){
+ sub = '60% от среднего дохода (оценка)';
+ }
  kHtml += '<div class="cf-kpi"><div class="cf-kpi-label">Ожидаемый расход</div>'
  + '<div class="cf-kpi-value" style="color:#EF4444">−' + fmt(Math.round(f.totalOutgoing)) + ' ₸</div>'
- + '<div class="cf-kpi-sub">средний по истории</div></div>';
+ + '<div class="cf-kpi-sub">' + sub + '</div>'
+ + ((f.monthlyConstant > 0 || f.monthlyVariable > 0) ? '<div style="font-size:10px;color:var(--text-muted);margin-top:6px;line-height:1.5">'
+ + 'Постоянные: <b style="color:var(--text)">' + fmt(Math.round(f.monthlyConstant * (_cfHorizon/30))) + ' ₸</b><br>'
+ + 'Переменные: <b style="color:var(--text)">' + fmt(Math.round(f.monthlyVariable * (_cfHorizon/30))) + ' ₸</b>'
+ + '</div>' : '')
+ + '</div>';
  var netColor = f.totalNet >= 0 ? '#10B981' : '#EF4444';
  var netSign = f.totalNet >= 0 ? '+' : '−';
  kHtml += '<div class="cf-kpi"><div class="cf-kpi-label">Нетто за период</div>'
