@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v281</title>
+<title>SalesDoc — Финансовый Дашборд v282</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3959,6 +3959,9 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div></div></div>
  </div>
  <!-- СРЕДНИЙ ЧЕК ПО МЕНЕДЖЕРАМ -->
+ <!-- v282: Лидер недели и аутсайдер -->
+ <div id="leaders-strip" style="margin-bottom:16px"></div>
+
  <div class="panel" style="margin-bottom:16px">
  <div class="panel-title" style="margin-bottom:12px">Средний чек новых клиентов по менеджерам</div>
  <div id="avg-check-managers" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px"></div>
@@ -7315,6 +7318,7 @@ function renderAll() {
  setupKpiTooltips(ps);
  renderM2MA2A(ps);
  renderAvgCheckManagers(ps);
+ renderLeadersStrip();
  renderPlanFactStrip(ps, total);
  // Если страница Статистики открыта — перерисовать с новым selectedMonth
  var statView = document.getElementById('view-statistics');
@@ -7359,6 +7363,81 @@ function workDaysPassed(year, month, dayInclusive, country){
  if(isWorkDay(new Date(year, month, d), country)) n++;
  }
  return n;
+}
+
+// v282: «Лидер недели + аутсайдер» — сравнение выручки менеджеров за эту и прошлую неделю
+function renderLeadersStrip(){
+ var el = document.getElementById('leaders-strip');
+ if(!el) return;
+ if(typeof payments === 'undefined' || !payments || !payments.length){ el.innerHTML = ''; return; }
+ var now = new Date();
+ // Этa неделя: понедельник 00:00 до сейчас
+ var dayOfWeek = now.getDay() || 7; // 1=пн ... 7=вс
+ var thisMonStart = new Date(now); thisMonStart.setDate(now.getDate() - (dayOfWeek-1)); thisMonStart.setHours(0,0,0,0);
+ var prevMonStart = new Date(thisMonStart); prevMonStart.setDate(thisMonStart.getDate() - 7);
+ var prevMonEnd = new Date(thisMonStart); prevMonEnd.setMilliseconds(-1);
+
+ function inRange(d, from, to){ return d >= from && d <= to; }
+ function getMgrName(p){ return (p.managerName || empName(p.employee) || '').trim(); }
+
+ // Считаем суммы по менеджерам за обе недели
+ var thisWeek = {}, prevWeek = {};
+ payments.forEach(function(p){
+ if(!p.date) return;
+ var d = new Date(p.date + 'T00:00:00');
+ var name = getMgrName(p);
+ if(!name || name === '-') return;
+ if(d >= thisMonStart && d <= now){
+ thisWeek[name] = (thisWeek[name]||0) + (Number(p.amount)||0);
+ } else if(inRange(d, prevMonStart, prevMonEnd)){
+ prevWeek[name] = (prevWeek[name]||0) + (Number(p.amount)||0);
+ }
+ });
+ // Собираем уникальный список менеджеров
+ var allMgrs = {};
+ Object.keys(thisWeek).forEach(function(n){ allMgrs[n] = 1; });
+ Object.keys(prevWeek).forEach(function(n){ allMgrs[n] = 1; });
+ var mgrs = Object.keys(allMgrs).map(function(name){
+ var t = thisWeek[name] || 0;
+ var p = prevWeek[name] || 0;
+ var delta = p > 0 ? Math.round((t - p) / p * 100) : (t > 0 ? 999 : 0);
+ return { name: name, thisWeek: t, prevWeek: p, delta: delta };
+ });
+ if(!mgrs.length){ el.innerHTML = ''; return; }
+ // Сортируем по выручке этой недели — лидер, по дельте — аутсайдер
+ var byThis = mgrs.slice().sort(function(a,b){ return b.thisWeek - a.thisWeek; });
+ var leader = byThis[0]; // топ по выручке недели
+ // Аутсайдер — у кого больше всех просел % при условии что в прошлой неделе была активность
+ var withHistory = mgrs.filter(function(m){ return m.prevWeek > 0; });
+ var outsider = null;
+ if(withHistory.length){
+ var byDelta = withHistory.slice().sort(function(a,b){ return a.delta - b.delta; });
+ outsider = byDelta[0].delta < 0 ? byDelta[0] : null;
+ }
+ var fmtDelta = function(d){
+ if(d === 999) return '+∞';
+ return (d >= 0 ? '+' : '') + d + '%';
+ };
+ var blocks = '';
+ if(leader && leader.thisWeek > 0){
+ var lColor = leader.delta >= 0 ? '#10B981' : (leader.delta > -20 ? '#F59E0B' : '#EF4444');
+ blocks += '<div style="flex:1;min-width:240px;background:var(--dark-card);border:1px solid var(--border-faint);border-radius:12px;padding:14px 18px">'
+ + '<div style="font-size:10px;color:#10B981;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:6px">Лидер этой недели</div>'
+ + '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><div style="font-family:\'Space Grotesk\',sans-serif;font-size:18px;font-weight:700;color:var(--text)">'+kbEsc(leader.name)+'</div>'
+ + '<div style="color:'+lColor+';font-size:13px;font-weight:600">'+fmtDelta(leader.delta)+' к прошлой неделе</div></div>'
+ + '<div style="font-size:13px;color:var(--text-soft);margin-top:4px">'+fmt(Math.round(leader.thisWeek))+' ₸ за неделю · прошлая '+fmt(Math.round(leader.prevWeek))+' ₸</div>'
+ + '</div>';
+ }
+ if(outsider && outsider.name !== (leader && leader.name)){
+ blocks += '<div style="flex:1;min-width:240px;background:var(--dark-card);border:1px solid var(--border-faint);border-radius:12px;padding:14px 18px">'
+ + '<div style="font-size:10px;color:#EF4444;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-bottom:6px">Аутсайдер недели</div>'
+ + '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><div style="font-family:\'Space Grotesk\',sans-serif;font-size:18px;font-weight:700;color:var(--text)">'+kbEsc(outsider.name)+'</div>'
+ + '<div style="color:#EF4444;font-size:13px;font-weight:600">'+fmtDelta(outsider.delta)+' к прошлой неделе</div></div>'
+ + '<div style="font-size:13px;color:var(--text-soft);margin-top:4px">'+fmt(Math.round(outsider.thisWeek))+' ₸ за неделю · прошлая '+fmt(Math.round(outsider.prevWeek))+' ₸</div>'
+ + '</div>';
+ }
+ if(!blocks){ el.innerHTML = ''; return; }
+ el.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap">' + blocks + '</div>';
 }
 
 // v266: жирная плашка «План vs Факт месяца» + прогноз исходя из текущего темпа.
@@ -21724,6 +21803,58 @@ function crmEventSave(eventId){
  crmCalRender();
 }
 
+// ===== v282: Quick-edit оператора на карточке канбана =====
+function kbQuickOpDropdown(cardId, anchorEl){
+ // Закрыть прошлый dropdown если есть
+ var prev = document.getElementById('kb-quick-op-dd');
+ if(prev) prev.remove();
+ var card = kbCards.find(function(c){ return c.id === cardId; });
+ if(!card) return;
+ var rect = anchorEl.getBoundingClientRect();
+ var dd = document.createElement('div');
+ dd.id = 'kb-quick-op-dd';
+ dd.style.cssText = 'position:fixed;left:'+rect.left+'px;top:'+(rect.bottom+4)+'px;background:var(--dark-card);border:1px solid var(--amo-blue);border-radius:8px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:9999;min-width:160px';
+ var ops = (typeof kbOperators !== 'undefined' ? kbOperators : []).slice();
+ // Опция «Снять оператора»
+ var html = '<div onclick="kbQuickOpSet(\''+cardId+'\', null)" style="padding:8px 10px;font-size:12px;color:var(--text-muted);cursor:pointer;border-radius:6px" onmouseover="this.style.background=\'rgba(255,255,255,.05)\'" onmouseout="this.style.background=\'transparent\'">— Снять оператора</div>';
+ ops.forEach(function(op){
+ var color = (typeof KB_OP_COLORS !== 'undefined' && KB_OP_COLORS[op]) || '#888';
+ var current = card.operator === op ? ' background:var(--amo-blue-soft);' : '';
+ html += '<div onclick="kbQuickOpSet(\''+cardId+'\', \''+op.replace(/\x27/g,"\\\x27")+'\')" style="padding:8px 10px;font-size:12px;color:var(--text);cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:8px;'+current+'" onmouseover="this.style.background=\'rgba(255,255,255,.05)\'" onmouseout="this.style.background=\''+(card.operator===op?'var(--amo-blue-soft)':'transparent')+'\'">'
+ + '<span style="width:10px;height:10px;border-radius:50%;background:'+color+'"></span>'
+ + op + '</div>';
+ });
+ dd.innerHTML = html;
+ document.body.appendChild(dd);
+ // Закрыть при клике вне
+ setTimeout(function(){
+ document.addEventListener('click', function closeFn(e){
+ if(!dd.contains(e.target)){ dd.remove(); document.removeEventListener('click', closeFn); }
+ });
+ }, 50);
+}
+
+async function kbQuickOpSet(cardId, op){
+ var card = kbCards.find(function(c){ return c.id === cardId; });
+ if(!card) return;
+ var old = card.operator;
+ card.operator = op || '';
+ // Закрыть dropdown
+ var dd = document.getElementById('kb-quick-op-dd'); if(dd) dd.remove();
+ // Сохранить в Sheets
+ try {
+ if(typeof KB_SCRIPT_URL !== 'undefined' && KB_SCRIPT_URL && card._row){
+ await fetch(KB_SCRIPT_URL, {
+ method:'POST', headers:{'Content-Type':'text/plain'},
+ body: JSON.stringify({action:'updateCard', row: card._row, operator: op || ''})
+ });
+ }
+ } catch(e){ card.operator = old; }
+ // Перерисовать канбан
+ if(typeof kbRenderBoard === 'function') kbRenderBoard();
+ if(typeof kbShowToast === 'function') kbShowToast(op ? 'Назначен оператор: ' + op : 'Оператор снят');
+}
+
 // ===== v278: BULK-ОПЕРАЦИИ НА КАНБАНЕ =====
 window._kbSelected = new Set();
 
@@ -21874,7 +22005,9 @@ function kbCreateCardEl(card) {
  }
  if(prog.total > 0) html += '<span style="color:'+progColor+'">' + prog.done + '/' + prog.total + '</span>';
  html += '</div>';
- if(card.operator) html += '<div class="kb-operator" style="color:'+opColor+'">' + card.operator + '</div>';
+ // v282: inline-смена оператора прямо на карточке без захода в fullscreen
+ var opLabel = card.operator || '<span style="color:#F59E0B">Нет оператора</span>';
+ html += '<div class="kb-operator" style="color:'+(card.operator?opColor:'inherit')+';cursor:pointer" onclick="event.stopPropagation();kbQuickOpDropdown(\''+card.id+'\', this)" title="Кликни чтобы сменить оператора">'+opLabel+' <span style="font-size:9px;color:var(--text-muted)">▾</span></div>';
  if(card.activDate) html += '<div style="font-size:10px;color:#30D158;margin-top:2px">&#10004; Активирован: ' + card.activDate + '</div>';
  var actRcv = card.fields && card.fields._actReceived === '1';
  var actSt = card.fields && card.fields._actStatus;
