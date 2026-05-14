@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v285</title>
+<title>SalesDoc — Финансовый Дашборд v286</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3006,6 +3006,36 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
 .plan-sum-val{font-size:18px;font-weight:900;font-family:"Inter",sans-serif;color:var(--gold-bright)}
 .plan-sum-lbl{font-size:10px;letter-spacing:2px;color:var(--text-muted);margin-top:2px}
 
+/* PLAN HERO — iOS-style (v286) */
+.ph-hero{background:rgba(120,120,128,.08);border:1px solid rgba(120,120,128,.16);border-radius:18px;padding:20px 22px;display:flex;flex-direction:column;gap:16px}
+body.light .ph-hero{background:rgba(120,120,128,.06);border-color:rgba(120,120,128,.18)}
+.ph-hero-top{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap}
+.ph-hero-fact{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ph-hero-lbl{font-size:12px;color:var(--text-muted);font-weight:500}
+.ph-hero-amount-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.ph-hero-amount{font-family:'Inter',sans-serif;font-size:40px;font-weight:600;letter-spacing:-1px;color:var(--text-primary);font-variant-numeric:tabular-nums;line-height:1}
+.ph-hero-unit{font-size:18px;color:var(--text-muted);font-weight:500}
+.ph-hero-pct{font-size:13px;font-weight:600;padding:3px 10px;border-radius:999px;margin-left:4px;font-variant-numeric:tabular-nums}
+.ph-hero-sub{font-size:12px;color:var(--text-muted)}
+.ph-hero-aside{display:flex;flex-direction:column;gap:4px;text-align:right;min-width:160px}
+.ph-hero-aside .ph-hero-aside-block .lbl{font-size:11px;color:var(--text-muted)}
+.ph-hero-aside .ph-hero-aside-block .val{font-family:'Inter',sans-serif;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:2px}
+.ph-hero-aside .ph-hero-aside-block .sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+.ph-unit-tiny{font-size:12px;color:var(--text-muted);font-weight:500}
+.ph-hero-bar{display:flex;flex-direction:column;gap:6px}
+.phb-track{position:relative;height:8px;background:rgba(120,120,128,.18);border-radius:4px;overflow:visible}
+.phb-fill{height:100%;border-radius:4px;transition:width .6s ease}
+.phb-mark{position:absolute;top:-3px;width:2px;height:14px;background:rgba(255,255,255,.6);border-radius:1px;transform:translateX(-1px)}
+body.light .phb-mark{background:rgba(0,0,0,.5)}
+.phb-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted)}
+.phb-meta-mid{color:var(--text-secondary);font-weight:500}
+@media (max-width:720px){
+.ph-hero{padding:16px}
+.ph-hero-top{flex-direction:column;align-items:flex-start;gap:14px}
+.ph-hero-aside{text-align:left;min-width:0}
+.ph-hero-amount{font-size:32px}
+}
+
 /* SALARY BLOCK — iOS-style (v285) */
 .salary-block{margin-top:14px;padding:14px;background:rgba(120,120,128,.08);border-radius:14px;display:flex;flex-direction:column;gap:10px}
 body.light .salary-block{background:rgba(120,120,128,.12)}
@@ -4111,9 +4141,8 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <button class="add-btn" onclick="planLoad()" id="plan-refresh-btn" style="display:none"> Обновить</button>
  </div>
 
- <!-- SUMMARY BAR -->
- <!-- v210: auto-fit вместо repeat(4,1fr) — 5 KPI становятся в одну строку, симметрия восстановлена -->
- <div id="plan-summary-bar" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px"></div>
+ <!-- SUMMARY HERO (v286 — iOS-style) -->
+ <div id="plan-summary-bar" style="margin-bottom:16px"></div>
 
  <!-- DAYS PROGRESS -->
  <div class="panel" id="plan-days-panel" style="margin-bottom:16px;display:none">
@@ -15775,33 +15804,83 @@ function parsePlanData(rows) {
 }
 
 function planRender(data) {
- // Summary bar
+ // v286: iOS-style hero вместо 5 одинаковых карточек.
  var sumBar = document.getElementById('plan-summary-bar');
  if (!sumBar) return;
  var pct = data.totalPlan > 0 ? data.totalFact / data.totalPlan * 100 : 0;
- var pctColor = pct >= 80 ? '#10B981' : pct >= 50 ? '#F59E0B' : '#EF4444';
- sumBar.innerHTML =
- '<div class="plan-sum-card"><div class="plan-sum-val" style="color:var(--gold-bright)">' + fmtNum(data.totalPlan) + '<span class="kpi-currency">'+_CUR+'</span></div><div class="plan-sum-lbl">План продаж</div></div>' +
- '<div class="plan-sum-card"><div class="plan-sum-val" style="color:#10B981">' + fmtNum(data.totalFact) + '<span class="kpi-currency">'+_CUR+'</span></div><div class="plan-sum-lbl">ФАКТ ПРОДАЖ</div></div>' +
- '<div class="plan-sum-card"><div class="plan-sum-val" style="color:' + pctColor + '">' + Math.round(pct) + '%</div><div class="plan-sum-lbl">ВЫПОЛНЕНИЕ</div></div>' +
- '<div class="plan-sum-card"><div class="plan-sum-val" style="color:#F87171">' + fmtNum(data.totalRemain) + '<span class="kpi-currency">'+_CUR+'</span></div><div class="plan-sum-lbl">ОСТАТОК</div></div>' +
- (function(){
- if (data.doneDays > 0 && data.workDays > 0 && data.totalFact > 0) {
- var forecast = Math.round(data.totalFact / data.doneDays * data.workDays);
- var fcPct = data.totalPlan > 0 ? forecast / data.totalPlan * 100 : 0;
- var fcColor = fcPct >= 80 ? '#10B981' : fcPct >= 50 ? '#F59E0B' : '#EF4444';
- return '<div class="plan-sum-card"><div class="plan-sum-val" style="color:' + fcColor + '">' + fmtNum(forecast) + '<span class="kpi-currency">'+_CUR+'</span></div><div class="plan-sum-lbl">ПРОГНОЗ</div><div style="font-size:10px;color:' + fcColor + ';margin-top:2px"> ' + Math.round(fcPct) + '% плана</div></div>';
- }
- return '';
- })();
+ var pctRound = Math.round(pct);
+ var statusKey = pct >= 100 ? 'done' : pct >= 80 ? 'good' : pct >= 50 ? 'warn' : 'bad';
+ var statusColors = {done:'#10B981', good:'#10B981', warn:'#F59E0B', bad:'#EF4444'};
+ var statusColor = statusColors[statusKey];
+ var monthIdx = (typeof planTabIdx === 'number') ? planTabIdx : new Date().getMonth();
+ var monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+ var monthName = monthNames[monthIdx] || '';
+ var monthClosed = (data.workDays > 0 && data.doneDays >= data.workDays);
 
- // Days bar
- if (data.workDays > 0) {
- var dp = document.getElementById('plan-days-panel');
- dp.style.display = 'block';
- document.getElementById('plan-days-label').textContent = data.doneDays + ' из ' + data.workDays + ' дней';
- document.getElementById('plan-days-bar').style.width = Math.round(data.doneDays / data.workDays * 100) + '%';
+ var hasForecast = (data.doneDays > 0 && data.workDays > 0 && data.totalFact > 0);
+ var forecast = hasForecast ? Math.round(data.totalFact / data.doneDays * data.workDays) : 0;
+ var fcPct = data.totalPlan > 0 ? Math.round(forecast / data.totalPlan * 100) : 0;
+ var fcColor = fcPct >= 80 ? '#10B981' : fcPct >= 50 ? '#F59E0B' : '#EF4444';
+ var asideLbl, asideVal, asideSub, asideColor;
+ if (monthClosed) {
+ asideLbl = 'Итог месяца';
+ asideVal = fmtNum(data.totalFact);
+ asideSub = pctRound + '% плана — ' + (pct >= 100 ? 'выполнен' : 'не выполнен');
+ asideColor = statusColor;
+ } else if (hasForecast) {
+ asideLbl = 'Прогноз';
+ asideVal = fmtNum(forecast);
+ asideSub = fcPct + '% плана';
+ asideColor = fcColor;
+ } else {
+ asideLbl = 'Прогноз';
+ asideVal = '—';
+ asideSub = 'ждём первые продажи';
+ asideColor = 'var(--text-muted)';
  }
+
+ var daysLine = (data.workDays > 0) ? ('День ' + data.doneDays + ' из ' + data.workDays + ' рабочих') : '';
+ var paceMark = (data.workDays > 0) ? Math.min(100, Math.round(data.doneDays / data.workDays * 100)) : 0;
+ var factStr = fmtNum(data.totalFact);
+ var planStr = fmtNum(data.totalPlan);
+ var remainStr = fmtNum(Math.max(0, data.totalRemain));
+
+ var heroParts = [];
+ heroParts.push('<div class="ph-hero ph-status-' + statusKey + '">');
+ heroParts.push('<div class="ph-hero-top">');
+ heroParts.push('<div class="ph-hero-fact">');
+ heroParts.push('<div class="ph-hero-lbl">Факт продаж · ' + monthName + '</div>');
+ heroParts.push('<div class="ph-hero-amount-row">');
+ heroParts.push('<span class="ph-hero-amount">' + factStr + '</span>');
+ heroParts.push('<span class="ph-hero-unit">' + _CUR + '</span>');
+ heroParts.push('<span class="ph-hero-pct" style="color:' + statusColor + ';background:' + statusColor + '22">' + pctRound + '%</span>');
+ heroParts.push('</div>');
+ heroParts.push('<div class="ph-hero-sub">из ' + planStr + ' ' + _CUR + ' плана · осталось ' + remainStr + ' ' + _CUR + '</div>');
+ heroParts.push('</div>');
+ heroParts.push('<div class="ph-hero-aside">');
+ heroParts.push('<div class="ph-hero-aside-block">');
+ heroParts.push('<div class="lbl">' + asideLbl + '</div>');
+ heroParts.push('<div class="val" style="color:' + asideColor + '">' + asideVal + (asideVal !== '—' ? ' <span class="ph-unit-tiny">' + _CUR + '</span>' : '') + '</div>');
+ heroParts.push('<div class="sub">' + asideSub + '</div>');
+ heroParts.push('</div>');
+ heroParts.push('</div>');
+ heroParts.push('</div>');
+ heroParts.push('<div class="ph-hero-bar">');
+ heroParts.push('<div class="phb-track">');
+ heroParts.push('<div class="phb-fill" style="width:' + Math.min(100, pctRound) + '%;background:' + statusColor + '"></div>');
+ if (data.workDays > 0) {
+ heroParts.push('<div class="phb-mark" style="left:' + paceMark + '%" title="Где должны быть по дням (' + data.doneDays + '/' + data.workDays + ')"></div>');
+ }
+ heroParts.push('</div>');
+ heroParts.push('<div class="phb-meta"><span>0 ' + _CUR + '</span><span class="phb-meta-mid">' + daysLine + '</span><span>' + planStr + ' ' + _CUR + '</span></div>');
+ heroParts.push('</div>');
+ heroParts.push('</div>');
+ sumBar.textContent = '';
+ sumBar.insertAdjacentHTML('beforeend', heroParts.join(''));
+
+ // v286: старая days-panel больше не нужна — данные в hero-bar
+ var dp = document.getElementById('plan-days-panel');
+ if (dp) dp.style.display = 'none';
 
  // Agent cards
  var grid = document.getElementById('plan-agents-grid');
