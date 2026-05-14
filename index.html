@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v284</title>
+<title>SalesDoc — Финансовый Дашборд v285</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3005,6 +3005,28 @@ svg.donut{width:150px;height:150px;filter:drop-shadow(0 0 15px rgba(59,130,246,.
 .plan-sum-card{background:var(--dark-panel);border:1px solid var(--dark-border-bright);border-radius:14px;padding:14px 16px}
 .plan-sum-val{font-size:18px;font-weight:900;font-family:"Inter",sans-serif;color:var(--gold-bright)}
 .plan-sum-lbl{font-size:10px;letter-spacing:2px;color:var(--text-muted);margin-top:2px}
+
+/* SALARY BLOCK — iOS-style (v285) */
+.salary-block{margin-top:14px;padding:14px;background:rgba(120,120,128,.08);border-radius:14px;display:flex;flex-direction:column;gap:10px}
+body.light .salary-block{background:rgba(120,120,128,.12)}
+.sb-row{display:flex;align-items:center;gap:10px;font-size:13px}
+.sb-row-label{min-width:108px;color:var(--text-secondary);font-weight:500;display:inline-flex;align-items:center;gap:4px}
+.sb-row-track{flex:1;height:6px;background:rgba(120,120,128,.16);border-radius:3px;overflow:hidden}
+.sb-row-fill{height:100%;border-radius:3px;transition:width .6s ease}
+.sb-row-value{font-weight:600;min-width:54px;text-align:right;font-variant-numeric:tabular-nums}
+.sb-row-total{font-size:11px;color:var(--text-muted);min-width:80px;text-align:right;font-variant-numeric:tabular-nums}
+.sb-purple{background:#A78BFA}
+.sb-purple-text{color:#C4B5FD}
+.sb-blue{background:#60A5FA}
+.sb-blue-text{color:#60A5FA}
+.sb-chevron{display:inline-block;margin-left:2px;color:var(--text-muted);font-weight:400;transform:translateY(-1px)}
+.sb-row-tap{cursor:pointer;border-radius:8px;padding:4px 6px;margin:-4px -6px;transition:background .15s}
+.sb-row-tap:hover{background:rgba(96,165,250,.06)}
+.sb-penalty{font-size:11px;color:#F87171;text-align:right;margin-top:-4px}
+.sb-total{display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid rgba(120,120,128,.18);margin-top:2px}
+.sb-total-label{display:flex;flex-direction:column;gap:1px;font-size:13px;color:var(--text-secondary);font-weight:500}
+.sb-total-hint{font-size:10px;color:var(--text-muted);font-weight:400;letter-spacing:0}
+.sb-total-value{font-family:'Inter',sans-serif;font-size:15px;font-weight:600;color:var(--text-primary);font-variant-numeric:tabular-nums}
 
 /* HAMBURGER BUTTON — видим на всех размерах, на десктопе сворачивает сайдбар */
 .menu-toggle{display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--dark-border);border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--text-secondary);font-size:16px;line-height:1;transition:all .2s;min-width:34px;height:34px}
@@ -15826,11 +15848,23 @@ function planRender(data) {
  '<div class="plan-kpi-row">' + kpiHTML + '</div>';
 
  // === БОНУС МЕНЕДЖЕРА (только для Айдос и Юлия) ===
+ // v285: блок ЗП показываем только админу, руководителю, бухгалтеру и самому сотруднику.
  try {
  var agentLow = agent.name.toLowerCase().trim();
  var isManager = (agentLow.indexOf('айдос') >= 0 && agentLow.indexOf('kg') < 0) || agentLow.indexOf('юлия') >= 0;
  var isSkip = agentLow.indexOf('офис') >= 0 || agentLow.indexOf('курс') >= 0 || agentLow.indexOf('kg') >= 0;
- if (isManager && salesKpi && !isSkip) {
+ // Право видеть ЗП: admin/head/accountant либо сам себе (matching по первому слову имени)
+ var canSeeSalary = false;
+ if (typeof currentUser !== 'undefined' && currentUser) {
+ var role = String(currentUser.role||'').toLowerCase();
+ if (role === 'admin' || role === 'head' || role === 'accountant') canSeeSalary = true;
+ else {
+ var meFirst = String(currentUser.name||'').toLowerCase().trim().split(/\s+/)[0];
+ var agFirst = agentLow.split(/\s+/)[0];
+ if (meFirst && agFirst && meFirst === agFirst) canSeeSalary = true;
+ }
+ }
+ if (isManager && salesKpi && !isSkip && canSeeSalary) {
  var bonusInfo = calcManagerBonus(agent.name, salesKpi.plan, salesKpi.fact, planTabIdx, salesKpi.pct, agent.kpis);
  // bonusId привязан к месяцу чтобы штрафы не переносились
  var bonusId = 'bonus-' + agent.name.replace(/[^a-zа-яё0-9]/gi,'') + '-' + planTabIdx;
@@ -15839,24 +15873,26 @@ function planRender(data) {
  var penalty = (window._bonusPenalties && window._bonusPenalties[bonusId]) || 0;
  var displayNet = bonusInfo.bonusGross - bonusInfo.tax - penalty;
  var totalSalary = 270000 + bonusInfo.kpiTotal + displayNet;
- var kpiCardLabel = bonusInfo.kpiEnabled ? 'KPI ПРЕМИЯ' : 'KPI (30К)';
- var bonusHTML = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--dark-border)">' +
- '<div class="plan-kpi-item">' +
- '<span class="plan-kpi-label" style="color:#CE93D8;font-weight:700">' + kpiCardLabel + '</span>' +
- '<div class="plan-kpi-bar-wrap"><div class="plan-kpi-bar" style="width:' + Math.min(100, Math.round(bonusInfo.kpiTotal/30000*100)) + '%;background:#CE93D8"></div></div>' +
- '<span class="plan-kpi-pct" style="color:#CE93D8">' + fmtBonus(bonusInfo.kpiTotal) + '</span>' +
- '<span class="plan-kpi-nums" style="color:var(--text-muted)">/ 30 000</span>' +
+ var kpiCardLabel = bonusInfo.kpiEnabled ? 'KPI премия' : 'KPI (30К)';
+ var bonusHTML = '<div class="salary-block">' +
+ '<div class="sb-row">' +
+ '<div class="sb-row-label">' + kpiCardLabel + '</div>' +
+ '<div class="sb-row-track"><div class="sb-row-fill sb-purple" style="width:' + Math.min(100, Math.round(bonusInfo.kpiTotal/30000*100)) + '%"></div></div>' +
+ '<div class="sb-row-value sb-purple-text">' + fmtBonus(bonusInfo.kpiTotal) + '</div>' +
+ '<div class="sb-row-total">/ 30 000</div>' +
  '</div>' +
- '<div class="plan-kpi-item" style="cursor:pointer" onclick="showBonusDetail(\'' + bonusId + '\')" title="Нажмите для детализации">' +
- '<span class="plan-kpi-label" style="color:#60A5FA;font-weight:700">БОНУС ПРОДАЖ ▸</span>' +
- '<div class="plan-kpi-bar-wrap"><div class="plan-kpi-bar" style="width:' + Math.min(100, bonusInfo.pctExec) + '%;background:#60A5FA"></div></div>' +
- '<span class="plan-kpi-pct" style="color:#60A5FA">' + bonusInfo.coeff + '%</span>' +
- '<span class="plan-kpi-nums" style="color:#60A5FA;font-weight:700">' + fmtBonus(displayNet) + '</span>' +
+ '<div class="sb-row sb-row-tap" onclick="showBonusDetail(\'' + bonusId + '\')" title="Коэффициент бонуса по таблице · нажмите для детализации">' +
+ '<div class="sb-row-label sb-blue-text">Бонус продаж<span class="sb-chevron">›</span></div>' +
+ '<div class="sb-row-track"><div class="sb-row-fill sb-blue" style="width:' + Math.min(100, bonusInfo.pctExec) + '%"></div></div>' +
+ '<div class="sb-row-value sb-blue-text">' + bonusInfo.coeff + '%</div>' +
+ '<div class="sb-row-total sb-blue-text">' + fmtBonus(displayNet) + '</div>' +
  '</div>' +
- (penalty > 0 ? '<div style="font-size:9px;color:#F87171;text-align:right">штраф: -' + fmtBonus(penalty) + '</div>' : '') +
- '<div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid var(--dark-border)">' +
- '<span style="font-size:11px;color:var(--text-muted)">ИТОГО ЗП (оклад 270К + KPI + бонус)</span>' +
- '<div style="font-family:Space Grotesk,sans-serif;font-size:13px;color:#60A5FA">' + fmtBonus(totalSalary) + ' '+_CUR+'</div></div>';
+ (penalty > 0 ? '<div class="sb-penalty">штраф: −' + fmtBonus(penalty) + '</div>' : '') +
+ '<div class="sb-total">' +
+ '<div class="sb-total-label">Итого ЗП<span class="sb-total-hint">оклад 270К + KPI + бонус</span></div>' +
+ '<div class="sb-total-value">' + fmtBonus(totalSalary) + ' ' + _CUR + '</div>' +
+ '</div>' +
+ '</div>';
  card.innerHTML += bonusHTML;
  }
  } catch(bonusErr) { console.log('[BONUS] Error for ' + agent.name + ': ' + bonusErr.message); }
