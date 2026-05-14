@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v286</title>
+<title>SalesDoc — Финансовый Дашборд v287</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3035,6 +3035,11 @@ body.light .phb-mark{background:rgba(0,0,0,.5)}
 .ph-hero-aside{text-align:left;min-width:0}
 .ph-hero-amount{font-size:32px}
 }
+
+/* EMPTY AGENT CARD (v287) — все KPI = 0, сворачиваем в строку */
+.ph-empty-card{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;padding:12px 18px;background:rgba(120,120,128,.06);border:1px dashed rgba(120,120,128,.2);border-radius:12px}
+.ph-empty-name{font-size:13px;color:var(--text-secondary);font-weight:600}
+.ph-empty-sub{font-size:12px;color:var(--text-muted)}
 
 /* SALARY BLOCK — iOS-style (v285) */
 .salary-block{margin-top:14px;padding:14px;background:rgba(120,120,128,.08);border-radius:14px;display:flex;flex-direction:column;gap:10px}
@@ -15886,16 +15891,43 @@ function planRender(data) {
  var grid = document.getElementById('plan-agents-grid');
  if (!grid) return;
  grid.innerHTML = '';
- data.agents.forEach(function(agent) {
+ // v287: классификация — менеджеры идут первыми, «Офис» компактом, неактивные (все 0) — мини-строкой
+ var sortedAgents = data.agents.slice().sort(function(a,b){
+ var la = (a.name||'').toLowerCase();
+ var lb = (b.name||'').toLowerCase();
+ var aEmpty = (a.kpis||[]).every(function(k){ return (Number(k.fact)||0) === 0; }) ? 1 : 0;
+ var bEmpty = (b.kpis||[]).every(function(k){ return (Number(k.fact)||0) === 0; }) ? 1 : 0;
+ if (aEmpty !== bEmpty) return aEmpty - bEmpty; // active first
+ var aOff = la.indexOf('офис') >= 0 ? 1 : 0;
+ var bOff = lb.indexOf('офис') >= 0 ? 1 : 0;
+ if (aOff !== bOff) return aOff - bOff; // people first, office after
+ return 0;
+ });
+ sortedAgents.forEach(function(agent) {
  if (!agent.kpis.length) return;
  // Overall agent % based on sales KPI
  var salesKpi = agent.kpis.find(function(k){ return k.name.toUpperCase().indexOf('ПРОДАЖ') >= 0; });
  var agentPct = salesKpi ? salesKpi.pct : (agent.kpis.reduce(function(s,k){ return s + k.pct; }, 0) / agent.kpis.length);
  var svColor = svetoforColor(agentPct);
 
+ // v287: если все факты по KPI = 0 → рендерим мини-строкой
+ var allEmpty = agent.kpis.every(function(k){ return (Number(k.fact)||0) === 0; });
+ if (allEmpty) {
+ var planSum = agent.kpis.reduce(function(s,k){ return s + (Number(k.plan)||0); }, 0);
+ var mini = document.createElement('div');
+ mini.className = 'ph-empty-card';
+ var miniHTML = '<div class="ph-empty-name">' + agent.name + '</div>'
+ + '<div class="ph-empty-sub">Ещё не активна' + (planSum > 0 ? ' · план ' + fmtNum(planSum) + ' ' + _CUR : '') + '</div>';
+ mini.insertAdjacentHTML('afterbegin', miniHTML);
+ grid.appendChild(mini);
+ return;
+ }
+
  var card = document.createElement('div');
  card.className = 'panel';
- card.style.cssText = 'border-left: 3px solid ' + svColor + ';';
+ var lowName = (agent.name||'').toLowerCase();
+ var isOffice = lowName.indexOf('офис') >= 0;
+ card.style.cssText = 'border-left: 3px solid ' + svColor + ';' + (isOffice ? 'opacity:.88;' : '');
 
  var kpiHTML = agent.kpis.map(function(kpi) {
  var barPct = Math.min(100, Math.round(kpi.pct * 100));
