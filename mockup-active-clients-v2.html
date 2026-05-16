@@ -8,18 +8,22 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0E1116;
-  --panel:rgba(120,120,128,.08);
-  --panel-border:rgba(120,120,128,.16);
-  --card:rgba(255,255,255,.03);
-  --card-border:rgba(120,120,128,.14);
-  --text:#F5F7FA;
-  --text-2:#A5ADBA;
-  --text-3:#6B7280;
-  --good:#10B981;
-  --bad:#EF4444;
-  --warn:#F59E0B;
-  --accent:#60A5FA;
+  --bg:#0B0E13;
+  --panel:rgba(120,120,128,.06);
+  --panel-border:rgba(120,120,128,.12);
+  --card:rgba(255,255,255,.02);
+  --card-border:rgba(120,120,128,.10);
+  --text:#E8EAED;
+  --text-2:#9AA0A6;
+  --text-3:#6E747A;
+  /* iOS dark: десатурированные, спокойные. Не «семафор». */
+  --good:#7FB89E;     /* мягкий шалфейный */
+  --good-bg:rgba(127,184,158,.10);
+  --bad:#D67373;      /* мягкий терракотовый, не семафор-красный */
+  --bad-bg:rgba(214,115,115,.10);
+  --warn:#D6A372;     /* мягкий песочный, не оранжевый сигнал */
+  --warn-bg:rgba(214,163,114,.10);
+  --accent:#7AA7D7;   /* приглушённый голубой, не #60A5FA */
 }
 *{box-sizing:border-box}
 body{
@@ -53,9 +57,10 @@ body{
 }
 .hero-main{display:flex;flex-direction:column;gap:6px;flex:1;min-width:280px}
 .hero-lbl{font-size:12px;color:var(--text-3);font-weight:500}
-.hero-amount{font-size:42px;font-weight:600;letter-spacing:-1px;color:var(--bad);font-variant-numeric:tabular-nums;line-height:1.05}
+.hero-amount{font-size:42px;font-weight:600;letter-spacing:-1px;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.05}
+.hero-amount .arrow{color:var(--bad);font-weight:500;margin-right:4px}
 .hero-amount .unit{font-size:18px;color:var(--text-3);font-weight:500;margin-left:6px}
-.hero-status{font-size:13px;padding:7px 14px;border-radius:10px;background:rgba(239,68,68,.10);color:var(--bad);align-self:flex-start;margin-top:6px}
+.hero-status{font-size:13px;padding:7px 14px;border-radius:10px;background:var(--bad-bg);color:var(--bad);align-self:flex-start;margin-top:6px}
 .hero-aside{display:flex;gap:12px;flex-wrap:wrap}
 .mini{
   background:var(--card);
@@ -66,11 +71,9 @@ body{
   display:flex;flex-direction:column;gap:4px;
 }
 .mini .lbl{font-size:11px;color:var(--text-3);font-weight:500}
-.mini .val{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.mini .val{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;color:var(--text)}
 .mini .sub{font-size:11px;font-variant-numeric:tabular-nums}
-.mini.high .val{color:var(--bad)}
-.mini.med .val{color:var(--warn)}
-.mini.low .val{color:var(--good)}
+.mini .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:1px}
 
 /* SECTION HEAD */
 .sect-head{display:flex;justify-content:space-between;align-items:baseline;margin:8px 4px 4px}
@@ -88,7 +91,7 @@ body{
 .op-cell{font-variant-numeric:tabular-nums}
 .op-name{display:flex;align-items:center;gap:8px;font-weight:500}
 .op-dot{width:8px;height:8px;border-radius:50%}
-.op-delta-bad{color:var(--bad);font-weight:500}
+.op-delta-bad{color:var(--bad);font-weight:400}
 .op-delta-neutral{color:var(--text-2)}
 
 /* CLIENTS TABLE */
@@ -111,13 +114,13 @@ body{
 .cl-period-chip{display:inline-block;padding:2px 8px;font-size:11px;border-radius:6px;background:rgba(120,120,128,.16);color:var(--text-2);font-variant-numeric:normal}
 .cl-op-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);font-variant-numeric:normal}
 .cl-op-chip .dot{width:6px;height:6px;border-radius:50%}
-.cl-delta-bad{color:var(--bad);font-weight:500}
+.cl-delta-bad{color:var(--bad);font-weight:400}
 .cl-delta-neutral{color:var(--text-3)}
-.cl-delta-good{color:var(--good);font-weight:500}
+.cl-delta-good{color:var(--good);font-weight:400}
 .cl-risk{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;padding:3px 9px;border-radius:999px}
-.cl-risk.high{background:rgba(239,68,68,.12);color:var(--bad)}
-.cl-risk.med{background:rgba(245,158,11,.12);color:var(--warn)}
-.cl-risk.low{background:rgba(16,185,129,.10);color:var(--good)}
+.cl-risk.high{background:var(--bad-bg);color:var(--bad)}
+.cl-risk.med{background:var(--warn-bg);color:var(--warn)}
+.cl-risk.low{background:var(--good-bg);color:var(--good)}
 .cl-risk .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
 .overdue-mark{margin-left:6px;color:var(--warn);font-size:11px;font-variant-numeric:normal}
 
@@ -158,22 +161,22 @@ body{
   <div class="hero">
     <div class="hero-main">
       <div class="hero-lbl">Падение за май к апрелю</div>
-      <div class="hero-amount">−2.4M <span class="unit">₸</span></div>
+      <div class="hero-amount"><span class="arrow">▼</span>2.4M <span class="unit">₸</span></div>
       <div class="hero-status">18 клиентов в риске · −9.4% к прошлому месяцу</div>
     </div>
     <div class="hero-aside">
-      <div class="mini high">
-        <div class="lbl">Высокий риск</div>
+      <div class="mini">
+        <div class="lbl"><span class="dot" style="background:var(--bad)"></span>Высокий риск</div>
         <div class="val">18</div>
         <div class="sub" style="color:var(--bad)">−2.1M ₸</div>
       </div>
-      <div class="mini med">
-        <div class="lbl">Средний</div>
+      <div class="mini">
+        <div class="lbl"><span class="dot" style="background:var(--warn)"></span>Средний</div>
         <div class="val">41</div>
         <div class="sub" style="color:var(--warn)">−320K ₸</div>
       </div>
-      <div class="mini low">
-        <div class="lbl">Норма</div>
+      <div class="mini">
+        <div class="lbl"><span class="dot" style="background:var(--good)"></span>Норма</div>
         <div class="val">195</div>
         <div class="sub" style="color:var(--good)">+180K ₸</div>
       </div>
@@ -193,19 +196,19 @@ body{
       <div class="h">Δ сумма</div>
       <div class="h">Δ лицензии</div>
 
-      <div class="op-row op-name"><span class="op-dot" style="background:#FF7043"></span>Самат</div>
+      <div class="op-row op-name"><span class="op-dot" style="background:#C68B6E"></span>Самат</div>
       <div class="op-row op-cell">12</div>
       <div class="op-row op-cell op-delta-bad">5</div>
       <div class="op-row op-cell op-delta-bad">−1.2M ₸</div>
       <div class="op-row op-cell op-delta-bad">−9</div>
 
-      <div class="op-row op-name"><span class="op-dot" style="background:#3B82F6"></span>Айдос</div>
+      <div class="op-row op-name"><span class="op-dot" style="background:#7AA7D7"></span>Айдос</div>
       <div class="op-row op-cell">8</div>
       <div class="op-row op-cell op-delta-bad">2</div>
       <div class="op-row op-cell op-delta-bad">−340K ₸</div>
       <div class="op-row op-cell op-delta-bad">−3</div>
 
-      <div class="op-row op-name"><span class="op-dot" style="background:#AB47BC"></span>Акбар</div>
+      <div class="op-row op-name"><span class="op-dot" style="background:#B388C7"></span>Акбар</div>
       <div class="op-row op-cell">6</div>
       <div class="op-row op-cell op-delta-bad">1</div>
       <div class="op-row op-cell op-delta-bad">−180K ₸</div>
@@ -246,7 +249,7 @@ body{
         <td style="text-align:right" class="cl-delta-bad">−40 000</td>
         <td style="text-align:right" class="cl-delta-bad">−3</td>
         <td><span class="cl-period-chip">1 мес</span></td>
-        <td><span class="cl-op-chip"><span class="dot" style="background:#FF7043"></span>Самат</span></td>
+        <td><span class="cl-op-chip"><span class="dot" style="background:#C68B6E"></span>Самат</span></td>
         <td style="text-align:right"><span class="cl-risk high"><span class="dot"></span>HIGH</span></td>
       </tr>
       <tr>
@@ -256,7 +259,7 @@ body{
         <td style="text-align:right" class="cl-delta-bad">−10 000</td>
         <td style="text-align:right" class="cl-delta-bad">−2</td>
         <td><span class="cl-period-chip">3 мес</span></td>
-        <td><span class="cl-op-chip"><span class="dot" style="background:#3B82F6"></span>Айдос</span></td>
+        <td><span class="cl-op-chip"><span class="dot" style="background:#7AA7D7"></span>Айдос</span></td>
         <td style="text-align:right"><span class="cl-risk high"><span class="dot"></span>HIGH</span></td>
       </tr>
       <tr>
@@ -266,7 +269,7 @@ body{
         <td style="text-align:right" class="cl-delta-bad">−5 000</td>
         <td style="text-align:right" class="cl-delta-neutral">±0</td>
         <td><span class="cl-period-chip">12 мес</span></td>
-        <td><span class="cl-op-chip"><span class="dot" style="background:#FF7043"></span>Самат</span></td>
+        <td><span class="cl-op-chip"><span class="dot" style="background:#C68B6E"></span>Самат</span></td>
         <td style="text-align:right"><span class="cl-risk med"><span class="dot"></span>MED</span></td>
       </tr>
       <tr>
@@ -286,7 +289,7 @@ body{
         <td style="text-align:right" class="cl-delta-good">+5 000</td>
         <td style="text-align:right" class="cl-delta-good">+1</td>
         <td><span class="cl-period-chip">1 мес</span></td>
-        <td><span class="cl-op-chip"><span class="dot" style="background:#AB47BC"></span>Акбар</span></td>
+        <td><span class="cl-op-chip"><span class="dot" style="background:#B388C7"></span>Акбар</span></td>
         <td style="text-align:right"><span class="cl-risk low"><span class="dot"></span>норма</span></td>
       </tr>
       <tr>
@@ -296,7 +299,7 @@ body{
         <td style="text-align:right" class="cl-delta-bad">−25 000</td>
         <td style="text-align:right" class="cl-delta-bad">−5</td>
         <td><span class="cl-period-chip">1 мес</span></td>
-        <td><span class="cl-op-chip"><span class="dot" style="background:#FF7043"></span>Самат</span></td>
+        <td><span class="cl-op-chip"><span class="dot" style="background:#C68B6E"></span>Самат</span></td>
         <td style="text-align:right"><span class="cl-risk high"><span class="dot"></span>HIGH</span></td>
       </tr>
       </tbody>
