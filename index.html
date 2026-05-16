@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v292</title>
+<title>SalesDoc — Финансовый Дашборд v293</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7522,7 +7522,8 @@ function renderAll() {
  renderActCounters(); renderAllPayments(); renderAllActs(); renderPlanView();
  renderKeyClients(); renderEmployees();
  if (window._intgLoaded) intgRender();
- document.getElementById('cs-payments').textContent=payments.length;
+ // v293 fix: cs-payments был удалён в v283 (Профиль почистили) — null-check обязателен
+ const _csPay=document.getElementById('cs-payments'); if(_csPay) _csPay.textContent=payments.length;
  const _csa=document.getElementById('cs-acts'); if(_csa) _csa.textContent=acts.length;
  const _csp=document.getElementById('cs-plans'); if(_csp) _csp.textContent=planHistory.length;
  populateEmployeeSelects();
@@ -24300,6 +24301,19 @@ function kbRender() {
  setInterval(renderKpiFooters, 2500);
  // Первый рендер
  setTimeout(renderKpiFooters, 500);
+})();
+
+// v293: маленькая плашка-индикатор версии в правом нижнем углу — чтобы видеть какой релиз сейчас
+(function(){
+ var m = (document.title || '').match(/v(\d+)/);
+ if (!m) return;
+ var b = document.createElement('div');
+ b.textContent = 'v' + m[1];
+ b.title = document.title;
+ b.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:99999;padding:3px 8px;font-family:Inter,system-ui,sans-serif;font-size:10px;color:var(--text-muted);background:rgba(120,120,128,.10);border:1px solid rgba(120,120,128,.18);border-radius:6px;font-variant-numeric:tabular-nums;pointer-events:auto;cursor:default;user-select:none;opacity:.55;transition:opacity .15s';
+ b.addEventListener('mouseenter', function(){ b.style.opacity='1'; });
+ b.addEventListener('mouseleave', function(){ b.style.opacity='.55'; });
+ document.body.appendChild(b);
 })();
 
 </script>
