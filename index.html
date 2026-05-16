@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v294</title>
+<title>SalesDoc — Финансовый Дашборд v295</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3025,6 +3025,38 @@ body.light .phb-mark{background:rgba(0,0,0,.5)}
 .ph-hero-amount{font-size:32px}
 }
 
+/* MRR STRIP (v295) — north-star SaaS-метрики в шапке «Действующих» */
+.mrr-strip{
+ display:grid;
+ grid-template-columns:1.4fr 1fr 1fr 1fr;
+ gap:12px;
+ margin-bottom:16px;
+}
+.mrr-card{
+ background:rgba(120,120,128,.08);
+ border:1px solid rgba(120,120,128,.14);
+ border-radius:16px;
+ padding:16px 18px;
+ display:flex;flex-direction:column;gap:6px;
+}
+body.light .mrr-card{background:rgba(120,120,128,.06)}
+.mrr-card.mrr-main{
+ background:rgba(120,120,128,.10);
+}
+.mrr-lbl{font-size:11px;color:var(--text-muted);font-weight:500;text-transform:none;letter-spacing:0}
+.mrr-amount{font-family:'Inter',sans-serif;font-size:32px;font-weight:600;letter-spacing:-.5px;color:var(--text-primary);font-variant-numeric:tabular-nums;line-height:1.05}
+.mrr-val{font-family:'Inter',sans-serif;font-size:22px;font-weight:600;color:var(--text-primary);font-variant-numeric:tabular-nums;line-height:1.1}
+.mrr-unit{font-size:14px;color:var(--text-muted);font-weight:500}
+.mrr-sub{font-size:11px;display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;font-variant-numeric:tabular-nums}
+.mrr-sub-muted{color:var(--text-muted);font-weight:400}
+@media (max-width:900px){
+ .mrr-strip{grid-template-columns:1fr 1fr}
+ .mrr-amount{font-size:26px}
+}
+@media (max-width:520px){
+ .mrr-strip{grid-template-columns:1fr}
+}
+
 /* CLIENTS TAB-BAR (v290) — iOS-style верхняя навигация раздела «Клиенты» */
 .cli-tabbar{
  display:flex;flex-wrap:wrap;gap:4px;
@@ -5851,6 +5883,8 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </select>
  </div>
  </div>
+ <!-- v295: MRR / ARR / Churn / NRR — north-star метрики SaaS -->
+ <div id="ac-mrr-strip"></div>
  <div class="sd-kpis" id="ac-kpis"></div>
  <div class="sd-charts-row">
  <div class="sd-card sd-chart-card">
@@ -22013,6 +22047,111 @@ function acRender(){
  }
  // v277: после основной таблицы — блок несматченных платежей
  if(typeof acRenderUnmatched === 'function') acRenderUnmatched();
+ // v295: MRR / ARR / Churn / NRR
+ try { acRenderMRRStrip(); } catch(_){}
+}
+
+// ===========================================================
+// v295: MRR / ARR / Churn / NRR (амортизация платежей)
+// ===========================================================
+function acComputeMRRMetrics(){
+ var byClientByMonth = {}; // { clientKey: { 'YYYY-MM': sum } }
+ (typeof payments !== 'undefined' && payments ? payments : []).forEach(function(p){
+ var amount = Number(p.amount || p.am) || 0;
+ if (amount <= 0) return;
+ var period = Math.max(1, Math.round(Number(p.period) || 1));
+ var startSrc = p.activationDate || p.date;
+ if (!startSrc) return;
+ var startDate = (startSrc instanceof Date) ? startSrc : (typeof parseDateFromSheet === 'function' ? parseDateFromSheet(startSrc) : new Date(startSrc));
+ if (!startDate || isNaN(startDate)) return;
+ var perMonth = amount / period;
+ var clientKey = String(p.client || p.cl || p.compName || '').toLowerCase().trim();
+ if (!clientKey) return;
+ if (!byClientByMonth[clientKey]) byClientByMonth[clientKey] = {};
+ for (var i = 0; i < period; i++) {
+ var d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
+ var key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+ byClientByMonth[clientKey][key] = (byClientByMonth[clientKey][key] || 0) + perMonth;
+ }
+ });
+
+ var today = new Date();
+ var nowKey = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0');
+ var prevD = new Date(today.getFullYear(), today.getMonth()-1, 1);
+ var prevKey = prevD.getFullYear() + '-' + String(prevD.getMonth()+1).padStart(2,'0');
+
+ var mrr = 0, mrrPrev = 0, activeNow = 0, activePrev = 0;
+ var churned = 0, churnedMRR = 0;
+ var nrrNow = 0, nrrPrev = 0;
+ Object.keys(byClientByMonth).forEach(function(c){
+ var sNow = byClientByMonth[c][nowKey] || 0;
+ var sPrev = byClientByMonth[c][prevKey] || 0;
+ mrr += sNow;
+ mrrPrev += sPrev;
+ if (sNow > 0) activeNow++;
+ if (sPrev > 0) {
+ activePrev++;
+ nrrPrev += sPrev;
+ nrrNow += sNow;
+ if (sNow <= 0) { churned++; churnedMRR += sPrev; }
+ }
+ });
+
+ var deltaMRR = mrr - mrrPrev;
+ var deltaPct = mrrPrev > 0 ? Math.round((mrr - mrrPrev) / mrrPrev * 100) : 0;
+ var arr = Math.round(mrr * 12);
+ var churnRate = activePrev > 0 ? Math.round(churned / activePrev * 1000) / 10 : 0;
+ var nrr = nrrPrev > 0 ? Math.round(nrrNow / nrrPrev * 100) : 0;
+
+ return {
+ mrr: Math.round(mrr), mrrPrev: Math.round(mrrPrev), deltaMRR: Math.round(deltaMRR), deltaPct: deltaPct,
+ arr: arr,
+ churned: churned, churnedMRR: Math.round(churnedMRR), churnRate: churnRate,
+ nrr: nrr,
+ activeNow: activeNow, activePrev: activePrev
+ };
+}
+
+function acRenderMRRStrip(){
+ var el = document.getElementById('ac-mrr-strip');
+ if (!el) return;
+ var m = acComputeMRRMetrics();
+ var fmtMoney = function(n){
+ if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'') + 'M';
+ if (Math.abs(n) >= 1e3) return Math.round(n/1e3) + 'K';
+ return String(Math.round(n));
+ };
+ var deltaSign = m.deltaMRR >= 0 ? '+' : '−';
+ var deltaColor = m.deltaMRR >= 0 ? 'var(--success)' : 'var(--danger)';
+ var nrrColor = m.nrr >= 100 ? 'var(--success)' : m.nrr >= 90 ? 'var(--warning)' : 'var(--danger)';
+ var churnColor = m.churnRate <= 2 ? 'var(--success)' : m.churnRate <= 5 ? 'var(--warning)' : 'var(--danger)';
+ var html = ''
+ + '<div class="mrr-strip">'
+ + ' <div class="mrr-card mrr-main">'
+ + ' <div class="mrr-lbl">MRR · повторяющаяся выручка месяца</div>'
+ + ' <div class="mrr-amount">' + fmtMoney(m.mrr) + ' <span class="mrr-unit">₸</span></div>'
+ + ' <div class="mrr-sub">'
+ + ' <span style="color:' + deltaColor + '">' + deltaSign + fmtMoney(Math.abs(m.deltaMRR)) + ' ₸ · ' + (m.deltaPct >= 0 ? '+' : '') + m.deltaPct + '%</span>'
+ + ' <span class="mrr-sub-muted">к прошлому месяцу</span>'
+ + ' </div>'
+ + ' </div>'
+ + ' <div class="mrr-card">'
+ + ' <div class="mrr-lbl">ARR · прогноз на год</div>'
+ + ' <div class="mrr-val">' + fmtMoney(m.arr) + ' <span class="mrr-unit">₸</span></div>'
+ + ' <div class="mrr-sub-muted">если темп сохранится</div>'
+ + ' </div>'
+ + ' <div class="mrr-card">'
+ + ' <div class="mrr-lbl">Churn за месяц</div>'
+ + ' <div class="mrr-val" style="color:' + churnColor + '">' + m.churnRate + '%</div>'
+ + ' <div class="mrr-sub-muted">' + m.churned + ' клиентов · −' + fmtMoney(m.churnedMRR) + ' ₸ MRR</div>'
+ + ' </div>'
+ + ' <div class="mrr-card">'
+ + ' <div class="mrr-lbl">NRR · удержание выручки</div>'
+ + ' <div class="mrr-val" style="color:' + nrrColor + '">' + m.nrr + '%</div>'
+ + ' <div class="mrr-sub-muted">' + (m.nrr >= 100 ? 'растём без новых' : m.nrr >= 90 ? 'почти удерживаем' : 'теряем без новых') + '</div>'
+ + ' </div>'
+ + '</div>';
+ el.innerHTML = html;
 }
 
 function acRiskBar(label, value, max, fillClass){
