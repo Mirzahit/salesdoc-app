@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v289</title>
+<title>SalesDoc — Финансовый Дашборд v290</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3025,6 +3025,34 @@ body.light .phb-mark{background:rgba(0,0,0,.5)}
 .ph-hero-amount{font-size:32px}
 }
 
+/* CLIENTS TAB-BAR (v290) — iOS-style верхняя навигация раздела «Клиенты» */
+.cli-tabbar{
+ display:flex;flex-wrap:wrap;gap:4px;
+ padding:6px;margin-bottom:16px;
+ background:rgba(120,120,128,.08);
+ border:1px solid rgba(120,120,128,.14);
+ border-radius:14px;
+}
+body.light .cli-tabbar{background:rgba(120,120,128,.10)}
+.cli-tab{
+ flex:1;min-width:90px;padding:8px 14px;
+ font-size:13px;font-weight:500;font-family:'Inter',sans-serif;
+ color:var(--text-secondary);background:transparent;
+ border:none;border-radius:10px;cursor:pointer;
+ transition:all .15s;text-align:center;
+}
+.cli-tab:hover{color:var(--text-primary);background:rgba(255,255,255,.03)}
+.cli-tab.cli-active{
+ background:var(--dark-card);
+ color:var(--text-primary);
+ box-shadow:0 1px 3px rgba(0,0,0,.18);
+ font-weight:600;
+}
+body.light .cli-tab.cli-active{background:#fff}
+.cli-tab[title="Скоро"]{opacity:.55}
+.cli-tab[title="Скоро"]::after{content:' · скоро';font-size:10px;color:var(--text-muted);font-weight:400}
+.cli-tab-extra{flex:0 0 auto;margin-left:auto;font-size:12px}
+
 /* CASHFLOW iOS-style (v289) */
 .cf-toprow{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
 .cf-balance-inline{display:inline-flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(120,120,128,.08);border-radius:14px}
@@ -3873,9 +3901,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div class="nav-group-trigger nav-btn"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><circle class="nav-icon-stroke" cx="10" cy="7" r="3" stroke-width="1.5"/><path class="nav-icon-stroke" d="M4 17c0-3 2.5-5 6-5s6 2 6 5" stroke-width="1.5" stroke-linecap="round"/></svg><div class="nav-label">Клиенты</div></div>
  <div class="nav-group-popup">
  <div class="nav-popup-title">Клиенты</div>
- <div class="nav-item" data-view="keyclients" onclick="showView('keyclients')">Ключевые клиенты</div>
- <div class="nav-item" data-view="integrations" onclick="showView('integrations')">Очередь интеграции</div>
- <div class="nav-item" data-view="kanban" onclick="showView('kanban')">Внедрение</div>
+ <div class="nav-item" data-view="clients" onclick="showView('clients')">Клиенты</div>
  <div class="nav-item" data-view="calendar" onclick="showView('calendar')">
  <svg class="nav-icon-stroke" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>
  <span class="nav-label">Календарь</span>
@@ -3883,10 +3909,6 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div class="nav-item" data-view="supportdash" onclick="showView('supportdash')">
  <svg class="nav-icon-stroke" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l3-3 4 4 5-5 6 6"/><circle cx="6" cy="9" r="1.5"/><circle cx="10" cy="13" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="21" cy="14" r="1.5"/></svg>
  <span class="nav-label">Тех.поддержка</span>
- </div>
- <div class="nav-item" data-view="activeclients" onclick="showView('activeclients')">
- <svg class="nav-icon-stroke" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M3 21v-1a6 6 0 0112 0v1"/><circle cx="17" cy="6" r="3"/><path d="M21 15v-1a4 4 0 00-7-2.6"/></svg>
- <span class="nav-label">Действующие клиенты</span>
  </div>
  </div>
  </div>
@@ -3973,6 +3995,17 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
 
  <div class="content">
+
+ <!-- v290: единый tab-bar раздела «Клиенты» (показывается только когда мы внутри одного из клиентских view) -->
+ <div id="clients-tab-bar" class="cli-tabbar" style="display:none">
+ <button class="cli-tab" data-clients-tab="all" onclick="clientsGoTab('all')" title="Скоро">Все</button>
+ <button class="cli-tab" data-clients-tab="kanban" onclick="clientsGoTab('kanban')">Внедрение</button>
+ <button class="cli-tab" data-clients-tab="activeclients" onclick="clientsGoTab('activeclients')">Действующие</button>
+ <button class="cli-tab" data-clients-tab="risk" onclick="clientsGoTab('risk')" title="Скоро">В риске</button>
+ <button class="cli-tab" data-clients-tab="keyclients" onclick="clientsGoTab('keyclients')">Ключевые</button>
+ <button class="cli-tab" data-clients-tab="churned" onclick="clientsGoTab('churned')" title="Скоро">Расторгнутые</button>
+ <button class="cli-tab cli-tab-extra" data-clients-tab="integrations" onclick="clientsGoTab('integrations')" title="Очередь интеграции — позже станет фильтром во Внедрении">⚙ Интеграции</button>
+ </div>
 
  <!-- DASHBOARD -->
  <div id="view-dashboard">
@@ -10407,6 +10440,15 @@ function defaultViewForUser(u){
  return 'cabinet';
 }
 function showView(v) {
+ // v290: «Клиенты» — это контейнер из 4 (пока) старых view, переключаемых единым tab-bar.
+ // showView('clients') → редирект на последний выбранный таб (или Действующие по умолчанию).
+ if (v === 'clients') {
+ var lastTab = null;
+ try { lastTab = localStorage.getItem('sd_clients_last_tab'); } catch(_){}
+ var allowedTabs = ['activeclients','kanban','keyclients','integrations'];
+ if (!allowedTabs.indexOf || allowedTabs.indexOf(lastTab) < 0) lastTab = 'activeclients';
+ v = lastTab;
+ }
  // v151: общая проверка прав — защита от обхода через DevTools (showView('expenses') и т.п.)
  // v180: 'dashboard' тоже под проверкой — операторы (Айдос/Самат/Акбар) дашборд не видят.
  if (currentUser) {
@@ -10425,6 +10467,24 @@ function showView(v) {
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
+ // v290: единый tab-bar раздела «Клиенты» — показываем при заходе на любой из подэкранов клиентов
+ (function(){
+ var cliViews = ['activeclients','kanban','keyclients','integrations'];
+ var bar = document.getElementById('clients-tab-bar');
+ if (!bar) return;
+ if (cliViews.indexOf(v) >= 0) {
+ bar.style.display = 'flex';
+ try { localStorage.setItem('sd_clients_last_tab', v); } catch(_){}
+ bar.querySelectorAll('.cli-tab').forEach(function(t){
+ t.classList.toggle('cli-active', t.dataset.clientsTab === v);
+ });
+ // page-title переопределяем на «Клиенты» для единства
+ var pt = document.getElementById('page-title');
+ if (pt) pt.textContent = 'Клиенты';
+ } else {
+ bar.style.display = 'none';
+ }
+ })();
  // v159: инициализация дашборда Маркетинг при заходе
  if (v === 'marketing' && typeof mktInitDashboard === 'function') { try { mktInitDashboard(); } catch(_){} }
  // v230: инициализация Календаря при заходе
@@ -10452,7 +10512,7 @@ function showView(v) {
  // Hide statistics subpage
  var statPage = document.getElementById('view-stat-page');
  if(statPage) statPage.style.display='none';
- const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Ключевые клиенты',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Очередь интеграции',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Внедрение',statistics:'Статистики — ИЦО',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Действующие клиенты'};
+ const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Клиенты',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Клиенты',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Клиенты',statistics:'Статистики — ИЦО',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Клиенты'};
  document.getElementById('page-title').textContent=titles[v]||v;
  // Подсветка активного пункта в nav
  document.querySelectorAll('.nav-item[data-view]').forEach(function(el){
@@ -12239,6 +12299,18 @@ function renderCabinetV83() {
  userMgmt.style.display = (u.role === 'admin') ? 'block' : 'none';
  if (u.role === 'admin') renderUserManagement();
  }
+}
+
+// v290: переключение табов внутри раздела «Клиенты»
+function clientsGoTab(tab) {
+ // Плейсхолдерные табы (пока без полноценного экрана) — показываем уведомление
+ var placeholders = { all: 'Все клиенты', risk: 'В риске', churned: 'Расторгнутые' };
+ if (placeholders[tab]) {
+ try { showNotif('Скоро', 'Таб «' + placeholders[tab] + '» появится в v291-v294'); } catch(_){}
+ return;
+ }
+ // Рабочие табы — это существующие view-* экраны
+ showView(tab);
 }
 
 function switchCabTab(tab, btn) {
