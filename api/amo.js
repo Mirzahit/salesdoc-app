@@ -15,10 +15,14 @@ function bad(res, code, msg, extra){
 }
 
 async function amoFetch(path, env){
-  const url = `https://${env.AMO_SUBDOMAIN}.amocrm.ru/api/v4${path}`;
+  // v309: чистим whitespace из env-переменных. При вставке в Vercel UI часто
+  //       копируются переносы строк, а в HTTP-заголовке они недопустимы.
+  const token = String(env.AMO_TOKEN || '').replace(/\s+/g, '');
+  const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+  const url = `https://${sub}.amocrm.ru/api/v4${path}`;
   const r = await fetch(url, {
     headers: {
-      'Authorization': `Bearer ${env.AMO_TOKEN}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
   });
