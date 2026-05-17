@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v300</title>
+<title>SalesDoc — Финансовый Дашборд v301</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21828,7 +21828,9 @@ function acGetActiveClients(){
  || (pCatRaw.indexOf('лицен') >= 0 && pCatRaw.indexOf('доп') < 0);
  if(isSubPay){
  var per = Math.max(1, Math.round(Number(p.period) || 1));
- var endD = new Date(d.getFullYear(), d.getMonth() + per, d.getDate());
+ // v301: биллинг календарный, не 30-дневный. Оплата 10 мая на 1 месяц = доступ до 31 мая.
+ // На 3 месяца = до 31 июля. new Date(y, m, 0) = последний день предыдущего месяца.
+ var endD = new Date(d.getFullYear(), d.getMonth() + per, 0);
  if(!payByHost[host].accessUntil || endD > payByHost[host].accessUntil) payByHost[host].accessUntil = endD;
  }
  }
