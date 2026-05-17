@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v319</title>
+<title>SalesDoc — Финансовый Дашборд v320</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4723,6 +4723,8 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  </div>
  <div id="amo-funnel-stages"></div>
+ <!-- v320: атрибуция источников Meta vs amo -->
+ <div id="amo-attribution" style="margin-top:14px"></div>
  </div>
  <style>
  .amo-pbtn.amo-pactive{background:var(--accent-bg)!important;color:var(--accent-text)!important;font-weight:700;border-color:var(--accent-text)!important}
@@ -24723,13 +24725,61 @@ function amoBuildUnifiedFunnel(amoData, metaData, period){
 
  // Период в человеческом виде
  var periodLabels = { last_7d: '7 дней', last_30d: '30 дней', last_90d: '90 дней', this_month: 'этот месяц', all: 'всё время' };
+ // v320: для виджета атрибуции
+ var metaLeadsCount = (m && m.leads && Number(m.leads.count)) ? Math.round(Number(m.leads.count)) : 0;
  return {
  flow: flow,
  amo_total: amoData.total_leads,
  amo_lost: amoData.lost_count || 0,
+ amo_tag_counts: amoData.tag_counts || null,
+ meta_leads_count: metaLeadsCount,
  period: period,
  period_label: periodLabels[period] || period
  };
+}
+
+// v320: виджет атрибуции — Meta API vs amo по тегам
+function amoRenderAttribution(d){
+ var el = document.getElementById('amo-attribution');
+ if(!el) return;
+ if(!d || !d.amo_tag_counts){ el.innerHTML = ''; return; }
+ var tc = d.amo_tag_counts;
+ var metaLeads = d.meta_leads_count || 0;
+ var amoMeta = (tc['таргет таблица'] || 0) + (tc['ТАРГЕТ'] || 0);
+ var loss = metaLeads - amoMeta;
+ var lossPct = metaLeads > 0 ? Math.round(loss / metaLeads * 100) : 0;
+ var lossColor = lossPct >= 50 ? '#FF6B5C' : lossPct >= 20 ? '#FFB340' : '#7FB89E';
+ var html = '<div style="background:rgba(120,120,128,.08);border-radius:8px;padding:14px 16px">'
+ + '<div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:10px">Атрибуция источников (период: ' + (d.period_label || '') + ')</div>'
+ + '<table style="width:100%;font-size:12px;border-collapse:collapse">'
+ + '<thead><tr style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">'
+ + '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border-faint)">Источник</th>'
+ + '<th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border-faint)">Заявок (внешний счёт)</th>'
+ + '<th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border-faint)">В amo (по тегу)</th>'
+ + '<th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border-faint)">Потеря</th>'
+ + '</tr></thead><tbody>'
+ + '<tr>'
+ + '<td style="padding:8px;color:#8B5CF6;font-weight:600">Meta (таргет)</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;font-weight:600">' + metaLeads + '</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums">«таргет таблица»: ' + (tc['таргет таблица']||0) + ' · «ТАРГЕТ»: ' + (tc['ТАРГЕТ']||0) + '</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;color:' + lossColor + ';font-weight:700">' + (loss >= 0 ? loss : 0) + (metaLeads > 0 ? ' (' + (lossPct >= 0 ? lossPct : 0) + '%)' : '') + '</td>'
+ + '</tr>'
+ + '<tr>'
+ + '<td style="padding:8px;color:#7FB89E;font-weight:600">Marquiz</td>'
+ + '<td style="text-align:right;padding:8px;color:var(--text-muted)">—</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums">' + (tc['marquiz']||0) + '</td>'
+ + '<td style="text-align:right;padding:8px;color:var(--text-muted)">—</td>'
+ + '</tr>'
+ + '<tr>'
+ + '<td style="padding:8px;color:var(--text-soft)">Без тега (звонки/менеджеры)</td>'
+ + '<td style="text-align:right;padding:8px;color:var(--text-muted)">—</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums">' + (tc['__without_tag__']||0) + '</td>'
+ + '<td style="text-align:right;padding:8px;color:var(--text-muted)">—</td>'
+ + '</tr>'
+ + '</tbody></table>'
+ + (loss > 0 && (tc['таргет таблица'] || 0) === 0 ? '<div style="font-size:11px;color:var(--text-muted);margin-top:10px">⚠️ Тег «таргет таблица» пока не проставлен ни одному лиду. Если интеграция Meta→amo подключена недавно — новые лиды должны начать приходить с этим тегом. Проверь через 1-2 дня.</div>' : '')
+ + '</div>';
+ el.innerHTML = html;
 }
 
 // v311: безопасное экранирование для текста внутри SVG
@@ -24818,6 +24868,8 @@ function amoRenderFunnel(d){
  + '</div>';
 
  stagesEl.innerHTML = html;
+ // v320: рисуем виджет атрибуции
+ if(typeof amoRenderAttribution === 'function') amoRenderAttribution(d);
 }
 async function mktUpdateTargetPreview(){
  try {

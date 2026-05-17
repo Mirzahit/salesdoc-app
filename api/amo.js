@@ -161,6 +161,22 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
   const paid = findByName(/счет.*оплач|оплач.*счет|оплачен.*работ/);
   if(paid) logicalFlow.push({ key: 'paid', label: 'Счёт оплачен', count: paid.cumulative });
 
+  // v320: распределение по тегам — для атрибуции источников лидов
+  const tagCounts = { 'таргет таблица': 0, 'ТАРГЕТ': 0, 'marquiz': 0, '__without_tag__': 0 };
+  let _accountedByTag = 0;
+  allLeads.forEach(l => {
+    const tags = (l._embedded && l._embedded.tags) || [];
+    if(tags.length === 0){ tagCounts['__without_tag__']++; return; }
+    let matched = false;
+    tags.forEach(t => {
+      const tn = String(t.name||'').toLowerCase();
+      if(tn.includes('таргет таблица')) { tagCounts['таргет таблица']++; matched = true; }
+      else if(tn === 'таргет' || tn.includes('таргет') && !tn.includes('таблица')) { tagCounts['ТАРГЕТ']++; matched = true; }
+      else if(tn.includes('marquiz')) { tagCounts['marquiz']++; matched = true; }
+    });
+    if(matched) _accountedByTag++;
+  });
+
   return {
     pipeline: { id: p.id, name: p.name },
     total_leads: leads.length,
@@ -169,6 +185,7 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
     lost_count: lostCount,
     period: { from: fromTs || null, to: toTs || null },
     tag_filter: tagFilter || null,
+    tag_counts: tagCounts,
     stages: stages,
     logical_flow: logicalFlow
   };
