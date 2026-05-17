@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v306</title>
+<title>SalesDoc — Финансовый Дашборд v307</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12182,6 +12182,80 @@ function asstBuildContext(){
  return 'текущий период';
  })();
 
+ // v307: расширенный контекст для агентов — готовые статусы клиентов, метрики SaaS,
+ //       2025 годовые подписки, несматченные платежи, спорные склейки.
+ //       Чтобы Аналитик клиентов отвечал по конкретным цифрам, а не пересчитывал из платежей.
+ var clientsView = null, mrrView = null, newClientsView = null;
+ var unmatchedView = null, prefixMergedView = null, additionalView = null, priorStats = null;
+ try {
+ if(typeof acGetActiveClients === 'function'){
+ var acList = acGetActiveClients();
+ clientsView = {
+ total: acList.length,
+ by_status: acList.reduce(function(s,c){ s[c.accessStatus] = (s[c.accessStatus]||0)+1; return s; }, {}),
+ // Топ-150 по сумме абонплаты (компактно — только action-relevant поля)
+ list: acList
+ .filter(function(c){ return c.accessStatus !== 'never' || c.monthlySum > 0; })
+ .sort(function(a,b){ return (b.monthlySum||0) - (a.monthlySum||0); })
+ .slice(0, 150)
+ .map(function(c){
+ return {
+ name: c.client, host: c.host,
+ segment: c.segment, monthly_qty: c.monthlyQty, monthly_sum: c.monthlySum,
+ access_status: c.accessStatus,
+ access_until: c.accessUntil ? new Date(c.accessUntil).toISOString().slice(0,10) : null,
+ days_overdue: c.daysOverdue || 0,
+ operator: c.operator || null, tags: c.tags || [],
+ pay_count_2026: c.payCount, total_amount_2026: c.totalAmount
+ };
+ })
+ };
+ }
+ if(typeof acComputeMRRMetrics === 'function'){
+ mrrView = acComputeMRRMetrics();
+ }
+ if(typeof ncComputeMetrics === 'function'){
+ var nc = ncComputeMetrics();
+ newClientsView = {
+ count_this_month: nc.count, count_prev_month: nc.countPrev,
+ sum_first_payments: nc.sum, avg_check: nc.avgCheck,
+ avg_days_to_activation: nc.avgActivDays,
+ activated: nc.activated, waiting: nc.notActivated
+ };
+ }
+ if(window._acUnmatchedPays){
+ unmatchedView = {
+ count: window._acUnmatchedPays.length,
+ // Топ-20 по сумме — наиболее важные для ручной привязки
+ top: window._acUnmatchedPays.slice(0, 20).map(function(u){
+ return {
+ host: u.host,
+ pay_count: u.pay.payCount,
+ total_amount: Math.round(u.pay.totalAmount||0),
+ last_pay: u.pay.lastPay ? new Date(u.pay.lastPay).toISOString().slice(0,10) : null
+ };
+ })
+ };
+ }
+ if(window._acPrefixMerged){
+ var pm = window._acPrefixMerged;
+ var approved = (typeof acGetApprovedPrefixes === 'function') ? acGetApprovedPrefixes() : {};
+ prefixMergedView = Object.keys(pm)
+ .filter(function(k){ return !approved[k]; })
+ .map(function(k){ return { pay_host: k, matched_to: pm[k].matchedTo, score: pm[k].score }; });
+ }
+ if(typeof acGetAdditionalClients === 'function'){
+ additionalView = acGetAdditionalClients();
+ }
+ if(window._acPriorPays){
+ priorStats = {
+ count: window._acPriorPays.length,
+ total_amount: window._acPriorPays.reduce(function(s,p){return s+(Number(p.amount)||0);}, 0),
+ note: 'Подписочные оплаты 2025, у которых endDate >= сегодня. Они продлевают доступ клиентов в 2026.'
+ };
+ }
+ } catch(_){}
+
  return {
  country: currentCountry,
  today: new Date().toISOString().slice(0,10),
@@ -12190,7 +12264,15 @@ function asstBuildContext(){
  by_month: monthsSorted,
  employees_count: (typeof employees!=='undefined'?employees.length:0),
  acts_count: (typeof acts!=='undefined'?acts.length:0),
- payments: compact
+ payments: compact,
+ // v307: новые блоки
+ clients: clientsView,
+ saas_metrics: mrrView,
+ new_clients: newClientsView,
+ unmatched_payments: unmatchedView,
+ prefix_merged_to_review: prefixMergedView,
+ additional_clients_local: additionalView,
+ prior_year_subscriptions: priorStats
  };
  } catch(e){ return { error: 'context_build_failed: '+e.message }; }
 }
