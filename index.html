@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v295</title>
+<title>SalesDoc — Финансовый Дашборд v298</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3057,6 +3057,16 @@ body.light .mrr-card{background:rgba(120,120,128,.06)}
  .mrr-strip{grid-template-columns:1fr}
 }
 
+/* NEW CLIENTS STRIP (v298) — 3 карточки вместо 4 */
+.nc-strip{
+ display:grid;
+ grid-template-columns:1.4fr 1fr 1fr;
+ gap:12px;
+ margin-bottom:16px;
+}
+@media (max-width:900px){ .nc-strip{grid-template-columns:1fr 1fr} }
+@media (max-width:520px){ .nc-strip{grid-template-columns:1fr} }
+
 /* CLIENTS TAB-BAR (v290) — iOS-style верхняя навигация раздела «Клиенты» */
 .cli-tabbar{
  display:flex;flex-wrap:wrap;gap:4px;
@@ -4105,6 +4115,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div id="clients-tab-bar" class="cli-tabbar" style="display:none">
  <button class="cli-tab" data-clients-tab="all" onclick="clientsGoTab('all')" title="Скоро">Все</button>
  <button class="cli-tab" data-clients-tab="kanban" onclick="clientsGoTab('kanban')">Внедрение</button>
+ <button class="cli-tab" data-clients-tab="newclients" onclick="clientsGoTab('newclients')">Новые</button>
  <button class="cli-tab" data-clients-tab="activeclients" onclick="clientsGoTab('activeclients')">Действующие</button>
  <button class="cli-tab" data-clients-tab="risk" onclick="clientsGoTab('risk')" title="Скоро">В риске</button>
  <button class="cli-tab" data-clients-tab="keyclients" onclick="clientsGoTab('keyclients')">Ключевые</button>
@@ -5924,6 +5935,22 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  <!-- /ACTIVECLIENTS VIEW -->
 
+ <!-- v298: Новые клиенты — первые платежи, скорость активации, динамика -->
+ <div id="view-newclients" style="display:none">
+ <div class="sd-page">
+ <div class="sd-head">
+ <div>
+ <div class="sd-h1">Новые клиенты</div>
+ <div class="sd-sub">Кто пришёл в этом месяце · скорость активации · средний чек первого платежа</div>
+ </div>
+ </div>
+ <div id="nc-strip"></div>
+ <div class="sd-section-title">Новые в текущем месяце <span id="nc-count" style="color:var(--text-soft);font-weight:500;text-transform:none;letter-spacing:0;font-size:13px"></span></div>
+ <div class="sd-card"><div class="sd-table-wrap"><table class="sd-table" id="nc-table"></table></div></div>
+ </div>
+ </div>
+ <!-- /NEWCLIENTS VIEW -->
+
  <!-- TELEGRAM-БОТ — АДМИН (v260) -->
  <div id="view-botadmin" style="display:none">
  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:18px">
@@ -6480,6 +6507,7 @@ const ACCESS_KEYS = [
  { key:'view_integrations', label:'Очередь интеграции', group:'Клиенты' },
  { key:'view_supportdash', label:'Тех.поддержка (дашборд)', group:'Клиенты' }, // v261
  { key:'view_activeclients', label:'Действующие клиенты', group:'Клиенты' }, // v261
+ { key:'view_newclients', label:'Новые клиенты', group:'Клиенты' }, // v298
  { key:'view_calendar', label:'Календарь задач', group:'Команда' }, // v261
  { key:'view_planning', label:'Планёрки / спринты', group:'Команда' }, // v261
  { key:'view_statistics', label:'Статистики', group:'Команда' },
@@ -6515,13 +6543,13 @@ const ROLE_LABELS = {
 // accountant: финансы и расходы — без канбана/маркетинга/HR
 // viewer: только просмотр финансов и команды
 const ROLE_DEFAULTS = {
- admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_botadmin:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_botadmin:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
- accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:1,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:0,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:0,manage_employees:0 },
- viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:0,view_supportdash:0,view_activeclients:0,view_botadmin:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:1,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:0,manage_employees:0 },
+ viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
 };
 
 // v151: Email-список тех, кому разрешён Ассистент. Не через роль — чтобы Arslan
@@ -7057,7 +7085,7 @@ function applyUserAccess() {
  // v180: фильтруем И обычные пункты, И solo-кнопку «Дашборд» (она `nav-item-solo`).
  // v261: добавлены отсутствовавшие view (calendar/supportdash/activeclients/botadmin) — раньше
  // эти пункты НЕ скрывались в навигации, например оператор видел «Telegram-бот».
- const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',settings:'view_settings',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',botadmin:'view_botadmin'};
+ const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',settings:'view_settings',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin'};
  document.querySelectorAll('.nav-item[data-view],.nav-item-solo[data-view]').forEach(el=>{
  const view=el.dataset.view;
  if (view === 'assistant') {
@@ -10553,7 +10581,7 @@ function showView(v) {
  if (v === 'clients') {
  var lastTab = null;
  try { lastTab = localStorage.getItem('sd_clients_last_tab'); } catch(_){}
- var allowedTabs = ['activeclients','kanban','keyclients','integrations'];
+ var allowedTabs = ['activeclients','newclients','kanban','keyclients','integrations'];
  if (!allowedTabs.indexOf || allowedTabs.indexOf(lastTab) < 0) lastTab = 'activeclients';
  v = lastTab;
  }
@@ -10564,20 +10592,20 @@ function showView(v) {
  try { showNotif('Нет доступа', 'Ассистент доступен только CEO.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
- var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',botadmin:'view_botadmin',settings:'view_settings'};
+ var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',settings:'view_settings'};
  var _need = _accessMap[v];
  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
  }
- ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','statistics','planning','calendar','supportdash','activeclients','botadmin'].forEach(x=>{
+ ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
  // v290: единый tab-bar раздела «Клиенты» — показываем при заходе на любой из подэкранов клиентов
  (function(){
- var cliViews = ['activeclients','kanban','keyclients','integrations'];
+ var cliViews = ['activeclients','newclients','kanban','keyclients','integrations'];
  var bar = document.getElementById('clients-tab-bar');
  if (!bar) return;
  if (cliViews.indexOf(v) >= 0) {
@@ -10600,6 +10628,7 @@ function showView(v) {
  // v246: Дашборд тех.поддержки
  if (v === 'supportdash' && typeof supportInit === 'function') { try { supportInit(); } catch(_){} }
  if (v === 'activeclients' && typeof acInit === 'function') { try { acInit(); } catch(_){} }
+ if (v === 'newclients' && typeof ncInit === 'function') { try { ncInit(); } catch(_){} }
  // v165: инициализация Планёрок при заходе
  if (v === 'planning' && typeof planningInit === 'function') { try { planningInit(); } catch(_){} }
  // Hide fullscreen card page when switching views
@@ -10620,7 +10649,7 @@ function showView(v) {
  // Hide statistics subpage
  var statPage = document.getElementById('view-stat-page');
  if(statPage) statPage.style.display='none';
- const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Клиенты',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Клиенты',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Клиенты',statistics:'Статистики — ИЦО',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Клиенты'};
+ const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Клиенты',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Клиенты',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Клиенты',statistics:'Статистики — ИЦО',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Клиенты',newclients:'Клиенты'};
  document.getElementById('page-title').textContent=titles[v]||v;
  // Подсветка активного пункта в nav
  document.querySelectorAll('.nav-item[data-view]').forEach(function(el){
@@ -22053,17 +22082,37 @@ function acRender(){
 
 // ===========================================================
 // v295: MRR / ARR / Churn / NRR (амортизация платежей)
+// v296 fix: parseDateFromSheet возвращает СТРОКУ 'YYYY-MM-DD', а не Date —
+//           isNaN("2026-01-03") === true отфильтровывал ВСЕ платежи, MRR=0
+// v297:     MRR считаем ТОЛЬКО по абонплате (category='subscription').
+//           Внедрения / интеграции / разовые лицензии — не recurring, в MRR не идут.
 // ===========================================================
 function acComputeMRRMetrics(){
  var byClientByMonth = {}; // { clientKey: { 'YYYY-MM': sum } }
  (typeof payments !== 'undefined' && payments ? payments : []).forEach(function(p){
+ // v297: только recurring подписочные платежи
+ var cat = String(p.category || '').toLowerCase();
+ var catRaw = String(p.categoryRaw || p.cat || '').toLowerCase();
+ var isSub = (cat === 'subscription') || catRaw.indexOf('абон') >= 0 || catRaw.indexOf('баланс') >= 0;
+ if (!isSub) return;
  var amount = Number(p.amount || p.am) || 0;
  if (amount <= 0) return;
  var period = Math.max(1, Math.round(Number(p.period) || 1));
- var startSrc = p.activationDate || p.date;
+ var startSrc = p.activationDate || p.date || p.d;
  if (!startSrc) return;
- var startDate = (startSrc instanceof Date) ? startSrc : (typeof parseDateFromSheet === 'function' ? parseDateFromSheet(startSrc) : new Date(startSrc));
- if (!startDate || isNaN(startDate)) return;
+ var startDate = null;
+ if (startSrc instanceof Date) {
+ startDate = startSrc;
+ } else {
+ var s = (typeof parseDateFromSheet === 'function') ? parseDateFromSheet(startSrc) : String(startSrc);
+ if (!s) return;
+ var parts = String(s).substring(0,10).split('-');
+ if (parts.length !== 3) return;
+ var yy = parseInt(parts[0],10), mm = parseInt(parts[1],10), dd = parseInt(parts[2],10) || 1;
+ if (!yy || !mm) return;
+ startDate = new Date(yy, mm - 1, dd);
+ }
+ if (!startDate || isNaN(startDate.getTime())) return;
  var perMonth = amount / period;
  var clientKey = String(p.client || p.cl || p.compName || '').toLowerCase().trim();
  if (!clientKey) return;
@@ -22153,6 +22202,181 @@ function acRenderMRRStrip(){
  + '</div>';
  el.innerHTML = html;
 }
+
+// ===========================================================
+// v298: Новые клиенты — отдельная страница с метриками
+// Считаем «новым» каждого клиента, у которого в payments есть строка
+// с categoryRaw=«новый клиент». Берём САМУЮ РАННЮЮ такую оплату как
+// «первую» — на ней считаются: чек, дата активации, дни до активации.
+// ===========================================================
+function ncParseDate(s){
+ if(!s) return null;
+ if(s instanceof Date) return s;
+ var ss = String(s).substring(0,10).split('-');
+ if(ss.length !== 3) return null;
+ var y = parseInt(ss[0],10), m = parseInt(ss[1],10), d = parseInt(ss[2],10) || 1;
+ if(!y || !m) return null;
+ var dt = new Date(y, m-1, d);
+ return isNaN(dt.getTime()) ? null : dt;
+}
+
+function ncEsc(s){
+ return (typeof kbEsc === 'function')
+ ? kbEsc(s)
+ : String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+ });
+}
+
+function ncComputeMetrics(){
+ var today = new Date();
+ var tY = today.getFullYear(), tM = today.getMonth();
+ var prevD = new Date(tY, tM-1, 1);
+ var pY = prevD.getFullYear(), pM = prevD.getMonth();
+
+ var byClient = {};
+ (typeof payments !== 'undefined' && payments ? payments : []).forEach(function(p){
+ var raw = String(p.categoryRaw || p.cat || '').toLowerCase().trim();
+ var isNew = (raw === 'новый клиент') || (raw.indexOf('нов') >= 0 && raw.indexOf('клиент') >= 0);
+ if(!isNew) return;
+ var key = String(p.client || p.cl || '').trim().toLowerCase();
+ if(!key) return;
+ var dt = ncParseDate(p.date || p.d);
+ if(!dt) return;
+ if(!byClient[key] || dt < byClient[key].firstPayDate){
+ byClient[key] = {
+ client: p.client || p.cl || '—',
+ firstPayDate: dt,
+ firstAmount: Number(p.amount || p.am) || 0,
+ activationDate: ncParseDate(p.activationDate),
+ manager: p.managerName || p.m || ''
+ };
+ }
+ });
+
+ var thisList = [], prevList = [];
+ var thisSum = 0, prevSum = 0;
+ var activTimes = [];
+ Object.keys(byClient).forEach(function(k){
+ var nc = byClient[k];
+ var y = nc.firstPayDate.getFullYear(), m = nc.firstPayDate.getMonth();
+ if(y === tY && m === tM){
+ thisList.push(nc);
+ thisSum += nc.firstAmount;
+ if(nc.activationDate){
+ var dd = Math.round((nc.activationDate - nc.firstPayDate) / 86400000);
+ if(dd >= 0 && dd < 365) activTimes.push(dd);
+ }
+ } else if(y === pY && m === pM){
+ prevList.push(nc);
+ prevSum += nc.firstAmount;
+ }
+ });
+
+ var count = thisList.length;
+ var countPrev = prevList.length;
+ var deltaCount = count - countPrev;
+ var deltaPct = countPrev > 0 ? Math.round((count - countPrev) / countPrev * 100) : 0;
+ var avgCheck = count > 0 ? Math.round(thisSum / count) : 0;
+ var avgActivDays = activTimes.length > 0
+ ? Math.round(activTimes.reduce(function(s,d){return s+d;}, 0) / activTimes.length)
+ : 0;
+ var notActivated = thisList.filter(function(nc){ return !nc.activationDate; }).length;
+
+ return {
+ count: count, countPrev: countPrev, deltaCount: deltaCount, deltaPct: deltaPct,
+ sum: Math.round(thisSum), sumPrev: Math.round(prevSum),
+ avgCheck: avgCheck,
+ avgActivDays: avgActivDays,
+ notActivated: notActivated, activated: count - notActivated,
+ list: thisList.sort(function(a,b){ return b.firstPayDate - a.firstPayDate; })
+ };
+}
+
+function ncRender(){
+ var stripEl = document.getElementById('nc-strip');
+ var tblEl = document.getElementById('nc-table');
+ var cntEl = document.getElementById('nc-count');
+ if(!stripEl || !tblEl) return;
+ var m = ncComputeMetrics();
+
+ var fmtMoney = function(n){
+ if(Math.abs(n) >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'') + 'M';
+ if(Math.abs(n) >= 1e3) return Math.round(n/1e3) + 'K';
+ return String(Math.round(n));
+ };
+
+ var deltaSign = m.deltaCount >= 0 ? '+' : '−';
+ var deltaColor = m.deltaCount >= 0 ? 'var(--success)' : 'var(--danger)';
+ var activColor = !m.avgActivDays ? 'var(--text-muted)'
+ : m.avgActivDays <= 7 ? 'var(--success)'
+ : m.avgActivDays <= 14 ? 'var(--warning)' : 'var(--danger)';
+
+ stripEl.className = 'nc-strip';
+ stripEl.innerHTML = ''
+ + '<div class="mrr-card mrr-main">'
+ + ' <div class="mrr-lbl">Новых за этот месяц</div>'
+ + ' <div class="mrr-amount">' + m.count + ' <span class="mrr-unit">клиентов</span></div>'
+ + ' <div class="mrr-sub">'
+ + ' <span style="color:' + deltaColor + '">' + deltaSign + Math.abs(m.deltaCount) + ' · ' + (m.deltaPct >= 0 ? '+' : '') + m.deltaPct + '%</span>'
+ + ' <span class="mrr-sub-muted">к прошлому (' + m.countPrev + ')</span>'
+ + ' </div>'
+ + '</div>'
+ + '<div class="mrr-card">'
+ + ' <div class="mrr-lbl">Сумма первых платежей</div>'
+ + ' <div class="mrr-val">' + fmtMoney(m.sum) + ' <span class="mrr-unit">₸</span></div>'
+ + ' <div class="mrr-sub-muted">средний чек ' + fmtMoney(m.avgCheck) + ' ₸</div>'
+ + '</div>'
+ + '<div class="mrr-card">'
+ + ' <div class="mrr-lbl">Время до активации</div>'
+ + ' <div class="mrr-val" style="color:' + activColor + '">' + (m.avgActivDays || '—') + (m.avgActivDays ? ' <span class="mrr-unit">дн</span>' : '') + '</div>'
+ + ' <div class="mrr-sub-muted">' + m.activated + ' активир. · ' + m.notActivated + ' ждут</div>'
+ + '</div>';
+
+ if(cntEl) cntEl.textContent = m.count ? '· ' + m.count : '';
+
+ var fmtDate = function(d){
+ return String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
+ };
+ var thead = '<thead><tr>'
+ + '<th>Клиент</th>'
+ + '<th>Дата 1-й оплаты</th>'
+ + '<th>Сумма</th>'
+ + '<th>Менеджер</th>'
+ + '<th>Активирован</th>'
+ + '<th>Дней до активации</th>'
+ + '</tr></thead>';
+ var body = '<tbody>';
+ if(!m.list.length){
+ body += '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px">В этом месяце новых клиентов ещё не зафиксировано</td></tr>';
+ } else {
+ body += m.list.map(function(nc){
+ var pdStr = fmtDate(nc.firstPayDate);
+ var actStr = '—', daysStr;
+ if(nc.activationDate){
+ actStr = fmtDate(nc.activationDate);
+ var dd = Math.round((nc.activationDate - nc.firstPayDate) / 86400000);
+ daysStr = dd + ' дн';
+ } else {
+ var waitDays = Math.round((new Date() - nc.firstPayDate) / 86400000);
+ var waitColor = waitDays > 14 ? 'var(--danger)' : waitDays > 7 ? 'var(--warning)' : 'var(--text-muted)';
+ daysStr = '<span style="color:' + waitColor + '">ждёт ' + waitDays + ' дн</span>';
+ }
+ return '<tr>'
+ + '<td>' + ncEsc(nc.client || '—') + '</td>'
+ + '<td>' + pdStr + '</td>'
+ + '<td>' + nc.firstAmount.toLocaleString('ru-KZ') + ' ₸</td>'
+ + '<td>' + ncEsc(nc.manager || '—') + '</td>'
+ + '<td>' + actStr + '</td>'
+ + '<td>' + daysStr + '</td>'
+ + '</tr>';
+ }).join('');
+ }
+ body += '</tbody>';
+ tblEl.innerHTML = thead + body;
+}
+
+function ncInit(){ ncRender(); }
 
 function acRiskBar(label, value, max, fillClass){
  var pct = max ? Math.round(value / max * 100) : 0;
