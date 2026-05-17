@@ -256,22 +256,50 @@ export default async function handler(req, res){
         if(page === maxPages && contacts.length === 250) amoTruncated = true;
       }
 
-      // 4. Сверяем: для каждого Sheets-лида ищем в amo
+      // 4. Сверяем: для каждого Sheets-лида ищем в amo (пасс 1 — bulk phones)
+      const stillMissing = [];
+      sheetLeads.forEach(l => {
+        l.in_amo = amoPhones.has(l.phone);
+        if(!l.in_amo) stillMissing.push(l);
+      });
+
+      // v316: пасс 2 — для не найденных делаем прямой query-поиск amo (учитывает все форматы хранения)
+      let foundByQuery = 0;
+      for(const l of stillMissing){
+        try {
+          const r = await amoFetch(`/contacts?query=${encodeURIComponent(l.phone)}&limit=1`, env);
+          if(r && r._embedded && r._embedded.contacts && r._embedded.contacts.length > 0){
+            l.in_amo = true;
+            l.found_via_query = true;
+            foundByQuery++;
+          }
+          // Альтернативный поиск — последние 10 цифр (на случай если в amo сохранено без 7/8)
+          if(!l.in_amo){
+            const last10 = l.phone.slice(-10);
+            const r2 = await amoFetch(`/contacts?query=${encodeURIComponent(last10)}&limit=1`, env);
+            if(r2 && r2._embedded && r2._embedded.contacts && r2._embedded.contacts.length > 0){
+              l.in_amo = true;
+              l.found_via_query = true;
+              foundByQuery++;
+            }
+          }
+        } catch(_){}
+      }
+
+      // 5. Пересчитываем после query-fallback
       let inAmo = 0, notInAmo = 0;
       const byClass = {};
-      const mismatch_marked_not_in_amo = []; // менеджер пометил «в срм», но в amo нет → ⚠️
-      const urgent_unprocessed = []; // без пометки И нет в amo → 🔥 новый необработанный
+      const mismatch_marked_not_in_amo = [];
+      const urgent_unprocessed = [];
       sheetLeads.forEach(l => {
-        const found = amoPhones.has(l.phone);
-        l.in_amo = found;
-        if(found) inAmo++; else notInAmo++;
+        if(l.in_amo) inAmo++; else notInAmo++;
         byClass[l.classification] = byClass[l.classification] || { total: 0, in_amo: 0, not_in_amo: 0 };
         byClass[l.classification].total++;
-        if(found) byClass[l.classification].in_amo++; else byClass[l.classification].not_in_amo++;
-        if(l.classification === 'in_amo_marked' && !found){
+        if(l.in_amo) byClass[l.classification].in_amo++; else byClass[l.classification].not_in_amo++;
+        if(l.classification === 'in_amo_marked' && !l.in_amo){
           mismatch_marked_not_in_amo.push({ phone: l.phone });
         }
-        if(l.classification === 'unprocessed' && !found){
+        if(l.classification === 'unprocessed' && !l.in_amo){
           urgent_unprocessed.push({ phone: l.phone });
         }
       });
