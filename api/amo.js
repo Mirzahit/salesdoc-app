@@ -82,7 +82,10 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
     if(page === 5 && batch.length === 250){ truncated = true; }
   }
 
-  // v319: фильтр по тегу (имя тега в нижнем регистре, проверка includes для гибкости)
+  // v319 / v323: фильтр по тегу. Поддерживает спец-значения:
+  //   'meta_any' — любой Meta-источник (таргет таблица OR ТАРГЕТ OR marquiz)
+  //   'без тега' / '__notag__' — без любых тегов
+  //   иначе — match по includes
   let leads = allLeads;
   if(tagFilter){
     const tf = String(tagFilter).toLowerCase().trim();
@@ -90,6 +93,14 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
       leads = allLeads.filter(l => {
         const tags = (l._embedded && l._embedded.tags) || [];
         return tags.length === 0;
+      });
+    } else if(tf === 'meta_any' || tf === 'все meta'){
+      leads = allLeads.filter(l => {
+        const tags = (l._embedded && l._embedded.tags) || [];
+        return tags.some(t => {
+          const tn = String(t.name||'').toLowerCase();
+          return tn.includes('таргет') || tn.includes('marquiz');
+        });
       });
     } else {
       leads = allLeads.filter(l => {
@@ -216,6 +227,113 @@ export default async function handler(req, res){
       const tagFilter = req.query.tag || null; // v319: фильтр по тегу (имя)
       const data = await getFunnel(pipelineId, env, fromTs, toTs, tagFilter);
       return res.status(200).json(data);
+    }
+    if(action === 'apply_meta_tags'){
+      // v323: массовая простановка тега «таргет таблица» сделкам которые сматчились по телефону
+      //       с Meta Sheets (ручные переносы менеджеров без тега). С dry_run для безопасности.
+      const sheetId = String(req.query.sheet_id || '');
+      const sheetName = String(req.query.sheet_name || 'Sheet1');
+      const tagName = String(req.query.tag || 'таргет таблица');
+      const dryRun = req.query.dry_run !== 'false'; // по умолчанию true
+      if(!sheetId) return bad(res, 400, 'Need ?sheet_id=...');
+
+      // 1. Читаем CSV из Sheets и извлекаем телефоны
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+      const csvResp = await fetch(csvUrl);
+      if(!csvResp.ok) return bad(res, 502, `Sheets fetch failed: ${csvResp.status}`);
+      const csv = await csvResp.text();
+      function normalizePhone(p){
+        const digits = String(p||'').replace(/\D/g, '');
+        if(!digits) return null;
+        let n = digits;
+        if(n.startsWith('8') && n.length === 11) n = '7' + n.slice(1);
+        if(n.length === 10) n = '7' + n;
+        return n.length >= 10 ? n : null;
+      }
+      const phones = new Set();
+      csv.split('\n').forEach(line => {
+        const m = line.match(/p:\+?(\d{10,11})/);
+        if(m){ const p = normalizePhone(m[1]); if(p) phones.add(p); }
+      });
+
+      // 2. Для каждого телефона ищем lead в amo (с тегами)
+      const results = { matched: [], not_found: [], already_tagged: [], to_tag: [] };
+      let processed = 0;
+      const maxProcess = Math.min(40, phones.size); // Vercel timeout safety
+      for(const phone of phones){
+        if(processed >= maxProcess) break;
+        processed++;
+        try {
+          // Поиск контакта по телефону
+          const contactsR = await amoFetch(`/contacts?query=${encodeURIComponent(phone)}&limit=1&with=leads`, env);
+          const contacts = (contactsR && contactsR._embedded && contactsR._embedded.contacts) || [];
+          if(!contacts.length){ results.not_found.push({phone}); continue; }
+          // Берём связанные сделки
+          const leadIds = ((contacts[0]._embedded && contacts[0]._embedded.leads) || []).map(l => l.id);
+          if(!leadIds.length){ results.not_found.push({phone, contact_id: contacts[0].id}); continue; }
+          // Берём первую (главную) сделку
+          const leadId = leadIds[0];
+          const leadR = await amoFetch(`/leads/${leadId}?with=contacts`, env);
+          const existingTags = (leadR._embedded && leadR._embedded.tags) || [];
+          const hasTag = existingTags.some(t => String(t.name||'').toLowerCase() === tagName.toLowerCase());
+          if(hasTag){
+            results.already_tagged.push({phone, lead_id: leadId});
+            continue;
+          }
+          results.matched.push({phone, lead_id: leadId, lead_name: leadR.name});
+          results.to_tag.push({phone, lead_id: leadId});
+        } catch(e){
+          results.not_found.push({phone, error: e.message});
+        }
+      }
+
+      // 3. Если не dry_run — реально проставляем тег
+      let appliedCount = 0;
+      const appliedErrors = [];
+      if(!dryRun && results.to_tag.length){
+        // PATCH /leads с массивом обновлений: каждая сделка получает _embedded.tags = [{name: tagName}]
+        // amo не имеет single-tag append, только полная замена. Сначала получаем существующие теги.
+        for(const item of results.to_tag){
+          try {
+            const cur = await amoFetch(`/leads/${item.lead_id}?with=contacts`, env);
+            const curTags = ((cur._embedded && cur._embedded.tags) || []).map(t => ({id: t.id}));
+            curTags.push({name: tagName});
+            const body = JSON.stringify([{ id: item.lead_id, _embedded: { tags: curTags } }]);
+            const r = await fetch(`https://${String(env.AMO_SUBDOMAIN||'').replace(/\s+/g,'')}.amocrm.ru/api/v4/leads`, {
+              method: 'PATCH',
+              headers: {
+                'Authorization': `Bearer ${String(env.AMO_TOKEN||'').replace(/\s+/g,'')}`,
+                'Content-Type': 'application/json'
+              },
+              body: body
+            });
+            if(r.ok){ appliedCount++; }
+            else { appliedErrors.push({lead_id: item.lead_id, status: r.status}); }
+          } catch(e){
+            appliedErrors.push({lead_id: item.lead_id, error: e.message});
+          }
+        }
+      }
+
+      return res.status(200).json({
+        sheet: { id: sheetId, name: sheetName },
+        tag: tagName,
+        dry_run: dryRun,
+        phones_total: phones.size,
+        phones_processed: processed,
+        truncated: phones.size > processed,
+        matched_count: results.matched.length,
+        already_tagged_count: results.already_tagged.length,
+        not_found_count: results.not_found.length,
+        to_tag_count: results.to_tag.length,
+        applied_count: appliedCount,
+        applied_errors: appliedErrors,
+        matched_sample: results.matched.slice(0, 10),
+        not_found_sample: results.not_found.slice(0, 10),
+        message: dryRun
+          ? `DRY RUN: будет помечено ${results.to_tag.length} сделок тегом «${tagName}». Запусти с &dry_run=false чтобы применить.`
+          : `Применено: тег «${tagName}» к ${appliedCount} сделкам. Ошибок: ${appliedErrors.length}.`
+      });
     }
     if(action === 'phone_lookup'){
       // v317: debug — поиск контакта/лида в amo по конкретному телефону, в разных форматах
