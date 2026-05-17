@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v299</title>
+<title>SalesDoc — Финансовый Дашборд v300</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5892,6 +5892,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <option value="working">В работе</option>
  <option value="ok">Норма</option>
  </select>
+ <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-churned" onchange="acSetShowChurned(this.checked)" style="margin:0"> Показать отвалившихся</label>
  </div>
  </div>
  <!-- v295: MRR / ARR / Churn / NRR — north-star метрики SaaS -->
@@ -21618,7 +21619,7 @@ function supportChartAging(cards){
 // ============================================================
 var AC_TAGS_KEY = 'crm_client_tags';
 var AC_KZ_CACHE = null;
-var acState = { operator: '', risk: '', tag: '', segment: '' };
+var acState = { operator: '', risk: '', tag: '', segment: '', showChurned: false };
 
 // v253: сегменты клиентов по кол-ву пользователей (qty)
 var AC_SEGMENTS = [
@@ -21793,7 +21794,7 @@ function acGetActiveClients(){
  payments.forEach(function(p){
  var host = String(p && (p.client || p.cl || p.compName) || '').trim().toLowerCase();
  if(!host) return;
- if(!payByHost[host]) payByHost[host] = { totalAmount: 0, payCount: 0, lastPay: null };
+ if(!payByHost[host]) payByHost[host] = { totalAmount: 0, payCount: 0, lastPay: null, accessUntil: null };
  payByHost[host].payCount++;
  payByHost[host].totalAmount += parseFloat(p.amount || p.am) || 0;
  // v299 fix: parseDateFromSheet возвращает СТРОКУ 'YYYY-MM-DD', isNaN(string)===true
@@ -21814,6 +21815,23 @@ function acGetActiveClients(){
  }
  }
  if(d && (!payByHost[host].lastPay || d > payByHost[host].lastPay)) payByHost[host].lastPay = d;
+ // v300: подписочные платежи продлевают "Доступ до" на N месяцев (period из Sheets, default=1).
+ // Подписочные = абонплата + баланс + новый клиент + лицензия (см. mapCategoryFromSheet).
+ // Услуги (внедрение/интеграция/накладные/долги) НЕ продлевают доступ.
+ if(d){
+ var pCat = String(p.category || '').toLowerCase();
+ var pCatRaw = String(p.categoryRaw || p.cat || '').toLowerCase();
+ var isSubPay = pCat === 'subscription' || pCat === 'license'
+ || pCatRaw.indexOf('абон') >= 0
+ || pCatRaw.indexOf('баланс') >= 0
+ || pCatRaw === 'новый клиент' || (pCatRaw.indexOf('нов') >= 0 && pCatRaw.indexOf('клиент') >= 0)
+ || (pCatRaw.indexOf('лицен') >= 0 && pCatRaw.indexOf('доп') < 0);
+ if(isSubPay){
+ var per = Math.max(1, Math.round(Number(p.period) || 1));
+ var endD = new Date(d.getFullYear(), d.getMonth() + per, d.getDate());
+ if(!payByHost[host].accessUntil || endD > payByHost[host].accessUntil) payByHost[host].accessUntil = endD;
+ }
+ }
  });
  }
 
@@ -21864,13 +21882,15 @@ function acGetActiveClients(){
  Object.keys(payByHost).forEach(function(payHost){
  var clientName = payHostToClient[payHost];
  if(!clientName) return;
- if(!aggByClient[clientName]) aggByClient[clientName] = { totalAmount: 0, payCount: 0, lastPay: null, hosts: [] };
+ if(!aggByClient[clientName]) aggByClient[clientName] = { totalAmount: 0, payCount: 0, lastPay: null, accessUntil: null, hosts: [] };
  var p = payByHost[payHost];
  aggByClient[clientName].totalAmount += p.totalAmount;
  aggByClient[clientName].payCount += p.payCount;
  aggByClient[clientName].hosts.push(payHost);
  if(p.lastPay && (!aggByClient[clientName].lastPay || p.lastPay > aggByClient[clientName].lastPay))
  aggByClient[clientName].lastPay = p.lastPay;
+ if(p.accessUntil && (!aggByClient[clientName].accessUntil || p.accessUntil > aggByClient[clientName].accessUntil))
+ aggByClient[clientName].accessUntil = p.accessUntil;
  });
 
  // 4. Собираем итоговый список действующих клиентов
@@ -21881,9 +21901,17 @@ function acGetActiveClients(){
  var keyLow = (String(item.host||'').trim().toLowerCase()) || acNormName(name);
  if(seen[keyLow]) return;
  seen[keyLow] = 1;
- var pay = aggByClient[name] || { totalAmount:0, payCount:0, lastPay:null, hosts:[] };
+ var pay = aggByClient[name] || { totalAmount:0, payCount:0, lastPay:null, accessUntil:null, hosts:[] };
  var card = cardByKey[String(item.host||'').trim().toLowerCase()] || cardByKey[acNormName(name)] || null;
  var daysSince = pay.lastPay ? Math.floor((new Date() - pay.lastPay) / 86400000) : 999;
+ // v300: статус доступа на основе подписочных платежей + period
+ var accessStatus = 'never', daysOverdue = 0;
+ if(pay.accessUntil){
+ var diff = Math.floor((new Date() - pay.accessUntil) / 86400000);
+ if(diff < 0) accessStatus = 'active';
+ else if(diff < 7) { accessStatus = 'grace'; daysOverdue = diff + 1; }
+ else { accessStatus = 'churned'; daysOverdue = diff + 1; }
+ }
  result.push({
  client: name, host: item.host || '',
  monthlyQty: item.qty || 0, monthlySum: item.sum || 0,
@@ -21897,6 +21925,9 @@ function acGetActiveClients(){
  payCount: pay.payCount || 0,
  matchedHosts: pay.hosts,
  daysSincePay: daysSince,
+ accessUntil: pay.accessUntil || null,
+ accessStatus: accessStatus,
+ daysOverdue: daysOverdue,
  risk: acRiskLevelByDays(name, daysSince),
  tags: acGetTags(name)
  });
@@ -21941,6 +21972,7 @@ function acSetOperator(op){ acState.operator = op || ''; acRender(); }
 function acSetRisk(r){ acState.risk = r || ''; acRender(); }
 function acSetTag(t){ acState.tag = t || ''; acRender(); }
 function acSetSegment(s){ acState.segment = s || ''; acRender(); }
+function acSetShowChurned(v){ acState.showChurned = !!v; acRender(); }
 
 function acInit(){
  var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
@@ -21968,6 +22000,8 @@ function acRender(){
  if(acState.risk && c.risk !== acState.risk) return false;
  if(acState.tag && c.tags.indexOf(acState.tag) < 0) return false;
  if(acState.segment && c.segment !== acState.segment) return false;
+ // v300: по умолчанию скрываем отвалившихся (доступ закончился >7 дн назад)
+ if(!acState.showChurned && c.accessStatus === 'churned') return false;
  return true;
  });
 
@@ -22037,7 +22071,7 @@ function acRender(){
  // v253: таблица с группировкой по сегментам (заголовок-строка для каждого сегмента)
  var tbl = document.getElementById('ac-table');
  if(tbl){
-  var thead = '<thead><tr><th>Клиент</th><th>Хост</th><th class="num">Польз.</th><th class="num">Абонплата</th><th>Оператор</th><th class="num">Дн. без оплаты</th><th>Риск</th><th>Теги</th><th>Действия</th></tr></thead><tbody>';
+  var thead = '<thead><tr><th>Клиент</th><th>Хост</th><th class="num">Польз.</th><th class="num">Абонплата</th><th>Оператор</th><th>Доступ до</th><th>Риск</th><th>Теги</th><th>Действия</th></tr></thead><tbody>';
   if(!filtered.length){
    tbl.innerHTML = thead + '<tr><td colspan="9" class="sd-empty">Нет клиентов по фильтру</td></tr></tbody>';
   } else {
@@ -22067,8 +22101,17 @@ function acRender(){
      var opColor = (typeof KB_OP_COLORS !== 'undefined' && c.operator && KB_OP_COLORS[c.operator]) || '#888';
      var riskCls = c.risk === 'high' ? 's-bad' : (c.risk === 'med' ? 's-mid' : 's-good');
      var riskLabel = c.risk === 'high' ? 'High' : (c.risk === 'med' ? 'Med' : 'Low');
-     var daysStr = c.daysSincePay === 999 ? 'не платил' : c.daysSincePay;
-     var daysColor = c.daysSincePay > 60 ? '#FF6B5C' : (c.daysSincePay > 30 ? '#FFB340' : 'inherit');
+     // v300: «Доступ до» вместо «Дн. без оплаты» — расчёт по последней подписочной оплате + period
+     var accessStr, accessColor;
+     var fmtDM = function(d){ return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear(); };
+     if(c.accessStatus === 'never'){ accessStr = '— нет подписки'; accessColor = 'var(--text-muted)'; }
+     else if(c.accessStatus === 'active'){
+      var daysLeft = Math.floor((c.accessUntil - new Date()) / 86400000);
+      accessStr = 'до ' + fmtDM(c.accessUntil) + (daysLeft <= 7 ? ' <span style="color:#FFB340">(' + daysLeft + ' дн)</span>' : '');
+      accessColor = daysLeft <= 7 ? '#FFB340' : 'var(--success)';
+     }
+     else if(c.accessStatus === 'grace'){ accessStr = 'просрочка ' + c.daysOverdue + ' дн'; accessColor = '#FFB340'; }
+     else { accessStr = 'отвалился ' + c.daysOverdue + ' дн'; accessColor = 'var(--text-muted)'; }
      var tagsHtml = c.tags.map(function(t){
       var labels = {risk:'Риск', problem:'Проблема', working:'В работе', ok:'Норма'};
       return '<span class="ac-tag" title="'+t+'">'+(labels[t]||t)+'</span>';
@@ -22080,7 +22123,7 @@ function acRender(){
       + '<td class="num">'+(c.monthlyQty||0)+'</td>'
       + '<td class="num">'+(c.monthlySum?fmtSum(c.monthlySum):'—')+'</td>'
       + '<td><div class="sd-op-cell"><span class="sd-op-dot" style="background:'+opColor+'"></span>'+kbEsc(c.operator || '—')+'</div></td>'
-      + '<td class="num" style="color:'+daysColor+'">'+daysStr+'</td>'
+      + '<td style="color:'+accessColor+';font-size:12px;white-space:nowrap">'+accessStr+'</td>'
       + '<td><span class="sd-score '+riskCls+'">'+riskLabel+'</span></td>'
       + '<td><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" onclick="acTagModal(\''+clientEsc+'\')">+</button></div></td>'
       + '<td>'+(c.cardId ? '<button class="sd-risk-action" onclick="supportOpenCard(\''+c.cardId+'\')">Открыть</button>' : '')+'</td>'
