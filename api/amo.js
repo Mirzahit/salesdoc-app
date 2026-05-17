@@ -363,11 +363,14 @@ export default async function handler(req, res){
         });
       });
       const tagSorted = Object.entries(tagCount).sort((a,b) => b[1]-a[1]).map(([name, count]) => ({name, count}));
+      // v318: возвращаем имена всех тегов чтоб видеть новые (от интеграций)
+      const allTagNames = allTags.map(t => t.name).sort();
       return res.status(200).json({
         leads_fetched: leads.length,
         with_any_tag: withAnyTag,
         without_tag: withoutTag,
         all_tags_in_account: allTags.length,
+        all_tag_names: allTagNames,
         top_tags: tagSorted
       });
     }
