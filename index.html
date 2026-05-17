@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v320</title>
+<title>SalesDoc — Финансовый Дашборд v321</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -24738,46 +24738,63 @@ function amoBuildUnifiedFunnel(amoData, metaData, period){
  };
 }
 
-// v320: виджет атрибуции — Meta API vs amo по тегам
+// v320 / v321: виджет атрибуции — где отваливаются Meta-лиды
 function amoRenderAttribution(d){
  var el = document.getElementById('amo-attribution');
  if(!el) return;
  if(!d || !d.amo_tag_counts){ el.innerHTML = ''; return; }
  var tc = d.amo_tag_counts;
  var metaLeads = d.meta_leads_count || 0;
- var amoMeta = (tc['таргет таблица'] || 0) + (tc['ТАРГЕТ'] || 0);
- var loss = metaLeads - amoMeta;
- var lossPct = metaLeads > 0 ? Math.round(loss / metaLeads * 100) : 0;
- var lossColor = lossPct >= 50 ? '#FF6B5C' : lossPct >= 20 ? '#FFB340' : '#7FB89E';
+
+ // v321: правильная атрибуция — Marquiz тоже Meta-источник (квизы крутятся в Meta-рекламе)
+ var amoDirectTarget = (tc['таргет таблица'] || 0) + (tc['ТАРГЕТ'] || 0);
+ var amoMarquiz = tc['marquiz'] || 0;
+ var amoNoTag = tc['__without_tag__'] || 0;
+ var amoTotalFromMeta = amoDirectTarget + amoMarquiz; // явно Meta-источники
+
+ // Сколько НЕ привязано к тегам = разница Meta API vs (всё что с Meta-тегами)
+ // Часть «без тега» в amo тоже МОЖЕТ быть Meta (ручной перенос из Sheets) — это серая зона
+ var notAttributed = Math.max(0, metaLeads - amoTotalFromMeta);
+ var notAttrPct = metaLeads > 0 ? Math.round(notAttributed / metaLeads * 100) : 0;
+ var lossColor = notAttrPct >= 50 ? '#FF6B5C' : notAttrPct >= 20 ? '#FFB340' : '#7FB89E';
+
  var html = '<div style="background:rgba(120,120,128,.08);border-radius:8px;padding:14px 16px">'
- + '<div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:10px">Атрибуция источников (период: ' + (d.period_label || '') + ')</div>'
+ + '<div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Где отваливаются лиды · ' + (d.period_label || '') + '</div>'
+ + '<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Meta сообщает <b style="color:#8B5CF6">' + metaLeads + '</b> заявок. Из них в amo:</div>'
  + '<table style="width:100%;font-size:12px;border-collapse:collapse">'
  + '<thead><tr style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px">'
- + '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border-faint)">Источник</th>'
- + '<th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border-faint)">Заявок (внешний счёт)</th>'
- + '<th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border-faint)">В amo (по тегу)</th>'
- + '<th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border-faint)">Потеря</th>'
+ + '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border-faint)">Канал</th>'
+ + '<th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border-faint)">В amo</th>'
+ + '<th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border-faint)">Доля от 104</th>'
+ + '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border-faint)">Комментарий</th>'
  + '</tr></thead><tbody>'
  + '<tr>'
- + '<td style="padding:8px;color:#8B5CF6;font-weight:600">Meta (таргет)</td>'
- + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;font-weight:600">' + metaLeads + '</td>'
- + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums">«таргет таблица»: ' + (tc['таргет таблица']||0) + ' · «ТАРГЕТ»: ' + (tc['ТАРГЕТ']||0) + '</td>'
- + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;color:' + lossColor + ';font-weight:700">' + (loss >= 0 ? loss : 0) + (metaLeads > 0 ? ' (' + (lossPct >= 0 ? lossPct : 0) + '%)' : '') + '</td>'
+ + '<td style="padding:8px;color:#7FB89E;font-weight:600">Marquiz (квиз)</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;font-weight:600">' + amoMarquiz + '</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums">' + (metaLeads > 0 ? Math.round(amoMarquiz/metaLeads*100) + '%' : '—') + '</td>'
+ + '<td style="padding:8px;font-size:11px;color:var(--text-muted)">тег «marquiz», интеграция работает</td>'
  + '</tr>'
  + '<tr>'
- + '<td style="padding:8px;color:#7FB89E;font-weight:600">Marquiz</td>'
- + '<td style="text-align:right;padding:8px;color:var(--text-muted)">—</td>'
- + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums">' + (tc['marquiz']||0) + '</td>'
- + '<td style="text-align:right;padding:8px;color:var(--text-muted)">—</td>'
+ + '<td style="padding:8px;color:#8B5CF6;font-weight:600">Meta Lead Forms напрямую</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;font-weight:600">' + amoDirectTarget + '</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums">' + (metaLeads > 0 ? Math.round(amoDirectTarget/metaLeads*100) + '%' : '—') + '</td>'
+ + '<td style="padding:8px;font-size:11px;color:var(--text-muted)">тег «таргет таблица»/«ТАРГЕТ» — после новой интеграции</td>'
  + '</tr>'
  + '<tr>'
- + '<td style="padding:8px;color:var(--text-soft)">Без тега (звонки/менеджеры)</td>'
- + '<td style="text-align:right;padding:8px;color:var(--text-muted)">—</td>'
- + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums">' + (tc['__without_tag__']||0) + '</td>'
- + '<td style="text-align:right;padding:8px;color:var(--text-muted)">—</td>'
+ + '<td style="padding:8px;color:var(--text-soft)">Без тега</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums">' + amoNoTag + '</td>'
+ + '<td style="text-align:right;padding:8px;color:var(--text-muted)">?</td>'
+ + '<td style="padding:8px;font-size:11px;color:var(--text-muted)">часть может быть Meta (ручной перенос из Sheets), часть — звонки/менеджеры</td>'
+ + '</tr>'
+ + '<tr style="border-top:2px solid var(--border-faint)">'
+ + '<td style="padding:10px 8px;font-weight:700">Не привязано к Meta-тегам</td>'
+ + '<td style="text-align:right;padding:10px 8px;font-variant-numeric:tabular-nums;font-weight:700;color:' + lossColor + '">' + notAttributed + '</td>'
+ + '<td style="text-align:right;padding:10px 8px;font-variant-numeric:tabular-nums;color:' + lossColor + ';font-weight:700">' + notAttrPct + '%</td>'
+ + '<td style="padding:10px 8px;font-size:11px;color:var(--text-muted)">Часть в «Без тега» через ручной перенос; часть реально потеряна. Точно скажет только Sheets-аудит.</td>'
  + '</tr>'
  + '</tbody></table>'
- + (loss > 0 && (tc['таргет таблица'] || 0) === 0 ? '<div style="font-size:11px;color:var(--text-muted);margin-top:10px">⚠️ Тег «таргет таблица» пока не проставлен ни одному лиду. Если интеграция Meta→amo подключена недавно — новые лиды должны начать приходить с этим тегом. Проверь через 1-2 дня.</div>' : '')
+ + (amoDirectTarget === 0 ? '<div style="font-size:11px;color:var(--text-muted);margin-top:10px;padding:8px 10px;background:rgba(255,179,64,.10);border-radius:6px">⚠ Тег «таргет таблица» пока не проставлен. Интеграция Meta→amo только включена — новые лиды получат тег в ближайшие часы/дни. Тогда атрибуция станет точной.</div>' : '')
+ + '<div style="font-size:11px;color:var(--text-muted);margin-top:8px">Чтобы увидеть <b>где именно отваливаются</b> Marquiz-лиды на воронке — выбери «Только Marquiz» в фильтре сверху. Аналогично для Meta когда появятся.</div>'
  + '</div>';
  el.innerHTML = html;
 }
