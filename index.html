@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v310</title>
+<title>SalesDoc — Финансовый Дашборд v311</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -24627,6 +24627,13 @@ window.amoLoadFunnel = async function(force){
  }
 };
 
+// v311: безопасное экранирование для текста внутри SVG
+function amoEscXml(s){
+ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'})[c];
+ });
+}
+
 function amoRenderFunnel(d){
  var sub = document.getElementById('amo-funnel-sub');
  var stagesEl = document.getElementById('amo-funnel-stages');
@@ -24661,34 +24668,49 @@ function amoRenderFunnel(d){
   + ' · активных: ' + activeCnt + ' · успех: ' + winCnt + ' · потеря: ' + lossCnt
   + (d.truncated ? ' · (показаны первые 1250)' : '');
 
- // Найти максимум для пропорциональных полос (только среди ненулевых)
- var maxCount = Math.max.apply(null, d.stages.map(function(s){ return s.count; })) || 1;
- // v310: фильтр пустых этапов по умолчанию (этапов с 0 лидами в этой воронке часто половина)
+ // v311: вместо горизонтальных полос — SVG-воронка трапециевидная.
+ //       Фильтр пустых этапов по умолчанию (половина воронок имеют 0 лидов).
  var visible = d.stages.filter(function(s){ return s.count > 0; });
+ var rows = window._amoShowEmpty ? d.stages : visible;
+ var maxCount = Math.max.apply(null, rows.map(function(s){ return s.count; })) || 1;
 
  var html = '';
  if(d.stages.length > visible.length){
  html += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Скрыты ' + (d.stages.length - visible.length) + ' этапов без лидов. <a href="#" onclick="event.preventDefault();window._amoShowEmpty=!window._amoShowEmpty;amoRenderFunnel(window._amoFunnelCache.data);return false;" style="color:var(--accent-text)">' + (window._amoShowEmpty?'Скрыть пустые':'Показать все') + '</a></div>';
  }
- var rows = window._amoShowEmpty ? d.stages : visible;
+
+ // SVG funnel рендер
+ var svgW = 800, stageH = 56, gap = 2;
+ var svgH = rows.length * (stageH + gap);
+ var centerX = svgW / 2, maxW = svgW - 40; // padding по бокам
+ var svg = '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" style="width:100%;height:auto;max-height:' + (rows.length * 60) + 'px;display:block;margin:0 auto" preserveAspectRatio="xMidYMid meet">';
 
  rows.forEach(function(s, i){
- var pct = Math.round(s.count / maxCount * 100);
- var barColor = s._kind === 'win' ? '#7FB89E'
+ var curW = Math.max(60, Math.round(s.count / maxCount * maxW)); // min width 60 чтобы текст влез
+ var prevS = i > 0 ? rows[i-1] : null;
+ var prevW = prevS ? Math.max(60, Math.round(prevS.count / maxCount * maxW)) : curW;
+ var y = i * (stageH + gap);
+ // Трапеция: верхние края = prev width, нижние = cur width
+ var tl = centerX - prevW/2, tr = centerX + prevW/2;
+ var bl = centerX - curW/2, br = centerX + curW/2;
+ var pts = tl + ',' + y + ' ' + tr + ',' + y + ' ' + br + ',' + (y+stageH) + ' ' + bl + ',' + (y+stageH);
+
+ var fill = s._kind === 'win' ? '#7FB89E'
   : s._kind === 'loss' ? '#D89595'
   : '#5489BB';
  var convFromMax = maxCount > 0 ? Math.round(s.count / maxCount * 100) : 0;
- var priceLabel = s.total_price > 0 ? (' · ' + Math.round(s.total_price/1000) + 'K ₸') : '';
- html += '<div style="display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--border-faint);font-size:12px">'
- + '<div style="flex:0 0 22px;color:var(--text-muted);text-align:right;font-variant-numeric:tabular-nums">' + (i+1) + '.</div>'
- + '<div style="flex:0 0 200px;color:var(--text-primary);font-weight:500">' + (s.name || '—') + '</div>'
- + '<div style="flex:1;height:18px;background:rgba(120,120,128,.10);border-radius:4px;overflow:hidden">'
- + '<div style="width:' + pct + '%;height:100%;background:' + barColor + ';opacity:.7;transition:width .3s"></div>'
- + '</div>'
- + '<div style="flex:0 0 80px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-primary);font-weight:600">' + s.count + '</div>'
- + '<div style="flex:0 0 110px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-muted);font-size:11px">' + convFromMax + '%' + priceLabel + '</div>'
- + '</div>';
+ var priceLabel = s.total_price > 0 ? ' · ' + Math.round(s.total_price/1000) + 'K ₸' : '';
+
+ svg += '<polygon points="' + pts + '" fill="' + fill + '" opacity="0.85" stroke="' + fill + '" stroke-width="1"/>';
+ // Текст в центре трапеции
+ var ty = y + stageH/2;
+ svg += '<text x="' + centerX + '" y="' + (ty - 4) + '" text-anchor="middle" font-family="Inter,sans-serif" font-size="13" font-weight="600" fill="#fff">'
+ + amoEscXml(s.name) + '</text>';
+ svg += '<text x="' + centerX + '" y="' + (ty + 14) + '" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="rgba(255,255,255,0.85)">'
+ + s.count + ' · ' + convFromMax + '%' + amoEscXml(priceLabel) + '</text>';
  });
+ svg += '</svg>';
+ html += svg;
 
  // Итоговая сводка
  var convColor = convPct >= 10 ? 'var(--success)' : convPct >= 3 ? 'var(--warning)' : 'var(--danger)';
