@@ -180,7 +180,37 @@ export default async function handler(req, res){
       const data = await getFunnel(pipelineId, env, fromTs, toTs);
       return res.status(200).json(data);
     }
-    return bad(res, 400, 'Unknown action. Use ?action=pipelines or ?action=funnel');
+    if(action === 'tag_breakdown'){
+      // v313: распределение тегов среди последних N лидов — чтобы понимать какие источники реально проставлены
+      const limit = Math.min(250, Math.max(1, Number(req.query.limit) || 99));
+      // Список всех тегов (id → name)
+      const tagsData = await amoFetch('/leads/tags?limit=250', env);
+      const allTags = (tagsData && tagsData._embedded && tagsData._embedded.tags) || [];
+      const tagById = {};
+      allTags.forEach(t => { tagById[t.id] = t.name; });
+      // Последние N лидов с тегами
+      const leadsData = await amoFetch(`/leads?order[created_at]=desc&limit=${limit}`, env);
+      const leads = (leadsData && leadsData._embedded && leadsData._embedded.leads) || [];
+      const tagCount = {};
+      let withAnyTag = 0, withoutTag = 0;
+      leads.forEach(l => {
+        const tags = (l._embedded && l._embedded.tags) || [];
+        if(tags.length > 0) withAnyTag++; else withoutTag++;
+        tags.forEach(t => {
+          const name = tagById[t.id] || t.name || ('id:'+t.id);
+          tagCount[name] = (tagCount[name] || 0) + 1;
+        });
+      });
+      const tagSorted = Object.entries(tagCount).sort((a,b) => b[1]-a[1]).map(([name, count]) => ({name, count}));
+      return res.status(200).json({
+        leads_fetched: leads.length,
+        with_any_tag: withAnyTag,
+        without_tag: withoutTag,
+        all_tags_in_account: allTags.length,
+        top_tags: tagSorted
+      });
+    }
+    return bad(res, 400, 'Unknown action. Use ?action=pipelines | funnel | tag_breakdown');
   } catch(e){
     return bad(res, e.status || 500, e.message, { data: e.data });
   }
