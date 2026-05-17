@@ -229,12 +229,14 @@ export default async function handler(req, res){
         sheetLeads.push({ phone: phone, classification: cls, raw_line: line.slice(0, 200) });
       });
 
-      // 3. Тянем телефоны из amo (контакты с custom_fields type=PHONE)
-      const amoPhones = new Map(); // normalized phone → contact id
+      // 3. Тянем телефоны из amo (до 20 страниц = 5000 контактов).
+      //    v315: ?pages=N (1..20) — по умолчанию 20, чтобы покрыть всю базу.
+      const maxPages = Math.min(20, Math.max(1, Number(req.query.pages) || 20));
+      const amoPhones = new Map();
       let amoPagesFetched = 0;
       let amoTruncated = false;
-      for(let page = 1; page <= 5; page++){
-        const data = await amoFetch(`/contacts?limit=250&page=${page}&with=leads`, env);
+      for(let page = 1; page <= maxPages; page++){
+        const data = await amoFetch(`/contacts?limit=250&page=${page}`, env);
         if(!data) break;
         const contacts = (data._embedded && data._embedded.contacts) || [];
         if(!contacts.length) break;
@@ -251,7 +253,7 @@ export default async function handler(req, res){
           });
         });
         if(contacts.length < 250) break;
-        if(page === 5 && contacts.length === 250) amoTruncated = true;
+        if(page === maxPages && contacts.length === 250) amoTruncated = true;
       }
 
       // 4. Сверяем: для каждого Sheets-лида ищем в amo
