@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v304</title>
+<title>SalesDoc — Финансовый Дашборд v305</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21751,6 +21751,17 @@ function acToggleSkipMatch(payHost){
  if(typeof acRender === 'function') acRender();
 }
 
+// v305: «префикс-матч подтверждён» — пользователь проверил и сказал «этот матч правильный, убери из списка»
+// Ключ — payHost, значение — true. Такие хосты сматчены автоматом но не светятся в диагностике.
+var AC_PREFIX_APPROVED_KEY = 'sd_prefix_approved';
+function acGetApprovedPrefixes(){ try { return JSON.parse(localStorage.getItem(AC_PREFIX_APPROVED_KEY) || '{}'); } catch(e){ return {}; } }
+function acApprovePrefix(payHost){
+ var ap = acGetApprovedPrefixes();
+ ap[payHost] = true;
+ localStorage.setItem(AC_PREFIX_APPROVED_KEY, JSON.stringify(ap));
+ if(typeof acRenderPrefixMerged === 'function') acRenderPrefixMerged();
+}
+
 // v303: загрузка подписочных платежей 2025 для корректного расчёта «Доступ до»
 // Многие клиенты оплатили на год/полгода в 2025, и эти подписки покрывают 2026.
 // Без этих данных «годовики» показываются как «нет подписки».
@@ -21875,24 +21886,23 @@ function acRenderUnmatched(){
  if(!items.length){ section.style.display = 'none'; return; }
  section.style.display = 'block';
  if(cntEl) cntEl.textContent = '· ' + items.length;
- // Опции клиентов для дропдауна (из AC_KZ_CACHE)
- var clientOpts = (AC_KZ_CACHE || []).map(function(c){
- return '<option value="'+kbEsc(c.name)+'">'+kbEsc(c.name)+'</option>';
+ // v305: общий datalist для всех инпутов привязки — браузер сам делает автодополнение по 254 клиентам
+ //       Пользователь начинает печатать имя — видит совпадения. Не нужно листать select.
+ var dlOpts = (AC_KZ_CACHE || []).map(function(c){
+ return '<option value="'+kbEsc(c.name)+'">';
  }).join('');
  // Топ-30 несматченных (по убыванию суммы)
- var html = '';
+ var html = '<datalist id="ac-clients-datalist">' + dlOpts + '</datalist>';
  items.slice(0, 30).forEach(function(it){
  var amt = Math.round(it.pay.totalAmount || 0);
  var lastPay = it.pay.lastPay ? new Date(it.pay.lastPay).toLocaleDateString('ru-RU') : '—';
+ var inputId = 'ac-link-' + kbEsc(it.host).replace(/[^a-z0-9_-]/gi,'_');
  html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-faint);flex-wrap:wrap">'
  + '<div style="flex:1;min-width:200px">'
  + '<div style="font-family:monospace;font-size:13px;color:var(--text);font-weight:600">'+kbEsc(it.host)+'</div>'
  + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+it.pay.payCount+' платеж'+(it.pay.payCount===1?'':'ей')+' · '+amt.toLocaleString('ru-RU')+' ₸ · последний '+lastPay+'</div>'
  + '</div>'
- + '<select id="ac-link-'+kbEsc(it.host).replace(/[^a-z0-9_-]/gi,'_')+'" style="flex:1;min-width:200px;padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-faint);border-radius:6px;color:var(--text);font-size:12px">'
- + '<option value="">— выбрать клиента —</option>'
- + clientOpts
- + '</select>'
+ + '<input type="text" id="'+inputId+'" list="ac-clients-datalist" placeholder="Начни печатать имя клиента..." autocomplete="off" style="flex:1;min-width:240px;padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-faint);border-radius:6px;color:var(--text);font-size:12px">'
  + '<button onclick="acLinkUnmatched(\''+kbEsc(it.host).replace(/\x27/g,"\\\x27")+'\')" style="padding:6px 14px;background:var(--amo-blue);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Привязать</button>'
  + '</div>';
  });
@@ -21901,11 +21911,16 @@ function acRenderUnmatched(){
 }
 
 // v277: связать pay-host с именем клиента вручную
+// v305: input с автодополнением (datalist) вместо select — но логика та же: берём value
 function acLinkUnmatched(payHost){
  var safeId = payHost.replace(/[^a-z0-9_-]/gi,'_');
  var sel = document.getElementById('ac-link-'+safeId);
- if(!sel || !sel.value){ alert('Выбери клиента из списка'); return; }
- acSetOverride(payHost, sel.value);
+ if(!sel || !sel.value){ alert('Начни печатать имя клиента и выбери из подсказок'); return; }
+ // Проверяем что введённое имя реально существует в мастере
+ var name = sel.value.trim();
+ var exists = (AC_KZ_CACHE || []).some(function(c){ return c.name === name; });
+ if(!exists){ alert('Клиент «'+name+'» не найден в списке. Выбери из подсказок.'); return; }
+ acSetOverride(payHost, name);
  // Перерисовать список действующих клиентов и блок несматченных
  if(typeof acRender === 'function') acRender();
  if(typeof acRenderUnmatched === 'function') acRenderUnmatched();
@@ -22340,21 +22355,24 @@ function acRenderPrefixMerged(){
  var listEl = document.getElementById('ac-prefix-list');
  if(!section || !listEl) return;
  var pm = window._acPrefixMerged || {};
- var keys = Object.keys(pm);
+ // v305: фильтруем те что пользователь уже подтвердил («Норм, это тот же»)
+ var approved = acGetApprovedPrefixes();
+ var keys = Object.keys(pm).filter(function(k){ return !approved[k]; });
  // Сортируем по score (низшие сверху — они более подозрительные)
  keys.sort(function(a,b){ return pm[a].score - pm[b].score; });
  if(!keys.length){ section.style.display = 'none'; return; }
  section.style.display = 'block';
  if(countEl) countEl.textContent = '(' + keys.length + ')';
- var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Если в списке клиент, который ДРУГОЙ, нажми «Это другой» — мы перестанем автоматически склеивать его платежи с этим клиентом.</div>';
+ var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Проверь каждое: если совпадение правильное (просто разные написания одной фирмы) — «Норм, это тот же». Если это разные компании — «Это другой».</div>';
  keys.slice(0, 50).forEach(function(payHost){
  var info = pm[payHost];
  var hostEsc = kbEsc(payHost).replace(/\x27/g, "\\\x27");
- html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-faint);font-size:12px">'
+ html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-faint);font-size:12px;flex-wrap:wrap">'
  + '<div style="flex:0 0 200px;font-family:monospace;color:var(--text-soft)">' + kbEsc(payHost) + '</div>'
  + '<div style="flex:0 0 30px;color:var(--text-muted)">→</div>'
- + '<div style="flex:1;color:var(--text)">' + kbEsc(info.matchedTo) + '</div>'
+ + '<div style="flex:1;min-width:180px;color:var(--text)">' + kbEsc(info.matchedTo) + '</div>'
  + '<div style="flex:0 0 50px;color:var(--text-muted);font-size:11px">score ' + info.score + '</div>'
+ + '<button onclick="acApprovePrefix(\'' + hostEsc + '\')" style="padding:4px 10px;background:rgba(127,184,158,.12);color:#7FB89E;border:1px solid rgba(127,184,158,.3);border-radius:6px;cursor:pointer;font-size:11px">Норм, это тот же</button>'
  + '<button onclick="acToggleSkipMatch(\'' + hostEsc + '\')" style="padding:4px 10px;background:rgba(255,107,92,.12);color:#FF6B5C;border:1px solid rgba(255,107,92,.3);border-radius:6px;cursor:pointer;font-size:11px">Это другой</button>'
  + '</div>';
  });
