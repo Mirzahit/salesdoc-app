@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v324</title>
+<title>SalesDoc — Финансовый Дашборд v325</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4708,13 +4708,13 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
  <button onclick="amoSetPeriod('last_7d')" data-amo-p="last_7d" class="amo-pbtn" style="padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">7 дн</button>
- <button onclick="amoSetPeriod('last_30d')" data-amo-p="last_30d" class="amo-pbtn amo-pactive" style="padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">30 дн</button>
- <button onclick="amoSetPeriod('this_month')" data-amo-p="this_month" class="amo-pbtn" style="padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">Этот мес</button>
+ <button onclick="amoSetPeriod('last_30d')" data-amo-p="last_30d" class="amo-pbtn" style="padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">30 дн</button>
+ <button onclick="amoSetPeriod('this_month')" data-amo-p="this_month" class="amo-pbtn amo-pactive" style="padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">Этот мес</button>
  <button onclick="amoSetPeriod('last_90d')" data-amo-p="last_90d" class="amo-pbtn" style="padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">3 мес</button>
  <button onclick="amoSetPeriod('all')" data-amo-p="all" class="amo-pbtn" style="padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">Всё</button>
  <select id="amo-tag-filter" onchange="amoSetTagFilter(this.value)" style="padding:6px 10px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;background:transparent;color:var(--text-soft);cursor:pointer">
- <option value="">Все источники</option>
- <option value="meta_any">Все Meta-каналы (объединено)</option>
+ <option value="meta_any" selected>Все Meta-каналы (объединено)</option>
+ <option value="">Все источники (включая звонки)</option>
  <option value="таргет таблица">Только таргет таблица</option>
  <option value="ТАРГЕТ">Только ТАРГЕТ (старый)</option>
  <option value="marquiz">Только Marquiz</option>
@@ -24625,8 +24625,11 @@ window.mktInitDashboard = async function(){
 // v312: объединённая воронка Meta → amo → Внедрены, с фильтром периода
 // v319: добавлен фильтр по тегу amo
 window._amoFunnelCache = {};
-window._amoCurrentPeriod = 'last_30d';
-window._amoCurrentTag = '';
+// v325: по умолчанию «Этот месяц» + «Все Meta-каналы» — чтобы воронка была честной
+// для CEO без ручных переключений (раньше показывала 104→53→10, что обманывало
+// потому что 53 это все каналы, а не только Meta)
+window._amoCurrentPeriod = 'this_month';
+window._amoCurrentTag = 'meta_any';
 
 window.amoSetPeriod = function(period){
  window._amoCurrentPeriod = period;
