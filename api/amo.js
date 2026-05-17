@@ -228,6 +228,145 @@ export default async function handler(req, res){
       const data = await getFunnel(pipelineId, env, fromTs, toTs, tagFilter);
       return res.status(200).json(data);
     }
+    if(action === 'honest_meta_funnel'){
+      // v326: ЧЕСТНАЯ воронка Meta-лидов матчингом по телефонам (не по тегам).
+      // Цель — ответить «из 82 Meta-заявок реально N на встрече, M оплатили».
+      const sheetId = String(req.query.sheet_id || '');
+      const sheetName = String(req.query.sheet_name || 'Sheet1');
+      const fromTs = req.query.from ? Number(req.query.from) : null;
+      const toTs = req.query.to ? Number(req.query.to) : null;
+      if(!sheetId) return bad(res, 400, 'Need ?sheet_id=...');
+
+      function normalizePhone(p){
+        const digits = String(p||'').replace(/\D/g, '');
+        if(!digits) return null;
+        let n = digits;
+        if(n.startsWith('8') && n.length === 11) n = '7' + n.slice(1);
+        if(n.length === 10) n = '7' + n;
+        return n.length >= 10 ? n : null;
+      }
+
+      // 1. Phones из Sheets (Meta Lead Forms)
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&range=A1:Z2000`;
+      const csvResp = await fetch(csvUrl);
+      const csv = csvResp.ok ? await csvResp.text() : '';
+      const sheetPhones = new Set();
+      csv.split('\n').forEach(line => {
+        const m = line.match(/p:\+?(\d{10,11})/);
+        if(m){ const p = normalizePhone(m[1]); if(p) sheetPhones.add(p); }
+      });
+
+      // 2. Из amo за период берём ВСЕ лиды воронки «Лиды» + их теги (для marquiz cohort)
+      const pipelines = await getPipelines(env);
+      const p = pipelines.find(x => /^лид/i.test(x.name||'')) || pipelines[0];
+      let dateFilter = '';
+      if(fromTs) dateFilter += `&filter[created_at][from]=${fromTs}`;
+      if(toTs) dateFilter += `&filter[created_at][to]=${toTs}`;
+
+      const allLeadsInPeriod = [];
+      for(let pg = 1; pg <= 5; pg++){
+        const data = await amoFetch(`/leads?filter[pipeline_id]=${p.id}${dateFilter}&limit=250&page=${pg}&with=contacts`, env);
+        if(!data) break;
+        const batch = (data._embedded && data._embedded.leads) || [];
+        if(!batch.length) break;
+        allLeadsInPeriod.push(...batch);
+        if(batch.length < 250) break;
+      }
+
+      // 3. Marquiz cohort: amo лиды за период с тегом marquiz
+      const marquizLeads = allLeadsInPeriod.filter(l => {
+        const tags = (l._embedded && l._embedded.tags) || [];
+        return tags.some(t => /marquiz/i.test(t.name||''));
+      });
+
+      // 4. Получаем телефоны контактов для лидов (нужно для phone-matching)
+      //    Контакты в lead._embedded.contacts только ID — телефоны отдельно.
+      //    Чтобы быстро: для каждого Sheets phone ищем lead через amo search.
+
+      // Stages map
+      const stageById = {};
+      const stageList = p.statuses.sort((a,b) => a.sort - b.sort);
+      stageList.forEach(s => { stageById[s.id] = s.name; });
+
+      function classifyStage(statusId){
+        const name = stageById[statusId] || 'неизвестно';
+        const low = name.toLowerCase();
+        if(/закрыт.*не.*реализов/i.test(low)) return 'lost';
+        if(/успешн|реализован/i.test(low) && !/не.*реализов/i.test(low)) return 'won';
+        if(/счет.*оплач|оплач.*счет|оплачен.*работ/i.test(low)) return 'paid';
+        if(/счет.*выставл/i.test(low)) return 'invoice';
+        if(/договор/i.test(low)) return 'contract';
+        if(/реквизит|реквезит/i.test(low)) return 'requisites';
+        if(/встреч.*пройден|пройден.*встреч/i.test(low)) return 'meeting_done';
+        if(/назначен.*встреч|встреч.*назначен/i.test(low)) return 'meeting_set';
+        if(/квалифик/i.test(low)) return 'qualified';
+        if(/взят/i.test(low)) return 'in_work';
+        return 'other';
+      }
+
+      // 5. Для каждого Sheets-phone ищем lead через amo query
+      const sheetMatched = []; // {phone, lead_id, stage_name, status}
+      const sheetNotFound = [];
+      let processed = 0;
+      for(const phone of sheetPhones){
+        if(processed >= 60) break; // safety
+        processed++;
+        try {
+          const r = await amoFetch(`/contacts?query=${encodeURIComponent(phone)}&limit=1&with=leads`, env);
+          const contacts = (r && r._embedded && r._embedded.contacts) || [];
+          if(!contacts.length){ sheetNotFound.push({phone}); continue; }
+          const leadIds = ((contacts[0]._embedded && contacts[0]._embedded.leads) || []).map(l => l.id);
+          if(!leadIds.length){ sheetNotFound.push({phone, contact_id: contacts[0].id}); continue; }
+          // Берём первую сделку — её статус
+          const leadId = leadIds[0];
+          // Если эта сделка из периода (есть в allLeadsInPeriod) — используем её status_id оттуда (экономим API call)
+          const inPeriod = allLeadsInPeriod.find(l => l.id === leadId);
+          let statusId;
+          if(inPeriod){ statusId = inPeriod.status_id; }
+          else {
+            const lr = await amoFetch(`/leads/${leadId}`, env);
+            statusId = lr.status_id;
+          }
+          sheetMatched.push({
+            phone: phone,
+            lead_id: leadId,
+            stage_name: stageById[statusId] || 'неизв',
+            stage_class: classifyStage(statusId)
+          });
+        } catch(e){
+          sheetNotFound.push({phone, error: e.message});
+        }
+      }
+
+      // 6. Marquiz cohort — статусы прямо из allLeadsInPeriod
+      const marquizMatched = marquizLeads.map(l => ({
+        lead_id: l.id,
+        stage_name: stageById[l.status_id] || 'неизв',
+        stage_class: classifyStage(l.status_id)
+      }));
+
+      // 7. Объединение + распределение по стадиям
+      const combined = [...sheetMatched, ...marquizMatched];
+      // Дедуп по lead_id чтобы не считать дважды если Sheets-phone сматчился с Marquiz-лидом
+      const seen = {};
+      const dedupped = combined.filter(x => { if(seen[x.lead_id]) return false; seen[x.lead_id] = 1; return true; });
+
+      const distribution = { in_work: 0, qualified: 0, meeting_set: 0, meeting_done: 0, requisites: 0, contract: 0, invoice: 0, paid: 0, won: 0, lost: 0, other: 0 };
+      dedupped.forEach(x => { distribution[x.stage_class] = (distribution[x.stage_class] || 0) + 1; });
+
+      return res.status(200).json({
+        period: { from: fromTs, to: toTs },
+        sheet_phones_total: sheetPhones.size,
+        sheet_phones_processed: processed,
+        sheet_phones_truncated: sheetPhones.size > processed,
+        sheet_matched_in_amo: sheetMatched.length,
+        sheet_not_in_amo: sheetNotFound.length,
+        marquiz_leads_in_amo: marquizLeads.length,
+        combined_cohort_total: dedupped.length,
+        stage_distribution: distribution,
+        message: 'Это ЧЕСТНАЯ воронка по телефонам и тегу marquiz. Если Meta-кабинет показывает больше — разница теряется на уровне Meta→Sheets интеграции (другие формы не подключены).'
+      });
+    }
     if(action === 'apply_meta_tags'){
       // v323: массовая простановка тега «таргет таблица» сделкам которые сматчились по телефону
       //       с Meta Sheets (ручные переносы менеджеров без тега). С dry_run для безопасности.

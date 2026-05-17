@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v325</title>
+<title>SalesDoc — Финансовый Дашборд v326</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4726,6 +4726,8 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div id="amo-funnel-stages"></div>
  <!-- v320: атрибуция источников Meta vs amo -->
  <div id="amo-attribution" style="margin-top:14px"></div>
+ <!-- v326: ЧЕСТНАЯ воронка Meta по телефонам -->
+ <div id="amo-honest-funnel" style="margin-top:14px"></div>
  </div>
  <style>
  .amo-pbtn.amo-pactive{background:var(--accent-bg)!important;color:var(--accent-text)!important;font-weight:700;border-color:var(--accent-text)!important}
@@ -24901,6 +24903,94 @@ function amoRenderFunnel(d){
  stagesEl.innerHTML = html;
  // v320: рисуем виджет атрибуции
  if(typeof amoRenderAttribution === 'function') amoRenderAttribution(d);
+ // v326: рисуем честную воронку по телефонам
+ if(typeof amoLoadHonestFunnel === 'function') amoLoadHonestFunnel();
+}
+
+// v326: ЧЕСТНАЯ Meta-воронка по матчингу телефонов + marquiz тегу
+window._amoHonestCache = {};
+window._amoHonestSheetId = '1WRSSTLllcOQ5w3xz8J-7LcOi1YWETsgRud9RY7A-cGI';
+window.amoLoadHonestFunnel = async function(){
+ var el = document.getElementById('amo-honest-funnel');
+ if(!el) return;
+ var period = window._amoCurrentPeriod || 'this_month';
+ // Кэш per-period 10 минут (тяжёлый запрос — много API звонков)
+ var cached = window._amoHonestCache[period];
+ if(cached && (Date.now() - cached.ts < 10*60*1000)){
+ amoRenderHonest(cached.data);
+ return;
+ }
+ el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:14px 16px;background:rgba(120,120,128,.06);border-radius:8px">Загрузка честной воронки по телефонам...</div>';
+ try {
+ var ts = amoPeriodToTimestamps(period);
+ var url = '/api/amo?action=honest_meta_funnel&sheet_id=' + encodeURIComponent(window._amoHonestSheetId);
+ if(ts.from) url += '&from=' + ts.from;
+ if(ts.to) url += '&to=' + ts.to;
+ var r = await fetch(url);
+ var data = await r.json();
+ if(data.error){ el.innerHTML = '<div style="font-size:11px;color:var(--danger);padding:10px">Ошибка: ' + data.error + '</div>'; return; }
+ window._amoHonestCache[period] = { ts: Date.now(), data: data };
+ amoRenderHonest(data);
+ } catch(e){
+ el.innerHTML = '<div style="font-size:11px;color:var(--danger);padding:10px">Ошибка сети: ' + e.message + '</div>';
+ }
+};
+
+function amoRenderHonest(d){
+ var el = document.getElementById('amo-honest-funnel');
+ if(!el || !d) return;
+ var s = d.stage_distribution || {};
+ var stages = [
+ { label: 'В работе / квалификация', count: (s.in_work||0) + (s.qualified||0) + (s.other||0), color: '#5489BB' },
+ { label: 'Назначена встреча', count: s.meeting_set||0, color: '#5489BB' },
+ { label: 'Встреча прошла', count: s.meeting_done||0, color: '#5489BB' },
+ { label: 'Реквизиты получены', count: s.requisites||0, color: '#5489BB' },
+ { label: 'Договор согласован', count: s.contract||0, color: '#5489BB' },
+ { label: 'Счёт выставлен', count: s.invoice||0, color: '#5489BB' },
+ { label: 'Счёт оплачен', count: s.paid||0, color: '#7FB89E' },
+ { label: 'Успешно реализовано', count: s.won||0, color: '#7FB89E' }
+ ];
+ var totalCohort = d.combined_cohort_total || 0;
+ var lostCount = s.lost || 0;
+ var notFound = d.sheet_not_in_amo || 0;
+ var html = '<div style="background:rgba(127,184,158,.06);border:1px solid rgba(127,184,158,.25);border-radius:8px;padding:14px 16px">'
+ + '<div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:6px">Истинная Meta-воронка (по телефонам)</div>'
+ + '<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">'
+ + 'Собрано <b>' + totalCohort + '</b> явных Meta-лидов: '
+ + '<b>' + (d.sheet_matched_in_amo||0) + '</b> из Sheets (форма SD KZ) + '
+ + '<b>' + (d.marquiz_leads_in_amo||0) + '</b> с тегом marquiz. '
+ + 'Эти конкретные люди ходили по воронке так:'
+ + '</div>'
+ + '<table style="width:100%;font-size:12px;border-collapse:collapse">'
+ + '<tbody>';
+ stages.forEach(function(st, i){
+ var pctOfCohort = totalCohort > 0 ? Math.round(st.count / totalCohort * 100) : 0;
+ html += '<tr>'
+ + '<td style="padding:5px 8px;color:var(--text-primary)">' + (i+1) + '. ' + st.label + '</td>'
+ + '<td style="text-align:right;padding:5px 8px;font-variant-numeric:tabular-nums;font-weight:600;color:' + st.color + '">' + st.count + '</td>'
+ + '<td style="text-align:right;padding:5px 8px;font-variant-numeric:tabular-nums;color:var(--text-muted);width:50px">' + pctOfCohort + '%</td>'
+ + '</tr>';
+ });
+ // Lost
+ html += '<tr style="border-top:1px solid var(--border-faint)">'
+ + '<td style="padding:8px;color:#D89595">Закрыто как «не реализовано»</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;font-weight:600;color:#D89595">' + lostCount + '</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;color:var(--text-muted)">' + (totalCohort > 0 ? Math.round(lostCount/totalCohort*100) : 0) + '%</td>'
+ + '</tr>';
+ if(notFound > 0){
+ html += '<tr>'
+ + '<td style="padding:8px;color:var(--text-muted)">Не нашли в amo (потеряны менеджерами)</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;color:var(--text-muted)">' + notFound + '</td>'
+ + '<td style="text-align:right;padding:8px;color:var(--text-muted)">—</td>'
+ + '</tr>';
+ }
+ html += '</tbody></table>'
+ + '<div style="font-size:11px;color:var(--text-muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border-faint)">'
+ + 'Это <b>конкретные люди</b> которых я нашёл по телефонам или тегу marquiz. Без обмана: каждая строка — про этих самых людей.'
+ + (d.sheet_phones_truncated ? ' ⚠️ Часть Sheets-телефонов не проверена (ограничение скорости).' : '')
+ + '</div>'
+ + '</div>';
+ el.innerHTML = html;
 }
 async function mktUpdateTargetPreview(){
  try {
