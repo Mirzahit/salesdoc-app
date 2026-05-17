@@ -180,6 +180,116 @@ export default async function handler(req, res){
       const data = await getFunnel(pipelineId, env, fromTs, toTs);
       return res.status(200).json(data);
     }
+    if(action === 'sheets_audit'){
+      // v314: сверка лидов из Google Sheets (Meta Lead Forms сырая выгрузка) с amo по телефону.
+      //       Классификация по комментариям менеджеров: срм / ндз / не квал / брак / новый.
+      const sheetId = String(req.query.sheet_id || '');
+      const sheetName = String(req.query.sheet_name || 'Sheet1');
+      if(!sheetId) return bad(res, 400, 'Need ?sheet_id=...');
+
+      // 1. Читаем CSV из Google Sheets через gviz
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+      const csvResp = await fetch(csvUrl);
+      if(!csvResp.ok) return bad(res, 502, `Sheets fetch failed: ${csvResp.status}`);
+      const csv = await csvResp.text();
+
+      // 2. Парсим строки и извлекаем телефон + комментарий
+      function normalizePhone(p){
+        const digits = String(p||'').replace(/\D/g, '');
+        if(!digits) return null;
+        // Казахстан: +7 / 8 → 7
+        let n = digits;
+        if(n.startsWith('8') && n.length === 11) n = '7' + n.slice(1);
+        if(n.length === 10) n = '7' + n;
+        return n.length >= 10 ? n : null;
+      }
+
+      function classifyComment(line){
+        const t = String(line||'').toLowerCase();
+        if(/номер не полн|плох.*номер|без номер/.test(t)) return 'broken';
+        if(/не квал|сигарет|табак|алкогол|свинин/.test(t)) return 'not_qualified';
+        if(/^|.*срм|crm|created/.test(t) && /срм|crm|created/.test(t)) {
+          // 'srm' mentioned → в СРМ
+          if(/срм|crm|created/.test(t)) return 'in_amo_marked';
+        }
+        if(/ндз|не дозв/.test(t)) return 'no_answer';
+        return 'unprocessed';
+      }
+
+      const lines = csv.split('\n').filter(l => l.trim().length > 0);
+      const sheetLeads = [];
+      lines.forEach(line => {
+        // Извлекаем все p:+7XXX или p:7XXX и берём первый валидный
+        const phoneMatch = line.match(/p:\+?(\d{10,11})/);
+        if(!phoneMatch) return;
+        const phone = normalizePhone(phoneMatch[1]);
+        if(!phone) return;
+        // Комментарий — берём ВСЮ строку для классификации (комментарии в разных колонках)
+        const cls = classifyComment(line);
+        sheetLeads.push({ phone: phone, classification: cls, raw_line: line.slice(0, 200) });
+      });
+
+      // 3. Тянем телефоны из amo (контакты с custom_fields type=PHONE)
+      const amoPhones = new Map(); // normalized phone → contact id
+      let amoPagesFetched = 0;
+      let amoTruncated = false;
+      for(let page = 1; page <= 5; page++){
+        const data = await amoFetch(`/contacts?limit=250&page=${page}&with=leads`, env);
+        if(!data) break;
+        const contacts = (data._embedded && data._embedded.contacts) || [];
+        if(!contacts.length) break;
+        amoPagesFetched++;
+        contacts.forEach(c => {
+          const cf = c.custom_fields_values || [];
+          cf.forEach(f => {
+            if(f.field_code === 'PHONE' && Array.isArray(f.values)){
+              f.values.forEach(v => {
+                const p = normalizePhone(v.value);
+                if(p) amoPhones.set(p, c.id);
+              });
+            }
+          });
+        });
+        if(contacts.length < 250) break;
+        if(page === 5 && contacts.length === 250) amoTruncated = true;
+      }
+
+      // 4. Сверяем: для каждого Sheets-лида ищем в amo
+      let inAmo = 0, notInAmo = 0;
+      const byClass = {};
+      const mismatch_marked_not_in_amo = []; // менеджер пометил «в срм», но в amo нет → ⚠️
+      const urgent_unprocessed = []; // без пометки И нет в amo → 🔥 новый необработанный
+      sheetLeads.forEach(l => {
+        const found = amoPhones.has(l.phone);
+        l.in_amo = found;
+        if(found) inAmo++; else notInAmo++;
+        byClass[l.classification] = byClass[l.classification] || { total: 0, in_amo: 0, not_in_amo: 0 };
+        byClass[l.classification].total++;
+        if(found) byClass[l.classification].in_amo++; else byClass[l.classification].not_in_amo++;
+        if(l.classification === 'in_amo_marked' && !found){
+          mismatch_marked_not_in_amo.push({ phone: l.phone });
+        }
+        if(l.classification === 'unprocessed' && !found){
+          urgent_unprocessed.push({ phone: l.phone });
+        }
+      });
+
+      return res.status(200).json({
+        sheet: { id: sheetId, name: sheetName },
+        total_rows_in_sheet: lines.length,
+        leads_with_phone: sheetLeads.length,
+        in_amo: inAmo,
+        not_in_amo: notInAmo,
+        amo_contacts_fetched: amoPhones.size,
+        amo_pages_fetched: amoPagesFetched,
+        amo_truncated_warning: amoTruncated,
+        by_classification: byClass,
+        urgent_unprocessed_count: urgent_unprocessed.length,
+        urgent_unprocessed_sample: urgent_unprocessed.slice(0, 10),
+        mismatch_marked_in_amo_but_not_found: mismatch_marked_not_in_amo.length,
+        mismatch_sample: mismatch_marked_not_in_amo.slice(0, 10)
+      });
+    }
     if(action === 'tag_breakdown'){
       // v313: распределение тегов среди последних N лидов — чтобы понимать какие источники реально проставлены
       const limit = Math.min(250, Math.max(1, Number(req.query.limit) || 99));
