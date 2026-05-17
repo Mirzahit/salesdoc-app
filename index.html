@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v307</title>
+<title>SalesDoc — Финансовый Дашборд v308</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4697,6 +4697,18 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div class="mkt-main-kpi"><div class="mkt-main-kpi-label">Прибыль</div><div id="mkt-k-profit" class="mkt-main-kpi-val">—</div><div class="mkt-main-kpi-sub">продажи − расход</div></div>
  <div class="mkt-main-kpi"><div class="mkt-main-kpi-label">CPL</div><div id="mkt-cpl" class="mkt-main-kpi-val">—</div><div class="mkt-main-kpi-sub">цена лида ₸</div></div>
  <div class="mkt-main-kpi"><div class="mkt-main-kpi-label">ROAS</div><div id="mkt-roas" class="mkt-main-kpi-val">—</div><div class="mkt-main-kpi-sub">продажи ÷ расход</div></div>
+ </div>
+
+ <!-- v308: Воронка из amoCRM (только pipeline «Лиды») -->
+ <div id="amo-funnel-section" style="margin-bottom:22px;background:rgba(120,120,128,.06);border:1px solid rgba(120,120,128,.14);border-radius:14px;padding:18px 20px">
+ <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+ <div>
+ <div style="font-size:14px;font-weight:600;color:var(--text-primary)">Воронка <span style="color:var(--text-soft);font-weight:500">из amoCRM «Лиды»</span></div>
+ <div id="amo-funnel-sub" style="font-size:11px;color:var(--text-muted);margin-top:3px">Загрузка...</div>
+ </div>
+ <button onclick="amoLoadFunnel(true)" id="amo-funnel-refresh" style="padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">Обновить</button>
+ </div>
+ <div id="amo-funnel-stages"></div>
  </div>
 
  <!-- v159: Модули каналов — современная сетка с превью -->
@@ -24572,6 +24584,8 @@ window.mktInitDashboard = async function(){
  mktUpdateTargetPreview();
  mktUpdateChannelsPreview();
  mktUpdateLtvPreview();
+ // v308: воронка amoCRM «Лиды»
+ if(typeof amoLoadFunnel === 'function') amoLoadFunnel(false);
  // v162: если расходы ещё не загружены — подтянуть их, чтобы автоматически
  // посчитать сумму на маркетинг (категория таргет/реклама/маркетинг).
  try {
@@ -24581,6 +24595,85 @@ window.mktInitDashboard = async function(){
  }
  } catch(e){ console.warn('mktInit: loadExpenses failed', e); }
 };
+
+// v308: загрузка и рендер воронки из amoCRM (только pipeline «Лиды»)
+window._amoFunnelCache = null;
+window.amoLoadFunnel = async function(force){
+ var sub = document.getElementById('amo-funnel-sub');
+ var stagesEl = document.getElementById('amo-funnel-stages');
+ var refreshBtn = document.getElementById('amo-funnel-refresh');
+ if(!sub || !stagesEl) return;
+ // Кэш 5 минут чтобы не дёргать amo при каждом заходе
+ if(!force && window._amoFunnelCache && (Date.now() - window._amoFunnelCache.ts < 5*60*1000)){
+ amoRenderFunnel(window._amoFunnelCache.data);
+ return;
+ }
+ sub.textContent = 'Загрузка...';
+ if(refreshBtn){ refreshBtn.disabled = true; refreshBtn.textContent = '...'; }
+ try {
+ var resp = await fetch('/api/amo?action=funnel');
+ var data = await resp.json();
+ if(!resp.ok || data.error){
+ sub.textContent = 'Ошибка: ' + (data.error || ('HTTP ' + resp.status));
+ stagesEl.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:10px 0">Проверь что в Vercel заданы AMO_SUBDOMAIN, AMO_TOKEN, AMO_ACCOUNT_ID.</div>';
+ return;
+ }
+ window._amoFunnelCache = { ts: Date.now(), data: data };
+ amoRenderFunnel(data);
+ } catch(e){
+ sub.textContent = 'Ошибка сети: ' + e.message;
+ } finally {
+ if(refreshBtn){ refreshBtn.disabled = false; refreshBtn.textContent = 'Обновить'; }
+ }
+};
+
+function amoRenderFunnel(d){
+ var sub = document.getElementById('amo-funnel-sub');
+ var stagesEl = document.getElementById('amo-funnel-stages');
+ if(!d || !d.stages){
+ if(sub) sub.textContent = '—';
+ if(stagesEl) stagesEl.innerHTML = '';
+ return;
+ }
+ // Подсчитаем «итоговую конверсию»: сколько добралось до последнего НЕ системного этапа
+ var realStages = d.stages.filter(function(s){ return s.type !== 1; }); // type=1 = закрытые статусы (но включим их)
+ var firstCnt = realStages.length ? realStages[0].count : 0;
+ // Последний УСПЕХ — статус с type=142 или последний по sort
+ var lastSuccess = d.stages.filter(function(s){ return s.type !== 143; }).slice(-1)[0]; // 143 = закрыто/неуспех
+ var lastCnt = lastSuccess ? lastSuccess.count : 0;
+ var convPct = firstCnt > 0 ? Math.round(lastCnt / firstCnt * 100) : 0;
+ if(sub) sub.textContent = 'Всего лидов в воронке: ' + d.total_leads
+  + (d.truncated ? ' (показаны первые 1250)' : '')
+  + ' · этапов: ' + d.stages.length;
+
+ // Найти максимум для пропорциональных полос
+ var maxCount = Math.max.apply(null, d.stages.map(function(s){ return s.count; })) || 1;
+ var html = '';
+ d.stages.forEach(function(s, i){
+ var pct = Math.round(s.count / maxCount * 100);
+ var barColor = s.type === 142 ? '#7FB89E'  // успех
+  : s.type === 143 ? '#D89595'  // неуспех/закрыто
+  : '#5489BB';                 // обычный
+ var convLabel = s.conv_from_first_pct + '%';
+ html += '<div style="display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--border-faint);font-size:12px">'
+ + '<div style="flex:0 0 22px;color:var(--text-muted);text-align:right;font-variant-numeric:tabular-nums">' + (i+1) + '.</div>'
+ + '<div style="flex:0 0 200px;color:var(--text-primary);font-weight:500">' + (s.name || '—') + '</div>'
+ + '<div style="flex:1;height:18px;background:rgba(120,120,128,.10);border-radius:4px;overflow:hidden;position:relative">'
+ + '<div style="width:' + pct + '%;height:100%;background:' + barColor + ';opacity:.7;transition:width .3s"></div>'
+ + '</div>'
+ + '<div style="flex:0 0 60px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-primary);font-weight:600">' + s.count + '</div>'
+ + '<div style="flex:0 0 55px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-muted);font-size:11px">' + convLabel + '</div>'
+ + '</div>';
+ });
+ // Финальная строка с общей конверсией
+ if(firstCnt > 0){
+ html += '<div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--border-faint);display:flex;justify-content:space-between;font-size:13px">'
+ + '<div style="color:var(--text-soft)">Конверсия воронки (вход → последний этап)</div>'
+ + '<div style="font-weight:700;color:' + (convPct >= 10 ? 'var(--success)' : convPct >= 3 ? 'var(--warning)' : 'var(--danger)') + '">' + convPct + '% (' + lastCnt + ' из ' + firstCnt + ')</div>'
+ + '</div>';
+ }
+ stagesEl.innerHTML = html;
+}
 async function mktUpdateTargetPreview(){
  try {
  var resp = await fetch('/api/meta-ads?endpoint=account_summary&period=last_7d');
