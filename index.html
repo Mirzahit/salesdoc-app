@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v301</title>
+<title>SalesDoc — Финансовый Дашборд v302</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5893,6 +5893,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <option value="ok">Норма</option>
  </select>
  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-churned" onchange="acSetShowChurned(this.checked)" style="margin:0"> Показать отвалившихся</label>
+ <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-nosub" onchange="acSetShowNoSub(this.checked)" style="margin:0"> Показать без подписки</label>
  </div>
  </div>
  <!-- v295: MRR / ARR / Churn / NRR — north-star метрики SaaS -->
@@ -21619,7 +21620,7 @@ function supportChartAging(cards){
 // ============================================================
 var AC_TAGS_KEY = 'crm_client_tags';
 var AC_KZ_CACHE = null;
-var acState = { operator: '', risk: '', tag: '', segment: '', showChurned: false };
+var acState = { operator: '', risk: '', tag: '', segment: '', showChurned: false, showNoSub: false };
 
 // v253: сегменты клиентов по кол-ву пользователей (qty)
 var AC_SEGMENTS = [
@@ -21930,7 +21931,7 @@ function acGetActiveClients(){
  accessUntil: pay.accessUntil || null,
  accessStatus: accessStatus,
  daysOverdue: daysOverdue,
- risk: acRiskLevelByDays(name, daysSince),
+ risk: acRiskLevelByDays(name, daysSince, accessStatus, pay.accessUntil),
  tags: acGetTags(name)
  });
  });
@@ -21953,20 +21954,25 @@ function acGetActiveClients(){
  operator: card ? (card.operator||'') : '', activDate: card?(card.activDate||''):'',
  stage: card?card.stage:'', cardId: card?card.id:null,
  lastPayDate: pay.lastPay, totalAmount: pay.totalAmount, payCount: pay.payCount,
- daysSincePay: daysSince, risk: acRiskLevelByDays(origName, daysSince), tags: acGetTags(origName)
+ daysSincePay: daysSince, risk: acRiskLevelByDays(origName, daysSince, 'never', null), tags: acGetTags(origName)
  });
  });
  }
  return result;
 }
 
-// Версия без обращения к acDaysSinceLastPay (мы уже имеем daysSince)
-function acRiskLevelByDays(client, days){
+// v302: риск теперь по accessStatus, а не по дням с последней оплаты.
+// Раньше клиент без оплат (999 дн) автоматом считался high и лез в топ сортировки.
+function acRiskLevelByDays(client, days, accessStatus, accessUntil){
  var tags = acGetTags(client);
  if(tags.indexOf('risk') >= 0) return 'high';
  if(tags.indexOf('ok') >= 0) return 'low';
- if(days > 60) return 'high';
- if(days > 30) return 'med';
+ if(accessStatus === 'churned') return 'high';
+ if(accessStatus === 'grace') return 'med';
+ if(accessStatus === 'active' && accessUntil){
+ var daysLeft = Math.floor((accessUntil - new Date()) / 86400000);
+ if(daysLeft <= 7) return 'med';
+ }
  return 'low';
 }
 
@@ -21975,6 +21981,7 @@ function acSetRisk(r){ acState.risk = r || ''; acRender(); }
 function acSetTag(t){ acState.tag = t || ''; acRender(); }
 function acSetSegment(s){ acState.segment = s || ''; acRender(); }
 function acSetShowChurned(v){ acState.showChurned = !!v; acRender(); }
+function acSetShowNoSub(v){ acState.showNoSub = !!v; acRender(); }
 
 function acInit(){
  var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
@@ -22004,6 +22011,9 @@ function acRender(){
  if(acState.segment && c.segment !== acState.segment) return false;
  // v300: по умолчанию скрываем отвалившихся (доступ закончился >7 дн назад)
  if(!acState.showChurned && c.accessStatus === 'churned') return false;
+ // v302: по умолчанию скрываем тех, у кого вообще не было подписочных платежей —
+ // это шум (старые клиенты без оплат, тестовые записи, клиенты только на услугах)
+ if(!acState.showNoSub && c.accessStatus === 'never') return false;
  return true;
  });
 
