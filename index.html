@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v309</title>
+<title>SalesDoc — Финансовый Дашборд v310</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -24635,43 +24635,71 @@ function amoRenderFunnel(d){
  if(stagesEl) stagesEl.innerHTML = '';
  return;
  }
- // Подсчитаем «итоговую конверсию»: сколько добралось до последнего НЕ системного этапа
- var realStages = d.stages.filter(function(s){ return s.type !== 1; }); // type=1 = закрытые статусы (но включим их)
- var firstCnt = realStages.length ? realStages[0].count : 0;
- // Последний УСПЕХ — статус с type=142 или последний по sort
- var lastSuccess = d.stages.filter(function(s){ return s.type !== 143; }).slice(-1)[0]; // 143 = закрыто/неуспех
- var lastCnt = lastSuccess ? lastSuccess.count : 0;
- var convPct = firstCnt > 0 ? Math.round(lastCnt / firstCnt * 100) : 0;
- if(sub) sub.textContent = 'Всего лидов в воронке: ' + d.total_leads
-  + (d.truncated ? ' (показаны первые 1250)' : '')
-  + ' · этапов: ' + d.stages.length;
+ // v310: классифицируем этапы по ИМЕНИ (type не всегда заполнен правильно в amo)
+ //       Цель — выделить «успех» / «потеря» / активные.
+ var classify = function(name){
+ var n = String(name||'').toLowerCase();
+ if(/успешн|реализован|оплачен.*работ|передано в работу/.test(n) && !/не.*реализован/.test(n)) return 'win';
+ if(/закрыт.*не.*реализов|закрыт.*неуспех|неуспех|отказ|отвал|закрытая база/.test(n)) return 'loss';
+ return 'active';
+ };
 
- // Найти максимум для пропорциональных полос
+ var total = 0, winCnt = 0, lossCnt = 0, activeCnt = 0, activePrice = 0;
+ d.stages.forEach(function(s){
+ var k = classify(s.name);
+ s._kind = k;
+ total += s.count;
+ if(k === 'win'){ winCnt += s.count; }
+ else if(k === 'loss'){ lossCnt += s.count; }
+ else { activeCnt += s.count; activePrice += (s.total_price||0); }
+ });
+
+ // Конверсия успеха = успех / (успех + потеря + активные) = успех / total
+ var convPct = total > 0 ? Math.round(winCnt / total * 100) : 0;
+
+ if(sub) sub.textContent = 'Всего лидов: ' + d.total_leads
+  + ' · активных: ' + activeCnt + ' · успех: ' + winCnt + ' · потеря: ' + lossCnt
+  + (d.truncated ? ' · (показаны первые 1250)' : '');
+
+ // Найти максимум для пропорциональных полос (только среди ненулевых)
  var maxCount = Math.max.apply(null, d.stages.map(function(s){ return s.count; })) || 1;
+ // v310: фильтр пустых этапов по умолчанию (этапов с 0 лидами в этой воронке часто половина)
+ var visible = d.stages.filter(function(s){ return s.count > 0; });
+
  var html = '';
- d.stages.forEach(function(s, i){
+ if(d.stages.length > visible.length){
+ html += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Скрыты ' + (d.stages.length - visible.length) + ' этапов без лидов. <a href="#" onclick="event.preventDefault();window._amoShowEmpty=!window._amoShowEmpty;amoRenderFunnel(window._amoFunnelCache.data);return false;" style="color:var(--accent-text)">' + (window._amoShowEmpty?'Скрыть пустые':'Показать все') + '</a></div>';
+ }
+ var rows = window._amoShowEmpty ? d.stages : visible;
+
+ rows.forEach(function(s, i){
  var pct = Math.round(s.count / maxCount * 100);
- var barColor = s.type === 142 ? '#7FB89E'  // успех
-  : s.type === 143 ? '#D89595'  // неуспех/закрыто
-  : '#5489BB';                 // обычный
- var convLabel = s.conv_from_first_pct + '%';
+ var barColor = s._kind === 'win' ? '#7FB89E'
+  : s._kind === 'loss' ? '#D89595'
+  : '#5489BB';
+ var convFromMax = maxCount > 0 ? Math.round(s.count / maxCount * 100) : 0;
+ var priceLabel = s.total_price > 0 ? (' · ' + Math.round(s.total_price/1000) + 'K ₸') : '';
  html += '<div style="display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--border-faint);font-size:12px">'
  + '<div style="flex:0 0 22px;color:var(--text-muted);text-align:right;font-variant-numeric:tabular-nums">' + (i+1) + '.</div>'
  + '<div style="flex:0 0 200px;color:var(--text-primary);font-weight:500">' + (s.name || '—') + '</div>'
- + '<div style="flex:1;height:18px;background:rgba(120,120,128,.10);border-radius:4px;overflow:hidden;position:relative">'
+ + '<div style="flex:1;height:18px;background:rgba(120,120,128,.10);border-radius:4px;overflow:hidden">'
  + '<div style="width:' + pct + '%;height:100%;background:' + barColor + ';opacity:.7;transition:width .3s"></div>'
  + '</div>'
- + '<div style="flex:0 0 60px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-primary);font-weight:600">' + s.count + '</div>'
- + '<div style="flex:0 0 55px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-muted);font-size:11px">' + convLabel + '</div>'
+ + '<div style="flex:0 0 80px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-primary);font-weight:600">' + s.count + '</div>'
+ + '<div style="flex:0 0 110px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-muted);font-size:11px">' + convFromMax + '%' + priceLabel + '</div>'
  + '</div>';
  });
- // Финальная строка с общей конверсией
- if(firstCnt > 0){
- html += '<div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--border-faint);display:flex;justify-content:space-between;font-size:13px">'
- + '<div style="color:var(--text-soft)">Конверсия воронки (вход → последний этап)</div>'
- + '<div style="font-weight:700;color:' + (convPct >= 10 ? 'var(--success)' : convPct >= 3 ? 'var(--warning)' : 'var(--danger)') + '">' + convPct + '% (' + lastCnt + ' из ' + firstCnt + ')</div>'
+
+ // Итоговая сводка
+ var convColor = convPct >= 10 ? 'var(--success)' : convPct >= 3 ? 'var(--warning)' : 'var(--danger)';
+ html += '<div style="margin-top:14px;padding:12px 14px;background:rgba(120,120,128,.08);border-radius:8px;display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:center;font-size:12px">'
+ + '<div><span style="color:var(--text-muted)">Активных:</span> <b style="color:var(--text-primary)">' + activeCnt + '</b>'
+ + (activePrice > 0 ? ' <span style="color:var(--text-muted)">(' + Math.round(activePrice/1000) + 'K ₸ потенциал)</span>' : '') + '</div>'
+ + '<div><span style="color:var(--text-muted)">Успех:</span> <b style="color:#7FB89E">' + winCnt + '</b></div>'
+ + '<div><span style="color:var(--text-muted)">Потеря:</span> <b style="color:#D89595">' + lossCnt + '</b></div>'
+ + '<div style="font-weight:700;color:' + convColor + '">Конверсия успеха: ' + convPct + '%</div>'
  + '</div>';
- }
+
  stagesEl.innerHTML = html;
 }
 async function mktUpdateTargetPreview(){
