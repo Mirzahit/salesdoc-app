@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v326</title>
+<title>SalesDoc — Финансовый Дашборд v327</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13329,16 +13329,17 @@ window.mktLoadLeads = async function() {
  var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
  var url = GS_URL + '?action=getSheet&spreadsheetId=' + LEADS_SHEET_ID + '&sheet=Лист1&range=A1:R300';
 
+ var totalLeads = 0;
+ var sheetWorked = false;
  try {
  var resp = await fetch(url);
  var data = await resp.json();
  if (!data.rows) throw new Error('Нет данных');
 
- var totalLeads = 0;
- var MAX_LEADS_PER_ROW = 500; // фильтр мусора
+ var MAX_LEADS_PER_ROW = 500;
  data.rows.forEach(function(row) {
- var dateStr = row[1] || ''; // колонка B - дата
- var leads = Number(row[13]); // колонка N - кол-во лидов
+ var dateStr = row[1] || '';
+ var leads = Number(row[13]);
  if (!dateStr || !dateStr.includes('T')) return;
  if (isNaN(leads) || leads <= 0 || leads > MAX_LEADS_PER_ROW) return;
 
@@ -13347,16 +13348,34 @@ window.mktLoadLeads = async function() {
  totalLeads += leads;
  }
  });
-
- leadsEl.textContent = totalLeads;
- leadsEl.style.color = '#5489BB';
- if (statusEl) statusEl.textContent = '';
- mktAutoCalc();
+ sheetWorked = true;
  } catch(e) {
- if (statusEl) statusEl.textContent = '';
- leadsEl.textContent = '—';
- console.error('mktLoadLeads error:', e);
+ console.warn('mktLoadLeads: Sheets fail, fallback to Meta API', e);
  }
+
+ // v327: fallback на Meta API leads_count если из Sheets ничего не пришло
+ if (totalLeads === 0) {
+ try {
+ var metaPeriod = _mktPeriod === 'week' ? 'last_7d' : 'this_month';
+ var mr = await fetch('/api/meta-ads?endpoint=account_summary&period=' + metaPeriod);
+ var md = await mr.json();
+ var metaLeads = md && md.summary ? Number(md.summary.leads_count || 0) : 0;
+ if (metaLeads > 0) {
+ totalLeads = metaLeads;
+ if (statusEl) statusEl.textContent = 'из Meta Ads (Sheets пустой)';
+ } else if (statusEl) {
+ statusEl.textContent = sheetWorked ? 'из Google Таблицы' : 'данных нет';
+ }
+ } catch(e2) {
+ console.warn('mktLoadLeads: Meta API fallback failed', e2);
+ }
+ } else if (statusEl) {
+ statusEl.textContent = 'из Google Таблицы';
+ }
+
+ leadsEl.textContent = totalLeads > 0 ? totalLeads : '—';
+ if (totalLeads > 0) leadsEl.style.color = '#5489BB';
+ mktAutoCalc();
 };
 
 // v161: автоматический подсчёт расхода на маркетинг из раздела Расходы.
