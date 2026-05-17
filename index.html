@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v305</title>
+<title>SalesDoc — Финансовый Дашборд v306</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21762,6 +21762,32 @@ function acApprovePrefix(payHost){
  if(typeof acRenderPrefixMerged === 'function') acRenderPrefixMerged();
 }
 
+// v306: дополнительные клиенты, добавленные пользователем для несматченных host'ов.
+// Используется когда у компании несколько серверов (типа ROKOS: rokosalm/rokosast/rokoskrg)
+// и каждый сервер — отдельный клиент с собственным учётом подписки.
+// Сохраняются в localStorage, мерджатся с AC_KZ_CACHE при чтении.
+var AC_ADD_CLIENTS_KEY = 'sd_additional_clients';
+function acGetAdditionalClients(){ try { return JSON.parse(localStorage.getItem(AC_ADD_CLIENTS_KEY) || '[]'); } catch(e){ return []; } }
+function acAddClientAsSeparate(payHost, name){
+ var list = acGetAdditionalClients();
+ var nm = String(name || payHost).trim();
+ if(!nm){ alert('Имя клиента не может быть пустым'); return; }
+ // Не дублируем
+ if(list.some(function(c){ return (c.host||'').toLowerCase() === payHost.toLowerCase(); })){
+ alert('Клиент с host «'+payHost+'» уже создан');
+ return;
+ }
+ list.push({ name: nm, host: payHost, qty: 0, sum: 0, _added: true });
+ localStorage.setItem(AC_ADD_CLIENTS_KEY, JSON.stringify(list));
+ if(typeof showNotif === 'function') showNotif('Клиент создан', nm + ' добавлен как отдельный клиент');
+ if(typeof acRender === 'function') acRender();
+}
+function acRemoveAdditionalClient(host){
+ var list = acGetAdditionalClients().filter(function(c){ return (c.host||'').toLowerCase() !== host.toLowerCase(); });
+ localStorage.setItem(AC_ADD_CLIENTS_KEY, JSON.stringify(list));
+ if(typeof acRender === 'function') acRender();
+}
+
 // v303: загрузка подписочных платежей 2025 для корректного расчёта «Доступ до»
 // Многие клиенты оплатили на год/полгода в 2025, и эти подписки покрывают 2026.
 // Без этих данных «годовики» показываются как «нет подписки».
@@ -21904,10 +21930,18 @@ function acRenderUnmatched(){
  + '</div>'
  + '<input type="text" id="'+inputId+'" list="ac-clients-datalist" placeholder="Начни печатать имя клиента..." autocomplete="off" style="flex:1;min-width:240px;padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-faint);border-radius:6px;color:var(--text);font-size:12px">'
  + '<button onclick="acLinkUnmatched(\''+kbEsc(it.host).replace(/\x27/g,"\\\x27")+'\')" style="padding:6px 14px;background:var(--amo-blue);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Привязать</button>'
+ + '<button onclick="acCreateSeparatePrompt(\''+kbEsc(it.host).replace(/\x27/g,"\\\x27")+'\')" title="Создать host как отдельного клиента (для филиалов холдинга где каждый сервер — свой учёт)" style="padding:6px 14px;background:rgba(127,184,158,.12);color:#7FB89E;border:1px solid rgba(127,184,158,.3);border-radius:6px;cursor:pointer;font-size:12px">Сделать отдельным</button>'
  + '</div>';
  });
  if(items.length > 30) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:10px">...и ещё '+(items.length-30)+' (скрыто, привяжи топ-30 сначала)</div>';
  list.innerHTML = html;
+}
+
+// v306: создать host как отдельного клиента (диалог для имени)
+function acCreateSeparatePrompt(payHost){
+ var name = prompt('Имя нового клиента для host «'+payHost+'»:\n(можно оставить host если не знаешь точного названия)', payHost);
+ if(name === null) return; // отмена
+ acAddClientAsSeparate(payHost, name);
 }
 
 // v277: связать pay-host с именем клиента вручную
@@ -21931,7 +21965,9 @@ function acGetActiveClients(){
  // v277: новая логика матчинга — нормализация + подстрока + ручные override.
  // Цель: чтобы «karat-pv» / «karat2» / «ТОО Карат» в платежах сматчились с
  // одним клиентом «ТОО Карат (host=karat)» из clients-kz.json.
- var kzItems = AC_KZ_CACHE || [];
+ // v306: к мастер-списку из clients-kz.json добавляем «отдельные клиенты» из localStorage
+ //       (созданные через кнопку «Сделать отдельным клиентом» в блоке несматченных)
+ var kzItems = (AC_KZ_CACHE || []).concat(acGetAdditionalClients());
  var overrides = acGetOverrides();
 
  // 1. Группируем платежи по полю client (это host или имя — что в Sheets вписано)
