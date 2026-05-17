@@ -180,6 +180,27 @@ export default async function handler(req, res){
       const data = await getFunnel(pipelineId, env, fromTs, toTs);
       return res.status(200).json(data);
     }
+    if(action === 'phone_lookup'){
+      // v317: debug — поиск контакта/лида в amo по конкретному телефону, в разных форматах
+      const phone = String(req.query.phone || '').replace(/\D/g, '');
+      if(!phone) return bad(res, 400, 'Need ?phone=...');
+      const variants = [phone, '+' + phone, phone.slice(-10), '8' + phone.slice(-10), phone.slice(-9)];
+      const results = {};
+      for(const v of variants){
+        try {
+          const r = await amoFetch(`/contacts?query=${encodeURIComponent(v)}&limit=5`, env);
+          const found = (r && r._embedded && r._embedded.contacts) || [];
+          results[v] = found.map(c => ({
+            id: c.id, name: c.name,
+            phones: (c.custom_fields_values || []).filter(f => f.field_code === 'PHONE')
+              .flatMap(f => (f.values || []).map(v => v.value))
+          }));
+        } catch(e){
+          results[v] = { error: e.message };
+        }
+      }
+      return res.status(200).json({ phone_normalized: phone, search_variants: results });
+    }
     if(action === 'sheets_audit'){
       // v314: сверка лидов из Google Sheets (Meta Lead Forms сырая выгрузка) с amo по телефону.
       //       Классификация по комментариям менеджеров: срм / ндз / не квал / брак / новый.
