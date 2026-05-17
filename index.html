@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v321</title>
+<title>SalesDoc — Финансовый Дашборд v322</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -24702,8 +24702,10 @@ function amoBuildUnifiedFunnel(amoData, metaData, period){
  var clicks = Number(m.clicks || m.inline_link_clicks || 0);
  if(imps > 0) flow.push({ label: 'Просмотры рекламы', count: imps, source: 'meta' });
  if(clicks > 0) flow.push({ label: 'Клики/отклики', count: clicks, source: 'meta' });
- if(m.leads && Number(m.leads.count) > 0){
- flow.push({ label: 'Заявки из Meta', count: Math.round(Number(m.leads.count)), source: 'meta' });
+ // v322 fix: Meta API кладёт счёт в leads_count (не leads.count) — раньше этап пропускался
+ var leadsCnt = Number(m.leads_count || (m.leads && m.leads.count) || 0);
+ if(leadsCnt > 0){
+ flow.push({ label: 'Оставили заявку (Meta)', count: Math.round(leadsCnt), source: 'meta' });
  }
  }
  if(amoData.logical_flow && amoData.logical_flow.length){
@@ -24725,8 +24727,8 @@ function amoBuildUnifiedFunnel(amoData, metaData, period){
 
  // Период в человеческом виде
  var periodLabels = { last_7d: '7 дней', last_30d: '30 дней', last_90d: '90 дней', this_month: 'этот месяц', all: 'всё время' };
- // v320: для виджета атрибуции
- var metaLeadsCount = (m && m.leads && Number(m.leads.count)) ? Math.round(Number(m.leads.count)) : 0;
+ // v320 / v322: для виджета атрибуции — leads_count (правильное поле Meta API)
+ var metaLeadsCount = m ? Math.round(Number(m.leads_count || (m.leads && m.leads.count) || 0)) : 0;
  return {
  flow: flow,
  amo_total: amoData.total_leads,
