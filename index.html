@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v298</title>
+<title>SalesDoc — Финансовый Дашборд v299</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21796,8 +21796,24 @@ function acGetActiveClients(){
  if(!payByHost[host]) payByHost[host] = { totalAmount: 0, payCount: 0, lastPay: null };
  payByHost[host].payCount++;
  payByHost[host].totalAmount += parseFloat(p.amount || p.am) || 0;
- var d = (typeof parseDateFromSheet === 'function' && p.date) ? parseDateFromSheet(p.date) : (p.date ? new Date(p.date) : null);
- if(d && !isNaN(d) && (!payByHost[host].lastPay || d > payByHost[host].lastPay)) payByHost[host].lastPay = d;
+ // v299 fix: parseDateFromSheet возвращает СТРОКУ 'YYYY-MM-DD', isNaN(string)===true
+ // отрезало все даты — lastPay оставался null, daysSince=999 у всех клиентов
+ // → ВСЕ показывались как «не платил» даже при наличии оплат в Sheets
+ var d = null;
+ if(p.date){
+ var ds = (typeof parseDateFromSheet === 'function') ? parseDateFromSheet(p.date) : String(p.date);
+ if(ds){
+ var dp = String(ds).substring(0,10).split('-');
+ if(dp.length === 3){
+ var yy = parseInt(dp[0],10), mm = parseInt(dp[1],10), dd2 = parseInt(dp[2],10) || 1;
+ if(yy && mm){
+ var dt = new Date(yy, mm-1, dd2);
+ if(!isNaN(dt.getTime())) d = dt;
+ }
+ }
+ }
+ }
+ if(d && (!payByHost[host].lastPay || d > payByHost[host].lastPay)) payByHost[host].lastPay = d;
  });
  }
 
