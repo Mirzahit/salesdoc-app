@@ -53,7 +53,7 @@ async function getPipelines(env){
   }));
 }
 
-async function getFunnel(pipelineId, env, fromTs, toTs){
+async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
   // Получаем pipeline + его статусы
   const pipelines = await getPipelines(env);
   // v308: всегда работаем с воронкой «Лиды» (по имени). Внедрение/Покупатели игнорируем.
@@ -69,16 +69,34 @@ async function getFunnel(pipelineId, env, fromTs, toTs){
   if(toTs) dateFilter += `&filter[created_at][to]=${toTs}`;
 
   // Тянем лиды постранично (до 5 страниц = 1250 лидов в периоде)
-  const leads = [];
+  // v319: with=contacts уже было; теги приходят в _embedded.tags автоматически
+  const allLeads = [];
   let truncated = false;
   for(let page = 1; page <= 5; page++){
     const data = await amoFetch(`/leads?filter[pipeline_id]=${p.id}${dateFilter}&limit=250&page=${page}`, env);
     if(!data) break;
     const batch = (data._embedded && data._embedded.leads) || [];
     if(!batch.length) break;
-    leads.push(...batch);
+    allLeads.push(...batch);
     if(batch.length < 250) break;
     if(page === 5 && batch.length === 250){ truncated = true; }
+  }
+
+  // v319: фильтр по тегу (имя тега в нижнем регистре, проверка includes для гибкости)
+  let leads = allLeads;
+  if(tagFilter){
+    const tf = String(tagFilter).toLowerCase().trim();
+    if(tf === 'без тега' || tf === '__notag__'){
+      leads = allLeads.filter(l => {
+        const tags = (l._embedded && l._embedded.tags) || [];
+        return tags.length === 0;
+      });
+    } else {
+      leads = allLeads.filter(l => {
+        const tags = (l._embedded && l._embedded.tags) || [];
+        return tags.some(t => String(t.name||'').toLowerCase().includes(tf));
+      });
+    }
   }
 
   // Группируем по status_id
@@ -146,9 +164,11 @@ async function getFunnel(pipelineId, env, fromTs, toTs){
   return {
     pipeline: { id: p.id, name: p.name },
     total_leads: leads.length,
+    total_leads_unfiltered: allLeads.length,
     truncated: truncated,
     lost_count: lostCount,
     period: { from: fromTs || null, to: toTs || null },
+    tag_filter: tagFilter || null,
     stages: stages,
     logical_flow: logicalFlow
   };
@@ -174,10 +194,10 @@ export default async function handler(req, res){
     }
     if(action === 'funnel'){
       const pipelineId = req.query.pipeline_id ? Number(req.query.pipeline_id) : null;
-      // v312: период фильтрует по created_at лида. Передавать как unix-секунды.
       const fromTs = req.query.from ? Number(req.query.from) : null;
       const toTs = req.query.to ? Number(req.query.to) : null;
-      const data = await getFunnel(pipelineId, env, fromTs, toTs);
+      const tagFilter = req.query.tag || null; // v319: фильтр по тегу (имя)
+      const data = await getFunnel(pipelineId, env, fromTs, toTs, tagFilter);
       return res.status(200).json(data);
     }
     if(action === 'phone_lookup'){

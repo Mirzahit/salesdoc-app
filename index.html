@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v318</title>
+<title>SalesDoc — Финансовый Дашборд v319</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4712,6 +4712,13 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <button onclick="amoSetPeriod('this_month')" data-amo-p="this_month" class="amo-pbtn" style="padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">Этот мес</button>
  <button onclick="amoSetPeriod('last_90d')" data-amo-p="last_90d" class="amo-pbtn" style="padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">3 мес</button>
  <button onclick="amoSetPeriod('all')" data-amo-p="all" class="amo-pbtn" style="padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">Всё</button>
+ <select id="amo-tag-filter" onchange="amoSetTagFilter(this.value)" style="padding:6px 10px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;background:transparent;color:var(--text-soft);cursor:pointer">
+ <option value="">Все источники</option>
+ <option value="таргет таблица">Только таргет (Meta)</option>
+ <option value="ТАРГЕТ">Только ТАРГЕТ (старый)</option>
+ <option value="marquiz">Только Marquiz</option>
+ <option value="без тега">Без тега</option>
+ </select>
  <button onclick="amoLoadFunnel(true)" id="amo-funnel-refresh" style="margin-left:6px;padding:6px 12px;font-size:11px;border:1px solid var(--border-faint);border-radius:6px;cursor:pointer;background:transparent;color:var(--text-soft)">⟳</button>
  </div>
  </div>
@@ -24608,16 +24615,21 @@ window.mktInitDashboard = async function(){
 
 // v308: загрузка и рендер воронки из amoCRM (только pipeline «Лиды»)
 // v312: объединённая воронка Meta → amo → Внедрены, с фильтром периода
+// v319: добавлен фильтр по тегу amo
 window._amoFunnelCache = {};
 window._amoCurrentPeriod = 'last_30d';
+window._amoCurrentTag = '';
 
 window.amoSetPeriod = function(period){
  window._amoCurrentPeriod = period;
- // Подсветка активной кнопки
  document.querySelectorAll('.amo-pbtn').forEach(function(b){
  b.classList.toggle('amo-pactive', b.dataset.amoP === period);
  });
  amoLoadFunnel(false);
+};
+window.amoSetTagFilter = function(tag){
+ window._amoCurrentTag = tag || '';
+ amoLoadFunnel(true); // force — кэш per-period не учитывает тег
 };
 
 // Конвертация периода в unix-timestamp диапазон (для amo created_at filter)
@@ -24655,6 +24667,8 @@ window.amoLoadFunnel = async function(force){
  var amoQS = '/api/amo?action=funnel';
  if(ts.from) amoQS += '&from=' + ts.from;
  if(ts.to) amoQS += '&to=' + ts.to;
+ // v319: фильтр по тегу
+ if(window._amoCurrentTag) amoQS += '&tag=' + encodeURIComponent(window._amoCurrentTag);
  // Meta API использует свои строковые периоды — последние 7/30/90 или this_month
  var metaPeriod = period === 'all' ? 'last_90d' : period;
  var amoP = fetch(amoQS).then(function(r){ return r.json(); });
@@ -24740,8 +24754,9 @@ function amoRenderFunnel(d){
  var convPct = top > 0 ? Math.round(bottom / top * 100 * 100) / 100 : 0; // 2 знака после
  if(sub){
  var perLabel = d.period_label || '30 дней';
- var lostBit = d.amo_lost ? ' · ' + d.amo_lost + ' лидов закрыто как «не реализовано»' : '';
- sub.textContent = 'Период: ' + perLabel + ' · ' + flow.length + ' шагов · сквозная конверсия: ' + convPct + '%' + lostBit;
+ var lostBit = d.amo_lost ? ' · ' + d.amo_lost + ' закрыто как «не реализовано»' : '';
+ var tagBit = window._amoCurrentTag ? ' · фильтр: «' + window._amoCurrentTag + '»' : '';
+ sub.textContent = 'Период: ' + perLabel + tagBit + ' · ' + flow.length + ' шагов · конверсия: ' + convPct + '%' + lostBit;
  }
 
  var maxCount = Math.max.apply(null, flow.map(function(s){ return s.count; })) || 1;
