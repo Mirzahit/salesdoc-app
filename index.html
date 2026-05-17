@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v302</title>
+<title>SalesDoc — Финансовый Дашборд v303</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5929,6 +5929,19 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div id="ac-unmatched-toggle" style="color:var(--text-muted);font-size:18px">▾</div>
  </div>
  <div id="ac-unmatched-list" style="display:none;margin-top:14px;border-top:1px solid var(--border-faint);padding-top:14px"></div>
+ </div>
+ </div>
+ <!-- v303: диагностика префикс-матчей — какие host'ы из 2025 склеились не точно -->
+ <div id="ac-prefix-section" style="display:none;margin-bottom:16px">
+ <div class="sd-card" style="padding:14px 16px;background:rgba(214,163,114,.04);border:1px solid rgba(214,163,114,.25)">
+ <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="acTogglePrefixList()">
+ <div>
+ <div style="font-size:12px;color:#D6A372;font-weight:700;letter-spacing:1px;text-transform:uppercase">Сматчены через префикс <span id="ac-prefix-count">0</span></div>
+ <div style="font-size:11px;color:var(--text-muted);margin-top:3px">host'ы привязаны к клиентам не по точному совпадению. Проверь — точно ли это те же клиенты, или это другие компании.</div>
+ </div>
+ <div id="ac-prefix-toggle" style="color:var(--text-muted);font-size:18px">▾</div>
+ </div>
+ <div id="ac-prefix-list" style="display:none;margin-top:14px;border-top:1px solid var(--border-faint);padding-top:14px"></div>
  </div>
  </div>
  <div class="sd-section-title">Все клиенты <span id="ac-count" style="color:var(--text-soft);font-weight:500;text-transform:none;letter-spacing:0;font-size:13px"></span></div>
@@ -21725,6 +21738,124 @@ function acSetOverride(payHost, clientName){
  localStorage.setItem(AC_OVERRIDE_KEY, JSON.stringify(ov));
 }
 
+// v303: «не сматчивать» override — для случаев когда префикс-матч склеивает разных клиентов
+// Ключ — payHost (например 'karat-server2'), значение — true. Такие хосты не будут
+// автоматически сматчиваться даже при префикс-совпадении.
+var AC_SKIP_MATCH_KEY = 'sd_pay_skip_match';
+function acGetSkipMatch(){ try { return JSON.parse(localStorage.getItem(AC_SKIP_MATCH_KEY) || '{}'); } catch(e){ return {}; } }
+function acToggleSkipMatch(payHost){
+ var sk = acGetSkipMatch();
+ if(sk[payHost]) delete sk[payHost]; else sk[payHost] = true;
+ localStorage.setItem(AC_SKIP_MATCH_KEY, JSON.stringify(sk));
+ if(typeof acRender === 'function') acRender();
+}
+
+// v303: загрузка подписочных платежей 2025 для корректного расчёта «Доступ до»
+// Многие клиенты оплатили на год/полгода в 2025, и эти подписки покрывают 2026.
+// Без этих данных «годовики» показываются как «нет подписки».
+// Кэш в localStorage на 7 дней — исторические данные почти не меняются.
+var AC_PRIOR_CACHE_KEY = 'sd_prior_payments_cache';
+var AC_PRIOR_TTL_DAYS = 7;
+
+function acLoadPriorPayments(forceRefresh){
+ // Проверяем кэш
+ if(!forceRefresh){
+ try {
+ var raw = localStorage.getItem(AC_PRIOR_CACHE_KEY);
+ if(raw){
+ var cached = JSON.parse(raw);
+ var ageMs = Date.now() - (cached.ts || 0);
+ if(cached.country === currentCountry && ageMs < AC_PRIOR_TTL_DAYS * 86400000){
+ window._acPriorPays = cached.payments || [];
+ return Promise.resolve(window._acPriorPays);
+ }
+ }
+ } catch(_){}
+ }
+
+ var cfg = COUNTRY_CONFIG[currentCountry];
+ var priorId = cfg && cfg.LTV_ID;
+ if(!priorId){ window._acPriorPays = []; return Promise.resolve([]); }
+
+ var months = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+ var today = new Date();
+ var allSubs = [];
+
+ // Простой CSV parser для русского формата (запятая разделитель, кавычки экранируют)
+ function parseCSV(text){
+ return text.split('\n').map(function(line){
+ var fields = [], cur = '', inQ = false;
+ for(var i = 0; i < line.length; i++){
+ var ch = line[i];
+ if(ch === '"'){ inQ = !inQ; continue; }
+ if(ch === ',' && !inQ){ fields.push(cur); cur = ''; continue; }
+ cur += ch;
+ }
+ fields.push(cur);
+ return fields;
+ });
+ }
+
+ function parseNum(s){
+ if(typeof s === 'number') return s;
+ return parseFloat(String(s||'').replace(/\s/g,'').replace(',','.')) || 0;
+ }
+
+ function parseDateDMY(s){
+ var m = String(s||'').trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+ if(!m) return null;
+ return m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
+ }
+
+ var promises = months.map(function(sheet, mi){
+ var url = 'https://docs.google.com/spreadsheets/d/' + priorId
+ + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(sheet) + '&range=A4:T500';
+ return fetch(url).then(function(r){ return r.text(); }).then(function(csv){
+ var rows = parseCSV(csv);
+ rows.forEach(function(row){
+ if(!row[1]) return;
+ var dateStr = parseDateDMY(row[0]);
+ if(!dateStr) return;
+ var cat = String(row[2]||'').trim();
+ var catLow = cat.toLowerCase();
+ // Только подписочные: абонплата / баланс / новый клиент / лицензия (включая «доп. лицензии»)
+ var isSub = catLow.indexOf('абон') >= 0
+ || catLow.indexOf('баланс') >= 0
+ || catLow === 'новый клиент' || (catLow.indexOf('нов') >= 0 && catLow.indexOf('клиент') >= 0)
+ || catLow.indexOf('лицен') >= 0;
+ if(!isSub) return;
+ var amount = parseNum(row[12]) || parseNum(row[9]);
+ if(amount <= 0) return;
+ var period = Math.max(1, Math.round(parseNum(row[8]) || 1));
+ // Проверяем что endDate >= сегодня (иначе подписка истекла, не нужна для accessUntil)
+ var dp = dateStr.split('-');
+ var dY = parseInt(dp[0],10), dM = parseInt(dp[1],10), dD = parseInt(dp[2],10);
+ var endD = new Date(dY, dM - 1 + period, 0);
+ if(endD < today) return;
+ allSubs.push({
+ date: dateStr,
+ client: String(row[1]).trim(),
+ category: 'subscription',
+ categoryRaw: cat,
+ amount: amount,
+ period: period,
+ _prior: true // метка чтоб в матчинге понять что это исторический
+ });
+ });
+ }).catch(function(){});
+ });
+
+ return Promise.all(promises).then(function(){
+ window._acPriorPays = allSubs;
+ try {
+ localStorage.setItem(AC_PRIOR_CACHE_KEY, JSON.stringify({
+ ts: Date.now(), country: currentCountry, payments: allSubs
+ }));
+ } catch(_){}
+ return allSubs;
+ });
+}
+
 // v277: UI — раскрыть/свернуть блок несматченных
 function acToggleUnmatched(){
  var list = document.getElementById('ac-unmatched-list');
@@ -21790,14 +21921,26 @@ function acGetActiveClients(){
  var overrides = acGetOverrides();
 
  // 1. Группируем платежи по полю client (это host или имя — что в Sheets вписано)
+ // v303: к 2026 платежам добавляем подписочные из 2025 (window._acPriorPays) —
+ //       те у кого date+period ещё покрывает текущий месяц. Они влияют только на accessUntil.
  var payByHost = {};
- if(typeof payments !== 'undefined' && payments){
- payments.forEach(function(p){
+ var prefixMerged = {}; // v303: payHost → {matchedTo, score} для диагностики
+ var skipMatchMap = acGetSkipMatch();
+ var combinedPays = (typeof payments !== 'undefined' && payments) ? payments.slice() : [];
+ if(window._acPriorPays && window._acPriorPays.length){
+ combinedPays = combinedPays.concat(window._acPriorPays);
+ }
+ if(combinedPays.length){
+ combinedPays.forEach(function(p){
  var host = String(p && (p.client || p.cl || p.compName) || '').trim().toLowerCase();
  if(!host) return;
  if(!payByHost[host]) payByHost[host] = { totalAmount: 0, payCount: 0, lastPay: null, accessUntil: null };
+ // v303: исторические платежи (prior=2025) учитываем ТОЛЬКО для accessUntil.
+ //       payCount/totalAmount/lastPay остаются по 2026 — чтобы выручка и метрики не дублировались.
+ if(!p._prior){
  payByHost[host].payCount++;
  payByHost[host].totalAmount += parseFloat(p.amount || p.am) || 0;
+ }
  // v299 fix: parseDateFromSheet возвращает СТРОКУ 'YYYY-MM-DD', isNaN(string)===true
  // отрезало все даты — lastPay оставался null, daysSince=999 у всех клиентов
  // → ВСЕ показывались как «не платил» даже при наличии оплат в Sheets
@@ -21815,7 +21958,7 @@ function acGetActiveClients(){
  }
  }
  }
- if(d && (!payByHost[host].lastPay || d > payByHost[host].lastPay)) payByHost[host].lastPay = d;
+ if(d && !p._prior && (!payByHost[host].lastPay || d > payByHost[host].lastPay)) payByHost[host].lastPay = d;
  // v300: подписочные платежи продлевают "Доступ до" на N месяцев (period из Sheets, default=1).
  // Подписочные = абонплата + баланс + новый клиент + лицензия (см. mapCategoryFromSheet).
  // Услуги (внедрение/интеграция/накладные/долги) НЕ продлевают доступ.
@@ -21850,6 +21993,8 @@ function acGetActiveClients(){
  // Возвращаем имя клиента или null если не нашли.
  var payHostToClient = {}; // map: payHost → kzItem.name (или null)
  Object.keys(payByHost).forEach(function(payHost){
+ // v303: skip-match override — пользователь сказал «это другой клиент, не сматчивать»
+ if(skipMatchMap[payHost]){ payHostToClient[payHost] = null; return; }
  // 2.1 — Ручной override: высший приоритет
  if(overrides[payHost]){ payHostToClient[payHost] = overrides[payHost]; return; }
  var payHostNorm = acNormName(payHost);
@@ -21878,7 +22023,14 @@ function acGetActiveClients(){
  });
  // Привязываем только если совпадение достаточно сильное (score >= 70)
  payHostToClient[payHost] = (bestScore >= 70) ? bestMatch : null;
+ // v303: если матч прошёл через префикс/нормализацию (не точное совпадение host),
+ //       отмечаем для диагностики — пользователь должен подтвердить
+ if(bestScore >= 70 && bestScore < 100){
+ prefixMerged[payHost] = { matchedTo: bestMatch, score: bestScore };
+ }
  });
+ // v303: экспортируем диагностику для рендера
+ window._acPrefixMerged = prefixMerged;
 
  // 3. Агрегируем платежи на каждого kz-клиента
  var aggByClient = {}; // map: clientName → {totalAmount, payCount, lastPay, hosts:[]}
@@ -22000,6 +22152,13 @@ function acInit(){
  var renderAfter = function(){ acLoadKZClients(function(){ acRender(); }); };
  if(loadKb && typeof loadKb.then === 'function'){ loadKb.then(renderAfter).catch(renderAfter); }
  else { renderAfter(); }
+ // v303: подгружаем подписочные 2025 (асинхронно, не блокирует первый рендер).
+ //       Когда придут — перерисовываем чтоб accessUntil обновился у годовиков.
+ if(typeof acLoadPriorPayments === 'function'){
+ acLoadPriorPayments().then(function(){
+ if(typeof acRender === 'function') acRender();
+ }).catch(function(){});
+ }
 }
 
 function acRender(){
@@ -22147,8 +22306,48 @@ function acRender(){
  }
  // v277: после основной таблицы — блок несматченных платежей
  if(typeof acRenderUnmatched === 'function') acRenderUnmatched();
+ // v303: диагностика префикс-матчей
+ if(typeof acRenderPrefixMerged === 'function') acRenderPrefixMerged();
  // v295: MRR / ARR / Churn / NRR
  try { acRenderMRRStrip(); } catch(_){}
+}
+
+// v303: рендер блока «host'ы сматченные через префикс»
+function acTogglePrefixList(){
+ var list = document.getElementById('ac-prefix-list');
+ var toggle = document.getElementById('ac-prefix-toggle');
+ if(!list) return;
+ var open = list.style.display === 'block';
+ list.style.display = open ? 'none' : 'block';
+ if(toggle) toggle.textContent = open ? '▾' : '▴';
+}
+
+function acRenderPrefixMerged(){
+ var section = document.getElementById('ac-prefix-section');
+ var countEl = document.getElementById('ac-prefix-count');
+ var listEl = document.getElementById('ac-prefix-list');
+ if(!section || !listEl) return;
+ var pm = window._acPrefixMerged || {};
+ var keys = Object.keys(pm);
+ // Сортируем по score (низшие сверху — они более подозрительные)
+ keys.sort(function(a,b){ return pm[a].score - pm[b].score; });
+ if(!keys.length){ section.style.display = 'none'; return; }
+ section.style.display = 'block';
+ if(countEl) countEl.textContent = '(' + keys.length + ')';
+ var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Если в списке клиент, который ДРУГОЙ, нажми «Это другой» — мы перестанем автоматически склеивать его платежи с этим клиентом.</div>';
+ keys.slice(0, 50).forEach(function(payHost){
+ var info = pm[payHost];
+ var hostEsc = kbEsc(payHost).replace(/\x27/g, "\\\x27");
+ html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-faint);font-size:12px">'
+ + '<div style="flex:0 0 200px;font-family:monospace;color:var(--text-soft)">' + kbEsc(payHost) + '</div>'
+ + '<div style="flex:0 0 30px;color:var(--text-muted)">→</div>'
+ + '<div style="flex:1;color:var(--text)">' + kbEsc(info.matchedTo) + '</div>'
+ + '<div style="flex:0 0 50px;color:var(--text-muted);font-size:11px">score ' + info.score + '</div>'
+ + '<button onclick="acToggleSkipMatch(\'' + hostEsc + '\')" style="padding:4px 10px;background:rgba(255,107,92,.12);color:#FF6B5C;border:1px solid rgba(255,107,92,.3);border-radius:6px;cursor:pointer;font-size:11px">Это другой</button>'
+ + '</div>';
+ });
+ if(keys.length > 50) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:10px">...и ещё ' + (keys.length-50) + ' (показаны первые 50)</div>';
+ listEl.innerHTML = html;
 }
 
 // ===========================================================
