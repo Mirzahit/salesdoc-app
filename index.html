@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v352</title>
+<title>SalesDoc — Финансовый Дашборд v353</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4222,6 +4222,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div id="clients-tab-bar" class="cli-tabbar" style="display:none">
  <button class="cli-tab" data-clients-tab="all" onclick="clientsGoTab('all')" title="Скоро">Все</button>
  <button class="cli-tab" data-clients-tab="kanban" onclick="clientsGoTab('kanban')">Внедрение</button>
+ <button class="cli-tab" data-clients-tab="route" onclick="clientsGoTab('route')">Маршрут</button>
  <button class="cli-tab" data-clients-tab="newclients" onclick="clientsGoTab('newclients')">Новые</button>
  <button class="cli-tab" data-clients-tab="activeclients" onclick="clientsGoTab('activeclients')">Действующие</button>
  <button class="cli-tab" data-clients-tab="risk" onclick="clientsGoTab('risk')" title="Скоро">В риске</button>
@@ -10804,7 +10805,7 @@ function showView(v) {
  if (v === 'clients') {
  var lastTab = null;
  try { lastTab = localStorage.getItem('sd_clients_last_tab'); } catch(_){}
- var allowedTabs = ['activeclients','newclients','kanban','keyclients','integrations'];
+ var allowedTabs = ['activeclients','newclients','kanban','route','keyclients','integrations'];
  if (!allowedTabs.indexOf || allowedTabs.indexOf(lastTab) < 0) lastTab = 'activeclients';
  v = lastTab;
  }
@@ -10815,20 +10816,20 @@ function showView(v) {
  try { showNotif('Нет доступа', 'Ассистент доступен только CEO.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
- var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',settings:'view_settings'};
+ var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',route:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',settings:'view_settings'};
  var _need = _accessMap[v];
  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
  }
- ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin'].forEach(x=>{
+ ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
  // v290: единый tab-bar раздела «Клиенты» — показываем при заходе на любой из подэкранов клиентов
  (function(){
- var cliViews = ['activeclients','newclients','kanban','keyclients','integrations'];
+ var cliViews = ['activeclients','newclients','kanban','route','keyclients','integrations'];
  var bar = document.getElementById('clients-tab-bar');
  if (!bar) return;
  if (cliViews.indexOf(v) >= 0) {
@@ -10872,7 +10873,7 @@ function showView(v) {
  // Hide statistics subpage
  var statPage = document.getElementById('view-stat-page');
  if(statPage) statPage.style.display='none';
- const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Клиенты',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Клиенты',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Клиенты',statistics:'Статистика',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Клиенты',newclients:'Клиенты',morning:'Утренний отчёт',planning:'Планёрки'};
+ const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Клиенты',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Клиенты',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Клиенты',statistics:'Статистика',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Клиенты',newclients:'Клиенты',route:'Клиенты',morning:'Утренний отчёт',planning:'Планёрки'};
  document.getElementById('page-title').textContent=titles[v]||v;
  // Подсветка активного пункта в nav
  document.querySelectorAll('.nav-item[data-view]').forEach(function(el){
