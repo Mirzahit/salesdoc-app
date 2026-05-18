@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v363</title>
+<title>SalesDoc — Финансовый Дашборд v364</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20559,6 +20559,31 @@ var kbLog = [];
 
 // v352: Маршрут клиента v2 — новый Канбан на Supabase
 // ===================================================================
+// v364: APP_TOKEN — должен совпадать с env APP_TOKEN в Vercel. Защита от случайных curl.
+// Если меняешь — меняй в обоих местах (тут + Vercel env) и Redeploy.
+window._APP_TOKEN = window._APP_TOKEN || 'salesdoc-2026-route-secret-9k3xJ7';
+
+// Глобальный helper для API. Автоматом добавляет токен и country (для cards/clients).
+async function sbFetch(path, options){
+ options = options || {};
+ options.headers = options.headers || {};
+ options.headers['x-app-token'] = window._APP_TOKEN;
+ if(options.body && !options.headers['Content-Type']){
+  options.headers['Content-Type'] = 'application/json';
+ }
+ // Авто country для cards/clients (если ещё не задан в URL)
+ if((path.startsWith('/api/cards') || path.startsWith('/api/clients')) && path.indexOf('country=') < 0){
+  var sep = path.indexOf('?') >= 0 ? '&' : '?';
+  path = path + sep + 'country=' + (typeof currentCountry !== 'undefined' ? currentCountry : 'KZ');
+ }
+ var r = await fetch(path, options);
+ var d = await r.json().catch(function(){ return { ok:false, error:'invalid json' }; });
+ if(r.status === 401){
+  console.warn('[sb] 401 unauthorized — токен не совпадает с env');
+ }
+ return d;
+}
+
 var ROUTE_STAGES = ['Новый','Настройка','Обучение','Тестирование','Активация'];
 var ROUTE_STAGE_COLORS = {
  'Новый':'#94A3B8',
@@ -20576,7 +20601,7 @@ async function routeLoad(){
  if(st) st.textContent = 'Загрузка...';
  try {
   var [cardsRes, opsRes] = await Promise.all([
-   fetch('/api/cards').then(r=>r.json()),
+   sbFetch('/api/cards'),
    fetch('/api/sb-ping').then(r=>r.json())
   ]);
   if(!cardsRes.ok) throw new Error(cardsRes.error || 'cards load failed');
@@ -20660,12 +20685,10 @@ async function routeDrop(ev, newStage){
  card.stage_entered_at = new Date().toISOString();
  routeRender();
  try {
-  var r = await fetch('/api/cards?id=' + routeDragCardId, {
+  var d = await sbFetch('/api/cards?id=' + routeDragCardId, {
    method: 'PATCH',
-   headers: { 'Content-Type': 'application/json' },
    body: JSON.stringify({ stage: newStage })
   });
-  var d = await r.json();
   if(!d.ok) throw new Error(d.error);
  } catch(e) {
   alert('Не удалось сохранить: ' + e.message);
@@ -20701,9 +20724,8 @@ async function routeCreate(){
  if(!name){ alert('Укажите название компании'); return; }
  try {
   // 1) Создать клиента в Реестре
-  var clientRes = await fetch('/api/clients', {
+  var clientData = await sbFetch('/api/clients', {
    method: 'POST',
-   headers: { 'Content-Type': 'application/json' },
    body: JSON.stringify({
     company_name: name,
     main_phone: phone || null,
@@ -20711,12 +20733,10 @@ async function routeCreate(){
     curator_operator: operator || null
    })
   });
-  var clientData = await clientRes.json();
   if(!clientData.ok) throw new Error(clientData.error);
   // 2) Создать карточку Канбана
-  var cardRes = await fetch('/api/cards', {
+  var cardData = await sbFetch('/api/cards', {
    method: 'POST',
-   headers: { 'Content-Type': 'application/json' },
    body: JSON.stringify({
     client_id: clientData.client.client_id,
     stage: 'Новый',
@@ -20724,7 +20744,6 @@ async function routeCreate(){
     tariff: tariff || null
    })
   });
-  var cardData = await cardRes.json();
   if(!cardData.ok) throw new Error(cardData.error);
   routeCloseNew();
   routeLoad();
@@ -20838,42 +20857,47 @@ async function routeActivateClient(){
  if(!confirm('Активировать ' + clName + '?\nКлиент перейдёт в «Действующие», оператор ' + (card.operator || '—') + ' станет его куратором на всё время.')){
   return;
  }
+ // v364: блокировка кнопки на время запроса — защита от двойного клика
+ var btn = document.querySelector('button[onclick*="routeActivateClient"]');
+ if(btn){ btn.disabled = true; btn.style.opacity = 0.5; btn.style.cursor = 'wait'; }
  try {
-  var nowIso = new Date().toISOString();
+  // v364: локальная дата (не UTC) — иначе вечером запишется завтрашняя
+  var today = new Date();
+  var localDate = today.getFullYear() + '-' +
+                  String(today.getMonth()+1).padStart(2,'0') + '-' +
+                  String(today.getDate()).padStart(2,'0');
   // 1) Клиент → status active + куратор + дата активации
-  var r1 = await fetch('/api/clients?client_id=' + encodeURIComponent(card.client_id), {
+  var d1 = await sbFetch('/api/clients?client_id=' + encodeURIComponent(card.client_id), {
    method: 'PATCH',
-   headers: {'Content-Type':'application/json'},
    body: JSON.stringify({
     status: 'active',
-    activation_date: nowIso.slice(0,10),
+    activation_date: localDate,
     curator_operator: card.operator || null
    })
   });
-  var d1 = await r1.json();
   if(!d1.ok) throw new Error('client update: ' + d1.error);
-  // 2) Карточка → архив
-  var r2 = await fetch('/api/cards?id=' + card.id, {
-   method: 'DELETE'
-  });
-  var d2 = await r2.json();
-  if(!d2.ok) throw new Error('card archive: ' + d2.error);
-  // 3) История — запись активации
-  fetch('/api/history', {
-   method: 'POST',
-   headers: {'Content-Type':'application/json'},
-   body: JSON.stringify({
-    card_id: card.id,
-    client_id: card.client_id,
-    event_type: 'system',
-    text: 'Клиент активирован. Куратор: ' + (card.operator || '—')
-   })
-  });
+  // Идемпотентность: если клиент УЖЕ был активирован — карточку всё равно архивируем но историю не пишем повторно
+  if(!d1.already_active){
+   // 2) Карточка → архив
+   var d2 = await sbFetch('/api/cards?id=' + card.id, { method: 'DELETE' });
+   if(!d2.ok) throw new Error('card archive: ' + d2.error);
+   // 3) История — запись активации
+   sbFetch('/api/history', {
+    method: 'POST',
+    body: JSON.stringify({
+     card_id: card.id,
+     client_id: card.client_id,
+     event_type: 'system',
+     text: 'Клиент активирован. Куратор: ' + (card.operator || '—')
+    })
+   });
+  }
   alert('Готово! ' + clName + ' переведён в Действующие. Куратор: ' + (card.operator || '—'));
   routeCloseCard();
   routeLoad();
  } catch(e){
   alert('Ошибка активации: ' + e.message);
+  if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; }
  }
 }
 
@@ -20901,8 +20925,7 @@ async function _routeRenderChecklist(){
  if(!_routeCurrentCard){ body.innerHTML = ''; return; }
  body.innerHTML = '<div style="color:var(--text-soft);font-size:13px">Загрузка чек-листа...</div>';
  try {
-  var r = await fetch('/api/checklist?card_id=' + _routeCurrentCard.id);
-  var d = await r.json();
+  var d = await sbFetch('/api/checklist?card_id=' + _routeCurrentCard.id);
   _routeChecklistItems = d.items || [];
  } catch(e){ _routeChecklistItems = []; }
  var stage = _routeCurrentCard.stage;
@@ -20938,18 +20961,14 @@ async function _routeRenderChecklist(){
 async function _routeToggleCheck(itemId, title, stage, checked){
  try {
   if(itemId){
-   var r = await fetch('/api/checklist?id=' + itemId, {
+   var d = await sbFetch('/api/checklist?id=' + itemId, {
     method: 'PATCH',
-    headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ done: checked })
    });
-   var d = await r.json();
    if(!d.ok) throw new Error(d.error);
   } else {
-   // Создать новый пункт со статусом done
-   var r2 = await fetch('/api/checklist', {
+   var d2 = await sbFetch('/api/checklist', {
     method: 'POST',
-    headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
      card_id: _routeCurrentCard.id,
      stage: stage,
@@ -20957,17 +20976,15 @@ async function _routeToggleCheck(itemId, title, stage, checked){
      done: checked
     })
    });
-   var d2 = await r2.json();
    if(!d2.ok) throw new Error(d2.error);
   }
   // Запись в историю
-  fetch('/api/history', {
+  sbFetch('/api/history', {
    method: 'POST',
-   headers: {'Content-Type':'application/json'},
    body: JSON.stringify({
     card_id: _routeCurrentCard.id,
     event_type: 'note',
-    text: (checked?'✓ ':'○ ') + title
+    text: (checked?'+ ':'- ') + title
    })
   });
   _routeRenderChecklist();
@@ -20981,8 +20998,7 @@ async function _routeRenderHistory(){
  if(!_routeCurrentCard){ body.innerHTML = ''; return; }
  body.innerHTML = '<div style="color:var(--text-soft);font-size:13px">Загрузка...</div>';
  try {
-  var r = await fetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50');
-  var d = await r.json();
+  var d = await sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50');
   _routeHistoryItems = d.items || [];
  } catch(e){ _routeHistoryItems = []; }
 
@@ -21009,16 +21025,14 @@ async function _routeAddNote(){
  var text = (input.value || '').trim();
  if(!text) return;
  try {
-  var r = await fetch('/api/history', {
+  var d = await sbFetch('/api/history', {
    method: 'POST',
-   headers: {'Content-Type':'application/json'},
    body: JSON.stringify({
     card_id: _routeCurrentCard.id,
     event_type: 'note',
     text: text
    })
   });
-  var d = await r.json();
   if(!d.ok) throw new Error(d.error);
   input.value = '';
   _routeRenderHistory();

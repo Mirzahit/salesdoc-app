@@ -6,10 +6,12 @@
 // event_type: 'call' | 'whatsapp' | 'note' | 'stage_change' | 'file' | 'system'
 
 import { sbSelect, sbInsert } from './_supabase.js';
+import { checkAuth } from './_auth.js';
 
 const ALLOWED_EVENTS = new Set(['call','whatsapp','note','stage_change','file','system']);
 
 export default async function handler(req, res) {
+  if (!checkAuth(req, res)) return;
   try {
     if (req.method === 'GET') {
       const { card_id, client_id, limit } = req.query || {};

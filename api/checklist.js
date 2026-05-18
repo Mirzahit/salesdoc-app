@@ -6,8 +6,10 @@
 // DELETE /api/checklist?id=UUID               → удалить пункт
 
 import { sbSelect, sbInsert, sbUpdate, sbDelete } from './_supabase.js';
+import { checkAuth } from './_auth.js';
 
 export default async function handler(req, res) {
+  if (!checkAuth(req, res)) return;
   try {
     if (req.method === 'GET') {
       const { card_id, stage } = req.query || {};
