@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v365</title>
+<title>SalesDoc — Финансовый Дашборд v366</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -477,6 +477,15 @@ body.light{
  /* v365: Маршрут клиента — 3 уровня глубины (страница/колонка/карточка) */
  --ds-page-bg:#1C1C1E;--ds-col-bg:#2C2C2E;--ds-card-bg:#3A3A3C;
  --ds-border-soft:rgba(255,255,255,.06);--ds-shadow-card:0 1px 2px rgba(0,0,0,.4);
+ /* v366: Liquid Glass (iOS/macOS 26) — стеклянные поверхности с backdrop-blur */
+ --ds-glass-col:rgba(120,120,128,.18);
+ --ds-glass-card:rgba(255,255,255,.06);
+ --ds-glass-card-hover:rgba(255,255,255,.10);
+ --ds-glass-border:rgba(255,255,255,.10);
+ --ds-glass-border-bright:rgba(255,255,255,.22);
+ --ds-glass-blur:saturate(180%) blur(24px);
+ --ds-glass-shadow:0 8px 32px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06);
+ --ds-page-gradient:radial-gradient(at 18% 25%,rgba(80,120,200,.18) 0%,transparent 55%),radial-gradient(at 82% 75%,rgba(180,90,200,.14) 0%,transparent 55%),radial-gradient(at 50% 50%,rgba(60,160,180,.08) 0%,transparent 70%),#1C1C1E;
  /* Backgrounds — iOS Dark (true black + elevated surfaces) */
  --bg:#000000;--surface:#1C1C1E;--surface-2:#2C2C2E;--surface-3:#3A3A3C;
  /* iOS hairline borders */
@@ -518,6 +527,15 @@ body.light{
  /* v365: Маршрут клиента — светлая тема, 3 уровня глубины */
  --ds-page-bg:#F2F2F7;--ds-col-bg:#E5E5EA;--ds-card-bg:#FFFFFF;
  --ds-border-soft:rgba(60,60,67,.10);--ds-shadow-card:0 1px 2px rgba(60,60,67,.10);
+ /* v366: Liquid Glass — светлая */
+ --ds-glass-col:rgba(255,255,255,.55);
+ --ds-glass-card:rgba(255,255,255,.75);
+ --ds-glass-card-hover:rgba(255,255,255,.92);
+ --ds-glass-border:rgba(255,255,255,.85);
+ --ds-glass-border-bright:rgba(255,255,255,1);
+ --ds-glass-blur:saturate(180%) blur(24px);
+ --ds-glass-shadow:0 8px 32px rgba(60,60,67,.14),inset 0 1px 0 rgba(255,255,255,.8);
+ --ds-page-gradient:radial-gradient(at 18% 25%,rgba(120,170,230,.30) 0%,transparent 55%),radial-gradient(at 82% 75%,rgba(220,160,230,.24) 0%,transparent 55%),radial-gradient(at 50% 50%,rgba(120,200,210,.18) 0%,transparent 70%),#F2F2F7;
  --bg:#F2F2F7;--surface:#FFFFFF;--surface-2:#FFFFFF;--surface-3:#F2F2F7;
  --border:rgba(60,60,67,.12);--border-strong:rgba(60,60,67,.24);--border-faint:rgba(60,60,67,.06);
  --text:#000000;--text-2:rgba(60,60,67,.60);--text-soft:rgba(60,60,67,.45);--text-faint:rgba(60,60,67,.30);
@@ -6118,8 +6136,8 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  <!-- /ACTIVECLIENTS VIEW -->
 
- <!-- v354: Маршрут клиента v2 — новый Канбан на Supabase. Без своего sd-head — tab-bar клиентов уже сверху. -->
- <div id="view-route" style="display:none">
+ <!-- v366: Маршрут клиента v2 — Liquid Glass дизайн (iOS/macOS 26) -->
+ <div id="view-route" style="display:none;background:var(--ds-page-gradient);min-height:calc(100vh - 70px)">
  <div style="padding:16px 24px 0">
  <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px">
  <div style="font-size:12px;color:var(--text-soft)" id="route-status">Загрузка...</div>
@@ -6135,8 +6153,8 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  </div>
 
- <!-- v359: Полноэкранная страница клиента (как в amo /leads/detail/) -->
- <div id="view-route-card" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--ds-page-bg);overflow-y:auto">
+ <!-- v359/v366: Полноэкранная страница клиента — Liquid Glass -->
+ <div id="view-route-card" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--ds-page-gradient);overflow-y:auto">
  <div style="max-width:1100px;margin:0 auto;padding:18px 24px">
  <div style="display:flex;align-items:center;gap:14px;padding-bottom:18px;border-bottom:1px solid var(--border-faint)">
  <button onclick="routeCloseCard()" style="padding:8px 14px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);cursor:pointer;font-size:13px;font-weight:500">← Назад в Маршрут</button>
@@ -20657,8 +20675,8 @@ function routeRender(){
    if(filterOp && c.operator !== filterOp) return false;
    return true;
   });
-  // v365: колонка Канбана — Apple 3 уровня глубины (фон колонки темнее страницы)
-  html += '<div class="route-col" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.filter=\'brightness(1.05)\'" ondragleave="this.style.filter=\'\'" ondrop="this.style.filter=\'\';routeDrop(event,\'' + stage + '\')" style="flex:0 0 280px;background:var(--ds-col-bg);border-radius:14px;padding:14px 12px 16px;display:flex;flex-direction:column;gap:6px;min-height:60vh">';
+  // v366: колонка — Liquid Glass (стекло с backdrop-blur поверх градиентного фона страницы)
+  html += '<div class="route-col" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.background=\'var(--ds-glass-card-hover)\'" ondragleave="this.style.background=\'var(--ds-glass-col)\'" ondrop="this.style.background=\'var(--ds-glass-col)\';routeDrop(event,\'' + stage + '\')" style="flex:0 0 280px;background:var(--ds-glass-col);backdrop-filter:var(--ds-glass-blur);-webkit-backdrop-filter:var(--ds-glass-blur);border:1px solid var(--ds-glass-border);border-radius:18px;padding:14px 12px 16px;display:flex;flex-direction:column;gap:6px;min-height:60vh;box-shadow:var(--ds-glass-shadow)">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px">';
   html += '<div style="font-weight:600;font-size:13px;color:var(--text-soft);letter-spacing:-0.01em">' + stage + '</div>';
   html += '<div style="font-size:11px;color:var(--text-soft);font-variant-numeric:tabular-nums;background:rgba(120,120,128,.16);padding:2px 8px;border-radius:8px;min-width:20px;text-align:center">' + stageCards.length + '</div>';
@@ -20685,8 +20703,8 @@ function routeRender(){
     else { ccol = 'var(--text-soft)'; cbg = 'rgba(120,120,128,.16)'; }
     checkBadge = '<span style="font-size:11px;padding:2px 8px;border-radius:999px;font-variant-numeric:tabular-nums;background:' + cbg + ';color:' + ccol + ';font-weight:600;margin-left:6px">' + card._checkDone + '/' + card._checkTotal + '</span>';
    }
-   // v365: карточка — Apple 3 уровня глубины (фон/колонка/карточка), drag-handle, без цветных линий
-   html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="this.style.opacity=1" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.12)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 1px 2px rgba(0,0,0,.15)\'" style="background:var(--ds-card-bg);border:1px solid var(--ds-border-soft);border-radius:10px;padding:12px 14px;cursor:grab;transition:transform .15s,box-shadow .15s;box-shadow:0 1px 2px rgba(0,0,0,.15)">';
+   // v366: карточка — Liquid Glass (стекло поверх стекла колонки = двойное преломление)
+   html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="this.style.opacity=1" onmouseover="this.style.background=\'var(--ds-glass-card-hover)\';this.style.transform=\'translateY(-1px)\';this.style.borderColor=\'var(--ds-glass-border-bright)\'" onmouseout="this.style.background=\'var(--ds-glass-card)\';this.style.transform=\'\';this.style.borderColor=\'var(--ds-glass-border)\'" style="background:var(--ds-glass-card);backdrop-filter:saturate(180%) blur(12px);-webkit-backdrop-filter:saturate(180%) blur(12px);border:1px solid var(--ds-glass-border);border-radius:14px;padding:12px 14px;cursor:grab;transition:background .2s,transform .2s,border-color .2s;box-shadow:0 4px 16px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.06)">';
    html += '<div style="margin-bottom:4px"><a onclick="event.stopPropagation();routeOpenCard(\'' + card.id + '\')" style="font-weight:600;font-size:13px;color:var(--accent,#0A84FF);cursor:pointer;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + _escHtml(name) + '</a></div>';
    if(card.tariff) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(card.tariff) + '</div>';
    html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft);gap:6px;flex-wrap:wrap">';
