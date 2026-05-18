@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v328</title>
+<title>SalesDoc — Финансовый Дашборд v329</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2421,9 +2421,13 @@ body.light .sprint-stat{background:rgba(255,255,255,.6);border-color:rgba(15,23,
 .sp-avatar:first-child{margin-left:0}
 
 /* v168: КАНБАН ВНУТРИ СПРИНТА — glassmorphism */
-.plan-kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+/* v329: 7 колонок — 4 рабочих + 3 закрытия (Перенесена/Не выполнено/Отменена) */
+.plan-kanban{display:grid;grid-template-columns:1.1fr 1.1fr 1.1fr 1.1fr 0.85fr 0.85fr 0.85fr;gap:10px}
+@media (max-width: 1400px){ .plan-kanban{grid-template-columns:repeat(4,1fr); } .plan-kb-col-closed{display:none} }
 @media (max-width: 900px){ .plan-kanban{grid-template-columns:repeat(2,1fr)} }
 @media (max-width: 600px){ .plan-kanban{grid-template-columns:1fr} }
+.plan-kb-col-closed{opacity:0.75}
+.plan-kb-col-closed:hover{opacity:1}
 .plan-kb-col{
  background:rgba(255,255,255,.025);
  backdrop-filter:blur(18px) saturate(150%);
@@ -4941,6 +4945,19 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div class="plan-kb-col" data-status="done" ondragover="planDragOver(event,this)" ondragleave="planDragLeave(this)" ondrop="planDropTask(event,'done',this)">
  <div class="plan-kb-head"><span>Готово</span><span class="plan-kb-count" id="plan-kb-count-done">0</span></div>
  <div class="plan-kb-body" id="plan-kb-done"></div>
+ </div>
+ <!-- v329: статусы закрытия как в Битриксе -->
+ <div class="plan-kb-col plan-kb-col-closed" data-status="postponed" ondragover="planDragOver(event,this)" ondragleave="planDragLeave(this)" ondrop="planDropTask(event,'postponed',this)">
+ <div class="plan-kb-head"><span style="color:#D6A372">Перенесена</span><span class="plan-kb-count" id="plan-kb-count-postponed">0</span></div>
+ <div class="plan-kb-body" id="plan-kb-postponed"></div>
+ </div>
+ <div class="plan-kb-col plan-kb-col-closed" data-status="not_done" ondragover="planDragOver(event,this)" ondragleave="planDragLeave(this)" ondrop="planDropTask(event,'not_done',this)">
+ <div class="plan-kb-head"><span style="color:#D67373">Не выполнено</span><span class="plan-kb-count" id="plan-kb-count-not_done">0</span></div>
+ <div class="plan-kb-body" id="plan-kb-not_done"></div>
+ </div>
+ <div class="plan-kb-col plan-kb-col-closed" data-status="cancelled" ondragover="planDragOver(event,this)" ondragleave="planDragLeave(this)" ondrop="planDropTask(event,'cancelled',this)">
+ <div class="plan-kb-head"><span style="color:var(--text-muted)">Отменена</span><span class="plan-kb-count" id="plan-kb-count-cancelled">0</span></div>
+ <div class="plan-kb-body" id="plan-kb-cancelled"></div>
  </div>
  </div>
  </div>
@@ -14145,7 +14162,8 @@ function planRenderKanban(){
  // v169: перерисовать burndown и velocity на каждое изменение задач
  var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;});
  if (sp) { try { planRenderBurndown(sp, tasks); planRenderVelocity(sp, tasks); } catch(_){} }
- var STATUSES = ['todo','progress','review','done'];
+ // v329: + 3 статуса закрытия как в Битриксе (postponed/not_done/cancelled)
+ var STATUSES = ['todo','progress','review','done','postponed','not_done','cancelled'];
  var statsRow = document.getElementById('plan-sprint-stats-row');
  if (statsRow) {
  var totalPoints = tasks.reduce(function(s,t){return s + (parseInt(t.points)||0);}, 0);
@@ -14154,7 +14172,8 @@ function planRenderKanban(){
  { l:'Всего задач', v: tasks.length },
  { l:'Готово', v: tasks.filter(function(t){return t.status==='done';}).length, c:'#7FB89E' },
  { l:'В работе', v: tasks.filter(function(t){return t.status==='progress';}).length, c:'#5489BB' },
- { l:'На проверке', v: tasks.filter(function(t){return t.status==='review';}).length, c:'#D6A372' },
+ { l:'Не выполнено', v: tasks.filter(function(t){return t.status==='not_done';}).length, c:'#D67373' },
+ { l:'Перенесено', v: tasks.filter(function(t){return t.status==='postponed';}).length, c:'#D6A372' },
  { l:'Баллы сложности', v: donePoints + ' / ' + totalPoints }
  ];
  statsRow.innerHTML = stats.map(function(s){
