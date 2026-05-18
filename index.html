@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v361</title>
+<title>SalesDoc — Финансовый Дашборд v363</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20808,14 +20808,73 @@ function _routeRenderCardHead(){
  html += '<div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px;letter-spacing:-0.02em">' + _escHtml(cl.company_name || '(без имени)') + '</div>';
  html += '<div style="font-size:13px;color:var(--text-soft)">' + _escHtml(card.tariff || 'тариф не указан') + ' · оператор: ' + _escHtml(card.operator || '—') + ' · этап: ' + _escHtml(card.stage) + '</div>';
  html += '</div>';
- html += '<div style="display:flex;gap:8px;align-items:center">';
+ html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
  if(cl.main_phone){
   html += '<a href="tel:' + cl.main_phone + '" style="padding:8px 14px;border-radius:8px;background:rgba(127,184,158,.16);color:#7FB89E;text-decoration:none;font-size:13px;font-weight:600;letter-spacing:-0.01em">Звонок</a>';
   html += '<a href="https://wa.me/' + cl.main_phone.replace(/[^0-9]/g,'') + '" target="_blank" style="padding:8px 14px;border-radius:8px;background:rgba(37,211,102,.16);color:#25D366;text-decoration:none;font-size:13px;font-weight:600;letter-spacing:-0.01em">WhatsApp</a>';
  }
+ // v363: кнопка «Активировать» — активна только на стадии Активация
+ if(card.stage === 'Активация'){
+  html += '<button onclick="routeActivateClient()" style="padding:8px 16px;border-radius:8px;border:none;background:#34C759;color:#fff;font-weight:600;cursor:pointer;font-size:13px;letter-spacing:-0.01em">Активировать клиента</button>';
+ } else if(cl.status === 'active'){
+  html += '<span style="padding:8px 14px;border-radius:8px;background:rgba(52,199,89,.16);color:#34C759;font-size:13px;font-weight:600;letter-spacing:-0.01em">Уже активирован</span>';
+ } else {
+  html += '<span style="padding:8px 14px;border-radius:8px;background:rgba(120,120,128,.12);color:var(--text-soft);font-size:13px;font-weight:500">Активация доступна на последнем этапе</span>';
+ }
  html += '</div>';
  html += '</div>';
  document.getElementById('route-card-head').innerHTML = html;
+}
+
+// v363: активация клиента — переводит из Канбана в «Действующие», закрепляет куратора
+async function routeActivateClient(){
+ var card = _routeCurrentCard;
+ if(!card) return;
+ if(card.stage !== 'Активация'){
+  alert('Активация доступна только на этапе «Активация»');
+  return;
+ }
+ var clName = (card.clients && card.clients.company_name) || 'клиента';
+ if(!confirm('Активировать ' + clName + '?\nКлиент перейдёт в «Действующие», оператор ' + (card.operator || '—') + ' станет его куратором на всё время.')){
+  return;
+ }
+ try {
+  var nowIso = new Date().toISOString();
+  // 1) Клиент → status active + куратор + дата активации
+  var r1 = await fetch('/api/clients?client_id=' + encodeURIComponent(card.client_id), {
+   method: 'PATCH',
+   headers: {'Content-Type':'application/json'},
+   body: JSON.stringify({
+    status: 'active',
+    activation_date: nowIso.slice(0,10),
+    curator_operator: card.operator || null
+   })
+  });
+  var d1 = await r1.json();
+  if(!d1.ok) throw new Error('client update: ' + d1.error);
+  // 2) Карточка → архив
+  var r2 = await fetch('/api/cards?id=' + card.id, {
+   method: 'DELETE'
+  });
+  var d2 = await r2.json();
+  if(!d2.ok) throw new Error('card archive: ' + d2.error);
+  // 3) История — запись активации
+  fetch('/api/history', {
+   method: 'POST',
+   headers: {'Content-Type':'application/json'},
+   body: JSON.stringify({
+    card_id: card.id,
+    client_id: card.client_id,
+    event_type: 'system',
+    text: 'Клиент активирован. Куратор: ' + (card.operator || '—')
+   })
+  });
+  alert('Готово! ' + clName + ' переведён в Действующие. Куратор: ' + (card.operator || '—'));
+  routeCloseCard();
+  routeLoad();
+ } catch(e){
+  alert('Ошибка активации: ' + e.message);
+ }
 }
 
 function routeCardTab(tab){
