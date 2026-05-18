@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v344</title>
+<title>SalesDoc — Финансовый Дашборд v345</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -25282,12 +25282,20 @@ window.amoLoadFunnel = async function(force){
 // v312: строим единую воронку Meta + amo + Внедрены, с учётом периода
 function amoBuildUnifiedFunnel(amoData, metaData, period){
  var flow = [];
+ // v345: показы и клики — это охват, а не этапы воронки продаж. Вынесены в overview-шапку.
+ // Воронка начинается с «Оставили заявку» где все этапы соизмеримы.
+ var overview = null;
  var m = (metaData && metaData.summary) || null;
  if(m){
  var imps = Number(m.impressions || 0);
  var clicks = Number(m.clicks || m.inline_link_clicks || 0);
- if(imps > 0) flow.push({ label: 'Просмотры рекламы', count: imps, source: 'meta' });
- if(clicks > 0) flow.push({ label: 'Клики/отклики', count: clicks, source: 'meta' });
+ if(imps > 0 || clicks > 0){
+ overview = {
+ impressions: imps,
+ clicks: clicks,
+ ctr: imps > 0 ? Math.round(clicks / imps * 1000) / 10 : 0
+ };
+ }
  // v322 fix: Meta API кладёт счёт в leads_count (не leads.count) — раньше этап пропускался
  var leadsCnt = Number(m.leads_count || (m.leads && m.leads.count) || 0);
  if(leadsCnt > 0){
@@ -25317,6 +25325,7 @@ function amoBuildUnifiedFunnel(amoData, metaData, period){
  var metaLeadsCount = m ? Math.round(Number(m.leads_count || (m.leads && m.leads.count) || 0)) : 0;
  return {
  flow: flow,
+ overview: overview, // v345: показы/клики/CTR — для шапки над воронкой
  amo_total: amoData.total_leads,
  amo_lost: amoData.lost_count || 0,
  amo_tag_counts: amoData.tag_counts || null,
@@ -25415,26 +25424,36 @@ function amoRenderFunnel(d){
  sub.textContent = 'Период: ' + perLabel + tagBit + ' · ' + flow.length + ' шагов · конверсия: ' + convPct + '%' + lostBit;
  }
 
- // v340: визуал воронки как в amo — горизонтальные полоски, проц внутри, треугольник-стрелка справа, имя/число справа
- var maxCount = Math.max.apply(null, flow.map(function(s){ return s.count; })) || 1;
- var html = '<div style="display:flex;flex-direction:column;gap:6px">';
+ // v345: ширина = % от ПЕРВОГО этапа (как в amo, воронка сужается), текст внутри = % от ПРЕДЫДУЩЕГО
+ var firstCount = flow[0].count || 1;
+ var html = '';
+
+ // Шапка охвата рекламы — над воронкой, отдельно (показы/клики не часть воронки продаж)
+ if(d.overview && (d.overview.impressions > 0 || d.overview.clicks > 0)){
+ html += '<div style="margin-bottom:14px;padding:10px 14px;background:rgba(139,92,246,.08);border-radius:8px;display:flex;gap:24px;flex-wrap:wrap;font-size:12px">'
+ + '<div><span style="color:var(--text-soft)">Показы: </span><b style="color:#8B5CF6">' + d.overview.impressions.toLocaleString('ru-RU') + '</b></div>'
+ + '<div><span style="color:var(--text-soft)">Клики: </span><b style="color:#8B5CF6">' + d.overview.clicks.toLocaleString('ru-RU') + '</b></div>'
+ + '<div><span style="color:var(--text-soft)">CTR: </span><b style="color:#8B5CF6">' + d.overview.ctr + '%</b></div>'
+ + '<div style="color:var(--text-soft);font-size:11px;align-self:center">охват рекламы, не часть воронки продаж</div>'
+ + '</div>';
+ }
+
+ html += '<div style="display:flex;flex-direction:column;gap:6px">';
 
  flow.forEach(function(s, i){
  var prevS = i > 0 ? flow[i-1] : null;
  var fill = s.source === 'meta' ? '#8B5CF6'
   : s.source === 'kanban' ? '#7FB89E'
   : '#5489BB';
- // v341: процент и ширина считаются от ОДНОГО знаменателя (макс. этапа), иначе % и ширина расходились
- var pctOfMax = maxCount > 0 ? Math.round(s.count / maxCount * 100) : 0;
- var widthPct = Math.max(6, pctOfMax);
- var convFromPrev = prevS && prevS.count > 0 ? Math.round(s.count / prevS.count * 100) : null;
+ var pctOfFirst = Math.round(s.count / firstCount * 100);
+ var widthPct = Math.max(6, pctOfFirst);
+ var convFromPrev = prevS && prevS.count > 0 ? Math.round(s.count / prevS.count * 100) : 100;
  var lost = prevS ? Math.max(0, prevS.count - s.count) : 0;
- var dropPct = (prevS && prevS.count > 0 && lost > 0) ? Math.round(lost / prevS.count * 100) : 0;
 
  html += '<div style="display:flex;align-items:center;gap:14px;padding:2px 0">'
  + '<div style="flex:0 0 50%;position:relative;height:30px;display:flex;align-items:center">'
    + '<div style="background:' + fill + ';color:#fff;height:30px;width:' + widthPct + '%;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:12px;position:relative;border-radius:3px 0 0 3px;letter-spacing:.2px">'
-     + pctOfMax + '%'
+     + convFromPrev + '%'
      + '<span style="position:absolute;left:100%;top:0;width:0;height:0;border-style:solid;border-width:15px 0 15px 14px;border-color:transparent transparent transparent ' + fill + '"></span>'
    + '</div>'
  + '</div>'
@@ -25442,8 +25461,9 @@ function amoRenderFunnel(d){
    + '<div style="font-size:13px;font-weight:600;color:var(--text)">' + amoEscXml(s.label) + '</div>'
    + '<div style="font-size:11px;color:var(--text-soft);margin-top:2px">'
      + '<b style="color:var(--text);font-size:13px">' + s.count.toLocaleString('ru-RU') + '</b>'
-     + (convFromPrev !== null ? '<span style="margin-left:8px">' + convFromPrev + '% от предыдущего</span>' : '')
-     + (dropPct >= 10 ? '<span style="margin-left:8px;color:#D89595">−' + lost.toLocaleString('ru-RU') + ' (' + dropPct + '%)</span>' : '')
+     + (i === 0 ? '<span style="margin-left:8px">старт воронки</span>'
+        : '<span style="margin-left:8px">' + pctOfFirst + '% от старта</span>')
+     + (lost > 0 ? '<span style="margin-left:8px;color:#D89595">−' + lost.toLocaleString('ru-RU') + '</span>' : '')
    + '</div>'
  + '</div>'
  + '</div>';
