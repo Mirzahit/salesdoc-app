@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v347</title>
+<title>SalesDoc — Финансовый Дашборд v352</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4123,6 +4123,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div class="nav-group-popup">
  <div class="nav-popup-title">Клиенты</div>
  <div class="nav-item" data-view="clients" onclick="showView('clients')">Клиенты</div>
+ <div class="nav-item" data-view="route" onclick="showView('route')">Маршрут v2 (новый)</div>
  <div class="nav-item" data-view="calendar" onclick="showView('calendar')">
  <svg class="nav-icon-stroke" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>
  <span class="nav-label">Календарь</span>
@@ -6111,6 +6112,47 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  </div>
  <!-- /ACTIVECLIENTS VIEW -->
+
+ <!-- v352: Маршрут клиента v2 — новый Канбан на Supabase. Старый Канбан остаётся параллельно. -->
+ <div id="view-route" style="display:none">
+ <div class="sd-page">
+ <div class="sd-head" style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">
+ <div>
+ <div class="sd-h1">Маршрут клиента <span style="font-size:13px;color:var(--text-soft);font-weight:400;letter-spacing:0">облачная версия</span></div>
+ <div class="sd-sub">Канбан внедрения, данные в Supabase. Карточки создаются здесь, синхронизируются между всеми операторами в реальном времени.</div>
+ </div>
+ <div style="display:flex;gap:8px;align-items:center">
+ <select id="route-filter-op" onchange="routeRender()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);font-size:13px">
+ <option value="">Все операторы</option>
+ </select>
+ <button onclick="routeOpenNew()" style="padding:8px 16px;border-radius:8px;border:none;background:#5489BB;color:#fff;font-weight:600;cursor:pointer;font-size:13px">+ Новая карточка</button>
+ <button onclick="routeLoad()" title="Обновить" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);cursor:pointer">⟳</button>
+ </div>
+ </div>
+ <div id="route-status" style="font-size:12px;color:var(--text-soft);margin:8px 0"></div>
+ <div id="route-board" style="display:flex;gap:12px;overflow-x:auto;padding:12px 0;min-height:60vh"></div>
+ </div>
+
+ <!-- Модалка создания карточки -->
+ <div id="route-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);align-items:center;justify-content:center">
+ <div style="background:var(--card-bg);border-radius:12px;padding:24px;width:min(420px,92vw);box-shadow:0 24px 64px rgba(0,0,0,.5)">
+ <div style="font-size:16px;font-weight:600;margin-bottom:16px">Новая карточка клиента</div>
+ <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Название компании *</label>
+ <input id="route-new-name" type="text" placeholder="Roko Almaty" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text);margin-bottom:12px;box-sizing:border-box">
+ <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Телефон</label>
+ <input id="route-new-phone" type="tel" placeholder="+7 777 ..." style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text);margin-bottom:12px;box-sizing:border-box">
+ <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Тариф</label>
+ <input id="route-new-tariff" type="text" placeholder="Бизнес 5 лицензий" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text);margin-bottom:12px;box-sizing:border-box">
+ <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Оператор</label>
+ <select id="route-new-operator" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text);margin-bottom:20px;box-sizing:border-box"></select>
+ <div style="display:flex;gap:8px;justify-content:flex-end">
+ <button onclick="routeCloseNew()" style="padding:10px 16px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text);cursor:pointer">Отмена</button>
+ <button onclick="routeCreate()" style="padding:10px 20px;border-radius:6px;border:none;background:#5489BB;color:#fff;font-weight:600;cursor:pointer">Создать</button>
+ </div>
+ </div>
+ </div>
+ </div>
+ <!-- /ROUTE VIEW -->
 
  <!-- v298: Новые клиенты — первые платежи, скорость активации, динамика -->
  <div id="view-newclients" style="display:none">
@@ -10879,6 +10921,7 @@ function showView(v) {
  if(v==='academy') acadLoad();
  if(v==='reports') reportsInit();
  if(v==='kanban'){if(!window._kbLoaded){kbLoad();window._kbLoaded=true;}else{kbRenderBoard();}}
+ if(v==='route'){ routeLoad(); }
  if(v==='botadmin'){ if(typeof botAdminInit==='function') botAdminInit(); }
  if(v==='morning'){ if(typeof morningInit==='function') morningInit(); }
  if(v==='cashflow'){ if(typeof cfInit==='function') cfInit(); }
@@ -20489,6 +20532,189 @@ var kbOperators = [];
 var kbChecklist = [];
 var kbDragCard = null;
 var kbLog = [];
+
+// v352: Маршрут клиента v2 — новый Канбан на Supabase
+// ===================================================================
+var ROUTE_STAGES = ['Новый','Настройка','Обучение','Тестирование','Активация'];
+var ROUTE_STAGE_COLORS = {
+ 'Новый':'#94A3B8',
+ 'Настройка':'#5489BB',
+ 'Обучение':'#8B5CF6',
+ 'Тестирование':'#FFB340',
+ 'Активация':'#7FB89E'
+};
+var routeCards = [];
+var routeOperators = [];
+var routeDragCardId = null;
+
+async function routeLoad(){
+ var st = document.getElementById('route-status');
+ if(st) st.textContent = 'Загрузка...';
+ try {
+  var [cardsRes, opsRes] = await Promise.all([
+   fetch('/api/cards').then(r=>r.json()),
+   fetch('/api/sb-ping').then(r=>r.json())
+  ]);
+  if(!cardsRes.ok) throw new Error(cardsRes.error || 'cards load failed');
+  routeCards = cardsRes.cards || [];
+  routeOperators = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
+  // Заполнить фильтр операторов
+  var filterEl = document.getElementById('route-filter-op');
+  if(filterEl && filterEl.options.length <= 1){
+   routeOperators.forEach(o => {
+    var opt = document.createElement('option');
+    opt.value = o.name; opt.textContent = o.name;
+    filterEl.appendChild(opt);
+   });
+  }
+  if(st) st.textContent = 'Карточек: ' + routeCards.length;
+  routeRender();
+ } catch(e) {
+  if(st) st.textContent = 'Ошибка: ' + e.message;
+ }
+}
+
+function routeRender(){
+ var board = document.getElementById('route-board');
+ if(!board) return;
+ var filterOp = (document.getElementById('route-filter-op')||{}).value || '';
+ var html = '';
+ ROUTE_STAGES.forEach(function(stage){
+  var stageCards = routeCards.filter(function(c){
+   if(c.stage !== stage) return false;
+   if(filterOp && c.operator !== filterOp) return false;
+   return true;
+  });
+  var color = ROUTE_STAGE_COLORS[stage] || '#888';
+  html += '<div class="route-col" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.background=\'rgba(120,120,128,.08)\'" ondragleave="this.style.background=\'\'" ondrop="routeDrop(event,\'' + stage + '\')" style="flex:0 0 280px;background:rgba(120,120,128,.04);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:50vh">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:2px solid ' + color + '">';
+  html += '<div style="font-weight:700;font-size:13px;color:var(--text)">' + stage + '</div>';
+  html += '<div style="font-size:11px;color:var(--text-soft);font-variant-numeric:tabular-nums">' + stageCards.length + '</div>';
+  html += '</div>';
+  stageCards.forEach(function(card){
+   var cl = card.clients || {};
+   var name = cl.company_name || '(без имени)';
+   var phone = cl.main_phone || '';
+   var op = card.operator || '—';
+   var days = card.stage_entered_at ? Math.floor((Date.now() - new Date(card.stage_entered_at).getTime())/86400000) : 0;
+   var dayBadge = days > 10 ? '<span style="color:#D89595;font-weight:600">' + days + ' дн</span>'
+                  : days > 3 ? '<span style="color:#FFB340">' + days + ' дн</span>'
+                  : '<span style="color:var(--text-soft)">' + days + ' дн</span>';
+   html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="this.style.opacity=1" style="background:var(--card-bg);border-radius:8px;padding:10px 12px;cursor:grab;box-shadow:0 1px 2px rgba(0,0,0,.08)">';
+   html += '<div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px">' + _escHtml(name) + '</div>';
+   if(card.tariff) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(card.tariff) + '</div>';
+   html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft)">';
+   html += '<span>' + _escHtml(op) + '</span>' + dayBadge;
+   html += '</div>';
+   if(phone){
+    html += '<div style="margin-top:8px;display:flex;gap:6px">';
+    html += '<a href="tel:' + phone + '" style="flex:1;text-align:center;padding:4px;border-radius:4px;background:#7FB89E22;color:#7FB89E;text-decoration:none;font-size:11px;font-weight:600">Звонок</a>';
+    html += '<a href="https://wa.me/' + phone.replace(/[^0-9]/g,'') + '" target="_blank" style="flex:1;text-align:center;padding:4px;border-radius:4px;background:#25D36622;color:#25D366;text-decoration:none;font-size:11px;font-weight:600">WhatsApp</a>';
+    html += '</div>';
+   }
+   html += '</div>';
+  });
+  html += '</div>';
+ });
+ board.innerHTML = html;
+}
+
+function routeDragStart(cardId){
+ routeDragCardId = cardId;
+ event.target.style.opacity = 0.5;
+}
+
+async function routeDrop(ev, newStage){
+ ev.preventDefault();
+ ev.target.closest('.route-col').style.background = '';
+ if(!routeDragCardId) return;
+ var card = routeCards.find(function(c){ return c.id === routeDragCardId; });
+ if(!card || card.stage === newStage){ routeDragCardId = null; return; }
+ // Оптимистично обновляем UI
+ card.stage = newStage;
+ card.stage_entered_at = new Date().toISOString();
+ routeRender();
+ try {
+  var r = await fetch('/api/cards?id=' + routeDragCardId, {
+   method: 'PATCH',
+   headers: { 'Content-Type': 'application/json' },
+   body: JSON.stringify({ stage: newStage })
+  });
+  var d = await r.json();
+  if(!d.ok) throw new Error(d.error);
+ } catch(e) {
+  alert('Не удалось сохранить: ' + e.message);
+  routeLoad();
+ }
+ routeDragCardId = null;
+}
+
+function routeOpenNew(){
+ var sel = document.getElementById('route-new-operator');
+ sel.innerHTML = '<option value="">— выбрать —</option>';
+ routeOperators.forEach(function(o){
+  var opt = document.createElement('option');
+  opt.value = o.name; opt.textContent = o.name;
+  sel.appendChild(opt);
+ });
+ document.getElementById('route-new-name').value = '';
+ document.getElementById('route-new-phone').value = '';
+ document.getElementById('route-new-tariff').value = '';
+ var m = document.getElementById('route-modal');
+ m.style.display = 'flex';
+}
+
+function routeCloseNew(){
+ document.getElementById('route-modal').style.display = 'none';
+}
+
+async function routeCreate(){
+ var name = document.getElementById('route-new-name').value.trim();
+ var phone = document.getElementById('route-new-phone').value.trim();
+ var tariff = document.getElementById('route-new-tariff').value.trim();
+ var operator = document.getElementById('route-new-operator').value;
+ if(!name){ alert('Укажите название компании'); return; }
+ try {
+  // 1) Создать клиента в Реестре
+  var clientRes = await fetch('/api/clients', {
+   method: 'POST',
+   headers: { 'Content-Type': 'application/json' },
+   body: JSON.stringify({
+    company_name: name,
+    main_phone: phone || null,
+    status: 'onboarding',
+    curator_operator: operator || null
+   })
+  });
+  var clientData = await clientRes.json();
+  if(!clientData.ok) throw new Error(clientData.error);
+  // 2) Создать карточку Канбана
+  var cardRes = await fetch('/api/cards', {
+   method: 'POST',
+   headers: { 'Content-Type': 'application/json' },
+   body: JSON.stringify({
+    client_id: clientData.client.client_id,
+    stage: 'Новый',
+    operator: operator || null,
+    tariff: tariff || null
+   })
+  });
+  var cardData = await cardRes.json();
+  if(!cardData.ok) throw new Error(cardData.error);
+  routeCloseNew();
+  routeLoad();
+ } catch(e) {
+  alert('Ошибка: ' + e.message);
+ }
+}
+
+function _escHtml(s){
+ return String(s||'').replace(/[&<>"']/g, function(c){
+  return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+ });
+}
+// ===================================================================
+// /v352 Маршрут v2
 
 // Пользовательский override чеклиста (приоритетнее Sheet и дефолта)
 function _kbSaveChecklistLocal(){
