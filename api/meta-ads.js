@@ -1,5 +1,8 @@
 // /api/meta-ads — Vercel Node serverless. Прокси к Meta Graph API.
-// ENV: META_ACCESS_TOKEN, META_AD_ACCOUNT_ID (например act_105673026201294), META_BUSINESS_ID (опц.)
+// ENV: META_ACCESS_TOKEN, META_AD_ACCOUNT_ID (например act_105673026201294)
+// ENV для KG (если есть отдельный кабинет): META_AD_ACCOUNT_ID_KG, META_ACCESS_TOKEN_KG (опц., иначе используется общий)
+// META_BUSINESS_ID (опц.)
+// При вызове можно передать ?country=KG чтобы переключиться на KG-кабинет (по умолчанию KZ)
 // Использование с фронта:
 //   GET /api/meta-ads?endpoint=account_summary&period=last_7d
 //   GET /api/meta-ads?endpoint=daily&period=last_30d
@@ -148,9 +151,24 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  // .trim() — убирает невидимые пробелы/переносы что часто проскальзывают при копи-паст в Vercel UI
-  const TOKEN = (process.env.META_ACCESS_TOKEN || '').trim();
-  const ACCOUNT = (process.env.META_AD_ACCOUNT_ID || '').trim();
+  // v360: поддержка двух стран — KZ (по умолчанию) и KG (через ?country=KG).
+  // .trim() убирает невидимые пробелы при копи-паст в Vercel UI.
+  const country = String(req.query.country || 'KZ').toUpperCase();
+  let TOKEN, ACCOUNT;
+  if (country === 'KG') {
+    ACCOUNT = (process.env.META_AD_ACCOUNT_ID_KG || '').trim();
+    // Если отдельного KG-токена нет, используем общий (если оба кабинета под одним Business Manager)
+    TOKEN = (process.env.META_ACCESS_TOKEN_KG || process.env.META_ACCESS_TOKEN || '').trim();
+    if (!ACCOUNT) {
+      return res.status(500).json({
+        error: 'Missing env KG',
+        detail: 'META_AD_ACCOUNT_ID_KG не задан. Добавь в Vercel env ID кыргызского рекламного кабинета (act_xxx), потом Redeploy.'
+      });
+    }
+  } else {
+    TOKEN = (process.env.META_ACCESS_TOKEN || '').trim();
+    ACCOUNT = (process.env.META_AD_ACCOUNT_ID || '').trim();
+  }
   if (!TOKEN || !ACCOUNT) {
     return res.status(500).json({
       error: 'Missing env',

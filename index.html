@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v359</title>
+<title>SalesDoc — Финансовый Дашборд v360</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7398,6 +7398,13 @@ function switchCountry(code) {
  // Сбросить Kanban для перезагрузки с новой страной
  window._kbLoaded = false;
  kbCards = [];
+ // v360: если открыт Маркетинг или Воронка — перезагрузить Meta-данные новой страны
+ try {
+  var vm = document.getElementById('view-marketing');
+  if (vm && vm.style.display !== 'none' && typeof mktLoadLeads === 'function') mktLoadLeads();
+  if (vm && vm.style.display !== 'none' && typeof mktInitDashboard === 'function') mktInitDashboard();
+  if (typeof amoLoadFunnel === 'function') amoLoadFunnel();
+ } catch(_){}
  syncFromSheets();
 }
 
@@ -13522,7 +13529,7 @@ window.mktLoadLeads = async function() {
  var fromMeta = false;
  try {
  var metaPeriod = _mktPeriod === 'week' ? 'last_7d' : 'this_month';
- var mr = await fetch('/api/meta-ads?endpoint=account_summary&period=' + metaPeriod);
+ var mr = await fetch('/api/meta-ads?endpoint=account_summary&period=' + metaPeriod + '&country=' + currentCountry);
  var md = await mr.json();
  var metaLeads = md && md.summary ? Number(md.summary.leads_count || 0) : 0;
  if (metaLeads > 0) {
@@ -15497,10 +15504,10 @@ window.mktMetaApiLoad = async function(){
  try {
  // Параллельно: summary с предыдущим периодом, daily breakdown, account_info, campaigns
  var [sumResp, dailyResp, infoResp, campsResp] = await Promise.all([
- fetch('/api/meta-ads?endpoint=account_summary&period=' + encodeURIComponent(period)),
- fetch('/api/meta-ads?endpoint=daily&period=' + encodeURIComponent(period)),
- fetch('/api/meta-ads?endpoint=account_info'),
- fetch('/api/meta-ads?endpoint=campaigns&period=' + encodeURIComponent(period))
+ fetch('/api/meta-ads?endpoint=account_summary&period=' + encodeURIComponent(period) + '&country=' + currentCountry),
+ fetch('/api/meta-ads?endpoint=daily&period=' + encodeURIComponent(period) + '&country=' + currentCountry),
+ fetch('/api/meta-ads?endpoint=account_info&country=' + currentCountry),
+ fetch('/api/meta-ads?endpoint=campaigns&period=' + encodeURIComponent(period) + '&country=' + currentCountry)
  ]);
  var sumData = await sumResp.json();
  if (!sumResp.ok) throw new Error(sumData.error || ('HTTP '+sumResp.status));
@@ -25750,7 +25757,7 @@ window.amoLoadFunnel = async function(force){
  // Meta API использует свои строковые периоды — последние 7/30/90 или this_month
  var metaPeriod = period === 'all' ? 'last_90d' : period;
  var amoP = fetch(amoQS).then(function(r){ return r.json(); });
- var metaP = fetch('/api/meta-ads?endpoint=account_summary&period=' + metaPeriod).then(function(r){ return r.json(); }).catch(function(){ return null; });
+ var metaP = fetch('/api/meta-ads?endpoint=account_summary&period=' + metaPeriod + '&country=' + currentCountry).then(function(r){ return r.json(); }).catch(function(){ return null; });
  var results = await Promise.all([amoP, metaP]);
  var amoData = results[0];
  var metaData = results[1];
@@ -26065,13 +26072,13 @@ function amoRenderHonest(d){
 }
 async function mktUpdateTargetPreview(){
  try {
- var resp = await fetch('/api/meta-ads?endpoint=account_summary&period=last_7d');
+ var resp = await fetch('/api/meta-ads?endpoint=account_summary&period=last_7d&country=' + currentCountry);
  if (!resp.ok) throw new Error('http ' + resp.status);
  var data = await resp.json();
  if (data.error) throw new Error(data.error);
  var s = data.summary || {};
  var info = null;
- try { var ir = await fetch('/api/meta-ads?endpoint=account_info'); if (ir.ok) info = await ir.json(); } catch(_){}
+ try { var ir = await fetch('/api/meta-ads?endpoint=account_info&country=' + currentCountry); if (ir.ok) info = await ir.json(); } catch(_){}
  var cur = (info && info.currency) || 'USD';
  var sym = cur === 'USD' ? '$' : (cur === 'KZT' ? '₸' : '');
  var spend = parseFloat(s.spend||0);
