@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v338</title>
+<title>SalesDoc — Финансовый Дашборд v339</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1062,6 +1062,25 @@ body.light .tt-mode-btn.on{background:#fff}
 .tt-week-task.p-high{background:rgba(255,69,58,.20)}
 .tt-week-task.p-med{background:rgba(255,159,10,.20)}
 .tt-week-task.p-low{background:rgba(10,132,255,.20)}
+.tt-week-task:active,.tt-md-task:active,.tt-day-task:active{cursor:grabbing;opacity:.7}
+
+/* v339: бэйджи активного фильтра + чипы типов + breadcrumb + пустое состояние */
+.tt-h1-block{display:flex;flex-direction:column;gap:4px;flex:1}
+.tt-back-btn{align-self:flex-start;padding:4px 10px;font-size:11px;color:var(--text-soft);background:transparent;border:none;cursor:pointer;font-family:Inter,sans-serif;border-radius:6px}
+.tt-back-btn:hover{background:var(--surface-2);color:var(--text)}
+.tt-active-filters{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tt-active-filter{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:var(--accent-bg);color:var(--accent-text);border-radius:14px;font-size:11px}
+.tt-active-filter b{font-weight:700}
+.tt-active-filter button{background:transparent;border:none;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0 0 0 4px;opacity:.65}
+.tt-active-filter button:hover{opacity:1}
+.tt-type-chips{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+.tt-type-chip{padding:5px 11px;font-size:11px;font-weight:500;background:rgba(120,120,128,.10);color:var(--text-soft);border:none;border-radius:14px;cursor:pointer;font-family:Inter,sans-serif;transition:all .15s}
+.tt-type-chip:hover{background:rgba(120,120,128,.18);color:var(--text)}
+.tt-type-chip.on{background:var(--accent-text);color:#fff;font-weight:600}
+.tt-empty-state{text-align:center;padding:60px 28px;color:var(--text-soft)}
+.tt-empty-illu{font-size:48px;opacity:.5;margin-bottom:12px}
+.tt-empty-title{font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px}
+.tt-empty-sub{font-size:13px;color:var(--text-muted);max-width:380px;margin:0 auto}
 
 .tt-detail{background:var(--surface);border-radius:14px;padding:16px}
 .tt-detail-empty{text-align:center;padding:30px 14px;color:var(--text-soft);font-size:13px}
@@ -21320,6 +21339,8 @@ function crmCalFilter(){
  var weekEnd = crmDateStr(crmAddDays(new Date(), 7));
  return crmEventsAll().filter(function(e){
  if(crmCalState.operator && e.operator !== crmCalState.operator) return false;
+ // v339: фильтр по типу задачи (встреча/звонок/дедлайн/обучение/прочее)
+ if(crmCalState.typeFilter && e.type !== crmCalState.typeFilter) return false;
  switch(crmCalState.list){
  case 'today': return e.date === today && e.status !== 'done';
  case 'tomorrow': return e.date === tomorrow && e.status !== 'done';
@@ -21384,13 +21405,47 @@ function crmCalRenderToolbar(){
  }
  // v335: + кнопка добавить задачу + Неделя в режимах (как в amoCRM)
  var addBtn = '<button class="tt-add-btn" onclick="crmEventOpenModal()" title="Добавить задачу"><span style="font-size:18px;line-height:1">+</span> Задача</button>';
+ // v339: бэйдж активного фильтра по оператору + breadcrumb «Назад в Месяц» если перешли из месяца
+ var opBadge = '';
+ if(crmCalState.operator){
+ opBadge = '<div class="tt-active-filter">Показаны задачи · <b>' + crmCalState.operator + '</b>'
+ + '<button onclick="crmCalSetOperator(\''+crmCalState.operator+'\')" title="Сбросить фильтр">×</button></div>';
+ }
+ var typeBadge = '';
+ if(crmCalState.typeFilter){
+ var labels = {meeting:'Встреча',training:'Обучение',deadline:'Дедлайн',other:'Прочее'};
+ typeBadge = '<div class="tt-active-filter">Тип · <b>' + (labels[crmCalState.typeFilter] || crmCalState.typeFilter) + '</b>'
+ + '<button onclick="crmCalSetTypeFilter(null)" title="Все типы">×</button></div>';
+ }
+ var crumb = '';
+ if(mode === 'day' && crmCalState._cameFromMode){
+ var backLabel = crmCalState._cameFromMode === 'month' ? '← Назад в Месяц' : '← Назад в Неделю';
+ crumb = '<button class="tt-back-btn" onclick="crmCalSetViewMode(\''+crmCalState._cameFromMode+'\')">'+backLabel+'</button>';
+ }
  document.getElementById('tt-toolbar').innerHTML = ''
- + '<div><div class="tt-h1">'+t+'</div><div class="tt-h1-sub">'+subText+'</div></div>'
+ + '<div class="tt-h1-block">'
+ + (crumb ? crumb : '')
+ + '<div class="tt-h1">'+t+'</div>'
+ + '<div class="tt-h1-sub">'+subText+'</div>'
+ + (opBadge || typeBadge ? '<div class="tt-active-filters">' + opBadge + typeBadge + '</div>' : '')
+ + '</div>'
  + '<div class="tt-mode-switch">' + btn('day','День') + btn('week','Неделя') + btn('month','Месяц') + btn('list','Список') + '</div>'
  + addBtn;
 }
 
+// v339: фильтр по типу задачи (без чекбоксов — единая кнопка-меню)
+window.crmCalSetTypeFilter = function(type){
+ crmCalState.typeFilter = type;
+ crmCalRender();
+};
+
 window.crmCalSetViewMode = function(mode){
+ // v339: запоминаем откуда пришли в День — для breadcrumb «Назад в Месяц/Неделю»
+ if(mode === 'day' && (crmCalState.viewMode === 'month' || crmCalState.viewMode === 'week')){
+ crmCalState._cameFromMode = crmCalState.viewMode;
+ } else if(mode !== 'day'){
+ crmCalState._cameFromMode = null;
+ }
  crmCalState.viewMode = mode;
  if((mode === 'month' || mode === 'day') && !crmCalState.viewDate){
  crmCalState.viewDate = crmDateStr(new Date());
@@ -21413,6 +21468,32 @@ window.crmCalNavDay = function(delta){
  crmCalState.viewDate = crmDateStr(d);
  crmCalRender();
 };
+
+// v339: чипы фильтра типа задач (без чекбоксов — простые кнопки)
+function crmCalTypeChips(){
+ var types = [
+ {key: null, label: 'Все типы'},
+ {key: 'meeting', label: 'Встреча'},
+ {key: 'training', label: 'Обучение'},
+ {key: 'deadline', label: 'Дедлайн'},
+ {key: 'other', label: 'Прочее'}
+ ];
+ var cur = crmCalState.typeFilter || null;
+ return '<div class="tt-type-chips">' + types.map(function(t){
+ var on = (cur === t.key) || (!cur && t.key === null);
+ return '<button class="tt-type-chip'+(on?' on':'')+'" onclick="crmCalSetTypeFilter('+(t.key===null?'null':'\''+t.key+'\'')+')">'+t.label+'</button>';
+ }).join('') + '</div>';
+}
+
+// v339: пустое состояние с иллюстрацией
+function crmCalEmptyState(extraHint){
+ return '<div class="tt-empty-state">'
+ + '<div class="tt-empty-illu">📅</div>'
+ + '<div class="tt-empty-title">Здесь пока пусто</div>'
+ + '<div class="tt-empty-sub">' + (extraHint || 'Создай первую задачу — она появится в выбранный день') + '</div>'
+ + '<button class="tt-add-btn" style="margin-top:14px" onclick="crmEventOpenModal()"><span style="font-size:18px;line-height:1">+</span> Задача</button>'
+ + '</div>';
+}
 
 // v333: рендер месячной сетки с задачами на днях
 function crmCalRenderMonth(){
@@ -21438,6 +21519,7 @@ function crmCalRenderMonth(){
  + '<button class="tt-mini-arrow" onclick="crmCalNavMonth(-1)" title="Предыдущий месяц">&lsaquo;</button>'
  + '<button class="tt-today-btn" onclick="crmCalSetViewDate(\''+today+'\')">Сегодня</button>'
  + '<button class="tt-mini-arrow" onclick="crmCalNavMonth(1)" title="Следующий месяц">&rsaquo;</button>'
+ + crmCalTypeChips()
  + '</div>';
  html += '<table class="tt-month-grid"><thead><tr>'
  + ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(function(d){return '<th>'+d+'</th>';}).join('')
@@ -21458,7 +21540,7 @@ function crmCalRenderMonth(){
  var pCls = e.priority === 1 || e.priority === 'high' ? ' p-high' :
  e.priority === 2 || e.priority === 'med' ? ' p-med' :
  e.priority === 3 || e.priority === 'low' ? ' p-low' : '';
- html += '<div class="tt-md-task'+pCls+'" draggable="true" ondragstart="crmCalDragStartTask(event,\''+e.id+'\')" onclick="event.stopPropagation();crmCalSelect(\''+e.id+'\')">'
+ html += '<div class="tt-md-task'+pCls+'" draggable="true" title="Тяни на другой день чтобы перенести" ondragstart="crmCalDragStartTask(event,\''+e.id+'\')" onclick="event.stopPropagation();crmCalSelect(\''+e.id+'\')">'
  + prDot(e.priority)
  + '<span>'+kbEsc((e.title||'').slice(0, 22))+'</span>'
  + '</div>';
@@ -21493,6 +21575,7 @@ function crmCalRenderDay(){
  + '<button class="tt-mini-arrow" onclick="crmCalNavDay(-1)" title="Предыдущий день">&lsaquo;</button>'
  + '<button class="tt-today-btn" onclick="crmCalSetViewDate(\''+crmDateStr(new Date())+'\')">Сегодня</button>'
  + '<button class="tt-mini-arrow" onclick="crmCalNavDay(1)" title="Следующий день">&rsaquo;</button>'
+ + crmCalTypeChips()
  + '</div>';
  if(allDayTasks.length){
  html += '<div class="tt-allday"><div class="tt-allday-label">Без времени</div>';
@@ -21690,6 +21773,7 @@ function crmCalRenderWeek(){
  + '<button class="tt-mini-arrow" onclick="crmCalNavWeek(-1)" title="Предыдущая неделя">&lsaquo;</button>'
  + '<button class="tt-today-btn" onclick="crmCalSetViewDate(\''+today+'\')">Сегодня</button>'
  + '<button class="tt-mini-arrow" onclick="crmCalNavWeek(1)" title="Следующая неделя">&rsaquo;</button>'
+ + crmCalTypeChips()
  + '</div>';
  html += '<div class="tt-week-grid">';
  weekDates.forEach(function(d, i){
@@ -21704,7 +21788,7 @@ function crmCalRenderWeek(){
  var pCls = e.priority === 1 || e.priority === 'high' ? ' p-high' :
  e.priority === 2 || e.priority === 'med' ? ' p-med' :
  e.priority === 3 || e.priority === 'low' ? ' p-low' : '';
- html += '<div class="tt-week-task'+pCls+'" draggable="true" ondragstart="crmCalDragStartTask(event,\''+e.id+'\')" onclick="event.stopPropagation();crmCalSelect(\''+e.id+'\')">'
+ html += '<div class="tt-week-task'+pCls+'" draggable="true" title="Тяни на другой день чтобы перенести" ondragstart="crmCalDragStartTask(event,\''+e.id+'\')" onclick="event.stopPropagation();crmCalSelect(\''+e.id+'\')">'
  + (e.time_start ? '<b>'+e.time_start+'</b> ' : '')
  + kbEsc((e.title||'').slice(0, 28))
  + '</div>';
