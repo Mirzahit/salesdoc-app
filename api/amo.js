@@ -204,13 +204,20 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
 
 export default async function handler(req, res){
   if(req.method !== 'GET'){ return bad(res, 405, 'Only GET'); }
-  const env = {
+  // v361: поддержка двух amo-кабинетов (KZ + KG) через ?country=KG
+  const country = String((req.query && req.query.country) || 'KZ').toUpperCase();
+  const env = country === 'KG' ? {
+    AMO_SUBDOMAIN: process.env.AMO_SUBDOMAIN_KG,
+    AMO_TOKEN: process.env.AMO_TOKEN_KG,
+    AMO_ACCOUNT_ID: process.env.AMO_ACCOUNT_ID_KG
+  } : {
     AMO_SUBDOMAIN: process.env.AMO_SUBDOMAIN,
     AMO_TOKEN: process.env.AMO_TOKEN,
     AMO_ACCOUNT_ID: process.env.AMO_ACCOUNT_ID
   };
   if(!env.AMO_SUBDOMAIN || !env.AMO_TOKEN){
-    return bad(res, 500, 'AMO env not configured: set AMO_SUBDOMAIN and AMO_TOKEN in Vercel');
+    const suffix = country === 'KG' ? '_KG' : '';
+    return bad(res, 500, `AMO env not configured: set AMO_SUBDOMAIN${suffix} and AMO_TOKEN${suffix} in Vercel`);
   }
 
   const action = String((req.query && req.query.action) || '').toLowerCase();
