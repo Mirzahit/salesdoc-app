@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v357</title>
+<title>SalesDoc — Финансовый Дашборд v358</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6123,11 +6123,25 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <select id="route-filter-op" onchange="routeRender()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);font-size:13px">
  <option value="">Все операторы</option>
  </select>
- <button onclick="routeOpenNew()" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent,#5489BB);color:#fff;font-weight:600;cursor:pointer;font-size:13px">+ Новая карточка</button>
+ <button onclick="routeOpenNew()" style="padding:7px 14px;border-radius:8px;border:none;background:rgba(10,132,255,.16);color:var(--accent,#0A84FF);font-weight:600;cursor:pointer;font-size:13px;letter-spacing:-0.01em">+ Новая карточка</button>
  <button onclick="routeLoad()" title="Обновить" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);cursor:pointer">⟳</button>
  </div>
  </div>
  <div id="route-board" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:24px;min-height:calc(100vh - 200px)"></div>
+ </div>
+ </div>
+
+ <!-- v358: Модалка ДЕТАЛЕЙ карточки — открывается кликом по карточке -->
+ <div id="route-card-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);align-items:center;justify-content:center" onclick="if(event.target===this)routeCloseCard()">
+ <div style="background:var(--card-bg);border-radius:14px;width:min(720px,94vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.5);overflow:hidden">
+ <div id="route-card-head" style="padding:18px 22px;border-bottom:1px solid var(--border-faint)"></div>
+ <div style="display:flex;gap:0;padding:0 22px;border-bottom:1px solid var(--border-faint)">
+ <button onclick="routeCardTab('check')" id="route-tab-check" class="route-tab" style="padding:12px 18px;border:none;background:transparent;color:var(--text);font-size:13px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer">Чек-лист</button>
+ <button onclick="routeCardTab('history')" id="route-tab-history" class="route-tab" style="padding:12px 18px;border:none;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer">История</button>
+ <button onclick="routeCardTab('contact')" id="route-tab-contact" class="route-tab" style="padding:12px 18px;border:none;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer">Контакт</button>
+ <button onclick="routeCloseCard()" style="margin-left:auto;padding:8px 14px;border:none;background:transparent;color:var(--text-soft);cursor:pointer;font-size:18px">×</button>
+ </div>
+ <div id="route-card-body" style="padding:18px 22px;overflow-y:auto;flex:1"></div>
  </div>
  </div>
 
@@ -6145,7 +6159,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <select id="route-new-operator" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text);margin-bottom:20px;box-sizing:border-box"></select>
  <div style="display:flex;gap:8px;justify-content:flex-end">
  <button onclick="routeCloseNew()" style="padding:10px 16px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text);cursor:pointer">Отмена</button>
- <button onclick="routeCreate()" style="padding:10px 20px;border-radius:6px;border:none;background:#5489BB;color:#fff;font-weight:600;cursor:pointer">Создать</button>
+ <button onclick="routeCreate()" style="padding:10px 20px;border-radius:8px;border:none;background:rgba(10,132,255,.16);color:var(--accent,#0A84FF);font-weight:600;cursor:pointer;letter-spacing:-0.01em">Создать</button>
  </div>
  </div>
  </div>
@@ -20583,11 +20597,11 @@ function routeRender(){
    if(filterOp && c.operator !== filterOp) return false;
    return true;
   });
-  var color = ROUTE_STAGE_COLORS[stage] || '#888';
-  html += '<div class="route-col" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.background=\'rgba(120,120,128,.08)\'" ondragleave="this.style.background=\'\'" ondrop="routeDrop(event,\'' + stage + '\')" style="flex:0 0 260px;background:rgba(120,120,128,.04);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:50vh">';
-  html += '<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:2px solid ' + color + '">';
-  html += '<div style="font-weight:700;font-size:13px;color:var(--text)">' + stage + '</div>';
-  html += '<div style="font-size:11px;color:var(--text-soft);font-variant-numeric:tabular-nums">' + stageCards.length + '</div>';
+  // v358: Apple-style — без цветной полосы под шапкой, мягкая капсула для счётчика
+  html += '<div class="route-col" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.background=\'rgba(120,120,128,.09)\'" ondragleave="this.style.background=\'rgba(120,120,128,.05)\'" ondrop="routeDrop(event,\'' + stage + '\')" style="flex:0 0 280px;background:rgba(120,120,128,.05);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;min-height:60vh">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px">';
+  html += '<div style="font-weight:600;font-size:13px;color:var(--text-soft);letter-spacing:-0.01em">' + stage + '</div>';
+  html += '<div style="font-size:11px;color:var(--text-soft);font-variant-numeric:tabular-nums;background:rgba(120,120,128,.16);padding:2px 8px;border-radius:8px;min-width:20px;text-align:center">' + stageCards.length + '</div>';
   html += '</div>';
   stageCards.forEach(function(card){
    var cl = card.clients || {};
@@ -20595,10 +20609,10 @@ function routeRender(){
    var phone = cl.main_phone || '';
    var op = card.operator || '—';
    var days = card.stage_entered_at ? Math.floor((Date.now() - new Date(card.stage_entered_at).getTime())/86400000) : 0;
-   var dayBadge = days > 10 ? '<span style="color:#D89595;font-weight:600">' + days + ' дн</span>'
-                  : days > 3 ? '<span style="color:#FFB340">' + days + ' дн</span>'
-                  : '<span style="color:var(--text-soft)">' + days + ' дн</span>';
-   html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="this.style.opacity=1" style="background:var(--card-bg);border-radius:8px;padding:10px 12px;cursor:grab;box-shadow:0 1px 2px rgba(0,0,0,.08)">';
+   // v358: мягкая капсула для бейджа дней — текстом, без заливки
+   var dayColor = days > 14 ? '#FF453A' : days > 7 ? '#FF9F0A' : 'var(--text-soft)';
+   var dayBadge = '<span style="font-size:11px;padding:2px 7px;border-radius:6px;font-variant-numeric:tabular-nums;background:rgba(120,120,128,.16);color:' + dayColor + '">' + days + ' дн</span>';
+   html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="this.style.opacity=1" onclick="routeOpenCard(\'' + card.id + '\')" onmouseover="this.style.background=\'rgba(255,255,255,.07)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'rgba(255,255,255,.04)\';this.style.transform=\'\'" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px 14px;cursor:pointer;transition:background .15s ease, transform .15s ease">';
    html += '<div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px">' + _escHtml(name) + '</div>';
    if(card.tariff) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(card.tariff) + '</div>';
    html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft)">';
@@ -20606,8 +20620,8 @@ function routeRender(){
    html += '</div>';
    if(phone){
     html += '<div style="margin-top:8px;display:flex;gap:6px">';
-    html += '<a href="tel:' + phone + '" style="flex:1;text-align:center;padding:4px;border-radius:4px;background:#7FB89E22;color:#7FB89E;text-decoration:none;font-size:11px;font-weight:600">Звонок</a>';
-    html += '<a href="https://wa.me/' + phone.replace(/[^0-9]/g,'') + '" target="_blank" style="flex:1;text-align:center;padding:4px;border-radius:4px;background:#25D36622;color:#25D366;text-decoration:none;font-size:11px;font-weight:600">WhatsApp</a>';
+    html += '<a href="tel:' + phone + '" onclick="event.stopPropagation()" style="flex:1;text-align:center;padding:4px;border-radius:4px;background:#7FB89E22;color:#7FB89E;text-decoration:none;font-size:11px;font-weight:600">Звонок</a>';
+    html += '<a href="https://wa.me/' + phone.replace(/[^0-9]/g,'') + '" target="_blank" onclick="event.stopPropagation()" style="flex:1;text-align:center;padding:4px;border-radius:4px;background:#25D36622;color:#25D366;text-decoration:none;font-size:11px;font-weight:600">WhatsApp</a>';
     html += '</div>';
    }
    html += '</div>';
@@ -20710,6 +20724,256 @@ function _escHtml(s){
  return String(s||'').replace(/[&<>"']/g, function(c){
   return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
  });
+}
+
+// v358: Модалка карточки клиента — открытие, табы, чек-лист, история
+// ===================================================================
+// Дефолтные пункты чек-листа на каждой стадии (показываются если в БД нет)
+var ROUTE_DEFAULT_CHECKLIST = {
+ 'Новый': [
+  'Позвонить контакту, представиться',
+  'Уточнить количество сотрудников и точек продаж',
+  'Договориться когда удобно начинать настройку',
+  'Создать чат в WhatsApp с клиентом',
+  'Запросить логотип, реквизиты, файл с товарами'
+ ],
+ 'Настройка': [
+  'Создать базу клиента на сервере',
+  'Завести пользователей по числу лицензий',
+  'Импортировать справочник товаров',
+  'Настроить кассу/фискальник',
+  'Подключить интеграции (Kaspi, WhatsApp)',
+  'Тестовая продажа без ошибок'
+ ],
+ 'Обучение': [
+  'Назначить дату и время обучения',
+  'Провести обучение кассира/продавца (1+ час)',
+  'Провести обучение руководителя (отчёты)',
+  'Отправить видео-инструкции и PDF',
+  'Проверить что клиент сам сделал продажу'
+ ],
+ 'Тестирование': [
+  'Клиент работает «по-настоящему» 3-5 дней',
+  'Ежедневная проверка: есть ли продажи и ошибки',
+  'Зафиксировать жалобы и починить',
+  'Финальный созвон — всё ли устраивает'
+ ],
+ 'Активация': [
+  'Финальный звонок, поздравить',
+  'Заполнить «паспорт клиента»',
+  'Получить отзыв (1-2 предложения)',
+  'Передать в Действующие клиенты'
+ ]
+};
+
+var _routeCurrentCard = null;
+var _routeCurrentTab = 'check';
+var _routeChecklistItems = [];
+var _routeHistoryItems = [];
+
+async function routeOpenCard(cardId){
+ _routeCurrentCard = routeCards.find(function(c){ return c.id === cardId; });
+ if(!_routeCurrentCard) return;
+ document.getElementById('route-card-modal').style.display = 'flex';
+ _routeRenderCardHead();
+ _routeCurrentTab = 'check';
+ routeCardTab('check');
+}
+
+function routeCloseCard(){
+ document.getElementById('route-card-modal').style.display = 'none';
+ _routeCurrentCard = null;
+}
+
+function _routeRenderCardHead(){
+ var card = _routeCurrentCard; if(!card) return;
+ var cl = card.clients || {};
+ var stageColor = ROUTE_STAGE_COLORS[card.stage] || '#888';
+ var html = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">';
+ html += '<div>';
+ html += '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px">' + _escHtml(cl.company_name || '(без имени)') + '</div>';
+ html += '<div style="font-size:12px;color:var(--text-soft)">' + _escHtml(card.tariff || 'тариф не указан') + ' · оператор: ' + _escHtml(card.operator || '—') + '</div>';
+ html += '</div>';
+ html += '<div style="display:flex;gap:8px;align-items:center">';
+ html += '<span style="padding:4px 10px;border-radius:6px;background:' + stageColor + '22;color:' + stageColor + ';font-size:12px;font-weight:600">' + _escHtml(card.stage) + '</span>';
+ if(cl.main_phone){
+  html += '<a href="tel:' + cl.main_phone + '" style="padding:6px 12px;border-radius:6px;background:#7FB89E22;color:#7FB89E;text-decoration:none;font-size:12px;font-weight:600">Звонок</a>';
+  html += '<a href="https://wa.me/' + cl.main_phone.replace(/[^0-9]/g,'') + '" target="_blank" style="padding:6px 12px;border-radius:6px;background:#25D36622;color:#25D366;text-decoration:none;font-size:12px;font-weight:600">WhatsApp</a>';
+ }
+ html += '</div>';
+ html += '</div>';
+ document.getElementById('route-card-head').innerHTML = html;
+}
+
+function routeCardTab(tab){
+ _routeCurrentTab = tab;
+ // Подсветка табов
+ ['check','history','contact'].forEach(function(t){
+  var btn = document.getElementById('route-tab-' + t);
+  if(!btn) return;
+  if(t === tab){
+   btn.style.color = 'var(--text)';
+   btn.style.borderBottomColor = 'var(--accent,#5489BB)';
+  } else {
+   btn.style.color = 'var(--text-soft)';
+   btn.style.borderBottomColor = 'transparent';
+  }
+ });
+ if(tab === 'check') _routeRenderChecklist();
+ if(tab === 'history') _routeRenderHistory();
+ if(tab === 'contact') _routeRenderContact();
+}
+
+async function _routeRenderChecklist(){
+ var body = document.getElementById('route-card-body');
+ if(!_routeCurrentCard){ body.innerHTML = ''; return; }
+ body.innerHTML = '<div style="color:var(--text-soft);font-size:13px">Загрузка чек-листа...</div>';
+ try {
+  var r = await fetch('/api/checklist?card_id=' + _routeCurrentCard.id);
+  var d = await r.json();
+  _routeChecklistItems = d.items || [];
+ } catch(e){ _routeChecklistItems = []; }
+ var stage = _routeCurrentCard.stage;
+ var defaults = ROUTE_DEFAULT_CHECKLIST[stage] || [];
+ // Мерджим: дефолтные пункты + кастомные из БД
+ var byTitle = {};
+ _routeChecklistItems.forEach(function(item){ if(item.stage === stage) byTitle[item.title] = item; });
+ var allTitles = [];
+ defaults.forEach(function(t){ if(allTitles.indexOf(t)<0) allTitles.push(t); });
+ _routeChecklistItems.forEach(function(it){ if(it.stage === stage && allTitles.indexOf(it.title)<0) allTitles.push(it.title); });
+
+ var done = 0;
+ var rows = allTitles.map(function(title){
+  var existing = byTitle[title];
+  var isDone = existing && existing.done;
+  if(isDone) done++;
+  var id = existing ? existing.id : '';
+  return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-faint)">'
+   + '<input type="checkbox" ' + (isDone?'checked':'') + ' onchange="_routeToggleCheck(\'' + (id||'') + '\',\'' + _escHtml(title).replace(/'/g,"\\'") + '\',\'' + stage + '\',this.checked)" style="width:18px;height:18px;cursor:pointer">'
+   + '<div style="flex:1;font-size:13px;color:var(--text);' + (isDone?'text-decoration:line-through;opacity:.6':'') + '">' + _escHtml(title) + '</div>'
+   + (existing && existing.done_at ? '<div style="font-size:11px;color:var(--text-soft)">' + new Date(existing.done_at).toLocaleDateString('ru-RU') + '</div>' : '')
+   + '</div>';
+ }).join('');
+
+ var html = '<div style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
+  + '<div style="font-size:14px;font-weight:600;color:var(--text)">Этап: ' + stage + '</div>'
+  + '<div style="font-size:12px;color:var(--text-soft)">' + done + ' из ' + allTitles.length + '</div>'
+  + '</div>'
+  + (rows || '<div style="color:var(--text-soft);font-size:13px;padding:20px 0;text-align:center">Пунктов нет</div>');
+ body.innerHTML = html;
+}
+
+async function _routeToggleCheck(itemId, title, stage, checked){
+ try {
+  if(itemId){
+   var r = await fetch('/api/checklist?id=' + itemId, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ done: checked })
+   });
+   var d = await r.json();
+   if(!d.ok) throw new Error(d.error);
+  } else {
+   // Создать новый пункт со статусом done
+   var r2 = await fetch('/api/checklist', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+     card_id: _routeCurrentCard.id,
+     stage: stage,
+     title: title,
+     done: checked
+    })
+   });
+   var d2 = await r2.json();
+   if(!d2.ok) throw new Error(d2.error);
+  }
+  // Запись в историю
+  fetch('/api/history', {
+   method: 'POST',
+   headers: {'Content-Type':'application/json'},
+   body: JSON.stringify({
+    card_id: _routeCurrentCard.id,
+    event_type: 'note',
+    text: (checked?'✓ ':'○ ') + title
+   })
+  });
+  _routeRenderChecklist();
+ } catch(e){
+  alert('Не удалось сохранить: ' + e.message);
+ }
+}
+
+async function _routeRenderHistory(){
+ var body = document.getElementById('route-card-body');
+ if(!_routeCurrentCard){ body.innerHTML = ''; return; }
+ body.innerHTML = '<div style="color:var(--text-soft);font-size:13px">Загрузка...</div>';
+ try {
+  var r = await fetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50');
+  var d = await r.json();
+  _routeHistoryItems = d.items || [];
+ } catch(e){ _routeHistoryItems = []; }
+
+ var input = '<div style="margin-bottom:14px;display:flex;gap:8px">'
+  + '<input id="route-new-note" type="text" placeholder="Что произошло? (заметка, итог звонка...)" style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text);font-size:13px">'
+  + '<button onclick="_routeAddNote()" style="padding:8px 16px;border-radius:8px;border:none;background:rgba(10,132,255,.16);color:var(--accent,#0A84FF);font-weight:600;cursor:pointer;font-size:12px;letter-spacing:-0.01em">Добавить</button>'
+  + '</div>';
+
+ var rows = _routeHistoryItems.length ? _routeHistoryItems.map(function(it){
+  var when = new Date(it.created_at).toLocaleString('ru-RU', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  var typeIcon = { call:'звонок', whatsapp:'WhatsApp', note:'заметка', stage_change:'этап', file:'файл', system:'система' }[it.event_type] || '';
+  return '<div style="padding:10px 0;border-bottom:1px solid var(--border-faint)">'
+   + '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-soft);margin-bottom:4px">'
+   + '<span>' + typeIcon + (it.author?' · ' + _escHtml(it.author):'') + '</span><span>' + when + '</span>'
+   + '</div>'
+   + '<div style="font-size:13px;color:var(--text)">' + _escHtml(it.text || '') + '</div>'
+   + '</div>';
+ }).join('') : '<div style="color:var(--text-soft);font-size:13px;padding:20px 0;text-align:center">Истории пока нет</div>';
+ body.innerHTML = input + rows;
+}
+
+async function _routeAddNote(){
+ var input = document.getElementById('route-new-note');
+ var text = (input.value || '').trim();
+ if(!text) return;
+ try {
+  var r = await fetch('/api/history', {
+   method: 'POST',
+   headers: {'Content-Type':'application/json'},
+   body: JSON.stringify({
+    card_id: _routeCurrentCard.id,
+    event_type: 'note',
+    text: text
+   })
+  });
+  var d = await r.json();
+  if(!d.ok) throw new Error(d.error);
+  input.value = '';
+  _routeRenderHistory();
+ } catch(e){ alert('Ошибка: ' + e.message); }
+}
+
+function _routeRenderContact(){
+ var body = document.getElementById('route-card-body');
+ if(!_routeCurrentCard){ body.innerHTML = ''; return; }
+ var cl = _routeCurrentCard.clients || {};
+ var rows = [
+  ['Компания', cl.company_name],
+  ['Телефон', cl.main_phone],
+  ['Куратор', cl.curator_operator || _routeCurrentCard.operator],
+  ['Тариф', _routeCurrentCard.tariff],
+  ['Лицензий', _routeCurrentCard.licenses_count],
+  ['Этап', _routeCurrentCard.stage],
+  ['На этапе с', _routeCurrentCard.stage_entered_at ? new Date(_routeCurrentCard.stage_entered_at).toLocaleDateString('ru-RU') : '—'],
+  ['Создан', _routeCurrentCard.created_at ? new Date(_routeCurrentCard.created_at).toLocaleDateString('ru-RU') : '—'],
+  ['ID клиента', _routeCurrentCard.client_id]
+ ];
+ body.innerHTML = rows.map(function(r){
+  return '<div style="display:flex;padding:8px 0;border-bottom:1px solid var(--border-faint);font-size:13px">'
+   + '<div style="flex:0 0 130px;color:var(--text-soft)">' + r[0] + '</div>'
+   + '<div style="flex:1;color:var(--text)">' + _escHtml(r[1] || '—') + '</div>'
+   + '</div>';
+ }).join('');
 }
 // ===================================================================
 // /v352 Маршрут v2
