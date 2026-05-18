@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v364</title>
+<title>SalesDoc — Финансовый Дашборд v365</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -474,6 +474,9 @@ body.light{
  углы 14/18/24 px, hairline-разделители, soft shadows, Inter везде.
  ============================================================ */
 :root{
+ /* v365: Маршрут клиента — 3 уровня глубины (страница/колонка/карточка) */
+ --ds-page-bg:#1C1C1E;--ds-col-bg:#2C2C2E;--ds-card-bg:#3A3A3C;
+ --ds-border-soft:rgba(255,255,255,.06);--ds-shadow-card:0 1px 2px rgba(0,0,0,.4);
  /* Backgrounds — iOS Dark (true black + elevated surfaces) */
  --bg:#000000;--surface:#1C1C1E;--surface-2:#2C2C2E;--surface-3:#3A3A3C;
  /* iOS hairline borders */
@@ -512,6 +515,9 @@ body.light{
 }
 /* DESIGN SYSTEM v217 — light: systemGroupedBackground (#F2F2F7), white cards, Emerald Depth dark accent */
 body.light{
+ /* v365: Маршрут клиента — светлая тема, 3 уровня глубины */
+ --ds-page-bg:#F2F2F7;--ds-col-bg:#E5E5EA;--ds-card-bg:#FFFFFF;
+ --ds-border-soft:rgba(60,60,67,.10);--ds-shadow-card:0 1px 2px rgba(60,60,67,.10);
  --bg:#F2F2F7;--surface:#FFFFFF;--surface-2:#FFFFFF;--surface-3:#F2F2F7;
  --border:rgba(60,60,67,.12);--border-strong:rgba(60,60,67,.24);--border-faint:rgba(60,60,67,.06);
  --text:#000000;--text-2:rgba(60,60,67,.60);--text-soft:rgba(60,60,67,.45);--text-faint:rgba(60,60,67,.30);
@@ -4220,14 +4226,12 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
 
  <!-- v290: единый tab-bar раздела «Клиенты» (показывается только когда мы внутри одного из клиентских view) -->
  <div id="clients-tab-bar" class="cli-tabbar" style="display:none">
- <button class="cli-tab" data-clients-tab="all" onclick="clientsGoTab('all')" title="Скоро">Все</button>
- <button class="cli-tab" data-clients-tab="kanban" onclick="clientsGoTab('kanban')">Внедрение</button>
+ <!-- v365: убраны фантомные вкладки «Все·скоро», «В риске·скоро», «Расторгнутые·скоро» — UX-критик сказал что они дразнят оператора -->
  <button class="cli-tab" data-clients-tab="route" onclick="clientsGoTab('route')">Маршрут клиента</button>
+ <button class="cli-tab" data-clients-tab="kanban" onclick="clientsGoTab('kanban')">Внедрение (старый)</button>
  <button class="cli-tab" data-clients-tab="newclients" onclick="clientsGoTab('newclients')">Новые</button>
  <button class="cli-tab" data-clients-tab="activeclients" onclick="clientsGoTab('activeclients')">Действующие</button>
- <button class="cli-tab" data-clients-tab="risk" onclick="clientsGoTab('risk')" title="Скоро">В риске</button>
  <button class="cli-tab" data-clients-tab="keyclients" onclick="clientsGoTab('keyclients')">Ключевые</button>
- <button class="cli-tab" data-clients-tab="churned" onclick="clientsGoTab('churned')" title="Скоро">Расторгнутые</button>
  <button class="cli-tab cli-tab-extra" data-clients-tab="integrations" onclick="clientsGoTab('integrations')" title="Очередь интеграции — позже станет фильтром во Внедрении">⚙ Интеграции</button>
  </div>
 
@@ -6123,7 +6127,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <select id="route-filter-op" onchange="routeRender()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);font-size:13px">
  <option value="">Все операторы</option>
  </select>
- <button onclick="routeOpenNew()" style="padding:7px 14px;border-radius:8px;border:none;background:rgba(10,132,255,.16);color:var(--accent,#0A84FF);font-weight:600;cursor:pointer;font-size:13px;letter-spacing:-0.01em">+ Новая карточка</button>
+ <button onclick="routeOpenNew()" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:13px;letter-spacing:-0.01em;box-shadow:0 1px 2px rgba(10,132,255,.25)">+ Новая карточка</button>
  <button onclick="routeLoad()" title="Обновить" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);cursor:pointer">⟳</button>
  </div>
  </div>
@@ -6132,7 +6136,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
 
  <!-- v359: Полноэкранная страница клиента (как в amo /leads/detail/) -->
- <div id="view-route-card" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void,#0a0a0a);overflow-y:auto">
+ <div id="view-route-card" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--ds-page-bg);overflow-y:auto">
  <div style="max-width:1100px;margin:0 auto;padding:18px 24px">
  <div style="display:flex;align-items:center;gap:14px;padding-bottom:18px;border-bottom:1px solid var(--border-faint)">
  <button onclick="routeCloseCard()" style="padding:8px 14px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);cursor:pointer;font-size:13px;font-weight:500">← Назад в Маршрут</button>
@@ -20600,13 +20604,32 @@ async function routeLoad(){
  var st = document.getElementById('route-status');
  if(st) st.textContent = 'Загрузка...';
  try {
-  var [cardsRes, opsRes] = await Promise.all([
+  var [cardsRes, opsRes, clRes] = await Promise.all([
    sbFetch('/api/cards'),
-   fetch('/api/sb-ping').then(r=>r.json())
+   fetch('/api/sb-ping').then(r=>r.json()),
+   sbFetch('/api/checklist?all=1')
   ]);
   if(!cardsRes.ok) throw new Error(cardsRes.error || 'cards load failed');
   routeCards = cardsRes.cards || [];
   routeOperators = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
+  // v365: посчитать прогресс чек-листа на каждую карточку (для бейджа 3/6 на главной)
+  var clItems = (clRes && clRes.items) || [];
+  routeCards.forEach(function(c){
+   var defaultsTotal = (ROUTE_DEFAULT_CHECKLIST[c.stage] || []).length;
+   var stageItems = clItems.filter(function(it){ return it.card_id === c.id && it.stage === c.stage; });
+   var customNames = {};
+   stageItems.forEach(function(it){ customNames[it.title] = it.done ? 1 : 0; });
+   var defaultNames = (ROUTE_DEFAULT_CHECKLIST[c.stage] || []);
+   var total = defaultNames.length;
+   defaultNames.forEach(function(){});
+   // Объединить: дефолтные + кастомные не из дефолтных
+   stageItems.forEach(function(it){ if(defaultNames.indexOf(it.title) < 0) total++; });
+   var done = 0;
+   defaultNames.forEach(function(n){ if(customNames[n] === 1) done++; });
+   stageItems.forEach(function(it){ if(defaultNames.indexOf(it.title) < 0 && it.done) done++; });
+   c._checkDone = done;
+   c._checkTotal = total;
+  });
   // Заполнить фильтр операторов
   var filterEl = document.getElementById('route-filter-op');
   if(filterEl && filterEl.options.length <= 1){
@@ -20634,8 +20657,8 @@ function routeRender(){
    if(filterOp && c.operator !== filterOp) return false;
    return true;
   });
-  // v358: Apple-style — без цветной полосы под шапкой, мягкая капсула для счётчика
-  html += '<div class="route-col" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.background=\'rgba(120,120,128,.09)\'" ondragleave="this.style.background=\'rgba(120,120,128,.05)\'" ondrop="routeDrop(event,\'' + stage + '\')" style="flex:0 0 280px;background:rgba(120,120,128,.05);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;min-height:60vh">';
+  // v365: колонка Канбана — Apple 3 уровня глубины (фон колонки темнее страницы)
+  html += '<div class="route-col" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.filter=\'brightness(1.05)\'" ondragleave="this.style.filter=\'\'" ondrop="this.style.filter=\'\';routeDrop(event,\'' + stage + '\')" style="flex:0 0 280px;background:var(--ds-col-bg);border-radius:14px;padding:14px 12px 16px;display:flex;flex-direction:column;gap:6px;min-height:60vh">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 4px 12px">';
   html += '<div style="font-weight:600;font-size:13px;color:var(--text-soft);letter-spacing:-0.01em">' + stage + '</div>';
   html += '<div style="font-size:11px;color:var(--text-soft);font-variant-numeric:tabular-nums;background:rgba(120,120,128,.16);padding:2px 8px;border-radius:8px;min-width:20px;text-align:center">' + stageCards.length + '</div>';
@@ -20647,14 +20670,27 @@ function routeRender(){
    var op = card.operator || '—';
    var days = card.stage_entered_at ? Math.floor((Date.now() - new Date(card.stage_entered_at).getTime())/86400000) : 0;
    // v358: мягкая капсула для бейджа дней — текстом, без заливки
-   var dayColor = days > 14 ? '#FF453A' : days > 7 ? '#FF9F0A' : 'var(--text-soft)';
-   var dayBadge = '<span style="font-size:11px;padding:2px 7px;border-radius:6px;font-variant-numeric:tabular-nums;background:rgba(120,120,128,.16);color:' + dayColor + '">' + days + ' дн</span>';
-   // v359: карточка — drag-handle, имя клиента — ссылка (как в amo /leads/detail/)
-   html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="this.style.opacity=1" onmouseover="this.style.background=\'rgba(255,255,255,.07)\'" onmouseout="this.style.background=\'rgba(255,255,255,.04)\'" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px 14px;cursor:grab;transition:background .15s ease">';
+   // v365: 3 диапазона (0-3 / 4-7 / 8+) с tint-фоном, как сказал дизайн-агент
+   var dayColor, dayBg;
+   if(days >= 8){ dayColor = '#FF453A'; dayBg = 'rgba(255,69,58,.18)'; }
+   else if(days >= 4){ dayColor = '#FF9F0A'; dayBg = 'rgba(255,159,10,.18)'; }
+   else { dayColor = '#34C759'; dayBg = 'rgba(52,199,89,.16)'; }
+   var dayBadge = '<span style="font-size:11px;padding:2px 8px;border-radius:999px;font-variant-numeric:tabular-nums;background:' + dayBg + ';color:' + dayColor + ';font-weight:600">' + days + ' дн</span>';
+   var checkBadge = '';
+   if(card._checkTotal > 0){
+    var pct = card._checkDone / card._checkTotal;
+    var ccol, cbg;
+    if(pct >= 1){ ccol = '#34C759'; cbg = 'rgba(52,199,89,.16)'; }
+    else if(pct >= 0.5){ ccol = '#FF9F0A'; cbg = 'rgba(255,159,10,.18)'; }
+    else { ccol = 'var(--text-soft)'; cbg = 'rgba(120,120,128,.16)'; }
+    checkBadge = '<span style="font-size:11px;padding:2px 8px;border-radius:999px;font-variant-numeric:tabular-nums;background:' + cbg + ';color:' + ccol + ';font-weight:600;margin-left:6px">' + card._checkDone + '/' + card._checkTotal + '</span>';
+   }
+   // v365: карточка — Apple 3 уровня глубины (фон/колонка/карточка), drag-handle, без цветных линий
+   html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="this.style.opacity=1" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.12)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 1px 2px rgba(0,0,0,.15)\'" style="background:var(--ds-card-bg);border:1px solid var(--ds-border-soft);border-radius:10px;padding:12px 14px;cursor:grab;transition:transform .15s,box-shadow .15s;box-shadow:0 1px 2px rgba(0,0,0,.15)">';
    html += '<div style="margin-bottom:4px"><a onclick="event.stopPropagation();routeOpenCard(\'' + card.id + '\')" style="font-weight:600;font-size:13px;color:var(--accent,#0A84FF);cursor:pointer;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + _escHtml(name) + '</a></div>';
    if(card.tariff) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(card.tariff) + '</div>';
-   html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft)">';
-   html += '<span>' + _escHtml(op) + '</span>' + dayBadge;
+   html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft);gap:6px;flex-wrap:wrap">';
+   html += '<span>' + _escHtml(op) + '</span><span style="display:flex;align-items:center;gap:6px">' + dayBadge + checkBadge + '</span>';
    html += '</div>';
    if(phone){
     html += '<div style="margin-top:8px;display:flex;gap:6px">';

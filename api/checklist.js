@@ -12,9 +12,10 @@ export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
     if (req.method === 'GET') {
-      const { card_id, stage } = req.query || {};
-      if (!card_id) return res.status(400).json({ ok: false, error: 'нужен ?card_id=UUID' });
-      const params = { card_id: 'eq.' + card_id, order: 'position.asc' };
+      const { card_id, stage, all } = req.query || {};
+      const params = { order: 'position.asc' };
+      if (card_id) params['card_id'] = 'eq.' + card_id;
+      else if (!all) return res.status(400).json({ ok: false, error: 'нужен ?card_id=UUID или ?all=1' });
       if (stage) params['stage'] = 'eq.' + stage;
       const items = await sbSelect('checklist_items', params);
       return res.status(200).json({ ok: true, count: items.length, items });
