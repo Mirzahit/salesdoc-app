@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v332</title>
+<title>SalesDoc — Финансовый Дашборд v333</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -996,6 +996,43 @@ body.light .kb-card:hover{border-color:var(--amo-blue)!important}
 .tt-mini-month{font-size:14px;font-weight:700;letter-spacing:-0.01em;color:var(--text)}
 .tt-mini-arrow{width:26px;height:26px;border-radius:8px;background:var(--surface-2);color:var(--text-2);border:none;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif}
 .tt-mini-arrow:hover{background:var(--accent-bg);color:var(--accent-text)}
+
+/* v333: переключатель Список/Месяц/День + полные виды */
+.tt-mode-switch{display:flex;gap:4px;padding:4px;background:rgba(120,120,128,.10);border-radius:10px}
+.tt-mode-btn{padding:6px 14px;font-size:12px;font-weight:600;background:transparent;color:var(--text-soft);border:none;border-radius:7px;cursor:pointer;font-family:Inter,sans-serif}
+.tt-mode-btn:hover{color:var(--text)}
+.tt-mode-btn.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+body.light .tt-mode-btn.on{background:#fff}
+.tt-month-nav,.tt-day-nav{display:flex;gap:6px;align-items:center;padding:0 28px 14px 28px}
+.tt-month-grid{width:calc(100% - 56px);margin:0 28px 28px 28px;border-collapse:collapse;table-layout:fixed}
+.tt-month-grid th{font-size:10px;font-weight:600;color:var(--text-faint);padding:8px 4px;text-transform:lowercase;letter-spacing:.5px;text-align:left}
+.tt-month-grid td{vertical-align:top;border:1px solid var(--border-faint);height:110px;padding:6px;cursor:pointer;transition:background .15s;background:var(--surface)}
+.tt-month-grid td:hover{background:var(--surface-2)}
+.tt-month-grid td.today{background:var(--accent-bg)}
+.tt-month-grid td.muted{color:var(--text-faint);background:transparent;opacity:.5}
+.tt-month-grid td.drop{background:rgba(127,184,158,.25);outline:2px dashed #7FB89E;outline-offset:-2px}
+.tt-md-num{font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:4px}
+.tt-month-grid td.today .tt-md-num{color:var(--accent-text);font-weight:700}
+.tt-md-task{font-size:11px;padding:3px 5px;margin-bottom:2px;background:rgba(84,137,187,.15);border-radius:4px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;cursor:grab}
+.tt-md-task.p-high{background:rgba(255,69,58,.18)}
+.tt-md-task.p-med{background:rgba(255,159,10,.18)}
+.tt-md-task.p-low{background:rgba(10,132,255,.18)}
+.tt-md-more{font-size:10px;color:var(--text-muted);padding:2px 5px}
+
+.tt-allday{margin:0 28px 14px 28px;padding:10px 12px;background:var(--surface);border-radius:10px}
+.tt-allday-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.tt-allday-task{padding:6px 10px;background:rgba(120,120,128,.10);border-radius:6px;margin-bottom:4px;font-size:13px;cursor:pointer}
+.tt-allday-task:hover{background:rgba(120,120,128,.18)}
+
+.tt-day-grid{width:calc(100% - 56px);margin:0 28px 28px 28px;border-collapse:collapse;table-layout:fixed}
+.tt-day-grid tr td:first-child{width:60px;font-size:11px;color:var(--text-muted);text-align:right;padding-right:10px;vertical-align:top;padding-top:8px}
+.tt-day-grid tr td:last-child{border-top:1px solid var(--border-faint);padding:6px;min-height:50px;cursor:pointer;transition:background .1s}
+.tt-day-grid tr td:last-child:hover{background:var(--surface-2)}
+.tt-day-task{padding:6px 10px;background:rgba(84,137,187,.18);border-radius:6px;margin-bottom:4px;font-size:12px;color:var(--text);cursor:pointer}
+.tt-day-task:hover{background:rgba(84,137,187,.30)}
+.tt-day-task.p-high{background:rgba(255,69,58,.22);border-left:3px solid #FF453A}
+.tt-day-task.p-med{background:rgba(255,159,10,.22);border-left:3px solid #FF9F0A}
+.tt-day-task.p-low{background:rgba(10,132,255,.22);border-left:3px solid #0A84FF}
 
 .tt-detail{background:var(--surface);border-radius:14px;padding:16px}
 .tt-detail-empty{text-align:center;padding:30px 14px;color:var(--text-soft);font-size:13px}
@@ -21195,7 +21232,8 @@ function crmUpdateActivateBtn(card){
 // v230: CRM Calendar — TickTick-style (localStorage)
 // ============================================================
 var CRM_EVENTS_KEY = 'crm_events';
-var crmCalState = { list: 'today', operator: null, selectedId: null };
+// v333: + viewMode (list / month / day) + viewDate (для месяца и дня)
+var crmCalState = { list: 'today', operator: null, selectedId: null, viewMode: 'list', viewDate: null };
 
 function crmEventsAll(){
  try { return JSON.parse(localStorage.getItem(CRM_EVENTS_KEY) || '[]') || []; }
@@ -21277,8 +21315,178 @@ function crmCalRenderToolbar(){
  var titles = { today:'Сегодня', tomorrow:'Завтра', week:'7 дней', overdue:'Просрочено', nodate:'Без даты', done:'Выполненные' };
  var t = titles[crmCalState.list] || 'Все';
  var sub = new Date().toLocaleDateString('ru-RU', {weekday:'long',day:'numeric',month:'long'});
- document.getElementById('tt-toolbar').innerHTML = '<div><div class="tt-h1">'+t+'</div><div class="tt-h1-sub">'+sub+'</div></div>';
+ // v333: переключатель «Список / Месяц / День»
+ var mode = crmCalState.viewMode || 'list';
+ var btn = function(v, label){ return '<button class="tt-mode-btn'+(mode===v?' on':'')+'" onclick="crmCalSetViewMode(\''+v+'\')">'+label+'</button>'; };
+ var subText = sub;
+ if(mode === 'month' && crmCalState.viewDate){
+ var d = new Date(crmCalState.viewDate + 'T00:00:00');
+ subText = d.toLocaleDateString('ru-RU', {month:'long',year:'numeric'});
+ t = 'Месяц';
+ } else if(mode === 'day' && crmCalState.viewDate){
+ var dd = new Date(crmCalState.viewDate + 'T00:00:00');
+ subText = dd.toLocaleDateString('ru-RU', {weekday:'long',day:'numeric',month:'long'});
+ t = 'День';
+ }
+ document.getElementById('tt-toolbar').innerHTML = ''
+ + '<div><div class="tt-h1">'+t+'</div><div class="tt-h1-sub">'+subText+'</div></div>'
+ + '<div class="tt-mode-switch">' + btn('list','Список') + btn('month','Месяц') + btn('day','День') + '</div>';
 }
+
+window.crmCalSetViewMode = function(mode){
+ crmCalState.viewMode = mode;
+ if((mode === 'month' || mode === 'day') && !crmCalState.viewDate){
+ crmCalState.viewDate = crmDateStr(new Date());
+ }
+ crmCalRender();
+};
+window.crmCalSetViewDate = function(date){
+ crmCalState.viewDate = date;
+ crmCalRender();
+};
+window.crmCalNavMonth = function(delta){
+ var d = crmCalState.viewDate ? new Date(crmCalState.viewDate+'T00:00:00') : new Date();
+ d.setMonth(d.getMonth() + delta);
+ crmCalState.viewDate = crmDateStr(d);
+ crmCalRender();
+};
+window.crmCalNavDay = function(delta){
+ var d = crmCalState.viewDate ? new Date(crmCalState.viewDate+'T00:00:00') : new Date();
+ d.setDate(d.getDate() + delta);
+ crmCalState.viewDate = crmDateStr(d);
+ crmCalRender();
+};
+
+// v333: рендер месячной сетки с задачами на днях
+function crmCalRenderMonth(){
+ var listEl = document.getElementById('tt-list');
+ if(!listEl) return;
+ var base = crmCalState.viewDate ? new Date(crmCalState.viewDate+'T00:00:00') : new Date();
+ var y = base.getFullYear(), m = base.getMonth();
+ var first = new Date(y, m, 1);
+ var startDay = (first.getDay() + 6) % 7;
+ var today = crmDateStr(new Date());
+ var byDay = {};
+ crmEventsAll().forEach(function(e){
+ if(!e.date) return;
+ (byDay[e.date] = byDay[e.date] || []).push(e);
+ });
+ var prDot = function(p){
+ if(p === 1 || p === 'high') return '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#FF453A;margin-right:3px"></span>';
+ if(p === 2 || p === 'med') return '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#FF9F0A;margin-right:3px"></span>';
+ if(p === 3 || p === 'low') return '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#0A84FF;margin-right:3px"></span>';
+ return '';
+ };
+ var html = '<div class="tt-month-nav">'
+ + '<button class="tt-mini-arrow" onclick="crmCalNavMonth(-1)">&lsaquo;</button>'
+ + '<button class="tt-mini-arrow" onclick="crmCalSetViewDate(\''+today+'\')">Сегодня</button>'
+ + '<button class="tt-mini-arrow" onclick="crmCalNavMonth(1)">&rsaquo;</button>'
+ + '</div>';
+ html += '<table class="tt-month-grid"><thead><tr>'
+ + ['пн','вт','ср','чт','пт','сб','вс'].map(function(d){return '<th>'+d+'</th>';}).join('')
+ + '</tr></thead><tbody>';
+ var d = 1 - startDay;
+ for(var w = 0; w < 6; w++){
+ html += '<tr>';
+ for(var dow = 0; dow < 7; dow++){
+ var date = new Date(y, m, d);
+ var ds = crmDateStr(date);
+ var muted = date.getMonth() !== m;
+ var isToday = ds === today;
+ var dayTasks = (byDay[ds] || []).filter(function(e){ return e.status !== 'done'; });
+ html += '<td class="'+(muted?'muted':'')+(isToday?' today':'')+'" ondragover="event.preventDefault();this.classList.add(\'drop\')" ondragleave="this.classList.remove(\'drop\')" ondrop="event.preventDefault();this.classList.remove(\'drop\');crmCalDropOnDate(\''+ds+'\',event)" onclick="crmCalSetViewDate(\''+ds+'\');crmCalSetViewMode(\'day\')">';
+ html += '<div class="tt-md-num">'+date.getDate()+'</div>';
+ // Первые 3 задачи + «ещё N» если больше
+ dayTasks.slice(0, 3).forEach(function(e){
+ var pCls = e.priority === 1 || e.priority === 'high' ? ' p-high' :
+ e.priority === 2 || e.priority === 'med' ? ' p-med' :
+ e.priority === 3 || e.priority === 'low' ? ' p-low' : '';
+ html += '<div class="tt-md-task'+pCls+'" draggable="true" ondragstart="crmCalDragStartTask(event,\''+e.id+'\')" onclick="event.stopPropagation();crmCalSelect(\''+e.id+'\')">'
+ + prDot(e.priority)
+ + '<span>'+kbEsc((e.title||'').slice(0, 22))+'</span>'
+ + '</div>';
+ });
+ if(dayTasks.length > 3) html += '<div class="tt-md-more">+ ещё '+(dayTasks.length-3)+'</div>';
+ html += '</td>';
+ d++;
+ }
+ html += '</tr>';
+ }
+ html += '</tbody></table>';
+ listEl.innerHTML = html;
+}
+
+// v333: рендер дневного экрана с почасовкой
+function crmCalRenderDay(){
+ var listEl = document.getElementById('tt-list');
+ if(!listEl) return;
+ var date = crmCalState.viewDate || crmDateStr(new Date());
+ var dayTasks = crmEventsAll().filter(function(e){ return e.date === date; }).sort(function(a,b){ return (a.time_start||'').localeCompare(b.time_start||''); });
+ var byHour = {};
+ var allDayTasks = [];
+ dayTasks.forEach(function(e){
+ if(e.time_start){
+ var h = parseInt(e.time_start.slice(0,2), 10) || 0;
+ (byHour[h] = byHour[h] || []).push(e);
+ } else {
+ allDayTasks.push(e);
+ }
+ });
+ var html = '<div class="tt-day-nav">'
+ + '<button class="tt-mini-arrow" onclick="crmCalNavDay(-1)">&lsaquo;</button>'
+ + '<button class="tt-mini-arrow" onclick="crmCalSetViewDate(\''+crmDateStr(new Date())+'\')">Сегодня</button>'
+ + '<button class="tt-mini-arrow" onclick="crmCalNavDay(1)">&rsaquo;</button>'
+ + '</div>';
+ if(allDayTasks.length){
+ html += '<div class="tt-allday"><div class="tt-allday-label">Без времени</div>';
+ allDayTasks.forEach(function(e){
+ html += '<div class="tt-allday-task" onclick="crmCalSelect(\''+e.id+'\')">'+kbEsc(e.title||'')+'</div>';
+ });
+ html += '</div>';
+ }
+ html += '<table class="tt-day-grid"><tbody>';
+ for(var h = 6; h <= 22; h++){
+ html += '<tr><td class="tt-hour">'+String(h).padStart(2,'0')+':00</td>'
+ + '<td class="tt-hour-slot" onclick="crmCalAddTaskAt(\''+date+'\','+h+')">';
+ (byHour[h] || []).forEach(function(e){
+ var pCls = e.priority === 1 || e.priority === 'high' ? ' p-high' :
+ e.priority === 2 || e.priority === 'med' ? ' p-med' :
+ e.priority === 3 || e.priority === 'low' ? ' p-low' : '';
+ html += '<div class="tt-day-task'+pCls+'" onclick="event.stopPropagation();crmCalSelect(\''+e.id+'\')">'
+ + '<b>'+(e.time_start||'')+(e.time_end?' — '+e.time_end:'')+'</b> '
+ + kbEsc(e.title||'')
+ + '</div>';
+ });
+ html += '</td></tr>';
+ }
+ html += '</tbody></table>';
+ listEl.innerHTML = html;
+}
+
+// Drag-and-drop tasks
+window.crmCalDragStartTask = function(ev, taskId){
+ ev.dataTransfer.setData('text/task-id', taskId);
+ ev.dataTransfer.effectAllowed = 'move';
+};
+window.crmCalDropOnDate = function(date, ev){
+ var taskId = ev.dataTransfer.getData('text/task-id');
+ if(!taskId) return;
+ var all = crmEventsAll();
+ var t = all.find(function(x){ return x.id === taskId; });
+ if(!t) return;
+ t.date = date;
+ crmEventsSaveAll(all);
+ crmCalRender();
+};
+window.crmCalAddTaskAt = function(date, hour){
+ // Quick add задачи в выбранный час — открывает модалку с предзаполнением
+ if(typeof crmEventOpenModal !== 'function') return;
+ crmEventOpenModal();
+ setTimeout(function(){
+ var di = document.getElementById('ev-date'); if(di) di.value = date;
+ var ti = document.getElementById('ev-time-start'); if(ti) ti.value = String(hour).padStart(2,'0')+':00';
+ }, 60);
+};
 
 function crmCalTaskHtml(e, today){
  var pcls = 'p'+(e.priority || 4);
@@ -21373,7 +21581,16 @@ function crmCalRenderRight(){
  document.getElementById('tt-right').innerHTML = html;
 }
 
-function crmCalRender(){ crmCalRenderSide(); crmCalRenderToolbar(); crmCalRenderList(); crmCalRenderRight(); }
+function crmCalRender(){
+ crmCalRenderSide();
+ crmCalRenderToolbar();
+ // v333: ветка по viewMode
+ var mode = crmCalState.viewMode || 'list';
+ if(mode === 'month') crmCalRenderMonth();
+ else if(mode === 'day') crmCalRenderDay();
+ else crmCalRenderList();
+ crmCalRenderRight();
+}
 function crmCalSetList(key){ crmCalState.list = key; crmCalRender(); }
 function crmCalSetOperator(name){ crmCalState.operator = crmCalState.operator === name ? null : name; crmCalRender(); }
 function crmCalSelect(id){ crmCalState.selectedId = id; crmCalRenderRight(); }
