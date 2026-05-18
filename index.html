@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v358</title>
+<title>SalesDoc — Финансовый Дашборд v359</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6131,17 +6131,19 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
  </div>
 
- <!-- v358: Модалка ДЕТАЛЕЙ карточки — открывается кликом по карточке -->
- <div id="route-card-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);align-items:center;justify-content:center" onclick="if(event.target===this)routeCloseCard()">
- <div style="background:var(--card-bg);border-radius:14px;width:min(720px,94vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.5);overflow:hidden">
- <div id="route-card-head" style="padding:18px 22px;border-bottom:1px solid var(--border-faint)"></div>
- <div style="display:flex;gap:0;padding:0 22px;border-bottom:1px solid var(--border-faint)">
- <button onclick="routeCardTab('check')" id="route-tab-check" class="route-tab" style="padding:12px 18px;border:none;background:transparent;color:var(--text);font-size:13px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer">Чек-лист</button>
- <button onclick="routeCardTab('history')" id="route-tab-history" class="route-tab" style="padding:12px 18px;border:none;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer">История</button>
- <button onclick="routeCardTab('contact')" id="route-tab-contact" class="route-tab" style="padding:12px 18px;border:none;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer">Контакт</button>
- <button onclick="routeCloseCard()" style="margin-left:auto;padding:8px 14px;border:none;background:transparent;color:var(--text-soft);cursor:pointer;font-size:18px">×</button>
+ <!-- v359: Полноэкранная страница клиента (как в amo /leads/detail/) -->
+ <div id="view-route-card" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void,#0a0a0a);overflow-y:auto">
+ <div style="max-width:1100px;margin:0 auto;padding:18px 24px">
+ <div style="display:flex;align-items:center;gap:14px;padding-bottom:18px;border-bottom:1px solid var(--border-faint)">
+ <button onclick="routeCloseCard()" style="padding:8px 14px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);cursor:pointer;font-size:13px;font-weight:500">← Назад в Маршрут</button>
+ <div id="route-card-head" style="flex:1"></div>
  </div>
- <div id="route-card-body" style="padding:18px 22px;overflow-y:auto;flex:1"></div>
+ <div style="display:flex;gap:0;padding:0;border-bottom:1px solid var(--border-faint);margin-top:8px">
+ <button onclick="routeCardTab('check')" id="route-tab-check" style="padding:14px 22px;border:none;background:transparent;color:var(--text);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Чек-лист</button>
+ <button onclick="routeCardTab('history')" id="route-tab-history" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">История</button>
+ <button onclick="routeCardTab('contact')" id="route-tab-contact" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Контакт</button>
+ </div>
+ <div id="route-card-body" style="padding:20px 0;min-height:60vh"></div>
  </div>
  </div>
 
@@ -10884,6 +10886,9 @@ function showView(v) {
  // Hide statistics subpage
  var statPage = document.getElementById('view-stat-page');
  if(statPage) statPage.style.display='none';
+ // v359: Hide route card fullscreen page
+ var rtCard = document.getElementById('view-route-card');
+ if(rtCard) { rtCard.style.display='none'; document.body.style.overflow=''; }
  const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Клиенты',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Клиенты',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Клиенты',statistics:'Статистика',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Клиенты',newclients:'Клиенты',route:'Клиенты',morning:'Утренний отчёт',planning:'Планёрки'};
  document.getElementById('page-title').textContent=titles[v]||v;
  // Подсветка активного пункта в nav
@@ -20612,8 +20617,9 @@ function routeRender(){
    // v358: мягкая капсула для бейджа дней — текстом, без заливки
    var dayColor = days > 14 ? '#FF453A' : days > 7 ? '#FF9F0A' : 'var(--text-soft)';
    var dayBadge = '<span style="font-size:11px;padding:2px 7px;border-radius:6px;font-variant-numeric:tabular-nums;background:rgba(120,120,128,.16);color:' + dayColor + '">' + days + ' дн</span>';
-   html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="this.style.opacity=1" onclick="routeOpenCard(\'' + card.id + '\')" onmouseover="this.style.background=\'rgba(255,255,255,.07)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.background=\'rgba(255,255,255,.04)\';this.style.transform=\'\'" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px 14px;cursor:pointer;transition:background .15s ease, transform .15s ease">';
-   html += '<div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px">' + _escHtml(name) + '</div>';
+   // v359: карточка — drag-handle, имя клиента — ссылка (как в amo /leads/detail/)
+   html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="this.style.opacity=1" onmouseover="this.style.background=\'rgba(255,255,255,.07)\'" onmouseout="this.style.background=\'rgba(255,255,255,.04)\'" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px 14px;cursor:grab;transition:background .15s ease">';
+   html += '<div style="margin-bottom:4px"><a onclick="event.stopPropagation();routeOpenCard(\'' + card.id + '\')" style="font-weight:600;font-size:13px;color:var(--accent,#0A84FF);cursor:pointer;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + _escHtml(name) + '</a></div>';
    if(card.tariff) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(card.tariff) + '</div>';
    html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft)">';
    html += '<span>' + _escHtml(op) + '</span>' + dayBadge;
@@ -20774,31 +20780,31 @@ var _routeHistoryItems = [];
 async function routeOpenCard(cardId){
  _routeCurrentCard = routeCards.find(function(c){ return c.id === cardId; });
  if(!_routeCurrentCard) return;
- document.getElementById('route-card-modal').style.display = 'flex';
+ document.getElementById('view-route-card').style.display = 'block';
+ document.body.style.overflow = 'hidden';
  _routeRenderCardHead();
  _routeCurrentTab = 'check';
  routeCardTab('check');
 }
 
 function routeCloseCard(){
- document.getElementById('route-card-modal').style.display = 'none';
+ document.getElementById('view-route-card').style.display = 'none';
+ document.body.style.overflow = '';
  _routeCurrentCard = null;
 }
 
 function _routeRenderCardHead(){
  var card = _routeCurrentCard; if(!card) return;
  var cl = card.clients || {};
- var stageColor = ROUTE_STAGE_COLORS[card.stage] || '#888';
- var html = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">';
+ var html = '<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">';
  html += '<div>';
- html += '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px">' + _escHtml(cl.company_name || '(без имени)') + '</div>';
- html += '<div style="font-size:12px;color:var(--text-soft)">' + _escHtml(card.tariff || 'тариф не указан') + ' · оператор: ' + _escHtml(card.operator || '—') + '</div>';
+ html += '<div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px;letter-spacing:-0.02em">' + _escHtml(cl.company_name || '(без имени)') + '</div>';
+ html += '<div style="font-size:13px;color:var(--text-soft)">' + _escHtml(card.tariff || 'тариф не указан') + ' · оператор: ' + _escHtml(card.operator || '—') + ' · этап: ' + _escHtml(card.stage) + '</div>';
  html += '</div>';
  html += '<div style="display:flex;gap:8px;align-items:center">';
- html += '<span style="padding:4px 10px;border-radius:6px;background:' + stageColor + '22;color:' + stageColor + ';font-size:12px;font-weight:600">' + _escHtml(card.stage) + '</span>';
  if(cl.main_phone){
-  html += '<a href="tel:' + cl.main_phone + '" style="padding:6px 12px;border-radius:6px;background:#7FB89E22;color:#7FB89E;text-decoration:none;font-size:12px;font-weight:600">Звонок</a>';
-  html += '<a href="https://wa.me/' + cl.main_phone.replace(/[^0-9]/g,'') + '" target="_blank" style="padding:6px 12px;border-radius:6px;background:#25D36622;color:#25D366;text-decoration:none;font-size:12px;font-weight:600">WhatsApp</a>';
+  html += '<a href="tel:' + cl.main_phone + '" style="padding:8px 14px;border-radius:8px;background:rgba(127,184,158,.16);color:#7FB89E;text-decoration:none;font-size:13px;font-weight:600;letter-spacing:-0.01em">Звонок</a>';
+  html += '<a href="https://wa.me/' + cl.main_phone.replace(/[^0-9]/g,'') + '" target="_blank" style="padding:8px 14px;border-radius:8px;background:rgba(37,211,102,.16);color:#25D366;text-decoration:none;font-size:13px;font-weight:600;letter-spacing:-0.01em">WhatsApp</a>';
  }
  html += '</div>';
  html += '</div>';
