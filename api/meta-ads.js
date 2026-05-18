@@ -60,10 +60,10 @@ function summarizeLeads(actions, costPerActionType) {
       })()
     });
   });
-  // v344: если в кампании есть конкретные типы (форма/сайт) — берём их сумму.
-  // Если только generic `lead` (как у некоторых Marquiz-кампаний) — используем его.
-  // Так избегаем ×2 (дубль generic+specific) и не теряем кампании где есть только generic.
-  const leadCount = specificSum > 0 ? specificSum : genericLead;
+  // v346: предпочитаем generic `lead` — это сводный итог самой Meta по всем типам лидов.
+  // Раньше брали specificSum и теряли Marquiz на account-level (когда onsite не пришёл, но lead был).
+  // Specific остаётся как fallback на случай если generic отсутствует.
+  const leadCount = genericLead > 0 ? genericLead : specificSum;
   breakdown.sort((a,b) => {
     const aLead = LEAD_ACTION_TYPES.has(a.action_type) ? 1 : 0;
     const bLead = LEAD_ACTION_TYPES.has(b.action_type) ? 1 : 0;
