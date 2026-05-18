@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v335</title>
+<title>SalesDoc — Финансовый Дашборд v336</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -933,6 +933,9 @@ body.light .kb-card:hover{border-color:var(--amo-blue)!important}
  DESIGN SYSTEM v230 — Календарь TickTick-style
  ============================================================ */
 .tt-page{background:var(--surface);border-radius:0;border:none;display:grid;grid-template-columns:240px 1fr 320px;min-height:calc(100vh - 70px);overflow:hidden}
+/* v336: на режимах Month/Week/Day прячем правую колонку — даём календарю всю ширину как в amoCRM */
+.tt-page.tt-fullwide{grid-template-columns:240px 1fr}
+.tt-page.tt-fullwide .tt-right{display:none}
 @media(max-width:1100px){.tt-page{grid-template-columns:1fr}.tt-side,.tt-right{display:none}}
 .tt-side{background:var(--surface-3);border-right:1px solid var(--border-faint);padding:18px 12px;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
 .tt-side h4{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-faint);padding:14px 10px 6px;margin:0}
@@ -21614,6 +21617,12 @@ function crmCalRender(){
  crmCalRenderToolbar();
  // v333 / v335: ветка по viewMode (добавлен week)
  var mode = crmCalState.viewMode || 'list';
+ // v336: на сеточных режимах правая панель скрывается, календарь во всю ширину
+ var page = document.querySelector('#view-calendar .tt-page');
+ if(page){
+ if(mode === 'month' || mode === 'week' || mode === 'day') page.classList.add('tt-fullwide');
+ else page.classList.remove('tt-fullwide');
+ }
  if(mode === 'month') crmCalRenderMonth();
  else if(mode === 'day') crmCalRenderDay();
  else if(mode === 'week') crmCalRenderWeek();
@@ -21683,6 +21692,17 @@ function crmCalSetOperator(name){ crmCalState.operator = crmCalState.operator ==
 function crmCalSelect(id){ crmCalState.selectedId = id; crmCalRenderRight(); }
 function crmCalendarInit(){
  crmCalState.selectedId = null;
+ // v336: автофильтр по текущему пользователю — каждый видит свои задачи по умолчанию
+ if(!crmCalState._userInited){
+ var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
+ var firstName = u && u.name ? String(u.name).split(' ')[0] : null;
+ // Проверяем что такой оператор существует среди известных
+ var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
+ if(firstName && ops.indexOf(firstName) >= 0){
+ crmCalState.operator = firstName;
+ }
+ crmCalState._userInited = true;
+ }
  if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
  try { kbLoad(); } catch(e){}
  }
