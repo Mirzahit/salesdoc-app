@@ -35,19 +35,21 @@ const ACTION_TYPE_LABELS = {
   'page_engagement': 'Реакции на страницу',
   'post_engagement': 'Реакции на пост'
 };
-// v343: считаем только КОНКРЕТНЫЕ типы лидов. Generic `lead` исключён — Meta его возвращает
-// дубликатом каждого конкретного события (форма / сайт), и при сложении получалось ×2.
-// Так цифры совпадают с Meta-кабинетом: leadgen.other = "Лиды форма", onsite = "Лиды с сайта".
-const LEAD_ACTION_TYPES = new Set(['leadgen.other','onsite_conversion.lead_grouped']);
+// v344: для счётчика и сортировки — все типы которые в принципе могут быть лидом.
+// Сам подсчёт ниже умный: берёт конкретные (форма/сайт) если есть, иначе generic `lead` fallback.
+const LEAD_ACTION_TYPES = new Set(['lead','leadgen.other','onsite_conversion.lead_grouped']);
+const LEAD_SPECIFIC_TYPES = new Set(['leadgen.other','onsite_conversion.lead_grouped']);
 
 function summarizeLeads(actions, costPerActionType) {
   if (!Array.isArray(actions)) return { count: 0, breakdown: [] };
-  let leadCount = 0;
+  let specificSum = 0;
+  let genericLead = 0;
   const breakdown = [];
   actions.forEach(a => {
     const type = a.action_type;
     const value = parseFloat(a.value || 0);
-    if (LEAD_ACTION_TYPES.has(type)) leadCount += value;
+    if (LEAD_SPECIFIC_TYPES.has(type)) specificSum += value;
+    else if (type === 'lead') genericLead = Math.max(genericLead, value);
     breakdown.push({
       action_type: type,
       label: ACTION_TYPE_LABELS[type] || type,
@@ -58,7 +60,10 @@ function summarizeLeads(actions, costPerActionType) {
       })()
     });
   });
-  // Сортируем breakdown — лиды наверх, потом по убыванию value
+  // v344: если в кампании есть конкретные типы (форма/сайт) — берём их сумму.
+  // Если только generic `lead` (как у некоторых Marquiz-кампаний) — используем его.
+  // Так избегаем ×2 (дубль generic+specific) и не теряем кампании где есть только generic.
+  const leadCount = specificSum > 0 ? specificSum : genericLead;
   breakdown.sort((a,b) => {
     const aLead = LEAD_ACTION_TYPES.has(a.action_type) ? 1 : 0;
     const bLead = LEAD_ACTION_TYPES.has(b.action_type) ? 1 : 0;
