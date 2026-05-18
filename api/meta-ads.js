@@ -35,8 +35,9 @@ const ACTION_TYPE_LABELS = {
   'page_engagement': 'Реакции на страницу',
   'post_engagement': 'Реакции на пост'
 };
-// Какие действия считаем "лидами" в широком смысле — для итоговой "Цены за лид"
-const LEAD_ACTION_TYPES = new Set(['lead','leadgen.other','onsite_conversion.lead_grouped','complete_registration','subscribe','onsite_conversion.messaging_conversation_started_7d']);
+// v342: считаем "лидами" только настоящие заявки — формы Meta + сайт (Marquiz/onsite).
+// Регистрации, подписки на страницу и Messenger-чаты НЕ лиды. Так цифры совпадают с Meta-кабинетом.
+const LEAD_ACTION_TYPES = new Set(['lead','leadgen.other','onsite_conversion.lead_grouped']);
 
 function summarizeLeads(actions, costPerActionType) {
   if (!Array.isArray(actions)) return { count: 0, breakdown: [] };
