@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v333</title>
+<title>SalesDoc — Финансовый Дашборд v334</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7948,6 +7948,10 @@ function aiWidgetHtml(widgetId){
 }
 
 function aiWidgetShow(widgetId){
+ // v334: встроенные виджеты отключены — заменены плавающей кнопкой AI Assistant в углу (как Амма в amoCRM)
+ //       Эта функция теперь no-op чтобы не плодить виджеты на страницах.
+ //       Контейнеры спрятаны через CSS .ai-w-container-hidden.
+ return;
  if(!(currentUser && typeof isAssistantAllowed === 'function' && isAssistantAllowed(currentUser))) return;
  // Если виджета нет в DOM — добавляем в контейнер (для страниц где есть placeholder)
  var el = document.getElementById(widgetId);
@@ -25840,6 +25844,56 @@ function kbRender() {
  b.addEventListener('mouseenter', function(){ b.style.opacity='1'; });
  b.addEventListener('mouseleave', function(){ b.style.opacity='.55'; });
  document.body.appendChild(b);
+})();
+
+// v334: плавающая кнопка AI-ассистента в правом нижнем углу (как Амма в amoCRM).
+//       Виджеты на страницах больше не показываются — всё через эту кнопку.
+//       Клик — переходит в Ассистент и автоматом выбирает агента по контексту страницы.
+(function(){
+ // Доступна только тем у кого Ассистент включён (CEO)
+ function ensureFab(){
+ if(!currentUser || (typeof isAssistantAllowed === 'function' && !isAssistantAllowed(currentUser))) return;
+ if(document.getElementById('ai-fab-btn')) return;
+ var fab = document.createElement('button');
+ fab.id = 'ai-fab-btn';
+ fab.title = 'Открыть AI-ассистента';
+ fab.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z" fill="white"/><circle cx="19" cy="5" r="2" fill="white" opacity="0.8"/><circle cx="5" cy="19" r="1.5" fill="white" opacity="0.6"/></svg>';
+ fab.style.cssText = [
+ 'position:fixed','right:24px','bottom:48px','z-index:99000',
+ 'width:56px','height:56px','border-radius:50%','border:none','cursor:pointer',
+ 'background:linear-gradient(135deg,#8B5CF6 0%,#5489BB 100%)',
+ 'color:#fff','box-shadow:0 6px 20px rgba(139,92,246,.35), 0 0 0 1px rgba(255,255,255,.06)',
+ 'display:flex','align-items:center','justify-content:center',
+ 'transition:transform .15s, box-shadow .15s'
+ ].join(';');
+ fab.addEventListener('mouseenter', function(){ fab.style.transform = 'scale(1.08)'; fab.style.boxShadow = '0 8px 28px rgba(139,92,246,.5), 0 0 0 1px rgba(255,255,255,.12)'; });
+ fab.addEventListener('mouseleave', function(){ fab.style.transform = ''; fab.style.boxShadow = '0 6px 20px rgba(139,92,246,.35), 0 0 0 1px rgba(255,255,255,.06)'; });
+ fab.addEventListener('click', function(){
+ // По контексту текущей страницы — определяем какого агента активировать
+ var view = (document.querySelector('[id^="view-"][style*="display: block"], [id^="view-"]:not([style*="display: none"])')||{}).id || '';
+ var viewKey = view.replace(/^view-/, '');
+ var agentByView = {
+ dashboard:'financier', morning:'financier',
+ payments:'financier', expenses:'financier', cashflow:'financier', reports:'financier',
+ activeclients:'customer', newclients:'sales',
+ keyclients:'customer',
+ kanban:'integrator', supportdash:'integrator', integrations:'integrator',
+ marketing:'marketing',
+ statistics:'sales', plan:'sales',
+ calendar:'product', planning:'product',
+ knowledge:'product', academy:'hr', employees:'hr', tests:'hr'
+ };
+ var agent = agentByView[viewKey] || 'customer';
+ if(typeof showView === 'function') showView('assistant');
+ setTimeout(function(){
+ if(typeof asstSelectAgent === 'function') asstSelectAgent(agent);
+ }, 100);
+ });
+ document.body.appendChild(fab);
+ }
+ // Пробуем добавить сразу + переустанавливать после login/смены пользователя
+ setTimeout(ensureFab, 1000);
+ setInterval(ensureFab, 3000); // на случай если currentUser появился позже
 })();
 
 </script>
