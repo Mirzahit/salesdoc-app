@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v339</title>
+<title>SalesDoc — Финансовый Дашборд v340</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -25415,52 +25415,40 @@ function amoRenderFunnel(d){
  sub.textContent = 'Период: ' + perLabel + tagBit + ' · ' + flow.length + ' шагов · конверсия: ' + convPct + '%' + lostBit;
  }
 
+ // v340: визуал воронки как в amo — горизонтальные полоски, проц внутри, треугольник-стрелка справа, имя/число справа
  var maxCount = Math.max.apply(null, flow.map(function(s){ return s.count; })) || 1;
- var svgW = 800, stageH = 64, gap = 3;
- var svgH = flow.length * (stageH + gap);
- var centerX = svgW / 2, maxW = svgW - 40;
-
- var svg = '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" style="width:100%;height:auto;max-height:' + (flow.length * 70) + 'px;display:block;margin:0 auto" preserveAspectRatio="xMidYMid meet">';
+ var html = '<div style="display:flex;flex-direction:column;gap:6px">';
 
  flow.forEach(function(s, i){
- var curW = Math.max(120, Math.round(s.count / maxCount * maxW));
  var prevS = i > 0 ? flow[i-1] : null;
- var prevW = prevS ? Math.max(120, Math.round(prevS.count / maxCount * maxW)) : curW;
- var y = i * (stageH + gap);
- var tl = centerX - prevW/2, tr = centerX + prevW/2;
- var bl = centerX - curW/2, br = centerX + curW/2;
- var pts = tl + ',' + y + ' ' + tr + ',' + y + ' ' + br + ',' + (y+stageH) + ' ' + bl + ',' + (y+stageH);
-
- // Цвет: Meta — фиолетовый, amo — синий, kanban — зелёный
  var fill = s.source === 'meta' ? '#8B5CF6'
   : s.source === 'kanban' ? '#7FB89E'
   : '#5489BB';
-
- // Конверсия от предыдущего этапа (drop-off detection)
+ var pctOfTop = top > 0 ? Math.round(s.count / top * 100) : 0;
+ // Ширина внутри левой колонки: от 6% (минимум для треугольника) до 100% (вершина воронки)
+ var widthPct = Math.max(6, Math.round(s.count / maxCount * 100));
  var convFromPrev = prevS && prevS.count > 0 ? Math.round(s.count / prevS.count * 100) : null;
- var convLabel = convFromPrev !== null ? ' · ' + convFromPrev + '% от предыдущего' : '';
- var fromTotal = top > 0 ? Math.round(s.count / top * 1000) / 10 : 0;
+ var lost = prevS ? Math.max(0, prevS.count - s.count) : 0;
+ var dropPct = (prevS && prevS.count > 0 && lost > 0) ? Math.round(lost / prevS.count * 100) : 0;
 
- svg += '<polygon points="' + pts + '" fill="' + fill + '" opacity="0.88" stroke="' + fill + '" stroke-width="1"/>';
- var ty = y + stageH/2;
- svg += '<text x="' + centerX + '" y="' + (ty - 8) + '" text-anchor="middle" font-family="Inter,sans-serif" font-size="14" font-weight="700" fill="#fff">'
- + amoEscXml(s.label) + '</text>';
- svg += '<text x="' + centerX + '" y="' + (ty + 10) + '" text-anchor="middle" font-family="Inter,sans-serif" font-size="13" font-weight="600" fill="#fff">'
- + s.count.toLocaleString('ru-RU') + '</text>';
- svg += '<text x="' + centerX + '" y="' + (ty + 24) + '" text-anchor="middle" font-family="Inter,sans-serif" font-size="10" fill="rgba(255,255,255,0.8)">'
- + amoEscXml((fromTotal + '% от вершины' + convLabel)) + '</text>';
-
- // Стрелка справа от трапеции: drop-off от предыдущего этапа
- if(prevS && prevS.count > s.count){
- var lost = prevS.count - s.count;
- var dropPct = Math.round(lost / prevS.count * 100);
- svg += '<text x="' + (svgW - 10) + '" y="' + (y - 4) + '" text-anchor="end" font-family="Inter,sans-serif" font-size="10" fill="#D89595" font-weight="600">'
- + '↘ −' + lost.toLocaleString('ru-RU') + ' (' + dropPct + '%)' + '</text>';
- }
+ html += '<div style="display:flex;align-items:center;gap:14px;padding:2px 0">'
+ + '<div style="flex:0 0 50%;position:relative;height:30px;display:flex;align-items:center">'
+   + '<div style="background:' + fill + ';color:#fff;height:30px;width:' + widthPct + '%;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:12px;position:relative;border-radius:3px 0 0 3px;letter-spacing:.2px">'
+     + pctOfTop + '%'
+     + '<span style="position:absolute;left:100%;top:0;width:0;height:0;border-style:solid;border-width:15px 0 15px 14px;border-color:transparent transparent transparent ' + fill + '"></span>'
+   + '</div>'
+ + '</div>'
+ + '<div style="flex:1;min-width:0;line-height:1.35">'
+   + '<div style="font-size:13px;font-weight:600;color:var(--text)">' + amoEscXml(s.label) + '</div>'
+   + '<div style="font-size:11px;color:var(--text-soft);margin-top:2px">'
+     + '<b style="color:var(--text);font-size:13px">' + s.count.toLocaleString('ru-RU') + '</b>'
+     + (convFromPrev !== null ? '<span style="margin-left:8px">' + convFromPrev + '% от предыдущего</span>' : '')
+     + (dropPct >= 10 ? '<span style="margin-left:8px;color:#D89595">−' + lost.toLocaleString('ru-RU') + ' (' + dropPct + '%)</span>' : '')
+   + '</div>'
+ + '</div>'
+ + '</div>';
  });
- svg += '</svg>';
-
- var html = svg;
+ html += '</div>';
 
  // Сводка снизу — цветовая легенда + конверсия
  var convColor = convPct >= 1 ? 'var(--success)' : convPct >= 0.5 ? 'var(--warning)' : 'var(--danger)';
