@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v331</title>
+<title>SalesDoc — Финансовый Дашборд v332</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2421,16 +2421,33 @@ body.light .sprint-stat{background:rgba(255,255,255,.6);border-color:rgba(15,23,
 .sp-avatar:first-child{margin-left:0}
 
 /* v168: КАНБАН ВНУТРИ СПРИНТА — glassmorphism */
-/* v329 / v330 / v331: Канбан как в amoCRM — фиксированная ширина колонок + горизонтальный скролл.
-   Колонки НЕ растягиваются при изменении ширины окна. */
+/* v329-v332: Канбан как в amoCRM — фиксированная ширина колонок + мини-карта скролла */
+.plan-kanban-wrap{position:relative}
 .plan-kanban{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x proximity}
 .plan-kb-col{flex:0 0 280px;scroll-snap-align:start;min-width:280px;max-width:280px}
 .plan-kb-col-closed{opacity:0.75;flex:0 0 220px;min-width:220px;max-width:220px}
 .plan-kb-col-closed:hover{opacity:1}
-/* Стилизация скроллбара чтоб не уродовал */
-.plan-kanban::-webkit-scrollbar{height:8px}
-.plan-kanban::-webkit-scrollbar-thumb{background:rgba(120,120,128,.25);border-radius:4px}
-.plan-kanban::-webkit-scrollbar-thumb:hover{background:rgba(120,120,128,.45)}
+/* Прячем системный скроллбар — будем использовать свою мини-карту */
+.plan-kanban::-webkit-scrollbar{height:0;display:none}
+.plan-kanban{scrollbar-width:none}
+/* v332: мини-карта скролла как в amoCRM */
+.plan-scroll-map{
+ position:sticky;bottom:8px;margin-top:10px;margin-left:auto;
+ width:280px;height:18px;padding:5px 8px;
+ background:rgba(30,30,40,.75);border:1px solid rgba(255,255,255,.06);
+ border-radius:10px;backdrop-filter:blur(10px);
+ display:flex;align-items:center;gap:2px;
+ z-index:5;
+}
+body.light .plan-scroll-map{background:rgba(255,255,255,.85);border-color:rgba(15,23,42,.06)}
+.plan-scroll-map__items{flex:1;position:relative;display:flex;gap:2px;height:100%;cursor:pointer}
+.plan-scroll-map__item{flex:1;background:rgba(120,120,128,.30);border-radius:2px}
+.plan-scroll-map__viewport{
+ position:absolute;top:0;bottom:0;
+ background:rgba(84,137,187,.55);border-radius:3px;
+ cursor:grab;transition:background .15s;
+}
+.plan-scroll-map__viewport:hover,.plan-scroll-map__viewport.dragging{background:rgba(84,137,187,.85);cursor:grabbing}
 .plan-kb-col{
  background:rgba(255,255,255,.025);
  backdrop-filter:blur(18px) saturate(150%);
@@ -4929,6 +4946,7 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  </div>
 
  <!-- Kanban -->
+ <div class="plan-kanban-wrap">
  <div class="plan-kanban" id="plan-kanban">
  <div class="plan-kb-col" data-status="todo" ondragover="planDragOver(event,this)" ondragleave="planDragLeave(this)" ondrop="planDropTask(event,'todo',this)">
  <div class="plan-kb-head"><span>Бэклог</span><span class="plan-kb-count" id="plan-kb-count-todo">0</span></div>
@@ -4958,6 +4976,13 @@ body.light #sd-splash .sd-splash-text{color:rgba(60,60,67,.45)}
  <div class="plan-kb-col plan-kb-col-closed" data-status="cancelled" ondragover="planDragOver(event,this)" ondragleave="planDragLeave(this)" ondrop="planDropTask(event,'cancelled',this)">
  <div class="plan-kb-head"><span style="color:var(--text-muted)">Отменена</span><span class="plan-kb-count" id="plan-kb-count-cancelled">0</span></div>
  <div class="plan-kb-body" id="plan-kb-cancelled"></div>
+ </div>
+ </div>
+ <!-- v332: мини-карта скролла как в amoCRM -->
+ <div class="plan-scroll-map" id="plan-scroll-map">
+ <div class="plan-scroll-map__items" id="plan-scroll-map-items">
+ <div class="plan-scroll-map__viewport" id="plan-scroll-map-viewport" style="width:30%;left:0%"></div>
+ </div>
  </div>
  </div>
  </div>
@@ -14156,8 +14181,71 @@ window.planCloseSprint = function(){
  if (typeof planningRender === 'function') planningRender();
 };
 
+// v332: мини-карта скролла Канбана — обновление позиции при scroll/resize + drag
+function _planInitScrollMap(){
+ if(window._planScrollMapInited) return;
+ var kb = document.getElementById('plan-kanban');
+ var vp = document.getElementById('plan-scroll-map-viewport');
+ var items = document.getElementById('plan-scroll-map-items');
+ if(!kb || !vp || !items) return;
+ window._planScrollMapInited = true;
+ function renderColItems(){
+ // Сегменты по числу колонок (фиксированно сейчас 7)
+ var cols = kb.querySelectorAll('.plan-kb-col').length || 7;
+ var existing = items.querySelectorAll('.plan-scroll-map__item');
+ if(existing.length !== cols){
+ existing.forEach(function(e){ e.remove(); });
+ for(var i = 0; i < cols; i++){
+ var d = document.createElement('div');
+ d.className = 'plan-scroll-map__item';
+ items.insertBefore(d, vp);
+ }
+ }
+ }
+ function update(){
+ renderColItems();
+ var sw = kb.scrollWidth, cw = kb.clientWidth;
+ if(sw <= cw){ vp.style.width = '100%'; vp.style.left = '0%'; return; }
+ var ratio = cw / sw;
+ var leftRatio = kb.scrollLeft / sw;
+ vp.style.width = Math.max(8, ratio * 100) + '%';
+ vp.style.left = (leftRatio * 100) + '%';
+ }
+ kb.addEventListener('scroll', update);
+ window.addEventListener('resize', update);
+ // Drag viewport indicator
+ var dragging = false, dragStartX, dragStartScrollLeft;
+ vp.addEventListener('mousedown', function(e){
+ dragging = true; vp.classList.add('dragging');
+ dragStartX = e.clientX; dragStartScrollLeft = kb.scrollLeft;
+ e.preventDefault();
+ });
+ document.addEventListener('mousemove', function(e){
+ if(!dragging) return;
+ var delta = e.clientX - dragStartX;
+ var mapWidth = items.offsetWidth;
+ if(mapWidth <= 0) return;
+ var deltaRatio = delta / mapWidth;
+ kb.scrollLeft = dragStartScrollLeft + deltaRatio * kb.scrollWidth;
+ });
+ document.addEventListener('mouseup', function(){
+ if(dragging){ dragging = false; vp.classList.remove('dragging'); }
+ });
+ // Click on track — jump to that position
+ items.addEventListener('click', function(e){
+ if(e.target === vp) return; // драг по индикатору обрабатывается отдельно
+ var rect = items.getBoundingClientRect();
+ var x = e.clientX - rect.left;
+ var ratio = x / rect.width;
+ kb.scrollLeft = ratio * kb.scrollWidth - kb.clientWidth / 2;
+ });
+ setTimeout(update, 100);
+}
+
 function planRenderKanban(){
  if (!_planCurrentSprintId) return;
+ // v332: инициализация мини-карты при первом рендере
+ _planInitScrollMap();
  var tasks = planTasksOfSprint(_planCurrentSprintId);
  // v169: перерисовать burndown и velocity на каждое изменение задач
  var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;});
