@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v327</title>
+<title>SalesDoc — Финансовый Дашборд v328</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -24606,10 +24606,14 @@ function kbSaveTasksToSheet(card) {
 // ============================================================
 function mktOpenTargetPage() {
  document.getElementById('view-mkt-target').style.display = 'block';
- // Инициализировать графики при первом открытии
+ // v328: автоматически грузим данные Meta API если ещё не загружены
  setTimeout(function(){
  if(typeof mktInitCharts==='function' && !window._mktInited) { mktInitCharts(); window._mktInited = true; }
  if(typeof mktRender==='function' && window._mktLeads && window._mktLeads.length) mktRender();
+ // Автозагрузка Meta-данных чтобы KPI не были «—» при открытии
+ if(typeof mktMetaApiLoad === 'function' && !window._metaApiCache){
+ try { mktMetaApiLoad(); } catch(_){}
+ }
  }, 200);
 }
 
