@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v346</title>
+<title>SalesDoc — Финансовый Дашборд v347</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13456,36 +13456,10 @@ window.mktLoadLeads = async function() {
 
  if (statusEl) statusEl.textContent = '';
 
- var range = mktGetDateRange(_mktPeriod);
- var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- var url = GS_URL + '?action=getSheet&spreadsheetId=' + LEADS_SHEET_ID + '&sheet=Лист1&range=A1:R300';
-
+ // v347: основной источник — Meta API (как в воронке и кабинете).
+ // Ручная таблица лидов в Sheets — fallback если Meta не ответил.
  var totalLeads = 0;
- var sheetWorked = false;
- try {
- var resp = await fetch(url);
- var data = await resp.json();
- if (!data.rows) throw new Error('Нет данных');
-
- var MAX_LEADS_PER_ROW = 500;
- data.rows.forEach(function(row) {
- var dateStr = row[1] || '';
- var leads = Number(row[13]);
- if (!dateStr || !dateStr.includes('T')) return;
- if (isNaN(leads) || leads <= 0 || leads > MAX_LEADS_PER_ROW) return;
-
- var rowDate = new Date(dateStr);
- if (rowDate >= range.start && rowDate <= range.end) {
- totalLeads += leads;
- }
- });
- sheetWorked = true;
- } catch(e) {
- console.warn('mktLoadLeads: Sheets fail, fallback to Meta API', e);
- }
-
- // v327: fallback на Meta API leads_count если из Sheets ничего не пришло
- if (totalLeads === 0) {
+ var fromMeta = false;
  try {
  var metaPeriod = _mktPeriod === 'week' ? 'last_7d' : 'this_month';
  var mr = await fetch('/api/meta-ads?endpoint=account_summary&period=' + metaPeriod);
@@ -13493,19 +13467,41 @@ window.mktLoadLeads = async function() {
  var metaLeads = md && md.summary ? Number(md.summary.leads_count || 0) : 0;
  if (metaLeads > 0) {
  totalLeads = metaLeads;
+ fromMeta = true;
  if (statusEl) statusEl.textContent = 'из рекламы Meta';
- } else if (statusEl) {
- statusEl.textContent = sheetWorked ? 'из таблицы лидов' : 'данных нет';
  }
- } catch(e2) {
- console.warn('mktLoadLeads: Meta API fallback failed', e2);
+ } catch(e) {
+ console.warn('mktLoadLeads: Meta API failed', e);
  }
- } else if (statusEl) {
- statusEl.textContent = 'из таблицы лидов';
+
+ if (totalLeads === 0) {
+ // Fallback: ручная таблица лидов в Sheets
+ var range = mktGetDateRange(_mktPeriod);
+ var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
+ var url = GS_URL + '?action=getSheet&spreadsheetId=' + LEADS_SHEET_ID + '&sheet=Лист1&range=A1:R300';
+ try {
+ var resp = await fetch(url);
+ var data = await resp.json();
+ if (data.rows) {
+ var MAX_LEADS_PER_ROW = 500;
+ data.rows.forEach(function(row) {
+ var dateStr = row[1] || '';
+ var leads = Number(row[13]);
+ if (!dateStr || !dateStr.includes('T')) return;
+ if (isNaN(leads) || leads <= 0 || leads > MAX_LEADS_PER_ROW) return;
+ var rowDate = new Date(dateStr);
+ if (rowDate >= range.start && rowDate <= range.end) totalLeads += leads;
+ });
+ if (totalLeads > 0 && statusEl) statusEl.textContent = 'из таблицы лидов (ручной учёт)';
+ }
+ } catch(e3) {
+ console.warn('mktLoadLeads: Sheets fallback failed', e3);
+ }
+ if (totalLeads === 0 && statusEl) statusEl.textContent = 'данных нет';
  }
 
  leadsEl.textContent = totalLeads > 0 ? totalLeads : '—';
- if (totalLeads > 0) leadsEl.style.color = '#5489BB';
+ if (totalLeads > 0) leadsEl.style.color = fromMeta ? '#8B5CF6' : '#5489BB';
  mktAutoCalc();
 };
 
