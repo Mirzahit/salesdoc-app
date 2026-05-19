@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v368</title>
+<title>SalesDoc — Финансовый Дашборд v369</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4392,6 +4392,7 @@ input:focus, select:focus, textarea:focus {
  <div id="clients-tab-bar" class="cli-tabbar" style="display:none">
  <!-- v365: убраны фантомные вкладки «Все·скоро», «В риске·скоро», «Расторгнутые·скоро» — UX-критик сказал что они дразнят оператора -->
  <button class="cli-tab" data-clients-tab="route" onclick="clientsGoTab('route')">Маршрут клиента</button>
+ <button class="cli-tab" data-clients-tab="my-clients" onclick="clientsGoTab('my-clients')">Мои клиенты</button>
  <button class="cli-tab" data-clients-tab="kanban" onclick="clientsGoTab('kanban')">Внедрение (старый)</button>
  <button class="cli-tab" data-clients-tab="newclients" onclick="clientsGoTab('newclients')">Новые</button>
  <button class="cli-tab" data-clients-tab="activeclients" onclick="clientsGoTab('activeclients')">Действующие</button>
@@ -6299,6 +6300,30 @@ input:focus, select:focus, textarea:focus {
  </div>
  </div>
 
+ <!-- v369: Мои клиенты — витрина активированных клиентов с напоминанием о продлении -->
+ <div id="view-my-clients" style="display:none;background:var(--ds-page-gradient);min-height:calc(100vh - 70px)">
+ <div style="padding:16px 24px 0;max-width:1400px;margin:0 auto">
+ <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+ <div>
+ <div style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.02em">Мои клиенты</div>
+ <div style="font-size:12px;color:var(--text-soft);margin-top:4px" id="myc-status">Загрузка...</div>
+ </div>
+ <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+ <select id="myc-filter-curator" onchange="myClientsRender()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);font-size:13px">
+ <option value="">Все кураторы</option>
+ </select>
+ <div style="display:inline-flex;gap:0;border-radius:8px;border:1px solid var(--border-faint);overflow:hidden">
+ <button onclick="myClientsSetUrgency('all')" id="myc-u-all" data-myc-urg="all" style="padding:8px 14px;border:none;background:transparent;color:var(--text);font-size:13px;cursor:pointer;font-weight:600">Все</button>
+ <button onclick="myClientsSetUrgency('soon')" id="myc-u-soon" data-myc-urg="soon" style="padding:8px 14px;border:none;background:transparent;color:var(--text-soft);font-size:13px;cursor:pointer;border-left:1px solid var(--border-faint)">Скоро (≤7 дн)</button>
+ <button onclick="myClientsSetUrgency('overdue')" id="myc-u-overdue" data-myc-urg="overdue" style="padding:8px 14px;border:none;background:transparent;color:var(--text-soft);font-size:13px;cursor:pointer;border-left:1px solid var(--border-faint)">Просрочены</button>
+ </div>
+ <button onclick="myClientsLoad()" title="Обновить" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);cursor:pointer">⟳</button>
+ </div>
+ </div>
+ <div id="myc-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;padding-bottom:32px"></div>
+ </div>
+ </div>
+
  <!-- v359/v366: Полноэкранная страница клиента — Liquid Glass -->
  <div id="view-route-card" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--ds-page-gradient);overflow-y:auto">
  <div style="max-width:1100px;margin:0 auto;padding:18px 24px">
@@ -6312,6 +6337,18 @@ input:focus, select:focus, textarea:focus {
  <button onclick="routeCardTab('contact')" id="route-tab-contact" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Контакт</button>
  </div>
  <div id="route-card-body" style="padding:20px 0;min-height:60vh"></div>
+ </div>
+ </div>
+
+ <!-- v369: Универсальная модалка выбора периода подписки (1/3/6/12 мес) — заменяет prompt() -->
+ <div id="period-modal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:center;justify-content:center">
+ <div style="background:var(--ds-glass-card);backdrop-filter:saturate(180%) blur(40px);-webkit-backdrop-filter:saturate(180%) blur(40px);border:1px solid var(--ds-glass-border-bright);border-radius:22px;padding:26px;width:min(440px,92vw);box-shadow:0 24px 64px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.18)">
+ <div id="period-modal-title" style="font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);letter-spacing:-0.02em"></div>
+ <div id="period-modal-sub" style="font-size:13px;color:var(--text-soft);margin-bottom:22px;line-height:1.4"></div>
+ <div id="period-modal-buttons" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px"></div>
+ <div style="display:flex;justify-content:flex-end">
+ <button onclick="_periodPickCancel()" style="padding:10px 18px;border-radius:10px;border:1px solid var(--ds-glass-border);background:transparent;color:var(--text-soft);cursor:pointer;font-weight:500">Отмена</button>
+ </div>
  </div>
  </div>
 
@@ -10993,7 +11030,7 @@ function showView(v) {
  if (v === 'clients') {
  var lastTab = null;
  try { lastTab = localStorage.getItem('sd_clients_last_tab'); } catch(_){}
- var allowedTabs = ['activeclients','newclients','kanban','route','keyclients','integrations'];
+ var allowedTabs = ['activeclients','newclients','kanban','route','my-clients','keyclients','integrations'];
  if (!allowedTabs.indexOf || allowedTabs.indexOf(lastTab) < 0) lastTab = 'activeclients';
  v = lastTab;
  }
@@ -11011,13 +11048,13 @@ function showView(v) {
  v = defaultViewForUser(currentUser);
  }
  }
- ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin'].forEach(x=>{
+ ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','my-clients','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
  // v290: единый tab-bar раздела «Клиенты» — показываем при заходе на любой из подэкранов клиентов
  (function(){
- var cliViews = ['activeclients','newclients','kanban','route','keyclients','integrations'];
+ var cliViews = ['activeclients','newclients','kanban','route','my-clients','keyclients','integrations'];
  var bar = document.getElementById('clients-tab-bar');
  if (!bar) return;
  if (cliViews.indexOf(v) >= 0) {
@@ -11041,6 +11078,8 @@ function showView(v) {
  if (v === 'supportdash' && typeof supportInit === 'function') { try { supportInit(); } catch(_){} }
  if (v === 'activeclients' && typeof acInit === 'function') { try { acInit(); } catch(_){} }
  if (v === 'newclients' && typeof ncInit === 'function') { try { ncInit(); } catch(_){} }
+ // v369: Мои клиенты — витрина продлений
+ if (v === 'my-clients' && typeof myClientsLoad === 'function') { try { myClientsLoad(); } catch(_){} }
  // v165: инициализация Планёрок при заходе
  if (v === 'planning' && typeof planningInit === 'function') { try { planningInit(); } catch(_){} }
  // Hide fullscreen card page when switching views
@@ -11064,7 +11103,7 @@ function showView(v) {
  // v359: Hide route card fullscreen page
  var rtCard = document.getElementById('view-route-card');
  if(rtCard) { rtCard.style.display='none'; document.body.style.overflow=''; }
- const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Клиенты',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Клиенты',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Клиенты',statistics:'Статистика',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Клиенты',newclients:'Клиенты',route:'Клиенты',morning:'Утренний отчёт',planning:'Планёрки'};
+ const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Клиенты',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Клиенты',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Клиенты',statistics:'Статистика',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Клиенты',newclients:'Клиенты',route:'Клиенты','my-clients':'Клиенты',morning:'Утренний отчёт',planning:'Планёрки'};
  document.getElementById('page-title').textContent=titles[v]||v;
  // Подсветка активного пункта в nav
  document.querySelectorAll('.nav-item[data-view]').forEach(function(el){
@@ -20952,6 +20991,241 @@ async function routeCreate(){
  }
 }
 
+// v369: Универсальная модалка выбора периода подписки. Заменяет браузерный prompt() —
+// тот выглядит как «комп сломался», особенно для операторов которые не айтишники.
+// Возвращает Promise<number|null>: число месяцев (1/3/6/12) или null если отменили.
+var _periodPickResolve = null;
+function _pickPeriod(title, subtitle, defaultMonths){
+ return new Promise(function(resolve){
+  _periodPickResolve = resolve;
+  document.getElementById('period-modal-title').textContent = title || 'Выберите период';
+  document.getElementById('period-modal-sub').textContent = subtitle || 'На какой срок оплачена подписка?';
+  var box = document.getElementById('period-modal-buttons');
+  box.replaceChildren();
+  [1, 3, 6, 12].forEach(function(m){
+   var btn = document.createElement('button');
+   btn.textContent = m === 1 ? '1 месяц' : (m === 12 ? '12 месяцев (год)' : m + ' месяца');
+   var isDefault = m === defaultMonths;
+   btn.style.cssText = 'padding:14px 16px;border-radius:12px;border:1px solid '
+    + (isDefault ? 'var(--accent,#5489BB)' : 'var(--ds-glass-border)')
+    + ';background:' + (isDefault ? 'rgba(84,137,187,.16)' : 'var(--ds-glass-card)')
+    + ';color:var(--text);font-size:15px;font-weight:600;cursor:pointer;letter-spacing:-0.01em;transition:all .15s';
+   btn.addEventListener('click', function(){
+    document.getElementById('period-modal').style.display = 'none';
+    if(_periodPickResolve){ _periodPickResolve(m); _periodPickResolve = null; }
+   });
+   box.appendChild(btn);
+  });
+  document.getElementById('period-modal').style.display = 'flex';
+ });
+}
+function _periodPickCancel(){
+ document.getElementById('period-modal').style.display = 'none';
+ if(_periodPickResolve){ _periodPickResolve(null); _periodPickResolve = null; }
+}
+
+// v369: Мои клиенты — витрина активных клиентов с напоминанием о продлении подписки.
+// Куратор видит своих, дни до next_billing_at цветом (зелёный/жёлтый/красный/просрочено).
+// Кнопка «Оплачено — продлить» сдвигает next_billing_at на +N месяцев согласно периоду подписки.
+// Все пользовательские данные экранируются через _escHtml (определена ниже) — XSS защита.
+var myClients = [];
+var mycUrgency = 'all'; // 'all' | 'soon' | 'overdue'
+
+async function myClientsLoad(){
+ var st = document.getElementById('myc-status');
+ if(st) st.textContent = 'Загрузка...';
+ try {
+  var [clRes, opsRes] = await Promise.all([
+   sbFetch('/api/clients?status=active'),
+   fetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators: [] }; })
+  ]);
+  if(!clRes.ok) throw new Error(clRes.error || 'clients load failed');
+  myClients = clRes.clients || [];
+  var filt = document.getElementById('myc-filter-curator');
+  if(filt && filt.options.length <= 1){
+   var ops = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
+   ops.forEach(function(o){
+    var opt = document.createElement('option');
+    opt.value = o.name; opt.textContent = o.name;
+    filt.appendChild(opt);
+   });
+  }
+  if(st) st.textContent = 'Всего активных: ' + myClients.length;
+  myClientsRender();
+ } catch(e){
+  if(st) st.textContent = 'Ошибка загрузки: ' + e.message;
+ }
+}
+
+function myClientsSetUrgency(u){
+ mycUrgency = u;
+ ['all','soon','overdue'].forEach(function(k){
+  var btn = document.getElementById('myc-u-' + k);
+  if(!btn) return;
+  if(k === u){
+   btn.style.background = 'var(--accent,#5489BB)';
+   btn.style.color = '#fff';
+   btn.style.fontWeight = '600';
+  } else {
+   btn.style.background = 'transparent';
+   btn.style.color = 'var(--text-soft)';
+   btn.style.fontWeight = '500';
+  }
+ });
+ myClientsRender();
+}
+
+function myClientsDaysUntil(dateStr){
+ if(!dateStr) return null;
+ var d = new Date(dateStr);
+ if(isNaN(d)) return null;
+ var today = new Date();
+ today.setHours(0,0,0,0);
+ d.setHours(0,0,0,0);
+ return Math.round((d - today) / 86400000);
+}
+
+function _mycColor(days){
+ if(days === null || days === undefined) return { c: 'var(--text-muted)', bg: 'rgba(120,120,128,.10)', label: 'дата не задана' };
+ if(days < 0) return { c: '#D67373', bg: 'rgba(214,115,115,.16)', label: 'просрочено ' + Math.abs(days) + ' дн' };
+ if(days <= 7) return { c: '#E6A552', bg: 'rgba(230,165,82,.16)', label: 'через ' + days + ' дн' };
+ if(days <= 30) return { c: '#7FB89E', bg: 'rgba(127,184,158,.16)', label: 'через ' + days + ' дн' };
+ return { c: 'var(--text-soft)', bg: 'rgba(120,120,128,.10)', label: 'через ' + days + ' дн' };
+}
+
+// Строит один card-узел через createElement — без innerHTML, без XSS-риска.
+function _mycBuildCard(c){
+ var days = myClientsDaysUntil(c.next_billing_at);
+ var col = _mycColor(days);
+ var phone = c.main_phone || '';
+ var phoneDigits = phone.replace(/[^0-9]/g, '');
+
+ var card = document.createElement('div');
+ card.style.cssText = 'background:var(--ds-glass-card);backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);border:1px solid var(--ds-glass-border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px';
+
+ var head = document.createElement('div');
+ head.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:10px';
+ var name = document.createElement('div');
+ name.style.cssText = 'font-weight:700;font-size:15px;color:var(--text);letter-spacing:-0.01em;line-height:1.3';
+ name.textContent = c.company_name || '(без имени)';
+ var badge = document.createElement('span');
+ badge.style.cssText = 'font-size:11px;padding:3px 8px;border-radius:8px;background:' + col.bg + ';color:' + col.c + ';font-weight:600;white-space:nowrap';
+ badge.textContent = col.label;
+ head.appendChild(name);
+ head.appendChild(badge);
+ card.appendChild(head);
+
+ var meta = document.createElement('div');
+ meta.style.cssText = 'font-size:11px;color:var(--text-soft);display:flex;flex-wrap:wrap;gap:8px';
+ if(c.curator_operator){
+  var cur = document.createElement('span');
+  cur.textContent = 'Куратор: ' + c.curator_operator;
+  meta.appendChild(cur);
+ }
+ if(c.subscription_period_months){
+  var per = document.createElement('span');
+  per.textContent = 'Период: ' + c.subscription_period_months + ' мес';
+  meta.appendChild(per);
+ }
+ card.appendChild(meta);
+
+ var dateRow = document.createElement('div');
+ dateRow.style.cssText = 'font-size:11px;color:var(--text-muted)';
+ dateRow.textContent = c.next_billing_at ? ('След. оплата: ' + c.next_billing_at) : 'Дата продления не задана';
+ card.appendChild(dateRow);
+
+ var actions = document.createElement('div');
+ actions.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:4px';
+ if(phoneDigits){
+  var aTel = document.createElement('a');
+  aTel.href = 'tel:' + phone;
+  aTel.textContent = 'Звонок';
+  aTel.style.cssText = 'padding:6px 10px;border-radius:8px;background:rgba(127,184,158,.16);color:#7FB89E;text-decoration:none;font-size:12px;font-weight:600';
+  actions.appendChild(aTel);
+  var aWa = document.createElement('a');
+  aWa.href = 'https://wa.me/' + phoneDigits;
+  aWa.target = '_blank';
+  aWa.rel = 'noopener';
+  aWa.textContent = 'WhatsApp';
+  aWa.style.cssText = 'padding:6px 10px;border-radius:8px;background:rgba(37,211,102,.16);color:#25D366;text-decoration:none;font-size:12px;font-weight:600';
+  actions.appendChild(aWa);
+ }
+ var btn = document.createElement('button');
+ btn.textContent = 'Оплачено — продлить';
+ btn.style.cssText = 'padding:6px 12px;border-radius:8px;border:none;background:var(--accent,#5489BB);color:#fff;font-size:12px;font-weight:600;cursor:pointer;letter-spacing:-0.01em;margin-left:auto';
+ btn.addEventListener('click', function(){ myClientsRenew(c.client_id); });
+ actions.appendChild(btn);
+ card.appendChild(actions);
+
+ return card;
+}
+
+function myClientsRender(){
+ var grid = document.getElementById('myc-grid');
+ if(!grid) return;
+ var curator = document.getElementById('myc-filter-curator');
+ var fCurator = curator ? curator.value : '';
+ var list = myClients.slice();
+ if(fCurator) list = list.filter(c => c.curator_operator === fCurator);
+ list.sort(function(a, b){
+  var da = a.next_billing_at ? new Date(a.next_billing_at).getTime() : Infinity;
+  var db = b.next_billing_at ? new Date(b.next_billing_at).getTime() : Infinity;
+  return da - db;
+ });
+ if(mycUrgency === 'soon'){
+  list = list.filter(c => {
+   var d = myClientsDaysUntil(c.next_billing_at);
+   return d !== null && d >= 0 && d <= 7;
+  });
+ } else if(mycUrgency === 'overdue'){
+  list = list.filter(c => {
+   var d = myClientsDaysUntil(c.next_billing_at);
+   return d !== null && d < 0;
+  });
+ }
+ // Очистка через replaceChildren — без innerHTML
+ grid.replaceChildren();
+ if(!list.length){
+  var empty = document.createElement('div');
+  empty.style.cssText = 'grid-column:1/-1;padding:48px 24px;text-align:center;color:var(--text-soft);font-size:14px';
+  empty.textContent = (mycUrgency === 'overdue' ? 'Просроченных нет — порядок' :
+   mycUrgency === 'soon' ? 'В ближайшие 7 дней никто не продлевает' :
+   'Активных клиентов не нашлось');
+  grid.appendChild(empty);
+  return;
+ }
+ list.forEach(function(c){ grid.appendChild(_mycBuildCard(c)); });
+}
+
+async function myClientsRenew(clientId){
+ var cl = myClients.find(c => c.client_id === clientId);
+ if(!cl){ alert('Клиент не найден в списке. Обнови страницу.'); return; }
+ // v369: период не спрашиваем — берём текущий период клиента (он же зафиксирован при оплате через бот).
+ // Когда оплатный бот будет писать в Supabase напрямую — эта кнопка станет вообще не нужна.
+ var months = cl.subscription_period_months || 1;
+ if(!confirm('Продлить «' + (cl.company_name || clientId) + '» на ' + months + ' мес?\nСлед. оплата сдвинется на ' + months + ' мес от сегодня.')){
+  return;
+ }
+ try {
+  var d = await sbFetch('/api/clients?client_id=' + encodeURIComponent(clientId), {
+   method: 'PATCH',
+   body: JSON.stringify({ renew: true, renewal_months: months })
+  });
+  if(!d.ok) throw new Error(d.error || 'renew failed');
+  sbFetch('/api/history', {
+   method: 'POST',
+   body: JSON.stringify({
+    client_id: clientId,
+    event_type: 'system',
+    text: 'Подписка продлена на ' + months + ' мес. След. оплата: ' + d.client.next_billing_at
+   })
+  });
+  myClientsLoad();
+ } catch(e){
+  alert('Ошибка продления: ' + e.message);
+ }
+}
+
 function _escHtml(s){
  return String(s||'').replace(/[&<>"']/g, function(c){
   return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
@@ -21046,6 +21320,9 @@ function _routeRenderCardHead(){
 }
 
 // v363: активация клиента — переводит из Канбана в «Действующие», закрепляет куратора
+// v369: период подписки и сумма приходят из оплатного бота (когда подключим). Пока:
+//       берём существующий subscription_period_months клиента или 1 мес по умолчанию.
+//       Оператор не вводит период вручную — он уже зафиксирован при оплате через бот.
 async function routeActivateClient(){
  var card = _routeCurrentCard;
  if(!card) return;
@@ -21054,7 +21331,8 @@ async function routeActivateClient(){
   return;
  }
  var clName = (card.clients && card.clients.company_name) || 'клиента';
- if(!confirm('Активировать ' + clName + '?\nКлиент перейдёт в «Действующие», оператор ' + (card.operator || '—') + ' станет его куратором на всё время.')){
+ var months = (card.clients && card.clients.subscription_period_months) || 1;
+ if(!confirm('Активировать ' + clName + '?\nКуратор: ' + (card.operator || '—') + '.\nПериод подписки: ' + months + ' мес. Напомним позвонить через ' + months + ' мес.')){
   return;
  }
  // v364: блокировка кнопки на время запроса — защита от двойного клика
@@ -21066,13 +21344,15 @@ async function routeActivateClient(){
   var localDate = today.getFullYear() + '-' +
                   String(today.getMonth()+1).padStart(2,'0') + '-' +
                   String(today.getDate()).padStart(2,'0');
-  // 1) Клиент → status active + куратор + дата активации
+  // 1) Клиент → status active + куратор + дата активации + период подписки
+  //    API сам проставит next_billing_at = today + months через addMonthsISO
   var d1 = await sbFetch('/api/clients?client_id=' + encodeURIComponent(card.client_id), {
    method: 'PATCH',
    body: JSON.stringify({
     status: 'active',
     activation_date: localDate,
-    curator_operator: card.operator || null
+    curator_operator: card.operator || null,
+    subscription_period_months: months
    })
   });
   if(!d1.ok) throw new Error('client update: ' + d1.error);
