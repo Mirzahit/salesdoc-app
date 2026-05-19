@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v386</title>
+<title>SalesDoc — Финансовый Дашборд v387</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21884,6 +21884,127 @@ function _routeRenderContact(){
 // контакты и ленту событий (включая WhatsApp через Wazzup24).
 // ID сделки пока хранится в localStorage по client_id (миграция БД с колонкой amo_lead_id
 // в clients — отдельной сессией, чтобы не блокировать).
+// v386: inline-edit для редактируемых полей карточки. Поле кликабельно, при клике
+// заменяется на input/select, по Enter/blur сохраняется через PATCH /api/cards
+// или /api/clients. ESC отменяет. После сохранения — обновляем _routeCurrentCard
+// и перерисовываем секцию полей.
+function _renderFieldValue(container, value, opts){
+ container.replaceChildren();
+ if(value === null || value === undefined || value === '' || value === '—'){
+  var dash = document.createElement('span'); dash.className = 'amocard-faint';
+  dash.textContent = '—'; container.appendChild(dash);
+ } else if(opts && opts.link){
+  var a = document.createElement('a'); a.href = opts.link; a.textContent = String(value);
+  if(opts.target) a.target = opts.target;
+  container.appendChild(a);
+ } else if(opts && opts.price){
+  var p = document.createElement('span'); p.className = 'amocard-price';
+  p.textContent = String(value); container.appendChild(p);
+ } else {
+  container.appendChild(document.createTextNode(String(value)));
+ }
+}
+
+function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
+ if(fieldEl.dataset.editing === '1') return; // уже редактируется
+ fieldEl.dataset.editing = '1';
+ valueEl.replaceChildren();
+
+ var input;
+ if(opts.type === 'select'){
+  input = document.createElement('select');
+  input.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--amocard-accent);background:var(--amocard-surface);color:var(--amocard-text);border-radius:6px;font-family:inherit;font-size:13.5px;outline:none';
+  // Пустой первый вариант — чтобы можно было сбросить значение
+  var blank = document.createElement('option'); blank.value = ''; blank.textContent = '—'; input.appendChild(blank);
+  (opts.choices || []).forEach(function(ch){
+   var o = document.createElement('option'); o.value = ch; o.textContent = ch; input.appendChild(o);
+  });
+  input.value = opts.rawValue || '';
+ } else {
+  input = document.createElement('input');
+  input.type = opts.type === 'number' ? 'number' : 'text';
+  input.value = opts.rawValue != null ? String(opts.rawValue) : '';
+  input.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--amocard-accent);background:var(--amocard-surface);color:var(--amocard-text);border-radius:6px;font-family:inherit;font-size:13.5px;outline:none';
+ }
+ valueEl.appendChild(input);
+ setTimeout(function(){ input.focus(); if(input.select) try{ input.select(); }catch(_){} }, 0);
+
+ var done = false;
+ function cleanup(){
+  fieldEl.dataset.editing = '';
+ }
+ function cancel(){
+  if(done) return; done = true;
+  _renderFieldValue(valueEl, currentDisplayValue, opts);
+  if(opts.editable){
+   var c = document.createElement('span'); c.className = 'amocard-caret'; c.textContent = '▾';
+   valueEl.appendChild(c);
+  }
+  cleanup();
+ }
+ async function save(){
+  if(done) return; done = true;
+  var newVal = input.value;
+  // Для number — int. Для select — оставляем строку или null если пусто.
+  if(opts.type === 'number') newVal = newVal === '' ? null : parseInt(newVal, 10);
+  else if(newVal === '') newVal = null;
+  // Для subscription_period_months — int
+  if(opts.field === 'subscription_period_months' && newVal !== null) newVal = parseInt(newVal, 10);
+
+  // Если значение не изменилось — просто закрываем
+  if(String(newVal) === String(opts.rawValue == null ? '' : opts.rawValue)){
+   cancel();
+   return;
+  }
+
+  // Показать loading state
+  input.disabled = true;
+  input.style.opacity = '0.6';
+
+  try {
+   var body = {}; body[opts.field] = newVal;
+   var url, method = 'PATCH';
+   if(opts.entity === 'card'){
+    url = '/api/cards?id=' + encodeURIComponent(_routeCurrentCard.id);
+   } else if(opts.entity === 'client'){
+    url = '/api/clients?client_id=' + encodeURIComponent(_routeCurrentCard.client_id);
+   } else {
+    throw new Error('entity не задан');
+   }
+   var d = await sbFetch(url, { method:method, body:JSON.stringify(body) });
+   if(!d.ok) throw new Error(d.error || 'save failed');
+
+   // Обновляем in-memory state
+   if(opts.entity === 'card'){
+    _routeCurrentCard[opts.field] = newVal;
+    // routeCards в global state тоже обновим если есть
+    if(typeof routeCards !== 'undefined' && Array.isArray(routeCards)){
+     var idx = routeCards.findIndex(function(c){ return c.id === _routeCurrentCard.id; });
+     if(idx >= 0) routeCards[idx][opts.field] = newVal;
+    }
+   } else {
+    if(!_routeCurrentCard.clients) _routeCurrentCard.clients = {};
+    _routeCurrentCard.clients[opts.field] = newVal;
+   }
+   cleanup();
+   // Перерисуем всю секцию — проще чем точечно обновлять
+   _routeRenderAmo();
+  } catch(e){
+   alert('Не удалось сохранить: ' + e.message);
+   input.disabled = false;
+   input.style.opacity = '';
+   done = false;
+  }
+ }
+
+ input.addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.preventDefault(); save(); }
+  else if(e.key === 'Escape'){ e.preventDefault(); cancel(); }
+ });
+ input.addEventListener('blur', function(){ setTimeout(save, 100); });
+ if(opts.type === 'select') input.addEventListener('change', function(){ save(); });
+}
+
 // v380: amo-style рендер таба «Основное». Заполняет route-card-body 15 полями в
 // 4 секции (Сделка / Контакт / Подписка / Продукт) — как mockup. Параллельно
 // рендерит ленту событий в #route-card-feed (заметки из card_history).
@@ -21895,7 +22016,8 @@ async function _routeRenderAmo(){
  var card = _routeCurrentCard;
  var cl = card.clients || {};
 
- // Локальные хелперы — добавляют секцию и поле в body
+ // v386: добавление полей с поддержкой inline-edit. При opts.editable клик открывает
+ // редактор (text/number/select), Enter/blur сохраняет через API, ESC отменяет.
  function addSection(title){
   var s = document.createElement('div');
   s.className = 'amocard-section-head';
@@ -21908,22 +22030,16 @@ async function _routeRenderAmo(){
   var l = document.createElement('div'); l.className = 'amocard-field-label';
   l.textContent = label;
   var v = document.createElement('div'); v.className = 'amocard-field-value';
-  if(value === null || value === undefined || value === '' || value === '—'){
-   var dash = document.createElement('span'); dash.className = 'amocard-faint';
-   dash.textContent = '—'; v.appendChild(dash);
-  } else if(opts.link){
-   var a = document.createElement('a'); a.href = opts.link; a.textContent = String(value);
-   if(opts.target) a.target = opts.target;
-   v.appendChild(a);
-  } else if(opts.price){
-   var p = document.createElement('span'); p.className = 'amocard-price';
-   p.textContent = String(value); v.appendChild(p);
-  } else {
-   v.appendChild(document.createTextNode(String(value)));
-  }
+  _renderFieldValue(v, value, opts);
   if(opts.editable){
    var c = document.createElement('span'); c.className = 'amocard-caret'; c.textContent = '▾';
    v.appendChild(c);
+   f.style.cursor = 'pointer';
+   f.title = 'Кликни чтобы изменить';
+   f.addEventListener('click', function(e){
+    if(e.target.tagName === 'A') return; // не перебиваем клик по ссылкам
+    _openFieldEditor(f, v, value, opts);
+   });
   }
   f.appendChild(l); f.appendChild(v);
   body.appendChild(f);
@@ -21931,10 +22047,10 @@ async function _routeRenderAmo(){
 
  // Секция СДЕЛКА
  addSection('Сделка');
- addField('Ответственный', card.operator || cl.curator_operator);
- addField('Бюджет', card.payment_amount ? '₸ ' + Number(card.payment_amount).toLocaleString('ru-RU').replace(/,/g, ' ') : null, { price:true });
- addField('Менеджер продаж', card.sales_manager);
- addField('Категория', card.payment_category);
+ addField('Ответственный', card.operator, { editable:true, entity:'card', field:'operator', type:'select', choices:['Айдос','Акбар','Самат','Нурай'], rawValue:card.operator });
+ addField('Бюджет', card.payment_amount ? '₸ ' + Number(card.payment_amount).toLocaleString('ru-RU').replace(/,/g, ' ') : null, { price:true, editable:true, entity:'card', field:'payment_amount', type:'number', rawValue:card.payment_amount });
+ addField('Менеджер продаж', card.sales_manager, { editable:true, entity:'card', field:'sales_manager', type:'select', choices:['Мирзахит','Юлия','Айдос Хапез'], rawValue:card.sales_manager });
+ addField('Категория', card.payment_category, { editable:true, entity:'card', field:'payment_category', type:'select', choices:['Нов внедрение','Нов интеграция'], rawValue:card.payment_category });
  addField('Создана', card.created_at ? new Date(card.created_at).toLocaleDateString('ru-RU') : null);
 
  // Секция КОНТАКТ
@@ -21944,20 +22060,20 @@ async function _routeRenderAmo(){
   var phoneDigits = String(cl.main_phone).replace(/[^0-9]/g, '');
   if(phoneDigits) addField('WhatsApp', '+' + phoneDigits, { link: 'https://wa.me/' + phoneDigits, target: '_blank' });
  } else { addField('WhatsApp', null); }
- addField('Куратор внедрения', cl.curator_operator || card.operator);
+ addField('Куратор внедрения', cl.curator_operator, { editable:true, entity:'client', field:'curator_operator', type:'select', choices:['Айдос','Акбар','Самат','Нурай'], rawValue:cl.curator_operator });
 
  // Секция ПОДПИСКА
  addSection('Подписка');
- addField('Период подписки', cl.subscription_period_months ? cl.subscription_period_months + ' мес' : null, { editable:true });
- addField('Лицензии', card.licenses_count);
- addField('Тариф', card.tariff, { editable:true });
- addField('Статус', cl.status || 'onboarding');
+ addField('Период подписки', cl.subscription_period_months ? cl.subscription_period_months + ' мес' : null, { editable:true, entity:'client', field:'subscription_period_months', type:'select', choices:['1','3','6','12'], rawValue:cl.subscription_period_months });
+ addField('Лицензии', card.licenses_count, { editable:true, entity:'card', field:'licenses_count', type:'number', rawValue:card.licenses_count });
+ addField('Тариф', card.tariff, { editable:true, entity:'card', field:'tariff', type:'text', rawValue:card.tariff });
+ addField('Статус', cl.status || 'onboarding', { editable:true, entity:'client', field:'status', type:'select', choices:['lead','sale','onboarding','active','paused','churned'], rawValue:cl.status });
  addField('Активирована', cl.activation_date);
  addField('Следующая оплата', cl.next_billing_at);
 
  // Секция ПРОДУКТ
  addSection('Продукт');
- addField('Модули', card.modules);
+ addField('Модули', card.modules, { editable:true, entity:'card', field:'modules', type:'text', rawValue:card.modules });
  addField('Страна', card.country || cl.country || 'KZ');
  addField('ID клиента', card.client_id);
 
