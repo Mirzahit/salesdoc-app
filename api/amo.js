@@ -227,6 +227,67 @@ export default async function handler(req, res){
       const list = await getPipelines(env);
       return res.status(200).json({ pipelines: list });
     }
+    if(action === 'lead_full'){
+      // v372: тянем сделку из amo со всеми кастомными полями, контактами и лентой событий.
+      // Используется на карточке клиента в Маршруте — «загрузить из amo».
+      const leadId = req.query.id ? Number(req.query.id) : null;
+      if(!leadId) return bad(res, 400, 'Need ?id=LEAD_ID');
+      const lead = await amoFetch(`/leads/${leadId}?with=contacts,catalog_elements,is_main_contact,loss_reason`, env);
+      // Контакты: получаем каждого по id для деталей (телефоны, email)
+      const contactsRaw = (lead._embedded && lead._embedded.contacts) || [];
+      const contacts = [];
+      for(const c of contactsRaw){
+        try {
+          const cd = await amoFetch(`/contacts/${c.id}`, env);
+          contacts.push({
+            id: cd.id,
+            name: cd.name,
+            first_name: cd.first_name,
+            last_name: cd.last_name,
+            is_main: c.is_main,
+            phones: (cd.custom_fields_values || []).filter(f => f.field_code === 'PHONE')
+              .flatMap(f => (f.values || []).map(v => ({ value: v.value, enum: v.enum_code }))),
+            emails: (cd.custom_fields_values || []).filter(f => f.field_code === 'EMAIL')
+              .flatMap(f => (f.values || []).map(v => ({ value: v.value, enum: v.enum_code }))),
+            position: ((cd.custom_fields_values || []).find(f => f.field_code === 'POSITION') || {values:[{value:''}]}).values[0].value
+          });
+        } catch(e){
+          contacts.push({ id: c.id, error: e.message });
+        }
+      }
+      // Заметки/события (лента): последние 50
+      let notes = [];
+      try {
+        const np = await amoFetch(`/leads/${leadId}/notes?limit=50&order[updated_at]=desc`, env);
+        notes = (np && np._embedded && np._embedded.notes) || [];
+      } catch(_){}
+      // Pipeline + статус для понимания этапа
+      let pipelineInfo = null;
+      try {
+        const allPipes = await getPipelines(env);
+        const pipe = allPipes.find(p => p.id === lead.pipeline_id);
+        const status = pipe && pipe.statuses.find(s => s.id === lead.status_id);
+        pipelineInfo = pipe ? { id: pipe.id, name: pipe.name, status: status ? status.name : null, status_color: status ? status.color : null } : null;
+      } catch(_){}
+      return res.status(200).json({
+        ok: true,
+        lead: {
+          id: lead.id,
+          name: lead.name,
+          price: lead.price,
+          status_id: lead.status_id,
+          pipeline_id: lead.pipeline_id,
+          responsible_user_id: lead.responsible_user_id,
+          created_at: lead.created_at,
+          updated_at: lead.updated_at,
+          custom_fields_values: lead.custom_fields_values || [],
+          _url: `https://${String(env.AMO_SUBDOMAIN||'').replace(/\s+/g,'')}.amocrm.ru/leads/detail/${lead.id}`
+        },
+        pipeline: pipelineInfo,
+        contacts: contacts,
+        notes: notes
+      });
+    }
     if(action === 'funnel'){
       const pipelineId = req.query.pipeline_id ? Number(req.query.pipeline_id) : null;
       const fromTs = req.query.from ? Number(req.query.from) : null;

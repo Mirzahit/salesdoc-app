@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v371</title>
+<title>SalesDoc — Финансовый Дашборд v372</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6344,6 +6344,7 @@ input:focus, select:focus, textarea:focus {
  <button onclick="routeCardTab('check')" id="route-tab-check" style="padding:14px 22px;border:none;background:transparent;color:var(--text);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Чек-лист</button>
  <button onclick="routeCardTab('history')" id="route-tab-history" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">История</button>
  <button onclick="routeCardTab('contact')" id="route-tab-contact" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Контакт</button>
+ <button onclick="routeCardTab('amo')" id="route-tab-amo" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">amo</button>
  </div>
  <div id="route-card-body" style="padding:20px 0;min-height:60vh"></div>
  </div>
@@ -21411,7 +21412,7 @@ async function routeActivateClient(){
 function routeCardTab(tab){
  _routeCurrentTab = tab;
  // Подсветка табов
- ['check','history','contact'].forEach(function(t){
+ ['check','history','contact','amo'].forEach(function(t){
   var btn = document.getElementById('route-tab-' + t);
   if(!btn) return;
   if(t === tab){
@@ -21425,6 +21426,7 @@ function routeCardTab(tab){
  if(tab === 'check') _routeRenderChecklist();
  if(tab === 'history') _routeRenderHistory();
  if(tab === 'contact') _routeRenderContact();
+ if(tab === 'amo') _routeRenderAmo();
 }
 
 async function _routeRenderChecklist(){
@@ -21568,8 +21570,253 @@ function _routeRenderContact(){
    + '</div>';
  }).join('');
 }
-// ===================================================================
-// /v352 Маршрут v2
+
+// v372: таб «amo» — тянет сделку из amoCRM по lead_id и показывает 18 кастомных полей,
+// контакты и ленту событий (включая WhatsApp через Wazzup24).
+// ID сделки пока хранится в localStorage по client_id (миграция БД с колонкой amo_lead_id
+// в clients — отдельной сессией, чтобы не блокировать).
+async function _routeRenderAmo(){
+ var body = document.getElementById('route-card-body');
+ if(!_routeCurrentCard){ body.replaceChildren(); return; }
+ var cl = _routeCurrentCard.clients || {};
+ var clientId = _routeCurrentCard.client_id;
+ var storedId = '';
+ try { storedId = localStorage.getItem('amo_lead_id_' + clientId) || ''; } catch(_){}
+
+ body.replaceChildren();
+
+ // Шапка с инпутом ID и кнопками
+ var head = document.createElement('div');
+ head.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border-faint)';
+ var label = document.createElement('span');
+ label.style.cssText = 'font-size:12px;color:var(--text-soft)';
+ label.textContent = 'ID сделки в amo:';
+ var input = document.createElement('input');
+ input.id = 'amo-lead-id-input';
+ input.type = 'text';
+ input.placeholder = '45963508';
+ input.value = storedId;
+ input.style.cssText = 'padding:6px 10px;border-radius:6px;border:1px solid var(--ds-glass-border);background:var(--ds-glass-card);color:var(--text);font-size:13px;width:140px';
+ var btn = document.createElement('button');
+ btn.textContent = 'Загрузить из amo';
+ btn.style.cssText = 'padding:6px 14px;border-radius:6px;border:none;background:var(--accent,#5489BB);color:#fff;font-size:13px;font-weight:600;cursor:pointer';
+ btn.addEventListener('click', function(){ _routeAmoFetch(input.value.trim()); });
+ head.appendChild(label);
+ head.appendChild(input);
+ head.appendChild(btn);
+ if(storedId){
+  var amoLink = document.createElement('a');
+  amoLink.textContent = 'Открыть в amo →';
+  amoLink.href = '#';
+  amoLink.id = 'amo-open-link';
+  amoLink.style.cssText = 'margin-left:auto;font-size:12px;color:var(--accent,#5489BB);text-decoration:none';
+  amoLink.target = '_blank';
+  head.appendChild(amoLink);
+ }
+ body.appendChild(head);
+
+ // Контейнер для контента
+ var container = document.createElement('div');
+ container.id = 'amo-content';
+ body.appendChild(container);
+
+ if(storedId){
+  _routeAmoFetch(storedId);
+ } else {
+  var hint = document.createElement('div');
+  hint.style.cssText = 'color:var(--text-soft);font-size:13px;padding:24px 0;text-align:center';
+  hint.textContent = 'Введите ID сделки из amo (число в URL: /leads/detail/12345) и нажмите «Загрузить».';
+  container.appendChild(hint);
+ }
+}
+
+async function _routeAmoFetch(leadId){
+ leadId = String(leadId || '').trim();
+ if(!/^\d+$/.test(leadId)){
+  alert('ID должен быть числом');
+  return;
+ }
+ var clientId = _routeCurrentCard ? _routeCurrentCard.client_id : null;
+ var container = document.getElementById('amo-content');
+ if(!container) return;
+ container.replaceChildren();
+ var loading = document.createElement('div');
+ loading.style.cssText = 'color:var(--text-soft);font-size:13px;padding:24px 0;text-align:center';
+ loading.textContent = 'Загрузка из amo...';
+ container.appendChild(loading);
+
+ try {
+  var country = window.currentCountry || 'KZ';
+  var r = await fetch('/api/amo?action=lead_full&id=' + leadId + '&country=' + country);
+  var d = await r.json();
+  if(!r.ok || !d.ok){
+   throw new Error(d.error || ('amo ' + r.status));
+  }
+  // Сохраняем lead_id в localStorage чтобы при следующем открытии сразу загружалось
+  if(clientId) try { localStorage.setItem('amo_lead_id_' + clientId, leadId); } catch(_){}
+  // Обновим ссылку «Открыть в amo»
+  var link = document.getElementById('amo-open-link');
+  if(link && d.lead && d.lead._url){ link.href = d.lead._url; }
+  else if(d.lead && d.lead._url){
+   // Создадим если ещё не было
+   var head = document.querySelector('#route-card-body > div:first-child');
+   if(head){
+    var a = document.createElement('a');
+    a.textContent = 'Открыть в amo →';
+    a.href = d.lead._url;
+    a.target = '_blank';
+    a.style.cssText = 'margin-left:auto;font-size:12px;color:var(--accent,#5489BB);text-decoration:none';
+    head.appendChild(a);
+   }
+  }
+  _routeAmoRender(container, d);
+ } catch(e){
+  container.replaceChildren();
+  var err = document.createElement('div');
+  err.style.cssText = 'color:#D67373;font-size:13px;padding:24px 0;text-align:center';
+  err.textContent = 'Ошибка загрузки: ' + e.message;
+  container.appendChild(err);
+ }
+}
+
+function _routeAmoRender(container, data){
+ container.replaceChildren();
+ var lead = data.lead || {};
+ var pipe = data.pipeline || {};
+
+ // Блок 1: основная информация
+ var sec1 = document.createElement('div');
+ sec1.style.cssText = 'background:var(--ds-glass-card);border:1px solid var(--ds-glass-border);border-radius:10px;padding:16px;margin-bottom:14px';
+ var title1 = document.createElement('div');
+ title1.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px';
+ title1.textContent = 'Сделка';
+ sec1.appendChild(title1);
+ var basicRows = [
+  ['Название', lead.name],
+  ['Бюджет', lead.price ? Number(lead.price).toLocaleString('ru-RU') + ' ₸' : null],
+  ['Воронка', pipe.name],
+  ['Этап', pipe.status],
+  ['Создана', lead.created_at ? new Date(lead.created_at * 1000).toLocaleDateString('ru-RU') : null],
+  ['Обновлена', lead.updated_at ? new Date(lead.updated_at * 1000).toLocaleDateString('ru-RU') : null]
+ ];
+ basicRows.forEach(function(r){
+  if(!r[1]) return;
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border-faint)';
+  var l = document.createElement('div');
+  l.style.cssText = 'flex:0 0 130px;color:var(--text-soft)';
+  l.textContent = r[0];
+  var v = document.createElement('div');
+  v.style.cssText = 'flex:1;color:var(--text)';
+  v.textContent = r[1];
+  row.appendChild(l); row.appendChild(v);
+  sec1.appendChild(row);
+ });
+ container.appendChild(sec1);
+
+ // Блок 2: кастомные поля
+ var sec2 = document.createElement('div');
+ sec2.style.cssText = 'background:var(--ds-glass-card);border:1px solid var(--ds-glass-border);border-radius:10px;padding:16px;margin-bottom:14px';
+ var title2 = document.createElement('div');
+ title2.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px';
+ title2.textContent = 'Поля сделки';
+ sec2.appendChild(title2);
+ var cfs = (lead.custom_fields_values || []);
+ if(!cfs.length){
+  var empty = document.createElement('div');
+  empty.style.cssText = 'color:var(--text-muted);font-size:13px;padding:8px 0';
+  empty.textContent = 'Полей не задано';
+  sec2.appendChild(empty);
+ }
+ cfs.forEach(function(cf){
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border-faint)';
+  var l = document.createElement('div');
+  l.style.cssText = 'flex:0 0 200px;color:var(--text-soft)';
+  l.textContent = cf.field_name || ('field_' + cf.field_id);
+  var v = document.createElement('div');
+  v.style.cssText = 'flex:1;color:var(--text);word-break:break-word';
+  var values = (cf.values || []).map(function(x){
+   return x.value || x.enum || '';
+  }).filter(Boolean).join(', ');
+  v.textContent = values || '—';
+  row.appendChild(l); row.appendChild(v);
+  sec2.appendChild(row);
+ });
+ container.appendChild(sec2);
+
+ // Блок 3: контакты
+ var sec3 = document.createElement('div');
+ sec3.style.cssText = 'background:var(--ds-glass-card);border:1px solid var(--ds-glass-border);border-radius:10px;padding:16px;margin-bottom:14px';
+ var title3 = document.createElement('div');
+ title3.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px';
+ title3.textContent = 'Контакты (' + (data.contacts || []).length + ')';
+ sec3.appendChild(title3);
+ (data.contacts || []).forEach(function(c){
+  var card = document.createElement('div');
+  card.style.cssText = 'padding:10px;border-radius:8px;background:var(--ds-glass-col);border:1px solid var(--ds-glass-border);margin-bottom:8px';
+  var nm = document.createElement('div');
+  nm.style.cssText = 'font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px';
+  nm.textContent = (c.name || (c.first_name + ' ' + (c.last_name||'')).trim()) + (c.is_main ? ' (главный)' : '');
+  card.appendChild(nm);
+  if(c.position){
+   var pos = document.createElement('div');
+   pos.style.cssText = 'font-size:12px;color:var(--text-soft);margin-bottom:4px';
+   pos.textContent = 'Должность: ' + c.position;
+   card.appendChild(pos);
+  }
+  (c.phones || []).forEach(function(ph){
+   var p = document.createElement('a');
+   p.href = 'tel:' + ph.value;
+   p.textContent = ph.value;
+   p.style.cssText = 'display:inline-block;margin-right:10px;font-size:12px;color:var(--accent,#5489BB);text-decoration:none';
+   card.appendChild(p);
+  });
+  (c.emails || []).forEach(function(em){
+   var e = document.createElement('span');
+   e.textContent = em.value;
+   e.style.cssText = 'display:inline-block;margin-right:10px;font-size:12px;color:var(--text-soft)';
+   card.appendChild(e);
+  });
+  sec3.appendChild(card);
+ });
+ container.appendChild(sec3);
+
+ // Блок 4: лента событий
+ var sec4 = document.createElement('div');
+ sec4.style.cssText = 'background:var(--ds-glass-card);border:1px solid var(--ds-glass-border);border-radius:10px;padding:16px';
+ var title4 = document.createElement('div');
+ title4.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px';
+ title4.textContent = 'Лента событий (' + (data.notes || []).length + ')';
+ sec4.appendChild(title4);
+ if(!data.notes || !data.notes.length){
+  var emptyN = document.createElement('div');
+  emptyN.style.cssText = 'color:var(--text-muted);font-size:13px;padding:8px 0';
+  emptyN.textContent = 'Событий нет';
+  sec4.appendChild(emptyN);
+ }
+ (data.notes || []).forEach(function(n){
+  var item = document.createElement('div');
+  item.style.cssText = 'padding:10px 0;border-bottom:1px solid var(--border-faint);font-size:13px';
+  var meta = document.createElement('div');
+  meta.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:4px';
+  var dt = n.created_at ? new Date(n.created_at * 1000).toLocaleString('ru-RU') : '';
+  meta.textContent = dt + ' · ' + (n.note_type || 'note');
+  item.appendChild(meta);
+  var content = document.createElement('div');
+  content.style.cssText = 'color:var(--text);word-break:break-word;white-space:pre-wrap';
+  var params = n.params || {};
+  // Разные типы заметок: common (текст), service_message, attachment, amocrm_message, и т.д.
+  var text = params.text || params.message || params.title || params.file_name || '';
+  if(!text && n.note_type === 'attachment') text = '[Файл]';
+  if(!text && (n.note_type||'').indexOf('voice') >= 0) text = '[Голосовое сообщение]';
+  if(!text) text = '(' + n.note_type + ')';
+  content.textContent = text;
+  item.appendChild(content);
+  sec4.appendChild(item);
+ });
+ container.appendChild(sec4);
+}
 
 // Пользовательский override чеклиста (приоритетнее Sheet и дефолта)
 function _kbSaveChecklistLocal(){
