@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v370</title>
+<title>SalesDoc — Финансовый Дашборд v371</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -477,12 +477,12 @@ body.light{
  /* v365: Маршрут клиента — 3 уровня глубины (страница/колонка/карточка) */
  --ds-page-bg:#1C1C1E;--ds-col-bg:#2C2C2E;--ds-card-bg:#3A3A3C;
  --ds-border-soft:rgba(255,255,255,.06);--ds-shadow-card:0 1px 2px rgba(0,0,0,.4);
- /* v366: Liquid Glass (iOS/macOS 26) — стеклянные поверхности с backdrop-blur */
- --ds-glass-col:rgba(120,120,128,.18);
- --ds-glass-card:rgba(255,255,255,.06);
- --ds-glass-card-hover:rgba(255,255,255,.10);
- --ds-glass-border:rgba(255,255,255,.10);
- --ds-glass-border-bright:rgba(255,255,255,.22);
+ /* v371: Liquid Glass — плотнее (пользователь жаловался что прозрачные слишком, не видно содержимого) */
+ --ds-glass-col:rgba(58,58,60,.62);
+ --ds-glass-card:rgba(44,44,46,.88);
+ --ds-glass-card-hover:rgba(58,58,60,.95);
+ --ds-glass-border:rgba(255,255,255,.18);
+ --ds-glass-border-bright:rgba(255,255,255,.32);
  --ds-glass-blur:saturate(180%) blur(24px);
  --ds-glass-shadow:0 8px 32px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06);
  --ds-page-gradient:radial-gradient(at 18% 25%,rgba(80,120,200,.18) 0%,transparent 55%),radial-gradient(at 82% 75%,rgba(180,90,200,.14) 0%,transparent 55%),radial-gradient(at 50% 50%,rgba(60,160,180,.08) 0%,transparent 70%),#1C1C1E;
@@ -527,12 +527,12 @@ body.light{
  /* v365: Маршрут клиента — светлая тема, 3 уровня глубины */
  --ds-page-bg:#F2F2F7;--ds-col-bg:#E5E5EA;--ds-card-bg:#FFFFFF;
  --ds-border-soft:rgba(60,60,67,.10);--ds-shadow-card:0 1px 2px rgba(60,60,67,.10);
- /* v366: Liquid Glass — светлая */
- --ds-glass-col:rgba(255,255,255,.55);
- --ds-glass-card:rgba(255,255,255,.75);
- --ds-glass-card-hover:rgba(255,255,255,.92);
- --ds-glass-border:rgba(255,255,255,.85);
- --ds-glass-border-bright:rgba(255,255,255,1);
+ /* v371: Liquid Glass — светлая, плотнее (читаемость > эстетика) */
+ --ds-glass-col:rgba(255,255,255,.88);
+ --ds-glass-card:rgba(255,255,255,.94);
+ --ds-glass-card-hover:rgba(255,255,255,1);
+ --ds-glass-border:rgba(60,60,67,.18);
+ --ds-glass-border-bright:rgba(60,60,67,.28);
  --ds-glass-blur:saturate(180%) blur(24px);
  --ds-glass-shadow:0 8px 32px rgba(60,60,67,.14),inset 0 1px 0 rgba(255,255,255,.8);
  --ds-page-gradient:radial-gradient(at 18% 25%,rgba(120,170,230,.30) 0%,transparent 55%),radial-gradient(at 82% 75%,rgba(220,160,230,.24) 0%,transparent 55%),radial-gradient(at 50% 50%,rgba(120,200,210,.18) 0%,transparent 70%),#F2F2F7;
@@ -21296,10 +21296,28 @@ function routeCloseCard(){
 function _routeRenderCardHead(){
  var card = _routeCurrentCard; if(!card) return;
  var cl = card.clients || {};
- var html = '<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">';
- html += '<div>';
- html += '<div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px;letter-spacing:-0.02em">' + _escHtml(cl.company_name || '(без имени)') + '</div>';
- html += '<div style="font-size:13px;color:var(--text-soft)">' + _escHtml(card.tariff || 'тариф не указан') + ' · оператор: ' + _escHtml(card.operator || '—') + ' · этап: ' + _escHtml(card.stage) + '</div>';
+ // v371: расширенная шапка — показывает всю информацию что есть в БД (тариф, период, куратор, этап, страна, дата)
+ // Полная карточка как в amo с 18 полями — в v372 (отдельная сессия).
+ var createdAt = card.created_at ? new Date(card.created_at).toLocaleDateString('ru-RU') : '—';
+ var period = cl.subscription_period_months ? cl.subscription_period_months + ' мес' : null;
+ var nextBill = cl.next_billing_at || null;
+ var html = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">';
+ html += '<div style="min-width:0">';
+ html += '<div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:6px;letter-spacing:-0.02em">' + _escHtml(cl.company_name || '(без имени)') + '</div>';
+ // Первая строка мета — основное
+ html += '<div style="font-size:13px;color:var(--text-soft);margin-bottom:4px">';
+ html += '<b>Тариф:</b> ' + _escHtml(card.tariff || 'не указан');
+ html += ' · <b>Куратор:</b> ' + _escHtml(card.operator || 'не назначен');
+ html += ' · <b>Этап:</b> ' + _escHtml(card.stage);
+ html += '</div>';
+ // Вторая строка мета — дополнительно
+ html += '<div style="font-size:12px;color:var(--text-muted)">';
+ html += 'Страна: ' + _escHtml(card.country || cl.country || 'KZ');
+ if(period) html += ' · Период подписки: ' + period;
+ if(nextBill) html += ' · След. оплата: ' + _escHtml(nextBill);
+ html += ' · Создано: ' + createdAt;
+ if(cl.activation_date) html += ' · Активирован: ' + _escHtml(cl.activation_date);
+ html += '</div>';
  html += '</div>';
  html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
  if(cl.main_phone){
