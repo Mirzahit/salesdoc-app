@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v394</title>
+<title>SalesDoc — Финансовый Дашборд v395</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21636,26 +21636,45 @@ async function ticketsLoad(){
  var hub = document.getElementById('tickets-head-sub');
  if(hub) hub.textContent = '· загрузка…';
  try {
-  // Тянем тикеты + операторов + клиентов (для модалки)
+  // Тянем тикеты + операторов + ВСЕХ клиентов (для модалки — операторы хотят
+  // создавать тикеты и на внедряющихся, не только на активных).
   var [tRes, opsRes, clRes] = await Promise.all([
    sbFetch('/api/cards?entity=ticket'),
    fetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators:[] }; }),
-   sbFetch('/api/clients?status=active')
+   sbFetch('/api/clients')
   ]);
   if(!tRes.ok) throw new Error(tRes.error || 'tickets load failed');
   ticketsList = tRes.tickets || [];
-  // Заполняем выпадашки если ещё пустые
+  // Заполняем выпадашку операторов (один раз)
   var filt = document.getElementById('tickets-filter-op');
   if(filt && filt.options.length <= 1){
    var ops = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
    ops.forEach(function(o){ var opt = document.createElement('option'); opt.value=o.name; opt.textContent=o.name; filt.appendChild(opt); });
   }
+  // Заполняем выпадашку клиентов КАЖДЫЙ раз (могут добавляться новые между загрузками)
   var newClientSel = document.getElementById('tickets-new-client');
-  if(newClientSel && newClientSel.options.length <= 1 && clRes && clRes.ok){
-   (clRes.clients || []).forEach(function(c){
-    var opt = document.createElement('option'); opt.value=c.client_id; opt.textContent=(c.company_name || c.client_id);
+  if(newClientSel && clRes && clRes.ok){
+   // Сохраняем выбранное значение если было
+   var prevValue = newClientSel.value;
+   // Чистим старые option (оставляем только первый «— выберите —»)
+   while(newClientSel.options.length > 1) newClientSel.remove(1);
+   // Группируем по статусу: активные сверху, потом внедряющиеся
+   var clients = (clRes.clients || []).slice();
+   clients.sort(function(a, b){
+    var statusOrder = { active: 0, onboarding: 1, sale: 2, lead: 3, paused: 4, churned: 5 };
+    var sa = statusOrder[a.status] || 99;
+    var sb = statusOrder[b.status] || 99;
+    if(sa !== sb) return sa - sb;
+    return (a.company_name || '').localeCompare(b.company_name || '');
+   });
+   clients.forEach(function(c){
+    var opt = document.createElement('option');
+    opt.value = c.client_id;
+    var statusBadge = { active:'действующий', onboarding:'внедрение', sale:'продано', lead:'новый', paused:'пауза', churned:'ушёл' }[c.status] || c.status;
+    opt.textContent = (c.company_name || c.client_id) + ' · ' + statusBadge;
     newClientSel.appendChild(opt);
    });
+   if(prevValue) newClientSel.value = prevValue;
   }
   ticketsUpdateStats();
   ticketsRender();
@@ -22014,24 +22033,31 @@ async function ticketCommentSend(){
 }
 
 // v394: открыть модалку нового тикета С ПРЕДЗАПОЛНЕННЫМ client_id (из карточки клиента).
+// v395: тянем ВСЕХ клиентов (не только active) и обновляем список каждый раз.
 function ticketsOpenNewForClient(clientId){
- // Загружаем клиентов в выпадашку если ещё не загружены
  var sel = document.getElementById('tickets-new-client');
- if(sel && sel.options.length <= 1){
-  // Тянем синхронно — в фоне
-  sbFetch('/api/clients?status=active').then(function(r){
-   if(r && r.ok){
-    (r.clients || []).forEach(function(c){
-     var opt = document.createElement('option'); opt.value=c.client_id; opt.textContent=(c.company_name || c.client_id);
-     sel.appendChild(opt);
-    });
-    sel.value = clientId;
-   }
-  });
- } else {
-  sel.value = clientId;
- }
+ if(!sel) return;
  ticketsOpenNew();
+ sbFetch('/api/clients').then(function(r){
+  if(r && r.ok){
+   while(sel.options.length > 1) sel.remove(1);
+   var clients = (r.clients || []).slice();
+   clients.sort(function(a, b){
+    var statusOrder = { active:0, onboarding:1, sale:2, lead:3, paused:4, churned:5 };
+    var sa = statusOrder[a.status] || 99, sb = statusOrder[b.status] || 99;
+    if(sa !== sb) return sa - sb;
+    return (a.company_name || '').localeCompare(b.company_name || '');
+   });
+   clients.forEach(function(c){
+    var opt = document.createElement('option');
+    opt.value = c.client_id;
+    var b = { active:'действующий', onboarding:'внедрение', sale:'продано', lead:'новый', paused:'пауза', churned:'ушёл' }[c.status] || c.status;
+    opt.textContent = (c.company_name || c.client_id) + ' · ' + b;
+    sel.appendChild(opt);
+   });
+   sel.value = clientId;
+  }
+ });
 }
 
 async function myClientsLoad(){
@@ -22785,14 +22811,13 @@ async function _routeRenderAmo(){
   body.appendChild(hint);
  }
 
- // v394: быстрая кнопка «+ Тикет» для активированных клиентов — создаёт обращение в Поддержке.
- if(cl.status === 'active'){
-  var ticketBtn = document.createElement('button');
-  ticketBtn.style.cssText = 'background:var(--amocard-accent);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:14px;width:100%;letter-spacing:-0.01em';
-  ticketBtn.textContent = '+ Новый тикет поддержки';
-  ticketBtn.addEventListener('click', function(){ ticketsOpenNewForClient(card.client_id); });
-  body.appendChild(ticketBtn);
- }
+ // v395: быстрая кнопка «+ Тикет» доступна для ВСЕХ клиентов (не только активных).
+ // Обращения могут быть и во время внедрения — например клиент пишет «не работает база».
+ var ticketBtn = document.createElement('button');
+ ticketBtn.style.cssText = 'background:var(--amocard-accent);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:14px;width:100%;letter-spacing:-0.01em';
+ ticketBtn.textContent = '+ Новый тикет поддержки';
+ ticketBtn.addEventListener('click', function(){ ticketsOpenNewForClient(card.client_id); });
+ body.appendChild(ticketBtn);
 
  // v386: добавление полей с поддержкой inline-edit. При opts.editable клик открывает
  // редактор (text/number/select), Enter/blur сохраняет через API, ESC отменяет.
