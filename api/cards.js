@@ -235,11 +235,16 @@ async function handlePaymentBotSync(body, res) {
   }
 
   // Создаём карточку. Оператора не назначаем — куратор сам возьмёт из «Новых».
+  // v377: сохраняем дополнительно сумму пакета, менеджера продаж и категорию оплаты —
+  // оператор сразу видит на карточке Канбана кто продал, за сколько и какой тип сделки.
   const cardRow = {
     client_id: clientId,
     stage: 'Новый',
     country: country,
     tariff: body.tariff || null,
+    payment_amount: body.amount ? parseInt(body.amount, 10) : null,
+    sales_manager: (body.manager || '').trim() || null,
+    payment_category: category || null,
     stage_entered_at: new Date().toISOString(),
     sheet_row: sheet_row,
     sheet_month: sheet_month
