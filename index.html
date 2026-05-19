@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v397</title>
+<title>SalesDoc — Финансовый Дашборд v398</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21727,7 +21727,8 @@ function ticketsRender(){
    if(fPrio && t.priority !== fPrio) return false;
    return true;
   });
-  html += '<div class="route-col-amo route-col s' + (sIdx + 1) + '" style="--route-col-color:' + stage.color + '">';
+  // v398: drop-зона на колонке — позволяет перетащить тикет из другой колонки сюда
+  html += '<div class="route-col-amo route-col s' + (sIdx + 1) + '" data-ticket-stage="' + stage.key + '" ondragover="event.preventDefault();this.style.background=\'rgba(120,120,128,.06)\'" ondragleave="this.style.background=\'transparent\'" ondrop="this.style.background=\'transparent\';_ticketsDrop(event,\'' + stage.key + '\')" style="--route-col-color:' + stage.color + '">';
   html += '<div class="route-col-amo-head" style="border-top-color:' + stage.color + '">';
   html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage.label + '</div><div class="route-col-amo-count">' + stageTickets.length + '</div></div>';
   html += '<div class="route-col-amo-desc">' + stage.desc + '</div>';
@@ -21741,7 +21742,9 @@ function ticketsRender(){
    var clientName = cl.company_name || t.client_id || '—';
    var slaInfo = _ticketsFmtSLA(t);
    var prioInfo = _ticketsFmtPriority(t.priority);
-   html += '<div onclick="ticketsOpen(\'' + t.id + '\')" style="background:var(--rk-surface);border:1px solid var(--rk-border);border-radius:10px;padding:12px 14px;cursor:pointer;box-shadow:var(--rk-sh-1);display:flex;flex-direction:column;gap:6px;transition:.15s" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'var(--rk-sh-2)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'var(--rk-sh-1)\'">';
+   // v398: карточка draggable. Клик открывает страницу тикета, drag — перетаскивает между колонками.
+   // Stop propagation чтобы клик по карточке не срабатывал во время drag.
+   html += '<div draggable="true" ondragstart="_ticketsDragStart(event,\'' + t.id + '\')" ondragend="this.style.opacity=1" onclick="ticketsOpen(\'' + t.id + '\')" style="background:var(--rk-surface);border:1px solid var(--rk-border);border-radius:10px;padding:12px 14px;cursor:pointer;box-shadow:var(--rk-sh-1);display:flex;flex-direction:column;gap:6px;transition:.15s" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'var(--rk-sh-2)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'var(--rk-sh-1)\'">';
    html += '<div style="font-size:14px;font-weight:700;color:var(--rk-text);letter-spacing:-0.01em;line-height:1.3">' + _escHtml(t.title || '(без темы)') + '</div>';
    html += '<div style="font-size:12px;color:var(--rk-text-soft)">' + _escHtml(clientName) + '</div>';
    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">';
@@ -21776,6 +21779,45 @@ function _ticketsFmtPriority(p){
   low: { label:'низкий', color:'var(--rk-text-faint)', bg:'rgba(120,120,128,.10)' }
  };
  return map[p] || map.normal;
+}
+
+// v398: drag-drop тикета между колонками Канбана Поддержки.
+var _ticketDragId = null;
+function _ticketsDragStart(ev, ticketId){
+ _ticketDragId = ticketId;
+ if(ev.target && ev.target.style) ev.target.style.opacity = 0.5;
+ if(ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
+}
+async function _ticketsDrop(ev, newStage){
+ ev.preventDefault();
+ var col = ev.target.closest('.route-col-amo');
+ if(col) col.style.background = 'transparent';
+ if(!_ticketDragId) return;
+ var t = ticketsList.find(function(x){ return x.id === _ticketDragId; });
+ if(!t){ _ticketDragId = null; return; }
+ if(t.status === newStage){ _ticketDragId = null; return; }
+ var oldStage = t.status;
+ // Оптимистично обновляем
+ t.status = newStage;
+ ticketsRender();
+ try {
+  var d = await sbFetch('/api/cards?entity=ticket&id=' + t.id, {
+   method:'PATCH', body: JSON.stringify({ status: newStage })
+  });
+  if(!d.ok) throw new Error(d.error || 'save failed');
+  // Обновляем объект из ответа (там может быть пересчитан first_response_at / solved_at)
+  var idx = ticketsList.findIndex(function(x){ return x.id === t.id; });
+  if(idx >= 0) ticketsList[idx] = d.ticket;
+  ticketsUpdateStats();
+  ticketsRender();
+ } catch(e){
+  // Откатываем оптимистичное обновление
+  t.status = oldStage;
+  ticketsRender();
+  alert('Не удалось переместить тикет: ' + e.message);
+ } finally {
+  _ticketDragId = null;
+ }
 }
 
 function ticketsOpenNew(){
@@ -21892,7 +21934,9 @@ function _ticketRenderFields(){
 
  addSection('Основное');
  addField('Приоритет', _ticketsFmtPriority(t.priority).label, { editable:true, field:'priority', type:'select', choices:['low','normal','high','critical'], choiceLabels:{low:'Низкий',normal:'Обычный',high:'Высокий',critical:'Критичный'}, rawValue:t.priority });
- addField('Статус', ({new:'Новое',in_progress:'В работе',waiting_client:'Ждём клиента',solved:'Решено',closed:'Закрыто',reopened:'Открыт повторно'}[t.status] || t.status), { editable:true, field:'status', type:'select', choices:['new','in_progress','waiting_client','solved','closed','reopened'], choiceLabels:{new:'Новое',in_progress:'В работе',waiting_client:'Ждём клиента',solved:'Решено',closed:'Закрыто',reopened:'Открыт повторно'}, rawValue:t.status });
+ // v398: убраны closed/reopened из выбора — в Канбане Поддержки нет этих колонок,
+ // тикет «исчезнет» с доски. Для закрытия — отдельная кнопка (добавим позже).
+ addField('Статус', ({new:'Новое',in_progress:'В работе',waiting_client:'Ждём клиента',solved:'Решено',closed:'Закрыто',reopened:'Открыт повторно'}[t.status] || t.status), { editable:true, field:'status', type:'select', choices:['new','in_progress','waiting_client','solved'], choiceLabels:{new:'Новое',in_progress:'В работе',waiting_client:'Ждём клиента',solved:'Решено'}, rawValue:t.status });
  addField('Оператор', t.operator, { editable:true, field:'operator', type:'select', choices:['Айдос','Акбар','Самат','Нурай'], rawValue:t.operator });
  addField('Категория', t.category || '—', { editable:true, field:'category', type:'select', choices:['bug','question','training','feature_request','other'], choiceLabels:{bug:'Баг',question:'Вопрос',training:'Обучение',feature_request:'Хотелка',other:'Другое'}, rawValue:t.category });
  addField('Канал', ({whatsapp:'WhatsApp',email:'Email',phone:'Звонок',form:'Форма',manual:'Вручную'}[t.channel] || t.channel));
@@ -21954,6 +21998,9 @@ function _openTicketFieldEditor(fieldEl, valueEl, currentDisplay, opts){
    cleanup();
    _ticketRenderHead();
    _ticketRenderFields();
+   // v398: BLOCKER 2 — после смены статуса/оператора Канбан Поддержки сзади тоже
+   // должен перерисоваться, иначе тикет визуально остаётся в старой колонке.
+   if(typeof ticketsRender === 'function'){ try { ticketsRender(); ticketsUpdateStats(); } catch(_){} }
   } catch(e){
    alert('Не удалось сохранить: ' + e.message);
    done = true; cancel();
@@ -21965,7 +22012,9 @@ function _openTicketFieldEditor(fieldEl, valueEl, currentDisplay, opts){
  });
  if(opts.type === 'select'){
   input.addEventListener('change', save);
-  input.addEventListener('blur', function(){ if(!done) cancel(); });
+  // v398: задержка 200мс перед cancel — в iOS Safari blur срабатывает РАНЬШЕ change,
+  // и без задержки cancel() ставит done=true до того как пришёл change → save() пропускался.
+  input.addEventListener('blur', function(){ setTimeout(function(){ if(!done) cancel(); }, 200); });
  } else {
   input.addEventListener('blur', function(){ setTimeout(save, 100); });
  }
@@ -22790,7 +22839,8 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
  });
  if(opts.type === 'select'){
   input.addEventListener('change', function(){ save(); });
-  input.addEventListener('blur', function(){ if(!done) cancel(); });
+  // v398: задержка 200мс — на iOS Safari blur у select срабатывает до change.
+  input.addEventListener('blur', function(){ setTimeout(function(){ if(!done) cancel(); }, 200); });
  } else {
   input.addEventListener('blur', function(){ setTimeout(save, 100); });
  }
