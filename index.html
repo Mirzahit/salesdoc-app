@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v392</title>
+<title>SalesDoc — Финансовый Дашборд v393</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4730,6 +4730,7 @@ body.light #view-route {
  <!-- v365: убраны фантомные вкладки «Все·скоро», «В риске·скоро», «Расторгнутые·скоро» — UX-критик сказал что они дразнят оператора -->
  <button class="cli-tab" data-clients-tab="route" onclick="clientsGoTab('route')">Маршрут клиента</button>
  <button class="cli-tab" data-clients-tab="my-clients" onclick="clientsGoTab('my-clients')">Мои клиенты</button>
+ <button class="cli-tab" data-clients-tab="tickets" onclick="clientsGoTab('tickets')">Поддержка</button>
  <button class="cli-tab" data-clients-tab="kanban" onclick="clientsGoTab('kanban')">Внедрение (старый)</button>
  <button class="cli-tab" data-clients-tab="newclients" onclick="clientsGoTab('newclients')">Новые</button>
  <button class="cli-tab" data-clients-tab="activeclients" onclick="clientsGoTab('activeclients')">Действующие</button>
@@ -6663,6 +6664,99 @@ body.light #view-route {
    <button onclick="routeLoad()" title="Обновить" class="route-btn route-btn-icon">&#8635;</button>
   </div>
   <div id="route-board" class="route-kanban"></div>
+ </div>
+
+ <!-- v393: Поддержка — Канбан тикетов (обращения от активированных клиентов).
+      4 колонки: Новое / В работе / Ждём клиента / Решено. Бэк /api/cards?entity=ticket. -->
+ <div id="view-tickets" style="display:none;min-height:calc(100vh - 70px);padding-top:18px">
+  <div class="route-head-bar">
+   <div class="route-head-title">Поддержка клиентов</div>
+   <div class="route-head-sub" id="tickets-head-sub">&middot; загрузка&hellip;</div>
+  </div>
+  <div class="route-stats">
+   <div class="route-stat-card">
+    <div class="route-stat-label">Тикетов</div>
+    <div class="route-stat-value" id="tickets-stat-total">&mdash;</div>
+    <div class="route-stat-sub">всего открытых</div>
+   </div>
+   <div class="route-stat-card">
+    <div class="route-stat-label">Просроченных</div>
+    <div class="route-stat-value red" id="tickets-stat-overdue">&mdash;</div>
+    <div class="route-stat-sub">SLA нарушен</div>
+   </div>
+   <div class="route-stat-card">
+    <div class="route-stat-label">Критичных</div>
+    <div class="route-stat-value red" id="tickets-stat-critical">&mdash;</div>
+    <div class="route-stat-sub">приоритет critical</div>
+   </div>
+   <div class="route-stat-card">
+    <div class="route-stat-label">Сегодня</div>
+    <div class="route-stat-value amber" id="tickets-stat-today">&mdash;</div>
+    <div class="route-stat-sub">новых обращений</div>
+   </div>
+   <div class="route-stat-card">
+    <div class="route-stat-label">Решено</div>
+    <div class="route-stat-value green" id="tickets-stat-solved">&mdash;</div>
+    <div class="route-stat-sub">за последние 7 дней</div>
+   </div>
+  </div>
+  <div class="route-filter-row">
+   <span class="route-count">Тикетов: <b id="tickets-count">&mdash;</b></span>
+   <div class="route-spacer"></div>
+   <select id="tickets-filter-op" class="route-select" onchange="ticketsRender()">
+    <option value="">Все операторы</option>
+   </select>
+   <select id="tickets-filter-prio" class="route-select" onchange="ticketsRender()">
+    <option value="">Все приоритеты</option>
+    <option value="critical">Критичные</option>
+    <option value="high">Высокие</option>
+    <option value="normal">Обычные</option>
+    <option value="low">Низкие</option>
+   </select>
+   <button onclick="ticketsOpenNew()" class="route-btn route-btn-primary">+&nbsp;Новый тикет</button>
+   <button onclick="ticketsLoad()" title="Обновить" class="route-btn route-btn-icon">&#8635;</button>
+  </div>
+  <div id="tickets-board" class="route-kanban" style="grid-template-columns:repeat(4,minmax(280px,1fr))"></div>
+ </div>
+
+ <!-- v393: Модалка «Новый тикет» -->
+ <div id="tickets-modal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:center;justify-content:center" onclick="if(event.target===this)ticketsCloseNew()">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:min(480px,92vw);box-shadow:0 24px 64px rgba(0,0,0,.5)">
+   <div style="font-size:18px;font-weight:700;margin-bottom:18px;color:var(--text);letter-spacing:-0.02em">Новый тикет</div>
+   <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Клиент *</label>
+   <select id="tickets-new-client" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:13px">
+    <option value="">— выберите —</option>
+   </select>
+   <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Тема обращения *</label>
+   <input id="tickets-new-title" type="text" placeholder="Например: «Не работает синхронизация»" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:13px">
+   <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Описание</label>
+   <textarea id="tickets-new-desc" placeholder="Подробности, шаги воспроизведения..." rows="3" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+    <div>
+     <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Приоритет</label>
+     <select id="tickets-new-prio" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);box-sizing:border-box;font-size:13px">
+      <option value="low">Низкий (3 дня)</option>
+      <option value="normal" selected>Обычный (1 день)</option>
+      <option value="high">Высокий (4 часа)</option>
+      <option value="critical">Критичный (2 часа)</option>
+     </select>
+    </div>
+    <div>
+     <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Канал</label>
+     <select id="tickets-new-channel" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);box-sizing:border-box;font-size:13px">
+      <option value="manual" selected>Вручную</option>
+      <option value="whatsapp">WhatsApp</option>
+      <option value="phone">Звонок</option>
+      <option value="email">Email</option>
+      <option value="form">Форма</option>
+     </select>
+    </div>
+   </div>
+   <div style="display:flex;gap:10px;justify-content:flex-end">
+    <button onclick="ticketsCloseNew()" style="padding:9px 18px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text-soft);cursor:pointer;font-weight:500">Отмена</button>
+    <button onclick="ticketsCreate()" style="padding:9px 22px;border-radius:8px;border:none;background:var(--accent,#28623A);color:#fff;font-weight:600;cursor:pointer">Создать</button>
+   </div>
+  </div>
  </div>
 
  <!-- v369: Мои клиенты — витрина активированных клиентов с напоминанием о продлении -->
@@ -11431,7 +11525,7 @@ function showView(v) {
  if (v === 'clients') {
  var lastTab = null;
  try { lastTab = localStorage.getItem('sd_clients_last_tab'); } catch(_){}
- var allowedTabs = ['activeclients','newclients','kanban','route','my-clients','keyclients','integrations'];
+ var allowedTabs = ['activeclients','newclients','kanban','route','my-clients','tickets','keyclients','integrations'];
  if (!allowedTabs.indexOf || allowedTabs.indexOf(lastTab) < 0) lastTab = 'activeclients';
  v = lastTab;
  }
@@ -11449,13 +11543,13 @@ function showView(v) {
  v = defaultViewForUser(currentUser);
  }
  }
- ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','my-clients','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin'].forEach(x=>{
+ ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','my-clients','tickets','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
  // v290: единый tab-bar раздела «Клиенты» — показываем при заходе на любой из подэкранов клиентов
  (function(){
- var cliViews = ['activeclients','newclients','kanban','route','my-clients','keyclients','integrations'];
+ var cliViews = ['activeclients','newclients','kanban','route','my-clients','tickets','keyclients','integrations'];
  var bar = document.getElementById('clients-tab-bar');
  if (!bar) return;
  if (cliViews.indexOf(v) >= 0) {
@@ -11481,6 +11575,8 @@ function showView(v) {
  if (v === 'newclients' && typeof ncInit === 'function') { try { ncInit(); } catch(_){} }
  // v369: Мои клиенты — витрина продлений
  if (v === 'my-clients' && typeof myClientsLoad === 'function') { try { myClientsLoad(); } catch(_){} }
+ // v393: Поддержка — Канбан тикетов
+ if (v === 'tickets' && typeof ticketsLoad === 'function') { try { ticketsLoad(); } catch(_){} }
  // v165: инициализация Планёрок при заходе
  if (v === 'planning' && typeof planningInit === 'function') { try { planningInit(); } catch(_){} }
  // Hide fullscreen card page when switching views
@@ -11504,7 +11600,7 @@ function showView(v) {
  // v359: Hide route card fullscreen page
  var rtCard = document.getElementById('view-route-card');
  if(rtCard) { rtCard.style.display='none'; document.body.style.overflow=''; }
- const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Клиенты',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Клиенты',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Клиенты',statistics:'Статистика',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Клиенты',newclients:'Клиенты',route:'Клиенты','my-clients':'Клиенты',morning:'Утренний отчёт',planning:'Планёрки'};
+ const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Выполнение плана',keyclients:'Клиенты',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Клиенты',tests:'Тесты и оценка навыков',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',kanban:'Клиенты',statistics:'Статистика',calendar:'Календарь',supportdash:'Тех.поддержка',activeclients:'Клиенты',newclients:'Клиенты',route:'Клиенты','my-clients':'Клиенты',tickets:'Клиенты',morning:'Утренний отчёт',planning:'Планёрки'};
  document.getElementById('page-title').textContent=titles[v]||v;
  // Подсветка активного пункта в nav
  document.querySelectorAll('.nav-item[data-view]').forEach(function(el){
@@ -21488,6 +21584,194 @@ function _periodPickCancel(){
 // Все пользовательские данные экранируются через _escHtml (определена ниже) — XSS защита.
 var myClients = [];
 var mycUrgency = 'all'; // 'all' | 'soon' | 'overdue'
+
+// v393: Поддержка — Канбан тикетов от активированных клиентов. Бэк готов (v378).
+// 4 колонки: new / in_progress / waiting_client / solved. closed скрыты по умолчанию.
+var TICKETS_STAGES = [
+ { key:'new', label:'Новое', desc:'Только что поступило, никто не взял', color:'#3B82F6' },
+ { key:'in_progress', label:'В работе', desc:'Оператор разбирается с проблемой', color:'#8B5CF6' },
+ { key:'waiting_client', label:'Ждём клиента', desc:'Запросили инфу, ждём ответа', color:'#FB923C' },
+ { key:'solved', label:'Решено', desc:'Проблема решена, скоро закроем', color:'#28623A' }
+];
+var ticketsList = [];
+
+async function ticketsLoad(){
+ var hub = document.getElementById('tickets-head-sub');
+ if(hub) hub.textContent = '· загрузка…';
+ try {
+  // Тянем тикеты + операторов + клиентов (для модалки)
+  var [tRes, opsRes, clRes] = await Promise.all([
+   sbFetch('/api/cards?entity=ticket'),
+   fetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators:[] }; }),
+   sbFetch('/api/clients?status=active')
+  ]);
+  if(!tRes.ok) throw new Error(tRes.error || 'tickets load failed');
+  ticketsList = tRes.tickets || [];
+  // Заполняем выпадашки если ещё пустые
+  var filt = document.getElementById('tickets-filter-op');
+  if(filt && filt.options.length <= 1){
+   var ops = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
+   ops.forEach(function(o){ var opt = document.createElement('option'); opt.value=o.name; opt.textContent=o.name; filt.appendChild(opt); });
+  }
+  var newClientSel = document.getElementById('tickets-new-client');
+  if(newClientSel && newClientSel.options.length <= 1 && clRes && clRes.ok){
+   (clRes.clients || []).forEach(function(c){
+    var opt = document.createElement('option'); opt.value=c.client_id; opt.textContent=(c.company_name || c.client_id);
+    newClientSel.appendChild(opt);
+   });
+  }
+  ticketsUpdateStats();
+  ticketsRender();
+  if(hub){
+   var now = new Date();
+   var hh = String(now.getHours()).padStart(2,'0');
+   var mm = String(now.getMinutes()).padStart(2,'0');
+   hub.textContent = '· обновлено ' + hh + ':' + mm;
+  }
+ } catch(e){
+  if(hub) hub.textContent = '· ошибка: ' + e.message;
+ }
+}
+
+function ticketsUpdateStats(){
+ var total = ticketsList.length;
+ var overdue = 0, critical = 0, todayCount = 0, solvedWeek = 0;
+ var todayStart = new Date(); todayStart.setHours(0,0,0,0);
+ var weekAgo = new Date(Date.now() - 7*86400000);
+ ticketsList.forEach(function(t){
+  if(t.sla_due_at && new Date(t.sla_due_at) < new Date() && ['new','in_progress','waiting_client','reopened'].indexOf(t.status) >= 0) overdue++;
+  if(t.priority === 'critical') critical++;
+  if(t.created_at && new Date(t.created_at) >= todayStart) todayCount++;
+  if(t.status === 'solved' && t.solved_at && new Date(t.solved_at) >= weekAgo) solvedWeek++;
+ });
+ var setText = function(id, val){ var el = document.getElementById(id); if(el) el.textContent = val; };
+ setText('tickets-stat-total', total);
+ setText('tickets-stat-overdue', overdue);
+ setText('tickets-stat-critical', critical);
+ setText('tickets-stat-today', todayCount);
+ setText('tickets-stat-solved', solvedWeek);
+ setText('tickets-count', total);
+}
+
+function ticketsRender(){
+ var board = document.getElementById('tickets-board');
+ if(!board) return;
+ var fOp = (document.getElementById('tickets-filter-op')||{}).value || '';
+ var fPrio = (document.getElementById('tickets-filter-prio')||{}).value || '';
+ var html = '';
+ TICKETS_STAGES.forEach(function(stage, sIdx){
+  var stageTickets = ticketsList.filter(function(t){
+   if(t.status !== stage.key) return false;
+   if(fOp && t.operator !== fOp) return false;
+   if(fPrio && t.priority !== fPrio) return false;
+   return true;
+  });
+  html += '<div class="route-col-amo route-col s' + (sIdx + 1) + '" style="--route-col-color:' + stage.color + '">';
+  html += '<div class="route-col-amo-head" style="border-top-color:' + stage.color + '">';
+  html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage.label + '</div><div class="route-col-amo-count">' + stageTickets.length + '</div></div>';
+  html += '<div class="route-col-amo-desc">' + stage.desc + '</div>';
+  html += '</div>';
+  html += '<div class="route-col-amo-body">';
+  if(stageTickets.length === 0){
+   html += '<div class="route-col-amo-empty">Пусто</div>';
+  }
+  stageTickets.forEach(function(t){
+   var cl = t.clients || {};
+   var clientName = cl.company_name || t.client_id || '—';
+   var slaInfo = _ticketsFmtSLA(t);
+   var prioInfo = _ticketsFmtPriority(t.priority);
+   html += '<div onclick="ticketsOpen(\'' + t.id + '\')" style="background:var(--rk-surface);border:1px solid var(--rk-border);border-radius:10px;padding:12px 14px;cursor:pointer;box-shadow:var(--rk-sh-1);display:flex;flex-direction:column;gap:6px;transition:.15s" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'var(--rk-sh-2)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'var(--rk-sh-1)\'">';
+   html += '<div style="font-size:14px;font-weight:700;color:var(--rk-text);letter-spacing:-0.01em;line-height:1.3">' + _escHtml(t.title || '(без темы)') + '</div>';
+   html += '<div style="font-size:12px;color:var(--rk-text-soft)">' + _escHtml(clientName) + '</div>';
+   html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">';
+   html += '<span style="font-size:11.5px;color:var(--rk-text-2)">' + _escHtml(t.operator || '— не назначен —') + '</span>';
+   html += '<div style="display:flex;gap:4px">';
+   html += '<span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:' + prioInfo.bg + ';color:' + prioInfo.color + ';letter-spacing:.2px">' + prioInfo.label + '</span>';
+   if(slaInfo) html += '<span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:' + slaInfo.bg + ';color:' + slaInfo.color + '">' + slaInfo.label + '</span>';
+   html += '</div></div>';
+   html += '</div>';
+  });
+  html += '</div>'; // /col-body
+  html += '</div>'; // /col
+ });
+ board.innerHTML = html;
+}
+
+function _ticketsFmtSLA(t){
+ if(!t.sla_due_at || ['solved','closed'].indexOf(t.status) >= 0) return null;
+ var due = new Date(t.sla_due_at);
+ var diff = (due.getTime() - Date.now()) / 1000 / 60; // минут до дедлайна
+ if(diff < 0) return { label:'просрочен', color:'#fff', bg:'#EF4444' };
+ if(diff < 60) return { label:Math.round(diff) + ' мин', color:'#fff', bg:'#F59E0B' };
+ if(diff < 60*4) return { label:Math.round(diff/60) + ' ч', color:'#92400E', bg:'rgba(245,158,11,.16)' };
+ return { label:Math.round(diff/60/24) + ' дн', color:'var(--rk-text-soft)', bg:'rgba(120,120,128,.16)' };
+}
+
+function _ticketsFmtPriority(p){
+ var map = {
+  critical: { label:'СРОЧНО', color:'#fff', bg:'#EF4444' },
+  high: { label:'ВЫСОКИЙ', color:'#92400E', bg:'rgba(245,158,11,.18)' },
+  normal: { label:'обычный', color:'var(--rk-text-soft)', bg:'rgba(120,120,128,.14)' },
+  low: { label:'низкий', color:'var(--rk-text-faint)', bg:'rgba(120,120,128,.10)' }
+ };
+ return map[p] || map.normal;
+}
+
+function ticketsOpenNew(){
+ document.getElementById('tickets-new-title').value = '';
+ document.getElementById('tickets-new-desc').value = '';
+ document.getElementById('tickets-new-prio').value = 'normal';
+ document.getElementById('tickets-new-channel').value = 'manual';
+ document.getElementById('tickets-modal').style.display = 'flex';
+}
+function ticketsCloseNew(){
+ document.getElementById('tickets-modal').style.display = 'none';
+}
+
+async function ticketsCreate(){
+ var client_id = document.getElementById('tickets-new-client').value;
+ var title = document.getElementById('tickets-new-title').value.trim();
+ var description = document.getElementById('tickets-new-desc').value.trim();
+ var priority = document.getElementById('tickets-new-prio').value;
+ var channel = document.getElementById('tickets-new-channel').value;
+ if(!client_id){ alert('Выберите клиента'); return; }
+ if(!title){ alert('Опишите тему обращения'); return; }
+ try {
+  var d = await sbFetch('/api/cards?entity=ticket', {
+   method:'POST',
+   body: JSON.stringify({
+    client_id: client_id,
+    title: title,
+    description: description || null,
+    priority: priority,
+    channel: channel,
+    country: window.currentCountry || 'KZ'
+   })
+  });
+  if(!d.ok) throw new Error(d.error || 'create failed');
+  ticketsCloseNew();
+  ticketsLoad();
+ } catch(e){
+  alert('Не удалось создать: ' + e.message);
+ }
+}
+
+function ticketsOpen(ticketId){
+ var t = ticketsList.find(function(x){ return x.id === ticketId; });
+ if(!t) return;
+ // MVP: пока показываем как alert с инфой. В следующей версии — полноэкранная страница как у карточки клиента.
+ var cl = t.clients || {};
+ var prio = _ticketsFmtPriority(t.priority);
+ var info = '— ' + (t.title || '(без темы)') + ' —\n\n';
+ info += 'Клиент: ' + (cl.company_name || t.client_id) + '\n';
+ info += 'Статус: ' + ({new:'Новое',in_progress:'В работе',waiting_client:'Ждём клиента',solved:'Решено',closed:'Закрыто'}[t.status] || t.status) + '\n';
+ info += 'Приоритет: ' + prio.label + '\n';
+ info += 'Канал: ' + t.channel + '\n';
+ info += 'Оператор: ' + (t.operator || 'не назначен') + '\n';
+ if(t.description) info += '\nОписание:\n' + t.description + '\n';
+ if(t.sla_due_at) info += '\nSLA до: ' + new Date(t.sla_due_at).toLocaleString('ru-RU') + '\n';
+ alert(info);
+}
 
 async function myClientsLoad(){
  var st = document.getElementById('myc-status');
