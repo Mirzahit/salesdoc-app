@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v374</title>
+<title>SalesDoc — Финансовый Дашборд v375</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4237,7 +4237,10 @@ input:focus, select:focus, textarea:focus {
 }
 /* v374: Карточка клиента в эстетике amoCRM. Применяется только к контейнеру таба
    «Основное» — шапка карточки SalesDoc (Назад, табы) остаётся в стиле дашборда. */
-.amo-style-wrapper { background:#F5F6F8; color:#1A1A1C; padding:24px; border-radius:12px; }
+.amo-style-wrapper { background:#F5F6F8; color:#1A1A1C; padding:24px; border-radius:12px; min-height:300px; }
+.amo-style-wrapper input { background:#fff !important; color:#1A1A1C !important; border:1px solid #D5D8DB !important; }
+.amo-style-wrapper input::placeholder { color:#9AA5B1 !important; }
+.amo-style-wrapper .amo-hint { color:#7C8389 !important; }
 .amo-style-wrapper .amo-field-label { color:#7C8389 !important; }
 .amo-style-wrapper .amo-field-value { color:#1A1A1C !important; }
 .amo-style-wrapper .amo-field-value a { color:#2F80ED !important; }
@@ -21683,14 +21686,76 @@ async function _routeRenderAmo(){
  container.id = 'amo-content';
  body.appendChild(container);
 
+ // Сначала показываем данные что есть из Supabase (бот их прислал)
+ _routeAmoRenderSupabaseFallback(container);
+
  if(storedId){
+  // Если есть сохранённый amo_lead_id — догружаем детали из amo поверх
   _routeAmoFetch(storedId);
- } else {
-  var hint = document.createElement('div');
-  hint.style.cssText = 'color:var(--text-soft);font-size:13px;padding:24px 0;text-align:center';
-  hint.textContent = 'Введите ID сделки из amo (число в URL: /leads/detail/12345) и нажмите «Загрузить».';
-  container.appendChild(hint);
  }
+}
+
+// Показывает базовые данные клиента из Supabase (от бота) пока amo не загружено.
+// Это позволяет оператору видеть всю информацию без обязательной загрузки из amo.
+function _routeAmoRenderSupabaseFallback(container){
+ if(!_routeCurrentCard) return;
+ var card = _routeCurrentCard;
+ var cl = card.clients || {};
+
+ // Шапка: имя + статус-пилюля + сумма пакета (если есть)
+ var topbar = document.createElement('div');
+ topbar.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid #E8EAED;margin-bottom:14px';
+ var leftTop = document.createElement('div');
+ var nm = document.createElement('div');
+ nm.style.cssText = 'font-size:24px;font-weight:700;color:#1A1A1C;letter-spacing:-0.02em;margin-bottom:6px';
+ nm.textContent = cl.company_name || '(без имени)';
+ leftTop.appendChild(nm);
+ // Пилюля этапа (из Маршрута SD — Новый/Настройка/...)
+ var pipeLine = document.createElement('div');
+ pipeLine.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:6px';
+ var pipeName = document.createElement('span');
+ pipeName.style.cssText = 'font-size:11px;color:#7C8389';
+ pipeName.textContent = 'Маршрут SalesDoc';
+ pipeLine.appendChild(pipeName);
+ var stagePill = document.createElement('span');
+ stagePill.style.cssText = 'background:#EB93FF;color:#1A1A1C;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600';
+ stagePill.textContent = card.stage || 'Новый';
+ pipeLine.appendChild(stagePill);
+ if(card.stage_entered_at){
+  var daysOn = Math.floor((Date.now() - new Date(card.stage_entered_at).getTime()) / 86400000);
+  var daysSpan = document.createElement('span');
+  daysSpan.style.cssText = 'font-size:11px;color:#7C8389';
+  daysSpan.textContent = '(' + daysOn + ' дн)';
+  pipeLine.appendChild(daysSpan);
+ }
+ leftTop.appendChild(pipeLine);
+ topbar.appendChild(leftTop);
+ container.appendChild(topbar);
+
+ // Поля сплошной таблицей — БЕЗ заголовков секций
+ var table = document.createElement('div');
+ table.className = 'amo-fields-table';
+ var rows = [
+  ['Отв-ный', card.operator || cl.curator_operator || '— не назначен —'],
+  ['Тариф', card.tariff || '—'],
+  ['Период подписки', cl.subscription_period_months ? cl.subscription_period_months + ' мес' : '—'],
+  ['Лицензии', card.licenses_count || '—'],
+  ['Телефон', cl.main_phone || '—'],
+  ['Страна', card.country || cl.country || 'KZ'],
+  ['Статус', cl.status || 'onboarding'],
+  ['Создана', card.created_at ? new Date(card.created_at).toLocaleDateString('ru-RU') : '—'],
+  ['Активирована', cl.activation_date || '—'],
+  ['Следующая оплата', cl.next_billing_at || '—'],
+  ['ID клиента', card.client_id]
+ ];
+ rows.forEach(function(r){
+  var row = document.createElement('div'); row.className = 'amo-field-row';
+  var l = document.createElement('div'); l.className = 'amo-field-label'; l.textContent = r[0];
+  var v = document.createElement('div'); v.className = 'amo-field-value'; v.textContent = r[1];
+  row.appendChild(l); row.appendChild(v);
+  table.appendChild(row);
+ });
+ container.appendChild(table);
 }
 
 async function _routeAmoFetch(leadId){
