@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v375</title>
+<title>SalesDoc — Финансовый Дашборд v380</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4294,6 +4294,174 @@ input:focus, select:focus, textarea:focus {
 .amo-voice-icon { width:22px; height:22px; border-radius:50%; background:#5489BB; color:#fff; display:flex; align-items:center; justify-content:center; font-size:10px; }
 .amo-stage-inline-pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; color:#1A1A1C; margin:0 4px; }
 .amo-tag-chip { display:inline-block; padding:2px 8px; border-radius:8px; background:rgba(84,137,187,.12); color:#5489BB; font-size:11px; margin-right:6px; }
+
+/* ============================================================================
+   v380: Карточка клиента в стиле amoCRM (mockup из дизайн-сессии Claude Code).
+   Палитра Emerald Depth. Двух-колоночный layout: слева поля сделки + pipeline,
+   справа лента событий + чат-инпут. Все классы префиксованы .amocard-* чтобы
+   не конфликтовать с существующими (.tabs, .field, .feed уже есть у проекта).
+   CSS-переменные локальные внутри #view-route-card — не загрязняют глобал.
+   ============================================================================ */
+#view-route-card.amocard-active {
+ --amocard-bg:#F1F2F5;
+ --amocard-surface:#FFFFFF;
+ --amocard-surface-2:#F7F8FA;
+ --amocard-surface-3:#ECEEF1;
+ --amocard-border:#E3E6EA;
+ --amocard-border-strong:#D5D9DF;
+ --amocard-hairline:#EEF0F3;
+ --amocard-text:#1A1D21;
+ --amocard-text-2:#3C4047;
+ --amocard-text-soft:#6B7280;
+ --amocard-text-faint:#9CA3AF;
+ --amocard-accent:#28623A;
+ --amocard-accent-bg:#E8F0EB;
+ --amocard-accent-deep:#0F2027;
+ --amocard-blue:#3B82F6;
+ --amocard-blue-bg:#E6F0FF;
+ --amocard-green:#28623A;
+ --amocard-green-bg:#E8F0EB;
+ --amocard-amber:#F59E0B;
+ --amocard-amber-bg:#FEF3C7;
+ --amocard-purple:#8B5CF6;
+ --amocard-purple-bg:#F0EAFE;
+ --amocard-sh-1:0 1px 2px rgba(16,24,40,.06);
+ --amocard-sh-2:0 2px 8px rgba(16,24,40,.08);
+ --amocard-sh-3:0 8px 24px rgba(16,24,40,.10);
+ background-color:var(--amocard-bg) !important;
+ background-image:none !important;
+}
+body.dark #view-route-card.amocard-active,
+body.theme-dark #view-route-card.amocard-active {
+ --amocard-bg:#0F2027;
+ --amocard-surface:#14292E;
+ --amocard-surface-2:#1A323A;
+ --amocard-surface-3:#234049;
+ --amocard-border:rgba(255,255,255,.07);
+ --amocard-border-strong:rgba(255,255,255,.14);
+ --amocard-hairline:rgba(255,255,255,.04);
+ --amocard-text:#E8EFEB;
+ --amocard-text-2:#BFCBC2;
+ --amocard-text-soft:#8B9A91;
+ --amocard-text-faint:#5A6862;
+ --amocard-accent:#3B8B57;
+ --amocard-accent-bg:rgba(59,139,87,.16);
+ --amocard-accent-deep:#28623A;
+ --amocard-blue:#60A5FA;
+ --amocard-blue-bg:rgba(96,165,250,.16);
+ --amocard-green:#3B8B57;
+ --amocard-green-bg:rgba(59,139,87,.16);
+ --amocard-amber:#FBBF24;
+ --amocard-amber-bg:rgba(251,191,36,.16);
+ --amocard-purple:#A78BFA;
+ --amocard-purple-bg:rgba(167,139,250,.16);
+ --amocard-sh-1:0 1px 2px rgba(0,0,0,.40);
+ --amocard-sh-2:0 4px 12px rgba(0,0,0,.50);
+ --amocard-sh-3:0 12px 32px rgba(0,0,0,.60);
+}
+
+.amocard-wrap { display:grid; grid-template-columns:320px 1fr; background:var(--amocard-surface); min-height:100vh; font-family:'Inter','-apple-system',system-ui,sans-serif; letter-spacing:-0.005em; color:var(--amocard-text); }
+.amocard-left { padding:0 32px 32px; border-right:1px solid var(--amocard-border); overflow-y:auto; max-height:100vh; }
+.amocard-head { padding:20px 0 14px; display:grid; grid-template-columns:1fr auto; gap:16px; align-items:start; }
+.amocard-head-left { display:flex; align-items:flex-start; gap:4px; }
+.amocard-back { color:var(--amocard-text-soft); font-size:20px; cursor:pointer; padding:4px 6px; margin-right:4px; line-height:1; user-select:none; }
+.amocard-back:hover { color:var(--amocard-text-2); }
+.amocard-name { font-size:22px; font-weight:700; letter-spacing:-0.02em; color:var(--amocard-text); line-height:1.2; }
+.amocard-id-row { display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
+.amocard-id { font-size:12px; color:var(--amocard-text-soft); font-weight:500; font-variant-numeric:tabular-nums; }
+.amocard-tag-btn { font-size:11px; font-weight:600; color:var(--amocard-text-soft); background:var(--amocard-surface-3); padding:3px 9px; border-radius:6px; letter-spacing:.3px; cursor:pointer; border:1px dashed var(--amocard-border-strong); }
+.amocard-tag-btn:hover { color:var(--amocard-text-2); background:var(--amocard-surface-2); }
+.amocard-menu { color:var(--amocard-text-soft); font-size:20px; cursor:pointer; padding:4px 10px; letter-spacing:.5px; }
+
+.amocard-stage-box { margin-top:10px; padding:14px 0 10px; border-bottom:1px solid var(--amocard-border); }
+.amocard-stage-row { display:grid; grid-template-columns:1fr auto; align-items:center; gap:10px; margin-bottom:10px; }
+.amocard-stage-label { font-size:11px; color:var(--amocard-text-soft); text-transform:uppercase; letter-spacing:.4px; font-weight:600; margin-bottom:2px; }
+.amocard-stage-name { font-size:16px; font-weight:700; color:var(--amocard-text); letter-spacing:-0.01em; }
+.amocard-days { font-size:13px; color:var(--amocard-text-soft); font-weight:500; margin-left:6px; }
+.amocard-stage-chevron { color:var(--amocard-text-faint); font-size:14px; cursor:pointer; padding:6px; border-radius:6px; }
+.amocard-stage-chevron:hover { background:var(--amocard-surface-3); color:var(--amocard-text-2); }
+
+.amocard-pipeline { display:flex; gap:3px; height:6px; border-radius:3px; overflow:hidden; }
+.amocard-pipe-step { flex:1; background:var(--amocard-surface-3); position:relative; cursor:pointer; }
+.amocard-pipe-step.done { background:var(--amocard-green); }
+.amocard-pipe-step.active { background:var(--amocard-blue); }
+.amocard-pipe-step.active::after { content:''; position:absolute; top:-3px; left:0; right:0; height:12px; background:var(--amocard-blue); border-radius:3px; box-shadow:0 2px 6px rgba(59,130,246,.40); }
+
+.amocard-tabs { display:flex; gap:0; padding:14px 0 0; border-bottom:1px solid var(--amocard-border); }
+.amocard-tab { padding:10px 14px; font-size:14px; font-weight:600; color:var(--amocard-text-soft); border-bottom:2px solid transparent; cursor:pointer; margin-bottom:-1px; background:none; border-top:none; border-left:none; border-right:none; }
+.amocard-tab:hover { color:var(--amocard-text-2); }
+.amocard-tab.active { color:var(--amocard-text); border-bottom-color:var(--amocard-text); }
+
+.amocard-fields { padding:8px 0 24px; }
+.amocard-section-head { font-size:10.5px; font-weight:700; color:var(--amocard-text-faint); text-transform:uppercase; letter-spacing:.8px; padding:14px 12px 6px; border-top:1px solid var(--amocard-hairline); margin-top:6px; }
+.amocard-section-head:first-child { border-top:none; margin-top:0; }
+.amocard-field { display:flex; flex-direction:column; gap:3px; padding:7px 12px; margin:0 -12px; border-radius:6px; transition:.15s; cursor:pointer; }
+.amocard-field:hover { background:var(--amocard-surface-2); }
+.amocard-field-label { font-size:10.5px; font-weight:600; color:var(--amocard-text-soft); text-transform:uppercase; letter-spacing:.4px; }
+.amocard-field-value { color:var(--amocard-text); font-weight:500; font-size:13.5px; display:flex; align-items:center; gap:6px; min-width:0; line-height:1.3; }
+.amocard-field-value .amocard-em-dash { color:var(--amocard-text-faint); margin-right:2px; }
+.amocard-field-value .amocard-caret { color:var(--amocard-text-faint); font-size:9px; margin-left:auto; }
+.amocard-field-value a { color:var(--amocard-blue); word-break:break-all; text-decoration:none; }
+.amocard-field-value a:hover { text-decoration:underline; }
+.amocard-field-value .amocard-price { font-variant-numeric:tabular-nums; font-weight:700; }
+.amocard-field-value .amocard-faint { color:var(--amocard-text-faint); }
+
+.amocard-right { display:flex; flex-direction:column; background:var(--amocard-surface-2); position:relative; max-height:100vh; }
+.amocard-feed { flex:1; overflow-y:auto; padding:18px 24px 12px; display:flex; flex-direction:column; gap:14px; }
+.amocard-note { background:var(--amocard-surface); border:1px solid var(--amocard-border); border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; box-shadow:var(--amocard-sh-1); }
+.amocard-feed-icon { width:32px; height:32px; border-radius:50%; background:var(--amocard-surface-3); color:var(--amocard-text-soft); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.amocard-feed-icon.amocard-ic-note { background:var(--amocard-amber-bg); color:var(--amocard-amber); }
+.amocard-feed-icon.amocard-ic-wz { background:var(--amocard-green-bg); color:var(--amocard-green); }
+.amocard-feed-icon.amocard-ic-stage { background:var(--amocard-blue-bg); color:var(--amocard-blue); }
+.amocard-feed-body { flex:1; min-width:0; }
+.amocard-feed-meta { font-size:11px; color:var(--amocard-text-soft); font-weight:500; margin-bottom:3px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.amocard-feed-meta .amocard-dot { width:4px; height:4px; border-radius:50%; background:var(--amocard-text-faint); }
+.amocard-feed-meta .amocard-who { color:var(--amocard-text-2); font-weight:600; }
+.amocard-feed-text { font-size:13px; color:var(--amocard-text); line-height:1.4; }
+
+.amocard-wz-msg { background:var(--amocard-surface); border:1px solid var(--amocard-border); border-radius:14px; padding:10px 14px; display:flex; gap:10px; align-items:center; box-shadow:var(--amocard-sh-1); position:relative; }
+.amocard-wz-msg::before { content:''; position:absolute; left:0; top:10px; bottom:10px; width:3px; background:var(--amocard-green); border-radius:0 3px 3px 0; }
+.amocard-wz-msg .amocard-feed-meta { margin-bottom:0; flex:1; }
+.amocard-wz-msg .amocard-feed-text { font-size:12px; color:var(--amocard-text-2); }
+.amocard-wz-tag { font-size:11px; color:var(--amocard-green); font-weight:600; white-space:nowrap; }
+
+.amocard-stage-change { padding:8px 14px; font-size:12px; color:var(--amocard-text-soft); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.amocard-stage-change .amocard-who { color:var(--amocard-text-2); font-weight:600; }
+.amocard-badge-stage { font-size:11px; font-weight:600; padding:3px 9px; border-radius:5px; background:var(--amocard-surface-3); color:var(--amocard-text-2); letter-spacing:.2px; }
+.amocard-badge-stage.amocard-in-work { background:var(--amocard-blue-bg); color:var(--amocard-blue); }
+.amocard-badge-stage.amocard-new-client { background:var(--amocard-green-bg); color:var(--amocard-accent-deep); }
+.amocard-badge-stage.amocard-muted { background:var(--amocard-surface-3); color:var(--amocard-text-soft); }
+.amocard-arrow { color:var(--amocard-text-faint); font-size:11px; }
+
+.amocard-task-hint { margin:8px 24px 0; padding:10px 14px; background:var(--amocard-amber-bg); color:#92400E; border-radius:10px; font-size:12px; display:flex; align-items:center; gap:8px; }
+body.dark .amocard-task-hint,
+body.theme-dark .amocard-task-hint { color:#FCD34D; background:rgba(251,191,36,.10); }
+.amocard-task-hint .amocard-ic { font-size:14px; }
+.amocard-task-hint a { color:inherit; font-weight:600; text-decoration:underline; }
+
+.amocard-chat-input { background:var(--amocard-surface); border-top:1px solid var(--amocard-border); padding:12px 24px 14px; display:flex; align-items:center; gap:10px; }
+.amocard-chat-select { font-size:13px; color:var(--amocard-text-soft); display:flex; align-items:center; gap:4px; cursor:pointer; }
+.amocard-chat-select b { color:var(--amocard-text-2); font-weight:600; }
+.amocard-chat-input input { flex:1; border:none; background:transparent; font-size:13px; padding:8px 0; outline:none; color:var(--amocard-text); font-family:inherit; }
+.amocard-chat-input input::placeholder { color:var(--amocard-text-faint); }
+.amocard-send { padding:7px 14px; border-radius:8px; background:var(--amocard-accent); color:#fff; font-size:13px; font-weight:600; transition:.15s; border:none; cursor:pointer; }
+.amocard-send:hover { background:var(--amocard-accent-deep); }
+
+.amocard-empty { padding:40px 24px; text-align:center; color:var(--amocard-text-soft); font-size:13px; }
+
+@media (max-width:1200px) {
+ .amocard-left { padding:0 20px 24px; }
+ .amocard-name { font-size:19px; }
+ .amocard-tabs { overflow-x:auto; flex-wrap:nowrap; }
+ .amocard-tab { white-space:nowrap; padding:10px 12px; font-size:13px; }
+ .amocard-feed { padding:14px 16px 10px; }
+ .amocard-chat-input { padding:10px 16px 12px; }
+}
+@media (max-width:760px) {
+ .amocard-wrap { grid-template-columns:1fr; }
+ .amocard-left { border-right:none; border-bottom:1px solid var(--amocard-border); max-height:none; }
+ .amocard-right { max-height:none; }
+}
 </style>
 </head>
 <body>
@@ -6389,23 +6557,56 @@ input:focus, select:focus, textarea:focus {
  </div>
  </div>
 
- <!-- v359/v366/v371-hotfix: Полноэкранная страница клиента.
-      Фон СПЛОШНОЙ (--ds-page-bg) + поверх градиент как декор. Без сплошного фона
-      радиальный градиент имеет прозрачные участки и через карточку просвечивает
-      Маршрут с Канбаном — карточка выглядит «прозрачной». -->
- <div id="view-route-card" style="display:none;position:fixed;inset:0;z-index:9999;background-color:var(--ds-page-bg);background-image:var(--ds-page-gradient);overflow-y:auto">
- <div style="max-width:1100px;margin:0 auto;padding:18px 24px">
- <div style="display:flex;align-items:center;gap:14px;padding-bottom:18px;border-bottom:1px solid var(--border-faint)">
- <button onclick="routeCloseCard()" style="padding:8px 14px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text);cursor:pointer;font-size:13px;font-weight:500">← Назад в Маршрут</button>
- <div id="route-card-head" style="flex:1"></div>
- </div>
- <div style="display:flex;gap:0;padding:0;border-bottom:1px solid var(--border-faint);margin-top:8px">
- <button onclick="routeCardTab('amo')" id="route-tab-amo" style="padding:14px 22px;border:none;background:transparent;color:var(--text);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Основное</button>
- <button onclick="routeCardTab('check')" id="route-tab-check" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Чек-лист</button>
- <button onclick="routeCardTab('history')" id="route-tab-history" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">История SD</button>
- <button onclick="routeCardTab('contact')" id="route-tab-contact" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Контакт</button>
- </div>
- <div id="route-card-body" style="padding:20px 0;min-height:60vh"></div>
+ <!-- v380: Полноэкранная карточка клиента в стиле amoCRM (Emerald Depth палитра).
+      Двух-колоночный layout: слева поля сделки + pipeline + табы, справа лента
+      событий + чат-инпут. Класс .amocard-active включает локальные CSS-переменные.
+      Все классы префиксованы .amocard-* чтобы не конфликтовать с существующими. -->
+ <div id="view-route-card" class="amocard-active" style="display:none;position:fixed;inset:0;z-index:9999;overflow-y:auto">
+ <div class="amocard-wrap">
+  <section class="amocard-left">
+   <div class="amocard-head">
+    <div class="amocard-head-left">
+     <span class="amocard-back" onclick="routeCloseCard()" title="Назад в Маршрут">&lsaquo;</span>
+     <div>
+      <div id="route-card-name" class="amocard-name">&mdash;</div>
+      <div class="amocard-id-row">
+       <span id="route-card-id" class="amocard-id">&mdash;</span>
+       <button class="amocard-tag-btn">#ТЕГИРОВАТЬ</button>
+      </div>
+     </div>
+    </div>
+    <span class="amocard-menu" title="Меню">&middot;&middot;&middot;</span>
+   </div>
+   <div class="amocard-stage-box">
+    <div class="amocard-stage-row">
+     <div>
+      <div class="amocard-stage-label">Маршрут</div>
+      <div class="amocard-stage-name"><span id="route-card-stage-name">&mdash;</span> <span id="route-card-stage-days" class="amocard-days"></span></div>
+     </div>
+     <span class="amocard-stage-chevron">&#9662;</span>
+    </div>
+    <div id="route-card-pipeline" class="amocard-pipeline"></div>
+   </div>
+   <div class="amocard-tabs">
+    <button id="route-tab-amo" class="amocard-tab active" onclick="routeCardTab('amo')">Основное</button>
+    <button id="route-tab-check" class="amocard-tab" onclick="routeCardTab('check')">Чек-лист</button>
+    <button id="route-tab-history" class="amocard-tab" onclick="routeCardTab('history')">История SD</button>
+    <button id="route-tab-contact" class="amocard-tab" onclick="routeCardTab('contact')">Контакт</button>
+   </div>
+   <div id="route-card-body" class="amocard-fields"></div>
+  </section>
+  <section class="amocard-right">
+   <div id="route-card-feed" class="amocard-feed"></div>
+   <div id="route-card-task-hint" class="amocard-task-hint" style="display:none">
+    <span class="amocard-ic">&#9201;</span>
+    <span>Нет запланированных задач, рекомендуем <a href="#" onclick="return false">добавить</a></span>
+   </div>
+   <div class="amocard-chat-input">
+    <span class="amocard-chat-select"><b>Чат</b> для <b id="route-chat-name">&mdash;:</b> <span style="color:var(--amocard-text-faint)">&#9662;</span></span>
+    <input id="route-chat-text" type="text" placeholder="введите текст &hellip;">
+    <button class="amocard-send" onclick="routeChatSend()" title="Отправить">&rarr;</button>
+   </div>
+  </section>
  </div>
  </div>
 
@@ -21363,48 +21564,84 @@ function routeCloseCard(){
  _routeCurrentCard = null;
 }
 
+// v380: amo-style карточка — заполняем шапку (имя/ID), pipeline (5 стадий), стадию.
+// Старый innerHTML в #route-card-head больше не используется — мы пишем напрямую
+// в новые элементы по ID. Это безопаснее от XSS (textContent вместо innerHTML).
+var ROUTE_STAGES_ORDER = ['Новый','Настройка','Обучение','Тестирование','Активация'];
 function _routeRenderCardHead(){
  var card = _routeCurrentCard; if(!card) return;
  var cl = card.clients || {};
- // v371: расширенная шапка — показывает всю информацию что есть в БД (тариф, период, куратор, этап, страна, дата)
- // Полная карточка как в amo с 18 полями — в v372 (отдельная сессия).
- var createdAt = card.created_at ? new Date(card.created_at).toLocaleDateString('ru-RU') : '—';
- var period = cl.subscription_period_months ? cl.subscription_period_months + ' мес' : null;
- var nextBill = cl.next_billing_at || null;
- var html = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">';
- html += '<div style="min-width:0">';
- html += '<div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:6px;letter-spacing:-0.02em">' + _escHtml(cl.company_name || '(без имени)') + '</div>';
- // Первая строка мета — основное
- html += '<div style="font-size:13px;color:var(--text-soft);margin-bottom:4px">';
- html += '<b>Тариф:</b> ' + _escHtml(card.tariff || 'не указан');
- html += ' · <b>Куратор:</b> ' + _escHtml(card.operator || 'не назначен');
- html += ' · <b>Этап:</b> ' + _escHtml(card.stage);
- html += '</div>';
- // Вторая строка мета — дополнительно
- html += '<div style="font-size:12px;color:var(--text-muted)">';
- html += 'Страна: ' + _escHtml(card.country || cl.country || 'KZ');
- if(period) html += ' · Период подписки: ' + period;
- if(nextBill) html += ' · След. оплата: ' + _escHtml(nextBill);
- html += ' · Создано: ' + createdAt;
- if(cl.activation_date) html += ' · Активирован: ' + _escHtml(cl.activation_date);
- html += '</div>';
- html += '</div>';
- html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
- if(cl.main_phone){
-  html += '<a href="tel:' + cl.main_phone + '" style="padding:8px 14px;border-radius:8px;background:rgba(127,184,158,.16);color:#7FB89E;text-decoration:none;font-size:13px;font-weight:600;letter-spacing:-0.01em">Звонок</a>';
-  html += '<a href="https://wa.me/' + cl.main_phone.replace(/[^0-9]/g,'') + '" target="_blank" style="padding:8px 14px;border-radius:8px;background:rgba(37,211,102,.16);color:#25D366;text-decoration:none;font-size:13px;font-weight:600;letter-spacing:-0.01em">WhatsApp</a>';
+ // Имя клиента
+ var nameEl = document.getElementById('route-card-name');
+ if(nameEl) nameEl.textContent = cl.company_name || '(без имени)';
+ // ID
+ var idEl = document.getElementById('route-card-id');
+ if(idEl) idEl.textContent = '#' + (card.client_id || '—');
+ // Имя этапа
+ var stageEl = document.getElementById('route-card-stage-name');
+ if(stageEl) stageEl.textContent = card.stage || '—';
+ // Дни на этапе
+ var daysEl = document.getElementById('route-card-stage-days');
+ if(daysEl){
+  if(card.stage_entered_at){
+   var d = Math.floor((Date.now() - new Date(card.stage_entered_at).getTime()) / 86400000);
+   daysEl.textContent = '(' + d + ' ' + _pluralDays(d) + ')';
+  } else { daysEl.textContent = ''; }
  }
- // v363: кнопка «Активировать» — активна только на стадии Активация
- if(card.stage === 'Активация'){
-  html += '<button onclick="routeActivateClient()" style="padding:8px 16px;border-radius:8px;border:none;background:#34C759;color:#fff;font-weight:600;cursor:pointer;font-size:13px;letter-spacing:-0.01em">Активировать клиента</button>';
- } else if(cl.status === 'active'){
-  html += '<span style="padding:8px 14px;border-radius:8px;background:rgba(52,199,89,.16);color:#34C759;font-size:13px;font-weight:600;letter-spacing:-0.01em">Уже активирован</span>';
- } else {
-  html += '<span style="padding:8px 14px;border-radius:8px;background:rgba(120,120,128,.12);color:var(--text-soft);font-size:13px;font-weight:500">Активация доступна на последнем этапе</span>';
+ // Имя в подписи чата
+ var chatNameEl = document.getElementById('route-chat-name');
+ if(chatNameEl) chatNameEl.textContent = (cl.company_name || 'клиент') + ':';
+ // Pipeline — 5 шагов SalesDoc. done = пройденные, active = текущий, пустые = впереди.
+ var pipeEl = document.getElementById('route-card-pipeline');
+ if(pipeEl){
+  pipeEl.replaceChildren();
+  var currentIdx = ROUTE_STAGES_ORDER.indexOf(card.stage);
+  ROUTE_STAGES_ORDER.forEach(function(stageName, i){
+   var step = document.createElement('div');
+   step.className = 'amocard-pipe-step';
+   if(i < currentIdx) step.classList.add('done');
+   else if(i === currentIdx) step.classList.add('active');
+   step.title = stageName;
+   pipeEl.appendChild(step);
+  });
  }
- html += '</div>';
- html += '</div>';
- document.getElementById('route-card-head').innerHTML = html;
+}
+
+function _pluralDays(n){
+ var mod10 = n % 10, mod100 = n % 100;
+ if(mod10 === 1 && mod100 !== 11) return 'день';
+ if(mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'дня';
+ return 'дней';
+}
+
+// v380: placeholder для отправки сообщения из чат-инпута. Пока сохраняет
+// текст как заметку в card_history. Реальная отправка в WhatsApp/Wazzup — позже.
+async function routeChatSend(){
+ var input = document.getElementById('route-chat-text');
+ if(!input) return;
+ var text = input.value.trim();
+ if(!text) return;
+ if(!_routeCurrentCard) return;
+ try {
+  var d = await sbFetch('/api/history', {
+   method:'POST',
+   body: JSON.stringify({
+    card_id: _routeCurrentCard.id,
+    client_id: _routeCurrentCard.client_id,
+    event_type: 'note',
+    text: text,
+    author: 'оператор'
+   })
+  });
+  if(!d.ok) throw new Error(d.error || 'history POST failed');
+  input.value = '';
+  // Если открыт таб «Основное» — перерисуем ленту
+  if(_routeCurrentTab === 'amo' && typeof _routeRenderFeed === 'function'){
+   _routeRenderFeed();
+  }
+ } catch(e){
+  alert('Не удалось сохранить: ' + e.message);
+ }
 }
 
 // v363: активация клиента — переводит из Канбана в «Действующие», закрепляет куратора
@@ -21471,24 +21708,19 @@ async function routeActivateClient(){
 
 function routeCardTab(tab){
  _routeCurrentTab = tab;
- // Подсветка табов
- ['check','history','contact','amo'].forEach(function(t){
+ // v380: переключение через класс .active на .amocard-tab (вместо inline-стилей).
+ ['amo','check','history','contact'].forEach(function(t){
   var btn = document.getElementById('route-tab-' + t);
   if(!btn) return;
-  if(t === tab){
-   btn.style.color = 'var(--text)';
-   btn.style.borderBottomColor = 'var(--accent,#5489BB)';
-  } else {
-   btn.style.color = 'var(--text-soft)';
-   btn.style.borderBottomColor = 'transparent';
-  }
+  btn.classList.toggle('active', t === tab);
+  // Очистка inline-стилей из старой версии (если остались)
+  btn.style.color = '';
+  btn.style.borderBottomColor = '';
  });
- // v374: amo-style применяется только к табу «Основное» — другие табы в обычной теме SalesDoc.
+ // Класс .amo-style-wrapper больше не используется (v374 → v380 — amo-стиль теперь
+ // через #view-route-card.amocard-active с локальными переменными).
  var body = document.getElementById('route-card-body');
- if(body){
-  if(tab === 'amo') body.classList.add('amo-style-wrapper');
-  else body.classList.remove('amo-style-wrapper');
- }
+ if(body) body.classList.remove('amo-style-wrapper');
  if(tab === 'check') _routeRenderChecklist();
  if(tab === 'history') _routeRenderHistory();
  if(tab === 'contact') _routeRenderContact();
@@ -21641,58 +21873,187 @@ function _routeRenderContact(){
 // контакты и ленту событий (включая WhatsApp через Wazzup24).
 // ID сделки пока хранится в localStorage по client_id (миграция БД с колонкой amo_lead_id
 // в clients — отдельной сессией, чтобы не блокировать).
+// v380: amo-style рендер таба «Основное». Заполняет route-card-body 15 полями в
+// 4 секции (Сделка / Контакт / Подписка / Продукт) — как mockup. Параллельно
+// рендерит ленту событий в #route-card-feed (заметки из card_history).
+// Поля которые НЕТ в Supabase показываем как «—», когда-то подтянем из amo.
 async function _routeRenderAmo(){
  var body = document.getElementById('route-card-body');
- if(!_routeCurrentCard){ body.replaceChildren(); return; }
- var cl = _routeCurrentCard.clients || {};
- var clientId = _routeCurrentCard.client_id;
- var storedId = '';
- try { storedId = localStorage.getItem('amo_lead_id_' + clientId) || ''; } catch(_){}
+ if(!_routeCurrentCard){ if(body) body.replaceChildren(); return; }
+ if(body) body.replaceChildren();
+ var card = _routeCurrentCard;
+ var cl = card.clients || {};
 
- body.replaceChildren();
-
- // Шапка с инпутом ID и кнопками
- var head = document.createElement('div');
- head.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border-faint)';
- var label = document.createElement('span');
- label.style.cssText = 'font-size:12px;color:var(--text-soft)';
- label.textContent = 'ID сделки в amo:';
- var input = document.createElement('input');
- input.id = 'amo-lead-id-input';
- input.type = 'text';
- input.placeholder = '45963508';
- input.value = storedId;
- input.style.cssText = 'padding:6px 10px;border-radius:6px;border:1px solid var(--ds-glass-border);background:var(--ds-glass-card);color:var(--text);font-size:13px;width:140px';
- var btn = document.createElement('button');
- btn.textContent = 'Загрузить из amo';
- btn.style.cssText = 'padding:6px 14px;border-radius:6px;border:none;background:var(--accent,#5489BB);color:#fff;font-size:13px;font-weight:600;cursor:pointer';
- btn.addEventListener('click', function(){ _routeAmoFetch(input.value.trim()); });
- head.appendChild(label);
- head.appendChild(input);
- head.appendChild(btn);
- if(storedId){
-  var amoLink = document.createElement('a');
-  amoLink.textContent = 'Открыть в amo →';
-  amoLink.href = '#';
-  amoLink.id = 'amo-open-link';
-  amoLink.style.cssText = 'margin-left:auto;font-size:12px;color:var(--accent,#5489BB);text-decoration:none';
-  amoLink.target = '_blank';
-  head.appendChild(amoLink);
+ // Локальные хелперы — добавляют секцию и поле в body
+ function addSection(title){
+  var s = document.createElement('div');
+  s.className = 'amocard-section-head';
+  s.textContent = title;
+  body.appendChild(s);
  }
- body.appendChild(head);
-
- // Контейнер для контента
- var container = document.createElement('div');
- container.id = 'amo-content';
- body.appendChild(container);
-
- // Сначала показываем данные что есть из Supabase (бот их прислал)
- _routeAmoRenderSupabaseFallback(container);
-
- if(storedId){
-  // Если есть сохранённый amo_lead_id — догружаем детали из amo поверх
-  _routeAmoFetch(storedId);
+ function addField(label, value, opts){
+  opts = opts || {};
+  var f = document.createElement('div'); f.className = 'amocard-field';
+  var l = document.createElement('div'); l.className = 'amocard-field-label';
+  l.textContent = label;
+  var v = document.createElement('div'); v.className = 'amocard-field-value';
+  if(value === null || value === undefined || value === '' || value === '—'){
+   var dash = document.createElement('span'); dash.className = 'amocard-faint';
+   dash.textContent = '—'; v.appendChild(dash);
+  } else if(opts.link){
+   var a = document.createElement('a'); a.href = opts.link; a.textContent = String(value);
+   if(opts.target) a.target = opts.target;
+   v.appendChild(a);
+  } else if(opts.price){
+   var p = document.createElement('span'); p.className = 'amocard-price';
+   p.textContent = String(value); v.appendChild(p);
+  } else {
+   v.appendChild(document.createTextNode(String(value)));
+  }
+  if(opts.editable){
+   var c = document.createElement('span'); c.className = 'amocard-caret'; c.textContent = '▾';
+   v.appendChild(c);
+  }
+  f.appendChild(l); f.appendChild(v);
+  body.appendChild(f);
  }
+
+ // Секция СДЕЛКА
+ addSection('Сделка');
+ addField('Ответственный', card.operator || cl.curator_operator);
+ addField('Бюджет', card.payment_amount ? '₸ ' + Number(card.payment_amount).toLocaleString('ru-RU').replace(/,/g, ' ') : null, { price:true });
+ addField('Менеджер продаж', card.sales_manager);
+ addField('Категория', card.payment_category);
+ addField('Создана', card.created_at ? new Date(card.created_at).toLocaleDateString('ru-RU') : null);
+
+ // Секция КОНТАКТ
+ addSection('Контакт');
+ addField('Телефон', cl.main_phone, cl.main_phone ? { link: 'tel:' + cl.main_phone } : null);
+ if(cl.main_phone){
+  var phoneDigits = String(cl.main_phone).replace(/[^0-9]/g, '');
+  if(phoneDigits) addField('WhatsApp', '+' + phoneDigits, { link: 'https://wa.me/' + phoneDigits, target: '_blank' });
+ } else { addField('WhatsApp', null); }
+ addField('Куратор внедрения', cl.curator_operator || card.operator);
+
+ // Секция ПОДПИСКА
+ addSection('Подписка');
+ addField('Период подписки', cl.subscription_period_months ? cl.subscription_period_months + ' мес' : null, { editable:true });
+ addField('Лицензии', card.licenses_count);
+ addField('Тариф', card.tariff, { editable:true });
+ addField('Статус', cl.status || 'onboarding');
+ addField('Активирована', cl.activation_date);
+ addField('Следующая оплата', cl.next_billing_at);
+
+ // Секция ПРОДУКТ
+ addSection('Продукт');
+ addField('Модули', card.modules);
+ addField('Страна', card.country || cl.country || 'KZ');
+ addField('ID клиента', card.client_id);
+
+ // Параллельно рисуем ленту событий справа
+ _routeRenderFeed();
+}
+
+// v380: лента событий из card_history (заметки, смены этапов, системные события).
+// Вызывается при открытии таба «Основное» и после добавления заметки через чат-инпут.
+async function _routeRenderFeed(){
+ var feedEl = document.getElementById('route-card-feed');
+ if(!feedEl) return;
+ if(!_routeCurrentCard){ feedEl.replaceChildren(); return; }
+ feedEl.replaceChildren();
+ try {
+  var d = await sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50');
+  var items = (d && d.items) || [];
+  if(!items.length){
+   var empty = document.createElement('div');
+   empty.className = 'amocard-empty';
+   empty.textContent = 'Событий пока нет. Напишите первую заметку внизу.';
+   feedEl.appendChild(empty);
+   return;
+  }
+  items.forEach(function(n){
+   var et = (n.event_type || 'note').toLowerCase();
+   var isStage = et === 'stage_change';
+   var isWZ = et === 'whatsapp';
+   if(isStage){
+    feedEl.appendChild(_buildFeedStageChange(n));
+   } else if(isWZ){
+    feedEl.appendChild(_buildFeedWZ(n));
+   } else {
+    feedEl.appendChild(_buildFeedNote(n, et));
+   }
+  });
+ } catch(e){
+  var err = document.createElement('div');
+  err.className = 'amocard-empty';
+  err.textContent = 'Не удалось загрузить ленту: ' + e.message;
+  feedEl.appendChild(err);
+ }
+}
+
+function _fmtFeedDate(iso){
+ if(!iso) return '';
+ var d = new Date(iso);
+ if(isNaN(d)) return '';
+ return d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+}
+
+function _buildFeedNote(n, eventType){
+ var note = document.createElement('div'); note.className = 'amocard-note';
+ var ic = document.createElement('div'); ic.className = 'amocard-feed-icon amocard-ic-note';
+ ic.textContent = eventType === 'system' ? '✓' : '✎';
+ note.appendChild(ic);
+ var body = document.createElement('div'); body.className = 'amocard-feed-body';
+ var meta = document.createElement('div'); meta.className = 'amocard-feed-meta';
+ var dt = document.createElement('span'); dt.textContent = _fmtFeedDate(n.created_at); meta.appendChild(dt);
+ if(n.author){
+  var dot = document.createElement('span'); dot.className = 'amocard-dot'; meta.appendChild(dot);
+  var who = document.createElement('span'); who.className = 'amocard-who'; who.textContent = '— ' + n.author; meta.appendChild(who);
+ }
+ body.appendChild(meta);
+ var text = document.createElement('div'); text.className = 'amocard-feed-text';
+ text.textContent = n.text || '(пусто)';
+ body.appendChild(text);
+ note.appendChild(body);
+ return note;
+}
+
+function _buildFeedWZ(n){
+ var wz = document.createElement('div'); wz.className = 'amocard-wz-msg';
+ var ic = document.createElement('div'); ic.className = 'amocard-feed-icon amocard-ic-wz';
+ ic.textContent = '✉';
+ wz.appendChild(ic);
+ var body = document.createElement('div'); body.className = 'amocard-feed-body';
+ var meta = document.createElement('div'); meta.className = 'amocard-feed-meta';
+ var dt = document.createElement('span'); dt.textContent = _fmtFeedDate(n.created_at); meta.appendChild(dt);
+ if(n.author){
+  var dot = document.createElement('span'); dot.className = 'amocard-dot'; meta.appendChild(dot);
+  var who = document.createElement('span'); who.className = 'amocard-who'; who.textContent = n.author; meta.appendChild(who);
+ }
+ body.appendChild(meta);
+ var text = document.createElement('div'); text.className = 'amocard-feed-text';
+ text.textContent = n.text || '';
+ body.appendChild(text);
+ wz.appendChild(body);
+ return wz;
+}
+
+function _buildFeedStageChange(n){
+ var sc = document.createElement('div'); sc.className = 'amocard-stage-change';
+ var dt = document.createElement('span'); dt.textContent = _fmtFeedDate(n.created_at); sc.appendChild(dt);
+ if(n.author){
+  var dot = document.createElement('span'); dot.className = 'amocard-dot'; sc.appendChild(dot);
+  var who = document.createElement('span'); who.className = 'amocard-who'; who.textContent = '— ' + n.author; sc.appendChild(who);
+ }
+ var label = document.createElement('span'); label.textContent = 'Новый этап:'; sc.appendChild(label);
+ var pillRoute = document.createElement('span'); pillRoute.className = 'amocard-badge-stage amocard-muted'; pillRoute.textContent = 'Маршрут';
+ sc.appendChild(pillRoute);
+ if(n.text){
+  var pillStage = document.createElement('span'); pillStage.className = 'amocard-badge-stage amocard-in-work';
+  pillStage.textContent = n.text;
+  sc.appendChild(pillStage);
+ }
+ return sc;
 }
 
 // Показывает базовые данные клиента из Supabase (от бота) пока amo не загружено.
