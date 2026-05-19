@@ -1,14 +1,25 @@
-// /api/cards — CRUD карточек Канбана Внедрения.
+// /api/cards — CRUD карточек Канбана Внедрения (kanban_cards) И тикетов поддержки (tickets).
+// Объединено в один endpoint из-за лимита Vercel Hobby = 12 serverless functions (мы на пределе).
 //
+// === Карточки Канбана (Маршрут клиента, основное использование):
 // GET  /api/cards               → все активные карточки (не архивные)
 // GET  /api/cards?operator=Айдос → карточки оператора
 // GET  /api/cards?id=UUID       → одна карточка
 // POST /api/cards               → создать карточку (body: { client_id, stage, operator, ... })
 // POST /api/cards (v370)        → ИЛИ синхронизация от оплатного бота:
-//                                 { source:'payment_bot', company, category, tariff,
-//                                   period_months, amount, manager, sheet_row, sheet_month, country }
+//                                 { source:'payment_bot', company, category, tariff, ... }
 // PATCH /api/cards?id=UUID      → изменить (body: { stage: 'Активация', ... })
-// DELETE /api/cards?id=UUID     → архивировать (soft delete: stage='Архив', archived_at=now)
+// DELETE /api/cards?id=UUID     → архивировать (soft delete: stage='Архив')
+//
+// === Тикеты поддержки (v378, after активации клиента):
+// GET  /api/cards?entity=ticket                  → все тикеты (status!=closed)
+// GET  /api/cards?entity=ticket&operator=Айдос   → мои тикеты
+// GET  /api/cards?entity=ticket&client_id=X      → тикеты клиента
+// GET  /api/cards?entity=ticket&sla_overdue=1    → просроченные по SLA
+// GET  /api/cards?entity=ticket&id=UUID          → один тикет
+// POST /api/cards?entity=ticket                  → создать тикет (body: { client_id, title, ... })
+// PATCH /api/cards?entity=ticket&id=UUID         → изменить (status, operator, priority, ...)
+// DELETE /api/cards?entity=ticket&id=UUID        → закрыть (status='closed')
 
 import { sbSelect, sbInsert, sbUpdate } from './_supabase.js';
 import { checkAuth } from './_auth.js';
@@ -20,9 +31,27 @@ const ALLOWED_COUNTRIES = ['KZ','KG'];
 const IMPLEMENTATION_CATEGORIES = ['Нов внедрение', 'Нов интеграция'];
 const RENEWAL_CATEGORIES = ['абон. плата'];
 
+// v378: Тикет-система поддержки
+const TICKET_STATUSES = ['new','in_progress','waiting_client','solved','closed','reopened'];
+const TICKET_PRIORITIES = ['low','normal','high','critical'];
+const TICKET_CHANNELS = ['whatsapp','email','phone','form','manual'];
+const TICKET_CATEGORIES = ['bug','question','training','feature_request','other'];
+// SLA в часах по приоритету. Дедлайн ответа = created_at + N часов.
+const TICKET_SLA_HOURS = { critical: 2, high: 4, normal: 24, low: 72 };
+function calculateTicketSLA(priority) {
+  const hours = TICKET_SLA_HOURS[priority] || TICKET_SLA_HOURS.normal;
+  return new Date(Date.now() + hours * 3600 * 1000).toISOString();
+}
+
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
+    // v378: тикет-система склеена в /api/cards (лимит 12 функций Vercel).
+    // entity=ticket → CRUD по таблице tickets вместо kanban_cards.
+    const entity = (req.query && (req.query.entity || req.query.kind) || '').toLowerCase();
+    if (entity === 'ticket') {
+      return await handleTicketsRoute(req, res);
+    }
     if (req.method === 'GET') {
       const { id, operator, stage, country } = req.query || {};
       const params = { select: '*,clients(company_name,main_phone,curator_operator,country)', order: 'created_at.desc' };
@@ -268,4 +297,125 @@ function addMonthsISO(date, months) {
   d.setMonth(d.getMonth() + months);
   if (d.getDate() < day) d.setDate(0);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// v378: CRUD тикет-системы. Вызывается когда в /api/cards пришёл ?entity=ticket.
+// Поддерживает GET (список/один), POST (создать), PATCH (изменить), DELETE (закрыть).
+async function handleTicketsRoute(req, res) {
+  if (req.method === 'GET') {
+    const { id, status, operator, client_id, country, priority, sla_overdue } = req.query || {};
+    const params = { order: 'created_at.desc' };
+    if (id) params['id'] = 'eq.' + id;
+    if (status) params['status'] = 'eq.' + status;
+    if (operator) params['operator'] = 'eq.' + operator;
+    if (client_id) params['client_id'] = 'eq.' + client_id;
+    if (country) params['country'] = 'eq.' + country;
+    if (priority) params['priority'] = 'eq.' + priority;
+    // sla_overdue=1 → просроченные тикеты в работе (sla_due_at < now AND status НЕ закрыт)
+    if (sla_overdue === '1' || sla_overdue === 'true') {
+      params['sla_due_at'] = 'lt.' + new Date().toISOString();
+      params['status'] = 'in.(new,in_progress,waiting_client,reopened)';
+    }
+    // По умолчанию скрываем закрытые если нет явного фильтра по status
+    else if (!status) {
+      params['status'] = 'neq.closed';
+    }
+    params['select'] = '*,clients(company_name,main_phone,curator_operator,country)';
+    const data = await sbSelect('tickets', params);
+    return res.status(200).json({ ok: true, count: data.length, tickets: data });
+  }
+
+  if (req.method === 'POST') {
+    const body = await readBody(req);
+    if (!body.client_id) return res.status(400).json({ ok: false, error: 'client_id обязателен (тикет привязан к клиенту)' });
+    if (!body.title || !String(body.title).trim()) return res.status(400).json({ ok: false, error: 'title обязателен' });
+
+    const country = (body.country || 'KZ').toUpperCase();
+    if (!ALLOWED_COUNTRIES.includes(country)) {
+      return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+    }
+    const priority = body.priority || 'normal';
+    if (!TICKET_PRIORITIES.includes(priority)) {
+      return res.status(400).json({ ok: false, error: 'priority должен быть один из: ' + TICKET_PRIORITIES.join(', ') });
+    }
+    const channel = body.channel || 'manual';
+    if (!TICKET_CHANNELS.includes(channel)) {
+      return res.status(400).json({ ok: false, error: 'channel должен быть один из: ' + TICKET_CHANNELS.join(', ') });
+    }
+    if (body.category && !TICKET_CATEGORIES.includes(body.category)) {
+      return res.status(400).json({ ok: false, error: 'category должен быть один из: ' + TICKET_CATEGORIES.join(', ') });
+    }
+
+    const ticket = {
+      client_id: body.client_id,
+      country: country,
+      title: String(body.title).trim().slice(0, 200),
+      description: body.description ? String(body.description).slice(0, 5000) : null,
+      status: 'new',
+      priority: priority,
+      channel: channel,
+      category: body.category || null,
+      operator: body.operator || null,
+      sla_due_at: calculateTicketSLA(priority)
+    };
+    const result = await sbInsert('tickets', ticket);
+    return res.status(201).json({ ok: true, ticket: result[0] });
+  }
+
+  if (req.method === 'PATCH') {
+    const { id } = req.query || {};
+    if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
+    const body = await readBody(req);
+
+    // Валидация изменяемых полей
+    if (body.status && !TICKET_STATUSES.includes(body.status)) {
+      return res.status(400).json({ ok: false, error: 'status: ' + TICKET_STATUSES.join(', ') });
+    }
+    if (body.priority && !TICKET_PRIORITIES.includes(body.priority)) {
+      return res.status(400).json({ ok: false, error: 'priority: ' + TICKET_PRIORITIES.join(', ') });
+    }
+    if (body.category && !TICKET_CATEGORIES.includes(body.category)) {
+      return res.status(400).json({ ok: false, error: 'category: ' + TICKET_CATEGORIES.join(', ') });
+    }
+
+    const patch = { updated_at: new Date().toISOString() };
+    ['status','priority','category','operator','title','description'].forEach(k => {
+      if (body[k] !== undefined) patch[k] = body[k];
+    });
+
+    // Авто-метки времени:
+    // - при первом переводе в in_progress (взяли в работу) фиксируем first_response_at
+    // - при переводе в solved фиксируем solved_at
+    if (body.status === 'in_progress') {
+      const existing = await sbSelect('tickets', { id: 'eq.' + id, select: 'first_response_at' });
+      if (existing.length && !existing[0].first_response_at) {
+        patch.first_response_at = new Date().toISOString();
+      }
+    }
+    if (body.status === 'solved') {
+      patch.solved_at = new Date().toISOString();
+    }
+    // Смена приоритета пересчитывает SLA (от текущего момента)
+    if (body.priority) {
+      patch.sla_due_at = calculateTicketSLA(body.priority);
+    }
+
+    const result = await sbUpdate('tickets', { id: 'eq.' + id }, patch);
+    if (!result.length) return res.status(404).json({ ok: false, error: 'тикет не найден' });
+    return res.status(200).json({ ok: true, ticket: result[0] });
+  }
+
+  if (req.method === 'DELETE') {
+    const { id } = req.query || {};
+    if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
+    // Soft delete: status='closed'. Полное удаление не предусмотрено.
+    const result = await sbUpdate('tickets', { id: 'eq.' + id }, {
+      status: 'closed',
+      updated_at: new Date().toISOString()
+    });
+    if (!result.length) return res.status(404).json({ ok: false, error: 'тикет не найден' });
+    return res.status(200).json({ ok: true, ticket: result[0] });
+  }
+
+  return res.status(405).json({ ok: false, error: 'method not allowed' });
 }
