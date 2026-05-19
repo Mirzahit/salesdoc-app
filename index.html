@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v398</title>
+<title>SalesDoc — Финансовый Дашборд v399</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21952,6 +21952,39 @@ function _ticketRenderFields(){
  addField('SLA до', t.sla_due_at ? new Date(t.sla_due_at).toLocaleString('ru-RU') : null);
  if(t.first_response_at) addField('Первый ответ', new Date(t.first_response_at).toLocaleString('ru-RU'));
  if(t.solved_at) addField('Решён', new Date(t.solved_at).toLocaleString('ru-RU'));
+
+ // v399: кнопка закрытия тикета внизу. Если уже закрыт — показываем плашку.
+ if(t.status === 'closed'){
+  var closedBox = document.createElement('div');
+  closedBox.style.cssText = 'margin-top:18px;padding:10px 14px;background:rgba(120,120,128,.15);border-radius:8px;font-size:12.5px;color:var(--amocard-text-soft);text-align:center';
+  closedBox.textContent = 'Тикет закрыт' + (t.updated_at ? ' ' + new Date(t.updated_at).toLocaleDateString('ru-RU') : '');
+  body.appendChild(closedBox);
+ } else {
+  var closeBtn = document.createElement('button');
+  closeBtn.style.cssText = 'margin-top:18px;width:100%;padding:10px 14px;border-radius:8px;border:1px solid rgba(214,115,115,.45);background:transparent;color:#D67373;font-size:13px;font-weight:600;cursor:pointer;transition:.15s';
+  closeBtn.textContent = 'Закрыть тикет';
+  closeBtn.addEventListener('mouseover', function(){ closeBtn.style.background = 'rgba(214,115,115,.10)'; });
+  closeBtn.addEventListener('mouseout', function(){ closeBtn.style.background = 'transparent'; });
+  closeBtn.addEventListener('click', _ticketCloseAndArchive);
+  body.appendChild(closeBtn);
+ }
+}
+
+async function _ticketCloseAndArchive(){
+ if(!_ticketCurrentTicket) return;
+ if(!confirm('Закрыть тикет «' + (_ticketCurrentTicket.title || '') + '»?\n\nТикет уйдёт в архив, перестанет показываться в Канбане Поддержки. Открыть заново можно только вручную сменив статус через БД.')) return;
+ try {
+  var d = await sbFetch('/api/cards?entity=ticket&id=' + _ticketCurrentTicket.id, { method:'DELETE' });
+  if(!d.ok) throw new Error(d.error || 'close failed');
+  // Удалить из in-memory списка
+  ticketsList = ticketsList.filter(function(x){ return x.id !== _ticketCurrentTicket.id; });
+  // Закрыть страницу и перерисовать Канбан
+  ticketCloseCard();
+  if(typeof ticketsRender === 'function') ticketsRender();
+  if(typeof ticketsUpdateStats === 'function') ticketsUpdateStats();
+ } catch(e){
+  alert('Не удалось закрыть тикет: ' + e.message);
+ }
 }
 
 function _openTicketFieldEditor(fieldEl, valueEl, currentDisplay, opts){
