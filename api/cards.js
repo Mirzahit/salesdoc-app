@@ -36,6 +36,9 @@ const TICKET_STATUSES = ['new','in_progress','waiting_client','solved','closed',
 const TICKET_PRIORITIES = ['low','normal','high','critical'];
 const TICKET_CHANNELS = ['whatsapp','email','phone','form','manual'];
 const TICKET_CATEGORIES = ['bug','question','training','feature_request','other'];
+// v413: whitelist операторов — раньше можно было через curl вписать любое имя.
+// null/'' разрешён — означает «не назначен».
+const TICKET_OPERATORS = ['Айдос','Акбар','Самат','Нурай'];
 // SLA в часах по приоритету. Дедлайн ответа = created_at + N часов.
 const TICKET_SLA_HOURS = { critical: 2, high: 4, normal: 24, low: 72 };
 function calculateTicketSLA(priority) {
@@ -381,6 +384,9 @@ async function handleTicketsRoute(req, res) {
     if (body.category && !TICKET_CATEGORIES.includes(body.category)) {
       return res.status(400).json({ ok: false, error: 'category должен быть один из: ' + TICKET_CATEGORIES.join(', ') });
     }
+    if (body.operator && !TICKET_OPERATORS.includes(body.operator)) {
+      return res.status(400).json({ ok: false, error: 'operator должен быть один из: ' + TICKET_OPERATORS.join(', ') });
+    }
 
     const ticket = {
       client_id: body.client_id,
@@ -413,6 +419,11 @@ async function handleTicketsRoute(req, res) {
     if (body.category && !TICKET_CATEGORIES.includes(body.category)) {
       return res.status(400).json({ ok: false, error: 'category: ' + TICKET_CATEGORIES.join(', ') });
     }
+    // v413: PATCH тоже валидирует operator — раньше можно было через curl записать любое имя.
+    // null разрешён (сброс назначения).
+    if (body.operator && !TICKET_OPERATORS.includes(body.operator)) {
+      return res.status(400).json({ ok: false, error: 'operator: ' + TICKET_OPERATORS.join(', ') });
+    }
 
     const patch = { updated_at: new Date().toISOString() };
     ['status','priority','category','operator','title','description'].forEach(k => {
@@ -443,9 +454,14 @@ async function handleTicketsRoute(req, res) {
     if (body.status === 'solved') {
       patch.solved_at = new Date().toISOString();
     }
-    // Смена приоритета пересчитывает SLA (от текущего момента)
+    // Смена приоритета пересчитывает SLA (от текущего момента).
+    // v413: сравниваем со старым — внешние интеграции (бот) могут шлёт тот же priority,
+    // и тогда счётчик SLA не должен сбрасываться.
     if (body.priority) {
-      patch.sla_due_at = calculateTicketSLA(body.priority);
+      const existingPrio = await sbSelect('tickets', { id: 'eq.' + id, select: 'priority' });
+      if (existingPrio.length && existingPrio[0].priority !== body.priority) {
+        patch.sla_due_at = calculateTicketSLA(body.priority);
+      }
     }
 
     const result = await sbUpdate('tickets', { id: 'eq.' + id }, patch);
