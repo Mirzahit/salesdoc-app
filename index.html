@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v390</title>
+<title>SalesDoc — Финансовый Дашборд v391</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21307,6 +21307,14 @@ function routeRender(){
   html += '<div class="route-col-amo route-col s' + meta.idx + '" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.background=\'rgba(120,120,128,.06)\'" ondragleave="this.style.background=\'transparent\'" ondrop="this.style.background=\'transparent\';routeDrop(event,\'' + stage + '\')">';
   html += '<div class="route-col-amo-head">';
   html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage + '</div><div class="route-col-amo-count">' + stageCards.length + '</div></div>';
+  // v391: для стадии «Новый» — счётчик «появилось сегодня» чтобы оператор сразу видел свежие
+  if(stage === 'Новый'){
+   var todayStart = new Date(); todayStart.setHours(0,0,0,0);
+   var newToday = stageCards.filter(function(c){ return c.created_at && new Date(c.created_at) >= todayStart; }).length;
+   if(newToday > 0){
+    html += '<div style="margin-top:6px"><span style="font-size:10.5px;color:#fff;background:var(--rk-stage-1);padding:2px 8px;border-radius:6px;font-weight:700;letter-spacing:.3px">+' + newToday + ' сегодня</span></div>';
+   }
+  }
   html += '<div class="route-col-amo-desc">' + meta.desc + '</div>';
   html += '<div class="route-col-amo-sum">' + sumLabel + '</div>';
   html += '</div>';
@@ -22184,6 +22192,11 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
    cleanup();
    // Перерисуем всю секцию — проще чем точечно обновлять
    _routeRenderAmo();
+   // v391: если изменили operator карточки — Канбан-доска должна обновить отображение
+   // (новый оператор появится на превью). Также при смене client.curator_operator не критично.
+   if(opts.entity === 'card' && opts.field === 'operator' && typeof routeRender === 'function'){
+    try { routeRender(); } catch(_){}
+   }
   } catch(e){
    // v388: при ошибке возвращаем поле в исходное состояние (cancel), а не оставляем
    // редактор. Иначе следующий blur вызовет save и второй alert.
@@ -22216,6 +22229,15 @@ async function _routeRenderAmo(){
  if(body) body.replaceChildren();
  var card = _routeCurrentCard;
  var cl = card.clients || {};
+
+ // v391: подсказка-онбординг если карточка без оператора. Помогает оператору при
+ // первом входе понять что делать: «Возьмите карточку → кликните Ответственный».
+ if(!card.operator){
+  var hint = document.createElement('div');
+  hint.style.cssText = 'background:var(--amocard-amber-bg, rgba(251,191,36,.12));color:var(--amocard-amber, #FBBF24);border-radius:8px;padding:10px 14px;font-size:12.5px;line-height:1.4;margin-bottom:14px;border:1px solid rgba(251,191,36,.25)';
+  hint.textContent = 'Возьмите карточку: кликните ниже на «Ответственный» и выберите себя.';
+  body.appendChild(hint);
+ }
 
  // v386: добавление полей с поддержкой inline-edit. При opts.editable клик открывает
  // редактор (text/number/select), Enter/blur сохраняет через API, ESC отменяет.
@@ -22259,9 +22281,14 @@ async function _routeRenderAmo(){
  addField('Телефон', cl.main_phone, cl.main_phone ? { link: 'tel:' + cl.main_phone } : null);
  if(cl.main_phone){
   var phoneDigits = String(cl.main_phone).replace(/[^0-9]/g, '');
+  // v391: WhatsApp не понимает «8» в начале (это российский внутренний код). Меняем на 7.
+  if(phoneDigits.length === 11 && phoneDigits.charAt(0) === '8') phoneDigits = '7' + phoneDigits.slice(1);
   if(phoneDigits) addField('WhatsApp', '+' + phoneDigits, { link: 'https://wa.me/' + phoneDigits, target: '_blank' });
  } else { addField('WhatsApp', null); }
- addField('Куратор внедрения', cl.curator_operator, { editable:true, entity:'client', field:'curator_operator', type:'select', choices:['Айдос','Акбар','Самат','Нурай'], rawValue:cl.curator_operator });
+ // v391: «Куратор внедрения» — тот кто закреплён за клиентом ПОСЛЕ активации (для продлений
+ // в «Мои клиенты»). «Ответственный» (выше) — кто ведёт сейчас в Маршруте. Часто это один
+ // человек, но могут отличаться (например брал Айдос, передаёт после внедрения Акбару).
+ addField('Куратор после активации', cl.curator_operator, { editable:true, entity:'client', field:'curator_operator', type:'select', choices:['Айдос','Акбар','Самат','Нурай'], rawValue:cl.curator_operator });
 
  // Секция ПОДПИСКА
  addSection('Подписка');
@@ -22320,10 +22347,13 @@ async function _routeRenderFeed(){
 }
 
 function _fmtFeedDate(iso){
+ // v391: защита от null/undefined/Invalid Date — возвращаем пусто вместо «Invalid Date».
  if(!iso) return '';
  var d = new Date(iso);
- if(isNaN(d)) return '';
- return d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+ if(!d || isNaN(d.getTime())) return '';
+ try {
+  return d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+ } catch(_){ return ''; }
 }
 
 function _buildFeedNote(n, eventType){
