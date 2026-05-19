@@ -202,8 +202,55 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
   };
 }
 
+// v376: helper для записи в amo (PATCH/POST через amocrm API v4)
+async function amoMutate(method, path, body, env){
+  const token = String(env.AMO_TOKEN || '').replace(/\s+/g, '');
+  const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+  const url = `https://${sub}.amocrm.ru/api/v4${path}`;
+  const r = await fetch(url, {
+    method: method,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if(r.status === 204) return null;
+  const text = await r.text();
+  let data;
+  try { data = JSON.parse(text); } catch(_){ data = { _raw: text }; }
+  if(!r.ok){
+    const err = new Error(`amo ${method} ${r.status}: ${data.title || data.detail || text.slice(0,200)}`);
+    err.status = r.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+// v376: для POST/PATCH endpoint'ов — читаем body запроса.
+async function readBody(req){
+  if(req.body && typeof req.body === 'object') return req.body;
+  return new Promise((resolve) => {
+    let chunks = '';
+    req.on('data', c => chunks += c);
+    req.on('end', () => { try { resolve(JSON.parse(chunks || '{}')); } catch { resolve({}); } });
+  });
+}
+
 export default async function handler(req, res){
-  if(req.method !== 'GET'){ return bad(res, 405, 'Only GET'); }
+  // v376: разрешаем POST для двусторонней синхронизации SD→amo (update_status, add_note).
+  if(req.method !== 'GET' && req.method !== 'POST'){ return bad(res, 405, 'Only GET/POST'); }
+  // v376: POST — защищены shared-secret APP_TOKEN. Иначе любой может менять статусы в amo.
+  if(req.method === 'POST'){
+    const expected = (process.env.APP_TOKEN || '').trim();
+    if(expected){
+      const got = (req.headers['x-app-token'] || '').toString().trim();
+      if(got !== expected){
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
+  }
   // v361: поддержка двух amo-кабинетов (KZ + KG) через ?country=KG
   const country = String((req.query && req.query.country) || 'KZ').toUpperCase();
   const env = country === 'KG' ? {
@@ -223,6 +270,34 @@ export default async function handler(req, res){
   const action = String((req.query && req.query.action) || '').toLowerCase();
 
   try {
+    // v376: POST-действия для двусторонней синхронизации SD→amo
+    if(req.method === 'POST'){
+      const body = await readBody(req);
+      if(action === 'update_status'){
+        // Обновить статус сделки в amo. body: { lead_id, status_id, pipeline_id? }
+        // Используется когда в SalesDoc активируют клиента — переводим сделку в amo на «успешно реализовано» (status_id=142).
+        const leadId = Number(body.lead_id || 0);
+        const statusId = Number(body.status_id || 0);
+        if(!leadId || !statusId) return bad(res, 400, 'Need body { lead_id, status_id }');
+        const patch = { status_id: statusId };
+        if(body.pipeline_id) patch.pipeline_id = Number(body.pipeline_id);
+        const result = await amoMutate('PATCH', `/leads/${leadId}`, patch, env);
+        return res.status(200).json({ ok: true, lead: result });
+      }
+      if(action === 'add_note'){
+        // Добавить заметку к сделке. body: { lead_id, text }
+        // Используется чтобы синхронизировать заметки SalesDoc → лента событий amo.
+        const leadId = Number(body.lead_id || 0);
+        const text = String(body.text || '').trim();
+        if(!leadId || !text) return bad(res, 400, 'Need body { lead_id, text }');
+        const result = await amoMutate('POST', `/leads/${leadId}/notes`, [{
+          note_type: 'common',
+          params: { text: text }
+        }], env);
+        return res.status(201).json({ ok: true, note: result });
+      }
+      return bad(res, 400, 'Unknown POST action. Use ?action=update_status | add_note');
+    }
     if(action === 'pipelines'){
       const list = await getPipelines(env);
       return res.status(200).json({ pipelines: list });
