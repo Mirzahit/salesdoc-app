@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v393</title>
+<title>SalesDoc — Финансовый Дашборд v394</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6717,6 +6717,43 @@ body.light #view-route {
    <button onclick="ticketsLoad()" title="Обновить" class="route-btn route-btn-icon">&#8635;</button>
   </div>
   <div id="tickets-board" class="route-kanban" style="grid-template-columns:repeat(4,minmax(280px,1fr))"></div>
+ </div>
+
+ <!-- v394: Полноэкранная страница тикета. Открывается из Канбана Поддержки и
+      из карточки клиента (через кнопку «+ Тикет»). Двух-колоночный layout amo-стиль. -->
+ <div id="view-ticket-card" class="amocard-active" style="display:none;position:fixed;inset:0;z-index:9999;overflow:hidden">
+  <div class="amocard-wrap">
+   <section class="amocard-left">
+    <div class="amocard-head">
+     <div class="amocard-head-left">
+      <span class="amocard-back" onclick="ticketCloseCard()" title="Назад в Поддержку">&lsaquo;</span>
+      <div>
+       <div id="ticket-card-title" class="amocard-name">&mdash;</div>
+       <div class="amocard-id-row">
+        <span id="ticket-card-client" class="amocard-id">&mdash;</span>
+       </div>
+      </div>
+     </div>
+    </div>
+    <div class="amocard-stage-box">
+     <div class="amocard-stage-row">
+      <div>
+       <div class="amocard-stage-label">Статус</div>
+       <div class="amocard-stage-name"><span id="ticket-card-status">&mdash;</span> <span id="ticket-card-sla" class="amocard-days"></span></div>
+      </div>
+     </div>
+    </div>
+    <div id="ticket-card-body" class="amocard-fields"></div>
+   </section>
+   <section class="amocard-right">
+    <div id="ticket-card-feed" class="amocard-feed"></div>
+    <div class="amocard-chat-input">
+     <span class="amocard-chat-select"><b>Комментарий</b></span>
+     <input id="ticket-comment-text" type="text" placeholder="написать комментарий и нажать Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();ticketCommentSend();}">
+     <button id="ticket-comment-send" class="amocard-send" onclick="ticketCommentSend()" title="Отправить">&rarr;</button>
+    </div>
+   </section>
+  </div>
  </div>
 
  <!-- v393: Модалка «Новый тикет» -->
@@ -21756,21 +21793,245 @@ async function ticketsCreate(){
  }
 }
 
-function ticketsOpen(ticketId){
+// v394: полноэкранная страница тикета (вместо alert MVP в v393).
+// Двух-колоночный amo-layout: слева поля (редактируются inline), справа лента
+// комментариев + поле ввода. Источник: GET /api/cards?entity=ticket&id=...
+var _ticketCurrentTicket = null;
+
+async function ticketsOpen(ticketId){
  var t = ticketsList.find(function(x){ return x.id === ticketId; });
- if(!t) return;
- // MVP: пока показываем как alert с инфой. В следующей версии — полноэкранная страница как у карточки клиента.
+ if(!t){
+  // Возможно открываем напрямую через URL — подгружаем из API
+  try {
+   var d = await sbFetch('/api/cards?entity=ticket&id=' + ticketId);
+   if(!d.ok || !d.tickets || !d.tickets.length) throw new Error('тикет не найден');
+   t = d.tickets[0];
+  } catch(e){ alert('Ошибка: ' + e.message); return; }
+ }
+ _ticketCurrentTicket = t;
+ document.getElementById('view-ticket-card').style.display = 'block';
+ document.body.style.overflow = 'hidden';
+ _ticketRenderHead();
+ _ticketRenderFields();
+ _ticketLoadComments();
+}
+
+function ticketCloseCard(){
+ document.getElementById('view-ticket-card').style.display = 'none';
+ document.body.style.overflow = '';
+ _ticketCurrentTicket = null;
+}
+
+function _ticketRenderHead(){
+ var t = _ticketCurrentTicket; if(!t) return;
  var cl = t.clients || {};
- var prio = _ticketsFmtPriority(t.priority);
- var info = '— ' + (t.title || '(без темы)') + ' —\n\n';
- info += 'Клиент: ' + (cl.company_name || t.client_id) + '\n';
- info += 'Статус: ' + ({new:'Новое',in_progress:'В работе',waiting_client:'Ждём клиента',solved:'Решено',closed:'Закрыто'}[t.status] || t.status) + '\n';
- info += 'Приоритет: ' + prio.label + '\n';
- info += 'Канал: ' + t.channel + '\n';
- info += 'Оператор: ' + (t.operator || 'не назначен') + '\n';
- if(t.description) info += '\nОписание:\n' + t.description + '\n';
- if(t.sla_due_at) info += '\nSLA до: ' + new Date(t.sla_due_at).toLocaleString('ru-RU') + '\n';
- alert(info);
+ var titleEl = document.getElementById('ticket-card-title');
+ if(titleEl) titleEl.textContent = t.title || '(без темы)';
+ var clientEl = document.getElementById('ticket-card-client');
+ if(clientEl) clientEl.textContent = cl.company_name || t.client_id || '—';
+ var statusEl = document.getElementById('ticket-card-status');
+ if(statusEl) statusEl.textContent = ({new:'Новое',in_progress:'В работе',waiting_client:'Ждём клиента',solved:'Решено',closed:'Закрыто',reopened:'Открыт повторно'}[t.status] || t.status);
+ var slaEl = document.getElementById('ticket-card-sla');
+ if(slaEl){
+  var slaInfo = _ticketsFmtSLA(t);
+  slaEl.textContent = slaInfo ? '(SLA: ' + slaInfo.label + ')' : '';
+ }
+}
+
+function _ticketRenderFields(){
+ var body = document.getElementById('ticket-card-body');
+ if(!body || !_ticketCurrentTicket) return;
+ body.replaceChildren();
+ var t = _ticketCurrentTicket;
+
+ function addSection(title){
+  var s = document.createElement('div'); s.className = 'amocard-section-head'; s.textContent = title;
+  body.appendChild(s);
+ }
+ function addField(label, value, opts){
+  opts = opts || {};
+  var f = document.createElement('div'); f.className = 'amocard-field';
+  var l = document.createElement('div'); l.className = 'amocard-field-label'; l.textContent = label;
+  var v = document.createElement('div'); v.className = 'amocard-field-value';
+  if(value === null || value === undefined || value === '' || value === '—'){
+   var dash = document.createElement('span'); dash.className = 'amocard-faint'; dash.textContent = '—'; v.appendChild(dash);
+  } else { v.appendChild(document.createTextNode(String(value))); }
+  if(opts.editable){
+   var c = document.createElement('span'); c.className = 'amocard-caret'; c.textContent = '▾'; v.appendChild(c);
+   f.style.cursor = 'pointer';
+   f.addEventListener('click', function(){
+    _openTicketFieldEditor(f, v, value, opts);
+   });
+  }
+  f.appendChild(l); f.appendChild(v); body.appendChild(f);
+ }
+
+ addSection('Основное');
+ addField('Приоритет', _ticketsFmtPriority(t.priority).label, { editable:true, field:'priority', type:'select', choices:['low','normal','high','critical'], choiceLabels:{low:'Низкий',normal:'Обычный',high:'Высокий',critical:'Критичный'}, rawValue:t.priority });
+ addField('Статус', ({new:'Новое',in_progress:'В работе',waiting_client:'Ждём клиента',solved:'Решено',closed:'Закрыто',reopened:'Открыт повторно'}[t.status] || t.status), { editable:true, field:'status', type:'select', choices:['new','in_progress','waiting_client','solved','closed','reopened'], choiceLabels:{new:'Новое',in_progress:'В работе',waiting_client:'Ждём клиента',solved:'Решено',closed:'Закрыто',reopened:'Открыт повторно'}, rawValue:t.status });
+ addField('Оператор', t.operator, { editable:true, field:'operator', type:'select', choices:['Айдос','Акбар','Самат','Нурай'], rawValue:t.operator });
+ addField('Категория', t.category || '—', { editable:true, field:'category', type:'select', choices:['bug','question','training','feature_request','other'], choiceLabels:{bug:'Баг',question:'Вопрос',training:'Обучение',feature_request:'Хотелка',other:'Другое'}, rawValue:t.category });
+ addField('Канал', ({whatsapp:'WhatsApp',email:'Email',phone:'Звонок',form:'Форма',manual:'Вручную'}[t.channel] || t.channel));
+
+ addSection('Описание');
+ var d = document.createElement('div'); d.className = 'amocard-field';
+ var dv = document.createElement('div'); dv.style.cssText = 'font-size:13px;color:var(--amocard-text);line-height:1.5;white-space:pre-wrap;word-break:break-word';
+ dv.textContent = t.description || '(описания нет)';
+ d.appendChild(dv); body.appendChild(d);
+
+ addSection('Время');
+ addField('Создан', t.created_at ? new Date(t.created_at).toLocaleString('ru-RU') : null);
+ addField('SLA до', t.sla_due_at ? new Date(t.sla_due_at).toLocaleString('ru-RU') : null);
+ if(t.first_response_at) addField('Первый ответ', new Date(t.first_response_at).toLocaleString('ru-RU'));
+ if(t.solved_at) addField('Решён', new Date(t.solved_at).toLocaleString('ru-RU'));
+}
+
+function _openTicketFieldEditor(fieldEl, valueEl, currentDisplay, opts){
+ if(fieldEl.dataset.editing === '1') return;
+ fieldEl.dataset.editing = '1';
+ valueEl.replaceChildren();
+ var input;
+ if(opts.type === 'select'){
+  input = document.createElement('select');
+  input.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--amocard-accent);background:var(--amocard-surface);color:var(--amocard-text);border-radius:6px;font-family:inherit;font-size:13.5px;outline:none';
+  (opts.choices || []).forEach(function(ch){
+   var o = document.createElement('option'); o.value = ch;
+   o.textContent = (opts.choiceLabels && opts.choiceLabels[ch]) || ch;
+   input.appendChild(o);
+  });
+  input.value = opts.rawValue || '';
+ } else {
+  input = document.createElement('input'); input.type = 'text';
+  input.value = opts.rawValue != null ? String(opts.rawValue) : '';
+  input.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--amocard-accent);background:var(--amocard-surface);color:var(--amocard-text);border-radius:6px;font-family:inherit;font-size:13.5px;outline:none';
+ }
+ valueEl.appendChild(input);
+ setTimeout(function(){ input.focus(); }, 0);
+ var done = false;
+ function cleanup(){ fieldEl.dataset.editing = ''; }
+ function cancel(){
+  if(done) return; done = true;
+  _ticketRenderFields(); cleanup();
+ }
+ async function save(){
+  if(done) return; done = true;
+  var newVal = input.value;
+  if(newVal === '') newVal = null;
+  if(String(newVal) === String(opts.rawValue == null ? '' : opts.rawValue)){ cancel(); return; }
+  input.disabled = true; input.style.opacity = '0.6';
+  try {
+   var body = {}; body[opts.field] = newVal;
+   var d = await sbFetch('/api/cards?entity=ticket&id=' + _ticketCurrentTicket.id, { method:'PATCH', body: JSON.stringify(body) });
+   if(!d.ok) throw new Error(d.error || 'save failed');
+   _ticketCurrentTicket = d.ticket;
+   // Также обновим в общем списке если он есть
+   var idx = ticketsList.findIndex(function(x){ return x.id === _ticketCurrentTicket.id; });
+   if(idx >= 0) ticketsList[idx] = _ticketCurrentTicket;
+   cleanup();
+   _ticketRenderHead();
+   _ticketRenderFields();
+  } catch(e){
+   alert('Не удалось сохранить: ' + e.message);
+   done = true; cancel();
+  }
+ }
+ input.addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.preventDefault(); save(); }
+  else if(e.key === 'Escape'){ e.preventDefault(); cancel(); }
+ });
+ if(opts.type === 'select'){
+  input.addEventListener('change', save);
+  input.addEventListener('blur', function(){ if(!done) cancel(); });
+ } else {
+  input.addEventListener('blur', function(){ setTimeout(save, 100); });
+ }
+}
+
+async function _ticketLoadComments(){
+ var feedEl = document.getElementById('ticket-card-feed');
+ if(!feedEl) return;
+ feedEl.replaceChildren();
+ if(!_ticketCurrentTicket) return;
+ try {
+  var d = await sbFetch('/api/cards?entity=ticket_comment&ticket_id=' + _ticketCurrentTicket.id);
+  var items = (d && d.comments) || [];
+  if(!items.length){
+   var empty = document.createElement('div');
+   empty.className = 'amocard-empty';
+   empty.textContent = 'Комментариев пока нет. Напишите первый внизу.';
+   feedEl.appendChild(empty);
+   return;
+  }
+  items.forEach(function(c){
+   var note = document.createElement('div'); note.className = 'amocard-note';
+   var ic = document.createElement('div'); ic.className = 'amocard-feed-icon amocard-ic-note';
+   ic.textContent = '✎';
+   note.appendChild(ic);
+   var body = document.createElement('div'); body.className = 'amocard-feed-body';
+   var meta = document.createElement('div'); meta.className = 'amocard-feed-meta';
+   var dt = document.createElement('span'); dt.textContent = _fmtFeedDate(c.created_at); meta.appendChild(dt);
+   if(c.author){
+    var dot = document.createElement('span'); dot.className = 'amocard-dot'; meta.appendChild(dot);
+    var who = document.createElement('span'); who.className = 'amocard-who'; who.textContent = '— ' + c.author; meta.appendChild(who);
+   }
+   body.appendChild(meta);
+   var text = document.createElement('div'); text.className = 'amocard-feed-text';
+   text.textContent = c.text || '';
+   body.appendChild(text);
+   note.appendChild(body);
+   feedEl.appendChild(note);
+  });
+ } catch(e){
+  var err = document.createElement('div'); err.className = 'amocard-empty'; err.textContent = 'Ошибка загрузки: ' + e.message;
+  feedEl.appendChild(err);
+ }
+}
+
+async function ticketCommentSend(){
+ var input = document.getElementById('ticket-comment-text');
+ var btn = document.getElementById('ticket-comment-send');
+ if(!input || !_ticketCurrentTicket) return;
+ var text = input.value.trim();
+ if(!text) return;
+ if(btn && btn.disabled) return;
+ if(btn) btn.disabled = true;
+ input.disabled = true;
+ try {
+  var d = await sbFetch('/api/cards?entity=ticket_comment', {
+   method:'POST',
+   body: JSON.stringify({ ticket_id: _ticketCurrentTicket.id, text: text, author: 'оператор', channel: 'internal' })
+  });
+  if(!d.ok) throw new Error(d.error || 'comment POST failed');
+  input.value = '';
+  _ticketLoadComments();
+ } catch(e){
+  alert('Не удалось сохранить: ' + e.message);
+ } finally {
+  if(btn) btn.disabled = false;
+  input.disabled = false;
+  input.focus();
+ }
+}
+
+// v394: открыть модалку нового тикета С ПРЕДЗАПОЛНЕННЫМ client_id (из карточки клиента).
+function ticketsOpenNewForClient(clientId){
+ // Загружаем клиентов в выпадашку если ещё не загружены
+ var sel = document.getElementById('tickets-new-client');
+ if(sel && sel.options.length <= 1){
+  // Тянем синхронно — в фоне
+  sbFetch('/api/clients?status=active').then(function(r){
+   if(r && r.ok){
+    (r.clients || []).forEach(function(c){
+     var opt = document.createElement('option'); opt.value=c.client_id; opt.textContent=(c.company_name || c.client_id);
+     sel.appendChild(opt);
+    });
+    sel.value = clientId;
+   }
+  });
+ } else {
+  sel.value = clientId;
+ }
+ ticketsOpenNew();
 }
 
 async function myClientsLoad(){
@@ -22522,6 +22783,15 @@ async function _routeRenderAmo(){
   hint.style.cssText = 'background:var(--amocard-amber-bg, rgba(251,191,36,.12));color:var(--amocard-amber, #FBBF24);border-radius:8px;padding:10px 14px;font-size:12.5px;line-height:1.4;margin-bottom:14px;border:1px solid rgba(251,191,36,.25)';
   hint.textContent = 'Возьмите карточку: кликните ниже на «Ответственный» и выберите себя.';
   body.appendChild(hint);
+ }
+
+ // v394: быстрая кнопка «+ Тикет» для активированных клиентов — создаёт обращение в Поддержке.
+ if(cl.status === 'active'){
+  var ticketBtn = document.createElement('button');
+  ticketBtn.style.cssText = 'background:var(--amocard-accent);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:14px;width:100%;letter-spacing:-0.01em';
+  ticketBtn.textContent = '+ Новый тикет поддержки';
+  ticketBtn.addEventListener('click', function(){ ticketsOpenNewForClient(card.client_id); });
+  body.appendChild(ticketBtn);
  }
 
  // v386: добавление полей с поддержкой inline-edit. При opts.editable клик открывает

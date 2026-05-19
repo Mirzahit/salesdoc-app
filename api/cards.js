@@ -48,9 +48,13 @@ export default async function handler(req, res) {
   try {
     // v378: тикет-система склеена в /api/cards (лимит 12 функций Vercel).
     // entity=ticket → CRUD по таблице tickets вместо kanban_cards.
+    // entity=ticket_comment → CRUD по таблице ticket_comments (v394).
     const entity = (req.query && (req.query.entity || req.query.kind) || '').toLowerCase();
     if (entity === 'ticket') {
       return await handleTicketsRoute(req, res);
+    }
+    if (entity === 'ticket_comment') {
+      return await handleTicketCommentsRoute(req, res);
     }
     if (req.method === 'GET') {
       const { id, operator, stage, country } = req.query || {};
@@ -291,6 +295,34 @@ async function handlePaymentBotSync(body, res) {
     client_id: clientId,
     company: company
   });
+}
+
+// v394: CRUD комментариев к тикетам. Таблица ticket_comments создана миграцией v378.
+async function handleTicketCommentsRoute(req, res) {
+  if (req.method === 'GET') {
+    const { ticket_id } = req.query || {};
+    if (!ticket_id) return res.status(400).json({ ok: false, error: 'нужен ?ticket_id=UUID' });
+    const items = await sbSelect('ticket_comments', {
+      ticket_id: 'eq.' + ticket_id,
+      order: 'created_at.asc'
+    });
+    return res.status(200).json({ ok: true, count: items.length, comments: items });
+  }
+  if (req.method === 'POST') {
+    const body = await readBody(req);
+    if (!body.ticket_id) return res.status(400).json({ ok: false, error: 'ticket_id обязателен' });
+    if (!body.text || !String(body.text).trim()) return res.status(400).json({ ok: false, error: 'text обязателен' });
+    const row = {
+      ticket_id: body.ticket_id,
+      author: body.author || null,
+      text: String(body.text).trim().slice(0, 5000),
+      channel: body.channel || 'internal',
+      attachment_url: body.attachment_url || null
+    };
+    const result = await sbInsert('ticket_comments', row);
+    return res.status(201).json({ ok: true, comment: result[0] });
+  }
+  return res.status(405).json({ ok: false, error: 'method not allowed' });
 }
 
 // v370: тот же хелпер что в /api/clients.js — добавить N месяцев к дате.
