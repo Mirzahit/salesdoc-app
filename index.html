@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v372</title>
+<title>SalesDoc — Финансовый Дашборд v373</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4235,6 +4235,27 @@ input:focus, select:focus, textarea:focus {
  background-color: var(--ds-page-bg) !important;
  background-image: var(--ds-page-gradient) !important;
 }
+/* v372-step2: Раскладка таба «amo» 1в1 как в amoCRM — слева поля, справа лента событий. */
+.amo-card-grid { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:18px; align-items:start; }
+@media (max-width: 900px) { .amo-card-grid { grid-template-columns: 1fr; } }
+.amo-section { background:var(--ds-glass-card); border:1px solid var(--ds-glass-border); border-radius:10px; padding:14px; margin-bottom:12px; }
+.amo-section-title { font-size:11px; font-weight:700; color:var(--text-soft); text-transform:uppercase; letter-spacing:0.6px; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid var(--border-faint); }
+.amo-field-row { display:flex; padding:7px 0; font-size:13px; border-bottom:1px solid var(--border-faint); }
+.amo-field-row:last-child { border-bottom:none; }
+.amo-field-label { flex:0 0 150px; color:var(--text-soft); font-size:12px; }
+.amo-field-value { flex:1; color:var(--text); word-break:break-word; }
+.amo-stage-pill { display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:14px; font-size:12px; font-weight:600; color:#1A1A1C; }
+.amo-stage-pill .amo-stage-dot { width:8px; height:8px; border-radius:50%; background:rgba(0,0,0,.35); }
+.amo-contact-card { padding:10px; border-radius:8px; background:var(--ds-glass-col); border:1px solid var(--ds-glass-border); margin-bottom:8px; display:flex; gap:10px; align-items:flex-start; }
+.amo-contact-avatar { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #5489BB 0%, #7FB89E 100%); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0; }
+.amo-note { padding:12px; border-radius:10px; background:var(--ds-glass-col); border:1px solid var(--ds-glass-border); margin-bottom:10px; }
+.amo-note-incoming { background:rgba(127,184,158,.10); border-color:rgba(127,184,158,.30); }
+.amo-note-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:11px; color:var(--text-muted); }
+.amo-note-author { color:var(--text); font-weight:600; font-size:12px; }
+.amo-note-type-badge { padding:1px 7px; border-radius:8px; background:rgba(84,137,187,.15); color:#5489BB; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.3px; }
+.amo-note-content { font-size:13px; color:var(--text); white-space:pre-wrap; word-break:break-word; line-height:1.4; }
+.amo-voice-player { display:flex; align-items:center; gap:10px; padding:8px 12px; background:rgba(84,137,187,.10); border-radius:20px; font-size:12px; color:var(--text); width:fit-content; }
+.amo-voice-icon { width:24px; height:24px; border-radius:50%; background:#5489BB; color:#fff; display:flex; align-items:center; justify-content:center; font-size:11px; }
 </style>
 </head>
 <body>
@@ -6341,10 +6362,10 @@ input:focus, select:focus, textarea:focus {
  <div id="route-card-head" style="flex:1"></div>
  </div>
  <div style="display:flex;gap:0;padding:0;border-bottom:1px solid var(--border-faint);margin-top:8px">
- <button onclick="routeCardTab('check')" id="route-tab-check" style="padding:14px 22px;border:none;background:transparent;color:var(--text);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Чек-лист</button>
- <button onclick="routeCardTab('history')" id="route-tab-history" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">История</button>
+ <button onclick="routeCardTab('amo')" id="route-tab-amo" style="padding:14px 22px;border:none;background:transparent;color:var(--text);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Основное</button>
+ <button onclick="routeCardTab('check')" id="route-tab-check" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Чек-лист</button>
+ <button onclick="routeCardTab('history')" id="route-tab-history" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">История SD</button>
  <button onclick="routeCardTab('contact')" id="route-tab-contact" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">Контакт</button>
- <button onclick="routeCardTab('amo')" id="route-tab-amo" style="padding:14px 22px;border:none;background:transparent;color:var(--text-soft);font-size:14px;font-weight:600;border-bottom:2px solid transparent;cursor:pointer;letter-spacing:-0.01em">amo</button>
  </div>
  <div id="route-card-body" style="padding:20px 0;min-height:60vh"></div>
  </div>
@@ -21283,7 +21304,7 @@ var ROUTE_DEFAULT_CHECKLIST = {
 };
 
 var _routeCurrentCard = null;
-var _routeCurrentTab = 'check';
+var _routeCurrentTab = 'amo';
 var _routeChecklistItems = [];
 var _routeHistoryItems = [];
 
@@ -21293,8 +21314,9 @@ async function routeOpenCard(cardId){
  document.getElementById('view-route-card').style.display = 'block';
  document.body.style.overflow = 'hidden';
  _routeRenderCardHead();
- _routeCurrentTab = 'check';
- routeCardTab('check');
+ // v372-step3: по умолчанию открываем «Основное» (amo-вид) — как в самой amo.
+ _routeCurrentTab = 'amo';
+ routeCardTab('amo');
 }
 
 function routeCloseCard(){
@@ -21679,143 +21701,234 @@ async function _routeAmoFetch(leadId){
  }
 }
 
+// v372-step2: рендер карточки в стиле amo — 2 колонки (слева поля, справа лента).
 function _routeAmoRender(container, data){
  container.replaceChildren();
  var lead = data.lead || {};
  var pipe = data.pipeline || {};
 
- // Блок 1: основная информация
- var sec1 = document.createElement('div');
- sec1.style.cssText = 'background:var(--ds-glass-card);border:1px solid var(--ds-glass-border);border-radius:10px;padding:16px;margin-bottom:14px';
- var title1 = document.createElement('div');
- title1.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px';
- title1.textContent = 'Сделка';
- sec1.appendChild(title1);
- var basicRows = [
-  ['Название', lead.name],
-  ['Бюджет', lead.price ? Number(lead.price).toLocaleString('ru-RU') + ' ₸' : null],
-  ['Воронка', pipe.name],
-  ['Этап', pipe.status],
-  ['Создана', lead.created_at ? new Date(lead.created_at * 1000).toLocaleDateString('ru-RU') : null],
-  ['Обновлена', lead.updated_at ? new Date(lead.updated_at * 1000).toLocaleDateString('ru-RU') : null]
- ];
- basicRows.forEach(function(r){
-  if(!r[1]) return;
-  var row = document.createElement('div');
-  row.style.cssText = 'display:flex;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border-faint)';
-  var l = document.createElement('div');
-  l.style.cssText = 'flex:0 0 130px;color:var(--text-soft)';
-  l.textContent = r[0];
-  var v = document.createElement('div');
-  v.style.cssText = 'flex:1;color:var(--text)';
-  v.textContent = r[1];
-  row.appendChild(l); row.appendChild(v);
-  sec1.appendChild(row);
- });
- container.appendChild(sec1);
+ // Заголовок над двумя колонками: имя сделки + статус-пилюля + бюджет (как в amo шапка)
+ var topbar = document.createElement('div');
+ topbar.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border-faint)';
+ var leftTop = document.createElement('div');
+ var nm = document.createElement('div');
+ nm.style.cssText = 'font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.02em;margin-bottom:6px';
+ nm.textContent = lead.name || ('Сделка #' + lead.id);
+ leftTop.appendChild(nm);
+ if(pipe.status){
+  var pill = document.createElement('span');
+  pill.className = 'amo-stage-pill';
+  pill.style.background = '#' + (pipe.status_color ? String(pipe.status_color).replace('#','') : 'CCFF66');
+  var dot = document.createElement('span');
+  dot.className = 'amo-stage-dot';
+  pill.appendChild(dot);
+  var pt = document.createElement('span');
+  pt.textContent = (pipe.name ? pipe.name + ' · ' : '') + pipe.status;
+  pill.appendChild(pt);
+  leftTop.appendChild(pill);
+ }
+ topbar.appendChild(leftTop);
+ if(lead.price){
+  var budget = document.createElement('div');
+  budget.style.cssText = 'font-size:24px;font-weight:700;color:var(--text);letter-spacing:-0.02em';
+  budget.textContent = Number(lead.price).toLocaleString('ru-RU') + ' ₸';
+  topbar.appendChild(budget);
+ }
+ container.appendChild(topbar);
 
- // Блок 2: кастомные поля
- var sec2 = document.createElement('div');
- sec2.style.cssText = 'background:var(--ds-glass-card);border:1px solid var(--ds-glass-border);border-radius:10px;padding:16px;margin-bottom:14px';
- var title2 = document.createElement('div');
- title2.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px';
- title2.textContent = 'Поля сделки';
- sec2.appendChild(title2);
- var cfs = (lead.custom_fields_values || []);
+ // 2 колонки
+ var grid = document.createElement('div');
+ grid.className = 'amo-card-grid';
+ container.appendChild(grid);
+
+ // ──────── ЛЕВАЯ КОЛОНКА: поля сделки + контакты ────────
+ var left = document.createElement('div');
+ grid.appendChild(left);
+
+ // Секция «Основное»
+ var secMain = document.createElement('div');
+ secMain.className = 'amo-section';
+ var titleMain = document.createElement('div');
+ titleMain.className = 'amo-section-title';
+ titleMain.textContent = 'Основное';
+ secMain.appendChild(titleMain);
+ var mainRows = [
+  ['Создана', lead.created_at ? new Date(lead.created_at * 1000).toLocaleDateString('ru-RU') : null],
+  ['Обновлена', lead.updated_at ? new Date(lead.updated_at * 1000).toLocaleDateString('ru-RU') : null],
+  ['ID сделки', lead.id]
+ ];
+ mainRows.forEach(function(r){
+  if(!r[1]) return;
+  var row = document.createElement('div'); row.className = 'amo-field-row';
+  var l = document.createElement('div'); l.className = 'amo-field-label'; l.textContent = r[0];
+  var v = document.createElement('div'); v.className = 'amo-field-value'; v.textContent = r[1];
+  row.appendChild(l); row.appendChild(v);
+  secMain.appendChild(row);
+ });
+ left.appendChild(secMain);
+
+ // Секция «Поля сделки» — кастомные поля amo (Должность, Город, Лицензии, ...)
+ var secFields = document.createElement('div');
+ secFields.className = 'amo-section';
+ var titleF = document.createElement('div');
+ titleF.className = 'amo-section-title';
+ titleF.textContent = 'Поля сделки';
+ secFields.appendChild(titleF);
+ var cfs = lead.custom_fields_values || [];
  if(!cfs.length){
-  var empty = document.createElement('div');
-  empty.style.cssText = 'color:var(--text-muted);font-size:13px;padding:8px 0';
-  empty.textContent = 'Полей не задано';
-  sec2.appendChild(empty);
+  var emp = document.createElement('div');
+  emp.style.cssText = 'color:var(--text-muted);font-size:13px;padding:8px 0';
+  emp.textContent = 'Полей не задано';
+  secFields.appendChild(emp);
  }
  cfs.forEach(function(cf){
-  var row = document.createElement('div');
-  row.style.cssText = 'display:flex;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border-faint)';
-  var l = document.createElement('div');
-  l.style.cssText = 'flex:0 0 200px;color:var(--text-soft)';
+  var row = document.createElement('div'); row.className = 'amo-field-row';
+  var l = document.createElement('div'); l.className = 'amo-field-label';
   l.textContent = cf.field_name || ('field_' + cf.field_id);
-  var v = document.createElement('div');
-  v.style.cssText = 'flex:1;color:var(--text);word-break:break-word';
-  var values = (cf.values || []).map(function(x){
-   return x.value || x.enum || '';
-  }).filter(Boolean).join(', ');
+  var v = document.createElement('div'); v.className = 'amo-field-value';
+  var values = (cf.values || []).map(function(x){ return x.value || x.enum || ''; }).filter(Boolean).join(', ');
   v.textContent = values || '—';
   row.appendChild(l); row.appendChild(v);
-  sec2.appendChild(row);
+  secFields.appendChild(row);
  });
- container.appendChild(sec2);
+ left.appendChild(secFields);
 
- // Блок 3: контакты
- var sec3 = document.createElement('div');
- sec3.style.cssText = 'background:var(--ds-glass-card);border:1px solid var(--ds-glass-border);border-radius:10px;padding:16px;margin-bottom:14px';
- var title3 = document.createElement('div');
- title3.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px';
- title3.textContent = 'Контакты (' + (data.contacts || []).length + ')';
- sec3.appendChild(title3);
+ // Секция «Контакты»
+ var secC = document.createElement('div');
+ secC.className = 'amo-section';
+ var titleC = document.createElement('div');
+ titleC.className = 'amo-section-title';
+ titleC.textContent = 'Контакты (' + (data.contacts || []).length + ')';
+ secC.appendChild(titleC);
  (data.contacts || []).forEach(function(c){
-  var card = document.createElement('div');
-  card.style.cssText = 'padding:10px;border-radius:8px;background:var(--ds-glass-col);border:1px solid var(--ds-glass-border);margin-bottom:8px';
-  var nm = document.createElement('div');
-  nm.style.cssText = 'font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px';
-  nm.textContent = (c.name || (c.first_name + ' ' + (c.last_name||'')).trim()) + (c.is_main ? ' (главный)' : '');
-  card.appendChild(nm);
-  if(c.position){
-   var pos = document.createElement('div');
-   pos.style.cssText = 'font-size:12px;color:var(--text-soft);margin-bottom:4px';
-   pos.textContent = 'Должность: ' + c.position;
-   card.appendChild(pos);
+  var card = document.createElement('div'); card.className = 'amo-contact-card';
+  // Аватар с инициалами
+  var av = document.createElement('div'); av.className = 'amo-contact-avatar';
+  var fullName = (c.name || ((c.first_name||'') + ' ' + (c.last_name||''))).trim();
+  av.textContent = fullName ? fullName.charAt(0).toUpperCase() : '?';
+  card.appendChild(av);
+  var info = document.createElement('div'); info.style.cssText = 'flex:1;min-width:0';
+  var nameLine = document.createElement('div');
+  nameLine.style.cssText = 'font-weight:600;color:var(--text);font-size:14px;margin-bottom:2px';
+  nameLine.textContent = fullName || '(без имени)';
+  if(c.is_main){
+   var mainBadge = document.createElement('span');
+   mainBadge.textContent = ' Главный';
+   mainBadge.style.cssText = 'font-size:10px;color:#7FB89E;font-weight:600;margin-left:6px';
+   nameLine.appendChild(mainBadge);
   }
+  info.appendChild(nameLine);
+  if(c.position){
+   var posLine = document.createElement('div');
+   posLine.style.cssText = 'font-size:11px;color:var(--text-soft);margin-bottom:4px';
+   posLine.textContent = c.position;
+   info.appendChild(posLine);
+  }
+  var contactsLine = document.createElement('div');
+  contactsLine.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:4px';
   (c.phones || []).forEach(function(ph){
-   var p = document.createElement('a');
-   p.href = 'tel:' + ph.value;
-   p.textContent = ph.value;
-   p.style.cssText = 'display:inline-block;margin-right:10px;font-size:12px;color:var(--accent,#5489BB);text-decoration:none';
-   card.appendChild(p);
+   var a = document.createElement('a');
+   a.href = 'tel:' + ph.value; a.textContent = ph.value;
+   a.style.cssText = 'font-size:12px;color:#5489BB;text-decoration:none;padding:2px 8px;border-radius:6px;background:rgba(84,137,187,.10)';
+   contactsLine.appendChild(a);
   });
   (c.emails || []).forEach(function(em){
    var e = document.createElement('span');
    e.textContent = em.value;
-   e.style.cssText = 'display:inline-block;margin-right:10px;font-size:12px;color:var(--text-soft)';
-   card.appendChild(e);
+   e.style.cssText = 'font-size:12px;color:var(--text-soft);padding:2px 8px;border-radius:6px;background:var(--ds-glass-col)';
+   contactsLine.appendChild(e);
   });
-  sec3.appendChild(card);
+  info.appendChild(contactsLine);
+  card.appendChild(info);
+  secC.appendChild(card);
  });
- container.appendChild(sec3);
+ left.appendChild(secC);
 
- // Блок 4: лента событий
- var sec4 = document.createElement('div');
- sec4.style.cssText = 'background:var(--ds-glass-card);border:1px solid var(--ds-glass-border);border-radius:10px;padding:16px';
- var title4 = document.createElement('div');
- title4.style.cssText = 'font-size:11px;font-weight:600;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px';
- title4.textContent = 'Лента событий (' + (data.notes || []).length + ')';
- sec4.appendChild(title4);
+ // ──────── ПРАВАЯ КОЛОНКА: лента событий (как в amo) ────────
+ var right = document.createElement('div');
+ grid.appendChild(right);
+
+ var secFeed = document.createElement('div');
+ secFeed.className = 'amo-section';
+ secFeed.style.cssText += ';position:sticky;top:8px;max-height:calc(100vh - 200px);overflow-y:auto';
+ var titleFeed = document.createElement('div');
+ titleFeed.className = 'amo-section-title';
+ titleFeed.textContent = 'Лента событий (' + (data.notes || []).length + ')';
+ secFeed.appendChild(titleFeed);
  if(!data.notes || !data.notes.length){
-  var emptyN = document.createElement('div');
-  emptyN.style.cssText = 'color:var(--text-muted);font-size:13px;padding:8px 0';
-  emptyN.textContent = 'Событий нет';
-  sec4.appendChild(emptyN);
+  var emN = document.createElement('div');
+  emN.style.cssText = 'color:var(--text-muted);font-size:13px;padding:8px 0';
+  emN.textContent = 'Событий нет';
+  secFeed.appendChild(emN);
  }
  (data.notes || []).forEach(function(n){
-  var item = document.createElement('div');
-  item.style.cssText = 'padding:10px 0;border-bottom:1px solid var(--border-faint);font-size:13px';
-  var meta = document.createElement('div');
-  meta.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:4px';
-  var dt = n.created_at ? new Date(n.created_at * 1000).toLocaleString('ru-RU') : '';
-  meta.textContent = dt + ' · ' + (n.note_type || 'note');
-  item.appendChild(meta);
-  var content = document.createElement('div');
-  content.style.cssText = 'color:var(--text);word-break:break-word;white-space:pre-wrap';
+  var note = document.createElement('div');
+  note.className = 'amo-note';
+  // Определяем входящее / исходящее
   var params = n.params || {};
-  // Разные типы заметок: common (текст), service_message, attachment, amocrm_message, и т.д.
-  var text = params.text || params.message || params.title || params.file_name || '';
-  if(!text && n.note_type === 'attachment') text = '[Файл]';
-  if(!text && (n.note_type||'').indexOf('voice') >= 0) text = '[Голосовое сообщение]';
-  if(!text) text = '(' + n.note_type + ')';
-  content.textContent = text;
-  item.appendChild(content);
-  sec4.appendChild(item);
+  var isIncoming = params.income === true || params.incoming === true;
+  if(isIncoming) note.classList.add('amo-note-incoming');
+  // Шапка: дата · автор · тип
+  var head = document.createElement('div'); head.className = 'amo-note-head';
+  var dt = n.created_at ? new Date(n.created_at * 1000).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+  var dtSpan = document.createElement('span'); dtSpan.textContent = dt;
+  head.appendChild(dtSpan);
+  var author = params.author || params.contact_name || (isIncoming ? 'Клиент' : 'Менеджер');
+  if(author){
+   var sep = document.createElement('span'); sep.textContent = '·'; head.appendChild(sep);
+   var au = document.createElement('span'); au.className = 'amo-note-author'; au.textContent = author;
+   head.appendChild(au);
+  }
+  var typeLabel = _amoNoteTypeLabel(n.note_type);
+  if(typeLabel){
+   var sep2 = document.createElement('span'); sep2.textContent = '·'; head.appendChild(sep2);
+   var typeBadge = document.createElement('span'); typeBadge.className = 'amo-note-type-badge'; typeBadge.textContent = typeLabel;
+   head.appendChild(typeBadge);
+  }
+  note.appendChild(head);
+  // Содержимое
+  var contentEl = document.createElement('div'); contentEl.className = 'amo-note-content';
+  var text = params.text || params.message || params.title || '';
+  var isVoice = (n.note_type || '').indexOf('voice') >= 0 || params.media_type === 'voice' || (params.attachment && params.attachment.file_name && /\.(ogg|opus|mp3|m4a)$/i.test(params.attachment.file_name));
+  if(isVoice){
+   var voice = document.createElement('div'); voice.className = 'amo-voice-player';
+   var ic = document.createElement('div'); ic.className = 'amo-voice-icon'; ic.textContent = '▶';
+   var dur = params.duration ? formatDuration(params.duration) : (params.attachment && params.attachment.duration ? formatDuration(params.attachment.duration) : '');
+   var label = document.createElement('span'); label.textContent = 'Голосовое сообщение' + (dur ? ' · ' + dur : '');
+   voice.appendChild(ic); voice.appendChild(label);
+   contentEl.appendChild(voice);
+  } else if(n.note_type === 'attachment' || params.attachment){
+   contentEl.textContent = '📎 ' + (params.attachment && params.attachment.file_name || params.file_name || 'Файл');
+  } else if(text){
+   contentEl.textContent = text;
+  } else {
+   contentEl.textContent = '(' + (n.note_type || 'событие') + ')';
+   contentEl.style.color = 'var(--text-muted)';
+   contentEl.style.fontStyle = 'italic';
+  }
+  note.appendChild(contentEl);
+  secFeed.appendChild(note);
  });
- container.appendChild(sec4);
+ right.appendChild(secFeed);
+}
+
+function _amoNoteTypeLabel(t){
+ var map = {
+  'common': 'Заметка',
+  'service_message': 'Система',
+  'attachment': 'Файл',
+  'call_in': 'Звонок вх.',
+  'call_out': 'Звонок исх.',
+  'amocrm_message': 'amoCRM',
+  'extended_service_message': 'Система'
+ };
+ return map[t] || t;
+}
+
+function formatDuration(sec){
+ var s = parseInt(sec, 10) || 0;
+ var m = Math.floor(s / 60); var r = s % 60;
+ return String(m).padStart(2,'0') + ':' + String(r).padStart(2,'0');
 }
 
 // Пользовательский override чеклиста (приоритетнее Sheet и дефолта)
