@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v387</title>
+<title>SalesDoc — Финансовый Дашборд v388</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4384,7 +4384,7 @@ body.light #view-route-card.amocard-active {
 .amocard-stage-chevron:hover { background:var(--amocard-surface-3); color:var(--amocard-text-2); }
 
 .amocard-pipeline { display:flex; gap:3px; height:6px; border-radius:3px; overflow:hidden; }
-.amocard-pipe-step { flex:1; background:var(--amocard-surface-3); position:relative; cursor:pointer; }
+.amocard-pipe-step { flex:1; background:var(--amocard-surface-3); position:relative; cursor:default; }
 .amocard-pipe-step.done { background:var(--amocard-green); }
 .amocard-pipe-step.active { background:var(--amocard-blue); }
 .amocard-pipe-step.active::after { content:''; position:absolute; top:-3px; left:0; right:0; height:12px; background:var(--amocard-blue); border-radius:3px; box-shadow:0 2px 6px rgba(59,130,246,.40); }
@@ -6581,11 +6581,9 @@ body.light .amocard-chat-input input:focus { background:#FFFFFF; }
       <div id="route-card-name" class="amocard-name">&mdash;</div>
       <div class="amocard-id-row">
        <span id="route-card-id" class="amocard-id">&mdash;</span>
-       <button class="amocard-tag-btn">#ТЕГИРОВАТЬ</button>
       </div>
      </div>
     </div>
-    <span class="amocard-menu" title="Меню">&middot;&middot;&middot;</span>
    </div>
    <div class="amocard-stage-box">
     <div class="amocard-stage-row">
@@ -6593,14 +6591,13 @@ body.light .amocard-chat-input input:focus { background:#FFFFFF; }
       <div class="amocard-stage-label">Маршрут</div>
       <div class="amocard-stage-name"><span id="route-card-stage-name">&mdash;</span> <span id="route-card-stage-days" class="amocard-days"></span></div>
      </div>
-     <span class="amocard-stage-chevron">&#9662;</span>
     </div>
     <div id="route-card-pipeline" class="amocard-pipeline"></div>
    </div>
    <div class="amocard-tabs">
     <button id="route-tab-amo" class="amocard-tab active" onclick="routeCardTab('amo')">Основное</button>
     <button id="route-tab-check" class="amocard-tab" onclick="routeCardTab('check')">Чек-лист</button>
-    <button id="route-tab-history" class="amocard-tab" onclick="routeCardTab('history')">История SD</button>
+    <button id="route-tab-history" class="amocard-tab" onclick="routeCardTab('history')">История</button>
     <button id="route-tab-contact" class="amocard-tab" onclick="routeCardTab('contact')">Контакт</button>
    </div>
    <div id="route-card-body" class="amocard-fields"></div>
@@ -6613,9 +6610,9 @@ body.light .amocard-chat-input input:focus { background:#FFFFFF; }
     <span>Нет запланированных задач, рекомендуем <a href="#" onclick="return false">добавить</a></span>
    </div>
    <div class="amocard-chat-input">
-    <span class="amocard-chat-select"><b>Чат</b> для <b id="route-chat-name">&mdash;:</b> <span style="color:var(--amocard-text-faint)">&#9662;</span></span>
-    <input id="route-chat-text" type="text" placeholder="введите текст &hellip;">
-    <button class="amocard-send" onclick="routeChatSend()" title="Отправить">&rarr;</button>
+    <span class="amocard-chat-select"><b>Заметка для команды</b></span>
+    <input id="route-chat-text" type="text" placeholder="клиент это НЕ увидит — только операторы внутри SalesDoc" onkeydown="if(event.key==='Enter'){event.preventDefault();routeChatSend();}">
+    <button id="route-chat-send" class="amocard-send" onclick="routeChatSend()" title="Сохранить заметку">&rarr;</button>
    </div>
   </section>
  </div>
@@ -21603,14 +21600,17 @@ function _routeRenderCardHead(){
  var chatNameEl = document.getElementById('route-chat-name');
  if(chatNameEl) chatNameEl.textContent = (cl.company_name || 'клиент') + ':';
  // Pipeline — 5 шагов SalesDoc. done = пройденные, active = текущий, пустые = впереди.
+ // v388: если stage не из списка (например 'Архив') — показываем все как done.
  var pipeEl = document.getElementById('route-card-pipeline');
  if(pipeEl){
   pipeEl.replaceChildren();
   var currentIdx = ROUTE_STAGES_ORDER.indexOf(card.stage);
+  var isArchive = card.stage === 'Архив';
   ROUTE_STAGES_ORDER.forEach(function(stageName, i){
    var step = document.createElement('div');
    step.className = 'amocard-pipe-step';
-   if(i < currentIdx) step.classList.add('done');
+   if(isArchive) step.classList.add('done');
+   else if(i < currentIdx) step.classList.add('done');
    else if(i === currentIdx) step.classList.add('active');
    step.title = stageName;
    pipeEl.appendChild(step);
@@ -21629,10 +21629,15 @@ function _pluralDays(n){
 // текст как заметку в card_history. Реальная отправка в WhatsApp/Wazzup — позже.
 async function routeChatSend(){
  var input = document.getElementById('route-chat-text');
+ var btn = document.getElementById('route-chat-send');
  if(!input) return;
  var text = input.value.trim();
  if(!text) return;
  if(!_routeCurrentCard) return;
+ // v388: защита от двойного клика — блокируем кнопку и поле на время запроса.
+ if(btn && btn.disabled) return;
+ if(btn) btn.disabled = true;
+ input.disabled = true;
  try {
   var d = await sbFetch('/api/history', {
    method:'POST',
@@ -21646,12 +21651,15 @@ async function routeChatSend(){
   });
   if(!d.ok) throw new Error(d.error || 'history POST failed');
   input.value = '';
-  // Если открыт таб «Основное» — перерисуем ленту
   if(_routeCurrentTab === 'amo' && typeof _routeRenderFeed === 'function'){
    _routeRenderFeed();
   }
  } catch(e){
   alert('Не удалось сохранить: ' + e.message);
+ } finally {
+  if(btn) btn.disabled = false;
+  input.disabled = false;
+  input.focus();
  }
 }
 
@@ -21668,7 +21676,8 @@ async function routeActivateClient(){
  }
  var clName = (card.clients && card.clients.company_name) || 'клиента';
  var months = (card.clients && card.clients.subscription_period_months) || 1;
- if(!confirm('Активировать ' + clName + '?\nКуратор: ' + (card.operator || '—') + '.\nПериод подписки: ' + months + ' мес. Напомним позвонить через ' + months + ' мес.')){
+ // v388: понятный текст — что произойдёт, что нельзя откатить
+ if(!confirm('Активировать «' + clName + '»?\n\nЧто произойдёт:\n• Карточка уйдёт из Маршрута в «Мои клиенты»\n• Куратор: ' + (card.operator || '—') + '\n• Дата следующей оплаты: через ' + months + ' мес\n\nОткатить можно будет только вручную.')){
   return;
  }
  // v364: блокировка кнопки на время запроса — защита от двойного клика
@@ -21884,6 +21893,15 @@ function _routeRenderContact(){
 // контакты и ленту событий (включая WhatsApp через Wazzup24).
 // ID сделки пока хранится в localStorage по client_id (миграция БД с колонкой amo_lead_id
 // в clients — отдельной сессией, чтобы не блокировать).
+// v388: маппинг технических значений в человеческие подписи для UI.
+// В БД хранится 'lead'/'onboarding'/... — оператор видит «Новый»/«Внедрение».
+function _amoLabelStatus(s){
+ return ({lead:'Новый',sale:'Продано',onboarding:'Внедрение',active:'Действующий',paused:'На паузе',churned:'Ушёл'})[s] || s || '—';
+}
+function _amoLabelCategory(c){
+ return ({'Нов внедрение':'Новое внедрение','Нов интеграция':'Новая интеграция'})[c] || c || '—';
+}
+
 // v386: inline-edit для редактируемых полей карточки. Поле кликабельно, при клике
 // заменяется на input/select, по Enter/blur сохраняется через PATCH /api/cards
 // или /api/clients. ESC отменяет. После сохранения — обновляем _routeCurrentCard
@@ -21914,10 +21932,14 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
  if(opts.type === 'select'){
   input = document.createElement('select');
   input.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--amocard-accent);background:var(--amocard-surface);color:var(--amocard-text);border-radius:6px;font-family:inherit;font-size:13.5px;outline:none';
-  // Пустой первый вариант — чтобы можно было сбросить значение
-  var blank = document.createElement('option'); blank.value = ''; blank.textContent = '—'; input.appendChild(blank);
+  // v388: убран пункт «—» в начале — оператор случайно сбрасывал значение.
+  // Если нужно сбросить — кликает ESC.
   (opts.choices || []).forEach(function(ch){
-   var o = document.createElement('option'); o.value = ch; o.textContent = ch; input.appendChild(o);
+   var o = document.createElement('option');
+   o.value = ch;
+   // Если choiceLabels задан — показываем человеческие подписи (lead → Новый)
+   o.textContent = (opts.choiceLabels && opts.choiceLabels[ch]) || ch;
+   input.appendChild(o);
   });
   input.value = opts.rawValue || '';
  } else {
@@ -21950,6 +21972,8 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
   else if(newVal === '') newVal = null;
   // Для subscription_period_months — int
   if(opts.field === 'subscription_period_months' && newVal !== null) newVal = parseInt(newVal, 10);
+  // v388: защита от NaN — если parseInt не справился, считаем что пусто (null)
+  if(typeof newVal === 'number' && Number.isNaN(newVal)) newVal = null;
 
   // Если значение не изменилось — просто закрываем
   if(String(newVal) === String(opts.rawValue == null ? '' : opts.rawValue)){
@@ -21990,19 +22014,25 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
    // Перерисуем всю секцию — проще чем точечно обновлять
    _routeRenderAmo();
   } catch(e){
+   // v388: при ошибке возвращаем поле в исходное состояние (cancel), а не оставляем
+   // редактор. Иначе следующий blur вызовет save и второй alert.
    alert('Не удалось сохранить: ' + e.message);
-   input.disabled = false;
-   input.style.opacity = '';
-   done = false;
+   done = true; cancel();
   }
  }
 
+ // v388: для select слушаем ТОЛЬКО change (blur+change давали двойной save с race).
+ // Для input — Enter сохраняет, ESC отменяет, blur сохраняет с задержкой 100мс.
  input.addEventListener('keydown', function(e){
   if(e.key === 'Enter'){ e.preventDefault(); save(); }
   else if(e.key === 'Escape'){ e.preventDefault(); cancel(); }
  });
- input.addEventListener('blur', function(){ setTimeout(save, 100); });
- if(opts.type === 'select') input.addEventListener('change', function(){ save(); });
+ if(opts.type === 'select'){
+  input.addEventListener('change', function(){ save(); });
+  input.addEventListener('blur', function(){ if(!done) cancel(); });
+ } else {
+  input.addEventListener('blur', function(){ setTimeout(save, 100); });
+ }
 }
 
 // v380: amo-style рендер таба «Основное». Заполняет route-card-body 15 полями в
@@ -22050,7 +22080,7 @@ async function _routeRenderAmo(){
  addField('Ответственный', card.operator, { editable:true, entity:'card', field:'operator', type:'select', choices:['Айдос','Акбар','Самат','Нурай'], rawValue:card.operator });
  addField('Бюджет', card.payment_amount ? '₸ ' + Number(card.payment_amount).toLocaleString('ru-RU').replace(/,/g, ' ') : null, { price:true, editable:true, entity:'card', field:'payment_amount', type:'number', rawValue:card.payment_amount });
  addField('Менеджер продаж', card.sales_manager, { editable:true, entity:'card', field:'sales_manager', type:'select', choices:['Мирзахит','Юлия','Айдос Хапез'], rawValue:card.sales_manager });
- addField('Категория', card.payment_category, { editable:true, entity:'card', field:'payment_category', type:'select', choices:['Нов внедрение','Нов интеграция'], rawValue:card.payment_category });
+ addField('Категория', _amoLabelCategory(card.payment_category), { editable:true, entity:'card', field:'payment_category', type:'select', choices:['Нов внедрение','Нов интеграция','абон. плата','доп. лицензии','новый клиент','доработка'], rawValue:card.payment_category });
  addField('Создана', card.created_at ? new Date(card.created_at).toLocaleDateString('ru-RU') : null);
 
  // Секция КОНТАКТ
@@ -22067,7 +22097,7 @@ async function _routeRenderAmo(){
  addField('Период подписки', cl.subscription_period_months ? cl.subscription_period_months + ' мес' : null, { editable:true, entity:'client', field:'subscription_period_months', type:'select', choices:['1','3','6','12'], rawValue:cl.subscription_period_months });
  addField('Лицензии', card.licenses_count, { editable:true, entity:'card', field:'licenses_count', type:'number', rawValue:card.licenses_count });
  addField('Тариф', card.tariff, { editable:true, entity:'card', field:'tariff', type:'text', rawValue:card.tariff });
- addField('Статус', cl.status || 'onboarding', { editable:true, entity:'client', field:'status', type:'select', choices:['lead','sale','onboarding','active','paused','churned'], rawValue:cl.status });
+ addField('Статус', _amoLabelStatus(cl.status || 'onboarding'), { editable:true, entity:'client', field:'status', type:'select', choices:['lead','sale','onboarding','active','paused','churned'], choiceLabels:{lead:'Новый',sale:'Продано',onboarding:'Внедрение',active:'Действующий',paused:'На паузе',churned:'Ушёл'}, rawValue:cl.status });
  addField('Активирована', cl.activation_date);
  addField('Следующая оплата', cl.next_billing_at);
 

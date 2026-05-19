@@ -90,7 +90,14 @@ export default async function handler(req, res) {
     if (req.method === 'PATCH') {
       const { client_id } = req.query || {};
       if (!client_id) return res.status(400).json({ ok: false, error: 'нужен ?client_id=...' });
-      const body = await readBody(req);
+      const rawBody = await readBody(req);
+      // v388: whitelist изменяемых полей. Защита от случайной перезаписи client_id/created_at
+      // и от опечаток имени поля (Supabase молча отказал бы или вернул 500 от PostgREST).
+      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months'];
+      const body = {};
+      Object.keys(rawBody).forEach(k => {
+        if (ALLOWED_PATCH_FIELDS.includes(k)) body[k] = rawBody[k];
+      });
       body.updated_at = new Date().toISOString();
       if (body.status && !ALLOWED_STATUS.includes(body.status)) {
         return res.status(400).json({ ok: false, error: 'status должен быть один из: ' + ALLOWED_STATUS.join(', ') });

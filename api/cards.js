@@ -110,6 +110,10 @@ export default async function handler(req, res) {
       if (body.tariff !== undefined) patch.tariff = body.tariff;
       if (body.licenses_count !== undefined) patch.licenses_count = body.licenses_count;
       if (body.modules !== undefined) patch.modules = body.modules;
+      // v388: новые поля v377 теперь редактируются inline на карточке клиента
+      if (body.payment_amount !== undefined) patch.payment_amount = body.payment_amount;
+      if (body.sales_manager !== undefined) patch.sales_manager = body.sales_manager;
+      if (body.payment_category !== undefined) patch.payment_category = body.payment_category;
       if (!Object.keys(patch).length) return res.status(400).json({ ok: false, error: 'нечего обновлять' });
       const result = await sbUpdate('kanban_cards', { id: 'eq.' + id }, patch);
       if (!result.length) return res.status(404).json({ ok: false, error: 'карточка не найдена' });
