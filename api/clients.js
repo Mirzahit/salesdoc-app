@@ -137,20 +137,11 @@ export default async function handler(req, res) {
       const result = await sbUpdate('clients', { client_id: 'eq.' + client_id }, body);
       if (!result.length) return res.status(404).json({ ok: false, error: 'клиент не найден' });
 
-      // v376: двусторонняя синхронизация SD→amo. При активации в SalesDoc если у клиента
-      // есть привязанный amo_lead_id — обновляем статус сделки в amo на «успешно реализовано» (142).
-      // Не блокирует ответ: SalesDoc-активация уже сохранена. Ошибка amo логируется но не падает запрос.
-      let amoSyncResult = null;
-      if (body.status === 'active' && result[0].amo_lead_id) {
-        try {
-          const amoRes = await syncActivationToAmo(result[0].amo_lead_id, result[0].country || 'KZ', result[0].company_name);
-          amoSyncResult = amoRes;
-        } catch (e) {
-          amoSyncResult = { ok: false, error: e.message };
-          console.warn('[amo-sync] activation sync failed for ' + result[0].client_id + ': ' + e.message);
-        }
-      }
-      return res.status(200).json({ ok: true, client: result[0], amo_sync: amoSyncResult });
+      // v376 → v379: авто-синхронизация SD→amo при активации ОТМЕНЕНА.
+      // Менеджеры продаж сами закрывают сделки в amo — не нужно ещё одного источника
+      // изменений в amo. Endpoint /api/amo POST update_status оставлен на случай если
+      // в будущем понадобится ручной триггер, но автоматический вызов отсюда убран.
+      return res.status(200).json({ ok: true, client: result[0] });
     }
 
     return res.status(405).json({ ok: false, error: 'method not allowed' });
@@ -179,32 +170,7 @@ function addMonthsISO(date, months) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-// v376: после активации клиента в SalesDoc — перевести соответствующую сделку
-// в amo на статус «успешно реализовано» (status_id=142). Это стандартный финальный
-// статус в любой воронке amo (Лиды/Внедрение/Покупатели/HR — везде 142).
-// Дёргаем наш же endpoint /api/amo чтобы переиспользовать существующую авторизацию.
-async function syncActivationToAmo(leadId, country, companyName) {
-  // VERCEL_URL даёт текущий хост деплоя (без https). На локалке/в SSR его нет, тогда используем APP_TOKEN-fetch напрямую.
-  const baseUrl = process.env.VERCEL_URL
-    ? 'https://' + process.env.VERCEL_URL
-    : (process.env.APP_BASE_URL || 'https://salesdoc-app.vercel.app');
-  const token = (process.env.APP_TOKEN || '').trim();
-  const r = await fetch(baseUrl + '/api/amo?action=update_status&country=' + encodeURIComponent(country), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-app-token': token },
-    body: JSON.stringify({ lead_id: leadId, status_id: 142 })
-  });
-  const text = await r.text();
-  let data;
-  try { data = JSON.parse(text); } catch(_){ data = { _raw: text }; }
-  if (!r.ok) throw new Error('amo update ' + r.status + ': ' + (data.error || text.slice(0,150)));
-  // Доп. заметка в amo для следа
-  try {
-    await fetch(baseUrl + '/api/amo?action=add_note&country=' + encodeURIComponent(country), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-app-token': token },
-      body: JSON.stringify({ lead_id: leadId, text: 'Клиент активирован в SalesDoc' + (companyName ? ' (' + companyName + ')' : '') })
-    });
-  } catch(_){ /* note — не критично */ }
-  return { ok: true, lead_id: leadId, new_status_id: 142 };
-}
+// v376→v379: функция syncActivationToAmo удалена. CEO решил не дёргать amo автоматически
+// при активации в SalesDoc — менеджеры продаж сами закрывают сделки в amo. Endpoint
+// /api/amo POST update_status оставлен (может пригодиться для ручного триггера),
+// но из /api/clients больше не вызывается.
