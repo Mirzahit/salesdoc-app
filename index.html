@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v403</title>
+<title>SalesDoc — Финансовый Дашборд v404</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4653,6 +4653,13 @@ body.light #view-ticket-card .tk-input select option { background:#FFFFFF !impor
 #view-ticket-card .tk-prio-dot.tk-prio-normal { background:#5A8FBF !important; }
 #view-ticket-card .tk-prio-dot.tk-prio-high { background:#E8A33D !important; }
 #view-ticket-card .tk-prio-dot.tk-prio-critical { background:#D67373 !important; }
+#view-ticket-card .tk-tags-box { display:flex !important; flex-wrap:wrap !important; gap:4px !important; padding:6px 8px !important; border:1px solid var(--amocard-border) !important; background:var(--amocard-surface-2) !important; border-radius:5px !important; min-height:32px !important; align-items:center !important; cursor:text !important; box-sizing:border-box !important; }
+#view-ticket-card .tk-tags-box:focus-within { border-color:var(--amocard-accent,#3B8B57) !important; }
+#view-ticket-card .tk-tag { display:inline-flex !important; align-items:center !important; gap:3px !important; padding:1px 6px 1px 8px !important; background:rgba(120,120,128,.18) !important; border-radius:10px !important; font-size:11px !important; color:var(--amocard-text-2) !important; font-weight:500 !important; }
+#view-ticket-card .tk-tag .tk-tag-close { cursor:pointer; color:var(--amocard-text-faint) !important; font-size:14px !important; line-height:1; padding-left:2px; user-select:none; }
+#view-ticket-card .tk-tag .tk-tag-close:hover { color:var(--amocard-text) !important; }
+#view-ticket-card .tk-tags-input { border:none !important; background:transparent !important; outline:none !important; color:var(--amocard-text) !important; font-size:12px !important; font-family:inherit !important; flex:1 !important; min-width:80px !important; padding:2px 0 !important; }
+#view-ticket-card .tk-tags-input::placeholder { color:var(--amocard-text-faint) !important; }
 #view-ticket-card .tk-section-title { font-size:10.5px !important; font-weight:600 !important; color:var(--amocard-text-faint) !important; text-transform:uppercase !important; letter-spacing:.6px !important; padding:14px 0 8px !important; border-top:1px solid var(--amocard-hairline) !important; margin-top:6px !important; }
 #view-ticket-card .tk-section-title:first-child, #view-ticket-card .tk-sidebar > .tk-section-title:first-child { border-top:none !important; margin-top:0 !important; padding-top:0 !important; }
 #view-ticket-card .tk-readonly-row { display:flex !important; justify-content:space-between !important; gap:8px !important; padding:5px 0 !important; font-size:12px !important; }
@@ -6804,6 +6811,7 @@ body.light #view-ticket-card .tk-input select option { background:#FFFFFF !impor
   </div>
   <div class="route-filter-row">
    <span class="route-count">Тикетов: <b id="tickets-count">&mdash;</b></span>
+   <input id="tickets-search" type="search" placeholder="Поиск по теме, клиенту, тегу…" oninput="ticketsRender()" class="route-select" style="min-width:240px;flex:0 1 280px">
    <div class="route-spacer"></div>
    <select id="tickets-filter-op" class="route-select" onchange="ticketsRender()">
     <option value="">Все операторы</option>
@@ -21809,12 +21817,19 @@ function ticketsRender(){
  if(!board) return;
  var fOp = (document.getElementById('tickets-filter-op')||{}).value || '';
  var fPrio = (document.getElementById('tickets-filter-prio')||{}).value || '';
+ // v404: поиск по теме, описанию, имени клиента, тегам. Регистронезависимо.
+ var fSearch = ((document.getElementById('tickets-search')||{}).value || '').trim().toLowerCase();
  var html = '';
  TICKETS_STAGES.forEach(function(stage, sIdx){
   var stageTickets = ticketsList.filter(function(t){
    if(t.status !== stage.key) return false;
    if(fOp && t.operator !== fOp) return false;
    if(fPrio && t.priority !== fPrio) return false;
+   if(fSearch){
+    var cl = t.clients || {};
+    var hay = ((t.title||'') + ' ' + (t.description||'') + ' ' + (cl.company_name||'') + ' ' + ((t.tags||[]).join(' '))).toLowerCase();
+    if(hay.indexOf(fSearch) === -1) return false;
+   }
    return true;
   });
   // v398: drop-зона на колонке — позволяет перетащить тикет из другой колонки сюда
@@ -22084,6 +22099,9 @@ function _ticketRenderFields(){
   faint: !t.category
  });
 
+ // v404: Теги — массив коротких меток. Box с пилюлями + input, Enter добавляет.
+ _ticketRenderTagsField(body, t);
+
  // Канал — read-only (его задаёт источник тикета, не оператор)
  addField('Канал', { readonly:true, displayValue: CHANNEL_LABELS[t.channel] || t.channel || '—' });
 
@@ -22162,6 +22180,81 @@ function _openTicketSidebarEditor(inputEl, valueEl, opts){
  sel.addEventListener('keydown', function(e){
   if(e.key === 'Escape'){ e.preventDefault(); cancel(); }
  });
+}
+
+// v404: рендер поля «Теги» в sidebar тикета. Enter добавляет тег, крестик удаляет.
+// Сохраняется PATCH-ом массива целиком, чтобы не плодить per-tag endpoint.
+function _ticketRenderTagsField(parent, t){
+ var f = document.createElement('div'); f.className = 'tk-field';
+ var l = document.createElement('label'); l.className = 'tk-label'; l.textContent = 'Теги';
+ var box = document.createElement('div'); box.className = 'tk-tags-box';
+ var inp = document.createElement('input'); inp.className = 'tk-tags-input'; inp.type = 'text';
+ inp.placeholder = (t.tags && t.tags.length) ? '' : '+ добавить';
+ var saving = false;
+
+ function renderPills(){
+  // Чистим всё, кроме инпута
+  Array.prototype.slice.call(box.querySelectorAll('.tk-tag')).forEach(function(el){ el.remove(); });
+  (t.tags || []).forEach(function(tag){
+   var pill = document.createElement('span'); pill.className = 'tk-tag';
+   pill.appendChild(document.createTextNode(tag));
+   var x = document.createElement('span'); x.className = 'tk-tag-close'; x.textContent = '×'; x.title = 'Удалить тег';
+   x.addEventListener('click', function(e){ e.stopPropagation(); removeTag(tag); });
+   pill.appendChild(x);
+   box.insertBefore(pill, inp);
+  });
+  inp.placeholder = (t.tags && t.tags.length) ? '' : '+ добавить';
+ }
+ async function saveTags(newArr){
+  if(saving) return;
+  saving = true;
+  try {
+   var d = await sbFetch('/api/cards?entity=ticket&id=' + _ticketCurrentTicket.id, {
+    method:'PATCH', body: JSON.stringify({ tags: newArr })
+   });
+   if(!d.ok) throw new Error(d.error || 'save failed');
+   _ticketCurrentTicket = d.ticket;
+   t = _ticketCurrentTicket;
+   var idx = ticketsList.findIndex(function(x){ return x.id === _ticketCurrentTicket.id; });
+   if(idx >= 0) ticketsList[idx] = _ticketCurrentTicket;
+   renderPills();
+   if(typeof ticketsRender === 'function'){ try { ticketsRender(); } catch(_){} }
+  } catch(e){
+   alert('Не удалось сохранить теги: ' + e.message);
+  } finally { saving = false; }
+ }
+ function addTag(raw){
+  var s = String(raw||'').trim().slice(0,32);
+  if(!s) return;
+  var arr = (t.tags || []).slice();
+  if(arr.indexOf(s) !== -1) return; // уже есть
+  if(arr.length >= 12) { alert('Максимум 12 тегов'); return; }
+  arr.push(s);
+  saveTags(arr);
+ }
+ function removeTag(tag){
+  var arr = (t.tags || []).filter(function(x){ return x !== tag; });
+  saveTags(arr);
+ }
+
+ box.addEventListener('click', function(){ inp.focus(); });
+ inp.addEventListener('keydown', function(e){
+  if(e.key === 'Enter' || e.key === ','){
+   e.preventDefault();
+   addTag(inp.value);
+   inp.value = '';
+  } else if(e.key === 'Backspace' && !inp.value && (t.tags||[]).length){
+   // Backspace на пустом инпуте — удалить последний тег
+   removeTag(t.tags[t.tags.length - 1]);
+  }
+ });
+ inp.addEventListener('blur', function(){
+  if(inp.value.trim()){ addTag(inp.value); inp.value = ''; }
+ });
+
+ box.appendChild(inp);
+ renderPills();
+ f.appendChild(l); f.appendChild(box); parent.appendChild(f);
 }
 
 async function _ticketCloseAndArchive(){

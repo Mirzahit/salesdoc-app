@@ -418,6 +418,18 @@ async function handleTicketsRoute(req, res) {
     ['status','priority','category','operator','title','description'].forEach(k => {
       if (body[k] !== undefined) patch[k] = body[k];
     });
+    // v404: tags TEXT[] — массив коротких меток. Принимаем только массив строк,
+    // обрезаем по 32 символа, дедуплицируем, максимум 12 тегов.
+    if (body.tags !== undefined) {
+      if (!Array.isArray(body.tags)) {
+        return res.status(400).json({ ok: false, error: 'tags должен быть массивом строк' });
+      }
+      const seen = new Set();
+      patch.tags = body.tags
+        .map(t => String(t).trim().slice(0, 32))
+        .filter(t => t.length > 0 && !seen.has(t) && (seen.add(t), true))
+        .slice(0, 12);
+    }
 
     // Авто-метки времени:
     // - при первом переводе в in_progress (взяли в работу) фиксируем first_response_at
