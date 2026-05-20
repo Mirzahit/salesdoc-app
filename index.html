@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v414</title>
+<title>SalesDoc — Финансовый Дашборд v415</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4699,6 +4699,10 @@ body.light #view-ticket-card .tk-input select option { background:#FFFFFF !impor
  #view-ticket-card .tk-sidebar { border-right:none !important; border-bottom:1px solid var(--amocard-border) !important; height:auto !important; grid-column:1 !important; grid-row:2 !important; }
  #view-ticket-card .tk-main { height:auto !important; min-height:60vh !important; grid-column:1 !important; grid-row:1 !important; }
 }
+/* v415: drag-to-delete зона в правом нижнем углу. Показывается только во время перетаскивания
+   карточки через .route-trash-visible на body. Подсвечивается ярче когда курсор над ней. */
+body.route-trash-visible #route-trash { display:flex !important; }
+#route-trash.route-trash-active { background:rgba(255,69,58,.22) !important; border-color:rgba(255,69,58,.85) !important; transform:scale(1.06); }
 </style>
 </head>
 <body>
@@ -7054,6 +7058,13 @@ body.light #view-ticket-card .tk-input select option { background:#FFFFFF !impor
  </div>
  </div>
  </div>
+ </div>
+
+ <!-- v415: drag-to-delete зона. Как в amoCRM — появляется при перетаскивании карточки.
+      Бросаешь сюда → карточка архивируется (stage='Архив', soft delete). -->
+ <div id="route-trash" ondragover="event.preventDefault();this.classList.add('route-trash-active')" ondragleave="this.classList.remove('route-trash-active')" ondrop="event.preventDefault();this.classList.remove('route-trash-active');routeTrashDrop(event)" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9998;align-items:center;gap:10px;padding:14px 22px;border-radius:14px;background:rgba(255,69,58,.10);border:2px dashed rgba(255,69,58,.55);color:#FF453A;font-weight:600;font-size:14px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.30);pointer-events:auto;user-select:none;transition:transform .15s,background .15s,border-color .15s">
+  <span style="font-size:22px;line-height:1">×</span>
+  <span>Бросьте сюда чтобы удалить</span>
  </div>
  <!-- /ROUTE VIEW -->
 
@@ -21631,7 +21642,7 @@ function routeRender(){
     checkBadge = '<span style="font-size:11px;padding:2px 8px;border-radius:999px;font-variant-numeric:tabular-nums;background:' + cbg + ';color:' + ccol + ';font-weight:600;margin-left:6px">' + card._checkDone + '/' + card._checkTotal + '</span>';
    }
    // v366: карточка — Liquid Glass (стекло поверх стекла колонки = двойное преломление)
-   html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="this.style.opacity=1" onmouseover="this.style.background=\'var(--ds-glass-card-hover)\';this.style.transform=\'translateY(-1px)\';this.style.borderColor=\'var(--ds-glass-border-bright)\'" onmouseout="this.style.background=\'var(--ds-glass-card)\';this.style.transform=\'\';this.style.borderColor=\'var(--ds-glass-border)\'" style="background:var(--ds-glass-card);backdrop-filter:saturate(180%) blur(12px);-webkit-backdrop-filter:saturate(180%) blur(12px);border:1px solid var(--ds-glass-border);border-radius:14px;padding:12px 14px;cursor:grab;transition:background .2s,transform .2s,border-color .2s;box-shadow:0 4px 16px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.06)">';
+   html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="routeDragEnd(this)" onmouseover="this.style.background=\'var(--ds-glass-card-hover)\';this.style.transform=\'translateY(-1px)\';this.style.borderColor=\'var(--ds-glass-border-bright)\'" onmouseout="this.style.background=\'var(--ds-glass-card)\';this.style.transform=\'\';this.style.borderColor=\'var(--ds-glass-border)\'" style="background:var(--ds-glass-card);backdrop-filter:saturate(180%) blur(12px);-webkit-backdrop-filter:saturate(180%) blur(12px);border:1px solid var(--ds-glass-border);border-radius:14px;padding:12px 14px;cursor:grab;transition:background .2s,transform .2s,border-color .2s;box-shadow:0 4px 16px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.06)">';
    html += '<div style="margin-bottom:4px"><a onclick="event.stopPropagation();routeOpenCard(\'' + card.id + '\')" style="font-weight:600;font-size:13px;color:var(--accent,#34C77A);cursor:pointer;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + _escHtml(name) + '</a></div>';
    if(card.tariff) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(card.tariff) + '</div>';
    html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft);gap:6px;flex-wrap:wrap">';
@@ -21654,11 +21665,21 @@ function routeRender(){
 function routeDragStart(cardId){
  routeDragCardId = cardId;
  event.target.style.opacity = 0.5;
+ // v415: показать зону удаления в правом нижнем углу
+ document.body.classList.add('route-trash-visible');
+}
+
+// v415: вызывается из ondragend карточки (см. шаблон в routeRender). Прячет зону удаления
+// даже если карточку бросили мимо всех зон (в пустоту).
+function routeDragEnd(el){
+ if(el) el.style.opacity = 1;
+ document.body.classList.remove('route-trash-visible');
 }
 
 async function routeDrop(ev, newStage){
  ev.preventDefault();
  ev.target.closest('.route-col').style.background = '';
+ document.body.classList.remove('route-trash-visible');
  if(!routeDragCardId) return;
  var card = routeCards.find(function(c){ return c.id === routeDragCardId; });
  if(!card || card.stage === newStage){ routeDragCardId = null; return; }
@@ -21677,6 +21698,32 @@ async function routeDrop(ev, newStage){
   routeLoad();
  }
  routeDragCardId = null;
+}
+
+// v415: бросили карточку в зону удаления. Архивирует (DELETE = soft delete, stage='Архив').
+// С подтверждением — чтобы случайно не снести боевого клиента.
+async function routeTrashDrop(ev){
+ ev.preventDefault();
+ document.body.classList.remove('route-trash-visible');
+ if(!routeDragCardId){ return; }
+ var card = routeCards.find(function(c){ return c.id === routeDragCardId; });
+ var cardId = routeDragCardId;
+ routeDragCardId = null;
+ if(!card){ return; }
+ var clientName = (card.clients && card.clients.company_name) || card.client_id || '';
+ if(!confirm('Удалить карточку «' + clientName + '»?\n\nКарточка уйдёт в архив (не из канбана, а в архив базы — на случай если ошиблись).')){
+  return;
+ }
+ // Оптимистично убираем из UI
+ routeCards = routeCards.filter(function(c){ return c.id !== cardId; });
+ routeRender();
+ try {
+  var d = await sbFetch('/api/cards?id=' + cardId, { method: 'DELETE' });
+  if(!d.ok) throw new Error(d.error);
+ } catch(e) {
+  alert('Не удалось удалить: ' + e.message);
+  routeLoad();
+ }
 }
 
 // v414: выбранный из базы клиент при создании новой карточки. null = создаём нового.
