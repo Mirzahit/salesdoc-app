@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v413</title>
+<title>SalesDoc — Финансовый Дашборд v414</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7013,19 +7013,44 @@ body.light #view-ticket-card .tk-input select option { background:#FFFFFF !impor
 
  <!-- v367: Модалка создания карточки — Liquid Glass -->
  <div id="route-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:center;justify-content:center" onclick="if(event.target===this)routeCloseNew()">
- <div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:24px;width:min(440px,92vw);box-shadow:0 24px 64px rgba(0,0,0,.5)">
- <div style="font-size:18px;font-weight:700;margin-bottom:20px;color:var(--text);letter-spacing:-0.02em">Новая карточка клиента</div>
+ <div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:24px;width:min(460px,92vw);max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.5)">
+ <div style="font-size:18px;font-weight:700;margin-bottom:6px;color:var(--text);letter-spacing:-0.02em">Новая карточка клиента</div>
+ <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">v414: чтобы не создавать дубль — сначала ищем клиента в базе</div>
+
+ <!-- v414: блок поиска по существующим клиентам -->
+ <div id="route-new-search-wrap">
+ <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Найти клиента в базе</label>
+ <input id="route-new-search" type="text" placeholder="Начните печатать название…" oninput="routeSearchClients(this.value)" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2,#1A1A1C);color:var(--text);margin-bottom:6px;box-sizing:border-box;font-size:14px">
+ <div id="route-new-search-results" style="margin-bottom:12px"></div>
+ </div>
+
+ <!-- v414: блок «выбран существующий клиент» -->
+ <div id="route-new-existing-info" style="display:none;background:rgba(52,199,122,.08);border:1px solid rgba(52,199,122,.3);border-radius:10px;padding:12px 14px;margin-bottom:14px">
+ <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+ <div>
+ <div id="route-new-existing-name" style="font-weight:700;color:var(--text);font-size:14px"></div>
+ <div id="route-new-existing-meta" style="font-size:12px;color:var(--text-soft);margin-top:3px"></div>
+ <div id="route-new-existing-warn" style="font-size:12px;color:#ff9b3d;margin-top:6px;display:none"></div>
+ </div>
+ <button onclick="routeClearExisting()" style="background:transparent;border:1px solid var(--border-faint);color:var(--text-soft);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap">Сменить</button>
+ </div>
+ </div>
+
+ <!-- v414: поле «Название» — показывается только если клиента в базе нет -->
+ <div id="route-new-name-wrap">
  <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Название компании *</label>
  <input id="route-new-name" type="text" placeholder="Roko Almaty" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2,#1A1A1C);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:14px">
  <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Телефон</label>
  <input id="route-new-phone" type="tel" placeholder="+7 777 ..." style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2,#1A1A1C);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:14px">
+ </div>
+
  <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Тариф</label>
  <input id="route-new-tariff" type="text" placeholder="Бизнес 5 лицензий" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2,#1A1A1C);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:14px">
  <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Оператор</label>
  <select id="route-new-operator" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2,#1A1A1C);color:var(--text);margin-bottom:22px;box-sizing:border-box;font-size:14px"></select>
  <div style="display:flex;gap:10px;justify-content:flex-end">
  <button onclick="routeCloseNew()" style="padding:10px 18px;border-radius:10px;border:1px solid var(--ds-glass-border);background:var(--ds-glass-card);color:var(--text);cursor:pointer;font-weight:500">Отмена</button>
- <button onclick="routeCreate()" style="padding:10px 22px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;letter-spacing:-0.01em;box-shadow:0 2px 8px rgba(52,199,122,.35)">Создать</button>
+ <button id="route-new-submit" onclick="routeCreate()" style="padding:10px 22px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;letter-spacing:-0.01em;box-shadow:0 2px 8px rgba(52,199,122,.35)">Создать</button>
  </div>
  </div>
  </div>
@@ -21654,9 +21679,17 @@ async function routeDrop(ev, newStage){
  routeDragCardId = null;
 }
 
+// v414: выбранный из базы клиент при создании новой карточки. null = создаём нового.
+var _routeSelectedClient = null;
+var _routeSearchTimer = null;
+var _ROUTE_STATUS_LABELS = {lead:'лид',sale:'продан',onboarding:'внедряется',active:'активен',paused:'на паузе',churned:'отвалился'};
+
 function routeOpenNew(){
  var sel = document.getElementById('route-new-operator');
- sel.innerHTML = '<option value="">— выбрать —</option>';
+ sel.replaceChildren();
+ var optEmpty = document.createElement('option');
+ optEmpty.value = ''; optEmpty.textContent = '— выбрать —';
+ sel.appendChild(optEmpty);
  routeOperators.forEach(function(o){
   var opt = document.createElement('option');
   opt.value = o.name; opt.textContent = o.name;
@@ -21665,37 +21698,157 @@ function routeOpenNew(){
  document.getElementById('route-new-name').value = '';
  document.getElementById('route-new-phone').value = '';
  document.getElementById('route-new-tariff').value = '';
+ // v414: сброс поиска и выбранного клиента
+ document.getElementById('route-new-search').value = '';
+ document.getElementById('route-new-search-results').replaceChildren();
+ routeClearExisting();
  var m = document.getElementById('route-modal');
  m.style.display = 'flex';
+ setTimeout(function(){ document.getElementById('route-new-search').focus(); }, 50);
 }
 
 function routeCloseNew(){
  document.getElementById('route-modal').style.display = 'none';
 }
 
+// v414: ищем клиентов в базе по части названия. Debounce 250мс чтобы не дёргать API на каждой букве.
+// Используем createElement/textContent — никакого innerHTML с пользовательскими данными,
+// чтобы исключить XSS если в названии компании окажутся спецсимволы.
+function routeSearchClients(query){
+ var q = (query || '').trim();
+ var box = document.getElementById('route-new-search-results');
+ if(_routeSearchTimer) clearTimeout(_routeSearchTimer);
+ if(q.length < 2){ box.replaceChildren(); return; }
+ _routeSearchTimer = setTimeout(function(){
+  sbFetch('/api/clients?search=' + encodeURIComponent(q)).then(function(d){
+   box.replaceChildren();
+   if(!d.ok){
+    var err = document.createElement('div');
+    err.style.cssText = 'font-size:12px;color:#ff6b6b;padding:6px';
+    err.textContent = 'Ошибка поиска';
+    box.appendChild(err);
+    return;
+   }
+   var list = (d.clients || []).slice(0, 8);
+   if(!list.length){
+    var empty = document.createElement('div');
+    empty.style.cssText = 'font-size:12px;color:var(--text-muted);padding:8px 4px';
+    empty.textContent = 'В базе такого клиента нет. Заполните поля ниже — создадим нового.';
+    box.appendChild(empty);
+    return;
+   }
+   list.forEach(function(c){
+    var row = document.createElement('div');
+    row.style.cssText = 'padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;margin-bottom:6px;cursor:pointer;background:var(--surface-2,#1A1A1C);transition:background .15s';
+    row.addEventListener('mouseover', function(){ row.style.background = 'rgba(52,199,122,.08)'; });
+    row.addEventListener('mouseout', function(){ row.style.background = 'var(--surface-2,#1A1A1C)'; });
+    row.addEventListener('click', function(){ routeSelectExisting(c.client_id); });
+    var title = document.createElement('div');
+    title.style.cssText = 'font-weight:600;color:var(--text);font-size:13px';
+    title.textContent = c.company_name || '—';
+    row.appendChild(title);
+    var meta = document.createElement('div');
+    meta.style.cssText = 'font-size:11px;color:var(--text-soft);margin-top:2px';
+    var statusLabel = _ROUTE_STATUS_LABELS[c.status] || c.status || '';
+    meta.textContent = statusLabel + (c.curator_operator ? ' · куратор ' + c.curator_operator : '');
+    row.appendChild(meta);
+    box.appendChild(row);
+   });
+  }).catch(function(e){
+   box.replaceChildren();
+   var err = document.createElement('div');
+   err.style.cssText = 'font-size:12px;color:#ff6b6b;padding:6px';
+   err.textContent = e.message || 'Ошибка сети';
+   box.appendChild(err);
+  });
+ }, 250);
+}
+
+// v414: пользователь кликнул на найденного клиента — фиксируем выбор, прячем поле названия,
+// проверяем нет ли у него уже активной карточки во Внедрении (защита от двойного внедрения).
+async function routeSelectExisting(clientId){
+ try {
+  var d = await sbFetch('/api/clients?client_id=' + encodeURIComponent(clientId));
+  if(!d.ok || !d.clients || !d.clients.length){ alert('Клиент не найден'); return; }
+  var cl = d.clients[0];
+  _routeSelectedClient = cl;
+  document.getElementById('route-new-search-wrap').style.display = 'none';
+  document.getElementById('route-new-name-wrap').style.display = 'none';
+  document.getElementById('route-new-existing-info').style.display = 'block';
+  document.getElementById('route-new-existing-name').textContent = cl.company_name || '';
+  var statusLabel = _ROUTE_STATUS_LABELS[cl.status] || cl.status || '';
+  var meta = statusLabel + (cl.main_phone ? ' · ' + cl.main_phone : '') + (cl.curator_operator ? ' · куратор ' + cl.curator_operator : '');
+  document.getElementById('route-new-existing-meta').textContent = meta;
+  // Проверка дубля: есть ли уже активная карточка во Внедрении у этого клиента
+  var active = routeCards.filter(function(c){ return c.client_id === clientId && c.stage !== 'Архив' && c.stage !== 'Активация'; });
+  var warn = document.getElementById('route-new-existing-warn');
+  if(active.length){
+   warn.style.display = 'block';
+   warn.textContent = 'У клиента уже идёт внедрение (этап «' + active[0].stage + '»). Если создадите новую — будет две карточки в одном канбане.';
+  } else {
+   warn.style.display = 'none';
+   warn.textContent = '';
+  }
+  document.getElementById('route-new-submit').textContent = 'Начать внедрение';
+ } catch(e) {
+  alert('Ошибка: ' + e.message);
+ }
+}
+
+// v414: «Сменить» — возвращаемся к поиску, имя/телефон редактируемые
+function routeClearExisting(){
+ _routeSelectedClient = null;
+ document.getElementById('route-new-search-wrap').style.display = 'block';
+ document.getElementById('route-new-name-wrap').style.display = 'block';
+ document.getElementById('route-new-existing-info').style.display = 'none';
+ document.getElementById('route-new-existing-warn').style.display = 'none';
+ document.getElementById('route-new-submit').textContent = 'Создать';
+}
+
 async function routeCreate(){
- var name = document.getElementById('route-new-name').value.trim();
- var phone = document.getElementById('route-new-phone').value.trim();
  var tariff = document.getElementById('route-new-tariff').value.trim();
  var operator = document.getElementById('route-new-operator').value;
- if(!name){ alert('Укажите название компании'); return; }
  try {
-  // 1) Создать клиента в Реестре
-  var clientData = await sbFetch('/api/clients', {
-   method: 'POST',
-   body: JSON.stringify({
-    company_name: name,
-    main_phone: phone || null,
-    status: 'onboarding',
-    curator_operator: operator || null
-   })
-  });
-  if(!clientData.ok) throw new Error(clientData.error);
-  // 2) Создать карточку Канбана
+  var clientId;
+  if(_routeSelectedClient){
+   // v414: путь «выбран существующий из базы» — клиента не создаём, только карточку.
+   // История (платежи, прошлые карточки, тикеты) автоматически подтянется по client_id.
+   clientId = _routeSelectedClient.client_id;
+   // Если клиент был активным/отвалившимся — переведём его обратно в onboarding,
+   // чтобы он корректно отображался в фильтре «внедряющиеся».
+   if(_routeSelectedClient.status !== 'onboarding'){
+    await sbFetch('/api/clients?client_id=' + encodeURIComponent(clientId), {
+     method: 'PATCH',
+     body: JSON.stringify({ status: 'onboarding', curator_operator: operator || _routeSelectedClient.curator_operator || null })
+    });
+   } else if(operator && operator !== _routeSelectedClient.curator_operator){
+    await sbFetch('/api/clients?client_id=' + encodeURIComponent(clientId), {
+     method: 'PATCH',
+     body: JSON.stringify({ curator_operator: operator })
+    });
+   }
+  } else {
+   // v414: путь «нового клиента нет в базе» — старое поведение: создаём клиента + карточку.
+   var name = document.getElementById('route-new-name').value.trim();
+   var phone = document.getElementById('route-new-phone').value.trim();
+   if(!name){ alert('Укажите название компании или выберите клиента из базы выше'); return; }
+   var clientData = await sbFetch('/api/clients', {
+    method: 'POST',
+    body: JSON.stringify({
+     company_name: name,
+     main_phone: phone || null,
+     status: 'onboarding',
+     curator_operator: operator || null
+    })
+   });
+   if(!clientData.ok) throw new Error(clientData.error);
+   clientId = clientData.client.client_id;
+  }
+  // Создать карточку Канбана (для обоих путей)
   var cardData = await sbFetch('/api/cards', {
    method: 'POST',
    body: JSON.stringify({
-    client_id: clientData.client.client_id,
+    client_id: clientId,
     stage: 'Новый',
     operator: operator || null,
     tariff: tariff || null
