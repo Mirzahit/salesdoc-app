@@ -53,6 +53,21 @@ async function getPipelines(env){
   }));
 }
 
+// v421: помощник — извлечь значение custom field «Источник сделки» (field_id 1134759).
+// В amo там значения типа «Таргет», «Marquiz», «Холодный звонок» и т.п. Менеджеры
+// заполняют его всегда (обязательное поле), поэтому это правда для маркетинговой
+// аналитики — лучше тегов, которые менеджеры часто забывают ставить.
+function _amoLeadSource(lead){
+ var fields = (lead && lead.custom_fields_values) || [];
+ for(var i=0; i<fields.length; i++){
+  if(fields[i].field_id === 1134759){
+   var vals = fields[i].values || [];
+   if(vals.length && vals[0].value) return String(vals[0].value).toLowerCase();
+  }
+ }
+ return '';
+}
+
 async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
   // Получаем pipeline + его статусы
   const pipelines = await getPipelines(env);
@@ -82,31 +97,30 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
     if(page === 5 && batch.length === 250){ truncated = true; }
   }
 
-  // v319 / v323: фильтр по тегу. Поддерживает спец-значения:
-  //   'meta_any' — любой Meta-источник (таргет таблица OR ТАРГЕТ OR marquiz)
-  //   'без тега' / '__notag__' — без любых тегов
-  //   иначе — match по includes
+  // v421: фильтр по custom field «Источник сделки» (field_id 1134759) ВМЕСТО тегов.
+  // Почему: менеджеры заполняют custom field всегда (обязательное поле в карточке amo),
+  // а теги — редко. Из-за этого по тегам получали недосчёт. См. историю расследования 9 vs 4.
+  //
+  // Принимаемые значения tagFilter (имя оставили старое для совместимости с фронтом):
+  //   'meta_any' / 'все meta' — Источник содержит «таргет» или «marquiz»
+  //   'marquiz'               — Источник содержит «marquiz»
+  //   'таргет таблица'        — Источник содержит «таргет таблица»
+  //   'таргет' / 'ТАРГЕТ'     — Источник содержит «таргет» (включая «таргет таблица»)
+  //   'без тега' / '__notag__' — Источник пустой (не заполнен)
+  //   '' / undefined          — без фильтра, считаем все
+  //   иначе                   — фильтр по includes
   let leads = allLeads;
   if(tagFilter){
     const tf = String(tagFilter).toLowerCase().trim();
     if(tf === 'без тега' || tf === '__notag__'){
-      leads = allLeads.filter(l => {
-        const tags = (l._embedded && l._embedded.tags) || [];
-        return tags.length === 0;
-      });
+      leads = allLeads.filter(l => _amoLeadSource(l) === '');
     } else if(tf === 'meta_any' || tf === 'все meta'){
       leads = allLeads.filter(l => {
-        const tags = (l._embedded && l._embedded.tags) || [];
-        return tags.some(t => {
-          const tn = String(t.name||'').toLowerCase();
-          return tn.includes('таргет') || tn.includes('marquiz');
-        });
+        const s = _amoLeadSource(l);
+        return s.includes('таргет') || s.includes('marquiz');
       });
     } else {
-      leads = allLeads.filter(l => {
-        const tags = (l._embedded && l._embedded.tags) || [];
-        return tags.some(t => String(t.name||'').toLowerCase().includes(tf));
-      });
+      leads = allLeads.filter(l => _amoLeadSource(l).includes(tf));
     }
   }
 
