@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v431</title>
+<title>SalesDoc — Финансовый Дашборд v432</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7099,6 +7099,40 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
   <span>Бросьте сюда чтобы удалить</span>
  </div>
  <!-- /ROUTE VIEW -->
+
+ <!-- v432: полноэкранная карта Интеграции. По образцу view-route-card.
+      Слева — поля интеграции, справа — лента событий клиента.
+      Открывается из канбана #intg-sb-list по клику на карточку. -->
+ <div id="view-integration-card" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg,#0B0B0D);overflow:auto">
+  <div style="max-width:1280px;margin:0 auto;padding:18px 24px">
+   <!-- Шапка -->
+   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--border-faint);margin-bottom:18px">
+    <div style="display:flex;align-items:center;gap:14px;min-width:0">
+     <span onclick="intgCloseCard()" title="Назад" style="cursor:pointer;font-size:28px;line-height:1;color:var(--text-soft);user-select:none">&lsaquo;</span>
+     <div style="min-width:0">
+      <div id="intg-card-name" style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+      <div id="intg-card-sub" style="font-size:11px;color:var(--text-muted);margin-top:2px"></div>
+     </div>
+    </div>
+    <div id="intg-card-status-badge" style="font-size:12px;font-weight:700;padding:5px 14px;border-radius:14px"></div>
+   </div>
+
+   <!-- Контент: 2 колонки -->
+   <div style="display:grid;grid-template-columns:340px 1fr;gap:24px">
+    <!-- ЛЕВАЯ: поля -->
+    <aside>
+     <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:10px">Поля интеграции</div>
+     <div id="intg-card-fields" style="font-size:13px"></div>
+    </aside>
+    <!-- ПРАВАЯ: лента -->
+    <section>
+     <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:10px">Лента событий клиента</div>
+     <div id="intg-card-feed" style="font-size:13px"></div>
+    </section>
+   </div>
+  </div>
+ </div>
+ <!-- /INTEGRATION CARD VIEW -->
 
  <!-- v298: Новые клиенты — первые платежи, скорость активации, динамика -->
  <div id="view-newclients" style="display:none">
@@ -18811,6 +18845,15 @@ async function intgSbLoad(){
  }
 }
 
+// v432: канбан-доска как во Внедрении. 5 колонок по статусам. Карточки кликабельные.
+var INTG_STAGES = [
+ { key: 'Новая',    label: 'Новые',     color: '#5489BB' },
+ { key: 'В работе', label: 'В работе',  color: '#FF9F0A' },
+ { key: 'На паузе', label: 'На паузе',  color: '#9E9E9E' },
+ { key: 'Готово',   label: 'Готово',    color: '#34C77A' },
+ { key: 'Отменено', label: 'Отменено',  color: '#D67373' }
+];
+
 function intgSbRender(items){
  var listEl = document.getElementById('intg-sb-list');
  if(!listEl) return;
@@ -18822,55 +18865,241 @@ function intgSbRender(items){
   listEl.appendChild(empty);
   return;
  }
- // Простая таблица: компания, статус, оператор, тип, пакет, дата оплаты
- var STATUS_COLORS = {
-  'Новая': '#5489BB',
-  'В работе': '#FF9F0A',
-  'Готово': '#34C77A',
-  'Отменено': '#D67373',
-  'На паузе': '#9E9E9E'
- };
- var head = document.createElement('div');
- head.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 90px;gap:10px;padding:6px 4px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border-faint)';
- ['Компания','Статус','Тип','Пакет','Оператор','Оплата'].forEach(function(t){
-  var c = document.createElement('div'); c.textContent = t; head.appendChild(c);
- });
- listEl.appendChild(head);
+
+ // Группируем по статусу
+ var byStage = {};
+ INTG_STAGES.forEach(function(s){ byStage[s.key] = []; });
  items.forEach(function(r){
-  var row = document.createElement('div');
-  row.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 90px;gap:10px;padding:8px 4px;font-size:12px;border-bottom:1px dashed var(--border-faint);align-items:center';
-  var name = document.createElement('div');
-  name.style.cssText = 'font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-  name.textContent = r.company_name || '—';
-  name.title = r.company_name || '';
-  row.appendChild(name);
-  var st = document.createElement('div');
-  var stColor = STATUS_COLORS[r.status] || 'var(--text-soft)';
-  st.style.cssText = 'font-size:11px;color:' + stColor + ';font-weight:600';
-  st.textContent = r.status || '—';
-  row.appendChild(st);
-  var type = document.createElement('div');
-  type.style.cssText = 'color:var(--text-soft);font-size:11.5px';
-  type.textContent = r.type || '—';
-  row.appendChild(type);
-  var pkg = document.createElement('div');
-  pkg.style.cssText = 'color:var(--text-soft);font-size:11.5px';
-  pkg.textContent = r.package || '—';
-  row.appendChild(pkg);
-  var op = document.createElement('div');
-  op.style.cssText = 'color:var(--text-soft);font-size:11.5px';
-  op.textContent = r.operator || '— не назначен —';
-  row.appendChild(op);
-  var paid = document.createElement('div');
-  paid.style.cssText = 'color:var(--text-muted);font-size:11px;text-align:right';
-  if(r.date_paid){
-   var d = new Date(r.date_paid);
-   if(!isNaN(d)){
-    paid.textContent = String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
-   }
+  var key = byStage[r.status] !== undefined ? r.status : 'Новая';
+  byStage[key].push(r);
+ });
+
+ // Doska
+ var board = document.createElement('div');
+ board.style.cssText = 'display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:4px';
+
+ INTG_STAGES.forEach(function(stage, idx){
+  var col = document.createElement('div');
+  col.style.cssText = 'background:rgba(120,120,128,.04);border:1px solid var(--border-faint);border-radius:10px;padding:10px;min-height:200px';
+
+  var head = document.createElement('div');
+  head.style.cssText = 'border-top:2px solid ' + stage.color + ';padding:8px 4px 10px;margin:-10px -10px 10px;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center';
+  var title = document.createElement('div');
+  title.style.cssText = 'font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.5px;padding-left:6px';
+  title.textContent = stage.label;
+  head.appendChild(title);
+  var count = document.createElement('div');
+  count.style.cssText = 'font-size:11px;color:var(--text-muted);background:rgba(120,120,128,.10);padding:2px 8px;border-radius:10px;font-weight:600';
+  count.textContent = byStage[stage.key].length;
+  head.appendChild(count);
+  col.appendChild(head);
+
+  var body = document.createElement('div');
+  body.style.cssText = 'display:flex;flex-direction:column;gap:8px';
+
+  if(!byStage[stage.key].length){
+   var emptyCol = document.createElement('div');
+   emptyCol.style.cssText = 'font-size:11px;color:var(--text-muted);font-style:italic;padding:6px 4px;text-align:center';
+   emptyCol.textContent = 'Пусто';
+   body.appendChild(emptyCol);
   }
-  row.appendChild(paid);
-  listEl.appendChild(row);
+
+  byStage[stage.key].forEach(function(r){
+   var card = document.createElement('div');
+   card.style.cssText = 'background:var(--surface-2,#1A1A1C);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:10px 12px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15);transition:transform .15s,border-color .15s';
+   card.addEventListener('mouseover', function(){ card.style.transform = 'translateY(-1px)'; card.style.borderColor = 'rgba(255,255,255,.20)'; });
+   card.addEventListener('mouseout', function(){ card.style.transform = ''; card.style.borderColor = 'rgba(255,255,255,.10)'; });
+   card.addEventListener('click', function(){ intgOpenCard(r.id); });
+
+   var name = document.createElement('div');
+   name.style.cssText = 'font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+   name.textContent = r.company_name || '—';
+   name.title = r.company_name || '';
+   card.appendChild(name);
+
+   if(r.type || r.package){
+    var meta = document.createElement('div');
+    meta.style.cssText = 'font-size:10.5px;color:var(--text-soft);margin-bottom:6px';
+    meta.textContent = [r.type, r.package].filter(Boolean).join(' · ');
+    card.appendChild(meta);
+   }
+
+   var foot = document.createElement('div');
+   foot.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:var(--text-muted);margin-top:4px';
+   var opSpan = document.createElement('span');
+   opSpan.textContent = r.operator || '— не назначен —';
+   if(!r.operator) opSpan.style.color = '#D67373';
+   foot.appendChild(opSpan);
+   if(r.deadline){
+    var dl = document.createElement('span');
+    var d = new Date(r.deadline);
+    if(!isNaN(d)){
+     var today = new Date();
+     var days = Math.ceil((d - today) / (1000*60*60*24));
+     dl.textContent = days < 0 ? 'просрочен' : (days === 0 ? 'сегодня' : ('+' + days + ' дн'));
+     dl.style.color = days < 0 ? '#D67373' : (days < 3 ? '#FF9F0A' : 'var(--text-soft)');
+     foot.appendChild(dl);
+    }
+   }
+   card.appendChild(foot);
+
+   body.appendChild(card);
+  });
+
+  col.appendChild(body);
+  board.appendChild(col);
+ });
+
+ listEl.appendChild(board);
+}
+
+// v432: полноэкранная карта Интеграции — открывается по клику на канбан-карточку.
+// Простой view: слева поля, справа лента событий. Inline-редактирование — позже.
+var _intgCurrentCard = null;
+
+async function intgOpenCard(integrationId){
+ var view = document.getElementById('view-integration-card');
+ if(!view) return;
+ view.style.display = 'block';
+ document.body.style.overflow = 'hidden';
+ // Loading state
+ var nameEl = document.getElementById('intg-card-name');
+ var subEl = document.getElementById('intg-card-sub');
+ if(nameEl) nameEl.textContent = 'Загрузка…';
+ if(subEl) subEl.textContent = '';
+ try {
+  var d = await sbFetch('/api/cards?entity=integration&id=' + encodeURIComponent(integrationId));
+  if(!d.ok || !d.integrations || !d.integrations.length) throw new Error('Не найдено');
+  _intgCurrentCard = d.integrations[0];
+  intgRenderCard(_intgCurrentCard);
+  // Параллельно грузим ленту по client_id
+  if(_intgCurrentCard.client_id){
+   try {
+    var h = await sbFetch('/api/history?client_id=' + encodeURIComponent(_intgCurrentCard.client_id) + '&limit=50');
+    intgRenderCardFeed((h && h.items) || []);
+   } catch(_){ intgRenderCardFeed([]); }
+  } else {
+   intgRenderCardFeed([]);
+  }
+ } catch(e){
+  if(nameEl) nameEl.textContent = 'Ошибка';
+  if(subEl) subEl.textContent = e.message || 'не удалось загрузить';
+ }
+}
+
+function intgCloseCard(){
+ var view = document.getElementById('view-integration-card');
+ if(view) view.style.display = 'none';
+ document.body.style.overflow = '';
+ _intgCurrentCard = null;
+}
+
+function intgRenderCard(card){
+ var nameEl = document.getElementById('intg-card-name');
+ var subEl = document.getElementById('intg-card-sub');
+ var badgeEl = document.getElementById('intg-card-status-badge');
+ var fieldsEl = document.getElementById('intg-card-fields');
+ if(nameEl) nameEl.textContent = card.company_name || '—';
+ if(subEl){
+  var bits = [];
+  if(card.country) bits.push(card.country);
+  if(card.clients && card.clients.company_name) bits.push('клиент: ' + card.clients.client_id || card.client_id);
+  else if(card.client_id) bits.push(card.client_id);
+  bits.push('ID: ' + card.id.slice(0, 8));
+  subEl.textContent = bits.join(' · ');
+ }
+ if(badgeEl){
+  var STATUS_BG = {
+   'Новая': 'rgba(84,137,187,.16)', 'В работе': 'rgba(255,159,10,.18)',
+   'Готово': 'rgba(52,199,122,.18)', 'Отменено': 'rgba(214,115,115,.16)',
+   'На паузе': 'rgba(158,158,158,.18)', 'Архив': 'rgba(120,120,128,.16)'
+  };
+  var STATUS_COLOR = {
+   'Новая': '#5489BB', 'В работе': '#FF9F0A', 'Готово': '#34C77A',
+   'Отменено': '#D67373', 'На паузе': '#9E9E9E', 'Архив': 'var(--text-muted)'
+  };
+  badgeEl.textContent = card.status || '—';
+  badgeEl.style.background = STATUS_BG[card.status] || 'rgba(120,120,128,.16)';
+  badgeEl.style.color = STATUS_COLOR[card.status] || 'var(--text-soft)';
+ }
+
+ // Поля
+ fieldsEl.replaceChildren();
+ function fmtDate(s){
+  if(!s) return '—';
+  var d = new Date(s);
+  if(isNaN(d)) return s;
+  return String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
+ }
+ function addRow(label, value, opts){
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;padding:8px 0;border-bottom:1px solid var(--border-faint);font-size:13px;gap:10px';
+  var lab = document.createElement('div');
+  lab.style.cssText = 'flex:0 0 130px;color:var(--text-soft);font-size:11.5px';
+  lab.textContent = label;
+  var val = document.createElement('div');
+  val.style.cssText = 'flex:1;color:var(--text);min-width:0;word-break:break-word';
+  if(opts && opts.mono) val.style.fontFamily = 'monospace';
+  if(opts && opts.pre) val.style.whiteSpace = 'pre-wrap';
+  val.textContent = value || '—';
+  row.appendChild(lab); row.appendChild(val);
+  fieldsEl.appendChild(row);
+ }
+ addRow('Тип',         card.type);
+ addRow('Пакет',       card.package);
+ addRow('Вид базы',    card.db_type);
+ addRow('Оператор',    card.operator);
+ addRow('Менеджер',    card.manager);
+ addRow('Дата оплаты', fmtDate(card.date_paid));
+ addRow('Взято в работу', fmtDate(card.date_taken));
+ addRow('Срок',        fmtDate(card.deadline));
+ addRow('Исполнено',   fmtDate(card.date_done));
+ addRow('Логин/пароль', card.login_password, { mono: true, pre: true });
+ addRow('Сервер',      card.server, { mono: true });
+ addRow('Контакты',    card.contact_persons, { pre: true });
+ addRow('Комментарий', card.comment, { pre: true });
+}
+
+function intgRenderCardFeed(items){
+ var feedEl = document.getElementById('intg-card-feed');
+ if(!feedEl) return;
+ feedEl.replaceChildren();
+ if(!items.length){
+  var empty = document.createElement('div');
+  empty.style.cssText = 'font-size:12px;color:var(--text-muted);font-style:italic;padding:14px 0';
+  empty.textContent = 'Событий по этому клиенту пока нет.';
+  feedEl.appendChild(empty);
+  return;
+ }
+ items.forEach(function(n){
+  var note = document.createElement('div');
+  note.style.cssText = 'display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-faint)';
+  var ic = document.createElement('div');
+  ic.style.cssText = 'width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;background:rgba(120,120,128,.14);color:var(--text-soft)';
+  var et = n.event_type || 'note';
+  if(et === 'integration_note'){ ic.style.background = 'rgba(255,159,10,.18)'; ic.style.color = '#FF9F0A'; ic.textContent = '⚙'; }
+  else if(et === 'system'){ ic.textContent = '✓'; }
+  else if(et === 'whatsapp'){ ic.style.background = 'rgba(52,199,122,.18)'; ic.style.color = '#34C77A'; ic.textContent = '✉'; }
+  else if(et === 'call'){ ic.textContent = '☎'; }
+  else { ic.textContent = '✎'; }
+  note.appendChild(ic);
+  var body = document.createElement('div');
+  body.style.cssText = 'flex:1;min-width:0';
+  var meta = document.createElement('div');
+  meta.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:3px';
+  var when = '';
+  if(n.created_at){
+   var d = new Date(n.created_at);
+   if(!isNaN(d)) when = d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+  }
+  meta.textContent = when + (n.author ? ' · ' + n.author : '') + (et === 'integration_note' ? ' · от интегратора' : '');
+  body.appendChild(meta);
+  var text = document.createElement('div');
+  text.style.cssText = 'font-size:13px;color:var(--text);white-space:pre-wrap;word-break:break-word';
+  text.textContent = n.text || '';
+  body.appendChild(text);
+  note.appendChild(body);
+  feedEl.appendChild(note);
  });
 }
 
