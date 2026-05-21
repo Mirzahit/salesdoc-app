@@ -8,7 +8,10 @@
 import { sbSelect, sbInsert } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 
-const ALLOWED_EVENTS = new Set(['call','whatsapp','note','stage_change','file','system']);
+// v430: добавлен 'integration_note' — заметки от команды интеграторов.
+// В UI будут рендериться особым стилем (как тикеты в v416-v417), чтобы было
+// видно «это от интегратора, не от оператора внедрения».
+const ALLOWED_EVENTS = new Set(['call','whatsapp','note','stage_change','file','system','integration_note']);
 
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
