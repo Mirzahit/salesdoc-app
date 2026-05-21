@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v427</title>
+<title>SalesDoc — Финансовый Дашборд v428</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -29341,14 +29341,14 @@ function amoRenderFunnel(d){
  + '<div style="font-weight:700;color:' + convColor + ';font-size:13px">Сквозная конверсия (вершина → внедрены): ' + convPct + '%</div>'
  + '</div>';
 
- // v427: блок «Качество данных amo» — показывает на сколько грязные данные.
- // Сейчас один пункт: сделки без тегов. Дальше можно добавить дубли контактов и т.п.
+ // v427/v428: блок «Качество данных amo». Один пункт всегда — сделки без тега.
+ // По кнопке «Проверить чистоту контактов» лениво грузим дубли и опечатки.
  var untagged = d.untagged_leads || [];
+ html += '<div style="margin-top:14px;background:rgba(255,179,64,.06);border:1px solid rgba(255,179,64,.30);border-radius:8px;padding:12px 16px">'
+      + '<div style="font-size:12px;font-weight:600;color:#FFB340;margin-bottom:6px">Качество данных amo</div>'
+      + '<div style="font-size:11px;color:var(--text-soft);margin-bottom:10px">Эти цифры объясняют почему воронка не сходится с Meta-кабинетом 1-в-1. Чем чище amo — тем точнее цифры.</div>';
  if(untagged.length){
-  html += '<div style="margin-top:14px;background:rgba(255,179,64,.06);border:1px solid rgba(255,179,64,.30);border-radius:8px;padding:12px 16px">'
-       + '<div style="font-size:12px;font-weight:600;color:#FFB340;margin-bottom:6px">Качество данных amo</div>'
-       + '<div style="font-size:11px;color:var(--text-soft);margin-bottom:10px">Эти цифры объясняют почему воронка не сходится с Meta-кабинетом 1-в-1. Чем чище amo — тем точнее цифры.</div>'
-       + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0">'
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,179,64,.18)">'
        + '<div><b style="color:var(--text);font-size:14px">' + untagged.length + '</b>'
        + '<span style="color:var(--text-soft);font-size:12px;margin-left:6px">сделок без тега источника</span>'
        + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Менеджер не пометил откуда лид. Из-за этого они не попадают в фильтр «Только Meta».</div>'
@@ -29373,8 +29373,19 @@ function amoRenderFunnel(d){
   if(untagged.length > 50){
    html += '<div style="font-size:11px;color:var(--text-muted);padding:6px 0;text-align:center">Показаны первые 50 из ' + untagged.length + '. Остальные увидишь после обработки этих.</div>';
   }
-  html += '</div></div>';
+  html += '</div>';
  }
+ // v428: ленивая проверка дубликатов контактов и опечаток в номерах
+ html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,179,64,.18)">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+      + '<div><b style="color:var(--text);font-size:13px">Дубликаты контактов и опечатки в номерах</b>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Эти проблемы делают «потерянных» лидов в воронке. Проверка занимает 5-10 секунд (читаем все контакты amo).</div>'
+      + '</div>'
+      + '<button onclick="amoLoadDataQuality(this)" id="amo-dq-btn" style="padding:7px 14px;border-radius:6px;border:1px solid #FFB340;background:transparent;color:#FFB340;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">Проверить →</button>'
+      + '</div>'
+      + '<div id="amo-dq-results" style="margin-top:10px"></div>'
+      + '</div>'
+      + '</div>';
 
  stagesEl.innerHTML = html;
  // v320: рисуем виджет атрибуции
@@ -29382,6 +29393,108 @@ function amoRenderFunnel(d){
  // v326: рисуем честную воронку по телефонам
  if(typeof amoLoadHonestFunnel === 'function') amoLoadHonestFunnel();
 }
+
+// v428: ленивая загрузка проверки качества данных amo (дубли + опечатки в номерах).
+// Запрос тяжёлый (5 страниц по 250 контактов), поэтому только по кнопке.
+window._amoDQCache = null;
+window.amoLoadDataQuality = async function(btn){
+ var box = document.getElementById('amo-dq-results');
+ if(!box) return;
+ if(btn){ btn.disabled = true; btn.textContent = 'Загружаю…'; }
+ try {
+  var d = window._amoDQCache;
+  if(!d || (Date.now() - d.ts > 5*60*1000)){
+   var r = await fetch('/api/amo?action=data_quality&country=' + currentCountry);
+   var json = await r.json();
+   if(json.error) throw new Error(json.error);
+   d = { ts: Date.now(), data: json };
+   window._amoDQCache = d;
+  }
+  amoRenderDataQuality(box, d.data);
+  if(btn){ btn.style.display = 'none'; }
+ } catch(e){
+  box.innerHTML = '<div style="font-size:12px;color:#D67373;padding:8px 0">Ошибка: ' + (e.message || 'не удалось загрузить') + '</div>';
+  if(btn){ btn.disabled = false; btn.textContent = 'Попробовать ещё раз'; }
+ }
+};
+
+function amoRenderDataQuality(box, d){
+ if(!box || !d) return;
+ var subdomain = window._amoSubdomain || 'salesdoctorkz';
+ var dups = d.duplicate_contacts || [];
+ var bads = d.bad_phones || [];
+ var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Проверено контактов: <b>' + (d.contacts_scanned || 0) + '</b>'
+         + (d.truncated ? ' (это первые 1250, в amo больше — но обычно дубли и опечатки везде одинаково)' : '')
+         + '</div>';
+
+ // Блок 1: Дубликаты контактов
+ html += '<div style="padding:8px 0;border-bottom:1px solid rgba(255,179,64,.18)">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+      + '<div><b style="color:var(--text);font-size:13px">' + dups.length + '</b>'
+      + '<span style="color:var(--text-soft);font-size:12px;margin-left:6px">телефонов с двумя и более карточками в amo</span>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'
+      + (dups.length ? 'Открой каждый, объедини карточки (правая панель в amo → «Объединить с похожим»). Сделки автоматически перейдут к одной.' : 'Дубликатов не нашлось — чисто.')
+      + '</div></div>'
+      + (dups.length ? '<a onclick="amoToggleDQList(\'amo-dq-dups-list\',this)" style="color:#FFB340;cursor:pointer;font-weight:600;text-decoration:none;font-size:12px;white-space:nowrap">показать ▾</a>' : '')
+      + '</div>';
+ if(dups.length){
+  html += '<div id="amo-dq-dups-list" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(120,120,128,.04);border-radius:6px;font-size:12px">';
+  dups.slice(0, 50).forEach(function(D){
+   html += '<div style="padding:6px 0;border-bottom:1px dashed var(--border-faint)">'
+        + '<div style="font-family:monospace;font-weight:600;color:var(--text);margin-bottom:4px">' + amoEscXml(D.phone) + ' <span style="color:var(--text-muted);font-weight:400;font-family:inherit">— ' + D.count + ' карточек</span></div>';
+   D.contacts.forEach(function(c){
+    var url = 'https://' + subdomain + '.amocrm.ru/contacts/detail/' + c.id;
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:2px 0 2px 12px">'
+         + '<a href="' + url + '" target="_blank" style="color:var(--accent,#34C77A);text-decoration:none;font-size:11.5px">' + amoEscXml(c.name || '(без имени, только номер)') + '</a>'
+         + '<span style="color:var(--text-muted);font-size:10.5px;white-space:nowrap">' + (c.has_lead ? 'есть сделка' : '<b style="color:#D67373">нет сделки</b>') + ' · raw: ' + amoEscXml(c.raw_phone || '') + '</span>'
+         + '</div>';
+   });
+   html += '</div>';
+  });
+  if(dups.length > 50){
+   html += '<div style="font-size:11px;color:var(--text-muted);padding:6px 0;text-align:center">Показаны первые 50 из ' + dups.length + '.</div>';
+  }
+  html += '</div>';
+ }
+ html += '</div>';
+
+ // Блок 2: Подозрительные номера (опечатки)
+ html += '<div style="padding:8px 0">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+      + '<div><b style="color:var(--text);font-size:13px">' + bads.length + '</b>'
+      + '<span style="color:var(--text-soft);font-size:12px;margin-left:6px">контактов с подозрительной длиной номера</span>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'
+      + (bads.length ? 'Номер не 10 и не 11 цифр (похоже опечатка). Поиск по телефону пропускает их. Открой и исправь.' : 'Все номера в норме (10-11 цифр).')
+      + '</div></div>'
+      + (bads.length ? '<a onclick="amoToggleDQList(\'amo-dq-bads-list\',this)" style="color:#FFB340;cursor:pointer;font-weight:600;text-decoration:none;font-size:12px;white-space:nowrap">показать ▾</a>' : '')
+      + '</div>';
+ if(bads.length){
+  html += '<div id="amo-dq-bads-list" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(120,120,128,.04);border-radius:6px;font-size:12px">';
+  bads.slice(0, 50).forEach(function(B){
+   var url = 'https://' + subdomain + '.amocrm.ru/contacts/detail/' + B.contact_id;
+   html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0;border-bottom:1px dashed var(--border-faint)">'
+        + '<a href="' + url + '" target="_blank" style="color:var(--accent,#34C77A);text-decoration:none;font-weight:600">' + amoEscXml(B.contact_name || '(без имени)') + '</a>'
+        + '<span style="font-family:monospace;color:#D67373;font-size:11.5px">' + amoEscXml(B.raw_phone || '') + ' <span style="color:var(--text-muted)">(' + B.length + ' цифр)</span></span>'
+        + '</div>';
+  });
+  if(bads.length > 50){
+   html += '<div style="font-size:11px;color:var(--text-muted);padding:6px 0;text-align:center">Показаны первые 50 из ' + bads.length + '.</div>';
+  }
+  html += '</div>';
+ }
+ html += '</div>';
+
+ box.innerHTML = html;
+}
+
+// Общий переключатель для подсписков в блоке «Качество данных»
+window.amoToggleDQList = function(elId, linkEl){
+ var el = document.getElementById(elId);
+ if(!el) return;
+ var hidden = el.style.display === 'none' || !el.style.display;
+ el.style.display = hidden ? 'block' : 'none';
+ if(linkEl) linkEl.textContent = hidden ? 'скрыть ▴' : 'показать ▾';
+};
 
 // v427: показать/скрыть список сделок без тегов
 window.amoToggleUntaggedList = function(linkEl){

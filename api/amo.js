@@ -708,6 +708,97 @@ export default async function handler(req, res){
           : `Применено: тег «${tagName}» к ${appliedCount} сделкам. Ошибок: ${appliedErrors.length}.`
       });
     }
+    if(action === 'data_quality'){
+      // v428: проверка «грязи» в amo для блока «Качество данных» дашборда.
+      // Цель — показать оператору конкретные точки для чистки:
+      //   1) Дубликаты контактов: один номер → несколько контактов в amo.
+      //      Реальный кейс: +77753097316 → contact 53757004 (пустой) + 53757042 (Адил).
+      //   2) Подозрительные номера: длина не 10 (без 7) и не 11 (с 7) → ввели с опечаткой.
+      //      Реальный кейс: «Мансур» с +7747967614 (10 цифр, пропущена вторая 7).
+      // Метод: тянем контакты постранично (до 5 стр = 1250), нормализуем телефоны,
+      // группируем. Передачи периода нет — баг качества данных не зависит от периода.
+      function normPhone(raw){
+        const digits = String(raw||'').replace(/\D/g, '');
+        if(!digits) return '';
+        // Казахстан: 8XXXXXXXXXX → 7XXXXXXXXXX, 10 цифр (без кода) → добавим 7 для группировки
+        let n = digits;
+        if(n.length === 11 && n[0] === '8') n = '7' + n.slice(1);
+        return n;
+      }
+      const phoneIndex = new Map(); // norm → [{ contact_id, contact_name, raw_phone, has_lead }]
+      const badPhones = []; // длина не 10/11
+      let pagesFetched = 0;
+      let totalContacts = 0;
+      let truncated = false;
+      for(let page = 1; page <= 5; page++){
+        try {
+          const data = await amoFetch(`/contacts?with=leads&order[updated_at]=desc&limit=250&page=${page}`, env);
+          if(!data) break;
+          const batch = (data._embedded && data._embedded.contacts) || [];
+          if(!batch.length) break;
+          pagesFetched++;
+          totalContacts += batch.length;
+          batch.forEach(c => {
+            const phoneField = (c.custom_fields_values || []).find(f => f.field_code === 'PHONE');
+            const rawPhones = phoneField ? (phoneField.values || []).map(v => v.value).filter(Boolean) : [];
+            const hasLead = !!((c._embedded && c._embedded.leads) || []).length;
+            rawPhones.forEach(rp => {
+              const n = normPhone(rp);
+              if(!n) return;
+              // Подозрительный номер: длина не 10 (без кода страны) и не 11 (с 7)
+              if(n.length !== 10 && n.length !== 11){
+                badPhones.push({ contact_id: c.id, contact_name: c.name, raw_phone: rp, normalized: n, length: n.length });
+              }
+              const key = n.length >= 10 ? n.slice(-10) : n; // группируем по последним 10 цифр
+              if(!phoneIndex.has(key)) phoneIndex.set(key, []);
+              phoneIndex.get(key).push({
+                contact_id: c.id,
+                contact_name: c.name || '',
+                raw_phone: rp,
+                has_lead: hasLead
+              });
+            });
+          });
+          if(batch.length < 250) break;
+          if(page === 5 && batch.length === 250) truncated = true;
+        } catch(e){
+          return res.status(500).json({ error: 'fetch contacts failed page ' + page + ': ' + e.message });
+        }
+      }
+      // Дубликаты: ключи где >1 контакта
+      const duplicateContacts = [];
+      phoneIndex.forEach((arr, key) => {
+        // Дедуп по contact_id (один контакт может иметь несколько телефонов которые после нормализации совпадают)
+        const uniqIds = {};
+        arr.forEach(x => { if(!uniqIds[x.contact_id]) uniqIds[x.contact_id] = x; });
+        const uniqArr = Object.values(uniqIds);
+        if(uniqArr.length > 1){
+          duplicateContacts.push({
+            phone: '+' + key,
+            count: uniqArr.length,
+            contacts: uniqArr.map(x => ({
+              id: x.contact_id, name: x.contact_name, raw_phone: x.raw_phone, has_lead: x.has_lead
+            }))
+          });
+        }
+      });
+      duplicateContacts.sort((a, b) => b.count - a.count);
+      // Подозрительные номера: дедуп по contact_id
+      const badByContact = {};
+      badPhones.forEach(b => { badByContact[b.contact_id] = b; });
+      const badList = Object.values(badByContact).sort((a, b) => a.length - b.length);
+
+      return res.status(200).json({
+        contacts_scanned: totalContacts,
+        pages_fetched: pagesFetched,
+        truncated: truncated,
+        duplicate_contacts_count: duplicateContacts.length,
+        duplicate_contacts: duplicateContacts.slice(0, 100),
+        bad_phones_count: badList.length,
+        bad_phones: badList.slice(0, 100),
+        message: 'Проверка контактов amo. Дубликаты — телефоны на которые в amo несколько карточек. Подозрительные номера — короче/длиннее обычного, скорее всего опечатка.'
+      });
+    }
     if(action === 'phone_lookup'){
       // v317: debug — поиск контакта/лида в amo по конкретному телефону, в разных форматах
       const phone = String(req.query.phone || '').replace(/\D/g, '');
