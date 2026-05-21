@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v415</title>
+<title>SalesDoc — Финансовый Дашборд v416</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22181,6 +22181,23 @@ async function ticketsCreate(){
    })
   });
   if(!d.ok) throw new Error(d.error || 'create failed');
+  // v416: пишем событие в ленту истории клиента — чтобы в карточке клиента было видно
+  // «здесь оператор завёл тикет такой-то», и по клику можно было сразу провалиться в этот тикет.
+  // Маркер 'ticket:<uuid>' кладём в attachment_url — это поле уже есть в card_history,
+  // не нужна миграция БД. Рендер ленты в _buildFeedNote распознаёт префикс.
+  if(d.ticket && d.ticket.id){
+   try {
+    await sbFetch('/api/history', {
+     method:'POST',
+     body: JSON.stringify({
+      client_id: client_id,
+      event_type: 'system',
+      text: 'Заведён тикет: ' + title,
+      attachment_url: 'ticket:' + d.ticket.id
+     })
+    });
+   } catch(_){ /* история не критична — тикет уже создан, не валим UI */ }
+  }
   ticketsCloseNew();
   ticketsLoad();
  } catch(e){
@@ -23448,7 +23465,12 @@ async function _routeRenderFeed(){
    var et = (n.event_type || 'note').toLowerCase();
    var isStage = et === 'stage_change';
    var isWZ = et === 'whatsapp';
-   if(isStage){
+   // v416: запись о созданном тикете распознаём по префиксу 'ticket:' в attachment_url.
+   // Рисуем особым блоком и делаем кликабельной — клик открывает сам тикет.
+   var isTicket = (n.attachment_url || '').indexOf('ticket:') === 0;
+   if(isTicket){
+    feedEl.appendChild(_buildFeedTicket(n));
+   } else if(isStage){
     feedEl.appendChild(_buildFeedStageChange(n));
    } else if(isWZ){
     feedEl.appendChild(_buildFeedWZ(n));
@@ -23530,6 +23552,51 @@ function _buildFeedStageChange(n){
   sc.appendChild(pillStage);
  }
  return sc;
+}
+
+// v416: запись о тикете в ленте карточки клиента. Кликабельна — открывает сам тикет.
+// attachment_url хранит маркер 'ticket:<UUID>' — отсюда достаём id для открытия.
+function _buildFeedTicket(n){
+ var ticketId = (n.attachment_url || '').replace(/^ticket:/, '');
+ var note = document.createElement('div');
+ note.className = 'amocard-note';
+ note.style.cursor = 'pointer';
+ note.title = 'Открыть карточку тикета';
+ note.addEventListener('mouseover', function(){ note.style.background = 'rgba(255,159,10,.06)'; });
+ note.addEventListener('mouseout', function(){ note.style.background = ''; });
+ note.addEventListener('click', function(){
+  // Закрываем карточку клиента и открываем тикет
+  if(typeof routeCloseCard === 'function') routeCloseCard();
+  if(typeof ticketsOpen === 'function') ticketsOpen(ticketId);
+ });
+ var ic = document.createElement('div');
+ ic.className = 'amocard-feed-icon';
+ ic.style.background = 'var(--amocard-amber-bg, rgba(255,159,10,.14))';
+ ic.style.color = 'var(--amocard-amber, #FF9F0A)';
+ ic.textContent = '!';
+ note.appendChild(ic);
+ var body = document.createElement('div'); body.className = 'amocard-feed-body';
+ var meta = document.createElement('div'); meta.className = 'amocard-feed-meta';
+ var dt = document.createElement('span'); dt.textContent = _fmtFeedDate(n.created_at); meta.appendChild(dt);
+ if(n.author){
+  var dot = document.createElement('span'); dot.className = 'amocard-dot'; meta.appendChild(dot);
+  var who = document.createElement('span'); who.className = 'amocard-who'; who.textContent = '— ' + n.author; meta.appendChild(who);
+ }
+ var tag = document.createElement('span'); tag.className = 'amocard-dot'; meta.appendChild(tag);
+ var label = document.createElement('span');
+ label.textContent = 'Тикет';
+ label.style.cssText = 'background:rgba(255,159,10,.14);color:#FF9F0A;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600;letter-spacing:.3px;text-transform:uppercase';
+ meta.appendChild(label);
+ body.appendChild(meta);
+ var text = document.createElement('div'); text.className = 'amocard-feed-text';
+ text.textContent = n.text || 'Тикет создан';
+ body.appendChild(text);
+ var hint = document.createElement('div');
+ hint.style.cssText = 'font-size:11px;color:var(--amocard-text-soft);margin-top:4px';
+ hint.textContent = 'Открыть тикет →';
+ body.appendChild(hint);
+ note.appendChild(body);
+ return note;
 }
 
 // Показывает базовые данные клиента из Supabase (от бота) пока amo не загружено.
