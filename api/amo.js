@@ -513,10 +513,18 @@ export default async function handler(req, res){
         if(processed >= 60) break; // safety
         processed++;
         try {
-          const r = await amoFetch(`/contacts?query=${encodeURIComponent(phone)}&limit=1&with=leads`, env);
+          // v426 FIX: limit=10 (было 1) — в amo часто есть дубликаты контактов на один телефон,
+          // первый может быть «пустым» (просто номер вместо имени, без сделок), а сделка
+          // привязана ко второму. Берём ВСЕ контакты и собираем все их leadIds.
+          // Реальный кейс: +77753097316 → contact 53757004 (пустой) + contact 53757042 (Адил со сделкой).
+          // С limit=1 наш код брал 53757004 и записывал лида как «потерянный» — это была ошибка.
+          const r = await amoFetch(`/contacts?query=${encodeURIComponent(phone)}&limit=10&with=leads`, env);
           const contacts = (r && r._embedded && r._embedded.contacts) || [];
           if(!contacts.length){ sheetNotFound.push({phone}); continue; }
-          const leadIds = ((contacts[0]._embedded && contacts[0]._embedded.leads) || []).map(l => l.id);
+          const leadIds = [];
+          for(const c of contacts){
+            ((c._embedded && c._embedded.leads) || []).forEach(l => { if(!leadIds.includes(l.id)) leadIds.push(l.id); });
+          }
           if(!leadIds.length){ sheetNotFound.push({phone, contact_id: contacts[0].id}); continue; }
           // Берём первую сделку — её статус
           const leadId = leadIds[0];
@@ -607,12 +615,15 @@ export default async function handler(req, res){
         if(processed >= maxProcess) break;
         processed++;
         try {
-          // Поиск контакта по телефону
-          const contactsR = await amoFetch(`/contacts?query=${encodeURIComponent(phone)}&limit=1&with=leads`, env);
+          // v426 FIX: limit=10 — собираем сделки со всех дубликатов контактов на этот номер
+          // (в amo часто есть пустой контакт «77...» + настоящий с именем — сделка у второго).
+          const contactsR = await amoFetch(`/contacts?query=${encodeURIComponent(phone)}&limit=10&with=leads`, env);
           const contacts = (contactsR && contactsR._embedded && contactsR._embedded.contacts) || [];
           if(!contacts.length){ results.not_found.push({phone}); continue; }
-          // Берём связанные сделки
-          const leadIds = ((contacts[0]._embedded && contacts[0]._embedded.leads) || []).map(l => l.id);
+          const leadIds = [];
+          for(const c of contacts){
+            ((c._embedded && c._embedded.leads) || []).forEach(l => { if(!leadIds.includes(l.id)) leadIds.push(l.id); });
+          }
           if(!leadIds.length){ results.not_found.push({phone, contact_id: contacts[0].id}); continue; }
           // Берём первую (главную) сделку
           const leadId = leadIds[0];
