@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v434</title>
+<title>SalesDoc — Финансовый Дашборд v435</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5415,8 +5415,9 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 
  <!-- v430: блок новых интеграций (источник — наша база Supabase).
       Сюда попадают: автоматом при оплате «Нов интеграция» от payment_bot
-      + вручную добавленные через приложение. Архив из Google-таблицы остаётся ниже. -->
- <div id="intg-sb-block" style="margin-bottom:20px;background:rgba(127,184,158,.05);border:1px solid rgba(127,184,158,.25);border-radius:10px;padding:14px 18px">
+      + вручную добавленные через приложение. Архив из Google-таблицы остаётся ниже.
+      v435: убран зелёный фон/рамка — без обёртки. -->
+ <div id="intg-sb-block" style="margin-bottom:20px">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
    <div>
     <div style="font-size:13px;font-weight:600;color:var(--text)">Новые интеграции (из приложения)</div>
@@ -18876,13 +18877,17 @@ function intgSbRender(items){
 
  // v433: используем те же CSS-классы что и канбан Маршрута/Поддержки —
  // route-col-amo для колонок, .tk-card для карточек. Чтоб выглядело точно так же.
- var html = '<div class="route-kanban" style="display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:10px;margin-top:4px">';
+ // v435: ширина колонок 280px+ (как в Маршруте), gap 14px. max-height колонки
+ // снимаем через style override (родительский класс ставит max-height:calc(100vh-280px)
+ // что добавляет вертикальный скроллбар внутри — пользователю не нравится).
+ var html = '<div class="route-kanban" style="display:grid;grid-template-columns:repeat(5,minmax(280px,1fr));gap:14px;margin-top:4px">';
  INTG_STAGES.forEach(function(stage, sIdx){
-  html += '<div class="route-col-amo route-col s' + (sIdx + 1) + '" data-intg-stage="' + stage.key + '" style="--route-col-color:' + stage.color + '">';
+  html += '<div class="route-col-amo route-col s' + (sIdx + 1) + '" data-intg-stage="' + stage.key + '" style="--route-col-color:' + stage.color + ';max-height:none">';
   html += '<div class="route-col-amo-head">';
   html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage.label + '</div><div class="route-col-amo-count">' + byStage[stage.key].length + '</div></div>';
   html += '</div>';
-  html += '<div class="route-col-amo-body">';
+  // v435: убираем внутренний скролл колонки — overflow:visible вместо auto
+  html += '<div class="route-col-amo-body" style="overflow:visible">';
   if(!byStage[stage.key].length){
    html += '<div class="route-col-amo-empty">Пусто</div>';
   } else {
