@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v426</title>
+<title>SalesDoc — Финансовый Дашборд v427</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -29160,6 +29160,7 @@ function amoBuildUnifiedFunnel(amoData, metaData, period){
  amo_lost: amoData.lost_count || 0,
  amo_tag_counts: amoData.tag_counts || null,
  leads_by_step: amoData.leads_by_step || null, // v423: списки сделок для раскрывающего блока
+ untagged_leads: amoData.untagged_leads || null, // v427: сделки без тегов для блока «Качество данных»
  meta_leads_count: metaLeadsCount,
  period: period,
  period_label: periodLabels[period] || period
@@ -29340,12 +29341,56 @@ function amoRenderFunnel(d){
  + '<div style="font-weight:700;color:' + convColor + ';font-size:13px">Сквозная конверсия (вершина → внедрены): ' + convPct + '%</div>'
  + '</div>';
 
+ // v427: блок «Качество данных amo» — показывает на сколько грязные данные.
+ // Сейчас один пункт: сделки без тегов. Дальше можно добавить дубли контактов и т.п.
+ var untagged = d.untagged_leads || [];
+ if(untagged.length){
+  html += '<div style="margin-top:14px;background:rgba(255,179,64,.06);border:1px solid rgba(255,179,64,.30);border-radius:8px;padding:12px 16px">'
+       + '<div style="font-size:12px;font-weight:600;color:#FFB340;margin-bottom:6px">Качество данных amo</div>'
+       + '<div style="font-size:11px;color:var(--text-soft);margin-bottom:10px">Эти цифры объясняют почему воронка не сходится с Meta-кабинетом 1-в-1. Чем чище amo — тем точнее цифры.</div>'
+       + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0">'
+       + '<div><b style="color:var(--text);font-size:14px">' + untagged.length + '</b>'
+       + '<span style="color:var(--text-soft);font-size:12px;margin-left:6px">сделок без тега источника</span>'
+       + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Менеджер не пометил откуда лид. Из-за этого они не попадают в фильтр «Только Meta».</div>'
+       + '</div>'
+       + '<a onclick="amoToggleUntaggedList(this)" style="color:#FFB340;cursor:pointer;font-weight:600;text-decoration:none;font-size:12px;white-space:nowrap">показать список ▾</a>'
+       + '</div>'
+       + '<div id="amo-untagged-list" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(120,120,128,.04);border-radius:6px;font-size:12px">'
+       + '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Кликни на компанию чтобы открыть в amo и поставить тег. Подсказка по тегам: «таргет таблица» для лидов из Meta Lead Forms, «marquiz» для квиза, оставить без тега если это холодный звонок или партнёр.</div>';
+  untagged.slice(0, 50).forEach(function(L){
+   var when = '';
+   if(L.created_at){
+    var dt = new Date(L.created_at * 1000);
+    when = String(dt.getDate()).padStart(2,'0') + '.' + String(dt.getMonth()+1).padStart(2,'0') + '.' + dt.getFullYear();
+   }
+   var amoUrl = 'https://' + (window._amoSubdomain || 'salesdoctorkz') + '.amocrm.ru/leads/detail/' + L.id;
+   html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-bottom:1px dashed var(--border-faint)">'
+        + '<a href="' + amoUrl + '" target="_blank" style="color:var(--accent,#34C77A);text-decoration:none;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + amoEscXml(L.name) + '">' + amoEscXml(L.name) + '</a>'
+        + '<span style="color:var(--text-muted);font-size:11px;white-space:nowrap">' + when + '</span>'
+        + '<span style="color:var(--text-soft);font-size:11px;white-space:nowrap" title="Сейчас на этапе">→ ' + amoEscXml(L.current_stage || '?') + '</span>'
+        + '</div>';
+  });
+  if(untagged.length > 50){
+   html += '<div style="font-size:11px;color:var(--text-muted);padding:6px 0;text-align:center">Показаны первые 50 из ' + untagged.length + '. Остальные увидишь после обработки этих.</div>';
+  }
+  html += '</div></div>';
+ }
+
  stagesEl.innerHTML = html;
  // v320: рисуем виджет атрибуции
  if(typeof amoRenderAttribution === 'function') amoRenderAttribution(d);
  // v326: рисуем честную воронку по телефонам
  if(typeof amoLoadHonestFunnel === 'function') amoLoadHonestFunnel();
 }
+
+// v427: показать/скрыть список сделок без тегов
+window.amoToggleUntaggedList = function(linkEl){
+ var box = document.getElementById('amo-untagged-list');
+ if(!box) return;
+ var hidden = box.style.display === 'none' || !box.style.display;
+ box.style.display = hidden ? 'block' : 'none';
+ if(linkEl) linkEl.textContent = hidden ? 'скрыть список ▴' : 'показать список ▾';
+};
 
 // v424: показать/скрыть строку со списком «не попавших в amo» телефонов
 window.amoToggleNotFoundList = function(linkEl){

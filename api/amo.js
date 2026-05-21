@@ -229,6 +229,24 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
   const stPaid = findStage(/счет.*оплач|оплач.*счет|оплачен.*работ/);
   if(stPaid) leadsByStep.paid = _leadsCumulativeFor(stPaid.id);
 
+  // v427: «Качество данных» — список самих сделок без тегов, чтобы оператор мог
+  // открыть каждую в amo и поставить тег. Это блок дашборда «грязь в amo».
+  const stageNameById = {};
+  sortedStages.forEach(s => { stageNameById[s.id] = s.name; });
+  const untaggedLeads = allLeads
+   .filter(l => {
+    const tags = (l._embedded && l._embedded.tags) || [];
+    return tags.length === 0;
+   })
+   .map(l => ({
+    id: l.id,
+    name: l.name || '(без названия)',
+    current_stage: stageNameById[l.status_id] || '?',
+    created_at: l.created_at,
+    price: l.price || 0
+   }))
+   .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+
   // v320: распределение по тегам — для атрибуции источников лидов
   const tagCounts = { 'таргет таблица': 0, 'ТАРГЕТ': 0, 'marquiz': 0, '__without_tag__': 0 };
   let _accountedByTag = 0;
@@ -256,7 +274,8 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
     tag_counts: tagCounts,
     stages: stages,
     logical_flow: logicalFlow,
-    leads_by_step: leadsByStep // v422: списки сделок по логическим шагам — для отладки
+    leads_by_step: leadsByStep, // v422: списки сделок по логическим шагам — для отладки
+    untagged_leads: untaggedLeads // v427: список сделок без тегов — для блока «Качество данных»
   };
 }
 
