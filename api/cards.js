@@ -56,12 +56,16 @@ export default async function handler(req, res) {
     // v378: тикет-система склеена в /api/cards (лимит 12 функций Vercel).
     // entity=ticket → CRUD по таблице tickets вместо kanban_cards.
     // entity=ticket_comment → CRUD по таблице ticket_comments (v394).
+    // v430: entity=integration → CRUD по таблице integrations (карты процесса интеграции).
     const entity = (req.query && (req.query.entity || req.query.kind) || '').toLowerCase();
     if (entity === 'ticket') {
       return await handleTicketsRoute(req, res);
     }
     if (entity === 'ticket_comment') {
       return await handleTicketCommentsRoute(req, res);
+    }
+    if (entity === 'integration') {
+      return await handleIntegrationsRoute(req, res);
     }
     if (req.method === 'GET') {
       const { id, operator, stage, country } = req.query || {};
@@ -483,6 +487,127 @@ async function handleTicketsRoute(req, res) {
     });
     if (!result.length) return res.status(404).json({ ok: false, error: 'тикет не найден' });
     return res.status(200).json({ ok: true, ticket: result[0] });
+  }
+
+  return res.status(405).json({ ok: false, error: 'method not allowed' });
+}
+
+// =============================================================================
+// v430: INTEGRATIONS — карты процесса интеграции 1С/банк/касса/...
+// Архитектура: client_id из clients = главная карта; integrations = временные
+// карты привязанные к клиенту. См. memory/project_client_card_architecture.md
+//
+// GET    /api/cards?entity=integration                  → все активные (status != 'Архив')
+// GET    /api/cards?entity=integration&id=UUID          → одна
+// GET    /api/cards?entity=integration&client_id=X      → интеграции клиента (включая архив)
+// GET    /api/cards?entity=integration&operator=Иван    → мои
+// GET    /api/cards?entity=integration&status=Готово    → по статусу
+// GET    /api/cards?entity=integration&country=KZ       → по стране
+// POST   /api/cards?entity=integration                  → создать
+// PATCH  /api/cards?entity=integration&id=UUID          → изменить
+// DELETE /api/cards?entity=integration&id=UUID          → архивировать (status='Архив')
+// =============================================================================
+
+const INTEGRATION_STATUSES = ['Новая','В работе','Готово','Отменено','На паузе','Архив'];
+// Type и Package оставлены свободными — у интеграторов могут появляться новые
+// варианты, не хочется блокировать ввод и каждый раз ходить править код.
+// Валидируем только то что точно зафиксировано (status, country).
+
+async function handleIntegrationsRoute(req, res) {
+  if (req.method === 'GET') {
+    const { id, client_id, operator, status, country, type, package: pkg, include_archive } = req.query || {};
+    const params = {
+      select: '*,clients(company_name,main_phone,curator_operator,status)',
+      order: 'created_at.desc'
+    };
+    if (id) params['id'] = 'eq.' + id;
+    if (client_id) {
+      // Для конкретного клиента ВСЕГДА показываем и архив (нужно для истории клиента)
+      params['client_id'] = 'eq.' + client_id;
+    } else {
+      // На общей доске по умолчанию архив прячем (если явно не попросили)
+      if (!status && include_archive !== '1') params['status'] = 'neq.Архив';
+    }
+    if (operator) params['operator'] = 'eq.' + operator;
+    if (status) params['status'] = 'eq.' + status;
+    if (country) params['country'] = 'eq.' + country;
+    if (type) params['type'] = 'eq.' + type;
+    if (pkg) params['package'] = 'eq.' + pkg;
+    const data = await sbSelect('integrations', params);
+    return res.status(200).json({ ok: true, count: data.length, integrations: data });
+  }
+
+  if (req.method === 'POST') {
+    const body = await readBody(req);
+    if (!body.company_name || !String(body.company_name).trim()) {
+      return res.status(400).json({ ok: false, error: 'company_name обязателен' });
+    }
+    const country = String(body.country || 'KZ').toUpperCase();
+    if (!ALLOWED_COUNTRIES.includes(country)) {
+      return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+    }
+    const statusVal = body.status || 'Новая';
+    if (!INTEGRATION_STATUSES.includes(statusVal)) {
+      return res.status(400).json({ ok: false, error: 'status должен быть один из: ' + INTEGRATION_STATUSES.join(', ') });
+    }
+    const row = {
+      client_id: body.client_id || null,
+      company_name: String(body.company_name).trim(),
+      country: country,
+      status: statusVal,
+      type: body.type || null,
+      package: body.package || null,
+      db_type: body.db_type || null,
+      operator: body.operator || null,
+      manager: body.manager || null,
+      date_paid: body.date_paid || null,
+      date_taken: body.date_taken || null,
+      deadline: body.deadline || null,
+      date_done: body.date_done || null,
+      login_password: body.login_password || null,
+      server: body.server || null,
+      contact_persons: body.contact_persons || null,
+      comment: body.comment || null,
+      sheet_row: body.sheet_row || null
+    };
+    const result = await sbInsert('integrations', row);
+    return res.status(201).json({ ok: true, integration: result[0] });
+  }
+
+  if (req.method === 'PATCH') {
+    const { id } = req.query || {};
+    if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
+    const rawBody = await readBody(req);
+    // Whitelist изменяемых полей. Защита от случайной перезаписи id/client_id/created_at.
+    const ALLOWED_FIELDS = ['company_name','status','type','package','db_type','operator','manager',
+                            'date_paid','date_taken','deadline','date_done',
+                            'login_password','server','contact_persons','comment','country'];
+    const patch = {};
+    Object.keys(rawBody).forEach(k => {
+      if (ALLOWED_FIELDS.includes(k)) patch[k] = rawBody[k];
+    });
+    if (patch.status && !INTEGRATION_STATUSES.includes(patch.status)) {
+      return res.status(400).json({ ok: false, error: 'status должен быть один из: ' + INTEGRATION_STATUSES.join(', ') });
+    }
+    if (patch.country && !ALLOWED_COUNTRIES.includes(patch.country)) {
+      return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+    }
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ ok: false, error: 'нечего обновлять' });
+    }
+    // updated_at обновляется триггером БД, тут не трогаем
+    const result = await sbUpdate('integrations', { id: 'eq.' + id }, patch);
+    if (!result.length) return res.status(404).json({ ok: false, error: 'интеграция не найдена' });
+    return res.status(200).json({ ok: true, integration: result[0] });
+  }
+
+  if (req.method === 'DELETE') {
+    const { id } = req.query || {};
+    if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
+    // Soft delete — переводим в статус Архив, ничего не теряем
+    const result = await sbUpdate('integrations', { id: 'eq.' + id }, { status: 'Архив' });
+    if (!result.length) return res.status(404).json({ ok: false, error: 'интеграция не найдена' });
+    return res.status(200).json({ ok: true, integration: result[0] });
   }
 
   return res.status(405).json({ ok: false, error: 'method not allowed' });
