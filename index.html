@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v419</title>
+<title>SalesDoc — Финансовый Дашборд v420</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -23258,10 +23258,15 @@ async function _routeAddNote(){
  } catch(e){ alert('Ошибка: ' + e.message); }
 }
 
+// v420: таб «Контакт» — общие поля + контакт из amoCRM (если привязан lead_id)
+// + ответственный со стороны клиента по внедрению (operator добавляет через плюсик).
 function _routeRenderContact(){
  var body = document.getElementById('route-card-body');
- if(!_routeCurrentCard){ body.innerHTML = ''; return; }
+ if(!_routeCurrentCard){ body.replaceChildren(); return; }
  var cl = _routeCurrentCard.clients || {};
+ body.replaceChildren();
+
+ // ── 1) Общие поля
  var rows = [
   ['Компания', cl.company_name],
   ['Телефон', cl.main_phone],
@@ -23273,12 +23278,256 @@ function _routeRenderContact(){
   ['Создан', _routeCurrentCard.created_at ? new Date(_routeCurrentCard.created_at).toLocaleDateString('ru-RU') : '—'],
   ['ID клиента', _routeCurrentCard.client_id]
  ];
- body.innerHTML = rows.map(function(r){
-  return '<div style="display:flex;padding:8px 0;border-bottom:1px solid var(--border-faint);font-size:13px">'
-   + '<div style="flex:0 0 130px;color:var(--text-soft)">' + r[0] + '</div>'
-   + '<div style="flex:1;color:var(--text)">' + _escHtml(r[1] || '—') + '</div>'
-   + '</div>';
- }).join('');
+ rows.forEach(function(r){
+  var rowEl = document.createElement('div');
+  rowEl.style.cssText = 'display:flex;padding:8px 0;border-bottom:1px solid var(--border-faint);font-size:13px';
+  var lab = document.createElement('div');
+  lab.style.cssText = 'flex:0 0 130px;color:var(--text-soft)';
+  lab.textContent = r[0];
+  var val = document.createElement('div');
+  val.style.cssText = 'flex:1;color:var(--text)';
+  val.textContent = r[1] || '—';
+  rowEl.appendChild(lab); rowEl.appendChild(val);
+  body.appendChild(rowEl);
+ });
+
+ // ── 2) Контейнер для контактов: основной (amo) + ответственный по внедрению
+ var contactsWrap = document.createElement('div');
+ contactsWrap.style.cssText = 'margin-top:18px';
+ body.appendChild(contactsWrap);
+
+ var header = document.createElement('div');
+ header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px';
+ var hLabel = document.createElement('div');
+ hLabel.style.cssText = 'font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-soft);font-weight:600';
+ hLabel.textContent = 'Контакты';
+ header.appendChild(hLabel);
+ // Плюсик — добавить ответственного по внедрению. Открывает форму.
+ var addBtn = document.createElement('button');
+ addBtn.textContent = '+';
+ addBtn.title = 'Добавить ответственного со стороны клиента по внедрению';
+ addBtn.style.cssText = 'width:28px;height:28px;border-radius:50%;border:1px solid var(--border-faint);background:rgba(52,199,122,.10);color:var(--accent,#34C77A);font-size:18px;font-weight:600;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center';
+ addBtn.addEventListener('click', function(){ _routeOpenImplContactForm(); });
+ header.appendChild(addBtn);
+ contactsWrap.appendChild(header);
+
+ // 2a. Основной контакт из amoCRM (если есть amo_lead_id у клиента или в localStorage)
+ var amoBlock = document.createElement('div');
+ amoBlock.style.cssText = 'padding:10px 0;border-bottom:1px solid var(--border-faint)';
+ contactsWrap.appendChild(amoBlock);
+ var amoLabel = document.createElement('div');
+ amoLabel.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:6px';
+ amoLabel.textContent = 'Основной контакт (из amoCRM)';
+ amoBlock.appendChild(amoLabel);
+ var amoBody = document.createElement('div');
+ amoBody.style.cssText = 'font-size:13px;color:var(--text-soft)';
+ amoBody.textContent = 'Загрузка…';
+ amoBlock.appendChild(amoBody);
+
+ _routeLoadAmoContact(cl, amoBody);
+
+ // 2b. Ответственный по внедрению (из cl.implementation_contact)
+ var implBlock = document.createElement('div');
+ implBlock.id = 'route-impl-contact-block';
+ implBlock.style.cssText = 'padding:10px 0;border-bottom:1px solid var(--border-faint)';
+ contactsWrap.appendChild(implBlock);
+ _routeRenderImplContact(implBlock, cl.implementation_contact);
+}
+
+// v420: подтянуть основной контакт из amoCRM по lead_id (если есть).
+// lead_id берём из clients.amo_lead_id, иначе из localStorage (legacy).
+async function _routeLoadAmoContact(cl, target){
+ var leadId = cl.amo_lead_id || null;
+ if(!leadId && cl.client_id){
+  try { leadId = localStorage.getItem('amo_lead_id_' + cl.client_id) || null; } catch(_){}
+ }
+ if(!leadId){
+  target.textContent = 'Клиент не привязан к сделке в amoCRM. Откройте таб «Основное», нажмите «Загрузить из amo» и введите ID сделки.';
+  target.style.fontStyle = 'italic';
+  return;
+ }
+ try {
+  var country = cl.country || window.currentCountry || 'KZ';
+  var r = await fetch('/api/amo?action=lead_full&id=' + leadId + '&country=' + country);
+  var d = await r.json();
+  if(!r.ok || !d.ok) throw new Error(d.error || 'amo ' + r.status);
+  var contacts = d.contacts || [];
+  if(!contacts.length){
+   target.textContent = 'В сделке amoCRM пока нет контактных лиц.';
+   target.style.fontStyle = 'italic';
+   return;
+  }
+  // Главный контакт — с флагом is_main, иначе первый
+  var main = contacts.find(function(c){ return c.is_main; }) || contacts[0];
+  _routeFillContactView(target, main);
+ } catch(e){
+  target.textContent = 'Не удалось загрузить контакт из amo: ' + e.message;
+  target.style.color = '#D67373';
+ }
+}
+
+// v420: отрисовка одного контакта (используется для amo-контакта и для ответственного по внедрению).
+function _routeFillContactView(target, c){
+ target.replaceChildren();
+ target.style.fontStyle = '';
+ target.style.color = 'var(--text)';
+ var row = document.createElement('div');
+ row.style.cssText = 'display:flex;gap:10px;align-items:flex-start';
+ var av = document.createElement('div');
+ var fullName = (c.name || ((c.first_name||'') + ' ' + (c.last_name||''))).trim();
+ av.textContent = fullName ? fullName.charAt(0).toUpperCase() : '?';
+ av.style.cssText = 'width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#34C77A 0%,#7FB89E 100%);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0';
+ row.appendChild(av);
+ var info = document.createElement('div');
+ info.style.cssText = 'flex:1;min-width:0';
+ var nm = document.createElement('div');
+ nm.style.cssText = 'font-weight:600;color:var(--text);font-size:14px';
+ nm.textContent = fullName || '(без имени)';
+ info.appendChild(nm);
+ if(c.position){
+  var pos = document.createElement('div');
+  pos.style.cssText = 'font-size:11.5px;color:var(--text-soft);margin-top:2px';
+  pos.textContent = c.position;
+  info.appendChild(pos);
+ }
+ var lineCt = document.createElement('div');
+ lineCt.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:6px';
+ var phones = c.phones && c.phones.length ? c.phones : (c.phone ? [{value: c.phone}] : []);
+ phones.forEach(function(p){
+  var a = document.createElement('a');
+  a.href = 'tel:' + p.value;
+  a.textContent = p.value;
+  a.style.cssText = 'font-size:12px;color:#5489BB;text-decoration:none;padding:2px 8px;border-radius:6px;background:rgba(84,137,187,.10)';
+  lineCt.appendChild(a);
+ });
+ var emails = c.emails && c.emails.length ? c.emails : (c.email ? [{value: c.email}] : []);
+ emails.forEach(function(em){
+  var e = document.createElement('span');
+  e.textContent = em.value;
+  e.style.cssText = 'font-size:12px;color:var(--text-soft);padding:2px 8px;border-radius:6px;background:rgba(120,120,128,.16)';
+  lineCt.appendChild(e);
+ });
+ if(phones.length || emails.length) info.appendChild(lineCt);
+ row.appendChild(info);
+ target.appendChild(row);
+}
+
+// v420: блок «Ответственный по внедрению». Если контакт уже сохранён — показываем
+// его + кнопки «Изменить»/«Удалить». Если нет — подсказка «нажмите + чтобы добавить».
+function _routeRenderImplContact(target, contact){
+ target.replaceChildren();
+ var label = document.createElement('div');
+ label.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:6px';
+ label.textContent = 'Ответственный по внедрению (от клиента)';
+ target.appendChild(label);
+
+ if(!contact || !(contact.name || contact.phone || contact.email)){
+  var hint = document.createElement('div');
+  hint.style.cssText = 'font-size:12px;color:var(--text-soft);font-style:italic';
+  hint.textContent = 'Пока не указан. Нажмите «+» сверху чтобы добавить.';
+  target.appendChild(hint);
+  return;
+ }
+
+ var view = document.createElement('div');
+ _routeFillContactView(view, contact);
+ target.appendChild(view);
+
+ var actions = document.createElement('div');
+ actions.style.cssText = 'display:flex;gap:8px;margin-top:8px';
+ var editBtn = document.createElement('button');
+ editBtn.textContent = 'Изменить';
+ editBtn.style.cssText = 'padding:5px 12px;font-size:11px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text-soft);cursor:pointer';
+ editBtn.addEventListener('click', function(){ _routeOpenImplContactForm(contact); });
+ actions.appendChild(editBtn);
+ var delBtn = document.createElement('button');
+ delBtn.textContent = 'Удалить';
+ delBtn.style.cssText = 'padding:5px 12px;font-size:11px;border-radius:6px;border:1px solid rgba(214,115,115,.30);background:transparent;color:#D67373;cursor:pointer';
+ delBtn.addEventListener('click', function(){
+  if(!confirm('Удалить контакт ответственного по внедрению?')) return;
+  _routeSaveImplContact(null);
+ });
+ actions.appendChild(delBtn);
+ target.appendChild(actions);
+}
+
+// v420: открыть простую inline-форму ввода контакта.
+function _routeOpenImplContactForm(existing){
+ var block = document.getElementById('route-impl-contact-block');
+ if(!block) return;
+ block.replaceChildren();
+ var label = document.createElement('div');
+ label.style.cssText = 'font-size:11px;color:var(--text-muted);margin-bottom:8px';
+ label.textContent = existing ? 'Изменить ответственного по внедрению' : 'Новый ответственный по внедрению';
+ block.appendChild(label);
+
+ function mkField(ph, val, type){
+  var inp = document.createElement('input');
+  inp.type = type || 'text';
+  inp.placeholder = ph;
+  inp.value = val || '';
+  inp.style.cssText = 'width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2,#1A1A1C);color:var(--text);margin-bottom:8px;box-sizing:border-box;font-size:13px';
+  return inp;
+ }
+ var nameInp = mkField('Имя и фамилия', existing && existing.name);
+ var posInp = mkField('Должность (например, «IT-директор»)', existing && existing.position);
+ var phoneInp = mkField('Телефон', existing && existing.phone, 'tel');
+ var emailInp = mkField('Email (необязательно)', existing && existing.email, 'email');
+ block.appendChild(nameInp);
+ block.appendChild(posInp);
+ block.appendChild(phoneInp);
+ block.appendChild(emailInp);
+
+ var actions = document.createElement('div');
+ actions.style.cssText = 'display:flex;gap:8px;justify-content:flex-end';
+ var cancelBtn = document.createElement('button');
+ cancelBtn.textContent = 'Отмена';
+ cancelBtn.style.cssText = 'padding:7px 14px;border-radius:8px;border:1px solid var(--border-faint);background:transparent;color:var(--text-soft);cursor:pointer;font-size:12px';
+ cancelBtn.addEventListener('click', function(){
+  var cl = (_routeCurrentCard && _routeCurrentCard.clients) || {};
+  _routeRenderImplContact(block, cl.implementation_contact);
+ });
+ actions.appendChild(cancelBtn);
+ var saveBtn = document.createElement('button');
+ saveBtn.textContent = 'Сохранить';
+ saveBtn.style.cssText = 'padding:7px 18px;border-radius:8px;border:none;background:var(--accent,#34C77A);color:#fff;font-weight:600;cursor:pointer;font-size:12px';
+ saveBtn.addEventListener('click', function(){
+  var data = {
+   name: nameInp.value.trim(),
+   position: posInp.value.trim(),
+   phone: phoneInp.value.trim(),
+   email: emailInp.value.trim()
+  };
+  if(!data.name && !data.phone){
+   alert('Укажите хотя бы имя или телефон');
+   return;
+  }
+  _routeSaveImplContact(data);
+ });
+ actions.appendChild(saveBtn);
+ block.appendChild(actions);
+ setTimeout(function(){ nameInp.focus(); }, 50);
+}
+
+// v420: сохранить контакт в Supabase. null = удалить.
+async function _routeSaveImplContact(contact){
+ if(!_routeCurrentCard || !_routeCurrentCard.client_id) return;
+ var clientId = _routeCurrentCard.client_id;
+ try {
+  var d = await sbFetch('/api/clients?client_id=' + encodeURIComponent(clientId), {
+   method: 'PATCH',
+   body: JSON.stringify({ implementation_contact: contact })
+  });
+  if(!d.ok) throw new Error(d.error || 'save failed');
+  // Локально обновляем чтобы не дёргать перезагрузку всего канбана
+  if(_routeCurrentCard.clients){
+   _routeCurrentCard.clients.implementation_contact = contact;
+  }
+  var block = document.getElementById('route-impl-contact-block');
+  if(block) _routeRenderImplContact(block, contact);
+ } catch(e){
+  alert('Не удалось сохранить: ' + e.message);
+ }
 }
 
 // v372: таб «amo» — тянет сделку из amoCRM по lead_id и показывает 18 кастомных полей,

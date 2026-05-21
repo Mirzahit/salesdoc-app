@@ -93,7 +93,9 @@ export default async function handler(req, res) {
       const rawBody = await readBody(req);
       // v388: whitelist изменяемых полей. Защита от случайной перезаписи client_id/created_at
       // и от опечаток имени поля (Supabase молча отказал бы или вернул 500 от PostgREST).
-      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months'];
+      // v420: добавлен implementation_contact (JSONB) — «Ответственный со стороны клиента
+      // по внедрению». Структура: { name, position, phone, email }.
+      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months','implementation_contact'];
       const body = {};
       Object.keys(rawBody).forEach(k => {
         if (ALLOWED_PATCH_FIELDS.includes(k)) body[k] = rawBody[k];
