@@ -627,16 +627,29 @@ async function handleSheetsImport(req, res) {
     else unmatched.push(row);
   }
 
+  // 4. Дедуп тех у кого клиент не найден — по нормализованному имени.
+  // Для каждой уникальной компании создаём главную карту в clients и привязываем
+  // все её интеграции к этому новому client_id.
+  const unmatchedByName = {}; // norm_name → { country, company_name, rows: [] }
+  unmatched.forEach(r => {
+    const key = _normName(r.company_name);
+    if (!unmatchedByName[key]) {
+      unmatchedByName[key] = { country: r.country, company_name: r.company_name, rows: [] };
+    }
+    unmatchedByName[key].rows.push(r);
+  });
+  const newClientsPlan = Object.values(unmatchedByName);
+
   const planSummary = {
     ok: true,
     dry_run: dryRun,
     total_rows_in_sheet: rows.length - 1,
     skipped_empty: skipped.length,
-    will_match_client: matched.length,
-    will_unmatched_client: unmatched.length,
-    will_add_history_notes: matched.filter(r => r.comment).length,
-    sample_matched: matched.slice(0, 5).map(r => ({ company: r.company_name, client_id: r.client_id, status: r.status })),
-    sample_unmatched: unmatched.slice(0, 5).map(r => r.company_name)
+    will_match_existing_clients: matched.length,
+    will_create_new_clients: newClientsPlan.length,
+    will_total_integrations: matched.length + unmatched.length,
+    will_add_history_notes: matched.filter(r => r.comment).length + unmatched.filter(r => r.comment).length,
+    sample_new_clients: newClientsPlan.slice(0, 10).map(g => ({ company: g.company_name, integrations: g.rows.length, country: g.country }))
   };
 
   if (dryRun) {
@@ -644,16 +657,58 @@ async function handleSheetsImport(req, res) {
     return res.status(200).json(planSummary);
   }
 
-  // 4. Реальный импорт. Сначала integrations — батчами по 50 чтобы не упереться в лимиты PostgREST.
-  const allRows = matched.concat(unmatched);
+  // 5. Реальный импорт. Сначала создаём новых клиентов, потом интеграции.
+  let createdClients = 0;
+  const newClientsErrors = [];
+
+  // Находим начальные номера client_id для KZ и KG (нужно генерить SD-KZ-2026-NNNNN)
+  const year = new Date().getFullYear();
+  const nextNumByCountry = { KZ: 1, KG: 1 };
+  for (const cn of ['KZ','KG']) {
+    const last = await sbSelect('clients', {
+      select: 'client_id',
+      country: 'eq.' + cn,
+      order: 'created_at.desc',
+      limit: '1'
+    });
+    if (last.length) {
+      const m = (last[0].client_id || '').match(new RegExp('SD-[A-Z]{2}-\\d{4}-(\\d+)'));
+      if (m) nextNumByCountry[cn] = parseInt(m[1], 10) + 1;
+    }
+  }
+
+  for (const g of newClientsPlan) {
+    const cn = ['KZ','KG'].includes(g.country) ? g.country : 'KZ';
+    const num = nextNumByCountry[cn]++;
+    const cid = 'SD-' + cn + '-' + year + '-' + String(num).padStart(5, '0');
+    try {
+      // status='active' — безопасное предположение для исторических интеграций
+      // (если интегратор работал с клиентом — клиент скорее всего реальный)
+      await sbInsert('clients', {
+        client_id: cid,
+        company_name: g.company_name,
+        country: cn,
+        status: 'active'
+      });
+      createdClients++;
+      // Привязываем все интеграции этой компании к новому client_id
+      g.rows.forEach(r => { r.client_id = cid; });
+    } catch (e) {
+      newClientsErrors.push({ company: g.company_name, error: e.message });
+    }
+  }
+
+  // 6. Теперь все строки имеют client_id (matched + unmatched после создания)
+  const allRows = matched.concat(unmatched.filter(r => r.client_id));
   let inserted = 0;
+  let historyAdded = 0;
   const failures = [];
   for (let i = 0; i < allRows.length; i += 50) {
     const batch = allRows.slice(i, i + 50);
     try {
       const result = await sbInsert('integrations', batch);
       inserted += result.length;
-      // Для каждой вставленной записи, у которой есть client_id И есть комментарий, пишем в card_history
+      // Для каждой вставленной записи, у которой есть комментарий, пишем в card_history
       for (let j = 0; j < result.length; j++) {
         const ins = result[j];
         const src = batch[j];
@@ -666,6 +721,7 @@ async function handleSheetsImport(req, res) {
               author: src.operator || 'Интегратор',
               attachment_url: 'integration:' + ins.id
             });
+            historyAdded++;
           } catch (e) {
             failures.push({ company: src.company_name, error: 'history: ' + e.message });
           }
@@ -677,9 +733,12 @@ async function handleSheetsImport(req, res) {
   }
 
   planSummary.dry_run = false;
-  planSummary.actually_inserted = inserted;
+  planSummary.created_clients = createdClients;
+  planSummary.new_clients_errors = newClientsErrors;
+  planSummary.inserted_integrations = inserted;
+  planSummary.history_notes_added = historyAdded;
   planSummary.failures = failures;
-  planSummary.message = `Готово. Импортировано ${inserted} интеграций из ${allRows.length}. Ошибок: ${failures.length}.`;
+  planSummary.message = `Готово. Создано ${createdClients} главных карт клиентов, импортировано ${inserted} интеграций, добавлено ${historyAdded} заметок в ленту. Ошибок: ${failures.length + newClientsErrors.length}.`;
   return res.status(200).json(planSummary);
 }
 
