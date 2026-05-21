@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v433</title>
+<title>SalesDoc — Финансовый Дашборд v434</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18902,12 +18902,17 @@ function intgSbRender(items){
       dlBadge = '<span style="font-size:10.5px;padding:2px 8px;border-radius:999px;background:' + dlBg + ';color:' + dlCol + ';font-weight:600">' + dlText + '</span>';
      }
     }
-    html += '<div class="tk-card" onclick="intgOpenCard(\'' + r.id + '\')">';
-    html += '<div style="font-size:14px;font-weight:700;color:var(--text);letter-spacing:-0.01em;line-height:1.3">' + _escHtml(r.company_name || '—') + '</div>';
-    if(typePkg) html += '<div style="font-size:12px;color:var(--text-soft)">' + _escHtml(typePkg) + '</div>';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">';
-    html += '<span style="font-size:11.5px;color:' + opColor + '">' + _escHtml(opLabel) + '</span>';
-    if(dlBadge) html += dlBadge;
+    // v433: карточка в стиле Маршрута клиента (Liquid Glass, как v366).
+    // Клик открывает главную карту клиента (view-route-card) — ту же что и в Маршруте.
+    var clickAttr = r.client_id
+     ? 'onclick="routeOpenClient(\'' + _escHtml(r.client_id) + '\')"'
+     : 'onclick="alert(\'У этой интеграции нет привязки к клиенту\')"';
+    html += '<div ' + clickAttr + ' onmouseover="this.style.background=\'var(--ds-glass-card-hover)\';this.style.transform=\'translateY(-1px)\';this.style.borderColor=\'var(--ds-glass-border-bright)\'" onmouseout="this.style.background=\'var(--ds-glass-card)\';this.style.transform=\'\';this.style.borderColor=\'var(--ds-glass-border)\'" style="background:var(--ds-glass-card);backdrop-filter:saturate(180%) blur(12px);-webkit-backdrop-filter:saturate(180%) blur(12px);border:1px solid var(--ds-glass-border);border-radius:14px;padding:12px 14px;cursor:pointer;transition:background .2s,transform .2s,border-color .2s;box-shadow:0 4px 16px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.06)">';
+    html += '<div style="margin-bottom:4px;font-weight:600;font-size:13px;color:var(--accent,#34C77A)">' + _escHtml(r.company_name || '—') + '</div>';
+    if(typePkg) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(typePkg) + '</div>';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft);gap:6px;flex-wrap:wrap">';
+    html += '<span style="color:' + opColor + '">' + _escHtml(opLabel) + '</span>';
+    if(dlBadge) html += '<span>' + dlBadge + '</span>';
     html += '</div></div>';
    });
   }
@@ -18917,8 +18922,42 @@ function intgSbRender(items){
  listEl.innerHTML = html;
 }
 
-// v432: полноэкранная карта Интеграции — открывается по клику на канбан-карточку.
-// Простой view: слева поля, справа лента событий. Inline-редактирование — позже.
+// v433: открыть главную карту клиента (view-route-card) по client_id.
+// Используется и из Маршрута Внедрения (routeOpenCard), и из канбана Интеграции,
+// и из канбана Поддержки. Один компонент для всех контекстов.
+async function routeOpenClient(clientId){
+ if(!clientId) return;
+ // Сначала ищем активную карточку Внедрения этого клиента в текущем кеше
+ if(typeof routeCards !== 'undefined' && Array.isArray(routeCards)){
+  var existing = routeCards.find(function(c){ return c.client_id === clientId && c.stage !== 'Архив'; });
+  if(existing){ return routeOpenCard(existing.id); }
+ }
+ // Если карточки Внедрения нет — открываем «синтетическую» (только клиентская инфа,
+ // без stage/чек-листа). Лента истории сама загрузится по client_id.
+ try {
+  var d = await sbFetch('/api/clients?client_id=' + encodeURIComponent(clientId));
+  if(!d.ok || !d.clients || !d.clients.length) throw new Error('клиент не найден');
+  var cl = d.clients[0];
+  // Подменяем _routeCurrentCard минимально-валидной структурой
+  _routeCurrentCard = {
+   id: 'client:' + cl.client_id, // префикс отличает от настоящего kanban_card.id
+   client_id: cl.client_id,
+   clients: cl,
+   stage: null,
+   stage_entered_at: null,
+   created_at: cl.created_at,
+   tariff: null
+  };
+  document.getElementById('view-route-card').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  if(typeof _routeRenderCardHead === 'function') _routeRenderCardHead();
+  if(typeof routeCardTab === 'function') routeCardTab('amo');
+ } catch(e){
+  alert('Не удалось открыть клиента: ' + (e.message || 'ошибка'));
+ }
+}
+
+// v432: deprecated — оставлен для совместимости, переадресует на routeOpenClient
 var _intgCurrentCard = null;
 
 async function intgOpenCard(integrationId){
