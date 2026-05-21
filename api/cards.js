@@ -28,11 +28,12 @@ import { checkAuth } from './_auth.js';
 const ALLOWED_STAGES = ['Новый','Настройка','Обучение','Тестирование','Активация','Архив'];
 const ALLOWED_COUNTRIES = ['KZ','KG'];
 // v370: категории Доходов которые создают карточку в Маршруте (от payment_bot)
-// v414: 'Нов интеграция' убрана — она ведётся в отдельной странице «Очередь интеграции»
-// (Google Sheet 11ZnhVoLvIJRHeeJk0u-fZI2G5crWNHIpV9RDOVtDQJ4), её туда тянет отдельный модуль.
-// Раньше платёж за интеграцию плодил дубль-карточку в канбане Внедрения рядом с карточкой Внедрения
-// того же клиента. Теперь интеграция остаётся только в своей Очереди, во Внедрение не попадает.
+// v414: 'Нов интеграция' убрана из IMPLEMENTATION_CATEGORIES — она шла в Google-таблицу.
+// v430: 'Нов интеграция' теперь обрабатывается отдельно — создаёт запись в таблице
+// integrations Supabase (главная карта клиента + временная карта интеграции).
+// См. memory/project_client_card_architecture.md
 const IMPLEMENTATION_CATEGORIES = ['Нов внедрение'];
+const INTEGRATION_PAYMENT_CATEGORIES = ['Нов интеграция'];
 const RENEWAL_CATEGORIES = ['абон. плата'];
 
 // v378: Тикет-система поддержки
@@ -187,9 +188,10 @@ async function handlePaymentBotSync(body, res) {
   // Категории которые не создают и не продлевают (баланс, доработка, бот-услуги и т.п.).
   // Фиксируем приём, но действий не выполняем.
   const isImpl = IMPLEMENTATION_CATEGORIES.includes(category);
+  const isInteg = INTEGRATION_PAYMENT_CATEGORIES.includes(category);
   const isRenewal = RENEWAL_CATEGORIES.includes(category);
-  if (!isImpl && !isRenewal) {
-    return res.status(200).json({ ok: true, action: 'ignored', reason: 'category not in implementation/renewal whitelist' });
+  if (!isImpl && !isInteg && !isRenewal) {
+    return res.status(200).json({ ok: true, action: 'ignored', reason: 'category not in implementation/integration/renewal whitelist' });
   }
 
   // Ищем существующего клиента по точному имени (+ country).
@@ -226,7 +228,7 @@ async function handlePaymentBotSync(body, res) {
     });
   }
 
-  // isImpl: новое внедрение/интеграция → клиент + карточка
+  // isImpl/isInteg: новое внедрение или интеграция → ищем/создаём клиента
   let clientId;
   if (existing.length) {
     clientId = existing[0].client_id;
@@ -259,6 +261,47 @@ async function handlePaymentBotSync(body, res) {
       country: country,
       status: 'onboarding',
       subscription_period_months: period_months
+    });
+  }
+
+  // v430: ветка интеграции — создаём запись в integrations, не kanban_cards
+  if (isInteg) {
+    // Идемпотентность: если запись для этого sheet_row+sheet_month уже есть — возвращаем
+    if (sheet_row && sheet_month) {
+      const existInteg = await sbSelect('integrations', {
+        country: 'eq.' + country,
+        sheet_row: 'eq.' + sheet_row,
+        sheet_month: 'eq.' + sheet_month,
+        select: 'id,client_id,status',
+        limit: '1'
+      });
+      if (existInteg.length) {
+        return res.status(200).json({
+          ok: true,
+          action: 'already_synced_integration',
+          integration_id: existInteg[0].id,
+          client_id: existInteg[0].client_id
+        });
+      }
+    }
+    const integRow = {
+      client_id: clientId,
+      company_name: company,
+      country: country,
+      status: 'Новая',
+      manager: (body.manager || '').trim() || null,
+      date_paid: new Date().toISOString().slice(0, 10),
+      package: body.tariff || null, // Если бот шлёт тариф — кладём как пакет интеграции
+      sheet_row: sheet_row,
+      sheet_month: sheet_month
+    };
+    const inserted = await sbInsert('integrations', integRow);
+    return res.status(201).json({
+      ok: true,
+      action: 'integration_created',
+      integration_id: inserted[0].id,
+      client_id: clientId,
+      company: company
     });
   }
 
