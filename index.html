@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v416</title>
+<title>SalesDoc — Финансовый Дашборд v417</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -23129,9 +23129,25 @@ async function _routeRenderHistory(){
  var body = document.getElementById('route-card-body');
  if(!_routeCurrentCard){ body.innerHTML = ''; return; }
  body.innerHTML = '<div style="color:var(--text-soft);font-size:13px">Загрузка...</div>';
+ // v417: таб «История» тоже грузим по card_id + client_id и склеиваем — иначе события
+ // привязанные только к клиенту (тикеты, звонки на номер вне канбана) пропадают.
  try {
-  var d = await sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50');
-  _routeHistoryItems = d.items || [];
+  var reqs = [sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50')];
+  if(_routeCurrentCard.client_id){
+   reqs.push(sbFetch('/api/history?client_id=' + encodeURIComponent(_routeCurrentCard.client_id) + '&limit=50'));
+  }
+  var results = await Promise.all(reqs);
+  var byCard = (results[0] && results[0].items) || [];
+  var byClient = (results[1] && results[1].items) || [];
+  var seen = {};
+  var merged = [];
+  byCard.concat(byClient).forEach(function(it){
+   if(!it || !it.id || seen[it.id]) return;
+   seen[it.id] = 1;
+   merged.push(it);
+  });
+  merged.sort(function(a, b){ return new Date(b.created_at || 0) - new Date(a.created_at || 0); });
+  _routeHistoryItems = merged.slice(0, 50);
  } catch(e){ _routeHistoryItems = []; }
 
  var input = '<div style="margin-bottom:14px;display:flex;gap:8px">'
@@ -23446,14 +23462,34 @@ async function _routeRenderAmo(){
 
 // v380: лента событий из card_history (заметки, смены этапов, системные события).
 // Вызывается при открытии таба «Основное» и после добавления заметки через чат-инпут.
+// v417: грузим события и по card_id, и по client_id и склеиваем. Это нужно потому что
+// часть событий привязана только к клиенту (например тикеты Поддержки — у них нет card_id),
+// и раньше они в ленте карточки клиента не появлялись.
 async function _routeRenderFeed(){
  var feedEl = document.getElementById('route-card-feed');
  if(!feedEl) return;
  if(!_routeCurrentCard){ feedEl.replaceChildren(); return; }
  feedEl.replaceChildren();
  try {
-  var d = await sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50');
-  var items = (d && d.items) || [];
+  var reqs = [sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50')];
+  if(_routeCurrentCard.client_id){
+   reqs.push(sbFetch('/api/history?client_id=' + encodeURIComponent(_routeCurrentCard.client_id) + '&limit=50'));
+  }
+  var results = await Promise.all(reqs);
+  var byCard = (results[0] && results[0].items) || [];
+  var byClient = (results[1] && results[1].items) || [];
+  // Склейка с дедупом по id. Сортировка по created_at desc — как и было.
+  var seen = {};
+  var merged = [];
+  byCard.concat(byClient).forEach(function(it){
+   if(!it || !it.id || seen[it.id]) return;
+   seen[it.id] = 1;
+   merged.push(it);
+  });
+  merged.sort(function(a, b){
+   return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+  var items = merged.slice(0, 50);
   if(!items.length){
    var empty = document.createElement('div');
    empty.className = 'amocard-empty';
