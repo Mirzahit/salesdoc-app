@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v430</title>
+<title>SalesDoc — Финансовый Дашборд v431</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5411,6 +5411,28 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </select>
  </div>
  <div id="intg-status" style="font-size:11px;color:var(--text-muted)"></div>
+ </div>
+
+ <!-- v430: блок новых интеграций (источник — наша база Supabase).
+      Сюда попадают: автоматом при оплате «Нов интеграция» от payment_bot
+      + вручную добавленные через приложение. Архив из Google-таблицы остаётся ниже. -->
+ <div id="intg-sb-block" style="margin-bottom:20px;background:rgba(127,184,158,.05);border:1px solid rgba(127,184,158,.25);border-radius:10px;padding:14px 18px">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+   <div>
+    <div style="font-size:13px;font-weight:600;color:var(--text)">Новые интеграции (из приложения)</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Появляются автоматически при оплате «Нов интеграция». Старые задачи из Google-таблицы — в архиве ниже.</div>
+   </div>
+   <button onclick="intgSbLoad()" id="intg-sb-refresh" style="padding:5px 12px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text-soft);cursor:pointer;font-size:11px">Обновить</button>
+  </div>
+  <div id="intg-sb-list">
+   <div style="font-size:12px;color:var(--text-muted);padding:8px 0">Загрузка…</div>
+  </div>
+ </div>
+
+ <!-- Заголовок архива (для понимания что ниже — старая таблица) -->
+ <div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border-faint)">
+  <div style="font-size:13px;font-weight:600;color:var(--text-soft)">Архив из Google-таблицы</div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Старые работы интеграторов. Пока команда не переехала в приложение — продолжайте обновлять там.</div>
  </div>
 
  <!-- Period stats — 3 cards by type -->
@@ -11856,6 +11878,8 @@ function showView(v) {
  if(v==='marketing'){mktInit();}
  if(v==='expenses'){expInit();expLoad();}
  if(v==='integrations'&&!window._intgLoaded){intgLoad();window._intgLoaded=true;} else if(v==='integrations'){intgRender();}
+// v430: при каждом открытии вкладки тянем свежие данные из Supabase
+if(v==='integrations' && typeof intgSbLoad === 'function'){ try { intgSbLoad(); } catch(_){} }
  if(v==='tests') testsRender();
  if(v==='knowledge') { /* показываем 2 кнопки -- оргсхема и материалы */ }
  if(v==='statistics') statInit();
@@ -18763,6 +18787,93 @@ function intgRender() {
  var st = document.getElementById('intg-status');
  if (st) st.textContent = data.length + ' записей' + (filterType ? ' / тип: '+filterType : '') + (filterStatus ? ' / статус: '+filterStatus : '') + (filterCountry ? ' / страна: '+filterCountry : '') + (filterPackage ? ' / пакет: '+filterPackage : '');
 }
+// v430: Supabase-блок новых интеграций над архивной таблицей.
+// Грузит /api/cards?entity=integration — те что попали через payment_bot или ручное создание.
+// Не трогает intgData (там Sheets-архив).
+async function intgSbLoad(){
+ var listEl = document.getElementById('intg-sb-list');
+ var btn = document.getElementById('intg-sb-refresh');
+ if(!listEl) return;
+ if(btn){ btn.disabled = true; btn.textContent = '...'; }
+ try {
+  var d = await sbFetch('/api/cards?entity=integration');
+  if(!d.ok) throw new Error(d.error || 'load failed');
+  var items = d.integrations || [];
+  intgSbRender(items);
+ } catch(e){
+  listEl.replaceChildren();
+  var err = document.createElement('div');
+  err.style.cssText = 'font-size:12px;color:#D67373;padding:8px 0';
+  err.textContent = 'Не удалось загрузить: ' + (e.message || 'ошибка');
+  listEl.appendChild(err);
+ } finally {
+  if(btn){ btn.disabled = false; btn.textContent = 'Обновить'; }
+ }
+}
+
+function intgSbRender(items){
+ var listEl = document.getElementById('intg-sb-list');
+ if(!listEl) return;
+ listEl.replaceChildren();
+ if(!items.length){
+  var empty = document.createElement('div');
+  empty.style.cssText = 'font-size:12px;color:var(--text-muted);padding:12px 0;text-align:center;font-style:italic';
+  empty.textContent = 'Пока новых интеграций нет — появятся когда пройдёт первая оплата «Нов интеграция» через бота.';
+  listEl.appendChild(empty);
+  return;
+ }
+ // Простая таблица: компания, статус, оператор, тип, пакет, дата оплаты
+ var STATUS_COLORS = {
+  'Новая': '#5489BB',
+  'В работе': '#FF9F0A',
+  'Готово': '#34C77A',
+  'Отменено': '#D67373',
+  'На паузе': '#9E9E9E'
+ };
+ var head = document.createElement('div');
+ head.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 90px;gap:10px;padding:6px 4px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border-faint)';
+ ['Компания','Статус','Тип','Пакет','Оператор','Оплата'].forEach(function(t){
+  var c = document.createElement('div'); c.textContent = t; head.appendChild(c);
+ });
+ listEl.appendChild(head);
+ items.forEach(function(r){
+  var row = document.createElement('div');
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 90px;gap:10px;padding:8px 4px;font-size:12px;border-bottom:1px dashed var(--border-faint);align-items:center';
+  var name = document.createElement('div');
+  name.style.cssText = 'font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+  name.textContent = r.company_name || '—';
+  name.title = r.company_name || '';
+  row.appendChild(name);
+  var st = document.createElement('div');
+  var stColor = STATUS_COLORS[r.status] || 'var(--text-soft)';
+  st.style.cssText = 'font-size:11px;color:' + stColor + ';font-weight:600';
+  st.textContent = r.status || '—';
+  row.appendChild(st);
+  var type = document.createElement('div');
+  type.style.cssText = 'color:var(--text-soft);font-size:11.5px';
+  type.textContent = r.type || '—';
+  row.appendChild(type);
+  var pkg = document.createElement('div');
+  pkg.style.cssText = 'color:var(--text-soft);font-size:11.5px';
+  pkg.textContent = r.package || '—';
+  row.appendChild(pkg);
+  var op = document.createElement('div');
+  op.style.cssText = 'color:var(--text-soft);font-size:11.5px';
+  op.textContent = r.operator || '— не назначен —';
+  row.appendChild(op);
+  var paid = document.createElement('div');
+  paid.style.cssText = 'color:var(--text-muted);font-size:11px;text-align:right';
+  if(r.date_paid){
+   var d = new Date(r.date_paid);
+   if(!isNaN(d)){
+    paid.textContent = String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
+   }
+  }
+  row.appendChild(paid);
+  listEl.appendChild(row);
+ });
+}
+
 // /INTEGRATIONS QUEUE MODULE 
 
 // P&L MODULE
