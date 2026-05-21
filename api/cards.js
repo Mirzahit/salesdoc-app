@@ -284,6 +284,25 @@ async function handlePaymentBotSync(body, res) {
         });
       }
     }
+    // v436 FIX: fallback-дедуп если бот не прислал sheet_row/sheet_month —
+    // ищем интеграцию того же клиента со статусом «Новая» и date_paid=сегодня.
+    // Защита от двойного нажатия / ретрая без sheet-полей.
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const recentInteg = await sbSelect('integrations', {
+      client_id: 'eq.' + clientId,
+      status: 'eq.Новая',
+      date_paid: 'eq.' + todayIso,
+      select: 'id,client_id,status',
+      limit: '1'
+    });
+    if (recentInteg.length) {
+      return res.status(200).json({
+        ok: true,
+        action: 'already_synced_integration_by_date',
+        integration_id: recentInteg[0].id,
+        client_id: recentInteg[0].client_id
+      });
+    }
     const integRow = {
       client_id: clientId,
       company_name: company,
@@ -647,8 +666,8 @@ async function handleSheetsImport(req, res) {
   });
 
   // 3. Парсим каждую строку Sheets (пропускаем первую — заголовки)
-  const matched = []; // { sheet_row, company, client_id, comment? }
-  const unmatched = []; // строки без клиента
+  let matched = []; // { sheet_row, company, client_id, comment? }
+  let unmatched = []; // строки без клиента
   const skipped = []; // пустое название и т.п.
 
   for (let i = 1; i < rows.length; i++) {
@@ -683,6 +702,9 @@ async function handleSheetsImport(req, res) {
 
     const row = {
       sheet_row: sheetRow,
+      // v436 FIX: sheet_month=0 для Sheets-импорта. Партиальный uniq-индекс
+      // требует чтобы оба поля были не-null. Иначе повторный импорт продублирует.
+      sheet_month: 0,
       country: ['KZ','KG'].includes(country) ? country : 'KZ',
       company_name: company,
       status: INTEGRATION_STATUSES.includes(status) ? status : 'Новая',
@@ -696,6 +718,24 @@ async function handleSheetsImport(req, res) {
 
     if (clientId) matched.push(row);
     else unmatched.push(row);
+  }
+
+  // v436 FIX: pre-check на повторный импорт. Если sheet_row+country уже есть
+  // в integrations — пропускаем строку, не дублируем. Защита от случайного
+  // повторного запуска import_sheets — раньше создавал бы 11 → 22 → 33.
+  if (!dryRun) {
+    const existingRows = await sbSelect('integrations', {
+      select: 'sheet_row,country',
+      sheet_row: 'not.is.null'
+    });
+    const existingKeys = new Set(existingRows.map(r => r.country + ':' + r.sheet_row));
+    const beforeFilter = matched.length + unmatched.length;
+    matched = matched.filter(r => !existingKeys.has(r.country + ':' + r.sheet_row));
+    unmatched = unmatched.filter(r => !existingKeys.has(r.country + ':' + r.sheet_row));
+    const afterFilter = matched.length + unmatched.length;
+    if (beforeFilter !== afterFilter) {
+      skipped.push({ reason: 'already_imported', count: beforeFilter - afterFilter });
+    }
   }
 
   // 4. Дедуп тех у кого клиент не найден — по нормализованному имени.
