@@ -97,30 +97,40 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
     if(page === 5 && batch.length === 250){ truncated = true; }
   }
 
-  // v421: фильтр по custom field «Источник сделки» (field_id 1134759) ВМЕСТО тегов.
-  // Почему: менеджеры заполняют custom field всегда (обязательное поле в карточке amo),
-  // а теги — редко. Из-за этого по тегам получали недосчёт. См. историю расследования 9 vs 4.
+  // v425: ОТКАТ v421 — возвращаем фильтр по ТЕГАМ. Пользователь подтвердил что
+  // в маркетинговой воронке правильнее опираться на теги amo (таргет таблица /
+  // marquiz / ТАРГЕТ), потому что:
+  //   1) Они точно совпадают с тем как операторы фильтруют в amo руками
+  //   2) Цифра «Попало в amo» ровно сравнима с Meta-кабинетом
+  // Сделки без тега значит менеджер «не оформил» — это процессная проблема,
+  // её надо решать обучением операторов, а не размазывать через custom field.
   //
-  // Принимаемые значения tagFilter (имя оставили старое для совместимости с фронтом):
-  //   'meta_any' / 'все meta' — Источник содержит «таргет» или «marquiz»
-  //   'marquiz'               — Источник содержит «marquiz»
-  //   'таргет таблица'        — Источник содержит «таргет таблица»
-  //   'таргет' / 'ТАРГЕТ'     — Источник содержит «таргет» (включая «таргет таблица»)
-  //   'без тега' / '__notag__' — Источник пустой (не заполнен)
-  //   '' / undefined          — без фильтра, считаем все
-  //   иначе                   — фильтр по includes
+  // Принимаемые значения tagFilter:
+  //   'meta_any' / 'все meta' — любой Meta-тег (таргет таблица OR ТАРГЕТ OR marquiz)
+  //   'без тега' / '__notag__' — без любых тегов
+  //   '' / undefined           — без фильтра, считаем все
+  //   иначе                    — match по includes на имена тегов сделки
   let leads = allLeads;
   if(tagFilter){
     const tf = String(tagFilter).toLowerCase().trim();
     if(tf === 'без тега' || tf === '__notag__'){
-      leads = allLeads.filter(l => _amoLeadSource(l) === '');
+      leads = allLeads.filter(l => {
+        const tags = (l._embedded && l._embedded.tags) || [];
+        return tags.length === 0;
+      });
     } else if(tf === 'meta_any' || tf === 'все meta'){
       leads = allLeads.filter(l => {
-        const s = _amoLeadSource(l);
-        return s.includes('таргет') || s.includes('marquiz');
+        const tags = (l._embedded && l._embedded.tags) || [];
+        return tags.some(t => {
+          const tn = String(t.name||'').toLowerCase();
+          return tn.includes('таргет') || tn.includes('marquiz');
+        });
       });
     } else {
-      leads = allLeads.filter(l => _amoLeadSource(l).includes(tf));
+      leads = allLeads.filter(l => {
+        const tags = (l._embedded && l._embedded.tags) || [];
+        return tags.some(t => String(t.name||'').toLowerCase().includes(tf));
+      });
     }
   }
 
