@@ -186,6 +186,39 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
   const paid = findByName(/счет.*оплач|оплач.*счет|оплачен.*работ/);
   if(paid) logicalFlow.push({ key: 'paid', label: 'Счёт оплачен', count: paid.cumulative });
 
+  // v422: список названий компаний по логическим этапам — для отладки «какие именно сделки
+  // попали в счётчик». Возвращаем для каждой логической стадии массив { id, name, current_stage }.
+  // Логические шаги те же что в logicalFlow ниже: meeting_set, meeting_done, requisites, paid.
+  const sortedIds = sortedStages.map(s => s.id);
+  function _leadsCumulativeFor(stageId){
+   const startIdx = sortedStages.findIndex(s => s.id === stageId);
+   if(startIdx < 0) return [];
+   const validIds = new Set();
+   for(let i = startIdx; i < sortedStages.length; i++){
+    if(isLoss(sortedStages[i])) continue;
+    validIds.add(sortedStages[i].id);
+   }
+   return leads
+    .filter(l => validIds.has(l.status_id))
+    .map(l => ({
+     id: l.id,
+     name: l.name || '(без названия)',
+     current_stage: (sortedStages.find(s => s.id === l.status_id) || {}).name || '?',
+     created_at: l.created_at
+    }))
+    .sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+  }
+  const findStage = (re) => sortedStages.find(s => re.test(String(s.name||'').toLowerCase()));
+  const leadsByStep = {};
+  const stMeetingSet = findStage(/назначен.*встреч|встреч.*назначен/);
+  if(stMeetingSet) leadsByStep.meeting_set = _leadsCumulativeFor(stMeetingSet.id);
+  const stMeetingDone = findStage(/встреч.*пройден|пройден.*встреч/);
+  if(stMeetingDone) leadsByStep.meeting_done = _leadsCumulativeFor(stMeetingDone.id);
+  const stReqv = findStage(/реквизит|реквезит/);
+  if(stReqv) leadsByStep.requisites = _leadsCumulativeFor(stReqv.id);
+  const stPaid = findStage(/счет.*оплач|оплач.*счет|оплачен.*работ/);
+  if(stPaid) leadsByStep.paid = _leadsCumulativeFor(stPaid.id);
+
   // v320: распределение по тегам — для атрибуции источников лидов
   const tagCounts = { 'таргет таблица': 0, 'ТАРГЕТ': 0, 'marquiz': 0, '__without_tag__': 0 };
   let _accountedByTag = 0;
@@ -212,7 +245,8 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
     tag_filter: tagFilter || null,
     tag_counts: tagCounts,
     stages: stages,
-    logical_flow: logicalFlow
+    logical_flow: logicalFlow,
+    leads_by_step: leadsByStep // v422: списки сделок по логическим шагам — для отладки
   };
 }
 
