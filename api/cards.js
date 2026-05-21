@@ -599,8 +599,30 @@ function _normName(s) {
   return String(s||'').toLowerCase().replace(/[«»"',.()]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// v431: маппинг статусов из Sheets в INTEGRATION_STATUSES Supabase.
+// В Sheets было несколько вариаций одного смысла («Выполняется» = «В работе»),
+// схлопываем их к нашему чистому списку.
+const SHEET_STATUS_MAP = {
+  'Выполняется': 'В работе',
+  'Тестируют': 'В работе',
+  'В очереди': 'Новая',
+  'Очередь': 'Новая',
+  'Новая': 'Новая',
+  'В работе': 'В работе',
+  'На паузе': 'На паузе',
+  'Готово': 'Готово',
+  'Протестирован': 'Готово',
+  'Отменено': 'Отменено',
+  'Перенесено': 'Отменено',
+  'Архив': 'Архив'
+};
+const SHEET_ACTIVE_STATUSES = new Set(['Выполняется','Тестируют','В очереди','Очередь','Новая','В работе','На паузе']);
+
 async function handleSheetsImport(req, res) {
   const dryRun = String(req.query.dry_run || '1') !== '0' && req.query.dry_run !== 'false';
+  // v431: ?active_only=1 — переносим только незавершённые работы (не Готово/Отменено/Перенесено).
+  // Архив остаётся в Sheets.
+  const activeOnly = String(req.query.active_only || '0') === '1' || req.query.active_only === 'true';
 
   // 1. Тянем CSV из Google Sheets
   const csvUrl = `https://docs.google.com/spreadsheets/d/${INTEG_SHEET_ID}/gviz/tq?tqx=out:csv`;
@@ -640,7 +662,13 @@ async function handleSheetsImport(req, res) {
     const dateDone = _parseDmy(r[4]);
     const company = String(r[5]||'').trim();
     if (!company) { skipped.push({ sheet_row: sheetRow, reason: 'empty company' }); continue; }
-    const status = String(r[6]||'').trim() || 'Новая';
+    const rawStatus = String(r[6]||'').trim() || 'Новая';
+    // v431: фильтр active_only — пропускаем завершённые/отменённые
+    if (activeOnly && !SHEET_ACTIVE_STATUSES.has(rawStatus)) {
+      skipped.push({ sheet_row: sheetRow, reason: 'status=' + rawStatus + ' (не активная)' });
+      continue;
+    }
+    const status = SHEET_STATUS_MAP[rawStatus] || 'Новая';
     const type = String(r[8]||'').trim() || null;
     const operator = String(r[9]||'').trim() || null;
     const manager = String(r[10]||'').trim() || null;
