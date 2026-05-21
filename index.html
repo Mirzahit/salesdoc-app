@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v432</title>
+<title>SalesDoc — Финансовый Дашборд v433</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18874,83 +18874,47 @@ function intgSbRender(items){
   byStage[key].push(r);
  });
 
- // Doska
- var board = document.createElement('div');
- board.style.cssText = 'display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:4px';
-
- INTG_STAGES.forEach(function(stage, idx){
-  var col = document.createElement('div');
-  col.style.cssText = 'background:rgba(120,120,128,.04);border:1px solid var(--border-faint);border-radius:10px;padding:10px;min-height:200px';
-
-  var head = document.createElement('div');
-  head.style.cssText = 'border-top:2px solid ' + stage.color + ';padding:8px 4px 10px;margin:-10px -10px 10px;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center';
-  var title = document.createElement('div');
-  title.style.cssText = 'font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.5px;padding-left:6px';
-  title.textContent = stage.label;
-  head.appendChild(title);
-  var count = document.createElement('div');
-  count.style.cssText = 'font-size:11px;color:var(--text-muted);background:rgba(120,120,128,.10);padding:2px 8px;border-radius:10px;font-weight:600';
-  count.textContent = byStage[stage.key].length;
-  head.appendChild(count);
-  col.appendChild(head);
-
-  var body = document.createElement('div');
-  body.style.cssText = 'display:flex;flex-direction:column;gap:8px';
-
+ // v433: используем те же CSS-классы что и канбан Маршрута/Поддержки —
+ // route-col-amo для колонок, .tk-card для карточек. Чтоб выглядело точно так же.
+ var html = '<div class="route-kanban" style="display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:10px;margin-top:4px">';
+ INTG_STAGES.forEach(function(stage, sIdx){
+  html += '<div class="route-col-amo route-col s' + (sIdx + 1) + '" data-intg-stage="' + stage.key + '" style="--route-col-color:' + stage.color + '">';
+  html += '<div class="route-col-amo-head">';
+  html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage.label + '</div><div class="route-col-amo-count">' + byStage[stage.key].length + '</div></div>';
+  html += '</div>';
+  html += '<div class="route-col-amo-body">';
   if(!byStage[stage.key].length){
-   var emptyCol = document.createElement('div');
-   emptyCol.style.cssText = 'font-size:11px;color:var(--text-muted);font-style:italic;padding:6px 4px;text-align:center';
-   emptyCol.textContent = 'Пусто';
-   body.appendChild(emptyCol);
-  }
-
-  byStage[stage.key].forEach(function(r){
-   var card = document.createElement('div');
-   card.style.cssText = 'background:var(--surface-2,#1A1A1C);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:10px 12px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.15);transition:transform .15s,border-color .15s';
-   card.addEventListener('mouseover', function(){ card.style.transform = 'translateY(-1px)'; card.style.borderColor = 'rgba(255,255,255,.20)'; });
-   card.addEventListener('mouseout', function(){ card.style.transform = ''; card.style.borderColor = 'rgba(255,255,255,.10)'; });
-   card.addEventListener('click', function(){ intgOpenCard(r.id); });
-
-   var name = document.createElement('div');
-   name.style.cssText = 'font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-   name.textContent = r.company_name || '—';
-   name.title = r.company_name || '';
-   card.appendChild(name);
-
-   if(r.type || r.package){
-    var meta = document.createElement('div');
-    meta.style.cssText = 'font-size:10.5px;color:var(--text-soft);margin-bottom:6px';
-    meta.textContent = [r.type, r.package].filter(Boolean).join(' · ');
-    card.appendChild(meta);
-   }
-
-   var foot = document.createElement('div');
-   foot.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:var(--text-muted);margin-top:4px';
-   var opSpan = document.createElement('span');
-   opSpan.textContent = r.operator || '— не назначен —';
-   if(!r.operator) opSpan.style.color = '#D67373';
-   foot.appendChild(opSpan);
-   if(r.deadline){
-    var dl = document.createElement('span');
-    var d = new Date(r.deadline);
-    if(!isNaN(d)){
-     var today = new Date();
-     var days = Math.ceil((d - today) / (1000*60*60*24));
-     dl.textContent = days < 0 ? 'просрочен' : (days === 0 ? 'сегодня' : ('+' + days + ' дн'));
-     dl.style.color = days < 0 ? '#D67373' : (days < 3 ? '#FF9F0A' : 'var(--text-soft)');
-     foot.appendChild(dl);
+   html += '<div class="route-col-amo-empty">Пусто</div>';
+  } else {
+   byStage[stage.key].forEach(function(r){
+    // .tk-card — твёрдый фон + чёткая рамка + мягкая тень (как карточки тикетов v419)
+    var typePkg = [r.type, r.package].filter(Boolean).join(' · ');
+    var opLabel = r.operator || '— не назначен —';
+    var opColor = r.operator ? 'var(--text-soft)' : '#D67373';
+    var dlBadge = '';
+    if(r.deadline){
+     var d = new Date(r.deadline);
+     if(!isNaN(d)){
+      var days = Math.ceil((d - new Date()) / 86400000);
+      var dlText = days < 0 ? 'просрочен' : (days === 0 ? 'сегодня' : ('+' + days + ' дн'));
+      var dlCol = days < 0 ? '#FF453A' : (days < 3 ? '#FF9F0A' : 'var(--text-soft)');
+      var dlBg = days < 0 ? 'rgba(255,69,58,.16)' : (days < 3 ? 'rgba(255,159,10,.16)' : 'rgba(120,120,128,.14)');
+      dlBadge = '<span style="font-size:10.5px;padding:2px 8px;border-radius:999px;background:' + dlBg + ';color:' + dlCol + ';font-weight:600">' + dlText + '</span>';
+     }
     }
-   }
-   card.appendChild(foot);
-
-   body.appendChild(card);
-  });
-
-  col.appendChild(body);
-  board.appendChild(col);
+    html += '<div class="tk-card" onclick="intgOpenCard(\'' + r.id + '\')">';
+    html += '<div style="font-size:14px;font-weight:700;color:var(--text);letter-spacing:-0.01em;line-height:1.3">' + _escHtml(r.company_name || '—') + '</div>';
+    if(typePkg) html += '<div style="font-size:12px;color:var(--text-soft)">' + _escHtml(typePkg) + '</div>';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">';
+    html += '<span style="font-size:11.5px;color:' + opColor + '">' + _escHtml(opLabel) + '</span>';
+    if(dlBadge) html += dlBadge;
+    html += '</div></div>';
+   });
+  }
+  html += '</div></div>';
  });
-
- listEl.appendChild(board);
+ html += '</div>';
+ listEl.innerHTML = html;
 }
 
 // v432: полноэкранная карта Интеграции — открывается по клику на канбан-карточку.
