@@ -552,6 +552,9 @@ export default async function handler(req, res){
         sheet_phones_truncated: sheetPhones.size > processed,
         sheet_matched_in_amo: sheetMatched.length,
         sheet_not_in_amo: sheetNotFound.length,
+        // v424: возвращаем сам список телефонов которые НЕ попали в amo — чтобы оператор
+        // мог их вытащить руками или прозвонить заново. Раньше было только число.
+        sheet_not_in_amo_list: sheetNotFound.map(x => ({ phone: x.phone, contact_id: x.contact_id || null, error: x.error || null })),
         marquiz_leads_in_amo: marquizLeads.length,
         combined_cohort_total: dedupped.length,
         stage_distribution: distribution,

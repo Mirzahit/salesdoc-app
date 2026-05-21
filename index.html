@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v423</title>
+<title>SalesDoc — Финансовый Дашборд v424</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -29347,6 +29347,15 @@ function amoRenderFunnel(d){
  if(typeof amoLoadHonestFunnel === 'function') amoLoadHonestFunnel();
 }
 
+// v424: показать/скрыть строку со списком «не попавших в amo» телефонов
+window.amoToggleNotFoundList = function(linkEl){
+ var row = document.getElementById('amo-not-found-list-row');
+ if(!row) return;
+ var hidden = row.style.display === 'none' || !row.style.display;
+ row.style.display = hidden ? 'table-row' : 'none';
+ if(linkEl) linkEl.textContent = hidden ? 'скрыть ▴' : 'показать ▾';
+};
+
 // v423: показать/скрыть список конкретных сделок под шагом воронки
 window.amoToggleFunnelLeads = function(detailsId, linkEl){
  var box = document.getElementById(detailsId);
@@ -29432,11 +29441,34 @@ function amoRenderHonest(d){
  + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;color:var(--text-muted)">' + (totalCohort > 0 ? Math.round(lostCount/totalCohort*100) : 0) + '%</td>'
  + '</tr>';
  if(notFound > 0){
- html += '<tr>'
- + '<td style="padding:8px;color:var(--text-muted)">Не нашли в amo (потеряны менеджерами)</td>'
- + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;color:var(--text-muted)">' + notFound + '</td>'
- + '<td style="text-align:right;padding:8px;color:var(--text-muted)">—</td>'
+ // v424: красным выделяем «не попавших» + кликабельная ссылка показать телефоны
+ var notFoundList = d.sheet_not_in_amo_list || [];
+ html += '<tr style="background:rgba(255,107,92,.08)">'
+ + '<td style="padding:8px;color:#FF6B5C;font-weight:600">Заявка была, но в amo не попала</td>'
+ + '<td style="text-align:right;padding:8px;font-variant-numeric:tabular-nums;color:#FF6B5C;font-weight:700">' + notFound + '</td>'
+ + '<td style="text-align:right;padding:8px;color:var(--text-muted)">'
+ + (notFoundList.length ? '<a onclick="amoToggleNotFoundList(this)" style="color:#FF6B5C;cursor:pointer;font-weight:600;text-decoration:none;font-size:11px">показать ▾</a>' : '—')
+ + '</td>'
  + '</tr>';
+ if(notFoundList.length){
+  html += '<tr id="amo-not-found-list-row" style="display:none"><td colspan="3" style="padding:8px 12px;background:rgba(255,107,92,.04)">'
+       + '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">'
+       + 'Это телефоны Meta-заявок которых нет в amoCRM — менеджеры их не приняли в работу. '
+       + 'Кликни «WhatsApp» чтобы написать или «Позвонить» чтобы прозвонить.'
+       + '</div>';
+  notFoundList.forEach(function(it){
+   var rawPhone = String(it.phone || '');
+   var plus = rawPhone.length === 11 && rawPhone.charAt(0) === '7' ? '+' + rawPhone : rawPhone;
+   var digits = rawPhone.replace(/\D/g, '');
+   html += '<div style="display:flex;gap:12px;align-items:center;padding:4px 0;border-bottom:1px dashed var(--border-faint)">'
+        + '<span style="font-family:monospace;font-size:13px;color:var(--text);flex:0 0 160px">' + plus + '</span>'
+        + '<a href="tel:' + plus + '" style="font-size:11px;padding:3px 10px;border-radius:4px;background:rgba(84,137,187,.10);color:#5489BB;text-decoration:none;font-weight:600">Позвонить</a>'
+        + '<a href="https://wa.me/' + digits + '" target="_blank" style="font-size:11px;padding:3px 10px;border-radius:4px;background:rgba(37,211,102,.12);color:#25D366;text-decoration:none;font-weight:600">WhatsApp</a>'
+        + (it.contact_id ? '<span style="font-size:11px;color:var(--text-muted)">контакт в amo есть, но без сделки</span>' : '<span style="font-size:11px;color:var(--text-muted)">вообще нет в amo</span>')
+        + '</div>';
+  });
+  html += '</td></tr>';
+ }
  }
  html += '</tbody></table>'
  + '<div style="font-size:11px;color:var(--text-muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border-faint)">'
