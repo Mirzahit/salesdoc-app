@@ -819,6 +819,51 @@ async function handleIntegrationsRoute(req, res) {
     return await handleSheetsImport(req, res);
   }
 
+  // v431: дозапись заметок-комментариев из integrations.comment в card_history.
+  // Нужно после миграции CHECK constraint event_type для integration_note.
+  // Проходит по интеграциям с непустым comment и client_id, проверяет нет ли
+  // уже записи в card_history с attachment_url='integration:<id>', если нет — пишет.
+  if (req.method === 'POST' && (req.query.action || '').toLowerCase() === 'backfill_integration_notes') {
+    const integs = await sbSelect('integrations', {
+      select: 'id,client_id,comment,operator',
+      not: 'client_id.is.null'
+    });
+    let processed = 0;
+    let added = 0;
+    const errors = [];
+    for (const it of integs) {
+      if (!it.comment || !it.client_id) continue;
+      processed++;
+      // Проверка — нет ли уже записи (идемпотентность)
+      const exists = await sbSelect('card_history', {
+        client_id: 'eq.' + it.client_id,
+        attachment_url: 'eq.integration:' + it.id,
+        select: 'id',
+        limit: '1'
+      });
+      if (exists.length) continue;
+      try {
+        await sbInsert('card_history', {
+          client_id: it.client_id,
+          event_type: 'integration_note',
+          text: it.comment,
+          author: it.operator || 'Интегратор',
+          attachment_url: 'integration:' + it.id
+        });
+        added++;
+      } catch (e) {
+        errors.push({ integration_id: it.id, error: e.message });
+      }
+    }
+    return res.status(200).json({
+      ok: true,
+      processed,
+      added,
+      errors,
+      message: `Просмотрено ${processed} интеграций с комментарием, добавлено ${added} новых заметок в ленту.`
+    });
+  }
+
   if (req.method === 'GET') {
     const { id, client_id, operator, status, country, type, package: pkg, include_archive } = req.query || {};
     const params = {
