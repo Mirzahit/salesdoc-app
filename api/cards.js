@@ -825,14 +825,13 @@ async function handleIntegrationsRoute(req, res) {
   // уже записи в card_history с attachment_url='integration:<id>', если нет — пишет.
   if (req.method === 'POST' && (req.query.action || '').toLowerCase() === 'backfill_integration_notes') {
     const integs = await sbSelect('integrations', {
-      select: 'id,client_id,comment,operator',
-      not: 'client_id.is.null'
+      select: 'id,client_id,comment,operator'
     });
     let processed = 0;
     let added = 0;
     const errors = [];
     for (const it of integs) {
-      if (!it.comment || !it.client_id) continue;
+      if (!it.comment || !it.client_id) continue; // фильтр на JS — у кого нет client_id, пропускаем
       processed++;
       // Проверка — нет ли уже записи (идемпотентность)
       const exists = await sbSelect('card_history', {
