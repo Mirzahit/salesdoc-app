@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v422</title>
+<title>SalesDoc — Финансовый Дашборд v423</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -29133,7 +29133,8 @@ function amoBuildUnifiedFunnel(amoData, metaData, period){
  }
  if(amoData.logical_flow && amoData.logical_flow.length){
  amoData.logical_flow.forEach(function(s){
- flow.push({ label: s.label, count: s.count, source: 'amo' });
+ // v423: передаём key — чтобы в рендере найти список сделок в leads_by_step
+ flow.push({ label: s.label, count: s.count, source: 'amo', key: s.key });
  });
  }
  // Внедрены: для current period — count из канбана (последний столбец)
@@ -29158,6 +29159,7 @@ function amoBuildUnifiedFunnel(amoData, metaData, period){
  amo_total: amoData.total_leads,
  amo_lost: amoData.lost_count || 0,
  amo_tag_counts: amoData.tag_counts || null,
+ leads_by_step: amoData.leads_by_step || null, // v423: списки сделок для раскрывающего блока
  meta_leads_count: metaLeadsCount,
  period: period,
  period_label: periodLabels[period] || period
@@ -29279,6 +29281,12 @@ function amoRenderFunnel(d){
  var convFromPrev = prevS && prevS.count > 0 ? Math.round(s.count / prevS.count * 100) : 100;
  var lost = prevS ? Math.max(0, prevS.count - s.count) : 0;
 
+ // v423: если у шага есть привязанный список сделок (logical_flow keys: meeting_set,
+ // meeting_done, requisites, paid) — добавим маленькую ссылку «показать N компаний»
+ // и блок-список под шагом, скрытый по умолчанию.
+ var leadsList = (s.key && d.leads_by_step && d.leads_by_step[s.key]) || null;
+ var detailsId = 'amo-funnel-details-' + i;
+
  html += '<div style="display:flex;align-items:center;gap:14px;padding:2px 0">'
  + '<div style="flex:0 0 50%;position:relative;height:30px;display:flex;align-items:center">'
    + '<div style="background:' + fill + ';color:#fff;height:30px;width:' + widthPct + '%;display:flex;align-items:center;padding:0 12px;font-weight:700;font-size:12px;position:relative;border-radius:3px 0 0 3px;letter-spacing:.2px">'
@@ -29293,9 +29301,31 @@ function amoRenderFunnel(d){
      + (i === 0 ? '<span style="margin-left:8px">старт воронки</span>'
         : '<span style="margin-left:8px">' + pctOfFirst + '% от старта</span>')
      + (lost > 0 ? '<span style="margin-left:8px;color:#D89595">−' + lost.toLocaleString('ru-RU') + '</span>' : '')
+     + (leadsList && leadsList.length
+        ? '<a onclick="amoToggleFunnelLeads(\'' + detailsId + '\',this)" style="margin-left:10px;color:var(--accent,#34C77A);cursor:pointer;text-decoration:none;font-weight:600">показать ' + leadsList.length + (leadsList.length === 1 ? ' компанию' : (leadsList.length < 5 ? ' компании' : ' компаний')) + ' ▾</a>'
+        : '')
    + '</div>'
  + '</div>'
  + '</div>';
+
+ // Скрытый блок со списком конкретных сделок
+ if(leadsList && leadsList.length){
+  html += '<div id="' + detailsId + '" style="display:none;margin-left:calc(50% + 14px);margin-bottom:8px;padding:8px 10px;background:rgba(120,120,128,.06);border:1px solid var(--border-faint);border-radius:6px;font-size:12px">';
+  leadsList.forEach(function(L){
+   var when = '';
+   if(L.created_at){
+    var dt = new Date(L.created_at * 1000);
+    when = String(dt.getDate()).padStart(2,'0') + '.' + String(dt.getMonth()+1).padStart(2,'0') + '.' + dt.getFullYear();
+   }
+   var amoUrl = 'https://' + (window._amoSubdomain || 'salesdoctorkz') + '.amocrm.ru/leads/detail/' + L.id;
+   html += '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--border-faint)">'
+        + '<a href="' + amoUrl + '" target="_blank" style="color:var(--accent,#34C77A);text-decoration:none;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + amoEscXml(L.name) + '">' + amoEscXml(L.name) + '</a>'
+        + '<span style="color:var(--text-muted);font-size:11px;white-space:nowrap">' + when + '</span>'
+        + '<span style="color:var(--text-soft);font-size:11px;white-space:nowrap" title="Сейчас на этапе">→ ' + amoEscXml(L.current_stage || '?') + '</span>'
+        + '</div>';
+  });
+  html += '</div>';
+ }
  });
  html += '</div>';
 
@@ -29316,6 +29346,20 @@ function amoRenderFunnel(d){
  // v326: рисуем честную воронку по телефонам
  if(typeof amoLoadHonestFunnel === 'function') amoLoadHonestFunnel();
 }
+
+// v423: показать/скрыть список конкретных сделок под шагом воронки
+window.amoToggleFunnelLeads = function(detailsId, linkEl){
+ var box = document.getElementById(detailsId);
+ if(!box) return;
+ var hidden = box.style.display === 'none' || !box.style.display;
+ box.style.display = hidden ? 'block' : 'none';
+ if(linkEl){
+  var txt = linkEl.textContent;
+  linkEl.textContent = hidden
+   ? txt.replace('▾', '▴').replace('показать ', 'скрыть ')
+   : txt.replace('▴', '▾').replace('скрыть ', 'показать ');
+ }
+};
 
 // v326: ЧЕСТНАЯ Meta-воронка по матчингу телефонов + marquiz тегу
 window._amoHonestCache = {};
