@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v417</title>
+<title>SalesDoc — Финансовый Дашборд v418</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4703,6 +4703,10 @@ body.light #view-ticket-card .tk-input select option { background:#FFFFFF !impor
    карточки через .route-trash-visible на body. Подсвечивается ярче когда курсор над ней. */
 body.route-trash-visible #route-trash { display:flex !important; }
 #route-trash.route-trash-active { background:rgba(255,69,58,.22) !important; border-color:rgba(255,69,58,.85) !important; transform:scale(1.06); }
+/* v418: красный бейдж на табе «Поддержка» — число моих висящих тикетов.
+   Показывается только когда display снят с none из JS. Position относительно кнопки. */
+.cli-tab { position:relative; }
+.cli-tab-badge { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; margin-left:6px; border-radius:9px; background:#FF453A; color:#fff; font-size:10px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums; box-shadow:0 1px 4px rgba(255,69,58,.5); vertical-align:middle; }
 </style>
 </head>
 <body>
@@ -4867,7 +4871,7 @@ body.route-trash-visible #route-trash { display:flex !important; }
  <!-- v365: убраны фантомные вкладки «Все·скоро», «В риске·скоро», «Расторгнутые·скоро» — UX-критик сказал что они дразнят оператора -->
  <button class="cli-tab" data-clients-tab="route" onclick="clientsGoTab('route')">Маршрут клиента</button>
  <button class="cli-tab" data-clients-tab="my-clients" onclick="clientsGoTab('my-clients')">Мои клиенты</button>
- <button class="cli-tab" data-clients-tab="tickets" onclick="clientsGoTab('tickets')">Поддержка</button>
+ <button class="cli-tab" data-clients-tab="tickets" onclick="clientsGoTab('tickets')">Поддержка<span id="tickets-tab-badge" class="cli-tab-badge" style="display:none"></span></button>
  <button class="cli-tab" data-clients-tab="kanban" onclick="clientsGoTab('kanban')">Внедрение (старый)</button>
  <button class="cli-tab" data-clients-tab="newclients" onclick="clientsGoTab('newclients')">Новые</button>
  <button class="cli-tab" data-clients-tab="activeclients" onclick="clientsGoTab('activeclients')">Действующие</button>
@@ -8232,6 +8236,9 @@ function applyUserAccess() {
  // topbar add btn
  // Кнопка Добавить скрыта
  document.querySelector('.add-btn').style.display = 'none';
+ // v418: после входа подтянуть число висящих тикетов и отрисовать кружок-индикатор
+ // на табе «Поддержка». setTimeout чтоб не блокировать рендер сразу после логина.
+ setTimeout(function(){ if(typeof ticketsLoadBadgeOnly === 'function') ticketsLoadBadgeOnly(); }, 500);
 }
 
 
@@ -21959,6 +21966,60 @@ var TICKETS_STAGES = [
 ];
 var ticketsList = [];
 
+// v418: операторы поддержки (whitelist из api/cards.js TICKET_OPERATORS).
+// Используется чтобы определить — текущий пользователь оператор или CEO/админ.
+var _TICKETS_BADGE_OPERATORS = ['Айдос','Акбар','Самат','Нурай'];
+
+// v418: вернуть имя оператора если текущий пользователь — оператор поддержки.
+// null если CEO/админ/не залогинен. Сверяем по первому слову currentUser.name
+// (в базе операторы — одно имя, в профиле может быть «Айдос Хапез»).
+function _ticketsCurrentOperatorName(){
+ if(typeof currentUser === 'undefined' || !currentUser || !currentUser.name) return null;
+ var firstWord = String(currentUser.name).trim().split(/\s+/)[0];
+ return _TICKETS_BADGE_OPERATORS.indexOf(firstWord) >= 0 ? firstWord : null;
+}
+
+// v418: посчитать мои висящие тикеты по уже загруженному ticketsList.
+// «Мои» — тикеты где явно назначен этот оператор ИЛИ куратор клиента = этот оператор.
+// Если пользователь не оператор (CEO) — считаем общее число висящих.
+// API /api/cards?entity=ticket по умолчанию уже отдаёт только не-closed тикеты.
+function _ticketsCountForBadge(){
+ var me = _ticketsCurrentOperatorName();
+ if(!me) return ticketsList.length;
+ return ticketsList.filter(function(t){
+  if(t.operator === me) return true;
+  if(t.clients && t.clients.curator_operator === me) return true;
+  return false;
+ }).length;
+}
+
+// v418: обновить бейдж-кружок на табе «Поддержка». Скрываем когда 0,
+// показываем число когда >0, и «99+» если очень много (не лезет в кружок).
+function _ticketsRenderBadge(){
+ var el = document.getElementById('tickets-tab-badge');
+ if(!el) return;
+ var n = _ticketsCountForBadge();
+ if(!n){
+  el.style.display = 'none';
+  el.textContent = '';
+  return;
+ }
+ el.style.display = 'inline-flex';
+ el.textContent = n > 99 ? '99+' : String(n);
+}
+
+// v418: вызывается из глобальной точки (или setTimeout после авторизации) — делает
+// собственный лёгкий fetch тикетов и пишет в бейдж, не трогая канбан.
+async function ticketsLoadBadgeOnly(){
+ try {
+  var d = await sbFetch('/api/cards?entity=ticket');
+  if(d && d.ok){
+   ticketsList = d.tickets || [];
+   _ticketsRenderBadge();
+  }
+ } catch(_){}
+}
+
 async function ticketsLoad(){
  var hub = document.getElementById('tickets-head-sub');
  if(hub) hub.textContent = '· загрузка…';
@@ -22005,6 +22066,7 @@ async function ticketsLoad(){
   }
   ticketsUpdateStats();
   ticketsRender();
+  _ticketsRenderBadge(); // v418: обновить кружок-индикатор на табе
   if(hub){
    var now = new Date();
    var hh = String(now.getHours()).padStart(2,'0');
