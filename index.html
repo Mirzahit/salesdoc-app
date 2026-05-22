@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v436</title>
+<title>SalesDoc — Финансовый Дашборд v437</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18854,6 +18854,9 @@ var INTG_STAGES = [
  { key: 'Готово',   label: 'Готово',    color: '#34C77A' },
  { key: 'Отменено', label: 'Отменено',  color: '#D67373' }
 ];
+// v437: список интеграторов (команда интеграции SalesDoc).
+// Используется как whitelist для выпадашки «Оператор» в карте интеграции.
+var INTG_OPERATORS = ['Аян','Дулат','Абзал'];
 
 function intgSbRender(items){
  var listEl = document.getElementById('intg-sb-list');
@@ -18907,11 +18910,9 @@ function intgSbRender(items){
       dlBadge = '<span style="font-size:10.5px;padding:2px 8px;border-radius:999px;background:' + dlBg + ';color:' + dlCol + ';font-weight:600">' + dlText + '</span>';
      }
     }
-    // v433: карточка в стиле Маршрута клиента (Liquid Glass, как v366).
-    // Клик открывает главную карту клиента (view-route-card) — ту же что и в Маршруте.
-    var clickAttr = r.client_id
-     ? 'onclick="routeOpenClient(\'' + _escHtml(r.client_id) + '\')"'
-     : 'onclick="alert(\'У этой интеграции нет привязки к клиенту\')"';
+    // v437: клик открывает карту ИНТЕГРАЦИИ (логин/пароль, сервер, комментарий).
+    // Карта клиента у этих клиентов почти пустая — интегратору нужны свои поля.
+    var clickAttr = 'onclick="intgOpenCard(\'' + _escHtml(r.id) + '\')"';
     html += '<div ' + clickAttr + ' onmouseover="this.style.background=\'var(--ds-glass-card-hover)\';this.style.transform=\'translateY(-1px)\';this.style.borderColor=\'var(--ds-glass-border-bright)\'" onmouseout="this.style.background=\'var(--ds-glass-card)\';this.style.transform=\'\';this.style.borderColor=\'var(--ds-glass-border)\'" style="background:var(--ds-glass-card);backdrop-filter:saturate(180%) blur(12px);-webkit-backdrop-filter:saturate(180%) blur(12px);border:1px solid var(--ds-glass-border);border-radius:14px;padding:12px 14px;cursor:pointer;transition:background .2s,transform .2s,border-color .2s;box-shadow:0 4px 16px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.06)">';
     html += '<div style="margin-bottom:4px;font-weight:600;font-size:13px;color:var(--accent,#34C77A)">' + _escHtml(r.company_name || '—') + '</div>';
     if(typePkg) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(typePkg) + '</div>';
@@ -19039,33 +19040,63 @@ function intgRenderCard(card){
   if(isNaN(d)) return s;
   return String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + d.getFullYear();
  }
+ // v437: addRow поддерживает editable — клик открывает _openFieldEditor.
+ // editOpts: { field, type, choices?, rows? } — то что отдадим в _openFieldEditor.
  function addRow(label, value, opts){
+  opts = opts || {};
   var row = document.createElement('div');
-  row.style.cssText = 'display:flex;padding:8px 0;border-bottom:1px solid var(--border-faint);font-size:13px;gap:10px';
+  row.style.cssText = 'display:flex;padding:8px 0;border-bottom:1px solid var(--border-faint);font-size:13px;gap:10px;align-items:flex-start';
   var lab = document.createElement('div');
-  lab.style.cssText = 'flex:0 0 130px;color:var(--text-soft);font-size:11.5px';
+  lab.style.cssText = 'flex:0 0 130px;color:var(--text-soft);font-size:11.5px;padding-top:2px';
   lab.textContent = label;
   var val = document.createElement('div');
   val.style.cssText = 'flex:1;color:var(--text);min-width:0;word-break:break-word';
-  if(opts && opts.mono) val.style.fontFamily = 'monospace';
-  if(opts && opts.pre) val.style.whiteSpace = 'pre-wrap';
-  val.textContent = value || '—';
+  if(opts.mono) val.style.fontFamily = 'monospace';
+  if(opts.pre) val.style.whiteSpace = 'pre-wrap';
+  val.textContent = (value === 0 || value) ? value : '—';
+  if(opts.editable){
+   row.style.cursor = 'pointer';
+   row.title = 'Кликни чтобы изменить';
+   // Подсветка hover для подсказки кликабельности
+   row.addEventListener('mouseenter', function(){ if(row.dataset.editing!=='1') row.style.background = 'var(--surface-2)'; });
+   row.addEventListener('mouseleave', function(){ row.style.background = ''; });
+   row.addEventListener('click', function(){
+    var editOpts = Object.assign({}, opts.editOpts || {}, { entity:'integration', editable:true });
+    _openFieldEditor(row, val, value, editOpts);
+   });
+  }
   row.appendChild(lab); row.appendChild(val);
   fieldsEl.appendChild(row);
  }
+ addRow('Статус', card.status, {
+  editable:true,
+  editOpts:{ field:'status', type:'select', choices:INTG_STAGES.map(function(s){ return s.key; }), rawValue:card.status }
+ });
  addRow('Тип',         card.type);
  addRow('Пакет',       card.package);
  addRow('Вид базы',    card.db_type);
- addRow('Оператор',    card.operator);
+ addRow('Оператор', card.operator, {
+  editable:true,
+  editOpts:{ field:'operator', type:'select', choices:INTG_OPERATORS, rawValue:card.operator }
+ });
  addRow('Менеджер',    card.manager);
  addRow('Дата оплаты', fmtDate(card.date_paid));
  addRow('Взято в работу', fmtDate(card.date_taken));
- addRow('Срок',        fmtDate(card.deadline));
+ addRow('Срок', fmtDate(card.deadline), {
+  editable:true,
+  editOpts:{ field:'deadline', type:'date', rawValue:card.deadline }
+ });
  addRow('Исполнено',   fmtDate(card.date_done));
- addRow('Логин/пароль', card.login_password, { mono: true, pre: true });
+ addRow('Логин/пароль', card.login_password, {
+  mono:true, pre:true, editable:true,
+  editOpts:{ field:'login_password', type:'textarea', rows:3, rawValue:card.login_password }
+ });
  addRow('Сервер',      card.server, { mono: true });
  addRow('Контакты',    card.contact_persons, { pre: true });
- addRow('Комментарий', card.comment, { pre: true });
+ addRow('Комментарий', card.comment, {
+  pre:true, editable:true,
+  editOpts:{ field:'comment', type:'textarea', rows:4, rawValue:card.comment }
+ });
 }
 
 function intgRenderCardFeed(items){
@@ -23931,10 +23962,26 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
    input.appendChild(o);
   });
   input.value = opts.rawValue || '';
+ } else if(opts.type === 'textarea'){
+  // v437: многострочное поле для login_password / comment / contact_persons
+  input = document.createElement('textarea');
+  input.rows = opts.rows || 3;
+  input.value = opts.rawValue != null ? String(opts.rawValue) : '';
+  input.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--amocard-accent);background:var(--amocard-surface);color:var(--amocard-text);border-radius:6px;font-family:inherit;font-size:13.5px;outline:none;resize:vertical;min-height:60px';
  } else {
   input = document.createElement('input');
-  input.type = opts.type === 'number' ? 'number' : 'text';
-  input.value = opts.rawValue != null ? String(opts.rawValue) : '';
+  // v437: type='date' для дедлайнов — нативный date picker
+  if(opts.type === 'number') input.type = 'number';
+  else if(opts.type === 'date') input.type = 'date';
+  else input.type = 'text';
+  // Для date — приводим к YYYY-MM-DD (input[type=date] требует ISO)
+  if(opts.type === 'date' && opts.rawValue){
+   var _d = new Date(opts.rawValue);
+   if(!isNaN(_d)) input.value = _d.toISOString().slice(0,10);
+   else input.value = '';
+  } else {
+   input.value = opts.rawValue != null ? String(opts.rawValue) : '';
+  }
   input.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--amocard-accent);background:var(--amocard-surface);color:var(--amocard-text);border-radius:6px;font-family:inherit;font-size:13.5px;outline:none';
  }
  valueEl.appendChild(input);
@@ -23946,6 +23993,12 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
  }
  function cancel(){
   if(done) return; done = true;
+  // v437: для интеграции — своя разметка (не amocard), перерисовываем карту целиком
+  if(opts.entity === 'integration'){
+   cleanup();
+   if(_intgCurrentCard) intgRenderCard(_intgCurrentCard);
+   return;
+  }
   _renderFieldValue(valueEl, currentDisplayValue, opts);
   if(opts.editable){
    var c = document.createElement('span'); c.className = 'amocard-caret'; c.textContent = '▾';
@@ -23978,9 +24031,18 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
    var body = {}; body[opts.field] = newVal;
    var url, method = 'PATCH';
    if(opts.entity === 'card'){
+    // v437: синтетическая карта клиента (id='client:SD-KZ-...') не существует в kanban_cards.
+    // Поля сделки нельзя сохранять — нужно сначала создать карточку Внедрения.
+    if(_routeCurrentCard && String(_routeCurrentCard.id||'').indexOf('client:') === 0){
+     throw new Error('У клиента нет активной карточки Внедрения — поля сделки сохранять некуда. Создайте карточку или редактируйте контактные данные.');
+    }
     url = '/api/cards?id=' + encodeURIComponent(_routeCurrentCard.id);
    } else if(opts.entity === 'client'){
     url = '/api/clients?client_id=' + encodeURIComponent(_routeCurrentCard.client_id);
+   } else if(opts.entity === 'integration'){
+    // v437: PATCH карты интеграции через /api/cards?entity=integration&id=...
+    if(!_intgCurrentCard || !_intgCurrentCard.id) throw new Error('нет открытой карты интеграции');
+    url = '/api/cards?entity=integration&id=' + encodeURIComponent(_intgCurrentCard.id);
    } else {
     throw new Error('entity не задан');
    }
@@ -23995,17 +24057,27 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
      var idx = routeCards.findIndex(function(c){ return c.id === _routeCurrentCard.id; });
      if(idx >= 0) routeCards[idx][opts.field] = newVal;
     }
+   } else if(opts.entity === 'integration'){
+    _intgCurrentCard[opts.field] = newVal;
    } else {
     if(!_routeCurrentCard.clients) _routeCurrentCard.clients = {};
     _routeCurrentCard.clients[opts.field] = newVal;
    }
    cleanup();
    // Перерисуем всю секцию — проще чем точечно обновлять
-   _routeRenderAmo();
-   // v391: если изменили operator карточки — Канбан-доска должна обновить отображение
-   // (новый оператор появится на превью). Также при смене client.curator_operator не критично.
-   if(opts.entity === 'card' && opts.field === 'operator' && typeof routeRender === 'function'){
-    try { routeRender(); } catch(_){}
+   if(opts.entity === 'integration'){
+    intgRenderCard(_intgCurrentCard);
+    // Если изменили status или operator — обновим канбан на странице ниже
+    if((opts.field === 'status' || opts.field === 'operator') && typeof intgSbLoad === 'function'){
+     try { intgSbLoad(); } catch(_){}
+    }
+   } else {
+    _routeRenderAmo();
+    // v391: если изменили operator карточки — Канбан-доска должна обновить отображение
+    // (новый оператор появится на превью). Также при смене client.curator_operator не критично.
+    if(opts.entity === 'card' && opts.field === 'operator' && typeof routeRender === 'function'){
+     try { routeRender(); } catch(_){}
+    }
    }
   } catch(e){
    // v388: при ошибке возвращаем поле в исходное состояние (cancel), а не оставляем
@@ -24017,9 +24089,16 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
 
  // v388: для select слушаем ТОЛЬКО change (blur+change давали двойной save с race).
  // Для input — Enter сохраняет, ESC отменяет, blur сохраняет с задержкой 100мс.
+ // v437: для textarea Enter — перенос строки (default), сохраняем только по Ctrl/Cmd+Enter или blur.
  input.addEventListener('keydown', function(e){
-  if(e.key === 'Enter'){ e.preventDefault(); save(); }
-  else if(e.key === 'Escape'){ e.preventDefault(); cancel(); }
+  if(e.key === 'Enter'){
+   if(opts.type === 'textarea'){
+    if(e.ctrlKey || e.metaKey){ e.preventDefault(); save(); }
+    // иначе — переносим строку, default behaviour
+   } else {
+    e.preventDefault(); save();
+   }
+  } else if(e.key === 'Escape'){ e.preventDefault(); cancel(); }
  });
  if(opts.type === 'select'){
   input.addEventListener('change', function(){ save(); });
@@ -24040,6 +24119,10 @@ async function _routeRenderAmo(){
  if(body) body.replaceChildren();
  var card = _routeCurrentCard;
  var cl = card.clients || {};
+ // v437: синтетическая карта (открыта через routeOpenClient без активной карточки Внедрения)
+ // не имеет реальной записи в kanban_cards — поля сделки нельзя сохранять.
+ // Поля entity='client' работают нормально.
+ var isSynthetic = String(card.id || '').indexOf('client:') === 0;
 
  // v391: подсказка-онбординг если карточка без оператора. Помогает оператору при
  // первом входе понять что делать: «Возьмите карточку → кликните Ответственный».
@@ -24068,6 +24151,8 @@ async function _routeRenderAmo(){
  }
  function addField(label, value, opts){
   opts = opts || {};
+  // v437: у синтетической карты поля сделки (entity='card') нельзя сохранить — снимаем editable
+  if(isSynthetic && opts.editable && opts.entity === 'card') opts.editable = false;
   var f = document.createElement('div'); f.className = 'amocard-field';
   var l = document.createElement('div'); l.className = 'amocard-field-label';
   l.textContent = label;
