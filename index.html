@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v445</title>
+<title>SalesDoc — Финансовый Дашборд v446</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4804,6 +4804,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="nav-group-trigger nav-btn"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect class="nav-icon-stroke" x="3" y="3" width="14" height="14" rx="2" stroke-width="1.5"/><path class="nav-icon-stroke" d="M6 7h8M6 10h5M6 13h7" stroke-width="1.5" stroke-linecap="round"/></svg><div class="nav-label">Инструменты</div></div>
  <div class="nav-group-popup">
  <div class="nav-popup-title">Инструменты</div>
+ <div class="nav-item" data-view="wig" onclick="showView('wig')">Цель</div>
+ <div class="nav-item" data-view="wig-edit" onclick="showView('wig-edit')">4Д</div>
  <div class="nav-item" data-view="statistics" onclick="showView('statistics')">Статистики</div>
  <div class="nav-item" data-view="marketing" onclick="showView('marketing')">Маркетинг</div>
  <div class="nav-item" data-view="planning" onclick="showView('planning')">Планёрки</div>
@@ -5591,6 +5593,89 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 
 </div>
  <!-- /MARKETING VIEW -->
+
+ <!-- v446: ЦЕЛЬ — табло главной цели квартала (видно всей команде, методика 4DX Шона Кови) -->
+ <div id="view-wig" style="display:none">
+  <div id="wig-empty" style="display:none;text-align:center;padding:80px 20px">
+   <div style="font-size:22px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Цель пока не задана</div>
+   <div style="font-size:13px;color:var(--text-muted)">CEO задаст её в разделе «4Д»</div>
+  </div>
+  <div id="wig-board" style="display:none;max-width:720px;margin:32px auto;padding:32px;background:var(--surface);border:1px solid var(--border-faint);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.18)">
+   <div id="wig-title-xl" style="font-size:28px;font-weight:700;color:var(--text);letter-spacing:-0.02em;line-height:1.2;text-align:center;margin-bottom:24px"></div>
+   <div style="text-align:center;margin-bottom:18px">
+    <div id="wig-numbers" style="font-size:48px;font-weight:800;color:var(--text);letter-spacing:-0.03em;font-variant-numeric:tabular-nums"></div>
+   </div>
+   <div style="margin-bottom:14px">
+    <div style="height:14px;border-radius:999px;background:var(--surface-2);overflow:hidden">
+     <div id="wig-bar-fill" style="height:100%;border-radius:999px;background:#7FB89E;width:0;transition:width .5s,background .3s"></div>
+    </div>
+    <div id="wig-pct-line" style="margin-top:8px;font-size:13px;color:var(--text-soft);text-align:center"></div>
+   </div>
+   <div id="wig-status-line" style="text-align:center;margin:18px 0;padding:10px;border-radius:10px;font-size:14px;font-weight:600"></div>
+   <div id="wig-why" style="font-size:14px;color:var(--text-soft);line-height:1.5;text-align:center;padding:14px 20px;border-top:1px solid var(--border-faint);margin-top:18px;display:none"></div>
+   <div id="wig-quick-update" style="text-align:center;margin-top:18px;display:none">
+    <button onclick="wigQuickUpdate()" style="padding:8px 16px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:12px;font-weight:600;cursor:pointer">Обновить факт</button>
+   </div>
+  </div>
+  <div id="wig-done" style="display:none;text-align:center;padding:60px 20px">
+   <div id="wig-done-title" style="font-size:28px;font-weight:700;margin-bottom:16px"></div>
+   <div id="wig-done-line" style="font-size:18px;color:var(--text-soft)"></div>
+  </div>
+ </div>
+ <!-- /ЦЕЛЬ -->
+
+ <!-- v446: 4Д — конструктор главной цели (виден только CEO) -->
+ <div id="view-wig-edit" style="display:none">
+  <div style="max-width:560px;margin:0 auto">
+   <div style="margin-bottom:18px">
+    <div style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.3px">Главная цель квартала</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:3px">Видна всей команде на странице «Цель»</div>
+   </div>
+   <div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:24px">
+    <div style="margin-bottom:14px">
+     <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Что хотим достичь</label>
+     <input id="wig-f-title" type="text" maxlength="120" placeholder="Например: MRR 7 миллионов" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 140px;gap:12px;margin-bottom:14px">
+     <div>
+      <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Целевая цифра</label>
+      <input id="wig-f-target" type="number" inputmode="numeric" placeholder="7000000" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px">
+     </div>
+     <div>
+      <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Единица</label>
+      <select id="wig-f-unit" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px">
+       <option value="₸">₸</option>
+       <option value="шт">шт</option>
+       <option value="%">%</option>
+       <option value="клиентов">клиентов</option>
+       <option value="иное">иное</option>
+      </select>
+     </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+     <div>
+      <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Где мы сейчас</label>
+      <input id="wig-f-current" type="number" inputmode="numeric" placeholder="0" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px">
+     </div>
+     <div>
+      <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">До какого числа</label>
+      <input id="wig-f-deadline" type="date" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px">
+     </div>
+    </div>
+    <div style="margin-bottom:18px">
+     <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Зачем это важно <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.6">(необязательно)</span></label>
+     <textarea id="wig-f-why" rows="3" maxlength="280" placeholder="Мотивация для команды — одна-две строки" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:13px;line-height:1.5;resize:vertical;font-family:inherit"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+     <button id="wig-btn-publish" onclick="wigPublish()" style="padding:10px 18px;border:none;border-radius:8px;background:var(--accent, #5489BB);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Вывести на табло</button>
+     <button id="wig-btn-save" onclick="wigSave()" style="padding:10px 18px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;display:none">Сохранить изменения</button>
+     <button id="wig-btn-unpublish" onclick="wigUnpublish()" style="padding:10px 18px;border:1px solid var(--border-faint);border-radius:8px;background:transparent;color:#D67373;font-size:13px;font-weight:600;cursor:pointer;display:none">Снять с табло</button>
+    </div>
+    <div id="wig-edit-status" style="margin-top:14px;font-size:11px;color:var(--text-muted)"></div>
+   </div>
+  </div>
+ </div>
+ <!-- /4Д -->
 
  <!-- v165: PLANNING / SPRINTS VIEW -->
  <div id="view-planning" style="display:none;position:relative">
@@ -7776,13 +7861,13 @@ const ROLE_LABELS = {
 // accountant: финансы и расходы — без канбана/маркетинга/HR
 // viewer: только просмотр финансов и команды
 const ROLE_DEFAULTS = {
- admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
- accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:1,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,add_payments:1,add_acts:1,edit_plans:0,manage_employees:0 },
- viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:1,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:1,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:0,manage_employees:0 },
+ viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
 };
 
 // v151: Email-список тех, кому разрешён Ассистент. Не через роль — чтобы Arslan
@@ -7793,6 +7878,15 @@ function isAssistantAllowed(user) {
  if (!user) return false;
  var em = String(user.email||'').trim().toLowerCase();
  return ASSISTANT_ALLOWED_EMAILS.indexOf(em) !== -1;
+}
+
+// v446: кто видит конструктор «4Д» (главная цель). По умолчанию — только CEO.
+// «Цель» (табло) видна всем через access view_wig=1 в каждой роли.
+const WIG_EDITOR_EMAILS = ['office@salesdoc.io'];
+function isWigEditorAllowed(user){
+ if (!user) return false;
+ var em = String(user.email||'').trim().toLowerCase();
+ return WIG_EDITOR_EMAILS.indexOf(em) !== -1;
 }
 
 // ============================================================
@@ -8348,11 +8442,16 @@ function applyUserAccess() {
  // v180: фильтруем И обычные пункты, И solo-кнопку «Дашборд» (она `nav-item-solo`).
  // v261: добавлены отсутствовавшие view (calendar/supportdash/activeclients/botadmin) — раньше
  // эти пункты НЕ скрывались в навигации, например оператор видел «Telegram-бот».
- const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',settings:'view_settings',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin'};
+ const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',settings:'view_settings',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',wig:'view_wig'/* v446: wig-edit фильтруется отдельной веткой */};
  document.querySelectorAll('.nav-item[data-view],.nav-item-solo[data-view]').forEach(el=>{
  const view=el.dataset.view;
  if (view === 'assistant') {
  el.classList.toggle('hidden', !isAssistantAllowed(u));
+ return;
+ }
+ // v446: «4Д» — только CEO (email-whitelist, не через роль)
+ if (view === 'wig-edit') {
+ el.classList.toggle('hidden', !isWigEditorAllowed(u));
  return;
  }
  const key=viewMap[view];
@@ -11869,14 +11968,19 @@ function showView(v) {
  try { showNotif('Нет доступа', 'Ассистент доступен только CEO.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
- var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',settings:'view_settings'};
+ // v446: «4Д» — только CEO. Защита от обхода через DevTools showView('wig-edit').
+ if (v === 'wig-edit' && !isWigEditorAllowed(currentUser)) {
+ try { showNotif('Нет доступа', 'Раздел 4Д доступен только CEO.'); } catch(_){}
+ v = defaultViewForUser(currentUser);
+ }
+ var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',settings:'view_settings',wig:'view_wig'};
  var _need = _accessMap[v];
  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
  }
- ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','my-clients','tickets','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin'].forEach(x=>{
+ ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','my-clients','tickets','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin','wig','wig-edit'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
@@ -11910,8 +12014,11 @@ function showView(v) {
  if (v === 'my-clients' && typeof myClientsLoad === 'function') { try { myClientsLoad(); } catch(_){} }
  // v393: Поддержка — Канбан тикетов
  if (v === 'tickets' && typeof ticketsLoad === 'function') { try { ticketsLoad(); } catch(_){} }
- // v165: инициализация Планёрок при заходе
+  // v165: инициализация Планёрок при заходе
  if (v === 'planning' && typeof planningInit === 'function') { try { planningInit(); } catch(_){} }
+ // v446: инициализация табло «Цель» и конструктора «4Д»
+ if (v === 'wig' && typeof wigLoadAndRender === 'function') { try { wigLoadAndRender(); } catch(_){} }
+ if (v === 'wig-edit' && typeof wigLoadAndFillForm === 'function') { try { wigLoadAndFillForm(); } catch(_){} }
  // Hide fullscreen card page when switching views
  document.getElementById('view-kb-card').style.display='none';
  // Hide marketing subpages
@@ -14851,6 +14958,238 @@ async function planSyncPush(){
  planUpdateSyncBadge('offline');
  }
 }
+
+// v446: главная цель квартала (4DX) — загрузка, рендер табло, форма конструктора, сохранение.
+var _wigCache = null;
+
+async function wigLoad(){
+ try {
+  var d = await sbFetch('/api/wig');
+  _wigCache = (d && d.ok && d.wig) ? d.wig : { published:false };
+ } catch(e){
+  _wigCache = { published:false };
+ }
+ return _wigCache;
+}
+
+function _wigFmtNum(n){
+ if(!n && n !== 0) return '—';
+ n = Number(n);
+ if(Math.abs(n) >= 1000000) return (n/1000000).toFixed(n%1000000===0?0:1).replace('.0','') + 'М';
+ if(Math.abs(n) >= 1000) return (n/1000).toFixed(0) + 'К';
+ return String(Math.round(n));
+}
+
+function _wigDaysBetween(fromIso, toIso){
+ try {
+  var a = new Date(fromIso), b = new Date(toIso);
+  return Math.round((b - a) / 86400000);
+ } catch(e){ return 0; }
+}
+
+async function wigLoadAndRender(){
+ await wigLoad();
+ wigRender();
+}
+
+function wigRender(){
+ var w = _wigCache || { published:false };
+ var empty = document.getElementById('wig-empty');
+ var board = document.getElementById('wig-board');
+ var done = document.getElementById('wig-done');
+ if(empty) empty.style.display = 'none';
+ if(board) board.style.display = 'none';
+ if(done) done.style.display = 'none';
+
+ if(!w.published || !w.title){
+  if(empty) empty.style.display = 'block';
+  return;
+ }
+
+ var todayIso = new Date().toISOString().slice(0,10);
+ var deadlinePassed = w.deadline && w.deadline < todayIso;
+ var target = Number(w.target) || 0;
+ var current = Number(w.current) || 0;
+
+ // Если дедлайн прошёл — отдельный экран «Цель завершена»
+ if(deadlinePassed){
+  if(done){
+   var dtitle = document.getElementById('wig-done-title');
+   var dline = document.getElementById('wig-done-line');
+   var hit = current >= target;
+   if(dtitle){
+    dtitle.textContent = hit ? 'Цель достигнута' : 'Срок вышел';
+    dtitle.style.color = hit ? '#7FB89E' : '#D67373';
+   }
+   if(dline) dline.textContent = _wigFmtNum(current) + ' ' + (w.unit||'') + ' из ' + _wigFmtNum(target) + ' ' + (w.unit||'');
+   done.style.display = 'block';
+  }
+  return;
+ }
+
+ // Обычный режим — рисуем табло
+ if(board) board.style.display = 'block';
+ var titleEl = document.getElementById('wig-title-xl');
+ if(titleEl) titleEl.textContent = w.title;
+ var nums = document.getElementById('wig-numbers');
+ if(nums) nums.textContent = _wigFmtNum(current) + ' ' + (w.unit||'') + ' / ' + _wigFmtNum(target) + ' ' + (w.unit||'');
+
+ var progressPct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
+ var bar = document.getElementById('wig-bar-fill');
+
+ // «Идём по плану / отстаём / сильно отстаём» — сравниваем прогресс с прошедшим временем
+ var status = 'winning', statusText = 'Идём по плану', statusBg = 'rgba(127,184,158,.16)', statusFg = '#5BA683';
+ var pctLine = Math.round(progressPct) + '%';
+ if(w.started_at && w.deadline){
+  var total = _wigDaysBetween(w.started_at, w.deadline);
+  var passed = _wigDaysBetween(w.started_at, todayIso);
+  var daysLeft = Math.max(0, total - passed);
+  pctLine += ' · осталось ' + daysLeft + ' дн.';
+  if(total > 0){
+   var timePct = Math.min(100, Math.max(0, (passed / total) * 100));
+   var diff = progressPct - timePct;
+   if(diff < -15){ status = 'losing'; statusText = 'Сильно отстаём'; statusBg = 'rgba(214,115,115,.16)'; statusFg = '#D67373'; }
+   else if(diff < -5){ status = 'behind'; statusText = 'Отстаём'; statusBg = 'rgba(214,163,114,.16)'; statusFg = '#C28A4D'; }
+  }
+ } else {
+  pctLine = Math.round(progressPct) + '%';
+ }
+ if(bar){
+  bar.style.width = progressPct + '%';
+  bar.style.background = status === 'winning' ? '#7FB89E' : (status === 'behind' ? '#D6A372' : '#D67373');
+ }
+ var pctLineEl = document.getElementById('wig-pct-line');
+ if(pctLineEl) pctLineEl.textContent = pctLine;
+ var statusEl = document.getElementById('wig-status-line');
+ if(statusEl){
+  statusEl.textContent = statusText;
+  statusEl.style.background = statusBg;
+  statusEl.style.color = statusFg;
+ }
+ var whyEl = document.getElementById('wig-why');
+ if(whyEl){
+  if(w.why){ whyEl.textContent = w.why; whyEl.style.display = 'block'; }
+  else { whyEl.style.display = 'none'; }
+ }
+ // Кнопка «Обновить факт» — только CEO
+ var quick = document.getElementById('wig-quick-update');
+ if(quick) quick.style.display = (typeof isWigEditorAllowed === 'function' && isWigEditorAllowed(currentUser)) ? 'block' : 'none';
+}
+
+async function wigLoadAndFillForm(){
+ await wigLoad();
+ wigFillForm();
+}
+
+function wigFillForm(){
+ var w = _wigCache || {};
+ var byId = function(id){ return document.getElementById(id); };
+ if(byId('wig-f-title')) byId('wig-f-title').value = w.title || '';
+ if(byId('wig-f-target')) byId('wig-f-target').value = (w.target === 0 || w.target) ? w.target : '';
+ if(byId('wig-f-unit')) byId('wig-f-unit').value = w.unit || '₸';
+ if(byId('wig-f-current')) byId('wig-f-current').value = (w.current === 0 || w.current) ? w.current : '';
+ if(byId('wig-f-deadline')) byId('wig-f-deadline').value = w.deadline || '';
+ if(byId('wig-f-why')) byId('wig-f-why').value = w.why || '';
+ // Если уже опубликовано — показываем кнопку «Сохранить изменения» и «Снять с табло»
+ var publishBtn = byId('wig-btn-publish');
+ var saveBtn = byId('wig-btn-save');
+ var unpubBtn = byId('wig-btn-unpublish');
+ if(w.published){
+  if(publishBtn) publishBtn.style.display = 'none';
+  if(saveBtn) saveBtn.style.display = '';
+  if(unpubBtn) unpubBtn.style.display = '';
+ } else {
+  if(publishBtn) publishBtn.style.display = '';
+  if(saveBtn) saveBtn.style.display = 'none';
+  if(unpubBtn) unpubBtn.style.display = 'none';
+ }
+ var status = byId('wig-edit-status');
+ if(status){
+  if(w.updated_at){
+   var d = new Date(w.updated_at);
+   status.textContent = 'Последнее обновление: ' + d.toLocaleString('ru-RU') + (w.updated_by ? ' · ' + w.updated_by : '');
+  } else {
+   status.textContent = '';
+  }
+ }
+}
+
+function _wigCollectForm(){
+ var byId = function(id){ return document.getElementById(id); };
+ return {
+  title: (byId('wig-f-title')||{}).value || '',
+  target: Number((byId('wig-f-target')||{}).value) || 0,
+  current: Number((byId('wig-f-current')||{}).value) || 0,
+  unit: (byId('wig-f-unit')||{}).value || '₸',
+  deadline: (byId('wig-f-deadline')||{}).value || '',
+  why: (byId('wig-f-why')||{}).value || ''
+ };
+}
+
+async function _wigPost(body){
+ body.updated_by_email = (currentUser && currentUser.email) || '';
+ body.updated_by = (currentUser && currentUser.name) || '';
+ var d = await sbFetch('/api/wig', { method:'POST', body: JSON.stringify(body) });
+ if(!d || !d.ok) throw new Error((d && d.error) || 'Не удалось сохранить');
+ _wigCache = d.wig;
+ return d.wig;
+}
+
+async function wigPublish(){
+ var form = _wigCollectForm();
+ if(!form.title.trim()){ alert('Заполните «Что хотим достичь»'); return; }
+ if(!form.target || form.target <= 0){ alert('Заполните целевую цифру'); return; }
+ if(!form.deadline){ alert('Укажите до какого числа'); return; }
+ try {
+  form.published = true;
+  await _wigPost(form);
+  if(typeof showNotif === 'function') showNotif('Готово', 'Цель видна на табло');
+  wigFillForm();
+ } catch(e){
+  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+ }
+}
+
+async function wigSave(){
+ var form = _wigCollectForm();
+ form.published = !!(_wigCache && _wigCache.published);
+ try {
+  await _wigPost(form);
+  if(typeof showNotif === 'function') showNotif('Сохранено', 'Изменения применены');
+  wigFillForm();
+ } catch(e){
+  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+ }
+}
+
+async function wigUnpublish(){
+ if(!confirm('Снять цель с табло? Команда увидит «Цель пока не задана».')) return;
+ var form = _wigCollectForm();
+ form.published = false;
+ try {
+  await _wigPost(form);
+  if(typeof showNotif === 'function') showNotif('Готово', 'Цель снята с табло');
+  wigFillForm();
+ } catch(e){
+  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+ }
+}
+
+async function wigQuickUpdate(){
+ var w = _wigCache || {};
+ var cur = prompt('Текущее значение факта (' + (w.unit||'') + '):', w.current || 0);
+ if(cur === null) return;
+ var n = Number(String(cur).replace(',', '.'));
+ if(isNaN(n)){ alert('Введите число'); return; }
+ try {
+  await _wigPost({ partial:true, current:n });
+  wigRender();
+  if(typeof showNotif === 'function') showNotif('Обновлено', 'Факт = ' + _wigFmtNum(n) + ' ' + (w.unit||''));
+ } catch(e){
+  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+ }
+}
+
 function planFmtDate(s){ try { var d = new Date(s); return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2); } catch(e){ return s; } }
 function planDaysBetween(a,b){ return Math.max(1, Math.round((new Date(b)-new Date(a))/86400000)+1); }
 function planDayOf(start){ return Math.max(1, Math.min(planDaysBetween(start, (new Date()).toISOString().slice(0,10)), 99)); }
