@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v448</title>
+<title>SalesDoc — Финансовый Дашборд v449</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4804,8 +4804,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="nav-group-trigger nav-btn"><svg class="nav-icon" viewBox="0 0 20 20" fill="none"><rect class="nav-icon-stroke" x="3" y="3" width="14" height="14" rx="2" stroke-width="1.5"/><path class="nav-icon-stroke" d="M6 7h8M6 10h5M6 13h7" stroke-width="1.5" stroke-linecap="round"/></svg><div class="nav-label">Инструменты</div></div>
  <div class="nav-group-popup">
  <div class="nav-popup-title">Инструменты</div>
- <div class="nav-item" data-view="wig" onclick="showView('wig')">Цель</div>
- <div class="nav-item" data-view="wig-edit" onclick="showView('wig-edit')">4Д</div>
+ <!-- v449: одна кнопка «4D» вместо двух старых («Цель» + «4Д»). Внутри — платформа с 5 вкладками. -->
+ <div class="nav-item" data-view="fdx" onclick="showView('fdx')">4D</div>
  <div class="nav-item" data-view="statistics" onclick="showView('statistics')">Статистики</div>
  <div class="nav-item" data-view="marketing" onclick="showView('marketing')">Маркетинг</div>
  <div class="nav-item" data-view="planning" onclick="showView('planning')">Планёрки</div>
@@ -5601,90 +5601,47 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 </div>
  <!-- /MARKETING VIEW -->
 
- <!-- v446: ЦЕЛЬ — табло главной цели квартала (видно всей команде, методика 4DX Шона Кови) -->
- <div id="view-wig" style="display:none">
-  <div id="wig-empty" style="display:none;text-align:center;padding:80px 20px">
-   <div style="font-size:22px;font-weight:700;color:var(--text-muted);margin-bottom:8px">Цель пока не задана</div>
-   <div style="font-size:13px;color:var(--text-muted)">CEO задаст её в разделе «4Д»</div>
-  </div>
-  <div id="wig-board" style="display:none;max-width:720px;margin:32px auto;padding:32px;background:var(--surface);border:1px solid var(--border-faint);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.18)">
-   <div id="wig-title-xl" style="font-size:28px;font-weight:700;color:var(--text);letter-spacing:-0.02em;line-height:1.2;text-align:center;margin-bottom:24px"></div>
-   <div style="text-align:center;margin-bottom:18px">
-    <div id="wig-numbers" style="font-size:48px;font-weight:800;color:var(--text);letter-spacing:-0.03em;font-variant-numeric:tabular-nums"></div>
+ <!-- v449: 4D — платформа методики 4 дисциплин исполнения (Кови).
+      Заменяет старые view-wig (табло) и view-wig-edit (конструктор) — теперь всё внутри одной вкладки.
+      Внутри 5 панелей: Табло / Цели / Опережающие / Планёрки / Аналитика.
+      Иерархия целей: Год → Квартал → Месяц → Неделя. Страны KZ и KG раздельно. -->
+ <div id="view-fdx" style="display:none;position:relative">
+  <!-- Шапка с переключателем вкладок -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+   <div>
+    <div style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.3px">4D — Дисциплины исполнения</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:3px">Главная цель, опережающие действия, планёрки, аналитика</div>
    </div>
-   <div style="margin-bottom:14px">
-    <div style="height:14px;border-radius:999px;background:var(--surface-2);overflow:hidden">
-     <div id="wig-bar-fill" style="height:100%;border-radius:999px;background:#7FB89E;width:0;transition:width .5s,background .3s"></div>
-    </div>
-    <div id="wig-pct-line" style="margin-top:8px;font-size:13px;color:var(--text-soft);text-align:center"></div>
-    <!-- v447: мини-график тренда по истории значений (виден когда есть 2+ записи факта) -->
-    <div id="wig-spark" style="margin-top:14px;display:flex;justify-content:center;align-items:center"></div>
-   </div>
-   <div id="wig-status-line" style="text-align:center;margin:18px 0;padding:10px;border-radius:10px;font-size:14px;font-weight:600"></div>
-   <div id="wig-why" style="font-size:14px;color:var(--text-soft);line-height:1.5;text-align:center;padding:14px 20px;border-top:1px solid var(--border-faint);margin-top:18px;display:none"></div>
-   <div id="wig-quick-update" style="text-align:center;margin-top:18px;display:none">
-    <button onclick="wigQuickUpdate()" style="padding:8px 16px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:12px;font-weight:600;cursor:pointer">Обновить факт</button>
-   </div>
+   <div id="fdx-edit-hint" style="font-size:11px;color:var(--text-muted);display:none">Редактирование доступно CEO</div>
   </div>
-  <div id="wig-done" style="display:none;text-align:center;padding:60px 20px">
-   <div id="wig-done-title" style="font-size:28px;font-weight:700;margin-bottom:16px"></div>
-   <div id="wig-done-line" style="font-size:18px;color:var(--text-soft)"></div>
-  </div>
- </div>
- <!-- /ЦЕЛЬ -->
 
- <!-- v446: 4Д — конструктор главной цели (виден только CEO) -->
- <div id="view-wig-edit" style="display:none">
-  <div style="max-width:560px;margin:0 auto">
-   <div style="margin-bottom:18px">
-    <div style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.3px">Главная цель квартала</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-top:3px">Видна всей команде на странице «Цель»</div>
-   </div>
-   <div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:24px">
-    <div style="margin-bottom:14px">
-     <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Что хотим достичь</label>
-     <input id="wig-f-title" type="text" maxlength="120" placeholder="Например: MRR 7 миллионов" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px">
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 140px;gap:12px;margin-bottom:14px">
-     <div>
-      <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Целевая цифра</label>
-      <input id="wig-f-target" type="number" inputmode="numeric" placeholder="7000000" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px">
-     </div>
-     <div>
-      <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Единица</label>
-      <select id="wig-f-unit" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px">
-       <option value="₸">₸</option>
-       <option value="шт">шт</option>
-       <option value="%">%</option>
-       <option value="клиентов">клиентов</option>
-       <option value="иное">иное</option>
-      </select>
-     </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-     <div>
-      <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Где мы сейчас</label>
-      <input id="wig-f-current" type="number" inputmode="numeric" placeholder="0" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px">
-     </div>
-     <div>
-      <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">До какого числа</label>
-      <input id="wig-f-deadline" type="date" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px">
-     </div>
-    </div>
-    <div style="margin-bottom:18px">
-     <label style="display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em">Зачем это важно <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.6">(необязательно)</span></label>
-     <textarea id="wig-f-why" rows="3" maxlength="280" placeholder="Мотивация для команды — одна-две строки" style="width:100%;padding:10px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:13px;line-height:1.5;resize:vertical;font-family:inherit"></textarea>
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-     <button id="wig-btn-publish" onclick="wigPublish()" style="padding:10px 18px;border:none;border-radius:8px;background:var(--accent, #5489BB);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Вывести на табло</button>
-     <button id="wig-btn-save" onclick="wigSave()" style="padding:10px 18px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;display:none">Сохранить изменения</button>
-     <button id="wig-btn-unpublish" onclick="wigUnpublish()" style="padding:10px 18px;border:1px solid var(--border-faint);border-radius:8px;background:transparent;color:#D67373;font-size:13px;font-weight:600;cursor:pointer;display:none">Снять с табло</button>
-    </div>
-    <div id="wig-edit-status" style="margin-top:14px;font-size:11px;color:var(--text-muted)"></div>
-   </div>
+  <!-- Tab-bar 5 вкладок -->
+  <div id="fdx-tabbar" style="display:flex;gap:4px;padding:4px;background:var(--surface-2);border-radius:10px;border:1px solid var(--border-faint);margin-bottom:18px;overflow-x:auto;flex-wrap:wrap">
+   <button data-fdx-tab="board" onclick="fdxSwitchTab('board')" style="border:none;padding:8px 14px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap">Табло</button>
+   <button data-fdx-tab="goals" onclick="fdxSwitchTab('goals')" style="border:none;padding:8px 14px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap">Цели</button>
+   <button data-fdx-tab="metrics" onclick="fdxSwitchTab('metrics')" style="border:none;padding:8px 14px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap">Опережающие</button>
+   <button data-fdx-tab="sessions" onclick="fdxSwitchTab('sessions')" style="border:none;padding:8px 14px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap">Планёрки</button>
+   <button data-fdx-tab="analytics" onclick="fdxSwitchTab('analytics')" style="border:none;padding:8px 14px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap">Аналитика</button>
+  </div>
+
+  <!-- Контейнеры панелей -->
+  <div id="fdx-pane-board">
+   <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px">Загрузка табло…</div>
+  </div>
+  <div id="fdx-pane-goals" style="display:none">
+   <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px">Скоро — Цели (иерархия Год → Квартал → Месяц → Неделя)</div>
+  </div>
+  <div id="fdx-pane-metrics" style="display:none">
+   <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px">Скоро — Опережающие действия со светофором</div>
+  </div>
+  <div id="fdx-pane-sessions" style="display:none">
+   <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px">Скоро — Планёрки с режимом «идёт сейчас»</div>
+  </div>
+  <div id="fdx-pane-analytics" style="display:none">
+   <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px">Скоро — Аналитика (% выполнения обязательств по людям)</div>
   </div>
  </div>
- <!-- /4Д -->
+ <!-- /4D -->
 
  <!-- v165: PLANNING / SPRINTS VIEW -->
  <div id="view-planning" style="display:none;position:relative">
@@ -8451,16 +8408,12 @@ function applyUserAccess() {
  // v180: фильтруем И обычные пункты, И solo-кнопку «Дашборд» (она `nav-item-solo`).
  // v261: добавлены отсутствовавшие view (calendar/supportdash/activeclients/botadmin) — раньше
  // эти пункты НЕ скрывались в навигации, например оператор видел «Telegram-бот».
- const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',settings:'view_settings',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',wig:'view_wig'/* v446: wig-edit фильтруется отдельной веткой */};
+ // v449: «4D» (fdx) видна всем у кого view_wig. Внутри редактирование защищено отдельно через isWigEditorAllowed.
+ const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',settings:'view_settings',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',fdx:'view_wig'};
  document.querySelectorAll('.nav-item[data-view],.nav-item-solo[data-view]').forEach(el=>{
  const view=el.dataset.view;
  if (view === 'assistant') {
  el.classList.toggle('hidden', !isAssistantAllowed(u));
- return;
- }
- // v446: «4Д» — только CEO (email-whitelist, не через роль)
- if (view === 'wig-edit') {
- el.classList.toggle('hidden', !isWigEditorAllowed(u));
  return;
  }
  const key=viewMap[view];
@@ -11978,19 +11931,15 @@ function showView(v) {
  try { showNotif('Нет доступа', 'Ассистент доступен только CEO.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
- // v446: «4Д» — только CEO. Защита от обхода через DevTools showView('wig-edit').
- if (v === 'wig-edit' && !isWigEditorAllowed(currentUser)) {
- try { showNotif('Нет доступа', 'Раздел 4Д доступен только CEO.'); } catch(_){}
- v = defaultViewForUser(currentUser);
- }
- var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',settings:'view_settings',wig:'view_wig'};
+ // v449: старые «Цель» и «4Д» объединены в одну кнопку «4D» (fdx). Внутри 5 вкладок.
+ var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',settings:'view_settings',fdx:'view_wig'};
  var _need = _accessMap[v];
  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
  }
- ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','my-clients','tickets','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin','wig','wig-edit'].forEach(x=>{
+ ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','my-clients','tickets','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin','fdx'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
@@ -12027,8 +11976,8 @@ function showView(v) {
   // v165: инициализация Планёрок при заходе
  if (v === 'planning' && typeof planningInit === 'function') { try { planningInit(); } catch(_){} }
  // v446: инициализация табло «Цель» и конструктора «4Д»
- if (v === 'wig' && typeof wigLoadAndRender === 'function') { try { wigLoadAndRender(); } catch(_){} }
- if (v === 'wig-edit' && typeof wigLoadAndFillForm === 'function') { try { wigLoadAndFillForm(); } catch(_){} }
+ // v449: единая точка входа в 4D-платформу. Подгружает текущую активную вкладку.
+ if (v === 'fdx' && typeof fdxInit === 'function') { try { fdxInit(); } catch(_){} }
  // Hide fullscreen card page when switching views
  document.getElementById('view-kb-card').style.display='none';
  // Hide marketing subpages
@@ -14969,247 +14918,325 @@ async function planSyncPush(){
  }
 }
 
-// v446: главная цель квартала (4DX) — загрузка, рендер табло, форма конструктора, сохранение.
-var _wigCache = null;
+// v449: модуль 4DX — единая платформа с 5 вкладками. Заменяет старые wig*-функции (v446-v447).
+// Хранилище — Vercel KV через /api/4dx (5 раздельных ключей: goals/metrics/entries/sessions/commitments).
+// Иерархия целей: Год → Квартал → Месяц → Неделя.
+var _fdxState = {
+ currentTab: 'board',
+ board: null,                  // {year_goals, sub_goals, metric_lights, next_session}
+ goals: null,
+ metrics: null,
+ entries: null,
+ sessions: null,
+ commitments: null,
+ loading: {}
+};
 
-async function wigLoad(){
- try {
-  var d = await sbFetch('/api/wig');
-  _wigCache = (d && d.ok && d.wig) ? d.wig : { published:false };
- } catch(e){
-  _wigCache = { published:false };
- }
- return _wigCache;
-}
-
-function _wigFmtNum(n){
+function _fdxCanEdit(){ return typeof isWigEditorAllowed === 'function' && isWigEditorAllowed(currentUser); }
+function _fdxFmtNum(n){
  if(!n && n !== 0) return '—';
  n = Number(n);
  if(Math.abs(n) >= 1000000) return (n/1000000).toFixed(n%1000000===0?0:1).replace('.0','') + 'М';
  if(Math.abs(n) >= 1000) return (n/1000).toFixed(0) + 'К';
  return String(Math.round(n));
 }
+function _fdxDaysLeft(iso){
+ if(!iso) return null;
+ var ms = new Date(iso + 'T23:59:59').getTime() - Date.now();
+ return Math.max(0, Math.round(ms / 86400000));
+}
 
-function _wigDaysBetween(fromIso, toIso){
+async function fdxFetch(entity, params){
+ var qs = 'entity=' + encodeURIComponent(entity);
+ if(typeof currentCountry !== 'undefined' && currentCountry) qs += '&country=' + encodeURIComponent(currentCountry);
+ if(params) Object.keys(params).forEach(function(k){ qs += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); });
  try {
-  var a = new Date(fromIso), b = new Date(toIso);
-  return Math.round((b - a) / 86400000);
- } catch(e){ return 0; }
+  var d = await sbFetch('/api/4dx?' + qs);
+  return (d && d.ok) ? d : null;
+ } catch(e){ return null; }
 }
 
-async function wigLoadAndRender(){
- await wigLoad();
- wigRender();
-}
-
-function wigRender(){
- var w = _wigCache || { published:false };
- var empty = document.getElementById('wig-empty');
- var board = document.getElementById('wig-board');
- var done = document.getElementById('wig-done');
- if(empty) empty.style.display = 'none';
- if(board) board.style.display = 'none';
- if(done) done.style.display = 'none';
-
- if(!w.published || !w.title){
-  if(empty) empty.style.display = 'block';
-  return;
- }
-
- var todayIso = new Date().toISOString().slice(0,10);
- var deadlinePassed = w.deadline && w.deadline < todayIso;
- var target = Number(w.target) || 0;
- var current = Number(w.current) || 0;
-
- // Если дедлайн прошёл — отдельный экран «Цель завершена»
- if(deadlinePassed){
-  if(done){
-   var dtitle = document.getElementById('wig-done-title');
-   var dline = document.getElementById('wig-done-line');
-   var hit = current >= target;
-   if(dtitle){
-    dtitle.textContent = hit ? 'Цель достигнута' : 'Срок вышел';
-    dtitle.style.color = hit ? '#7FB89E' : '#D67373';
-   }
-   if(dline) dline.textContent = _wigFmtNum(current) + ' ' + (w.unit||'') + ' из ' + _wigFmtNum(target) + ' ' + (w.unit||'');
-   done.style.display = 'block';
-  }
-  return;
- }
-
- // Обычный режим — рисуем табло
- if(board) board.style.display = 'block';
- var titleEl = document.getElementById('wig-title-xl');
- if(titleEl) titleEl.textContent = w.title;
- var nums = document.getElementById('wig-numbers');
- if(nums) nums.textContent = _wigFmtNum(current) + ' ' + (w.unit||'') + ' / ' + _wigFmtNum(target) + ' ' + (w.unit||'');
-
- var progressPct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
- var bar = document.getElementById('wig-bar-fill');
-
- // «Идём по плану / отстаём / сильно отстаём» — сравниваем прогресс с прошедшим временем
- var status = 'winning', statusText = 'Идём по плану', statusBg = 'rgba(127,184,158,.16)', statusFg = '#5BA683';
- var pctLine = Math.round(progressPct) + '%';
- if(w.started_at && w.deadline){
-  var total = _wigDaysBetween(w.started_at, w.deadline);
-  var passed = _wigDaysBetween(w.started_at, todayIso);
-  var daysLeft = Math.max(0, total - passed);
-  pctLine += ' · осталось ' + daysLeft + ' дн.';
-  if(total > 0){
-   var timePct = Math.min(100, Math.max(0, (passed / total) * 100));
-   var diff = progressPct - timePct;
-   if(diff < -15){ status = 'losing'; statusText = 'Сильно отстаём'; statusBg = 'rgba(214,115,115,.16)'; statusFg = '#D67373'; }
-   else if(diff < -5){ status = 'behind'; statusText = 'Отстаём'; statusBg = 'rgba(214,163,114,.16)'; statusFg = '#C28A4D'; }
-  }
- } else {
-  pctLine = Math.round(progressPct) + '%';
- }
- if(bar){
-  bar.style.width = progressPct + '%';
-  bar.style.background = status === 'winning' ? '#7FB89E' : (status === 'behind' ? '#D6A372' : '#D67373');
- }
- var pctLineEl = document.getElementById('wig-pct-line');
- if(pctLineEl) pctLineEl.textContent = pctLine;
- // v447: мини-график тренда. statSparkSvg сам возвращает '' если данных <2 — тогда блок остаётся пустой.
- var sparkEl = document.getElementById('wig-spark');
- if(sparkEl){
-  if(Array.isArray(w.history) && w.history.length >= 2 && typeof statSparkSvg === 'function'){
-   var values = w.history.map(function(p){ return Number(p.value) || 0; });
-   var sparkColor = status === 'winning' ? '#7FB89E' : (status === 'behind' ? '#D6A372' : '#D67373');
-   sparkEl.innerHTML = statSparkSvg(values, sparkColor);
-  } else {
-   sparkEl.innerHTML = '';
-  }
- }
- var statusEl = document.getElementById('wig-status-line');
- if(statusEl){
-  statusEl.textContent = statusText;
-  statusEl.style.background = statusBg;
-  statusEl.style.color = statusFg;
- }
- var whyEl = document.getElementById('wig-why');
- if(whyEl){
-  if(w.why){ whyEl.textContent = w.why; whyEl.style.display = 'block'; }
-  else { whyEl.style.display = 'none'; }
- }
- // Кнопка «Обновить факт» — только CEO
- var quick = document.getElementById('wig-quick-update');
- if(quick) quick.style.display = (typeof isWigEditorAllowed === 'function' && isWigEditorAllowed(currentUser)) ? 'block' : 'none';
-}
-
-async function wigLoadAndFillForm(){
- await wigLoad();
- wigFillForm();
-}
-
-function wigFillForm(){
- var w = _wigCache || {};
- var byId = function(id){ return document.getElementById(id); };
- if(byId('wig-f-title')) byId('wig-f-title').value = w.title || '';
- if(byId('wig-f-target')) byId('wig-f-target').value = (w.target === 0 || w.target) ? w.target : '';
- if(byId('wig-f-unit')) byId('wig-f-unit').value = w.unit || '₸';
- if(byId('wig-f-current')) byId('wig-f-current').value = (w.current === 0 || w.current) ? w.current : '';
- if(byId('wig-f-deadline')) byId('wig-f-deadline').value = w.deadline || '';
- if(byId('wig-f-why')) byId('wig-f-why').value = w.why || '';
- // Если уже опубликовано — показываем кнопку «Сохранить изменения» и «Снять с табло»
- var publishBtn = byId('wig-btn-publish');
- var saveBtn = byId('wig-btn-save');
- var unpubBtn = byId('wig-btn-unpublish');
- if(w.published){
-  if(publishBtn) publishBtn.style.display = 'none';
-  if(saveBtn) saveBtn.style.display = '';
-  if(unpubBtn) unpubBtn.style.display = '';
- } else {
-  if(publishBtn) publishBtn.style.display = '';
-  if(saveBtn) saveBtn.style.display = 'none';
-  if(unpubBtn) unpubBtn.style.display = 'none';
- }
- var status = byId('wig-edit-status');
- if(status){
-  if(w.updated_at){
-   var d = new Date(w.updated_at);
-   status.textContent = 'Последнее обновление: ' + d.toLocaleString('ru-RU') + (w.updated_by ? ' · ' + w.updated_by : '');
-  } else {
-   status.textContent = '';
-  }
- }
-}
-
-function _wigCollectForm(){
- var byId = function(id){ return document.getElementById(id); };
- return {
-  title: (byId('wig-f-title')||{}).value || '',
-  target: Number((byId('wig-f-target')||{}).value) || 0,
-  current: Number((byId('wig-f-current')||{}).value) || 0,
-  unit: (byId('wig-f-unit')||{}).value || '₸',
-  deadline: (byId('wig-f-deadline')||{}).value || '',
-  why: (byId('wig-f-why')||{}).value || ''
- };
-}
-
-async function _wigPost(body){
+async function fdxPost(body){
  body.updated_by_email = (currentUser && currentUser.email) || '';
  body.updated_by = (currentUser && currentUser.name) || '';
- var d = await sbFetch('/api/wig', { method:'POST', body: JSON.stringify(body) });
+ if(!body.country && typeof currentCountry !== 'undefined') body.country = currentCountry;
+ var d = await sbFetch('/api/4dx', { method:'POST', body: JSON.stringify(body) });
  if(!d || !d.ok) throw new Error((d && d.error) || 'Не удалось сохранить');
- _wigCache = d.wig;
- return d.wig;
+ return d;
 }
 
-async function wigPublish(){
- var form = _wigCollectForm();
- if(!form.title.trim()){ alert('Заполните «Что хотим достичь»'); return; }
- if(!form.target || form.target <= 0){ alert('Заполните целевую цифру'); return; }
- if(!form.deadline){ alert('Укажите до какого числа'); return; }
- try {
-  form.published = true;
-  await _wigPost(form);
-  if(typeof showNotif === 'function') showNotif('Готово', 'Цель видна на табло');
-  wigFillForm();
- } catch(e){
-  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+function fdxInit(){
+ // Восстанавливаем последнюю вкладку (или board)
+ var savedTab = null;
+ try { savedTab = localStorage.getItem('fdx_tab'); } catch(_){}
+ fdxSwitchTab(savedTab || 'board');
+}
+
+function fdxSwitchTab(tab){
+ if(['board','goals','metrics','sessions','analytics'].indexOf(tab) < 0) tab = 'board';
+ _fdxState.currentTab = tab;
+ try { localStorage.setItem('fdx_tab', tab); } catch(_){}
+ // Скрываем доступ к Аналитике для не-CEO (на случай прямого вызова)
+ if(tab === 'analytics' && !_fdxCanEdit()){
+  if(typeof showNotif === 'function') showNotif('Доступ', 'Аналитика — только для CEO/руководителя.');
+  tab = 'board'; _fdxState.currentTab = 'board';
+ }
+ ['board','goals','metrics','sessions','analytics'].forEach(function(t){
+  var pane = document.getElementById('fdx-pane-' + t);
+  if(pane) pane.style.display = (t === tab) ? '' : 'none';
+ });
+ // Обновить tab-bar (активная кнопка)
+ var bar = document.getElementById('fdx-tabbar');
+ if(bar){
+  bar.querySelectorAll('button[data-fdx-tab]').forEach(function(btn){
+   var isActive = btn.getAttribute('data-fdx-tab') === tab;
+   btn.style.background = isActive ? 'var(--accent, #5489BB)' : 'transparent';
+   btn.style.color = isActive ? '#fff' : 'var(--text-soft)';
+  });
+ }
+ var hint = document.getElementById('fdx-edit-hint');
+ if(hint) hint.style.display = _fdxCanEdit() ? 'none' : 'block';
+ // Рендер контента вкладки
+ if(tab === 'board') fdxRenderBoard();
+ if(tab === 'goals') fdxRenderGoalsPane();
+ if(tab === 'metrics') fdxRenderMetricsPane();
+ if(tab === 'sessions') fdxRenderSessionsPane();
+ if(tab === 'analytics') fdxRenderAnalyticsPane();
+}
+
+// ===== Табло =====
+async function fdxRenderBoard(){
+ var pane = document.getElementById('fdx-pane-board');
+ if(!pane) return;
+ pane.replaceChildren();
+ var loader = document.createElement('div');
+ loader.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
+ loader.textContent = 'Загрузка табло…';
+ pane.appendChild(loader);
+
+ var d = await fdxFetch('board');
+ if(!d || !d.board){
+  loader.textContent = 'Не удалось загрузить табло.';
+  return;
+ }
+ var b = d.board;
+ _fdxState.board = b;
+ pane.replaceChildren();
+
+ // Если нет ни одной опубликованной годовой цели — пустое состояние
+ if(!b.year_goals || !b.year_goals.length){
+  var empty = document.createElement('div');
+  empty.style.cssText = 'padding:60px 20px;text-align:center;color:var(--text-muted)';
+  var t = document.createElement('div'); t.style.cssText = 'font-size:20px;font-weight:700;margin-bottom:8px;color:var(--text-soft)';
+  t.textContent = 'Главная цель пока не задана';
+  var s = document.createElement('div'); s.style.cssText = 'font-size:13px';
+  s.textContent = _fdxCanEdit() ? 'Перейдите на вкладку «Цели» и создайте годовую цель.' : 'Подождите, CEO задаст её на вкладке «Цели».';
+  empty.appendChild(t); empty.appendChild(s);
+  pane.appendChild(empty);
+  return;
+ }
+
+ // Берём первую годовую опубликованную (на табло одна главная за раз)
+ var year = b.year_goals[0];
+ var card = _fdxBuildYearCard(year);
+ pane.appendChild(card);
+
+ // 4 карточки горизонтов: Год / Квартал / Месяц / Неделя
+ var horizons = _fdxBuildHorizonsRow(year, b.sub_goals || []);
+ pane.appendChild(horizons);
+
+ // Опережающие со светофором
+ if(b.metric_lights && b.metric_lights.length){
+  pane.appendChild(_fdxBuildMetricsBlock(b.metric_lights));
+ }
+
+ // Ближайшая планёрка
+ if(b.next_session){
+  pane.appendChild(_fdxBuildNextSessionCard(b.next_session));
  }
 }
 
-async function wigSave(){
- var form = _wigCollectForm();
- form.published = !!(_wigCache && _wigCache.published);
- try {
-  await _wigPost(form);
-  if(typeof showNotif === 'function') showNotif('Сохранено', 'Изменения применены');
-  wigFillForm();
- } catch(e){
-  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+function _fdxBuildYearCard(g){
+ var box = document.createElement('div');
+ box.style.cssText = 'max-width:720px;margin:0 auto 24px;padding:32px;background:var(--surface);border:1px solid var(--border-faint);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.18)';
+ var ttl = document.createElement('div');
+ ttl.style.cssText = 'font-size:24px;font-weight:700;color:var(--text);letter-spacing:-0.02em;line-height:1.2;text-align:center;margin-bottom:18px';
+ ttl.textContent = g.title || '—';
+ box.appendChild(ttl);
+ var nums = document.createElement('div');
+ nums.style.cssText = 'text-align:center;font-size:42px;font-weight:800;color:var(--text);letter-spacing:-0.03em;font-variant-numeric:tabular-nums;margin-bottom:16px';
+ nums.textContent = _fdxFmtNum(g.current) + ' ' + (g.unit||'') + ' / ' + _fdxFmtNum(g.target) + ' ' + (g.unit||'');
+ box.appendChild(nums);
+ var barWrap = document.createElement('div');
+ barWrap.style.cssText = 'height:14px;border-radius:999px;background:var(--surface-2);overflow:hidden;margin-bottom:8px';
+ var pct = (g.target > 0) ? Math.min(100, (Number(g.current)||0) * 100 / g.target) : 0;
+ var fill = document.createElement('div');
+ fill.style.cssText = 'height:100%;border-radius:999px;background:#7FB89E;width:' + pct + '%;transition:width .5s';
+ barWrap.appendChild(fill);
+ box.appendChild(barWrap);
+ var info = document.createElement('div');
+ info.style.cssText = 'font-size:13px;color:var(--text-soft);text-align:center;margin-bottom:10px';
+ var daysLeft = _fdxDaysLeft(g.period_end);
+ info.textContent = Math.round(pct) + '%' + (daysLeft !== null ? ' · осталось ' + daysLeft + ' дн.' : '');
+ box.appendChild(info);
+ if(g.why){
+  var why = document.createElement('div');
+  why.style.cssText = 'font-size:13px;color:var(--text-soft);line-height:1.5;text-align:center;padding:14px 20px;border-top:1px solid var(--border-faint);margin-top:14px';
+  why.textContent = g.why;
+  box.appendChild(why);
  }
+ return box;
 }
 
-async function wigUnpublish(){
- if(!confirm('Снять цель с табло? Команда увидит «Цель пока не задана».')) return;
- var form = _wigCollectForm();
- form.published = false;
- try {
-  await _wigPost(form);
-  if(typeof showNotif === 'function') showNotif('Готово', 'Цель снята с табло');
-  wigFillForm();
- } catch(e){
-  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
- }
+function _fdxBuildHorizonsRow(yearGoal, subGoals){
+ var wrap = document.createElement('div');
+ wrap.style.cssText = 'max-width:1100px;margin:0 auto 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px';
+ var labels = { year:'Год', quarter:'Квартал', month:'Месяц', week:'Неделя' };
+ ['year','quarter','month','week'].forEach(function(h){
+  var g = (h === 'year') ? yearGoal : subGoals.find(function(x){ return x.type === h && (x.parent_id === yearGoal.id || _fdxIsDescendant(x, yearGoal.id, subGoals)); });
+  var c = document.createElement('div');
+  c.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:12px;padding:16px';
+  var lbl = document.createElement('div');
+  lbl.style.cssText = 'font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:6px';
+  lbl.textContent = labels[h];
+  c.appendChild(lbl);
+  if(!g){
+   var nope = document.createElement('div');
+   nope.style.cssText = 'font-size:12px;color:var(--text-soft);padding:8px 0';
+   nope.textContent = 'не задано';
+   c.appendChild(nope);
+  } else {
+   var t = document.createElement('div');
+   t.style.cssText = 'font-size:13px;color:var(--text);font-weight:600;margin-bottom:6px;line-height:1.3';
+   t.textContent = g.title || '—';
+   c.appendChild(t);
+   var pct = (Number(g.target)>0) ? Math.min(100, (Number(g.current)||0)*100/Number(g.target)) : 0;
+   var num = document.createElement('div');
+   num.style.cssText = 'font-size:18px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums';
+   num.textContent = _fdxFmtNum(g.current) + ' / ' + _fdxFmtNum(g.target) + ' ' + (g.unit||'');
+   c.appendChild(num);
+   var pctL = document.createElement('div');
+   pctL.style.cssText = 'font-size:11.5px;color:var(--text-soft);margin-top:4px';
+   var dl = _fdxDaysLeft(g.period_end);
+   pctL.textContent = Math.round(pct) + '%' + (dl !== null ? ' · ' + dl + ' дн.' : '');
+   c.appendChild(pctL);
+  }
+  wrap.appendChild(c);
+ });
+ return wrap;
 }
 
-async function wigQuickUpdate(){
- var w = _wigCache || {};
- var cur = prompt('Текущее значение факта (' + (w.unit||'') + '):', w.current || 0);
- if(cur === null) return;
- var n = Number(String(cur).replace(',', '.'));
- if(isNaN(n)){ alert('Введите число'); return; }
- try {
-  await _wigPost({ partial:true, current:n });
-  wigRender();
-  if(typeof showNotif === 'function') showNotif('Обновлено', 'Факт = ' + _wigFmtNum(n) + ' ' + (w.unit||''));
- } catch(e){
-  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+function _fdxIsDescendant(node, ancestorId, allNodes){
+ var current = node;
+ while(current && current.parent_id){
+  if(current.parent_id === ancestorId) return true;
+  current = allNodes.find(function(x){ return x.id === current.parent_id; });
  }
+ return false;
 }
+
+function _fdxBuildMetricsBlock(lights){
+ var wrap = document.createElement('div');
+ wrap.style.cssText = 'max-width:1100px;margin:0 auto 24px';
+ var head = document.createElement('div');
+ head.style.cssText = 'font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:10px;padding:0 4px';
+ head.textContent = 'Опережающие действия (неделя)';
+ wrap.appendChild(head);
+ var grid = document.createElement('div');
+ grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px';
+ lights.forEach(function(L){
+  var m = L.metric;
+  var light = L.light || {color:'gray', fact:0, target:0};
+  var colors = { green:{bg:'rgba(127,184,158,.16)',fg:'#5BA683'}, yellow:{bg:'rgba(214,163,114,.16)',fg:'#C28A4D'}, red:{bg:'rgba(214,115,115,.16)',fg:'#D67373'}, gray:{bg:'var(--surface-2)',fg:'var(--text-muted)'} };
+  var c = colors[light.color] || colors.gray;
+  var card = document.createElement('div');
+  card.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:10px;padding:12px 14px;cursor:pointer';
+  card.onclick = function(){ fdxSwitchTab('metrics'); };
+  var t = document.createElement('div');
+  t.style.cssText = 'font-size:12.5px;color:var(--text);font-weight:600;margin-bottom:4px';
+  t.textContent = m.title || '—';
+  card.appendChild(t);
+  var rowB = document.createElement('div');
+  rowB.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px';
+  var num = document.createElement('span');
+  num.style.cssText = 'font-size:18px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums';
+  num.textContent = _fdxFmtNum(light.fact) + ' / ' + _fdxFmtNum(light.target);
+  var dot = document.createElement('span');
+  dot.style.cssText = 'font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:' + c.bg + ';color:' + c.fg;
+  dot.textContent = Math.round((light.factPct||0) * 100) + '%';
+  rowB.appendChild(num); rowB.appendChild(dot);
+  card.appendChild(rowB);
+  if(m.owner){
+   var op = document.createElement('div');
+   op.style.cssText = 'font-size:11px;color:var(--text-soft);margin-top:4px';
+   op.textContent = m.owner;
+   card.appendChild(op);
+  }
+  grid.appendChild(card);
+ });
+ wrap.appendChild(grid);
+ return wrap;
+}
+
+function _fdxBuildNextSessionCard(s){
+ var box = document.createElement('div');
+ box.style.cssText = 'max-width:720px;margin:0 auto;padding:14px 18px;background:var(--surface-2);border:1px solid var(--border-faint);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap';
+ var left = document.createElement('div');
+ var l1 = document.createElement('div'); l1.style.cssText = 'font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600';
+ l1.textContent = 'Ближайшая планёрка';
+ var l2 = document.createElement('div'); l2.style.cssText = 'font-size:13px;color:var(--text);margin-top:2px';
+ var when = s.scheduled_at ? new Date(s.scheduled_at).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+ l2.textContent = when + (s.facilitator_email ? ' · ' + s.facilitator_email : '');
+ left.appendChild(l1); left.appendChild(l2);
+ var btn = document.createElement('button');
+ btn.style.cssText = 'padding:8px 14px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;font-weight:600;cursor:pointer';
+ btn.textContent = 'Открыть';
+ btn.onclick = function(){ fdxSwitchTab('sessions'); };
+ box.appendChild(left); box.appendChild(btn);
+ return box;
+}
+
+// ===== Заглушки остальных вкладок (Этап 2-5) =====
+function fdxRenderGoalsPane(){
+ var pane = document.getElementById('fdx-pane-goals');
+ if(!pane) return;
+ pane.replaceChildren();
+ var box = document.createElement('div');
+ box.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
+ box.textContent = 'Скоро: дерево целей Год → Квартал → Месяц → Неделя с возможностью декомпозиции.';
+ pane.appendChild(box);
+}
+function fdxRenderMetricsPane(){
+ var pane = document.getElementById('fdx-pane-metrics');
+ if(!pane) return;
+ pane.replaceChildren();
+ var box = document.createElement('div');
+ box.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
+ box.textContent = 'Скоро: список опережающих показателей с быстрым вводом фактов и светофором.';
+ pane.appendChild(box);
+}
+function fdxRenderSessionsPane(){
+ var pane = document.getElementById('fdx-pane-sessions');
+ if(!pane) return;
+ pane.replaceChildren();
+ var box = document.createElement('div');
+ box.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
+ box.textContent = 'Скоро: планёрки 4DX — план/в работе/завершено + режим «идёт сейчас» в 3 шага.';
+ pane.appendChild(box);
+}
+function fdxRenderAnalyticsPane(){
+ var pane = document.getElementById('fdx-pane-analytics');
+ if(!pane) return;
+ pane.replaceChildren();
+ var box = document.createElement('div');
+ box.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
+ box.textContent = 'Скоро: % выполнения обязательств по сотрудникам + светофор показателей за период.';
+ pane.appendChild(box);
+}
+
+// v449: устаревшие wig*-функции удалены — заменены на fdx* выше. /api/wig остаётся живым для миграции,
+// но фронт его больше не дёргает. В Этапе 5 удалим api/wig.js и cron-wig-reminder.js.
+
 
 function planFmtDate(s){ try { var d = new Date(s); return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2); } catch(e){ return s; } }
 function planDaysBetween(a,b){ return Math.max(1, Math.round((new Date(b)-new Date(a))/86400000)+1); }
