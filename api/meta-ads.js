@@ -44,7 +44,7 @@ const LEAD_ACTION_TYPES = new Set(['lead','leadgen.other','onsite_conversion.lea
 const LEAD_SPECIFIC_TYPES = new Set(['leadgen.other','onsite_conversion.lead_grouped']);
 
 function summarizeLeads(actions, costPerActionType) {
-  if (!Array.isArray(actions)) return { count: 0, breakdown: [] };
+  if (!Array.isArray(actions)) return { count: 0, breakdown: [], other_conversions: 0 };
   let specificSum = 0;
   let genericLead = 0;
   const breakdown = [];
@@ -63,17 +63,19 @@ function summarizeLeads(actions, costPerActionType) {
       })()
     });
   });
-  // v346: предпочитаем generic `lead` — это сводный итог самой Meta по всем типам лидов.
-  // Раньше брали specificSum и теряли Marquiz на account-level (когда onsite не пришёл, но lead был).
-  // Specific остаётся как fallback на случай если generic отсутствует.
-  const leadCount = genericLead > 0 ? genericLead : specificSum;
+  // v442: основная цифра = только формы + сайт (то же что Meta-кабинет показывает в «Лиды»).
+  // Раньше (v346) брали generic `lead` — это сводный итог Meta по ВСЕМ типам (формы + подписки +
+  // регистрации + чаты + Marquiz). Цифра не совпадала с кабинетом → пользователь терял доверие.
+  // Разница вынесена в other_conversions — отображаем мелкой подписью под основной цифрой.
+  const leadCount = specificSum;
+  const otherConversions = Math.max(0, genericLead - specificSum);
   breakdown.sort((a,b) => {
     const aLead = LEAD_ACTION_TYPES.has(a.action_type) ? 1 : 0;
     const bLead = LEAD_ACTION_TYPES.has(b.action_type) ? 1 : 0;
     if (aLead !== bLead) return bLead - aLead;
     return b.value - a.value;
   });
-  return { count: leadCount, breakdown };
+  return { count: leadCount, breakdown, other_conversions: otherConversions };
 }
 
 // Простой in-memory кэш на 10 минут — Meta API rate-limited
@@ -178,7 +180,9 @@ export default async function handler(req, res) {
 
   const endpoint = String(req.query.endpoint || 'account_summary');
   const period = validatePeriod(String(req.query.period || 'last_30d'));
-  const cacheKey = JSON.stringify({ endpoint, period, q: req.query });
+  // v442: country явно префиксом — раньше попадал внутрь req.query, но порядок ключей
+  // в JSON.stringify не гарантирован, что давало риск смешения кэша KZ и KG.
+  const cacheKey = country + '|' + endpoint + '|' + period + '|' + JSON.stringify(req.query);
   const cached = cacheGet(cacheKey);
   if (cached) {
     res.setHeader('X-Cache', 'HIT');
@@ -208,11 +212,11 @@ export default async function handler(req, res) {
       const cur = (curData.data && curData.data[0]) || null;
       const prev = (prevData.data && prevData.data[0]) || null;
 
-      // Обогащаем leads breakdown'ом
+      // Обогащаем leads breakdown'ом + other_conversions (v442 — для подписки под цифрой лидов).
       const enrich = (s) => {
         if (!s) return null;
         const leads = summarizeLeads(s.actions, s.cost_per_action_type);
-        return { ...s, leads_count: leads.count, actions_breakdown: leads.breakdown };
+        return { ...s, leads_count: leads.count, other_conversions: leads.other_conversions || 0, actions_breakdown: leads.breakdown };
       };
       result = {
         period,
@@ -304,6 +308,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','account_info'] });
     }
 
+    // v442: метка страны в ответе — для отладки в DevTools Network видно какой кабинет ответил.
+    result.country = country;
     cacheSet(cacheKey, result);
     res.setHeader('X-Cache', 'MISS');
     return res.status(200).json(result);

@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v441</title>
+<title>SalesDoc — Финансовый Дашборд v442</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -16587,12 +16587,17 @@ function _metaRenderMain(sumData, info){
 
  var leads = parseFloat(s.leads_count || 0);
  var prevLeads = p ? parseFloat(p.leads_count || 0) : 0;
+ // v442: подпись «прочих действий» (подписки/чаты/Marquiz) — то что раньше раздувало цифру лидов.
+ var otherConv = parseFloat(s.other_conversions || 0);
+ var leadsSuffix = (otherConv > 0)
+   ? ('+ ' + _metaFmtNum(otherConv) + ' прочих действий (подписки, чаты)')
+   : (leads > 0 ? null : 'Нет событий лидов');
  _metaKpiBig('mkpi-leads',
  'Сколько лидов получили',
  leads > 0 ? _metaFmtNum(leads) : '—',
- 'Сколько людей оставили заявку, зарегистрировались или подписались. Считается из событий Meta — нужен Pixel на сайте или цель «Лидогенерация» в кампании.',
+ 'Заявки с форм и сайта. Считаем то же что Meta-кабинет показывает в столбце «Лиды».',
  leads > 0 ? _metaTrendBadge(leads, prevLeads, false) : '',
- leads > 0 ? null : 'Нет событий лидов'
+ leadsSuffix
  );
 
  var cpl = (leads > 0) ? (parseFloat(s.spend) / leads) : null;
