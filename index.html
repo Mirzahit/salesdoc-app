@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v440</title>
+<title>SalesDoc — Финансовый Дашборд v441</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8005,7 +8005,37 @@ function parseDateFromSheet(v) {
  return null;
 }
 
-// ДАННЫЕ ИЗ GOOGLE SHEETS (Январь, Февраль, Март 2026) 
+// v441: парный helper к parseDateFromSheet — возвращает Date в локальном TZ.
+// Избегает UTC-сдвига: new Date('2026-05-01') для KZ становится 30 апреля.
+// Использовать там где результат сравнивается/арифметится как Date (сортировка, дни).
+function parseDateObjFromSheet(v){
+ var s = parseDateFromSheet(v);
+ if(!s) return null;
+ var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+ if(!m) return null;
+ var d = new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+ return isNaN(d) ? null : d;
+}
+
+// v441: единый «судья» какие платежи считаются подписочными (recurring).
+// Используется в MRR-полосе, accessUntil и любых метриках про удержание.
+// Решено с CEO 2026-05-24: новый клиент = первый месяц подписки; любые лицензии
+// (включая доп.) = продление/расширение подписки. См. memory project_subscription_payment_definition.
+// KPI «Абон. плата» на Дашборде это НЕ использует — там кассовая разбивка через sumByCategory.
+function isSubscriptionPay(p){
+ if(!p) return false;
+ var raw = String(p.categoryRaw || p.cat || '').toLowerCase().replace(/\./g,' ').replace(/\s+/g,' ').trim();
+ if(!raw){
+  var cat = String(p.category || '').toLowerCase();
+  return (cat === 'subscription' || cat === 'license');
+ }
+ if(raw.includes('абон') || raw.includes('баланс')) return true;
+ if(raw.includes('нов клиент') || raw.includes('новый клиент')) return true;
+ if(raw.includes('лицен')) return true; // включая «доп. лицензии»
+ return false;
+}
+
+// ДАННЫЕ ИЗ GOOGLE SHEETS (Январь, Февраль, Март 2026)
 // Загружены напрямую через gviz API из таблицы «Доходы KZ 2026»
 // Всего 293 записи оплат
 const SEATED_MAP = {"sarybas_2026-03-01": true, "almas_2026-03-01": true, "semicegold_2026-03-02": true, "1000mel_2026-03-01": true, "bauer-airan_2026-03-02": true, "kemel_2026-03-02": true, "abdusattarov_2026-03-02": true, "sayramnan1_2026-03-02": true, "sayramnan2_2026-03-02": true, "ksmclean_2026-03-02": true, "leaderplus_2026-03-02": true, "il-nur_2026-03-02": true, "popova_2026-03-02": true, "abdgroup_2026-03-02": true, "shintree_2026-03-02": true, "riri_2026-03-02": true, "flacongroup_2026-03-02": true, "bikura_2026-03-02": true, "abokado_2026-03-02": true, "balmuzpetro_2026-03-02": true, "karaganda_2026-03-02": true, "harper-aktau_2026-03-02": true, "horeka-jb_2026-03-02": true, "fc2020_2026-03-03": true, "rndtech_2026-03-03": true, "kamalov_2026-03-03": true, "karat_2026-01-03": true, "rokosast_2026-01-05": true, "as_2026-01-03": true, "alikhan_2026-01-05": true, "altea-kst_2026-01-05": true, "four-trade_2026-01-05": true, "ada01_2026-01-05": true, "jeren-asal_2026-01-05": true, "kemel_2026-01-05": true, "nuar-pv_2026-01-05": true, "pro-sklad_2026-01-05": true, "dk-isma_2026-01-06": true, "ksmclean_2026-01-06": true, "vizitkzo_2026-01-06": true, "sulifashym_2026-01-06": true, "ost01_2026-01-07": true, "provkus_2026-01-07": true, "adalz_2026-01-08": true, "provkus_2026-01-08": true, "lkmcenter_2026-01-08": true, "nfa_2026-01-08": true, "alikhan_2026-01-08": true, "gizzo_2026-01-09": true, "ksmclean_2026-01-13": true, "baizhol_2026-01-13": true, "sulifashym_2026-01-13": true, "dk-isma_2026-01-13": true, "kemel17_2026-01-14": true, "nfa_2026-01-14": true, "baizhol_2026-01-14": true, "whitedistro_2026-01-14": true, "vizavi_2026-01-14": true, "daur_2026-01-14": true, "smag_2026-01-15": true, "sayramnan-jet_2026-01-14": true, "candytrade_2026-01-15": true, "lkmcenter_2026-01-14": true, "tazalife_2026-01-15": true, "iphan01_2026-01-16": true, "harvestfs_2026-01-16": true, "sular_2026-01-19": true, "baizhol_2026-01-20": true, "ayau_2026-01-20": true, "ayau_2026-01-21": true, "ilzat989_2026-01-06": true, "dostyk_2026-01-20": true, "semicegold_2026-01-20": true, "ecoraduga_2026-01-21": true, "provkus_2026-01-21": true, "lengerskoe-7say_2026-01-21": true, "sarybas_2026-01-22": true, "osman ibox_2026-01-23": true, "adalz_2026-01-16": true, "bereke_2026-01-26": true, "mehkaz02_2026-01-26": true, "ecoala_2026-01-26": true, "plastkrep_2026-01-26": true, "vizitkarabulak_2026-01-26": true, "nfa_2026-01-26": true, "baizhol_2026-01-26": true, "and-kzn_2026-01-27": true, "kamalov_2026-01-27": true, "sarybas_2026-01-27": true, "smak_2026-01-28": true, "bereke_2026-01-28": true, "tazalife_2026-01-27": true, "lengersk7say_2026-01-27": true, "ost01_2026-01-28": true, "ksmclean_2026-01-28": true, "vizitkzo_2026-01-27": true, "sulifashym_2026-01-28": true, "gizzo_2026-01-28": true, "baizhol_2026-01-29": true, "il-nur_2026-01-29": true, "arasha_2026-01-29": true, "semicegold_2026-01-29": true, "provkus_2026-01-29": true, "iphan01_2026-01-30": true, "kemel17_2026-01-04": true, "каспи_2026-01-19": false, "venerapopular_2026-01-27": false, "alikhan1_2026-01-30": true, "smak_2026-01-29": true, "gizzo_2026-02-02": true, "kemel17_2026-02-02": true, "alexandr_2026-02-01": true, "eco-semki01_2026-02-01": true, "medactr_2026-02-02": true, "vizitkzo_2026-02-02": true, "tazalife_2026-02-02": true, "kausar06_2026-02-02": true, "ksmclean_2026-02-02": true, "sulifashy_2026-02-02": true, "ahi_2026-02-02": true, "shymkala_2026-02-02": true, "eda_2026-02-02": true, "lengerkz_2026-02-02": true, "balmuzpetro_2026-02-02": true, "balmuzkost_2026-02-02": true, "dddhalal_2026-02-02": true, "shah-company_2026-02-02": true, "nfa_2026-02-02": true, "optoboom_2026-02-02": true, "panteradistribution_2026-02-03": true, "smak1_2026-02-02": true, "smak1_2026-02-03": true, "baizhol_2026-02-03": true, "iphan01_2026-02-03": true, "bauer-airan_2026-02-02": true, "bota_2026-02-02": true, "kztiai_2026-02-04": true, "ost01_2026-02-04": true, "harper_2026-02-05": true, "adalz_2026-02-05": true, "il-nur_2026-02-05": true, "semicegold_2026-02-05": true, "bereke_2026-02-05": true, "vizitkzo_2026-02-05": true, "tazalife_2026-02-05": true, "kemel17_2026-02-05": true, "provkus_2026-02-05": true, "sulifashy_2026-02-05": true, "lkmcenter_2026-02-05": true, "candytrade_2026-02-05": true, "sarybas_2026-02-05": true, "ksmclean_2026-02-06": true, "dk-isma_2026-02-06": true, "alikhan_2026-02-06": true, "nfa_2026-02-06": true, "gizzo_2026-02-09": true, "baizhol_2026-02-09": true, "daur_2026-02-09": true, "adalz_2026-02-10": true, "smak_2026-02-10": true, "dostyk_2026-02-10": true, "arasha_2026-02-10": true, "whitedistro_2026-02-11": true, "qazaqstantv_2026-02-12": true, "iphan01_2026-02-12": true, "il-nur_2026-02-12": true, "ost01_2026-02-12": true, "jqt_2026-02-13": true, "kamalov_2026-02-16": true, "kemel17_2026-02-16": true, "ozyurt-food_2026-02-16": true, "semicegold_2026-02-17": true, "nfa_2026-02-17": true, "kemel17_2026-02-18": true, "bestdecor_2026-02-19": true, "bestdecor_2026-02-13": true, "balsan_2026-02-20": true, "eda_2026-02-20": true, "TOO UNI Trade Aktau_2026-02-20": false, "donifoods_2026-02-21": true, "gedeongd_2026-02-17": true, "gis123_2026-02-23": true, "whitedistro_2026-02-18": true, "taza_2026-02-23": true, "sayramnan-kenes_2026-02-24": true, "dom_2026-02-04": true, "dom_2026-02-19": true, "iphan01_2026-02-23": true, "f3_2026-02-24": true, "kerey_2026-02-24": true, "sayramnanaralkazaly_2026-02-24": true, "adal14_2026-02-24": true, "GIZZO_2026-02-23": true, "muscat_2026-02-25": true, "lztsfrukt ibox_2026-02-25": false, "taiger_2026-02-24": true, "viakom_2026-02-25": false, "altea-kst_2026-02-26": true, "tomiko_2026-02-26": true, "shst_2026-02-26": false, "host tattim_2026-02-26": true, "GIZZO_2026-02-24": true, "aromakz_2026-02-24": true, "qq1_2026-02-06": true, "yoyoto_2026-02-25": true, "ИП ЖОЛАМАНОВ_2026-02-27": false, "каспи_2026-02-02": false};
@@ -26870,7 +26900,8 @@ function acLastPayment(client){
  if(!p) return;
  var clientName = p.client || p.cl || p.compName || '';
  if(clientName !== client) return;
- var d = (typeof parseDateFromSheet === 'function' && p.date) ? parseDateFromSheet(p.date) : (p.date ? new Date(p.date) : null);
+ // v441: parseDateObjFromSheet возвращает Date в локальной TZ (раньше была строка → сломанное сравнение).
+ var d = (typeof parseDateObjFromSheet === 'function' && p.date) ? parseDateObjFromSheet(p.date) : (p.date ? new Date(p.date) : null);
  if(!d || isNaN(d)) return;
  if(!lastD || d > lastD){ lastD = d; lastAmt = parseFloat(p.amount || p.am || 0) || 0; }
  });
@@ -27030,13 +27061,8 @@ function acLoadPriorPayments(forceRefresh){
  var dateStr = parseDateDMY(row[0]);
  if(!dateStr) return;
  var cat = String(row[2]||'').trim();
- var catLow = cat.toLowerCase();
- // Только подписочные: абонплата / баланс / новый клиент / лицензия (включая «доп. лицензии»)
- var isSub = catLow.indexOf('абон') >= 0
- || catLow.indexOf('баланс') >= 0
- || catLow === 'новый клиент' || (catLow.indexOf('нов') >= 0 && catLow.indexOf('клиент') >= 0)
- || catLow.indexOf('лицен') >= 0;
- if(!isSub) return;
+ // v441: единое правило подписки через isSubscriptionPay (включая «доп. лицензии»).
+ if(!isSubscriptionPay({categoryRaw: cat})) return;
  var amount = parseNum(row[12]) || parseNum(row[9]);
  if(amount <= 0) return;
  var period = Math.max(1, Math.round(parseNum(row[8]) || 1));
@@ -27168,42 +27194,18 @@ function acGetActiveClients(){
  payByHost[host].payCount++;
  payByHost[host].totalAmount += parseFloat(p.amount || p.am) || 0;
  }
- // v299 fix: parseDateFromSheet возвращает СТРОКУ 'YYYY-MM-DD', isNaN(string)===true
- // отрезало все даты — lastPay оставался null, daysSince=999 у всех клиентов
- // → ВСЕ показывались как «не платил» даже при наличии оплат в Sheets
- var d = null;
- if(p.date){
- var ds = (typeof parseDateFromSheet === 'function') ? parseDateFromSheet(p.date) : String(p.date);
- if(ds){
- var dp = String(ds).substring(0,10).split('-');
- if(dp.length === 3){
- var yy = parseInt(dp[0],10), mm = parseInt(dp[1],10), dd2 = parseInt(dp[2],10) || 1;
- if(yy && mm){
- var dt = new Date(yy, mm-1, dd2);
- if(!isNaN(dt.getTime())) d = dt;
- }
- }
- }
- }
+ // v441: parseDateObjFromSheet возвращает Date в локальной TZ; раньше тут было 12 строк ручного парсинга.
+ var d = (typeof parseDateObjFromSheet === 'function') ? parseDateObjFromSheet(p.date) : null;
  if(d && !p._prior && (!payByHost[host].lastPay || d > payByHost[host].lastPay)) payByHost[host].lastPay = d;
- // v300: подписочные платежи продлевают "Доступ до" на N месяцев (period из Sheets, default=1).
- // Подписочные = абонплата + баланс + новый клиент + лицензия (см. mapCategoryFromSheet).
+ // v441: единое правило подписки через isSubscriptionPay (включая «доп. лицензии» — решено с CEO).
+ // Подписочные платежи продлевают «Доступ до» на N месяцев (period из Sheets, default=1).
  // Услуги (внедрение/интеграция/накладные/долги) НЕ продлевают доступ.
- if(d){
- var pCat = String(p.category || '').toLowerCase();
- var pCatRaw = String(p.categoryRaw || p.cat || '').toLowerCase();
- var isSubPay = pCat === 'subscription' || pCat === 'license'
- || pCatRaw.indexOf('абон') >= 0
- || pCatRaw.indexOf('баланс') >= 0
- || pCatRaw === 'новый клиент' || (pCatRaw.indexOf('нов') >= 0 && pCatRaw.indexOf('клиент') >= 0)
- || (pCatRaw.indexOf('лицен') >= 0 && pCatRaw.indexOf('доп') < 0);
- if(isSubPay){
+ if(d && isSubscriptionPay(p)){
  var per = Math.max(1, Math.round(Number(p.period) || 1));
  // v301: биллинг календарный, не 30-дневный. Оплата 10 мая на 1 месяц = доступ до 31 мая.
  // На 3 месяца = до 31 июля. new Date(y, m, 0) = последний день предыдущего месяца.
  var endD = new Date(d.getFullYear(), d.getMonth() + per, 0);
  if(!payByHost[host].accessUntil || endD > payByHost[host].accessUntil) payByHost[host].accessUntil = endD;
- }
  }
  });
  }
@@ -27603,27 +27605,19 @@ function acRenderPrefixMerged(){
 function acComputeMRRMetrics(){
  var byClientByMonth = {}; // { clientKey: { 'YYYY-MM': sum } }
  (typeof payments !== 'undefined' && payments ? payments : []).forEach(function(p){
- // v297: только recurring подписочные платежи
- var cat = String(p.category || '').toLowerCase();
- var catRaw = String(p.categoryRaw || p.cat || '').toLowerCase();
- var isSub = (cat === 'subscription') || catRaw.indexOf('абон') >= 0 || catRaw.indexOf('баланс') >= 0;
- if (!isSub) return;
+ // v441: единое правило recurring через isSubscriptionPay (расширено — включает новый клиент и любые лицензии).
+ if (!isSubscriptionPay(p)) return;
  var amount = Number(p.amount || p.am) || 0;
  if (amount <= 0) return;
  var period = Math.max(1, Math.round(Number(p.period) || 1));
  var startSrc = p.activationDate || p.date || p.d;
  if (!startSrc) return;
  var startDate = null;
+ // v441: parseDateObjFromSheet вместо ручного парсинга строки в Date (8 строк → 1).
  if (startSrc instanceof Date) {
  startDate = startSrc;
  } else {
- var s = (typeof parseDateFromSheet === 'function') ? parseDateFromSheet(startSrc) : String(startSrc);
- if (!s) return;
- var parts = String(s).substring(0,10).split('-');
- if (parts.length !== 3) return;
- var yy = parseInt(parts[0],10), mm = parseInt(parts[1],10), dd = parseInt(parts[2],10) || 1;
- if (!yy || !mm) return;
- startDate = new Date(yy, mm - 1, dd);
+ startDate = (typeof parseDateObjFromSheet === 'function') ? parseDateObjFromSheet(startSrc) : null;
  }
  if (!startDate || isNaN(startDate.getTime())) return;
  var perMonth = amount / period;
