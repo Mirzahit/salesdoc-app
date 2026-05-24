@@ -446,6 +446,8 @@ export default async function handler(req, res){
       const toTs = req.query.to ? Number(req.query.to) : null;
       const tagFilter = req.query.tag || null; // v319: фильтр по тегу (имя)
       const data = await getFunnel(pipelineId, env, fromTs, toTs, tagFilter);
+      // v447: фронту нужен subdomain чтобы построить правильную ссылку KZ vs KG (был захардкожен salesdoctorkz).
+      data._subdomain = env.AMO_SUBDOMAIN;
       return res.status(200).json(data);
     }
     if(action === 'honest_meta_funnel'){
@@ -796,7 +798,9 @@ export default async function handler(req, res){
         duplicate_contacts: duplicateContacts.slice(0, 100),
         bad_phones_count: badList.length,
         bad_phones: badList.slice(0, 100),
-        message: 'Проверка контактов amo. Дубликаты — телефоны на которые в amo несколько карточек. Подозрительные номера — короче/длиннее обычного, скорее всего опечатка.'
+        message: 'Проверка контактов amo. Дубликаты — телефоны на которые в amo несколько карточек. Подозрительные номера — короче/длиннее обычного, скорее всего опечатка.',
+        // v447: subdomain для корректных ссылок на контакты KZ vs KG
+        _subdomain: env.AMO_SUBDOMAIN
       });
     }
     if(action === 'phone_lookup'){

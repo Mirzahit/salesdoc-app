@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v446</title>
+<title>SalesDoc — Финансовый Дашборд v447</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5610,6 +5610,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
      <div id="wig-bar-fill" style="height:100%;border-radius:999px;background:#7FB89E;width:0;transition:width .5s,background .3s"></div>
     </div>
     <div id="wig-pct-line" style="margin-top:8px;font-size:13px;color:var(--text-soft);text-align:center"></div>
+    <!-- v447: мини-график тренда по истории значений (виден когда есть 2+ записи факта) -->
+    <div id="wig-spark" style="margin-top:14px;display:flex;justify-content:center;align-items:center"></div>
    </div>
    <div id="wig-status-line" style="text-align:center;margin:18px 0;padding:10px;border-radius:10px;font-size:14px;font-weight:600"></div>
    <div id="wig-why" style="font-size:14px;color:var(--text-soft);line-height:1.5;text-align:center;padding:14px 20px;border-top:1px solid var(--border-faint);margin-top:18px;display:none"></div>
@@ -8803,8 +8805,8 @@ function getPeriodPayments(period) {
  const d = new Date(p.date + 'T00:00:00');
  if (period === 'week') {
  if (!selectedWeek) {
- // Default: current week based on latest payment
- const now = new Date('2026-03-04');
+ // v447: было жёстко вшито '2026-03-04' — заглушка, из-за неё «Неделя» всегда показывала первую неделю марта.
+ const now = new Date();
  const bounds = getWeekBounds(now.getFullYear(), getISOWeek(now).week);
  return d >= bounds.mon && d <= bounds.sun;
  }
@@ -8830,7 +8832,8 @@ function getPeriodRange(period) {
  var start, end;
  if (period === 'week') {
  if (!selectedWeek) {
- var now = new Date('2026-03-04');
+ // v447: было '2026-03-04' заглушкой — теперь реальная текущая дата.
+ var now = new Date();
  var bounds = getWeekBounds(now.getFullYear(), getISOWeek(now).week);
  start = bounds.mon.toISOString().split('T')[0];
  end = bounds.sun.toISOString().split('T')[0];
@@ -15060,6 +15063,17 @@ function wigRender(){
  }
  var pctLineEl = document.getElementById('wig-pct-line');
  if(pctLineEl) pctLineEl.textContent = pctLine;
+ // v447: мини-график тренда. statSparkSvg сам возвращает '' если данных <2 — тогда блок остаётся пустой.
+ var sparkEl = document.getElementById('wig-spark');
+ if(sparkEl){
+  if(Array.isArray(w.history) && w.history.length >= 2 && typeof statSparkSvg === 'function'){
+   var values = w.history.map(function(p){ return Number(p.value) || 0; });
+   var sparkColor = status === 'winning' ? '#7FB89E' : (status === 'behind' ? '#D6A372' : '#D67373');
+   sparkEl.innerHTML = statSparkSvg(values, sparkColor);
+  } else {
+   sparkEl.innerHTML = '';
+  }
+ }
  var statusEl = document.getElementById('wig-status-line');
  if(statusEl){
   statusEl.textContent = statusText;
@@ -30401,6 +30415,8 @@ window.amoLoadFunnel = async function(force){
  stagesEl.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:10px 0">Проверь Vercel ENV: AMO_SUBDOMAIN, AMO_TOKEN, AMO_ACCOUNT_ID.</div>';
  return;
  }
+ // v447: сохраняем subdomain (KZ/KG) чтобы ссылки на сделки вели в правильный кабинет
+ if(amoData._subdomain) window._amoSubdomain = amoData._subdomain;
  var combined = amoBuildUnifiedFunnel(amoData, metaData, period);
  window._amoFunnelCache[period] = { ts: Date.now(), data: combined };
  amoRenderFunnel(combined);
@@ -30621,9 +30637,13 @@ function amoRenderFunnel(d){
     var dt = new Date(L.created_at * 1000);
     when = String(dt.getDate()).padStart(2,'0') + '.' + String(dt.getMonth()+1).padStart(2,'0') + '.' + dt.getFullYear();
    }
-   var amoUrl = 'https://' + (window._amoSubdomain || 'salesdoctorkz') + '.amocrm.ru/leads/detail/' + L.id;
+   // v447: subdomain приходит с бэка через _subdomain (KZ vs KG). Если не известен — без ссылки, чтобы KG-сделки не уехали в чужой кабинет.
+   var sub = window._amoSubdomain || null;
+   var nameHtml = sub
+     ? '<a href="https://' + sub + '.amocrm.ru/leads/detail/' + L.id + '" target="_blank" style="color:var(--accent,#34C77A);text-decoration:none;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + amoEscXml(L.name) + '">' + amoEscXml(L.name) + '</a>'
+     : '<span style="color:var(--text);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + amoEscXml(L.name) + '">' + amoEscXml(L.name) + '</span>';
    html += '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dashed var(--border-faint)">'
-        + '<a href="' + amoUrl + '" target="_blank" style="color:var(--accent,#34C77A);text-decoration:none;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + amoEscXml(L.name) + '">' + amoEscXml(L.name) + '</a>'
+        + nameHtml
         + '<span style="color:var(--text-muted);font-size:11px;white-space:nowrap">' + when + '</span>'
         + '<span style="color:var(--text-soft);font-size:11px;white-space:nowrap" title="Сейчас на этапе">→ ' + amoEscXml(L.current_stage || '?') + '</span>'
         + '</div>';
@@ -30679,7 +30699,9 @@ window.amoLoadDataQuality = async function(btn){
 
 function amoRenderDataQuality(box, d){
  if(!box || !d) return;
- var subdomain = window._amoSubdomain || 'salesdoctorkz';
+ // v447: subdomain приходит с бэка (через d._subdomain). KZ vs KG — корректно. Если неизвестен — без ссылок.
+ if(d && d._subdomain) window._amoSubdomain = d._subdomain;
+ var subdomain = window._amoSubdomain || null;
  var dups = d.duplicate_contacts || [];
  var bads = d.bad_phones || [];
  var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Проверено контактов: <b>' + (d.contacts_scanned || 0) + '</b>'
@@ -30702,9 +30724,12 @@ function amoRenderDataQuality(box, d){
    html += '<div style="padding:6px 0;border-bottom:1px dashed var(--border-faint)">'
         + '<div style="font-family:monospace;font-weight:600;color:var(--text);margin-bottom:4px">' + amoEscXml(D.phone) + ' <span style="color:var(--text-muted);font-weight:400;font-family:inherit">— ' + D.count + ' карточек</span></div>';
    D.contacts.forEach(function(c){
-    var url = 'https://' + subdomain + '.amocrm.ru/contacts/detail/' + c.id;
+    // v447: если subdomain не известен — показываем имя без ссылки (вместо ухода в чужой кабинет)
+    var nameLink = subdomain
+      ? '<a href="https://' + subdomain + '.amocrm.ru/contacts/detail/' + c.id + '" target="_blank" style="color:var(--accent,#34C77A);text-decoration:none;font-size:11.5px">' + amoEscXml(c.name || '(без имени, только номер)') + '</a>'
+      : '<span style="color:var(--text);font-size:11.5px">' + amoEscXml(c.name || '(без имени, только номер)') + '</span>';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:2px 0 2px 12px">'
-         + '<a href="' + url + '" target="_blank" style="color:var(--accent,#34C77A);text-decoration:none;font-size:11.5px">' + amoEscXml(c.name || '(без имени, только номер)') + '</a>'
+         + nameLink
          + '<span style="color:var(--text-muted);font-size:10.5px;white-space:nowrap">' + (c.has_lead ? 'есть сделка' : '<b style="color:#D67373">нет сделки</b>') + ' · raw: ' + amoEscXml(c.raw_phone || '') + '</span>'
          + '</div>';
    });

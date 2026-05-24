@@ -89,6 +89,10 @@ export default async function handler(req, res) {
       if (raw) {
         try { existing = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { existing = null; }
       }
+      // v447: для истории нам нужно знать предыдущее значение current и старую историю.
+      const prevCurrent = existing && typeof existing.current === 'number' ? existing.current : null;
+      const prevHistory = (existing && Array.isArray(existing.history)) ? existing.history : [];
+
       let next;
       if (body.partial && existing) {
         next = Object.assign({}, existing);
@@ -109,6 +113,16 @@ export default async function handler(req, res) {
       }
       next.updated_at = Date.now();
       next.updated_by = String(body.updated_by || '').trim() || null;
+
+      // v447: история значений current. Пишем точку только если current реально поменялся,
+      // чтобы не плодить дубли (сохранение «зачем» или unit не должно засорять график).
+      // Trim до 50 последних точек — KV не пухнет, для квартала достаточно.
+      next.history = prevHistory.slice();
+      const currentChanged = typeof next.current === 'number' && next.current !== prevCurrent;
+      if (currentChanged) {
+        next.history.push({ at: next.updated_at, value: next.current });
+        if (next.history.length > 50) next.history = next.history.slice(-50);
+      }
 
       await kvSet(KV_KEY, next);
       return res.status(200).json({ ok: true, wig: next });
