@@ -3,6 +3,8 @@
 // ENV: KV_REST_API_URL, KV_REST_API_TOKEN (Vercel создаёт автоматически при подключении KV).
 // Если KV не подключён — отвечаем 503 с понятной ошибкой; фронт остаётся в локальном режиме.
 
+import { checkAuth } from './_auth.js';
+
 const KV_KEY = 'planning_v1';
 
 function kvEnv() {
@@ -43,6 +45,8 @@ function emptyState() {
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
+  // v440 SECURITY: до этого любой curl мог GET-нуть весь стейт планёрок и POST-ом стереть.
+  if (!checkAuth(req, res)) return;
 
   const { url: kvUrl, token: kvToken } = kvEnv();
   if (!kvUrl || !kvToken) {

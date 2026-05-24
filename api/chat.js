@@ -4,6 +4,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { checkAuth } from './_auth.js';
 
 let _agentsCache = null;
 function loadAgents() {
@@ -192,11 +193,9 @@ function buildContextBlock(ctx) {
 }
 
 export default async function handler(req, res) {
-  // CORS — на случай вызова не с того же origin (не критично, но безопасно)
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  // v440 SECURITY: эндпоинт same-origin, CORS снят. Защита через x-app-token (checkAuth).
+  // Раньше Allow-Origin был '*' — любой curl мог сжечь баланс Anthropic.
+  if (!checkAuth(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   try {

@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v439</title>
+<title>SalesDoc — Финансовый Дашборд v440</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -9110,7 +9110,7 @@ async function aiWidgetRefresh(widgetId){
  var ctx = (typeof ctxFn === 'function') ? ctxFn() : '<context>пусто</context>';
  var prompt = 'На основе данных ниже найди 3-5 коротких проактивных инсайтов для CEO. Каждый — одно ключевое наблюдение + конкретная рекомендация (1-2 предложения).\n\nФормат: **[Категория]** *Заголовок.* Объяснение. **Рекомендую:** что делать.\n\nКатегории: Внимание / Возможность / Тренд.\n\nБудь конкретен — имена, суммы, дни. Не повторяй очевидное (это и так в KPI). Никаких эмодзи.';
  var resp = await fetch('/api/chat', {
- method:'POST', headers:{'Content-Type':'application/json'},
+ method:'POST', headers:{'Content-Type':'application/json', 'x-app-token': window._APP_TOKEN || ''},
  body: JSON.stringify({
  agentId: w.agent,
  messages: [{role:'user', content: prompt}],
@@ -9362,7 +9362,7 @@ async function morningAnalyze(){
 
  var resp = await fetch('/api/chat', {
  method:'POST',
- headers:{'Content-Type':'application/json'},
+ headers:{'Content-Type':'application/json', 'x-app-token': window._APP_TOKEN || ''},
  body: JSON.stringify({
  agentId: 'finance',
  messages: [{role:'user', content: prompt}],
@@ -13537,7 +13537,7 @@ async function asstSend(){
  const tail = hist.slice(-20);
  const resp = await fetch(ASST_API, {
  method:'POST',
- headers:{'Content-Type':'application/json'},
+ headers:{'Content-Type':'application/json', 'x-app-token': window._APP_TOKEN || ''}, // v440: shared-secret
  body: JSON.stringify({
  agentId: agentId,
  messages: tail,
@@ -14714,7 +14714,7 @@ async function planSyncFetch(silent){
  _planSyncBusy = true;
  if (!silent) planUpdateSyncBadge('loading');
  try {
- var r = await fetch('/api/planning', { cache: 'no-store' });
+ var r = await fetch('/api/planning', { cache: 'no-store', headers: { 'x-app-token': window._APP_TOKEN || '' } });
  if (!r.ok) {
  // 503 = KV не настроен; 5xx = сбой. Падаем в локальный режим.
  throw new Error('HTTP ' + r.status);
@@ -14765,7 +14765,7 @@ window.planForcePush = async function(){
  planUpdateSyncBadge('saving');
  await planSyncPush();
  // Дополнительный fetch чтобы убедиться что сервер реально принял
- var r = await fetch('/api/planning', { cache: 'no-store' });
+ var r = await fetch('/api/planning', { cache: 'no-store', headers: { 'x-app-token': window._APP_TOKEN || '' } });
  var j = await r.json();
  if (j && j.updated_at && j.sprints && j.sprints.length) {
  try { showNotif('Готово', 'В облако ушло ' + j.sprints.length + ' спринт(ов)'); } catch(_){}
@@ -14784,7 +14784,7 @@ async function planSyncPush(){
  try {
  var r = await fetch('/api/planning', {
  method: 'POST',
- headers: { 'Content-Type': 'application/json' },
+ headers: { 'Content-Type': 'application/json', 'x-app-token': window._APP_TOKEN || '' },
  body: JSON.stringify({
  sprints: _planCloud.sprints || [],
  tasks: _planCloud.tasks || [],
@@ -19033,10 +19033,11 @@ function intgRenderCard(card){
  var fieldsEl = document.getElementById('intg-card-fields');
  if(nameEl) nameEl.textContent = card.company_name || '—';
  if(subEl){
+  // v440: было `card.clients.client_id` (поле не выбирается в select) → всегда «клиент: undefined».
+  // Берём собственное поле `card.client_id` (FK на clients.id), оно есть всегда.
   var bits = [];
   if(card.country) bits.push(card.country);
-  if(card.clients && card.clients.company_name) bits.push('клиент: ' + card.clients.client_id || card.client_id);
-  else if(card.client_id) bits.push(card.client_id);
+  if(card.client_id) bits.push('клиент: ' + card.client_id);
   bits.push('ID: ' + card.id.slice(0, 8));
   subEl.textContent = bits.join(' · ');
  }
