@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v438</title>
+<title>SalesDoc — Финансовый Дашборд v439</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7025,6 +7025,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
   </section>
   <!-- ПРАВАЯ КОЛОНКА: лента событий + чат-инпут внизу (mockup-стиль) -->
   <section class="amocard-right">
+   <!-- v439: мини-блок активных процессов клиента (Внедрение/Интеграция). P1-7. -->
+   <div id="route-card-processes" style="display:none"></div>
    <div id="route-card-feed" class="amocard-feed"></div>
    <div id="route-card-task-hint" class="amocard-task-hint" style="display:none">
     <span class="amocard-ic">&#9201;</span>
@@ -19163,6 +19165,147 @@ function intgRenderCardFeed(items){
  });
 }
 
+// v439: мини-блок процессов клиента над лентой истории (P1-7).
+// Грузит интеграции по client_id и рисует список тайлов: активные (Новая/В работе/На паузе)
+// сверху, ниже сепаратор «Закрытые» и приглушённые Готово/Отменено/Архив. Если интеграций
+// нет — контейнер скрывается целиком (display:none), лента истории остаётся на месте.
+// Внедрение здесь не показываем: активное внедрение замещает общую карту клиента целиком
+// (см. routeOpenClient → routeOpenCard), а архивные не отражаем по запросу пользователя.
+async function _routeRenderProcesses(){
+ var box = document.getElementById('route-card-processes');
+ if(!box) return;
+ if(!_routeCurrentCard || !_routeCurrentCard.client_id){
+  box.replaceChildren(); box.style.display = 'none'; return;
+ }
+ var rid = _routeCurrentCard.client_id;
+ var list = [];
+ try {
+  var d = await sbFetch('/api/cards?entity=integration&client_id=' + encodeURIComponent(rid));
+  if(d && d.ok && Array.isArray(d.integrations)) list = d.integrations;
+ } catch(e){ list = []; }
+ // Защита от гонки: пока шёл fetch — пользователь мог переключить клиента
+ if(!_routeCurrentCard || _routeCurrentCard.client_id !== rid) return;
+ if(!list.length){ box.replaceChildren(); box.style.display = 'none'; return; }
+
+ var ACTIVE = ['Новая','В работе','На паузе'];
+ var stageOrder = { 'Новая':0, 'В работе':1, 'На паузе':2 };
+ var active = [], closed = [];
+ list.forEach(function(x){ (ACTIVE.indexOf(x.status) !== -1 ? active : closed).push(x); });
+ active.sort(function(a,b){
+  var sa = stageOrder[a.status] || 99, sb = stageOrder[b.status] || 99;
+  if(sa !== sb) return sa - sb;
+  return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+ });
+ closed.sort(function(a,b){
+  return String(b.date_done || b.updated_at || '').localeCompare(String(a.date_done || a.updated_at || ''));
+ });
+
+ box.replaceChildren();
+ var h = document.createElement('div');
+ h.style.cssText = 'padding:14px 20px 6px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em';
+ h.textContent = 'Интеграции клиента';
+ box.appendChild(h);
+
+ var listEl = document.createElement('div');
+ listEl.style.cssText = 'padding:4px 20px 12px;display:flex;flex-direction:column;gap:8px';
+ box.appendChild(listEl);
+
+ active.forEach(function(it){ listEl.appendChild(_routeBuildProcessTile(it, false)); });
+ if(closed.length){
+  var sep = document.createElement('div');
+  sep.style.cssText = 'font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;padding:6px 4px 2px;border-top:1px dashed var(--border-faint);margin-top:4px';
+  sep.textContent = 'Закрытые';
+  listEl.appendChild(sep);
+  closed.forEach(function(it){ listEl.appendChild(_routeBuildProcessTile(it, true)); });
+ }
+ box.style.display = 'block';
+}
+
+// v439: одна мини-карточка процесса. Цвета берём из палитры intgRenderCard, чтобы
+// совпадало с канбаном Интеграций. БЕЗ border-left:3px (см. feedback пользователя) —
+// статус передаём цветной точкой слева и бейджем.
+function _routeBuildProcessTile(intg, isClosed){
+ var STATUS_BG = {
+  'Новая':'rgba(84,137,187,.16)', 'В работе':'rgba(255,159,10,.18)',
+  'Готово':'rgba(52,199,122,.18)', 'Отменено':'rgba(214,115,115,.16)',
+  'На паузе':'rgba(158,158,158,.18)', 'Архив':'rgba(120,120,128,.16)'
+ };
+ var STATUS_COLOR = {
+  'Новая':'#5489BB', 'В работе':'#FF9F0A', 'Готово':'#34C77A',
+  'Отменено':'#D67373', 'На паузе':'#9E9E9E', 'Архив':'var(--text-muted)'
+ };
+ function fmtDM(s){
+  if(!s) return '';
+  var d = new Date(s); if(isNaN(d)) return '';
+  return String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0');
+ }
+
+ var tile = document.createElement('div');
+ tile.setAttribute('role','button');
+ tile.setAttribute('tabindex','0');
+ tile.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:12px;padding:10px 12px;cursor:pointer;display:flex;gap:10px;align-items:center;transition:background .12s,border-color .12s' + (isClosed ? ';opacity:.6' : '');
+
+ var dot = document.createElement('span');
+ dot.style.cssText = 'width:8px;height:8px;border-radius:50%;flex-shrink:0;background:' + (STATUS_COLOR[intg.status] || '#9E9E9E');
+ tile.appendChild(dot);
+
+ var body = document.createElement('div');
+ body.style.cssText = 'flex:1;min-width:0';
+
+ var topRow = document.createElement('div');
+ topRow.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:3px;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em';
+ var lab = document.createElement('span'); lab.style.fontWeight = '700'; lab.textContent = 'Интеграция';
+ topRow.appendChild(lab);
+ var subBits = [];
+ if(intg.type) subBits.push(intg.type);
+ if(intg.package) subBits.push(intg.package);
+ if(subBits.length){
+  var sepDot = document.createElement('span'); sepDot.textContent = '·'; sepDot.style.opacity = '.6';
+  topRow.appendChild(sepDot);
+  var sub = document.createElement('span');
+  sub.style.cssText = 'font-weight:500;text-transform:none;letter-spacing:0;font-size:11.5px;color:var(--text-soft)';
+  sub.textContent = subBits.join(' / ');
+  topRow.appendChild(sub);
+ }
+ body.appendChild(topRow);
+
+ var btmRow = document.createElement('div');
+ btmRow.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--text)';
+ var badge = document.createElement('span');
+ badge.style.cssText = 'font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px;background:' + (STATUS_BG[intg.status] || 'rgba(120,120,128,.16)') + ';color:' + (STATUS_COLOR[intg.status] || 'var(--text-soft)');
+ badge.textContent = intg.status || '—';
+ btmRow.appendChild(badge);
+ if(intg.operator){
+  var op = document.createElement('span'); op.style.color = 'var(--text-soft)'; op.textContent = intg.operator;
+  btmRow.appendChild(op);
+ }
+ if(!isClosed){
+  var dl = fmtDM(intg.deadline);
+  if(dl){ var ddl = document.createElement('span'); ddl.style.color = 'var(--text-soft)'; ddl.textContent = 'срок ' + dl; btmRow.appendChild(ddl); }
+ } else {
+  var fin = fmtDM(intg.date_done || intg.updated_at);
+  if(fin){
+   var finPrefix = (intg.status === 'Отменено') ? 'отменено ' : (intg.status === 'Архив' ? 'архив ' : 'закрыто ');
+   var finEl = document.createElement('span'); finEl.style.color = 'var(--text-soft)'; finEl.textContent = finPrefix + fin;
+   btmRow.appendChild(finEl);
+  }
+ }
+ body.appendChild(btmRow);
+ tile.appendChild(body);
+
+ var arrow = document.createElement('span');
+ arrow.style.cssText = 'color:var(--text-muted);font-size:18px;line-height:1;flex-shrink:0';
+ arrow.textContent = '›';
+ tile.appendChild(arrow);
+
+ tile.addEventListener('mouseenter', function(){ tile.style.background = 'var(--surface-2)'; });
+ tile.addEventListener('mouseleave', function(){ tile.style.background = 'var(--surface)'; });
+ var open = function(){ if(typeof intgOpenCard === 'function') intgOpenCard(intg.id); };
+ tile.addEventListener('click', open);
+ tile.addEventListener('keydown', function(e){ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); } });
+ return tile;
+}
+
 // v438: композер «как в amoCRM» — переключатель Примечание/Задача, textarea, кнопки.
 // Submit пишет в card_history с event_type='integration_note'. Для задачи добавляется префикс [TODO].
 var _intgComposeMode = 'note'; // 'note' | 'task'
@@ -23402,6 +23545,9 @@ function routeCloseCard(){
  document.getElementById('view-route-card').style.display = 'none';
  document.body.style.overflow = '';
  _routeCurrentCard = null;
+ // v439: чистим блок процессов чтобы при следующем открытии не мелькали данные прошлого клиента
+ var p = document.getElementById('route-card-processes');
+ if(p){ p.replaceChildren(); p.style.display = 'none'; }
 }
 
 // v380: amo-style карточка — заполняем шапку (имя/ID), pipeline (5 стадий), стадию.
@@ -24288,6 +24434,8 @@ async function _routeRenderAmo(){
 
  // Параллельно рисуем ленту событий справа
  _routeRenderFeed();
+ // v439: мини-блок процессов клиента над лентой (P1-7).
+ _routeRenderProcesses();
 }
 
 // v380: лента событий из card_history (заметки, смены этапов, системные события).
