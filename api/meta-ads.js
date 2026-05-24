@@ -63,12 +63,12 @@ function summarizeLeads(actions, costPerActionType) {
       })()
     });
   });
-  // v442: основная цифра = только формы + сайт (то же что Meta-кабинет показывает в «Лиды»).
-  // Раньше (v346) брали generic `lead` — это сводный итог Meta по ВСЕМ типам (формы + подписки +
-  // регистрации + чаты + Marquiz). Цифра не совпадала с кабинетом → пользователь терял доверие.
-  // Разница вынесена в other_conversions — отображаем мелкой подписью под основной цифрой.
-  const leadCount = specificSum;
-  const otherConversions = Math.max(0, genericLead - specificSum);
+  // v443 откат: возвращаем generic `lead` как основную цифру (как было до v442).
+  // Причина отката: после v442 цифра лидов (только формы+сайт) стала МЕНЬШЕ чем
+  // «попало в amo» — связка визуально ломалась. CEO решил вернуть как было.
+  // Расхождение с Meta-кабинетом принимаем как known issue.
+  const leadCount = genericLead > 0 ? genericLead : specificSum;
+  const otherConversions = 0;
   breakdown.sort((a,b) => {
     const aLead = LEAD_ACTION_TYPES.has(a.action_type) ? 1 : 0;
     const bLead = LEAD_ACTION_TYPES.has(b.action_type) ? 1 : 0;
