@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v447</title>
+<title>SalesDoc — Финансовый Дашборд v448</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5428,7 +5428,14 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
     <div style="font-size:13px;font-weight:600;color:var(--text)">Новые интеграции (из приложения)</div>
     <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Появляются автоматически при оплате «Нов интеграция». Старые задачи из Google-таблицы — в архиве ниже.</div>
    </div>
-   <button onclick="intgSbLoad()" id="intg-sb-refresh" style="padding:5px 12px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text-soft);cursor:pointer;font-size:11px">Обновить</button>
+   <div style="display:flex;align-items:center;gap:10px">
+    <!-- v448: «Мои/Все» для интеграторов — как в Тикетах. Аян/Дулат/Абзал сразу видят свои. -->
+    <div id="intg-scope-toggle" style="display:inline-flex;gap:0;padding:2px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border-faint)">
+     <button data-scope="mine" onclick="_intgSetScope('mine')" style="border:none;padding:6px 12px;background:transparent;color:var(--text-soft);font-size:12px;font-weight:600;border-radius:6px;cursor:pointer">Мои<span class="cnt"></span></button>
+     <button data-scope="all" onclick="_intgSetScope('all')" style="border:none;padding:6px 12px;background:transparent;color:var(--text-soft);font-size:12px;font-weight:600;border-radius:6px;cursor:pointer">Все<span class="cnt"></span></button>
+    </div>
+    <button onclick="intgSbLoad()" id="intg-sb-refresh" style="padding:5px 12px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text-soft);cursor:pointer;font-size:11px">Обновить</button>
+   </div>
   </div>
   <div id="intg-sb-list">
    <div style="font-size:12px;color:var(--text-muted);padding:8px 0">Загрузка…</div>
@@ -19282,14 +19289,69 @@ function _intgToggleUnassigned(){
  if(typeof intgSbLoad === 'function') intgSbLoad();
 }
 
+// v448: «Мои/Все» для канбана Интеграций. По образцу _ticketsCurrentOperatorName.
+// «Мои» — карточки где operator === me. Состояние в localStorage.
+function _intgCurrentOperatorName(){
+ if(typeof currentUser === 'undefined' || !currentUser || !currentUser.name) return null;
+ var firstWord = String(currentUser.name).trim().split(/\s+/)[0];
+ return INTG_OPERATORS.indexOf(firstWord) >= 0 ? firstWord : null;
+}
+function _intgGetScope(){
+ var saved = null;
+ try { saved = localStorage.getItem('intg_scope'); } catch(_){}
+ if(saved === 'mine' || saved === 'all') return saved;
+ // По умолчанию: интегратору — «Мои», остальным (CEO/менеджеры) — «Все».
+ return _intgCurrentOperatorName() ? 'mine' : 'all';
+}
+function _intgSetScope(scope){
+ if(scope !== 'mine' && scope !== 'all') return;
+ try { localStorage.setItem('intg_scope', scope); } catch(_){}
+ if(typeof intgSbLoad === 'function') intgSbLoad();
+}
+function _intgRenderScopeToggle(items){
+ var toggle = document.getElementById('intg-scope-toggle');
+ if(!toggle) return;
+ var scope = _intgGetScope();
+ var me = _intgCurrentOperatorName();
+ var arr = Array.isArray(items) ? items : [];
+ var mineCount = me ? arr.filter(function(r){ return r.operator === me; }).length : 0;
+ var allCount = arr.length;
+ var btns = toggle.querySelectorAll('button[data-scope]');
+ for(var i = 0; i < btns.length; i++){
+  var btn = btns[i];
+  var s = btn.getAttribute('data-scope');
+  var isActive = s === scope;
+  btn.style.background = isActive ? 'var(--accent, #5489BB)' : 'transparent';
+  btn.style.color = isActive ? '#fff' : 'var(--text-soft)';
+  var cntEl = btn.querySelector('.cnt');
+  if(cntEl){
+   var n = s === 'mine' ? mineCount : allCount;
+   cntEl.textContent = ' (' + n + ')';
+  }
+ }
+}
+
 function intgSbRender(items){
  var listEl = document.getElementById('intg-sb-list');
  if(!listEl) return;
  listEl.replaceChildren();
- if(!items.length){
+ // v448: «Мои/Все» — фильтруем массив до группировки. Также обновляем счётчики в переключателе.
+ var intgScope = _intgGetScope();
+ var intgMe = _intgCurrentOperatorName();
+ _intgRenderScopeToggle(items);
+ var visibleItems = (intgScope === 'mine' && intgMe)
+  ? items.filter(function(r){ return r.operator === intgMe; })
+  : items;
+ if(!visibleItems.length){
   var empty = document.createElement('div');
-  empty.style.cssText = 'font-size:12px;color:var(--text-muted);padding:12px 0;text-align:center;font-style:italic';
-  empty.textContent = 'Пока новых интеграций нет — появятся когда пройдёт первая оплата «Нов интеграция» через бота.';
+  empty.style.cssText = 'font-size:13px;color:var(--text-muted);padding:24px 0;text-align:center;line-height:1.5';
+  if(intgScope === 'mine' && intgMe){
+   empty.textContent = 'У вас нет активных интеграций. Переключите на «Все» — заберите новую из общей очереди.';
+  } else if(!items.length){
+   empty.textContent = 'Пока новых интеграций нет — появятся когда пройдёт первая оплата «Нов интеграция» через бота.';
+  } else {
+   empty.textContent = 'Под этот фильтр ничего не попало.';
+  }
   listEl.appendChild(empty);
   return;
  }
@@ -19297,7 +19359,7 @@ function intgSbRender(items){
  // Группируем по статусу
  var byStage = {};
  INTG_STAGES.forEach(function(s){ byStage[s.key] = []; });
- items.forEach(function(r){
+ visibleItems.forEach(function(r){
   var key = byStage[r.status] !== undefined ? r.status : 'Новая';
   byStage[key].push(r);
  });
