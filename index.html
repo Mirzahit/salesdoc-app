@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v443</title>
+<title>SalesDoc — Финансовый Дашборд v444</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5433,28 +5433,31 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
   </div>
  </div>
 
- <!-- Заголовок архива (для понимания что ниже — старая таблица) -->
- <div style="margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border-faint)">
-  <div style="font-size:13px;font-weight:600;color:var(--text-soft)">Архив из Google-таблицы</div>
-  <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Старые работы интеграторов. Пока команда не переехала в приложение — продолжайте обновлять там.</div>
- </div>
+ <!-- v444: архив Sheets свёрнут под details — занимал 70% экрана и отвлекал от новой доски. -->
+ <details style="margin-top:24px">
+  <summary style="cursor:pointer;padding:10px 14px;background:var(--surface-2);border-radius:10px;font-size:13px;font-weight:600;color:var(--text-soft);user-select:none;list-style:none">
+   Архив из Google-таблицы
+   <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:6px">старая доска интеграторов — нажмите чтобы открыть</span>
+  </summary>
+  <div style="padding-top:14px">
+   <!-- Period stats — 3 cards by type -->
+   <div id="intg-period-stats" style="margin-bottom:16px"></div>
 
- <!-- Period stats — 3 cards by type -->
- <div id="intg-period-stats" style="margin-bottom:16px"></div>
+   <!-- Kanban -->
+   <div id="intg-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;min-height:300px"></div>
 
- <!-- Kanban -->
- <div id="intg-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;min-height:300px"></div>
-
- <!-- Dashboard по пакетам -->
- <div class="panel" id="intg-chart-type" style="min-height:100px;margin-bottom:16px">
- <div class="panel-title" style="margin-bottom:10px">По пакетам</div>
- <div id="intg-package-stats"></div>
- </div>
- <!-- Monthly breakdown table -->
- <div class="panel" id="intg-monthly-panel" style="min-height:100px;margin-bottom:16px">
- <div class="panel-title" style="margin-bottom:10px">Выполнено по месяцам</div>
- <div id="intg-monthly-table" style="overflow-x:auto"></div>
- </div>
+   <!-- Dashboard по пакетам -->
+   <div class="panel" id="intg-chart-type" style="min-height:100px;margin-bottom:16px">
+   <div class="panel-title" style="margin-bottom:10px">По пакетам</div>
+   <div id="intg-package-stats"></div>
+   </div>
+   <!-- Monthly breakdown table -->
+   <div class="panel" id="intg-monthly-panel" style="min-height:100px;margin-bottom:16px">
+   <div class="panel-title" style="margin-bottom:10px">Выполнено по месяцам</div>
+   <div id="intg-monthly-table" style="overflow-x:auto"></div>
+   </div>
+  </div>
+ </details>
  </div>
 
  <!-- MARKETING VIEW -->
@@ -19063,7 +19066,19 @@ function intgRenderCard(card){
  var subEl = document.getElementById('intg-card-sub');
  var badgeEl = document.getElementById('intg-card-status-badge');
  var fieldsEl = document.getElementById('intg-card-fields');
- if(nameEl) nameEl.textContent = card.company_name || '—';
+ if(nameEl){
+  nameEl.textContent = card.company_name || '—';
+  // v444: клик по имени открывает общую карту клиента — раньше нужно было выходить и искать руками.
+  if(card.client_id){
+   nameEl.style.cursor = 'pointer';
+   nameEl.title = 'Открыть карту клиента';
+   nameEl.onclick = function(){ intgCloseCard(); routeOpenClient(card.client_id); };
+  } else {
+   nameEl.style.cursor = '';
+   nameEl.title = '';
+   nameEl.onclick = null;
+  }
+ }
  if(subEl){
   // v440: было `card.clients.client_id` (поле не выбирается в select) → всегда «клиент: undefined».
   // Берём собственное поле `card.client_id` (FK на clients.id), оно есть всегда.
@@ -22994,6 +23009,15 @@ function _ticketRenderFields(){
    inp.addEventListener('click', function(){
     _openTicketSidebarEditor(inp, v, opts);
    });
+  } else if(opts.clientLink){
+   // v444: read-only поле «Клиент» — клик ведёт в общую карту клиента.
+   inp.style.cursor = 'pointer';
+   inp.title = 'Открыть карту клиента';
+   var arrow = document.createElement('span'); arrow.className = 'tk-caret'; arrow.textContent = '›'; inp.appendChild(arrow);
+   inp.addEventListener('click', function(){
+    if(typeof ticketCloseCard === 'function') ticketCloseCard();
+    if(typeof routeOpenClient === 'function') routeOpenClient(opts.clientLink);
+   });
   }
   f.appendChild(l); f.appendChild(inp); body.appendChild(f);
  }
@@ -23001,8 +23025,14 @@ function _ticketRenderFields(){
   var d = document.createElement('span'); d.className = 'tk-prio-dot tk-prio-' + (p || 'normal'); return d;
  }
 
- // Клиент — read-only (правка в карточке клиента отдельно)
- addField('Клиент', { readonly:true, displayValue: cl.company_name || t.client_id || '—', faint: !cl.company_name });
+ // Клиент — read-only, но клик ведёт в общую карту клиента (v444).
+ // Раньше операторам приходилось закрывать тикет и руками искать клиента в Действующих.
+ addField('Клиент', {
+  readonly:true,
+  displayValue: cl.company_name || t.client_id || '—',
+  faint: !cl.company_name,
+  clientLink: t.client_id || null
+ });
 
  // Исполнитель
  addField('Исполнитель', {
@@ -23590,12 +23620,20 @@ var ROUTE_STAGES_ORDER = ['Новый','Настройка','Обучение','
 function _routeRenderCardHead(){
  var card = _routeCurrentCard; if(!card) return;
  var cl = card.clients || {};
+ // v444: для активированных клиентов (синтетическая карта) скрываем таб «Чек-лист» —
+ // у них нет карточки Внедрения, чек-листа быть не может (раньше клик показывал «Этап:null»).
+ var isSynthetic = String(card.id || '').indexOf('client:') === 0;
+ var checkTab = document.getElementById('route-tab-check');
+ if(checkTab) checkTab.style.display = isSynthetic ? 'none' : '';
  // Имя клиента
  var nameEl = document.getElementById('route-card-name');
  if(nameEl) nameEl.textContent = cl.company_name || '(без имени)';
- // ID
+ // ID + бейдж страны (v444)
  var idEl = document.getElementById('route-card-id');
- if(idEl) idEl.textContent = '#' + (card.client_id || '—');
+ if(idEl){
+  var country = card.country || cl.country || '';
+  idEl.textContent = '#' + (card.client_id || '—') + (country ? '  ·  ' + country : '');
+ }
  // Имя этапа
  var stageEl = document.getElementById('route-card-stage-name');
  if(stageEl) stageEl.textContent = card.stage || '—';
@@ -23650,10 +23688,13 @@ async function routeChatSend(){
  if(btn) btn.disabled = true;
  input.disabled = true;
  try {
+  // v444: для синтетической карты (активированный клиент без карточки Внедрения)
+  // card_id содержит client:SD-KZ-... — не UUID, бэк не принимает. Шлём только client_id.
+  var isSynthetic = String(_routeCurrentCard.id || '').indexOf('client:') === 0;
   var d = await sbFetch('/api/history', {
    method:'POST',
    body: JSON.stringify({
-    card_id: _routeCurrentCard.id,
+    card_id: isSynthetic ? null : _routeCurrentCard.id,
     client_id: _routeCurrentCard.client_id,
     event_type: 'note',
     text: text,
@@ -23761,6 +23802,16 @@ function routeCardTab(tab){
 async function _routeRenderChecklist(){
  var body = document.getElementById('route-card-body');
  if(!_routeCurrentCard){ body.innerHTML = ''; return; }
+ // v444: синтетическая карта (открыта через routeOpenClient — клиент уже активирован)
+ // не имеет карточки Внедрения → чек-листа быть не может. Раньше показывало «Этап: null» и пустоту.
+ if(String(_routeCurrentCard.id || '').indexOf('client:') === 0){
+  body.replaceChildren();
+  var box = document.createElement('div');
+  box.style.cssText = 'padding:20px;background:var(--surface-2);border-radius:10px;font-size:13px;color:var(--text-soft);line-height:1.5';
+  box.textContent = 'Чек-лист есть только пока клиент в Маршруте Внедрения. Этот клиент уже активирован — чек-листа у него нет.';
+  body.appendChild(box);
+  return;
+ }
  body.innerHTML = '<div style="color:var(--text-soft);font-size:13px">Загрузка чек-листа...</div>';
  try {
   var d = await sbFetch('/api/checklist?card_id=' + _routeCurrentCard.id);
