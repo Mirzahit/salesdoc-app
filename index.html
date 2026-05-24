@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v444</title>
+<title>SalesDoc — Финансовый Дашборд v445</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6878,6 +6878,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
   </div>
   <div class="route-filter-row">
    <span class="route-count">Тикетов: <b id="tickets-count">&mdash;</b></span>
+   <!-- v445: сегментированный переключатель «Мои/Все» — операторам сразу видны их тикеты -->
+   <div id="tickets-scope-toggle" style="display:inline-flex;gap:0;padding:2px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border-faint)">
+    <button data-scope="mine" onclick="_ticketsSetScope('mine')" style="border:none;padding:6px 12px;background:transparent;color:var(--text-soft);font-size:12px;font-weight:600;border-radius:6px;cursor:pointer">Мои<span class="cnt"></span></button>
+    <button data-scope="all" onclick="_ticketsSetScope('all')" style="border:none;padding:6px 12px;background:transparent;color:var(--text-soft);font-size:12px;font-weight:600;border-radius:6px;cursor:pointer">Все<span class="cnt"></span></button>
+   </div>
    <input id="tickets-search" type="search" placeholder="Поиск по теме, клиенту, тегу…" oninput="ticketsRender()" class="route-select" style="min-width:240px;flex:0 1 280px">
    <div class="route-spacer"></div>
    <select id="tickets-filter-op" class="route-select" onchange="ticketsRender()">
@@ -7008,6 +7013,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
       </div>
      </div>
     </div>
+    <!-- v445: быстрая кнопка «Передать оператора» — поповер со списком -->
+    <div id="route-card-assign" style="position:relative;justify-self:end"></div>
    </div>
    <div class="amocard-stage-box">
     <div class="amocard-stage-row">
@@ -7122,7 +7129,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
      <div id="intg-card-sub" style="font-size:11px;color:var(--text-muted);margin-top:2px"></div>
     </div>
    </div>
-   <div id="intg-card-status-badge" style="font-size:12px;font-weight:700;padding:5px 14px;border-radius:14px"></div>
+   <!-- v445: быстрая кнопка «Передать» — поповер со списком интеграторов -->
+   <div style="display:flex;align-items:center;gap:10px">
+    <div id="intg-card-assign" style="position:relative"></div>
+    <div id="intg-card-status-badge" style="font-size:12px;font-weight:700;padding:5px 14px;border-radius:14px"></div>
+   </div>
   </div>
 
   <!-- Контент: 2 колонки, у каждой свой скролл -->
@@ -18912,6 +18923,12 @@ var INTG_STAGES = [
 // Используется как whitelist для выпадашки «Оператор» в карте интеграции.
 var INTG_OPERATORS = ['Аян','Дулат','Абзал'];
 
+// v445: toggle фильтра «только без оператора» для канбана Интеграций
+function _intgToggleUnassigned(){
+ window._intgFilterUnassigned = !window._intgFilterUnassigned;
+ if(typeof intgSbLoad === 'function') intgSbLoad();
+}
+
 function intgSbRender(items){
  var listEl = document.getElementById('intg-sb-list');
  if(!listEl) return;
@@ -18931,6 +18948,8 @@ function intgSbRender(items){
   var key = byStage[r.status] !== undefined ? r.status : 'Новая';
   byStage[key].push(r);
  });
+ // v445: toggle-фильтр «только без оператора» по канбану Интеграций (тот же паттерн что в Маршруте)
+ var intgFilterUnassigned = window._intgFilterUnassigned === true;
 
  // v433: используем те же CSS-классы что и канбан Маршрута/Поддержки —
  // route-col-amo для колонок, .tk-card для карточек. Чтоб выглядело точно так же.
@@ -18939,20 +18958,26 @@ function intgSbRender(items){
  // что добавляет вертикальный скроллбар внутри — пользователю не нравится).
  var html = '<div class="route-kanban" style="display:grid;grid-template-columns:repeat(5,minmax(280px,1fr));gap:14px;margin-top:4px">';
  INTG_STAGES.forEach(function(stage, sIdx){
+  // v445: счётчик «без оператора» по всей колонке (до фильтра видимости)
+  var intgUnassignedInStage = byStage[stage.key].filter(function(r){ return !r.operator; }).length;
+  // Применяем фильтр видимости
+  var visibleStage = intgFilterUnassigned ? byStage[stage.key].filter(function(r){ return !r.operator; }) : byStage[stage.key];
   html += '<div class="route-col-amo route-col s' + (sIdx + 1) + '" data-intg-stage="' + stage.key + '" style="--route-col-color:' + stage.color + ';max-height:none">';
-  html += '<div class="route-col-amo-head">';
-  html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage.label + '</div><div class="route-col-amo-count">' + byStage[stage.key].length + '</div></div>';
+  html += '<div class="route-col-amo-head"' + (intgFilterUnassigned ? ' style="outline:1px dashed rgba(214,115,115,.4);outline-offset:-2px;border-radius:8px"' : '') + '>';
+  html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage.label + '</div><div class="route-col-amo-count">' + visibleStage.length + '</div></div>';
+  // v445: кликабельный бейдж-фильтр «без оператора»
+  if(intgUnassignedInStage > 0){
+   html += '<div style="margin-top:4px"><span onclick="event.stopPropagation();_intgToggleUnassigned()" title="Показать только без оператора" style="font-size:10.5px;color:#D67373;cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-weight:600">' + intgUnassignedInStage + ' без оператора</span></div>';
+  }
   html += '</div>';
   // v435: убираем внутренний скролл колонки — overflow:visible вместо auto
   html += '<div class="route-col-amo-body" style="overflow:visible">';
-  if(!byStage[stage.key].length){
+  if(!visibleStage.length){
    html += '<div class="route-col-amo-empty">Пусто</div>';
   } else {
-   byStage[stage.key].forEach(function(r){
+   visibleStage.forEach(function(r){
     // .tk-card — твёрдый фон + чёткая рамка + мягкая тень (как карточки тикетов v419)
     var typePkg = [r.type, r.package].filter(Boolean).join(' · ');
-    var opLabel = r.operator || '— не назначен —';
-    var opColor = r.operator ? 'var(--text-soft)' : '#D67373';
     var dlBadge = '';
     if(r.deadline){
      var d = new Date(r.deadline);
@@ -18971,7 +18996,11 @@ function intgSbRender(items){
     html += '<div style="margin-bottom:4px;font-weight:600;font-size:13px;color:var(--accent,#34C77A)">' + _escHtml(r.company_name || '—') + '</div>';
     if(typePkg) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(typePkg) + '</div>';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft);gap:6px;flex-wrap:wrap">';
-    html += '<span style="color:' + opColor + '">' + _escHtml(opLabel) + '</span>';
+    // v445: pill «не назначен» вместо красного текста — единый паттерн с канбаном Маршрута
+    var intgOpCell = r.operator
+     ? '<span>' + _escHtml(r.operator) + '</span>'
+     : '<span style="font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(214,115,115,.14);color:#D67373">не назначен</span>';
+    html += intgOpCell;
     if(dlBadge) html += '<span>' + dlBadge + '</span>';
     html += '</div></div>';
    });
@@ -19168,6 +19197,12 @@ function intgRenderCard(card){
   pre:true, editable:true,
   editOpts:{ field:'comment', type:'textarea', rows:4, rawValue:card.comment }
  });
+ // v445: кнопка «Передать» в шапке карты Интеграции — быстрый дубль поля «Оператор»
+ if(typeof _renderAssignButton === 'function' && typeof INTG_OPERATORS !== 'undefined'){
+  _renderAssignButton('intg-card-assign', card.operator, INTG_OPERATORS, function(newOp){
+   _assignIntgOperator(card, newOp);
+  });
+ }
 }
 
 function intgRenderCardFeed(items){
@@ -22247,14 +22282,19 @@ function routeRender(){
  var board = document.getElementById('route-board');
  if(!board) return;
  var filterOp = (document.getElementById('route-filter-op')||{}).value || '';
+ // v445: «без оператора» — toggle-фильтр (кликом по бейджу в шапке колонки)
+ var filterUnassigned = window._routeFilterUnassigned === true;
  _routeUpdateStats();
  var html = '';
  ROUTE_STAGES.forEach(function(stage){
   var stageCards = routeCards.filter(function(c){
    if(c.stage !== stage) return false;
    if(filterOp && c.operator !== filterOp) return false;
+   if(filterUnassigned && c.operator) return false; // v445
    return true;
   });
+  // v445: счётчик «без оператора» для бейджа в шапке (считаем по всей колонке, не только видимым)
+  var unassignedInStage = routeCards.filter(function(c){ return c.stage === stage && !c.operator; }).length;
   var meta = ROUTE_STAGE_META[stage] || { idx:0, desc:'' };
   var stageSum = stageCards.reduce(function(s, c){ return s + (Number(c.payment_amount) || 0); }, 0);
   var sumLabel = stageCards.length > 0
@@ -22262,8 +22302,12 @@ function routeRender(){
    : 'Сумма: <b>₸ 0</b>';
   // Колонка amo-style: без фона/рамки, цветная полоска сверху через класс s{idx}
   html += '<div class="route-col-amo route-col s' + meta.idx + '" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.background=\'rgba(120,120,128,.06)\'" ondragleave="this.style.background=\'transparent\'" ondrop="this.style.background=\'transparent\';routeDrop(event,\'' + stage + '\')">';
-  html += '<div class="route-col-amo-head">';
+  html += '<div class="route-col-amo-head"' + (filterUnassigned ? ' style="outline:1px dashed rgba(214,115,115,.4);outline-offset:-2px;border-radius:8px"' : '') + '>';
   html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage + '</div><div class="route-col-amo-count">' + stageCards.length + '</div></div>';
+  // v445: кликабельный бейдж-фильтр «без оператора» — toggle общий на канбан
+  if(unassignedInStage > 0){
+   html += '<div style="margin-top:4px"><span onclick="event.stopPropagation();_routeToggleUnassigned()" title="Показать только без оператора" style="font-size:10.5px;color:#D67373;cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-weight:600">' + unassignedInStage + ' без оператора</span></div>';
+  }
   // v391: для стадии «Новый» — счётчик «появилось сегодня» чтобы оператор сразу видел свежие
   if(stage === 'Новый'){
    var todayStart = new Date(); todayStart.setHours(0,0,0,0);
@@ -22306,7 +22350,11 @@ function routeRender(){
    html += '<div style="margin-bottom:4px"><a onclick="event.stopPropagation();routeOpenCard(\'' + card.id + '\')" style="font-weight:600;font-size:13px;color:var(--accent,#34C77A);cursor:pointer;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + _escHtml(name) + '</a></div>';
    if(card.tariff) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(card.tariff) + '</div>';
    html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft);gap:6px;flex-wrap:wrap">';
-   html += '<span>' + _escHtml(op) + '</span><span style="display:flex;align-items:center;gap:6px">' + dayBadge + checkBadge + '</span>';
+   // v445: pill «не назначен» вместо тире — заметно но без accent-полоски
+   var opCell = card.operator
+    ? '<span>' + _escHtml(card.operator) + '</span>'
+    : '<span style="font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(214,115,115,.14);color:#D67373">не назначен</span>';
+   html += opCell + '<span style="display:flex;align-items:center;gap:6px">' + dayBadge + checkBadge + '</span>';
    html += '</div>';
    if(phone){
     html += '<div style="margin-top:8px;display:flex;gap:6px">';
@@ -22320,6 +22368,12 @@ function routeRender(){
   html += '</div>'; // /route-col-amo
  });
  board.innerHTML = html;
+}
+
+// v445: toggle фильтра «только без оператора» для канбана Маршрута
+function _routeToggleUnassigned(){
+ window._routeFilterUnassigned = !window._routeFilterUnassigned;
+ routeRender();
 }
 
 function routeDragStart(cardId){
@@ -22632,6 +22686,50 @@ function _ticketsCurrentOperatorName(){
  return _TICKETS_BADGE_OPERATORS.indexOf(firstWord) >= 0 ? firstWord : null;
 }
 
+// v445: scope «Мои/Все» для канбана Тикетов. Сохраняется в localStorage между сессиями.
+// Default: оператору — «Мои», CEO/админу — «Все».
+function _ticketsGetScope(){
+ var saved = null;
+ try { saved = localStorage.getItem('tickets_scope'); } catch(_){}
+ if(saved === 'mine' || saved === 'all') return saved;
+ return _ticketsCurrentOperatorName() ? 'mine' : 'all';
+}
+function _ticketsSetScope(scope){
+ if(scope !== 'mine' && scope !== 'all') return;
+ try { localStorage.setItem('tickets_scope', scope); } catch(_){}
+ // При клике «Мои» сбрасываем фильтр оператора (иначе конфликт «мои + Айдос» = только Айдос)
+ if(scope === 'mine'){
+  var fOp = document.getElementById('tickets-filter-op');
+  if(fOp) fOp.value = '';
+ }
+ ticketsRender();
+}
+function _ticketsRenderScopeToggle(){
+ var toggle = document.getElementById('tickets-scope-toggle');
+ if(!toggle) return;
+ var scope = _ticketsGetScope();
+ var me = _ticketsCurrentOperatorName();
+ var mineCount = me ? ticketsList.filter(function(t){
+  if(t.operator === me) return true;
+  if(t.clients && t.clients.curator_operator === me) return true;
+  return false;
+ }).length : 0;
+ var allCount = ticketsList.length;
+ var btns = toggle.querySelectorAll('button[data-scope]');
+ for(var i = 0; i < btns.length; i++){
+  var btn = btns[i];
+  var s = btn.getAttribute('data-scope');
+  var isActive = s === scope;
+  btn.style.background = isActive ? 'var(--accent, #5489BB)' : 'transparent';
+  btn.style.color = isActive ? '#fff' : 'var(--text-soft)';
+  var cntEl = btn.querySelector('.cnt');
+  if(cntEl){
+   var n = s === 'mine' ? mineCount : allCount;
+   cntEl.textContent = ' (' + n + ')';
+  }
+ }
+}
+
 // v418: посчитать мои висящие тикеты по уже загруженному ticketsList.
 // «Мои» — тикеты где явно назначен этот оператор ИЛИ куратор клиента = этот оператор.
 // Если пользователь не оператор (CEO) — считаем общее число висящих.
@@ -22754,14 +22852,33 @@ function ticketsUpdateStats(){
 function ticketsRender(){
  var board = document.getElementById('tickets-board');
  if(!board) return;
+ // v445: «Мои/Все» scope. Если оператор и есть свои — фильтруем по нему.
+ var me = _ticketsCurrentOperatorName();
+ var scope = _ticketsGetScope();
  var fOp = (document.getElementById('tickets-filter-op')||{}).value || '';
  var fPrio = (document.getElementById('tickets-filter-prio')||{}).value || '';
  // v404: поиск по теме, описанию, имени клиента, тегам. Регистронезависимо.
  var fSearch = ((document.getElementById('tickets-search')||{}).value || '').trim().toLowerCase();
+ // v445: пустое состояние «все мои тикеты решены» — показываем над board вместо четырёх «Пусто».
+ if(scope === 'mine' && me){
+  var totalMine = ticketsList.filter(function(t){
+   return (t.operator === me) || (t.clients && t.clients.curator_operator === me);
+  }).length;
+  if(totalMine === 0){
+   board.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-soft);font-size:14px;line-height:1.6">Все ваши тикеты решены.<br><a onclick="_ticketsSetScope(\'all\')" style="color:var(--accent, #5489BB);cursor:pointer;text-decoration:underline">Глянуть общую очередь</a></div>';
+   _ticketsRenderScopeToggle();
+   return;
+  }
+ }
  var html = '';
  TICKETS_STAGES.forEach(function(stage, sIdx){
   var stageTickets = ticketsList.filter(function(t){
    if(t.status !== stage.key) return false;
+   // v445: scope «Мои» — оператор или куратор клиента = me
+   if(scope === 'mine' && me){
+    var isMine = (t.operator === me) || (t.clients && t.clients.curator_operator === me);
+    if(!isMine) return false;
+   }
    if(fOp && t.operator !== fOp) return false;
    if(fPrio && t.priority !== fPrio) return false;
    if(fSearch){
@@ -22806,6 +22923,7 @@ function ticketsRender(){
   html += '</div>'; // /col
  });
  board.innerHTML = html;
+ _ticketsRenderScopeToggle(); // v445: обновить счётчики Мои/Все
 }
 
 function _ticketsFmtSLA(t){
@@ -23617,6 +23735,137 @@ function routeCloseCard(){
 // Старый innerHTML в #route-card-head больше не используется — мы пишем напрямую
 // в новые элементы по ID. Это безопаснее от XSS (textContent вместо innerHTML).
 var ROUTE_STAGES_ORDER = ['Новый','Настройка','Обучение','Тестирование','Активация'];
+// v445: единый список операторов Маршрута (раньше дублировался в 2 местах _routeRenderAmo)
+var ROUTE_OPERATORS = ['Айдос','Акбар','Самат','Нурай'];
+
+// v445: универсальная кнопка «Передать» с поповером. Используется в шапке карт Внедрения и Интеграции.
+// containerId — id <div> в шапке, currentOp — текущий оператор (или пусто), choices — массив строк,
+// onPick(newOp) — что делать при выборе (newOp === '' значит «Снять назначение»).
+function _renderAssignButton(containerId, currentOp, choices, onPick){
+ var box = document.getElementById(containerId);
+ if(!box) return;
+ box.replaceChildren();
+ var hasOp = !!currentOp;
+ var btn = document.createElement('button');
+ btn.type = 'button';
+ var bgColor = hasOp ? 'var(--surface-2)' : 'rgba(251,191,36,.16)';
+ var fgColor = hasOp ? 'var(--text)' : '#FBBF24';
+ btn.style.cssText = 'display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border-faint);border-radius:999px;background:' + bgColor + ';color:' + fgColor + ';font-size:12px;font-weight:600;cursor:pointer;line-height:1.2';
+ if(hasOp){
+  var initials = String(currentOp).trim().split(/\s+/).map(function(w){ return w[0]; }).join('').slice(0,2).toUpperCase();
+  var av = document.createElement('span');
+  av.style.cssText = 'width:22px;height:22px;border-radius:50%;background:var(--accent, #5489BB);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;letter-spacing:0';
+  av.textContent = initials;
+  btn.appendChild(av);
+  var nm = document.createElement('span'); nm.textContent = currentOp; btn.appendChild(nm);
+ } else {
+  var plus = document.createElement('span'); plus.textContent = '+ Взять / Передать'; btn.appendChild(plus);
+ }
+ var caret = document.createElement('span'); caret.textContent = '▾'; caret.style.cssText = 'font-size:10px;opacity:.7';
+ btn.appendChild(caret);
+ btn.title = hasOp ? 'Сменить ответственного' : 'Назначить ответственного';
+ box.appendChild(btn);
+
+ var popover = document.createElement('div');
+ popover.style.cssText = 'display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:220px;max-width:calc(100vw - 40px);background:var(--surface);border:1px solid var(--border-faint);border-radius:10px;padding:6px;box-shadow:0 12px 32px rgba(0,0,0,.4);z-index:10';
+ choices.forEach(function(op){
+  var item = document.createElement('div');
+  item.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text)';
+  var ini = String(op).trim().split(/\s+/).map(function(w){ return w[0]; }).join('').slice(0,2).toUpperCase();
+  var avi = document.createElement('span');
+  avi.style.cssText = 'width:24px;height:24px;border-radius:50%;background:var(--surface-2);color:var(--text-soft);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700';
+  avi.textContent = ini;
+  item.appendChild(avi);
+  var nm = document.createElement('span'); nm.style.flex = '1'; nm.textContent = op; item.appendChild(nm);
+  if(op === currentOp){
+   var chk = document.createElement('span'); chk.textContent = '✓'; chk.style.cssText = 'color:var(--accent, #34C77A);font-weight:700';
+   item.appendChild(chk);
+  }
+  item.addEventListener('mouseenter', function(){ item.style.background = 'var(--surface-2)'; });
+  item.addEventListener('mouseleave', function(){ item.style.background = ''; });
+  item.addEventListener('click', function(e){ e.stopPropagation(); popover.style.display = 'none'; onPick(op); });
+  popover.appendChild(item);
+ });
+ if(hasOp){
+  var sep = document.createElement('div'); sep.style.cssText = 'height:1px;background:var(--border-faint);margin:4px 0';
+  popover.appendChild(sep);
+  var off = document.createElement('div');
+  off.style.cssText = 'padding:8px 10px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--text-soft)';
+  off.textContent = 'Снять назначение';
+  off.addEventListener('mouseenter', function(){ off.style.background = 'var(--surface-2)'; });
+  off.addEventListener('mouseleave', function(){ off.style.background = ''; });
+  off.addEventListener('click', function(e){ e.stopPropagation(); popover.style.display = 'none'; onPick(''); });
+  popover.appendChild(off);
+ }
+ box.appendChild(popover);
+ btn.addEventListener('click', function(e){
+  e.stopPropagation();
+  var show = popover.style.display === 'none';
+  popover.style.display = show ? 'block' : 'none';
+  if(show){
+   // Закрытие при клике вне (один-разовый обработчик)
+   setTimeout(function(){
+    var off = function(){ popover.style.display = 'none'; document.removeEventListener('click', off); };
+    document.addEventListener('click', off);
+   }, 0);
+  }
+ });
+}
+
+// v445: смена оператора в Маршруте — оптимистично + PATCH + тост.
+async function _assignRouteOperator(card, newOp){
+ if(!card || !card.id) return;
+ var prev = card.operator || '';
+ card.operator = newOp || null;
+ // Обновляем кэш списка карт
+ if(typeof routeCards !== 'undefined' && Array.isArray(routeCards)){
+  var x = routeCards.find(function(c){ return c.id === card.id; });
+  if(x) x.operator = card.operator;
+ }
+ // Перерендер шапки и полей
+ _routeRenderCardHead();
+ if(_routeCurrentTab === 'amo' && typeof _routeRenderAmo === 'function') _routeRenderAmo();
+ try {
+  var d = await sbFetch('/api/cards?id=' + encodeURIComponent(card.id), {
+   method: 'PATCH',
+   body: JSON.stringify({ operator: newOp || null })
+  });
+  if(!d.ok) throw new Error(d.error || 'PATCH failed');
+  if(typeof showNotif === 'function') showNotif('Готово', newOp ? ('Передано ' + newOp) : 'Назначение снято');
+ } catch(e){
+  // Откат
+  card.operator = prev;
+  if(typeof routeCards !== 'undefined' && Array.isArray(routeCards)){
+   var y = routeCards.find(function(c){ return c.id === card.id; });
+   if(y) y.operator = prev;
+  }
+  _routeRenderCardHead();
+  if(_routeCurrentTab === 'amo' && typeof _routeRenderAmo === 'function') _routeRenderAmo();
+  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+ }
+}
+
+// v445: смена оператора в Интеграции — те же шаги, другой endpoint.
+async function _assignIntgOperator(card, newOp){
+ if(!card || !card.id) return;
+ var prev = card.operator || '';
+ card.operator = newOp || null;
+ // Перерендер карты
+ if(typeof intgRenderCard === 'function') intgRenderCard(card);
+ try {
+  var d = await sbFetch('/api/cards?entity=integration&id=' + encodeURIComponent(card.id), {
+   method: 'PATCH',
+   body: JSON.stringify({ operator: newOp || null })
+  });
+  if(!d.ok) throw new Error(d.error || 'PATCH failed');
+  if(typeof showNotif === 'function') showNotif('Готово', newOp ? ('Передано ' + newOp) : 'Назначение снято');
+ } catch(e){
+  card.operator = prev;
+  if(typeof intgRenderCard === 'function') intgRenderCard(card);
+  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+ }
+}
+
 function _routeRenderCardHead(){
  var card = _routeCurrentCard; if(!card) return;
  var cl = card.clients || {};
@@ -23664,6 +23913,15 @@ function _routeRenderCardHead(){
    step.title = stageName;
    pipeEl.appendChild(step);
   });
+ }
+ // v445: кнопка «Передать» в шапке (только для реальных карт Внедрения, не синтетических)
+ if(!isSynthetic){
+  _renderAssignButton('route-card-assign', card.operator, ROUTE_OPERATORS, function(newOp){
+   _assignRouteOperator(card, newOp);
+  });
+ } else {
+  var b = document.getElementById('route-card-assign');
+  if(b) b.replaceChildren();
  }
 }
 
