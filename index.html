@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v460</title>
+<title>SalesDoc — Финансовый Дашборд v461</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -24682,8 +24682,10 @@ var TICKETS_STAGES = [
 ];
 var ticketsList = [];
 
-// v418: операторы поддержки (whitelist из api/cards.js TICKET_OPERATORS).
-// Используется чтобы определить — текущий пользователь оператор или CEO/админ.
+// v418+v461: операторы поддержки. Раньше захардкожено — новые операторы (например,
+// добавленные в operators в БД) не получали «Мои(N)» счётчик. Теперь список загружается
+// динамически из /api/sb-ping в ticketsLoad() и пишется в window._TICKETS_BADGE_OPERATORS.
+// Фолбэк для случая когда ticketsLoad ещё не выполнился (первая отрисовка).
 var _TICKETS_BADGE_OPERATORS = ['Айдос','Акбар','Самат','Нурай'];
 
 // v418: вернуть имя оператора если текущий пользователь — оператор поддержки.
@@ -24691,8 +24693,19 @@ var _TICKETS_BADGE_OPERATORS = ['Айдос','Акбар','Самат','Нура
 // (в базе операторы — одно имя, в профиле может быть «Айдос Хапез»).
 function _ticketsCurrentOperatorName(){
  if(typeof currentUser === 'undefined' || !currentUser || !currentUser.name) return null;
- var firstWord = String(currentUser.name).trim().split(/\s+/)[0];
- return _TICKETS_BADGE_OPERATORS.indexOf(firstWord) >= 0 ? firstWord : null;
+ var raw = String(currentUser.name).trim();
+ var firstWord = raw.split(/\s+/)[0];
+ // v461: дополнительно матчим полное имя (на случай если оператор записан как «Айдос Хапез»
+ // в operators), и first-word. Пробуем все варианты против динамически загруженного списка.
+ var ops = _TICKETS_BADGE_OPERATORS || [];
+ if(ops.indexOf(raw) >= 0) return raw;
+ if(ops.indexOf(firstWord) >= 0) return firstWord;
+ // v461: дополнительно — точный матч имени из operators, нечувствительный к регистру
+ for(var i = 0; i < ops.length; i++){
+  if(ops[i] && ops[i].toLowerCase() === raw.toLowerCase()) return ops[i];
+  if(ops[i] && ops[i].toLowerCase() === firstWord.toLowerCase()) return ops[i];
+ }
+ return null;
 }
 
 // v445: scope «Мои/Все» для канбана Тикетов. Сохраняется в localStorage между сессиями.
@@ -24772,7 +24785,16 @@ function _ticketsRenderBadge(){
 // собственный лёгкий fetch тикетов и пишет в бейдж, не трогая канбан.
 async function ticketsLoadBadgeOnly(){
  try {
-  var d = await sbFetch('/api/cards?entity=ticket');
+  // v461: загружаем тикеты И список операторов параллельно — иначе бейдж покажет
+  // 0 для оператора, не попавшего в захардкоженный fallback.
+  var [d, opsRes] = await Promise.all([
+   sbFetch('/api/cards?entity=ticket'),
+   fetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators:[] }; })
+  ]);
+  var opsList = ((opsRes && opsRes.operators) || []).filter(o=>o.role==='integrator' && o.active);
+  if(opsList.length){
+   _TICKETS_BADGE_OPERATORS = opsList.map(function(o){ return o.name; });
+  }
   if(d && d.ok){
    ticketsList = d.tickets || [];
    _ticketsRenderBadge();
@@ -24796,6 +24818,11 @@ async function ticketsLoad(){
   // Заполняем выпадашку операторов (один раз)
   var filt = document.getElementById('tickets-filter-op');
   var opsList = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
+  // v461: динамически обновляем _TICKETS_BADGE_OPERATORS из активных операторов поддержки.
+  // Это позволяет любому добавленному в operators оператору сразу видеть счётчик «Мои».
+  if(opsList.length){
+   _TICKETS_BADGE_OPERATORS = opsList.map(function(o){ return o.name; });
+  }
   if(filt && filt.options.length <= 1){
    opsList.forEach(function(o){ var opt = document.createElement('option'); opt.value=o.name; opt.textContent=o.name; filt.appendChild(opt); });
   }
