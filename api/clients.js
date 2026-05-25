@@ -84,6 +84,33 @@ export default async function handler(req, res) {
         return res.status(400).json({ ok: false, error: 'status должен быть один из: ' + ALLOWED_STATUS.join(', ') });
       }
       const result = await sbInsert('clients', body);
+
+      // v452: авто-задача «Связаться» при создании клиента (spec §8 п.2).
+      // Запускается всегда, кроме случая когда явно отключено body.skip_auto_task=true.
+      // Errors here are логируются но не валят создание клиента.
+      if (result[0] && !body.skip_auto_task) {
+        try {
+          const userName = (req.headers['x-user-name'] || '').toString().trim()
+            || body.curator_operator
+            || 'system';
+          const assignee = body.curator_operator || userName;
+          const deadlineAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // +1 час
+          await sbInsert('tasks', {
+            client_id: result[0].client_id,
+            type_id: 1,                    // «Связаться»
+            text: 'Связаться с новым клиентом',
+            deadline_at: deadlineAt,
+            deadline_end_at: null,
+            is_all_day: false,
+            assignee_operator: assignee,
+            created_by: userName,
+            status: 'open'
+          });
+        } catch (taskErr) {
+          console.warn('[clients] auto-task creation failed:', taskErr.message || taskErr);
+        }
+      }
+
       return res.status(201).json({ ok: true, client: result[0] });
     }
 

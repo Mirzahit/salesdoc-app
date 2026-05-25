@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v451</title>
+<title>SalesDoc — Финансовый Дашборд v452</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4716,6 +4716,147 @@ body.route-trash-visible #route-trash { display:flex !important; }
 .tk-card:hover { transform:translateY(-1px); background:#222226; border-color:rgba(255,255,255,.18); box-shadow:0 6px 18px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.06); }
 body.light .tk-card { background:#FFFFFF; border-color:rgba(15,23,42,.10); box-shadow:0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04); }
 body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22); box-shadow:0 4px 14px rgba(15,23,42,.10), 0 2px 4px rgba(15,23,42,.06); }
+
+/* ============================================================================
+   v452 — Модуль «Задачи» (amoCRM-style) для таба карточки клиента.
+   Палитра — точные цвета из реального amoCRM DOM (см. spec §3, §9).
+   ============================================================================ */
+.ct-wrap { font-family:'PT Sans', Arial, sans-serif; color:#e5e7eb; }
+
+/* --- Форма создания (бирюзовый бордер) --- */
+.ct-form { border:1px solid #14b8a6; border-radius:10px; padding:14px 16px; margin-bottom:18px; background:#0e1626; }
+.ct-form-head { display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:13px; color:#c5cad1; margin-bottom:10px; line-height:1.5; }
+.ct-form-head .ct-static { color:#9ca3af; }
+.ct-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:14px; background:#15233a; border:1px solid #334155; color:#e5e7eb; font-size:12px; cursor:pointer; user-select:none; transition:background .15s, border-color .15s; }
+.ct-chip:hover { background:#1f2f4d; border-color:#3b4d6d; }
+.ct-chip.ct-chip-link { background:transparent; border:none; color:#60a5fa; padding:3px 4px; }
+.ct-chip.ct-chip-link:hover { background:rgba(96,165,250,.10); }
+.ct-form textarea { width:100%; min-height:50px; resize:vertical; background:transparent; border:none; border-top:0.5px solid #1e293b; padding:8px 0 6px; color:#e5e7eb; font-family:inherit; font-size:13px; outline:none; }
+.ct-form textarea::placeholder { color:#6b7280; }
+.ct-form-actions { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:6px; }
+.ct-btn-primary { padding:7px 18px; border:none; border-radius:6px; background:#475569; color:#fff; font-size:12px; font-weight:500; cursor:pointer; transition:background .15s; font-family:inherit; }
+.ct-btn-primary.is-active { background:#2563eb; }
+.ct-btn-primary.is-active:hover { background:#1d4ed8; }
+.ct-btn-cancel { background:transparent; border:none; color:#9ca3af; font-size:12px; cursor:pointer; padding:7px 10px; font-family:inherit; }
+.ct-btn-cancel:hover { color:#e5e7eb; }
+
+/* --- Список задач --- */
+.ct-section-title { font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:#6b7280; margin:18px 0 10px; }
+.ct-task { display:flex; gap:12px; align-items:flex-start; padding:12px 14px; border:1px solid #14b8a6; border-radius:10px; background:#0e1626; margin-bottom:8px; transition:border-color .15s; position:relative; }
+.ct-task.is-done { border-color:#374151; opacity:.6; }
+.ct-task-avatar { flex-shrink:0; width:36px; height:36px; border-radius:50%; border:2px solid #14b8a6; display:flex; align-items:center; justify-content:center; color:#14b8a6; font-size:16px; }
+.ct-task.is-done .ct-task-avatar { border-color:#374151; color:#6b7280; }
+.ct-task-info { flex:1; min-width:0; }
+.ct-task-meta { font-size:11px; color:#9ca3af; margin-bottom:3px; line-height:1.4; }
+.ct-task-meta .ct-meta-overdue { color:#f37575; font-weight:600; }
+.ct-task-meta .ct-meta-today { color:#6CC09C; font-weight:600; }
+.ct-task-body { font-size:13px; color:#e5e7eb; line-height:1.4; word-break:break-word; }
+.ct-task.is-done .ct-task-body { text-decoration:line-through; color:#9ca3af; }
+.ct-task-type-icon { display:inline-block; vertical-align:middle; margin-right:4px; font-size:12px; }
+.ct-task-result { font-size:12px; color:#c5cad1; margin-top:6px; padding-top:6px; border-top:0.5px solid #1e293b; line-height:1.4; }
+.ct-task-result .lbl { color:#6b7280; }
+.ct-task-actions { position:absolute; top:10px; right:12px; display:flex; gap:6px; opacity:0; transition:opacity .15s; }
+.ct-task:hover .ct-task-actions { opacity:1; }
+.ct-act-btn { padding:4px 10px; font-size:11px; border-radius:5px; border:1px solid; background:transparent; cursor:pointer; font-family:inherit; }
+.ct-act-done { color:#10b981; border-color:#10b981; }
+.ct-act-done:hover { background:rgba(16,185,129,.10); }
+.ct-act-edit { color:#9ca3af; border-color:#374151; }
+.ct-act-edit:hover { color:#e5e7eb; border-color:#475569; }
+.ct-act-del { color:#f37575; border-color:#7f1d1d; }
+.ct-act-del:hover { background:rgba(243,117,117,.10); }
+
+/* --- Дропдаун выбора типа/даты/времени/оператора --- */
+.ct-dd { position:absolute; z-index:10005; background:#0e1626; border:1px solid #2a3a52; border-radius:8px; padding:6px 0; box-shadow:0 8px 24px rgba(0,0,0,.5); min-width:180px; max-height:320px; overflow-y:auto; }
+.ct-dd-item { padding:8px 14px; font-size:12px; color:#e5e7eb; cursor:pointer; display:flex; align-items:center; gap:8px; font-family:inherit; }
+.ct-dd-item:hover { background:#15233a; }
+.ct-dd-item.is-selected { background:#15233a; color:#60a5fa; }
+.ct-dd-item-icon { display:inline-block; width:14px; text-align:center; font-size:12px; }
+
+/* --- Модалка закрытия задачи --- */
+.ct-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:10003; display:flex; align-items:center; justify-content:center; padding:20px; }
+.ct-modal { background:#0e1626; border:1px solid #2a3a52; border-radius:12px; padding:22px 24px; width:100%; max-width:480px; font-family:'PT Sans', Arial, sans-serif; color:#e5e7eb; box-shadow:0 24px 60px rgba(0,0,0,.6); }
+.ct-modal-title { font-size:16px; font-weight:700; margin-bottom:14px; color:#e5e7eb; }
+.ct-modal-sub { font-size:12px; color:#9ca3af; margin-bottom:14px; line-height:1.4; }
+.ct-modal-label { display:block; font-size:11px; color:#9ca3af; margin-bottom:6px; text-transform:uppercase; letter-spacing:.4px; }
+.ct-modal textarea, .ct-modal input[type=text], .ct-modal input[type=date], .ct-modal input[type=time], .ct-modal select { width:100%; background:#0b1220; border:1px solid #1e2837; color:#e5e7eb; border-radius:6px; padding:9px 10px; font-size:13px; font-family:inherit; outline:none; box-sizing:border-box; }
+.ct-modal textarea:focus, .ct-modal input:focus, .ct-modal select:focus { border-color:#2563eb; }
+.ct-modal textarea { min-height:90px; resize:vertical; }
+.ct-modal-hint { font-size:11px; color:#6b7280; margin-top:6px; }
+.ct-modal-hint.is-error { color:#f37575; }
+.ct-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+.ct-modal-btn { padding:9px 18px; font-size:12px; font-weight:500; border-radius:6px; cursor:pointer; border:none; font-family:inherit; }
+.ct-modal-btn-primary { background:#2563eb; color:#fff; }
+.ct-modal-btn-primary:hover:not(:disabled) { background:#1d4ed8; }
+.ct-modal-btn-primary:disabled { background:#374151; color:#6b7280; cursor:not-allowed; }
+.ct-modal-btn-secondary { background:transparent; color:#9ca3af; }
+.ct-modal-btn-secondary:hover { color:#e5e7eb; }
+.ct-modal-row { display:flex; gap:10px; margin-bottom:10px; }
+.ct-modal-row > * { flex:1; }
+.ct-modal-field { margin-bottom:10px; }
+
+/* --- Пустое состояние --- */
+.ct-empty { text-align:center; padding:30px 20px; color:#6b7280; font-size:13px; }
+.ct-empty-msg { font-size:14px; color:#9ca3af; margin-bottom:4px; }
+.ct-empty-hint { font-size:11px; color:#6b7280; }
+
+/* ============================================================================
+   v452 — Страница «Мои задачи» (канбан follow-up задач, отдельная view).
+   ============================================================================ */
+.mt-page { font-family:'PT Sans', Arial, sans-serif; background:#0b1220; min-height:calc(100vh - 60px); display:flex; flex-direction:column; color:#e5e7eb; }
+.mt-topbar { display:flex; justify-content:space-between; align-items:center; padding:10px 18px; background:#0e1626; border-bottom:1px solid #1e2837; flex-wrap:wrap; gap:10px; }
+.mt-topbar-left { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+.mt-topbar-right { display:flex; gap:8px; align-items:center; }
+.mt-title { font-size:16px; font-weight:700; color:#e5e7eb; }
+.mt-preset-group { display:flex; gap:4px; }
+.mt-preset { padding:6px 12px; background:transparent; border:1px solid #1e2837; color:#9ca3af; font-size:12px; border-radius:6px; cursor:pointer; font-family:inherit; transition:all .15s; }
+.mt-preset:hover { color:#e5e7eb; border-color:#2a3a52; }
+.mt-preset.is-active { background:#15233a; color:#60a5fa; border-color:#2563eb; }
+.mt-btn-primary { padding:7px 16px; background:#2563eb; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:500; cursor:pointer; font-family:inherit; }
+.mt-btn-primary:hover { background:#1d4ed8; }
+.mt-btn-secondary { padding:7px 11px; background:transparent; border:1px solid #1e2837; color:#9ca3af; border-radius:6px; font-size:14px; cursor:pointer; font-family:inherit; }
+.mt-btn-secondary:hover { color:#e5e7eb; border-color:#2a3a52; }
+
+/* Канбан-сетка */
+.mt-kanban { flex:1; display:grid; grid-template-columns:repeat(3, 1fr); gap:1px; background:#1e2837; overflow:auto; padding-bottom:50px; }
+.mt-kanban.is-all { grid-template-columns:repeat(5, minmax(220px, 1fr)); }
+.mt-kanban.is-compl { grid-template-columns:1fr; }
+.mt-col { background:#0e1626; display:flex; flex-direction:column; min-height:300px; }
+.mt-col-head { padding:10px 14px 8px; }
+.mt-col-title { font-size:13px; color:#e5e7eb; margin-bottom:4px; }
+.mt-col-count { font-size:11px; color:#6b7280; }
+.mt-col-bar { height:2px; width:100%; }
+.mt-col-body { flex:1; padding:8px 10px; overflow-y:auto; min-height:200px; transition:background .15s; }
+.mt-col-body.is-dragover { background:rgba(96,165,250,.08); }
+
+/* Карточка задачи на канбане */
+.mt-card { background:#0b1220; border:1px solid #1e2837; border-radius:8px; padding:10px 12px; margin-bottom:8px; cursor:grab; transition:transform .1s, box-shadow .15s, border-color .15s; }
+.mt-card:hover { border-color:#2a3a52; box-shadow:0 2px 10px rgba(0,0,0,.3); }
+.mt-card.is-dragging { opacity:.4; }
+.mt-card.is-overdue { border-left:3px solid #f37575; }
+.mt-card.is-today { border-left:3px solid #6CC09C; }
+.mt-card-stage-row { display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-bottom:4px; }
+.mt-card-contact { font-size:11px; color:#c5cad1; }
+.mt-card-stage { font-size:10px; padding:1px 7px; border-radius:3px; color:#5a1818; font-weight:600; }
+.mt-card-client { font-size:12px; color:#60a5fa; margin-bottom:4px; cursor:pointer; }
+.mt-card-client:hover { text-decoration:underline; }
+.mt-card-meta { font-size:10px; color:#9ca3af; margin-bottom:5px; line-height:1.4; }
+.mt-card-meta .mt-meta-overdue { color:#f37575; font-weight:600; }
+.mt-card-body { font-size:11px; color:#e5e7eb; line-height:1.35; word-break:break-word; }
+.mt-card-type-dot { color:#c5cad1; margin-right:4px; }
+.mt-card-deadline-bottom { font-size:10px; color:#6b7280; margin-top:5px; padding-top:5px; border-top:0.5px solid #1e2837; }
+
+/* Футер drop-зон */
+.mt-footer { position:fixed; bottom:0; left:0; right:0; display:flex; height:40px; background:#0e1626; border-top:1px solid #1e2837; z-index:50; }
+.mt-drop { flex:1; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:500; color:#9ca3af; cursor:pointer; border-right:0.5px solid #1e2837; transition:background .15s, color .15s; user-select:none; }
+.mt-drop:last-child { border-right:none; }
+.mt-drop.is-dragover { background:#15233a; color:#60a5fa; }
+.mt-drop-del { color:#f37575; font-size:16px; max-width:60px; flex:0 0 60px; }
+.mt-drop-del.is-dragover { background:rgba(243,117,117,.15); }
+.mt-drop-done { color:#10b981; }
+.mt-drop-done.is-dragover { background:rgba(16,185,129,.15); }
+
+.mt-loading { padding:40px; text-align:center; color:#6b7280; font-size:13px; grid-column:1/-1; }
+.mt-empty { padding:24px 14px; text-align:center; color:#6b7280; font-size:12px; }
 </style>
 </head>
 <body>
@@ -4784,6 +4925,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="nav-item" data-view="calendar" onclick="showView('calendar')">
  <svg class="nav-icon-stroke" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>
  <span class="nav-label">Календарь</span>
+ </div>
+ <!-- v452: «Мои задачи» — канбан follow-up по образцу amoCRM /todo/line/ -->
+ <div class="nav-item" data-view="mytasks" onclick="showView('mytasks')">
+ <svg class="nav-icon-stroke" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
+ <span class="nav-label">Мои задачи</span>
  </div>
  <div class="nav-item" data-view="supportdash" onclick="showView('supportdash')">
  <svg class="nav-icon-stroke" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l3-3 4 4 5-5 6 6"/><circle cx="6" cy="9" r="1.5"/><circle cx="10" cy="13" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="21" cy="14" r="1.5"/></svg>
@@ -6693,6 +6839,40 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
  <!-- /CALENDAR VIEW -->
 
+ <!-- v452: Мои задачи — канбан follow-up (по образцу amoCRM /todo/line/) -->
+ <div id="view-mytasks" style="display:none">
+ <div class="mt-page">
+  <div class="mt-topbar">
+   <div class="mt-topbar-left">
+    <div class="mt-title">Мои задачи</div>
+    <div class="mt-preset-group" id="mt-presets">
+     <button class="mt-preset is-active" data-preset="my" onclick="mytasksSetPreset('my')">Мои</button>
+     <button class="mt-preset" data-preset="all" onclick="mytasksSetPreset('all')">Все</button>
+     <button class="mt-preset" data-preset="failed" onclick="mytasksSetPreset('failed')">Просрочены</button>
+     <button class="mt-preset" data-preset="compl" onclick="mytasksSetPreset('compl')">Выполненные</button>
+    </div>
+   </div>
+   <div class="mt-topbar-right">
+    <button class="mt-btn-secondary" onclick="mytasksRefresh()" title="Обновить">↻</button>
+    <button class="mt-btn-primary" onclick="mytasksNewTaskStart()">+ Задача</button>
+   </div>
+  </div>
+
+  <div class="mt-kanban" id="mt-kanban">
+   <div class="mt-loading">Загрузка...</div>
+  </div>
+
+  <div class="mt-footer" id="mt-footer">
+   <div class="mt-drop mt-drop-del" data-target="delete" title="Удалить (перетащи сюда)">🗑</div>
+   <div class="mt-drop" data-target="after_tomorrow">Послезавтра</div>
+   <div class="mt-drop" data-target="next_week">Следующая неделя</div>
+   <div class="mt-drop" data-target="next_month">Следующий месяц</div>
+   <div class="mt-drop mt-drop-done" data-target="done">Завершить</div>
+  </div>
+ </div>
+ </div>
+ <!-- /MY TASKS VIEW -->
+
  <!-- v246+v248: Дашборд тех.поддержки -->
  <div id="view-supportdash" style="display:none">
  <div class="sd-page">
@@ -7795,6 +7975,7 @@ const ACCESS_KEYS = [
  { key:'view_activeclients', label:'Действующие клиенты', group:'Клиенты' }, // v261
  { key:'view_newclients', label:'Новые клиенты', group:'Клиенты' }, // v298
  { key:'view_calendar', label:'Календарь задач', group:'Команда' }, // v261
+ { key:'view_mytasks', label:'Мои задачи (follow-up)', group:'Команда' }, // v452
  { key:'view_planning', label:'Планёрки / спринты', group:'Команда' }, // v261
  { key:'view_statistics', label:'Статистики', group:'Команда' },
  { key:'view_marketing', label:'Маркетинг', group:'Команда' },
@@ -7829,13 +8010,13 @@ const ROLE_LABELS = {
 // accountant: финансы и расходы — без канбана/маркетинга/HR
 // viewer: только просмотр финансов и команды
 const ROLE_DEFAULTS = {
- admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:1,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
- accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:1,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:0,manage_employees:0 },
- viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:1,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:1,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:0,manage_employees:0 },
+ viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:0,view_mytasks:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
 };
 
 // v151: Email-список тех, кому разрешён Ассистент. Не через роль — чтобы Arslan
@@ -11934,14 +12115,14 @@ function showView(v) {
  v = defaultViewForUser(currentUser);
  }
  // v449: старые «Цель» и «4Д» объединены в одну кнопку «4D» (fdx). Внутри 5 вкладок.
- var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',settings:'view_settings',fdx:'view_wig'};
+ var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',mytasks:'view_mytasks',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',settings:'view_settings',fdx:'view_wig'};
  var _need = _accessMap[v];
  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
  }
- ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','my-clients','tickets','statistics','planning','calendar','supportdash','activeclients','newclients','botadmin','fdx'].forEach(x=>{
+ ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','my-clients','tickets','statistics','planning','calendar','mytasks','supportdash','activeclients','newclients','botadmin','fdx'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
@@ -11967,6 +12148,8 @@ function showView(v) {
  if (v === 'marketing' && typeof mktInitDashboard === 'function') { try { mktInitDashboard(); } catch(_){} }
  // v230: инициализация Календаря при заходе
  if (v === 'calendar' && typeof crmCalendarInit === 'function') { try { crmCalendarInit(); } catch(_){} }
+ // v452: инициализация «Моих задач» — канбан follow-up
+ if (v === 'mytasks' && typeof mytasksInit === 'function') { try { mytasksInit(); } catch(_){} }
  // v246: Дашборд тех.поддержки
  if (v === 'supportdash' && typeof supportInit === 'function') { try { supportInit(); } catch(_){} }
  if (v === 'activeclients' && typeof acInit === 'function') { try { acInit(); } catch(_){} }
@@ -30650,6 +30833,8 @@ function kbOpenCardPage(card) {
  tabsHtml += '<button class="crm-tab" data-tab="contacts" onclick="crmActivateTab(this)">Контакты <span class="count" id="crm-cnt-cn">—</span></button>';
  tabsHtml += '<button class="crm-tab" data-tab="files" onclick="crmActivateTab(this)">Файлы <span class="count" id="crm-cnt-fi">'+(actData&&actData.fileName?'1':'—')+'</span></button>';
  tabsHtml += '<button class="crm-tab" data-tab="calendar" onclick="crmActivateTab(this)">Календарь <span class="count" id="crm-cnt-ev">—</span></button>';
+ // v452: новый таб «Задачи» (модуль follow-up по образу amoCRM, отдельно от Календаря)
+ tabsHtml += '<button class="crm-tab" data-tab="tasks" onclick="crmActivateTab(this)">Задачи <span class="count" id="crm-cnt-tk">—</span></button>';
  tabsHtml += '<button class="crm-tab" data-tab="history" onclick="crmActivateTab(this)">История</button>';
  tabsHtml += '</div>';
 
@@ -30669,7 +30854,11 @@ function kbOpenCardPage(card) {
  panesHtml += '<div class="crm-tab-pane" hidden data-pane="calendar" id="crm-pane-calendar">';
  panesHtml += '<div class="crm-empty"><div class="crm-empty-ico"></div><div class="crm-empty-msg">Событий пока нет</div><div class="crm-empty-hint">Подключение в v229</div></div>';
  panesHtml += '</div>';
- // Pane 5 — История (kbc-history-list переехал сюда)
+ // v452: Pane 5 — Задачи (модуль follow-up). Render через crmClientTasksRender() при активации.
+ panesHtml += '<div class="crm-tab-pane" hidden data-pane="tasks" id="crm-pane-tasks">';
+ panesHtml += '<div class="ct-empty"><div class="ct-empty-msg">Загрузка задач...</div></div>';
+ panesHtml += '</div>';
+ // Pane 6 — История (kbc-history-list переехал сюда)
  panesHtml += '<div class="crm-tab-pane" hidden data-pane="history" id="crm-pane-history">'+historyHtml+'</div>';
 
  var mainEl = document.getElementById('kbc-main');
@@ -30703,6 +30892,10 @@ function kbOpenCardPage(card) {
  evCnt.textContent = n;
  }
  }
+ // v452: обновить counter таба «Задачи» (асинхронно из Supabase, без блокировки UI)
+ if(typeof crmTasksUpdateCount === 'function' && card.client_id){
+ crmTasksUpdateCount(card.client_id);
+ }
 }
 
 // v225: переключение табов карточки клиента
@@ -30714,6 +30907,8 @@ function crmActivateTab(btn){
  if(tab === 'contacts'){ crmContactsRender(card.client); }
  // v232: Календарь для конкретного клиента
  if(tab === 'calendar' && typeof crmRenderClientCalendar === 'function'){ crmRenderClientCalendar(card.client); }
+ // v452: Задачи — модуль follow-up из Supabase
+ if(tab === 'tasks' && typeof crmClientTasksRender === 'function'){ crmClientTasksRender(card); }
 }
 
 // v232: рендер событий конкретного клиента в табе «Календарь» карточки
@@ -30782,6 +30977,1013 @@ function crmEventOpenModalForClient(client){
  if(inp) inp.value = client;
  }, 60);
 }
+
+// ============================================================================
+// v452 — Модуль «Задачи» в табе карточки клиента.
+// Spec: docs/superpowers/specs/2026-05-25-tasks-module-design.md
+// Все динамические строки экранируются через ctEsc() перед вставкой в DOM,
+// что эквивалентно textContent-подходу для пользовательских данных.
+// ============================================================================
+
+// Безопасный escape (дублирует kbEsc на случай порядка загрузки)
+function ctEsc(s){
+ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+  return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+ });
+}
+
+// Helper для замены содержимого элемента уже экранированной HTML-строкой.
+// Все вызовы ctRender идут только с шаблонами где переменные обёрнуты в ctEsc().
+function ctRender(el, html){ el.replaceChildren(); el.insertAdjacentHTML('beforeend', html); }
+
+// Кэш справочника типов задач (загружается один раз за сессию)
+var crmTasksTypesCache = null;
+
+async function crmTasksLoadTypes(){
+ if(crmTasksTypesCache) return crmTasksTypesCache;
+ try {
+  var d = await sbFetch('/api/tasks?types=1');
+  if(d && d.ok && Array.isArray(d.types)) crmTasksTypesCache = d.types;
+ } catch(e){ console.warn('[tasks] загрузка типов:', e); }
+ if(!crmTasksTypesCache || !crmTasksTypesCache.length){
+  crmTasksTypesCache = [{id:1, name:'Связаться', icon:'phone', color:'#c5cad1', sort:1}];
+ }
+ return crmTasksTypesCache;
+}
+
+function crmTasksTypeById(typeId){
+ var list = crmTasksTypesCache || [];
+ return list.find(function(t){ return t.id === typeId; }) || {id:typeId, name:'Тип '+typeId, color:'#c5cad1'};
+}
+
+// Headers для API: shared-token (через sbFetch) + имя/роль текущего юзера
+function crmTasksAuthHeaders(){
+ var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
+ var name = (u.name || '').toString().split(' ')[0] || 'unknown';
+ var role = (u.role || '').toString().toLowerCase();
+ return { 'x-user-name': name, 'x-user-role': role };
+}
+
+async function crmTasksFetch(path, opts){
+ opts = opts || {};
+ opts.headers = Object.assign({}, opts.headers || {}, crmTasksAuthHeaders());
+ return await sbFetch(path, opts);
+}
+
+// Форматтер дедлайна для отображения («Сегодня 22:21-22:51» / «28 мая 15:00»)
+function crmTasksFmtDeadline(t){
+ if(!t || !t.deadline_at) return '';
+ var d = new Date(t.deadline_at);
+ var now = new Date();
+ var sod = function(x){ return new Date(x.getFullYear(), x.getMonth(), x.getDate()); };
+ var diff = Math.round((sod(d).getTime() - sod(now).getTime()) / 86400000);
+ var label;
+ if(diff === 0) label = 'Сегодня';
+ else if(diff === 1) label = 'Завтра';
+ else if(diff === -1) label = 'Вчера';
+ else if(diff === 2) label = 'Послезавтра';
+ else {
+  var months = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  label = d.getDate() + ' ' + months[d.getMonth()];
+  if(d.getFullYear() !== now.getFullYear()) label += ' ' + d.getFullYear();
+ }
+ var time = '';
+ if(t.is_all_day){
+  time = 'Весь день';
+ } else {
+  var hh = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  if(t.deadline_end_at){
+   var de = new Date(t.deadline_end_at);
+   hh += '-' + String(de.getHours()).padStart(2,'0') + ':' + String(de.getMinutes()).padStart(2,'0');
+  }
+  time = hh;
+ }
+ return label + ' ' + time;
+}
+
+function crmTasksIsOverdue(t){
+ if(!t || t.status === 'done' || !t.deadline_at) return false;
+ return new Date(t.deadline_at).getTime() < Date.now();
+}
+
+function crmTasksIsToday(t){
+ if(!t || t.status === 'done' || !t.deadline_at) return false;
+ var d = new Date(t.deadline_at);
+ var n = new Date();
+ return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+}
+
+// ============================================================================
+// Состояние формы создания (одно на всю сессию — сбрасывается после успешного create)
+// ============================================================================
+var crmTasksFormState = null;
+
+function crmTasksFormInitState(){
+ var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
+ var defaultAssignee = (u.name || '').toString().split(' ')[0]
+  || ((typeof kbOperators !== 'undefined' && kbOperators[0]) || 'Айдос');
+ var now = new Date();
+ now.setHours(now.getHours() + 1, 0, 0, 0);  // следующий круглый час
+ crmTasksFormState = {
+  type_id: 1,                                   // «Связаться»
+  date_iso: now.toISOString().slice(0,10),
+  time_start: String(now.getHours()).padStart(2,'0') + ':00',
+  time_end: '',
+  is_all_day: false,
+  assignee: defaultAssignee,
+  text: ''
+ };
+}
+
+// HTML формы (все динамические значения через ctEsc). На выходе — строка.
+function crmTasksFormHtml(){
+ if(!crmTasksFormState) crmTasksFormInitState();
+ var s = crmTasksFormState;
+ var type = crmTasksTypeById(s.type_id);
+ var today = new Date(); today.setHours(0,0,0,0);
+ var d = new Date(s.date_iso + 'T00:00:00');
+ var diff = Math.round((d.getTime() - today.getTime()) / 86400000);
+ var dateLabel;
+ if(diff === 0) dateLabel = 'Сегодня';
+ else if(diff === 1) dateLabel = 'Завтра';
+ else if(diff === 2) dateLabel = 'Послезавтра';
+ else {
+  var mm = String(d.getMonth()+1).padStart(2,'0');
+  dateLabel = String(d.getDate()).padStart(2,'0') + '.' + mm;
+ }
+ var timeLabel = s.is_all_day ? 'Весь день' : (s.time_start + (s.time_end ? ' - ' + s.time_end : ''));
+ var typeDot = '<span style="color:'+ctEsc(type.color)+'">●</span>';
+ var h = '<div class="ct-form" id="ct-form">';
+ h += '<div class="ct-form-head">';
+ h += ' <span class="ct-chip ct-chip-link" onclick="crmTasksDDType(this)">Задача ▾</span>';
+ h += ' <span class="ct-static">на</span>';
+ h += ' <span class="ct-chip" onclick="crmTasksDDDate(this)" id="ct-form-date">'+ctEsc(dateLabel)+' ▾</span>';
+ h += ' <span class="ct-chip" onclick="crmTasksDDTime(this)" id="ct-form-time">'+ctEsc(timeLabel)+' ▾</span>';
+ h += ' <span class="ct-static">для</span>';
+ h += ' <span class="ct-chip ct-chip-link" onclick="crmTasksDDAssignee(this)" id="ct-form-assignee">'+ctEsc(s.assignee)+' ▾</span>';
+ h += ' <span class="ct-static">:</span>';
+ h += ' <span class="ct-chip" onclick="crmTasksDDType(this)" id="ct-form-type">'+typeDot+' '+ctEsc(type.name)+' ▾</span>';
+ h += ' <span class="ct-static">:</span>';
+ h += '</div>';
+ h += '<textarea id="ct-form-text" placeholder="Введите описание задачи..." rows="2">'+ctEsc(s.text)+'</textarea>';
+ h += '<div class="ct-form-actions">';
+ h += ' <div>';
+ h += '  <button class="ct-btn-primary" id="ct-form-submit" onclick="crmTaskCreate()">Поставить</button>';
+ h += '  <button class="ct-btn-cancel" onclick="crmTasksFormReset()">Отменить</button>';
+ h += ' </div>';
+ h += ' <div style="font-size:18px;color:#6b7280">⌨</div>';
+ h += '</div>';
+ h += '</div>';
+ return h;
+}
+
+function crmTasksFormBind(){
+ var txt = document.getElementById('ct-form-text');
+ var btn = document.getElementById('ct-form-submit');
+ if(!txt || !btn) return;
+ var update = function(){
+  crmTasksFormState.text = txt.value;
+  if(txt.value.trim().length > 0) btn.classList.add('is-active');
+  else btn.classList.remove('is-active');
+ };
+ txt.oninput = update;
+ update();
+}
+
+function crmTasksFormReset(){
+ crmTasksFormInitState();
+ var card = window._kbCurrentCard;
+ if(card) crmClientTasksRender(card);
+}
+
+// ============================================================================
+// Рендер карточки одной задачи (открытой или закрытой)
+// ============================================================================
+function crmTaskHtmlOpen(t){
+ var type = crmTasksTypeById(t.type_id);
+ var dl = crmTasksFmtDeadline(t);
+ var overdue = crmTasksIsOverdue(t);
+ var today = crmTasksIsToday(t);
+ var metaCls = overdue ? 'ct-meta-overdue' : (today ? 'ct-meta-today' : '');
+ var idEsc = ctEsc(t.id);
+ var h = '<div class="ct-task" data-id="'+idEsc+'">';
+ h += ' <div class="ct-task-avatar">⊙</div>';
+ h += ' <div class="ct-task-info">';
+ h += '  <div class="ct-task-meta"><span class="'+metaCls+'">'+ctEsc(dl)+'</span> для '+ctEsc(t.assignee_operator||'—');
+ if(t.created_by) h += ' • от '+ctEsc(t.created_by);
+ h += '</div>';
+ h += '  <div class="ct-task-body"><span class="ct-task-type-icon" style="color:'+ctEsc(type.color)+'">●</span><b>'+ctEsc(type.name)+'</b>'+(t.text ? ' — '+ctEsc(t.text) : '')+'</div>';
+ h += ' </div>';
+ h += ' <div class="ct-task-actions">';
+ h += '  <button class="ct-act-btn ct-act-done" onclick="crmTaskCloseStart(\''+idEsc+'\')">Выполнить</button>';
+ h += '  <button class="ct-act-btn ct-act-edit" onclick="crmTaskEditStart(\''+idEsc+'\')">Изменить</button>';
+ h += '  <button class="ct-act-btn ct-act-del" onclick="crmTaskDelete(\''+idEsc+'\')">×</button>';
+ h += ' </div>';
+ h += '</div>';
+ return h;
+}
+
+function crmTaskHtmlDone(t){
+ var type = crmTasksTypeById(t.type_id);
+ var dl = crmTasksFmtDeadline(t);
+ var closedStr = '';
+ if(t.closed_at){
+  var c = new Date(t.closed_at);
+  var dd = String(c.getDate()).padStart(2,'0') + '.' + String(c.getMonth()+1).padStart(2,'0');
+  var hh = String(c.getHours()).padStart(2,'0') + ':' + String(c.getMinutes()).padStart(2,'0');
+  closedStr = ' • Закрыта ' + dd + ' ' + hh;
+ }
+ var h = '<div class="ct-task is-done" data-id="'+ctEsc(t.id)+'">';
+ h += ' <div class="ct-task-avatar">✓</div>';
+ h += ' <div class="ct-task-info">';
+ h += '  <div class="ct-task-meta">'+ctEsc(dl)+' для '+ctEsc(t.assignee_operator||'—')+ctEsc(closedStr)+'</div>';
+ h += '  <div class="ct-task-body"><span class="ct-task-type-icon" style="color:'+ctEsc(type.color)+'">●</span><b>'+ctEsc(type.name)+'</b>'+(t.text ? ' — '+ctEsc(t.text) : '')+'</div>';
+ if(t.result) h += '  <div class="ct-task-result"><span class="lbl">Результат:</span> '+ctEsc(t.result)+'</div>';
+ h += ' </div>';
+ h += '</div>';
+ return h;
+}
+
+// ============================================================================
+// Главный рендер таба — fetch + сборка HTML + bind формы
+// ============================================================================
+async function crmClientTasksRender(card){
+ var pane = document.getElementById('crm-pane-tasks');
+ if(!pane || !card) return;
+ if(!card.client_id){
+  ctRender(pane, '<div class="ct-empty"><div class="ct-empty-msg">У карточки нет client_id</div><div class="ct-empty-hint">Задачи требуют привязки к клиенту в Supabase</div></div>');
+  return;
+ }
+ ctRender(pane, '<div class="ct-empty"><div class="ct-empty-msg">Загрузка задач...</div></div>');
+
+ await crmTasksLoadTypes();
+ var d;
+ try {
+  d = await crmTasksFetch('/api/tasks?client_id=' + encodeURIComponent(card.client_id) + '&status=all');
+ } catch(e){
+  ctRender(pane, '<div class="ct-empty"><div class="ct-empty-msg" style="color:#f37575">Ошибка загрузки задач</div><div class="ct-empty-hint">'+ctEsc(e.message||String(e))+'</div></div>');
+  return;
+ }
+ if(!d || !d.ok){
+  ctRender(pane, '<div class="ct-empty"><div class="ct-empty-msg" style="color:#f37575">Ошибка: '+ctEsc(d && d.error ? d.error : 'неизвестная')+'</div><div class="ct-empty-hint">Проверь что /api/tasks задеплоен и миграция прогнана</div></div>');
+  return;
+ }
+
+ var tasks = d.tasks || [];
+ var open = tasks.filter(function(t){ return t.status === 'open'; });
+ var done = tasks.filter(function(t){ return t.status === 'done'; });
+ open.sort(function(a,b){ return (a.deadline_at||'').localeCompare(b.deadline_at||''); });
+ done.sort(function(a,b){ return (b.closed_at||'').localeCompare(a.closed_at||''); });
+
+ var html = '<div class="ct-wrap">' + crmTasksFormHtml();
+ if(open.length){
+  html += '<div class="ct-section-title">Открытые ('+open.length+')</div>';
+  open.forEach(function(t){ html += crmTaskHtmlOpen(t); });
+ }
+ if(done.length){
+  html += '<div class="ct-section-title">История ('+done.length+')</div>';
+  done.forEach(function(t){ html += crmTaskHtmlDone(t); });
+ }
+ if(!open.length && !done.length){
+  html += '<div class="ct-empty"><div class="ct-empty-msg">Задач пока нет</div><div class="ct-empty-hint">Создайте первую задачу — она появится здесь</div></div>';
+ }
+ html += '</div>';
+ ctRender(pane, html);
+ crmTasksFormBind();
+ var cnt = document.getElementById('crm-cnt-tk');
+ if(cnt) cnt.textContent = open.length || '—';
+}
+
+// Тихое обновление счётчика без рендера всего таба (вызывается при открытии карточки)
+async function crmTasksUpdateCount(client_id){
+ try {
+  var d = await crmTasksFetch('/api/tasks?client_id=' + encodeURIComponent(client_id) + '&status=open');
+  if(d && d.ok){
+   var cnt = document.getElementById('crm-cnt-tk');
+   if(cnt) cnt.textContent = (d.tasks && d.tasks.length) || '—';
+  }
+ } catch(e){ /* silent — счётчик не критичен */ }
+}
+
+// ============================================================================
+// Дропдауны для формы — выбор типа, даты, времени, ответственного
+// ============================================================================
+function crmTasksCloseDropdowns(){
+ document.querySelectorAll('.ct-dd').forEach(function(el){ el.remove(); });
+}
+
+function crmTasksOpenDropdown(anchor, items, onSelect){
+ crmTasksCloseDropdowns();
+ var rect = anchor.getBoundingClientRect();
+ var dd = document.createElement('div');
+ dd.className = 'ct-dd';
+ dd.style.left = rect.left + 'px';
+ dd.style.top = (rect.bottom + 4) + 'px';
+ items.forEach(function(it){
+  var item = document.createElement('div');
+  item.className = 'ct-dd-item' + (it.selected ? ' is-selected' : '');
+  var inner = (it.icon ? '<span class="ct-dd-item-icon" style="color:'+ctEsc(it.color||'#c5cad1')+'">●</span>' : '') + ctEsc(it.label);
+  item.insertAdjacentHTML('beforeend', inner);
+  item.onclick = function(){ crmTasksCloseDropdowns(); onSelect(it.value); };
+  dd.appendChild(item);
+ });
+ document.body.appendChild(dd);
+ setTimeout(function(){
+  document.addEventListener('click', function close(e){
+   if(!dd.contains(e.target) && e.target !== anchor){
+    crmTasksCloseDropdowns();
+    document.removeEventListener('click', close);
+   }
+  });
+ }, 50);
+}
+
+function crmTasksDDType(anchor){
+ var types = crmTasksTypesCache || [];
+ var items = types.map(function(t){
+  return { value:t.id, label:t.name, icon:true, color:t.color, selected: t.id === crmTasksFormState.type_id };
+ });
+ crmTasksOpenDropdown(anchor, items, function(v){
+  crmTasksFormState.type_id = v;
+  var card = window._kbCurrentCard;
+  if(card) crmClientTasksRender(card);
+ });
+}
+
+function crmTasksDDAssignee(anchor){
+ var ops = (typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators.slice() : ['Айдос','Акбар','Самат'];
+ var items = ops.map(function(op){
+  return { value:op, label:op, selected: op === crmTasksFormState.assignee };
+ });
+ crmTasksOpenDropdown(anchor, items, function(v){
+  crmTasksFormState.assignee = v;
+  var el = document.getElementById('ct-form-assignee');
+  if(el) el.textContent = v + ' ▾';
+ });
+}
+
+function crmTasksDDDate(anchor){
+ var today = new Date(); today.setHours(0,0,0,0);
+ var toIso = function(d){ return d.toISOString().slice(0,10); };
+ var t1 = new Date(today); t1.setDate(t1.getDate()+1);
+ var t2 = new Date(today); t2.setDate(t2.getDate()+2);
+ var t7 = new Date(today); t7.setDate(t7.getDate()+7);
+ var items = [
+  { value:toIso(today), label:'Сегодня' },
+  { value:toIso(t1), label:'Завтра' },
+  { value:toIso(t2), label:'Послезавтра' },
+  { value:toIso(t7), label:'Через неделю' },
+  { value:'__custom__', label:'Выбрать дату…' }
+ ];
+ crmTasksOpenDropdown(anchor, items, function(v){
+  if(v === '__custom__'){ crmTasksPickCustomDate(); return; }
+  crmTasksFormState.date_iso = v;
+  var card = window._kbCurrentCard;
+  if(card) crmClientTasksRender(card);
+ });
+}
+
+// Модалка кастомной даты
+function crmTasksPickCustomDate(){
+ var bg = document.createElement('div');
+ bg.className = 'ct-modal-bg';
+ bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
+ var inner = '<div class="ct-modal" onclick="event.stopPropagation()">' +
+  '<div class="ct-modal-title">Выбрать дату</div>' +
+  '<div class="ct-modal-field"><input type="date" id="ct-pick-date" value="'+ctEsc(crmTasksFormState.date_iso)+'"></div>' +
+  '<div class="ct-modal-actions">' +
+   '<button class="ct-modal-btn ct-modal-btn-secondary" onclick="this.closest(\'.ct-modal-bg\').remove()">Отмена</button>' +
+   '<button class="ct-modal-btn ct-modal-btn-primary" onclick="crmTasksApplyCustomDate()">OK</button>' +
+  '</div>' +
+ '</div>';
+ bg.insertAdjacentHTML('beforeend', inner);
+ document.body.appendChild(bg);
+}
+
+function crmTasksApplyCustomDate(){
+ var inp = document.getElementById('ct-pick-date');
+ if(inp && inp.value){
+  crmTasksFormState.date_iso = inp.value;
+  var bg = document.querySelector('.ct-modal-bg'); if(bg) bg.remove();
+  var card = window._kbCurrentCard;
+  if(card) crmClientTasksRender(card);
+ }
+}
+
+// Модалка времени (start + end + чекбокс «Весь день»)
+function crmTasksDDTime(){
+ var s = crmTasksFormState;
+ var bg = document.createElement('div');
+ bg.className = 'ct-modal-bg';
+ bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
+ var inner = '<div class="ct-modal" onclick="event.stopPropagation()">' +
+  '<div class="ct-modal-title">Время задачи</div>' +
+  '<div class="ct-modal-field"><label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e5e7eb;cursor:pointer"><input type="checkbox" id="ct-pick-allday" '+(s.is_all_day?'checked':'')+' style="width:auto;cursor:pointer"> Весь день</label></div>' +
+  '<div class="ct-modal-row" id="ct-pick-times" style="'+(s.is_all_day?'display:none':'')+'">' +
+   '<div class="ct-modal-field"><label class="ct-modal-label">Начало</label><input type="time" id="ct-pick-start" value="'+ctEsc(s.time_start||'09:00')+'"></div>' +
+   '<div class="ct-modal-field"><label class="ct-modal-label">Конец (опц.)</label><input type="time" id="ct-pick-end" value="'+ctEsc(s.time_end||'')+'"></div>' +
+  '</div>' +
+  '<div class="ct-modal-actions">' +
+   '<button class="ct-modal-btn ct-modal-btn-secondary" onclick="this.closest(\'.ct-modal-bg\').remove()">Отмена</button>' +
+   '<button class="ct-modal-btn ct-modal-btn-primary" onclick="crmTasksApplyTime()">OK</button>' +
+  '</div>' +
+ '</div>';
+ bg.insertAdjacentHTML('beforeend', inner);
+ document.body.appendChild(bg);
+ document.getElementById('ct-pick-allday').onchange = function(){
+  document.getElementById('ct-pick-times').style.display = this.checked ? 'none' : 'flex';
+ };
+}
+
+function crmTasksApplyTime(){
+ var ad = document.getElementById('ct-pick-allday').checked;
+ var ts = document.getElementById('ct-pick-start').value;
+ var te = document.getElementById('ct-pick-end').value;
+ crmTasksFormState.is_all_day = ad;
+ crmTasksFormState.time_start = ad ? '' : (ts || '09:00');
+ crmTasksFormState.time_end = ad ? '' : te;
+ var bg = document.querySelector('.ct-modal-bg'); if(bg) bg.remove();
+ var card = window._kbCurrentCard;
+ if(card) crmClientTasksRender(card);
+}
+
+// ============================================================================
+// CREATE задачи (POST /api/tasks)
+// ============================================================================
+async function crmTaskCreate(){
+ var card = window._kbCurrentCard;
+ if(!card || !card.client_id){ alert('Карточка клиента не открыта или не привязана к Supabase'); return; }
+ var s = crmTasksFormState;
+ var txt = document.getElementById('ct-form-text');
+ if(txt) s.text = txt.value.trim();
+ var deadline_at, deadline_end_at = null;
+ if(s.is_all_day){
+  deadline_at = s.date_iso + 'T00:00:00';
+ } else {
+  deadline_at = s.date_iso + 'T' + (s.time_start || '09:00') + ':00';
+  if(s.time_end) deadline_end_at = s.date_iso + 'T' + s.time_end + ':00';
+ }
+ var body = {
+  client_id: card.client_id,
+  contact_name: null,
+  stage_label: card.stage || null,
+  stage_color: null,
+  type_id: s.type_id,
+  text: s.text || null,
+  deadline_at: new Date(deadline_at).toISOString(),
+  deadline_end_at: deadline_end_at ? new Date(deadline_end_at).toISOString() : null,
+  is_all_day: !!s.is_all_day,
+  assignee_operator: s.assignee
+ };
+ var btn = document.getElementById('ct-form-submit');
+ if(btn){ btn.disabled = true; btn.textContent = 'Создаём...'; }
+ try {
+  var d = await crmTasksFetch('/api/tasks', { method:'POST', body: JSON.stringify(body) });
+  if(!d || !d.ok){
+   alert('Не удалось создать задачу: ' + (d && d.error || 'неизвестная ошибка'));
+   if(btn){ btn.disabled = false; btn.textContent = 'Поставить'; }
+   return;
+  }
+  if(typeof kbShowToast === 'function') kbShowToast('Задача создана');
+  crmTasksFormInitState();
+  crmClientTasksRender(card);
+ } catch(e){
+  alert('Ошибка сети: ' + (e.message || e));
+  if(btn){ btn.disabled = false; btn.textContent = 'Поставить'; }
+ }
+}
+
+// ============================================================================
+// CLOSE задачи — модалка с обязательным result ≥3 символов
+// ============================================================================
+function crmTaskCloseStart(taskId){
+ var idEsc = ctEsc(taskId);
+ var bg = document.createElement('div');
+ bg.className = 'ct-modal-bg';
+ bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
+ var inner = '<div class="ct-modal" onclick="event.stopPropagation()">' +
+  '<div class="ct-modal-title">Закрыть задачу</div>' +
+  '<div class="ct-modal-sub">Опишите результат — что было сделано, к чему пришли. Это история касания клиента.</div>' +
+  '<div class="ct-modal-field">' +
+   '<label class="ct-modal-label">Результат (обязательно)</label>' +
+   '<textarea id="ct-close-result" placeholder="дозвонился, договорились на встречу 28.05..."></textarea>' +
+   '<div class="ct-modal-hint" id="ct-close-hint">Минимум 3 символа</div>' +
+  '</div>' +
+  '<div class="ct-modal-actions">' +
+   '<button class="ct-modal-btn ct-modal-btn-secondary" onclick="this.closest(\'.ct-modal-bg\').remove()">Отмена</button>' +
+   '<button class="ct-modal-btn ct-modal-btn-primary" id="ct-close-submit" disabled onclick="crmTaskCloseSubmit(\''+idEsc+'\')">Закрыть задачу</button>' +
+  '</div>' +
+ '</div>';
+ bg.insertAdjacentHTML('beforeend', inner);
+ document.body.appendChild(bg);
+ var ta = document.getElementById('ct-close-result');
+ var btn = document.getElementById('ct-close-submit');
+ var hint = document.getElementById('ct-close-hint');
+ ta.oninput = function(){
+  var ok = ta.value.trim().length >= 3;
+  btn.disabled = !ok;
+  hint.className = 'ct-modal-hint' + (ok ? '' : ' is-error');
+ };
+ setTimeout(function(){ ta.focus(); }, 50);
+}
+
+async function crmTaskCloseSubmit(taskId){
+ var ta = document.getElementById('ct-close-result');
+ var result = (ta && ta.value || '').trim();
+ if(result.length < 3) return;
+ var btn = document.getElementById('ct-close-submit');
+ if(btn){ btn.disabled = true; btn.textContent = 'Закрываем...'; }
+ try {
+  var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId) + '&close=1', {
+   method:'PATCH', body: JSON.stringify({ result: result })
+  });
+  if(!d || !d.ok){
+   alert('Не удалось закрыть: ' + (d && d.error || 'неизв.'));
+   if(btn){ btn.disabled = false; btn.textContent = 'Закрыть задачу'; }
+   return;
+  }
+  var bg = document.querySelector('.ct-modal-bg'); if(bg) bg.remove();
+  if(typeof kbShowToast === 'function') kbShowToast('Задача закрыта');
+  var card = window._kbCurrentCard;
+  // Спросим — поставить ли следующую задачу
+  setTimeout(function(){
+   var next = confirm('Задача закрыта. Поставить следующую задачу этому клиенту?');
+   if(card){
+    crmClientTasksRender(card).then(function(){
+     if(next){
+      var txt2 = document.getElementById('ct-form-text');
+      if(txt2) txt2.focus();
+     }
+    });
+   }
+  }, 100);
+ } catch(e){
+  alert('Ошибка сети: ' + (e.message || e));
+  if(btn){ btn.disabled = false; btn.textContent = 'Закрыть задачу'; }
+ }
+}
+
+// ============================================================================
+// DELETE задачи (только автор или admin)
+// ============================================================================
+async function crmTaskDelete(taskId){
+ if(!confirm('Удалить задачу? Это нельзя отменить.')) return;
+ try {
+  var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId), { method:'DELETE' });
+  if(!d || !d.ok){ alert('Не удалось удалить: ' + (d && d.error || 'неизв.')); return; }
+  if(typeof kbShowToast === 'function') kbShowToast('Задача удалена');
+  var card = window._kbCurrentCard;
+  if(card) crmClientTasksRender(card);
+ } catch(e){ alert('Ошибка сети: ' + (e.message || e)); }
+}
+
+// ============================================================================
+// EDIT задачи (модалка с pre-fill из загруженной задачи)
+// ============================================================================
+async function crmTaskEditStart(taskId){
+ var d;
+ try {
+  d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId));
+ } catch(e){ alert('Не удалось загрузить задачу'); return; }
+ if(!d || !d.ok || !d.task){ alert('Задача не найдена'); return; }
+ var t = d.task;
+ await crmTasksLoadTypes();
+ var types = crmTasksTypesCache || [];
+ var ops = (typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators.slice() : ['Айдос','Акбар','Самат'];
+
+ var dt = new Date(t.deadline_at);
+ var dateStr = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+ var timeStr = String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0');
+ var timeEndStr = '';
+ if(t.deadline_end_at){
+  var de = new Date(t.deadline_end_at);
+  timeEndStr = String(de.getHours()).padStart(2,'0') + ':' + String(de.getMinutes()).padStart(2,'0');
+ }
+
+ var typeOpts = types.map(function(x){
+  return '<option value="'+x.id+'"'+(x.id===t.type_id?' selected':'')+'>'+ctEsc(x.name)+'</option>';
+ }).join('');
+ var opOpts = ops.map(function(x){
+  return '<option value="'+ctEsc(x)+'"'+(x===t.assignee_operator?' selected':'')+'>'+ctEsc(x)+'</option>';
+ }).join('');
+
+ var idEsc = ctEsc(taskId);
+ var bg = document.createElement('div');
+ bg.className = 'ct-modal-bg';
+ bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
+ var inner = '<div class="ct-modal" onclick="event.stopPropagation()" style="max-width:540px">' +
+  '<div class="ct-modal-title">Редактировать задачу</div>' +
+  '<div class="ct-modal-field"><label class="ct-modal-label">Тип</label><select id="ct-edit-type">'+typeOpts+'</select></div>' +
+  '<div class="ct-modal-field"><label class="ct-modal-label">Описание</label><textarea id="ct-edit-text" rows="2">'+ctEsc(t.text||'')+'</textarea></div>' +
+  '<div class="ct-modal-row">' +
+   '<div class="ct-modal-field"><label class="ct-modal-label">Дата</label><input type="date" id="ct-edit-date" value="'+ctEsc(dateStr)+'"></div>' +
+   '<div class="ct-modal-field"><label class="ct-modal-label">Ответственный</label><select id="ct-edit-assignee">'+opOpts+'</select></div>' +
+  '</div>' +
+  '<div class="ct-modal-field"><label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e5e7eb;cursor:pointer"><input type="checkbox" id="ct-edit-allday" '+(t.is_all_day?'checked':'')+' style="width:auto;cursor:pointer"> Весь день</label></div>' +
+  '<div class="ct-modal-row" id="ct-edit-times" style="'+(t.is_all_day?'display:none':'')+'">' +
+   '<div class="ct-modal-field"><label class="ct-modal-label">Начало</label><input type="time" id="ct-edit-time-start" value="'+ctEsc(timeStr)+'"></div>' +
+   '<div class="ct-modal-field"><label class="ct-modal-label">Конец (опц.)</label><input type="time" id="ct-edit-time-end" value="'+ctEsc(timeEndStr)+'"></div>' +
+  '</div>' +
+  '<div class="ct-modal-actions">' +
+   '<button class="ct-modal-btn ct-modal-btn-secondary" onclick="this.closest(\'.ct-modal-bg\').remove()">Отмена</button>' +
+   '<button class="ct-modal-btn ct-modal-btn-primary" onclick="crmTaskEditSubmit(\''+idEsc+'\')">Сохранить</button>' +
+  '</div>' +
+ '</div>';
+ bg.insertAdjacentHTML('beforeend', inner);
+ document.body.appendChild(bg);
+ document.getElementById('ct-edit-allday').onchange = function(){
+  document.getElementById('ct-edit-times').style.display = this.checked ? 'none' : 'flex';
+ };
+}
+
+async function crmTaskEditSubmit(taskId){
+ var typeId = parseInt(document.getElementById('ct-edit-type').value, 10);
+ var text = document.getElementById('ct-edit-text').value.trim();
+ var date = document.getElementById('ct-edit-date').value;
+ var assignee = document.getElementById('ct-edit-assignee').value;
+ var allDay = document.getElementById('ct-edit-allday').checked;
+ var ts = document.getElementById('ct-edit-time-start').value;
+ var te = document.getElementById('ct-edit-time-end').value;
+
+ var deadline_at, deadline_end_at = null;
+ if(allDay){
+  deadline_at = date + 'T00:00:00';
+ } else {
+  deadline_at = date + 'T' + (ts || '09:00') + ':00';
+  if(te) deadline_end_at = date + 'T' + te + ':00';
+ }
+ var patch = {
+  type_id: typeId,
+  text: text || null,
+  deadline_at: new Date(deadline_at).toISOString(),
+  deadline_end_at: deadline_end_at ? new Date(deadline_end_at).toISOString() : null,
+  is_all_day: allDay,
+  assignee_operator: assignee
+ };
+ try {
+  var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId), {
+   method:'PATCH', body: JSON.stringify(patch)
+  });
+  if(!d || !d.ok){ alert('Не удалось обновить: ' + (d && d.error || 'неизв.')); return; }
+  var bg = document.querySelector('.ct-modal-bg'); if(bg) bg.remove();
+  if(typeof kbShowToast === 'function') kbShowToast('Задача обновлена');
+  var card = window._kbCurrentCard;
+  if(card) crmClientTasksRender(card);
+ } catch(e){ alert('Ошибка сети: ' + (e.message || e)); }
+}
+// === конец v452 модуля «Задачи» (таб карточки клиента) ===
+
+// ============================================================================
+// v452 — Страница «Мои задачи»: канбан follow-up задач (a-la amoCRM /todo/line/)
+// Spec: docs/superpowers/specs/2026-05-25-tasks-module-design.md §7
+// ============================================================================
+
+var mytasksState = {
+ preset: 'my',         // 'my' | 'all' | 'failed' | 'compl'
+ assignee: null,       // имя оператора для preset='my' (заполняется из currentUser)
+ buckets: null,        // последний загруженный ответ /api/tasks?kanban=1
+ _dragTaskId: null     // id перетаскиваемой задачи
+};
+
+// Конфиг колонок (точные цвета из spec §3 «Дизайн-токены»)
+var MT_COLUMNS = [
+ { id:'expire',     title:'Просроченные задачи',  bar:'#f37575', presets:['my','all','failed'] },
+ { id:'today',      title:'Задачи на сегодня',     bar:'#6CC09C', presets:['my','all'] },
+ { id:'tomorrow',   title:'Задачи на завтра',      bar:'#c3c2c3', presets:['my','all'] },
+ { id:'this_week',  title:'Задачи на эту неделю', bar:'#c3c2c3', presets:['all'] },
+ { id:'next_week',  title:'Задачи на след. неделю', bar:'#c3c2c3', presets:['all'] },
+ { id:'this_month', title:'Задачи на месяц',       bar:'#c3c2c3', presets:['all'] },
+ { id:'future',     title:'Задачи на будущее',     bar:'#c3c2c3', presets:['all'] },
+ { id:'completed',  title:'Выполненные задачи',    bar:'#92989b', presets:['compl'] }
+];
+
+function mytasksInit(){
+ // Автоустановка фильтра «Мои» на основе текущего пользователя
+ var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
+ if(u && u.name){
+  mytasksState.assignee = u.name.split(' ')[0];
+ } else {
+  mytasksState.assignee = (typeof kbOperators !== 'undefined' && kbOperators[0]) || null;
+ }
+ // Прогрузим типы задач (нужны для рендера карточек)
+ crmTasksLoadTypes().then(function(){ mytasksLoad(); });
+}
+
+function mytasksSetPreset(p){
+ mytasksState.preset = p;
+ document.querySelectorAll('#mt-presets .mt-preset').forEach(function(b){
+  b.classList.toggle('is-active', b.dataset.preset === p);
+ });
+ mytasksLoad();
+}
+
+function mytasksRefresh(){ mytasksLoad(); }
+
+async function mytasksLoad(){
+ var kanban = document.getElementById('mt-kanban');
+ if(!kanban) return;
+ ctRender(kanban, '<div class="mt-loading">Загрузка...</div>');
+ var path = '/api/tasks?kanban=1';
+ // Preset='my' → фильтруем по ответственному; остальные показывают всех
+ if(mytasksState.preset === 'my' && mytasksState.assignee){
+  path += '&assignee=' + encodeURIComponent(mytasksState.assignee);
+ }
+ var d;
+ try {
+  d = await crmTasksFetch(path);
+ } catch(e){
+  ctRender(kanban, '<div class="mt-loading" style="color:#f37575">Ошибка загрузки: '+ctEsc(e.message||String(e))+'</div>');
+  return;
+ }
+ if(!d || !d.ok){
+  ctRender(kanban, '<div class="mt-loading" style="color:#f37575">'+ctEsc(d && d.error ? d.error : 'неизвестная ошибка')+'</div>');
+  return;
+ }
+ mytasksState.buckets = d.buckets || {};
+ mytasksRender();
+}
+
+function mytasksRender(){
+ var kanban = document.getElementById('mt-kanban');
+ if(!kanban) return;
+ var preset = mytasksState.preset;
+ var buckets = mytasksState.buckets || {};
+
+ var visible = MT_COLUMNS.filter(function(c){ return c.presets.indexOf(preset) >= 0; });
+ // Класс для grid layout: для 'all' — широкая раскладка, для 'compl' — одна колонка
+ var cls = 'mt-kanban';
+ if(preset === 'all') cls += ' is-all';
+ if(preset === 'compl') cls += ' is-compl';
+ kanban.className = cls;
+
+ var html = '';
+ visible.forEach(function(col){
+  var tasks = buckets[col.id] || [];
+  html += '<div class="mt-col" data-col="'+col.id+'">';
+  html += ' <div class="mt-col-head"><div class="mt-col-title">'+ctEsc(col.title)+'</div><div class="mt-col-count">'+tasks.length+' '+mytasksPluralize(tasks.length, 'задача','задачи','задач')+'</div></div>';
+  html += ' <div class="mt-col-bar" style="background:'+ctEsc(col.bar)+'"></div>';
+  html += ' <div class="mt-col-body" data-col="'+col.id+'" ondragover="mytasksDragOver(event)" ondragleave="mytasksDragLeave(event)" ondrop="mytasksDropCol(event)">';
+  if(tasks.length){
+   tasks.forEach(function(t){ html += mytasksCardHtml(t, col.id); });
+  } else {
+   html += '<div class="mt-empty">Пусто</div>';
+  }
+  html += ' </div>';
+  html += '</div>';
+ });
+ ctRender(kanban, html);
+ mytasksBindFooter();
+}
+
+function mytasksPluralize(n, one, few, many){
+ var mod10 = n % 10, mod100 = n % 100;
+ if(mod100 >= 11 && mod100 <= 14) return many;
+ if(mod10 === 1) return one;
+ if(mod10 >= 2 && mod10 <= 4) return few;
+ return many;
+}
+
+function mytasksCardHtml(t, colId){
+ var type = crmTasksTypeById(t.type_id);
+ var idEsc = ctEsc(t.id);
+ var overdue = colId === 'expire' || crmTasksIsOverdue(t);
+ var today = colId === 'today' || crmTasksIsToday(t);
+ var done = t.status === 'done';
+ var dl = crmTasksFmtDeadline(t);
+ var cls = 'mt-card';
+ if(overdue && !done) cls += ' is-overdue';
+ else if(today && !done) cls += ' is-today';
+
+ var h = '<div class="'+cls+'" draggable="true" data-id="'+idEsc+'" ondragstart="mytasksDragStart(event,\''+idEsc+'\')" ondragend="mytasksDragEnd(event)" onclick="crmTaskEditStart(\''+idEsc+'\')">';
+ // Контакт + stage badge (если есть)
+ if(t.contact_name || t.stage_label){
+  h += '<div class="mt-card-stage-row">';
+  if(t.contact_name) h += '<span class="mt-card-contact">'+ctEsc(t.contact_name)+'</span>';
+  if(t.contact_name && t.stage_label) h += '<span style="color:#6b7280">,</span>';
+  if(t.stage_label){
+   var bg = t.stage_color || '#ff8f92';
+   h += '<span class="mt-card-stage" style="background:'+ctEsc(bg)+'">'+ctEsc(t.stage_label)+'</span>';
+  }
+  h += '</div>';
+ }
+ // Клиент-ссылка
+ if(t.client_id){
+  h += '<div class="mt-card-client" onclick="event.stopPropagation();mytasksOpenClient(\''+ctEsc(t.client_id)+'\')">'+ctEsc(t.client_id)+'</div>';
+ }
+ // Метаданные: дата, автор → ответственный
+ var metaCls = overdue && !done ? 'mt-meta-overdue' : '';
+ h += '<div class="mt-card-meta"><span class="'+metaCls+'">'+ctEsc(dl)+'</span>';
+ if(t.created_by) h += ', от '+ctEsc(t.created_by);
+ h += ' для '+ctEsc(t.assignee_operator || '—')+'</div>';
+ // Тело: иконка типа + название + текст
+ h += '<div class="mt-card-body"><span class="mt-card-type-dot" style="color:'+ctEsc(type.color)+'">●</span><b>'+ctEsc(type.name)+'</b>';
+ if(t.text) h += ': '+ctEsc(t.text);
+ h += '</div>';
+ // Если закрыта — показать результат
+ if(done && t.result){
+  h += '<div class="mt-card-deadline-bottom">Результат: '+ctEsc(t.result)+'</div>';
+ }
+ h += '</div>';
+ return h;
+}
+
+// Открыть карточку клиента из канбана (если есть routeOpenClient — иначе показать toast)
+function mytasksOpenClient(client_id){
+ if(typeof routeOpenClient === 'function') routeOpenClient(client_id);
+ else if(typeof kbShowToast === 'function') kbShowToast('Карточка клиента: ' + client_id);
+}
+
+// ============================================================================
+// Drag-and-drop
+// ============================================================================
+function mytasksDragStart(ev, taskId){
+ mytasksState._dragTaskId = taskId;
+ ev.dataTransfer.effectAllowed = 'move';
+ try { ev.dataTransfer.setData('text/plain', taskId); } catch(_){}
+ if(ev.target && ev.target.classList) ev.target.classList.add('is-dragging');
+}
+
+function mytasksDragEnd(ev){
+ mytasksState._dragTaskId = null;
+ if(ev.target && ev.target.classList) ev.target.classList.remove('is-dragging');
+ document.querySelectorAll('.mt-col-body.is-dragover, .mt-drop.is-dragover').forEach(function(el){ el.classList.remove('is-dragover'); });
+}
+
+function mytasksDragOver(ev){
+ ev.preventDefault();
+ ev.dataTransfer.dropEffect = 'move';
+ if(ev.currentTarget && ev.currentTarget.classList) ev.currentTarget.classList.add('is-dragover');
+}
+
+function mytasksDragLeave(ev){
+ if(ev.currentTarget && ev.currentTarget.classList) ev.currentTarget.classList.remove('is-dragover');
+}
+
+// Drop в колонку — меняем дедлайн на сегодня/завтра/...
+async function mytasksDropCol(ev){
+ ev.preventDefault();
+ var taskId = mytasksState._dragTaskId;
+ if(!taskId) return;
+ var col = ev.currentTarget;
+ if(col && col.classList) col.classList.remove('is-dragover');
+ var target = col && col.dataset && col.dataset.col;
+ // expire — не делаем drop (нельзя сделать задачу «уже просроченной»)
+ if(!target || target === 'expire' || target === 'completed') return;
+ // Маппинг колонки → move target (только today и tomorrow напрямую; остальные колонки
+ // соответствуют дальним бакетам — для них нет прямого move-команды, используем footer-зоны).
+ var moveMap = { today:'today', tomorrow:'tomorrow' };
+ var move = moveMap[target];
+ if(!move) return;   // для this_week/next_week и т.д. drag из колонок не используется
+ await mytasksMove(taskId, move);
+}
+
+// Drop в футер-зону
+function mytasksBindFooter(){
+ document.querySelectorAll('#mt-footer .mt-drop').forEach(function(zone){
+  zone.ondragover = function(ev){ ev.preventDefault(); zone.classList.add('is-dragover'); };
+  zone.ondragleave = function(){ zone.classList.remove('is-dragover'); };
+  zone.ondrop = function(ev){
+   ev.preventDefault();
+   zone.classList.remove('is-dragover');
+   var taskId = mytasksState._dragTaskId;
+   if(!taskId) return;
+   var target = zone.dataset.target;
+   if(target === 'delete'){
+    if(confirm('Удалить задачу?')){
+     crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId), { method:'DELETE' })
+      .then(function(d){
+       if(!d || !d.ok){ alert('Не удалось: ' + (d && d.error || 'неизв.')); return; }
+       if(typeof kbShowToast === 'function') kbShowToast('Удалено');
+       mytasksLoad();
+      });
+    }
+   } else if(target === 'done'){
+    // Открываем модалку закрытия (требует result ≥3 символов)
+    crmTaskCloseStart(taskId);
+    // После закрытия модалки нужно перезагрузить kanban — повесим callback через override
+    // Не идеально, но в spec'е это допускается: модалка сама вызовет render таба карточки,
+    // а на странице мытаски просто обновим через короткую паузу. Лучше — listen-event:
+    var origUpdate = window.crmTaskCloseSubmit;
+    // Делаем одноразовый перехват для рефреша канбана
+    window.crmTaskCloseSubmit = async function(tid){
+     await origUpdate(tid);
+     window.crmTaskCloseSubmit = origUpdate;
+     setTimeout(function(){ mytasksLoad(); }, 200);
+    };
+   } else {
+    mytasksMove(taskId, target);
+   }
+  };
+ });
+}
+
+async function mytasksMove(taskId, target){
+ try {
+  var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId) + '&move=' + encodeURIComponent(target), { method:'PATCH' });
+  if(!d || !d.ok){ alert('Не удалось переместить: ' + (d && d.error || 'неизв.')); return; }
+  if(typeof kbShowToast === 'function') kbShowToast('Перенесено');
+  mytasksLoad();
+ } catch(e){ alert('Ошибка сети: ' + (e.message || e)); }
+}
+
+// ============================================================================
+// «+ Задача» — модалка глобального создания (без привязки к карточке клиента)
+// ============================================================================
+async function mytasksNewTaskStart(){
+ await crmTasksLoadTypes();
+ var types = crmTasksTypesCache || [];
+ var ops = (typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators.slice() : ['Айдос','Акбар','Самат'];
+ var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
+ var meName = (u.name || '').toString().split(' ')[0] || ops[0];
+
+ // Дата по умолчанию — сегодня, время — следующий круглый час
+ var now = new Date();
+ now.setHours(now.getHours()+1, 0, 0, 0);
+ var dateStr = now.toISOString().slice(0,10);
+ var timeStr = String(now.getHours()).padStart(2,'0') + ':00';
+
+ // Список клиентов (для опционального dropdown). Лимит — топ-100 активных.
+ var clientsHtml = '<option value="">— без клиента —</option>';
+ try {
+  var cl = await sbFetch('/api/clients?status=active');
+  if(cl && cl.ok && cl.clients){
+   cl.clients.slice(0,200).forEach(function(c){
+    clientsHtml += '<option value="'+ctEsc(c.client_id)+'">'+ctEsc(c.company_name || c.client_id)+' ('+ctEsc(c.client_id)+')</option>';
+   });
+  }
+ } catch(e){ /* network */ }
+
+ var typeOpts = types.map(function(x){
+  return '<option value="'+x.id+'"'+(x.id===1?' selected':'')+'>'+ctEsc(x.name)+'</option>';
+ }).join('');
+ var opOpts = ops.map(function(x){
+  return '<option value="'+ctEsc(x)+'"'+(x===meName?' selected':'')+'>'+ctEsc(x)+'</option>';
+ }).join('');
+
+ var bg = document.createElement('div');
+ bg.className = 'ct-modal-bg';
+ bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
+ var inner = '<div class="ct-modal" onclick="event.stopPropagation()" style="max-width:560px">' +
+  '<div class="ct-modal-title">Новая задача</div>' +
+  '<div class="ct-modal-field"><label class="ct-modal-label">Клиент</label><select id="mt-new-client">'+clientsHtml+'</select></div>' +
+  '<div class="ct-modal-field"><label class="ct-modal-label">Тип</label><select id="mt-new-type">'+typeOpts+'</select></div>' +
+  '<div class="ct-modal-field"><label class="ct-modal-label">Описание</label><textarea id="mt-new-text" rows="2" placeholder="что нужно сделать..."></textarea></div>' +
+  '<div class="ct-modal-row">' +
+   '<div class="ct-modal-field"><label class="ct-modal-label">Дата</label><input type="date" id="mt-new-date" value="'+ctEsc(dateStr)+'"></div>' +
+   '<div class="ct-modal-field"><label class="ct-modal-label">Ответственный</label><select id="mt-new-assignee">'+opOpts+'</select></div>' +
+  '</div>' +
+  '<div class="ct-modal-field"><label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e5e7eb;cursor:pointer"><input type="checkbox" id="mt-new-allday" style="width:auto;cursor:pointer"> Весь день</label></div>' +
+  '<div class="ct-modal-row" id="mt-new-times">' +
+   '<div class="ct-modal-field"><label class="ct-modal-label">Начало</label><input type="time" id="mt-new-time-start" value="'+ctEsc(timeStr)+'"></div>' +
+   '<div class="ct-modal-field"><label class="ct-modal-label">Конец (опц.)</label><input type="time" id="mt-new-time-end" value=""></div>' +
+  '</div>' +
+  '<div class="ct-modal-actions">' +
+   '<button class="ct-modal-btn ct-modal-btn-secondary" onclick="this.closest(\'.ct-modal-bg\').remove()">Отмена</button>' +
+   '<button class="ct-modal-btn ct-modal-btn-primary" onclick="mytasksNewTaskSubmit()">Создать</button>' +
+  '</div>' +
+ '</div>';
+ bg.insertAdjacentHTML('beforeend', inner);
+ document.body.appendChild(bg);
+ document.getElementById('mt-new-allday').onchange = function(){
+  document.getElementById('mt-new-times').style.display = this.checked ? 'none' : 'flex';
+ };
+}
+
+async function mytasksNewTaskSubmit(){
+ var clientId = document.getElementById('mt-new-client').value || null;
+ var typeId = parseInt(document.getElementById('mt-new-type').value, 10);
+ var text = document.getElementById('mt-new-text').value.trim();
+ var date = document.getElementById('mt-new-date').value;
+ var assignee = document.getElementById('mt-new-assignee').value;
+ var allDay = document.getElementById('mt-new-allday').checked;
+ var ts = document.getElementById('mt-new-time-start').value;
+ var te = document.getElementById('mt-new-time-end').value;
+ if(!date){ alert('Укажи дату'); return; }
+ var deadline_at, deadline_end_at = null;
+ if(allDay){
+  deadline_at = date + 'T00:00:00';
+ } else {
+  deadline_at = date + 'T' + (ts || '09:00') + ':00';
+  if(te) deadline_end_at = date + 'T' + te + ':00';
+ }
+ var body = {
+  client_id: clientId,
+  type_id: typeId,
+  text: text || null,
+  deadline_at: new Date(deadline_at).toISOString(),
+  deadline_end_at: deadline_end_at ? new Date(deadline_end_at).toISOString() : null,
+  is_all_day: allDay,
+  assignee_operator: assignee
+ };
+ try {
+  var d = await crmTasksFetch('/api/tasks', { method:'POST', body: JSON.stringify(body) });
+  if(!d || !d.ok){ alert('Не удалось создать: ' + (d && d.error || 'неизв.')); return; }
+  var bg = document.querySelector('.ct-modal-bg'); if(bg) bg.remove();
+  if(typeof kbShowToast === 'function') kbShowToast('Задача создана');
+  mytasksLoad();
+ } catch(e){ alert('Ошибка сети: ' + (e.message || e)); }
+}
+// === конец v452 модуля «Мои задачи» (страница-канбан) ===
 
 // v226: CRM Контакты — localStorage хранение
 // Структура: localStorage['crm_contacts'] = JSON массив объектов
