@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v449</title>
+<title>SalesDoc — Финансовый Дашборд v450</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15023,16 +15023,10 @@ async function fdxRenderBoard(){
  _fdxState.board = b;
  pane.replaceChildren();
 
- // Если нет ни одной опубликованной годовой цели — пустое состояние
+ // v450: онбординг «Начни здесь» вместо пустого состояния.
+ // Команда видит подсказку с 3 шагами и сразу понимает что делать.
  if(!b.year_goals || !b.year_goals.length){
-  var empty = document.createElement('div');
-  empty.style.cssText = 'padding:60px 20px;text-align:center;color:var(--text-muted)';
-  var t = document.createElement('div'); t.style.cssText = 'font-size:20px;font-weight:700;margin-bottom:8px;color:var(--text-soft)';
-  t.textContent = 'Главная цель пока не задана';
-  var s = document.createElement('div'); s.style.cssText = 'font-size:13px';
-  s.textContent = _fdxCanEdit() ? 'Перейдите на вкладку «Цели» и создайте годовую цель.' : 'Подождите, CEO задаст её на вкладке «Цели».';
-  empty.appendChild(t); empty.appendChild(s);
-  pane.appendChild(empty);
+  pane.appendChild(_fdxBuildOnboarding());
   return;
  }
 
@@ -15175,6 +15169,55 @@ function _fdxBuildMetricsBlock(lights){
   grid.appendChild(card);
  });
  wrap.appendChild(grid);
+ return wrap;
+}
+
+// v450: онбординг для первого входа — карточка с 3 шагами «Начни здесь».
+function _fdxBuildOnboarding(){
+ var canEdit = _fdxCanEdit();
+ var wrap = document.createElement('div');
+ wrap.style.cssText = 'max-width:680px;margin:32px auto;padding:36px 28px;background:var(--surface);border:1px solid var(--border-faint);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.18)';
+ var head = document.createElement('div');
+ head.style.cssText = 'text-align:center;margin-bottom:24px';
+ var t1 = document.createElement('div');
+ t1.style.cssText = 'font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.02em;margin-bottom:6px';
+ t1.textContent = 'Начни здесь';
+ var t2 = document.createElement('div');
+ t2.style.cssText = 'font-size:13px;color:var(--text-soft);line-height:1.5';
+ t2.textContent = canEdit
+  ? 'Методика 4DX в три шага: ставим главную цель, считаем опережающие действия каждый день, раз в неделю проводим планёрку.'
+  : 'CEO ещё не задал главную цель. Подождите — табло появится автоматически.';
+ head.appendChild(t1); head.appendChild(t2);
+ wrap.appendChild(head);
+
+ if(!canEdit) return wrap;
+
+ var steps = [
+  { n:'1', t:'Поставьте главную цель года', d:'Это «Дико Важная Цель» — то на чём команда сфокусируется. Например «MRR 7 миллионов к декабрю». Декомпозируйте на кварталы и недели.', btn:'Перейти к Целям', tab:'goals' },
+  { n:'2', t:'Добавьте опережающие действия', d:'Это что мы будем делать каждую неделю чтобы дойти до цели. Например «10 встреч в неделю», «50 звонков в день». На них светофор зелёный/жёлтый/красный.', btn:'Перейти к Опережающим', tab:'metrics' },
+  { n:'3', t:'Запланируйте первую планёрку', d:'Раз в неделю команда собирается на 20 минут: что было обещано, где мы по цели, что обещаем на следующую неделю.', btn:'Перейти к Планёркам', tab:'sessions' }
+ ];
+ steps.forEach(function(s){
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:14px;align-items:flex-start;padding:14px;background:var(--surface-2);border-radius:10px;margin-bottom:10px';
+  var num = document.createElement('div');
+  num.style.cssText = 'width:36px;height:36px;border-radius:50%;background:var(--accent, #5489BB);color:#fff;font-weight:700;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0';
+  num.textContent = s.n;
+  row.appendChild(num);
+  var body = document.createElement('div'); body.style.cssText = 'flex:1;min-width:0';
+  var rt = document.createElement('div'); rt.style.cssText = 'font-size:14px;color:var(--text);font-weight:600;margin-bottom:4px';
+  rt.textContent = s.t;
+  var rd = document.createElement('div'); rd.style.cssText = 'font-size:12.5px;color:var(--text-soft);line-height:1.4';
+  rd.textContent = s.d;
+  body.appendChild(rt); body.appendChild(rd);
+  row.appendChild(body);
+  var btn = document.createElement('button');
+  btn.style.cssText = 'padding:7px 13px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0';
+  btn.textContent = s.btn;
+  btn.onclick = function(){ fdxSwitchTab(s.tab); };
+  row.appendChild(btn);
+  wrap.appendChild(row);
+ });
  return wrap;
 }
 
@@ -15656,11 +15699,22 @@ function _fdxBuildMetricCard(m, light){
  card.appendChild(topRow);
 
  var nums = document.createElement('div');
- nums.style.cssText = 'font-size:20px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;margin-bottom:10px';
+ nums.style.cssText = 'font-size:20px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;margin-bottom:6px';
  var fact = light ? light.fact : 0;
  var target = light ? light.target : Number(m.target_per_period) || 0;
  nums.textContent = _fdxFmtNum(fact) + ' / ' + _fdxFmtNum(target) + ' ' + (m.unit||'');
  card.appendChild(nums);
+
+ // v450: sparkline за последние 6 периодов (недель или дней — по m.period)
+ var trend = _fdxMetricTrend(m, _fdxState.entries || []);
+ if(trend && trend.length >= 2 && typeof statSparkSvg === 'function'){
+  var sparkWrap = document.createElement('div');
+  sparkWrap.style.cssText = 'margin-bottom:10px';
+  var colorMap = { green:'#5BA683', yellow:'#C28A4D', red:'#D67373', gray:'#9E9E9E' };
+  var trendColor = colorMap[(light && light.color) || 'gray'] || '#9E9E9E';
+  sparkWrap.innerHTML = statSparkSvg(trend, trendColor);
+  card.appendChild(sparkWrap);
+ }
 
  // Быстрый ввод факта
  var entryRow = document.createElement('div');
@@ -15712,6 +15766,34 @@ function _fdxBuildMetricCard(m, light){
  }
 
  return card;
+}
+
+// v450: тренд показателя за последние 6 периодов (недель или дней по m.period).
+// Возвращает массив сумм для statSparkSvg. Старый → новый период.
+function _fdxMetricTrend(m, entries){
+ var period = m.period || 'week';
+ var now = new Date();
+ var buckets = [];
+ for(var i = 5; i >= 0; i--){
+  var bucketStart, bucketEnd;
+  if(period === 'day'){
+   var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+   bucketStart = d.getTime();
+   bucketEnd = bucketStart + 86400000 - 1;
+  } else {
+   // неделя — понедельник 00:00 → воскресенье 23:59
+   var ref = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i*7);
+   var dow = (ref.getDay() + 6) % 7;
+   var mon = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - dow);
+   bucketStart = mon.getTime();
+   bucketEnd = bucketStart + 7 * 86400000 - 1;
+  }
+  var sum = entries
+   .filter(function(e){ return e.metric_id === m.id && Date.parse(e.date) >= bucketStart && Date.parse(e.date) <= bucketEnd; })
+   .reduce(function(s, e){ return s + (Number(e.value) || 0); }, 0);
+  buckets.push(sum);
+ }
+ return buckets;
 }
 
 function fdxOpenMetricEditor(initial){
