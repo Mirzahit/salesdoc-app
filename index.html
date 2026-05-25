@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v461</title>
+<title>SalesDoc — Финансовый Дашборд v462</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12380,6 +12380,97 @@ if(v==='integrations' && typeof intgSbLoad === 'function'){ try { intgSbLoad(); 
  }
  }
 }
+
+// === v462: SPA history management ============================================
+// Без этого браузерный «Назад» (стрелка ← / Alt+← / touchpad swipe) выкидывал из
+// приложения, т.к. SPA не использовала history API. Теперь:
+//   • showView('X') → history.pushState с hash #X
+//   • kbOpenCard(card) → history.pushState с #card/<client_id> (overlay карточки клиента)
+//   • popstate (back/forward/swipe) → восстанавливаем state из стека без двойного push'а
+//   • Глубокий линк #marketing → откроет нужный view при первой загрузке
+// ============================================================================
+(function spaInitHistory(){
+ var _suppress = false;                          // флаг чтоб popstate не делал лишний push
+ var _origShowView = window.showView;
+ if(typeof _origShowView !== 'function') return;
+
+ window.showView = function(v){
+  _origShowView(v);
+  if(_suppress) return;
+  try {
+   var hash = '#' + (v || '');
+   if(location.hash !== hash){
+    history.pushState({ kind:'view', view:v }, '', hash);
+   }
+  } catch(_){}
+ };
+
+ // Если kbOpenCard уже определена в момент IIFE — оборачиваем её сразу. Если нет
+ // (определяется ниже по файлу), делаем отложенную обёртку через прокси-вызов.
+ function wrapKbOpenCard(){
+  var orig = window.kbOpenCard;
+  if(typeof orig !== 'function' || orig._spaWrapped) return false;
+  window.kbOpenCard = function(card){
+   orig(card);
+   if(_suppress) return;
+   var id = card && (card.client_id || card.id) || '';
+   try { history.pushState({ kind:'card', id:id }, '', '#card/' + encodeURIComponent(id)); } catch(_){}
+  };
+  window.kbOpenCard._spaWrapped = true;
+  return true;
+ }
+ // Пробуем сразу, и через timeout если функция ещё не определена
+ if(!wrapKbOpenCard()){
+  var tries = 0;
+  var iv = setInterval(function(){
+   if(wrapKbOpenCard() || ++tries > 50) clearInterval(iv);
+  }, 100);
+ }
+
+ window.addEventListener('popstate', function(ev){
+  _suppress = true;
+  try {
+   var state = ev.state || null;
+   // Если сейчас открыта карточка клиента, а новое состояние — не карточка → закрываем
+   var cardView = document.getElementById('view-kb-card');
+   var cardOpen = cardView && cardView.style.display !== 'none';
+   if(cardOpen && (!state || state.kind !== 'card')){
+    if(typeof kbCloseCardPage === 'function') kbCloseCardPage();
+   }
+   if(state){
+    if(state.kind === 'view' && state.view){
+     _origShowView(state.view);
+    } else if(state.kind === 'card' && state.id){
+     // Восстановить карточку: поиск в kbCards по client_id или id
+     if(typeof kbCards !== 'undefined' && Array.isArray(kbCards)){
+      var c = kbCards.find(function(x){ return (x.client_id === state.id) || (x.id === state.id); });
+      if(c){
+       // Вызовем оригинал напрямую — обёртка добавит state, но _suppress=true это блокирует
+       var openFn = window.kbOpenCard && window.kbOpenCard._spaWrapped
+        ? (function(){ var f = window.kbOpenCard; return function(card){ /* инлайн оригинал поведения */ f.toString(); /* fallback на orig: */ }; })()
+        : null;
+       // Простейший путь: разворачивать карточку через kbOpenCard (defer suppress)
+       if(typeof window.kbOpenCard === 'function') window.kbOpenCard(c);
+      }
+     }
+    }
+   }
+  } catch(e){ console.warn('[spa] popstate:', e); }
+  _suppress = false;
+ });
+
+ // На первой загрузке — фиксируем initial state
+ try {
+  var initHash = (location.hash || '').replace(/^#/, '');
+  if(initHash && initHash.indexOf('card/') !== 0){
+   history.replaceState({ kind:'view', view:initHash }, '', location.hash);
+   // Глубокий линк — открыть запрошенный view
+   _suppress = true; try { _origShowView(initHash); } catch(_){} _suppress = false;
+  } else {
+   history.replaceState({ kind:'view', view:'morning' }, '', location.hash || '');
+  }
+ } catch(_){}
+})();
 
 // DATA SOURCES INFO (динамически из COUNTRY_CONFIG)
 function getDataSources() {
