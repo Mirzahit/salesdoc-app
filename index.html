@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v453</title>
+<title>SalesDoc — Финансовый Дашборд v454</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4724,7 +4724,14 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 .ct-wrap { font-family:'PT Sans', Arial, sans-serif; color:#e5e7eb; }
 
 /* --- Форма создания (бирюзовый бордер) --- */
-.ct-form { border:1px solid #14b8a6; border-radius:10px; padding:14px 16px; margin-bottom:18px; background:#0e1626; }
+.ct-form { border:1px solid #14b8a6; border-radius:10px; padding:0 16px 14px; margin-bottom:18px; background:#0e1626; }
+/* v453: Табы режима (Примечание / Задача) — как в amoCRM */
+.ct-form-tabs { display:flex; gap:0; border-bottom:1px solid #1e293b; margin:0 -16px 14px; padding:0 16px; }
+.ct-form-tab { padding:10px 14px; font-size:12px; font-weight:500; color:#9ca3af; background:transparent; border:none; border-bottom:2px solid transparent; cursor:pointer; font-family:inherit; transition:color .15s, border-color .15s; }
+.ct-form-tab:hover { color:#e5e7eb; }
+.ct-form-tab.is-active { color:#14b8a6; border-bottom-color:#14b8a6; }
+.ct-form-tab-icon { display:inline-block; margin-right:5px; }
+.ct-form-content { padding-top:14px; }
 .ct-form-head { display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:13px; color:#c5cad1; margin-bottom:10px; line-height:1.5; }
 .ct-form-head .ct-static { color:#9ca3af; }
 .ct-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:14px; background:#15233a; border:1px solid #334155; color:#e5e7eb; font-size:12px; cursor:pointer; user-select:none; transition:background .15s, border-color .15s; }
@@ -31116,6 +31123,7 @@ function crmTasksFormInitState(){
  var now = new Date();
  now.setHours(now.getHours() + 1, 0, 0, 0);  // следующий круглый час
  crmTasksFormState = {
+  mode: 'task',                                 // v453: 'task' | 'note'
   type_id: 1,                                   // «Связаться»
   date_iso: now.toISOString().slice(0,10),
   time_start: String(now.getHours()).padStart(2,'0') + ':00',
@@ -31126,45 +31134,80 @@ function crmTasksFormInitState(){
  };
 }
 
+// v453: переключение режима «Примечание / Задача» в инлайн-форме
+function crmTasksFormSetMode(mode){
+ if(!crmTasksFormState) crmTasksFormInitState();
+ crmTasksFormState.mode = mode;
+ var card = window._kbCurrentCard;
+ if(card) crmClientTasksRender(card);
+ // После ререндера сразу фокус в textarea — пользователь не теряет ход мысли
+ setTimeout(function(){
+  var txt = document.getElementById('ct-form-text');
+  if(txt) txt.focus();
+ }, 50);
+}
+
 // HTML формы (все динамические значения через ctEsc). На выходе — строка.
+// v453: две вкладки «Примечание / Задача» вверху. Примечание прячет дату/время/тип.
 function crmTasksFormHtml(){
  if(!crmTasksFormState) crmTasksFormInitState();
  var s = crmTasksFormState;
- var type = crmTasksTypeById(s.type_id);
- var today = new Date(); today.setHours(0,0,0,0);
- var d = new Date(s.date_iso + 'T00:00:00');
- var diff = Math.round((d.getTime() - today.getTime()) / 86400000);
- var dateLabel;
- if(diff === 0) dateLabel = 'Сегодня';
- else if(diff === 1) dateLabel = 'Завтра';
- else if(diff === 2) dateLabel = 'Послезавтра';
- else {
-  var mm = String(d.getMonth()+1).padStart(2,'0');
-  dateLabel = String(d.getDate()).padStart(2,'0') + '.' + mm;
- }
- var timeLabel = s.is_all_day ? 'Весь день' : (s.time_start + (s.time_end ? ' - ' + s.time_end : ''));
- var typeDot = '<span style="color:'+ctEsc(type.color)+'">●</span>';
+ var isNote = s.mode === 'note';
+
  var h = '<div class="ct-form" id="ct-form">';
- h += '<div class="ct-form-head">';
- h += ' <span class="ct-chip ct-chip-link" onclick="crmTasksDDType(this)">Задача ▾</span>';
- h += ' <span class="ct-static">на</span>';
- h += ' <span class="ct-chip" onclick="crmTasksDDDate(this)" id="ct-form-date">'+ctEsc(dateLabel)+' ▾</span>';
- h += ' <span class="ct-chip" onclick="crmTasksDDTime(this)" id="ct-form-time">'+ctEsc(timeLabel)+' ▾</span>';
- h += ' <span class="ct-static">для</span>';
- h += ' <span class="ct-chip ct-chip-link" onclick="crmTasksDDAssignee(this)" id="ct-form-assignee">'+ctEsc(s.assignee)+' ▾</span>';
- h += ' <span class="ct-static">:</span>';
- h += ' <span class="ct-chip" onclick="crmTasksDDType(this)" id="ct-form-type">'+typeDot+' '+ctEsc(type.name)+' ▾</span>';
- h += ' <span class="ct-static">:</span>';
+ // Табы режима
+ h += '<div class="ct-form-tabs">';
+ h += ' <button class="ct-form-tab'+(isNote?' is-active':'')+'" onclick="crmTasksFormSetMode(\'note\')"><span class="ct-form-tab-icon">📝</span>Примечание</button>';
+ h += ' <button class="ct-form-tab'+(!isNote?' is-active':'')+'" onclick="crmTasksFormSetMode(\'task\')"><span class="ct-form-tab-icon">✓</span>Задача</button>';
  h += '</div>';
- h += '<textarea id="ct-form-text" placeholder="Введите описание задачи..." rows="2">'+ctEsc(s.text)+'</textarea>';
- h += '<div class="ct-form-actions">';
- h += ' <div>';
- h += '  <button class="ct-btn-primary" id="ct-form-submit" onclick="crmTaskCreate()" disabled>Поставить</button>';
- h += '  <button class="ct-btn-cancel" onclick="crmTasksFormReset()">Отменить</button>';
- h += ' </div>';
- h += ' <div style="font-size:18px;color:#6b7280">⌨</div>';
- h += '</div>';
- h += '</div>';
+ h += '<div class="ct-form-content">';
+
+ if(!isNote){
+  // === Режим «Задача» — полная форма с дедлайном ===
+  var type = crmTasksTypeById(s.type_id);
+  var today = new Date(); today.setHours(0,0,0,0);
+  var d = new Date(s.date_iso + 'T00:00:00');
+  var diff = Math.round((d.getTime() - today.getTime()) / 86400000);
+  var dateLabel;
+  if(diff === 0) dateLabel = 'Сегодня';
+  else if(diff === 1) dateLabel = 'Завтра';
+  else if(diff === 2) dateLabel = 'Послезавтра';
+  else {
+   var mm = String(d.getMonth()+1).padStart(2,'0');
+   dateLabel = String(d.getDate()).padStart(2,'0') + '.' + mm;
+  }
+  var timeLabel = s.is_all_day ? 'Весь день' : (s.time_start + (s.time_end ? ' - ' + s.time_end : ''));
+  var typeDot = '<span style="color:'+ctEsc(type.color)+'">●</span>';
+  h += '<div class="ct-form-head">';
+  h += ' <span class="ct-static">на</span>';
+  h += ' <span class="ct-chip" onclick="crmTasksDDDate(this)" id="ct-form-date">'+ctEsc(dateLabel)+' ▾</span>';
+  h += ' <span class="ct-chip" onclick="crmTasksDDTime(this)" id="ct-form-time">'+ctEsc(timeLabel)+' ▾</span>';
+  h += ' <span class="ct-static">для</span>';
+  h += ' <span class="ct-chip ct-chip-link" onclick="crmTasksDDAssignee(this)" id="ct-form-assignee">'+ctEsc(s.assignee)+' ▾</span>';
+  h += ' <span class="ct-static">:</span>';
+  h += ' <span class="ct-chip" onclick="crmTasksDDType(this)" id="ct-form-type">'+typeDot+' '+ctEsc(type.name)+' ▾</span>';
+  h += '</div>';
+  h += '<textarea id="ct-form-text" placeholder="Что нужно сделать?" rows="2">'+ctEsc(s.text)+'</textarea>';
+  h += '<div class="ct-form-actions">';
+  h += ' <div>';
+  h += '  <button class="ct-btn-primary" id="ct-form-submit" onclick="crmTaskCreate()" disabled>Поставить</button>';
+  h += '  <button class="ct-btn-cancel" onclick="crmTasksFormReset()">Отменить</button>';
+  h += ' </div>';
+  h += ' <div style="font-size:18px;color:#6b7280">⌨</div>';
+  h += '</div>';
+ } else {
+  // === Режим «Примечание» — только textarea + кнопка ===
+  h += '<textarea id="ct-form-text" placeholder="Запиши заметку — что обсудили, какие договорённости, нюансы..." rows="3">'+ctEsc(s.text)+'</textarea>';
+  h += '<div class="ct-form-actions">';
+  h += ' <div>';
+  h += '  <button class="ct-btn-primary" id="ct-form-submit" onclick="crmNoteCreate()" disabled>Записать</button>';
+  h += '  <button class="ct-btn-cancel" onclick="crmTasksFormReset()">Отменить</button>';
+  h += ' </div>';
+  h += ' <div style="font-size:11px;color:#6b7280">Заметка попадёт в Историю</div>';
+  h += '</div>';
+ }
+
+ h += '</div></div>';
  return h;
 }
 
@@ -31239,6 +31282,26 @@ function crmTaskHtmlDone(t){
  return h;
 }
 
+// v453: Рендер карточки заметки в Истории клиента. Стиль похож на закрытую задачу,
+// но без типа/дедлайна/ответственного. Аватар — иконка примечания (📝).
+function crmNoteHtml(n){
+ var c = new Date(n.created_at);
+ var dd = String(c.getDate()).padStart(2,'0') + '.' + String(c.getMonth()+1).padStart(2,'0');
+ var hh = String(c.getHours()).padStart(2,'0') + ':' + String(c.getMinutes()).padStart(2,'0');
+ var idEsc = ctEsc(n.id);
+ var h = '<div class="ct-task is-note" data-note-id="'+idEsc+'">';
+ h += ' <div class="ct-task-avatar" style="border-color:#9ca3af;color:#9ca3af">📝</div>';
+ h += ' <div class="ct-task-info">';
+ h += '  <div class="ct-task-meta">'+dd+' '+hh+' • '+ctEsc(n.created_by||'—')+'</div>';
+ h += '  <div class="ct-task-body" style="text-decoration:none">'+ctEsc(n.text)+'</div>';
+ h += ' </div>';
+ h += ' <div class="ct-task-actions">';
+ h += '  <button class="ct-act-btn ct-act-del" onclick="crmNoteDelete(\''+idEsc+'\')">×</button>';
+ h += ' </div>';
+ h += '</div>';
+ return h;
+}
+
 // ============================================================================
 // Главный рендер таба — fetch + сборка HTML + bind формы
 // ============================================================================
@@ -31249,38 +31312,53 @@ async function crmClientTasksRender(card){
   ctRender(pane, '<div class="ct-empty"><div class="ct-empty-msg">У карточки нет client_id</div><div class="ct-empty-hint">Задачи требуют привязки к клиенту в Supabase</div></div>');
   return;
  }
- ctRender(pane, '<div class="ct-empty"><div class="ct-empty-msg">Загрузка задач...</div></div>');
+ ctRender(pane, '<div class="ct-empty"><div class="ct-empty-msg">Загрузка...</div></div>');
 
  await crmTasksLoadTypes();
- var d;
+ // v453: параллельный fetch задач + заметок (две независимые сущности)
+ var tasksRes, notesRes;
  try {
-  d = await crmTasksFetch('/api/tasks?client_id=' + encodeURIComponent(card.client_id) + '&status=all');
+  var p1 = crmTasksFetch('/api/tasks?client_id=' + encodeURIComponent(card.client_id) + '&status=all');
+  var p2 = crmTasksFetch('/api/notes?client_id=' + encodeURIComponent(card.client_id));
+  var both = await Promise.all([p1, p2]);
+  tasksRes = both[0]; notesRes = both[1];
  } catch(e){
-  ctRender(pane, '<div class="ct-empty"><div class="ct-empty-msg" style="color:#f37575">Ошибка загрузки задач</div><div class="ct-empty-hint">'+ctEsc(e.message||String(e))+'</div></div>');
+  ctRender(pane, '<div class="ct-empty"><div class="ct-empty-msg" style="color:#f37575">Ошибка загрузки</div><div class="ct-empty-hint">'+ctEsc(e.message||String(e))+'</div></div>');
   return;
  }
- if(!d || !d.ok){
-  ctRender(pane, '<div class="ct-empty"><div class="ct-empty-msg" style="color:#f37575">Ошибка: '+ctEsc(d && d.error ? d.error : 'неизвестная')+'</div><div class="ct-empty-hint">Проверь что /api/tasks задеплоен и миграция прогнана</div></div>');
+ if(!tasksRes || !tasksRes.ok){
+  ctRender(pane, '<div class="ct-empty"><div class="ct-empty-msg" style="color:#f37575">Ошибка задач: '+ctEsc(tasksRes && tasksRes.error ? tasksRes.error : 'неизвестная')+'</div><div class="ct-empty-hint">Проверь что /api/tasks задеплоен и миграция прогнана</div></div>');
   return;
  }
+ // Заметки опциональны — если /api/notes ещё не задеплоен, продолжаем без них
+ var notes = (notesRes && notesRes.ok && notesRes.notes) ? notesRes.notes : [];
 
- var tasks = d.tasks || [];
+ var tasks = tasksRes.tasks || [];
  var open = tasks.filter(function(t){ return t.status === 'open'; });
  var done = tasks.filter(function(t){ return t.status === 'done'; });
  open.sort(function(a,b){ return (a.deadline_at||'').localeCompare(b.deadline_at||''); });
- done.sort(function(a,b){ return (b.closed_at||'').localeCompare(a.closed_at||''); });
+
+ // v453: История = закрытые задачи + примечания, отсортированы по дате (новые сверху).
+ // Закрытая задача — по closed_at, заметка — по created_at.
+ var history = [];
+ done.forEach(function(t){ history.push({ _kind:'task', _ts:t.closed_at, item:t }); });
+ notes.forEach(function(n){ history.push({ _kind:'note', _ts:n.created_at, item:n }); });
+ history.sort(function(a,b){ return (b._ts||'').localeCompare(a._ts||''); });
 
  var html = '<div class="ct-wrap">' + crmTasksFormHtml();
  if(open.length){
   html += '<div class="ct-section-title">Открытые ('+open.length+')</div>';
   open.forEach(function(t){ html += crmTaskHtmlOpen(t); });
  }
- if(done.length){
-  html += '<div class="ct-section-title">История ('+done.length+')</div>';
-  done.forEach(function(t){ html += crmTaskHtmlDone(t); });
+ if(history.length){
+  html += '<div class="ct-section-title">История ('+history.length+')</div>';
+  history.forEach(function(entry){
+   if(entry._kind === 'task') html += crmTaskHtmlDone(entry.item);
+   else html += crmNoteHtml(entry.item);
+  });
  }
- if(!open.length && !done.length){
-  html += '<div class="ct-empty"><div class="ct-empty-msg">Задач пока нет</div><div class="ct-empty-hint">Создайте первую задачу — она появится здесь</div></div>';
+ if(!open.length && !history.length){
+  html += '<div class="ct-empty"><div class="ct-empty-msg">Здесь пока пусто</div><div class="ct-empty-hint">Создайте задачу или запишите примечание — появится здесь</div></div>';
  }
  html += '</div>';
  ctRender(pane, html);
@@ -31489,6 +31567,49 @@ async function crmTaskCreate(){
   alert('Ошибка сети: ' + (e.message || e));
   if(btn){ btn.disabled = false; btn.textContent = 'Поставить'; }
  }
+}
+
+// ============================================================================
+// v453: CREATE / DELETE примечания (Note) — отдельная сущность от task
+// ============================================================================
+async function crmNoteCreate(){
+ var card = window._kbCurrentCard;
+ if(!card || !card.client_id){ alert('Карточка клиента не открыта или не привязана к Supabase'); return; }
+ var s = crmTasksFormState;
+ var txt = document.getElementById('ct-form-text');
+ if(txt) s.text = txt.value.trim();
+ if(!s.text){ alert('Введи текст примечания'); return; }
+ var btn = document.getElementById('ct-form-submit');
+ if(btn){ btn.disabled = true; btn.textContent = 'Записываем...'; }
+ try {
+  var d = await crmTasksFetch('/api/notes', {
+   method:'POST',
+   body: JSON.stringify({ client_id: card.client_id, text: s.text })
+  });
+  if(!d || !d.ok){
+   alert('Не удалось записать: ' + (d && d.error || 'неизв.'));
+   if(btn){ btn.disabled = false; btn.textContent = 'Записать'; }
+   return;
+  }
+  if(typeof kbShowToast === 'function') kbShowToast('Примечание записано');
+  // Сбрасываем форму и остаёмся в режиме «Примечание» — часто записывают серию заметок
+  s.text = '';
+  crmClientTasksRender(card);
+ } catch(e){
+  alert('Ошибка сети: ' + (e.message || e));
+  if(btn){ btn.disabled = false; btn.textContent = 'Записать'; }
+ }
+}
+
+async function crmNoteDelete(noteId){
+ if(!confirm('Удалить примечание? Это нельзя отменить.')) return;
+ try {
+  var d = await crmTasksFetch('/api/notes?id=' + encodeURIComponent(noteId), { method:'DELETE' });
+  if(!d || !d.ok){ alert('Не удалось удалить: ' + (d && d.error || 'неизв.')); return; }
+  if(typeof kbShowToast === 'function') kbShowToast('Примечание удалено');
+  var card = window._kbCurrentCard;
+  if(card) crmClientTasksRender(card);
+ } catch(e){ alert('Ошибка сети: ' + (e.message || e)); }
 }
 
 // ============================================================================
