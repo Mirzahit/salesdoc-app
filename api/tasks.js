@@ -35,6 +35,11 @@ const MOVE_TARGETS = ['today', 'tomorrow', 'after_tomorrow', 'next_week', 'next_
 
 const KANBAN_BUCKETS = ['expire', 'today', 'tomorrow', 'this_week', 'next_week', 'this_month', 'future', 'completed'];
 
+// v452 fix: пользователи в KZ/KG (UTC+5/+6). Vercel-функция работает в UTC, поэтому
+// при расчёте бакетов канбана и сдвигов move= используем Asia/Almaty TZ через Intl.
+const APP_TZ = process.env.APP_TZ || 'Asia/Almaty';
+const APP_TZ_OFFSET = process.env.APP_TZ_OFFSET || '+05:00';  // для составления ISO-строк
+
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
@@ -114,19 +119,20 @@ async function handleKanban(req, res) {
 
   const buckets = { expire: [], today: [], tomorrow: [], this_week: [], next_week: [], this_month: [], future: [], completed: doneTasks };
 
-  // Границы дней/недель в локальной TZ сервера. Supabase Vercel-функция работает в UTC,
-  // но мы используем календарные сравнения: «сегодня» = тот же YYYY-MM-DD что и now.
-  // Это упрощение OK: пользователи в KZ/KG, у них одна TZ, и фронт всё равно отображает
-  // относительные подписи («Сегодня», «Завтра»), а не точное время.
+  // v452 fix: ВСЕ календарные сравнения — в Asia/Almaty TZ (или APP_TZ из env).
+  // Иначе пользователь в Алматы в 02:00 локального времени видит задачи на «сегодня»
+  // как «вчерашние/просроченные» из-за UTC-смещения сервера.
   const now = new Date();
-  const todayStr = ymd(now);
-  const tomorrowStr = ymd(addDays(now, 1));
-  const endOfWeekStr = ymd(endOfWeek(now));       // воскресенье текущей недели
-  const endOfNextWeekStr = ymd(endOfWeek(addDays(now, 7)));
-  const endOfMonthStr = ymd(endOfMonth(now));
+  const todayStr = ymdInTz(now);
+  const tomorrowStr = ymdInTz(addDays(now, 1));
+  const endOfWeekStr = ymdInTz(endOfWeek(now));       // воскресенье текущей недели
+  const endOfNextWeekStr = ymdInTz(endOfWeek(addDays(now, 7)));
+  const endOfMonthStr = ymdInTz(endOfMonth(now));
 
   for (const t of openTasks) {
-    const dStr = (t.deadline_at || '').slice(0, 10);
+    // deadline_at — TIMESTAMPTZ из БД. new Date() парсит UTC, а затем ymdInTz
+    // даёт календарную дату пользователя.
+    const dStr = t.deadline_at ? ymdInTz(new Date(t.deadline_at)) : null;
     if (!dStr) { buckets.future.push(t); continue; }
 
     if (dStr < todayStr) buckets.expire.push(t);
@@ -286,13 +292,13 @@ async function readBody(req) {
   });
 }
 
-// Форматирование YYYY-MM-DD в локальной TZ сервера (UTC на Vercel).
-// Согласовано в spec'е §4.2 «Бакеты для канбана» — сравнения по календарной дате.
-function ymd(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+// v452 fix: форматирование YYYY-MM-DD в TZ приложения (Asia/Almaty по умолчанию).
+// 'en-CA' locale возвращает ISO-формат (YYYY-MM-DD). Без указания timeZone использовался бы UTC.
+function ymdInTz(d) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(d);
 }
 
 function addDays(date, n) {
@@ -336,9 +342,11 @@ function computeMoveDeadline(target, currentDeadlineIso) {
     const daysToNextMonday = dow === 0 ? 1 : (8 - dow);
     target_date.setDate(target_date.getDate() + daysToNextMonday);
   } else if (target === 'next_month') {
-    // 1 число следующего месяца, 09:00 (spec §8 п.6).
-    target_date = new Date(now.getFullYear(), now.getMonth() + 1, 1, 9, 0, 0, 0);
-    return target_date.toISOString();
+    // v452 fix: 1 число следующего месяца, 09:00 в TZ приложения (а не в UTC сервера!).
+    // Конструируем ISO-строку с явным offset, чтобы Vercel в UTC не сдвигал на +5 часов.
+    let y = now.getFullYear(), m = now.getMonth() + 1;
+    if (m > 11) { y++; m = 0; }
+    return `${y}-${String(m + 1).padStart(2, '0')}-01T09:00:00${APP_TZ_OFFSET}`;
   }
 
   target_date.setHours(h, m, s, 0);

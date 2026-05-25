@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v452</title>
+<title>SalesDoc — Финансовый Дашборд v453</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4737,6 +4737,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 .ct-btn-primary { padding:7px 18px; border:none; border-radius:6px; background:#475569; color:#fff; font-size:12px; font-weight:500; cursor:pointer; transition:background .15s; font-family:inherit; }
 .ct-btn-primary.is-active { background:#2563eb; }
 .ct-btn-primary.is-active:hover { background:#1d4ed8; }
+.ct-btn-primary:disabled { cursor:not-allowed; opacity:.65; }
 .ct-btn-cancel { background:transparent; border:none; color:#9ca3af; font-size:12px; cursor:pointer; padding:7px 10px; font-family:inherit; }
 .ct-btn-cancel:hover { color:#e5e7eb; }
 
@@ -31158,7 +31159,7 @@ function crmTasksFormHtml(){
  h += '<textarea id="ct-form-text" placeholder="Введите описание задачи..." rows="2">'+ctEsc(s.text)+'</textarea>';
  h += '<div class="ct-form-actions">';
  h += ' <div>';
- h += '  <button class="ct-btn-primary" id="ct-form-submit" onclick="crmTaskCreate()">Поставить</button>';
+ h += '  <button class="ct-btn-primary" id="ct-form-submit" onclick="crmTaskCreate()" disabled>Поставить</button>';
  h += '  <button class="ct-btn-cancel" onclick="crmTasksFormReset()">Отменить</button>';
  h += ' </div>';
  h += ' <div style="font-size:18px;color:#6b7280">⌨</div>';
@@ -31171,9 +31172,13 @@ function crmTasksFormBind(){
  var txt = document.getElementById('ct-form-text');
  var btn = document.getElementById('ct-form-submit');
  if(!txt || !btn) return;
+ // v452 fix: реально дизейблим кнопку при пустом тексте (раньше только класс is-active —
+ // визуально серая, но кликабельная → можно было создать пустую задачу).
  var update = function(){
   crmTasksFormState.text = txt.value;
-  if(txt.value.trim().length > 0) btn.classList.add('is-active');
+  var hasText = txt.value.trim().length > 0;
+  btn.disabled = !hasText;
+  if(hasText) btn.classList.add('is-active');
   else btn.classList.remove('is-active');
  };
  txt.oninput = update;
@@ -31446,6 +31451,9 @@ async function crmTaskCreate(){
  var s = crmTasksFormState;
  var txt = document.getElementById('ct-form-text');
  if(txt) s.text = txt.value.trim();
+ // v452 fix: страховка от случайного создания пустой задачи (кнопка должна быть disabled,
+ // но всякое бывает — например, программный вызов через DevTools).
+ if(!s.text){ alert('Введи описание задачи'); return; }
  var deadline_at, deadline_end_at = null;
  if(s.is_all_day){
   deadline_at = s.date_iso + 'T00:00:00';
@@ -31537,9 +31545,14 @@ async function crmTaskCloseSubmit(taskId){
   var card = window._kbCurrentCard;
   // Авто-рефреш страницы «Мои задачи» если она открыта (drop-to-«Завершить»)
   if(typeof _mtMaybeReload === 'function') _mtMaybeReload();
-  // Спросим — поставить ли следующую задачу (только в контексте карточки клиента)
+  // v452 fix: «Поставить следующую?» предлагаем ТОЛЬКО если юзер реально в карточке клиента
+  // и активен таб «Задачи». Иначе при drop-to-«Завершить» на странице «Мои задачи» появлялся
+  // запутывающий confirm про предыдущую открытую карточку (возможно другого клиента).
   setTimeout(function(){
-   if(card){
+   var cardView = document.getElementById('view-kb-card');
+   var taskPaneOpen = document.querySelector('.crm-tab-pane[data-pane="tasks"]:not([hidden])');
+   var inCardContext = card && cardView && cardView.style.display !== 'none' && taskPaneOpen;
+   if(inCardContext){
     var next = confirm('Задача закрыта. Поставить следующую задачу этому клиенту?');
     crmClientTasksRender(card).then(function(){
      if(next){
@@ -31738,17 +31751,33 @@ async function mytasksLoadCustomPresets(){
 function mytasksRenderCustomPresets(){
  var box = document.getElementById('mt-custom-presets');
  if(!box) return;
+ // v452 fix: XSS — раньше имя пресета вставлялось в onclick через .replace(/'/g,"\\'"),
+ // но ctEsc уже превратил ' в &#39;, поэтому replace был no-op, а браузер декодировал
+ // &#39; обратно в ' внутри атрибута → инъекция JS. Теперь имена идут только в текстовый
+ // узел (ctEsc безопасен), id — в data-attr, обработчик — через addEventListener.
  var html = '';
  (mytasksState.customPresets || []).forEach(function(p){
   var key = 'preset_' + p.id;
   var active = mytasksState.preset === key ? ' is-active' : '';
-  var idEsc = ctEsc(p.id);
-  var nameEsc = ctEsc(p.name);
-  html += '<button class="mt-preset mt-preset-custom'+active+'" data-preset="'+key+'" onclick="mytasksSetPreset(\''+key+'\')">'+nameEsc;
-  html += '<span class="mt-preset-del" onclick="event.stopPropagation();mytasksDeletePreset(\''+idEsc+'\',\''+nameEsc.replace(/'/g,"\\'")+'\')" title="Удалить пресет">×</span>';
+  html += '<button class="mt-preset mt-preset-custom'+active+'" data-preset-id="'+ctEsc(p.id)+'" data-preset-key="'+ctEsc(key)+'">';
+  html += ctEsc(p.name);
+  html += '<span class="mt-preset-del" data-action="del" title="Удалить пресет">×</span>';
   html += '</button>';
  });
  ctRender(box, html);
+ box.querySelectorAll('button.mt-preset-custom').forEach(function(btn){
+  btn.onclick = function(ev){
+   var pid = btn.dataset.presetId;
+   var pkey = btn.dataset.presetKey;
+   if(ev.target && ev.target.dataset && ev.target.dataset.action === 'del'){
+    ev.stopPropagation();
+    var p = (mytasksState.customPresets || []).find(function(x){ return x.id === pid; });
+    mytasksDeletePreset(pid, p ? p.name : '');
+    return;
+   }
+   mytasksSetPreset(pkey);
+  };
+ });
 }
 
 // Удаление кастомного пресета (с confirm)
@@ -32233,7 +32262,10 @@ async function kbLoadTaskIndicators(){
   var d = await crmTasksFetch('/api/tasks?status=open');
   if(!d || !d.ok) return;
   var now = Date.now();
-  var todayStr = new Date(now).toISOString().slice(0,10);
+  // v452 fix: todayStr собираем из локальной даты пользователя, а не из UTC ISO.
+  // В Алматы UTC+5: в 02:00 локального .toISOString().slice(0,10) ещё вчера → today_count врёт.
+  var nowD = new Date(now);
+  var todayStr = nowD.getFullYear() + '-' + String(nowD.getMonth()+1).padStart(2,'0') + '-' + String(nowD.getDate()).padStart(2,'0');
   var map = {};
   (d.tasks || []).forEach(function(t){
    if(!t.client_id) return;
@@ -32243,7 +32275,12 @@ async function kbLoadTaskIndicators(){
    if(!dt) return;
    var ts = new Date(dt).getTime();
    if(ts < now) map[t.client_id].overdue++;
-   else if(dt.slice(0,10) === todayStr) map[t.client_id].today++;
+   else {
+    // Сравниваем дату задачи в локальной TZ юзера, не в UTC.
+    var dd = new Date(dt);
+    var dStr = dd.getFullYear() + '-' + String(dd.getMonth()+1).padStart(2,'0') + '-' + String(dd.getDate()).padStart(2,'0');
+    if(dStr === todayStr) map[t.client_id].today++;
+   }
   });
   window.kbTaskIndicators = map;
   // Перерисуем канбан, если открыт
