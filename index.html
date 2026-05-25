@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v457</title>
+<title>SalesDoc — Финансовый Дашборд v458</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4428,6 +4428,12 @@ body.light #view-ticket-card.amocard-active {
 .amocard-feed-icon.amocard-ic-note { background:var(--amocard-amber-bg); color:var(--amocard-amber); }
 .amocard-feed-icon.amocard-ic-wz { background:var(--amocard-green-bg); color:var(--amocard-green); }
 .amocard-feed-icon.amocard-ic-stage { background:var(--amocard-blue-bg); color:var(--amocard-blue); }
+/* v458: feed-item для задач */
+.amocard-feed-icon.amocard-ic-task { background:rgba(20,184,166,.16); color:#14b8a6; }
+.amocard-task-feed { background:var(--amocard-surface); border:1px solid #14b8a6; border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; box-shadow:var(--amocard-sh-1); transition:all .15s; }
+.amocard-task-feed:hover { border-color:#0f9c8b; box-shadow:0 4px 12px rgba(0,0,0,.2); }
+.amocard-task-feed.is-done { border-color:var(--amocard-border); opacity:.65; }
+.amocard-task-feed.is-done .amocard-feed-icon.amocard-ic-task { background:rgba(146,152,155,.16); color:#92989b; }
 .amocard-feed-body { flex:1; min-width:0; }
 .amocard-feed-meta { font-size:11px; color:var(--amocard-text-soft); font-weight:500; margin-bottom:3px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .amocard-feed-meta .amocard-dot { width:4px; height:4px; border-radius:50%; background:var(--amocard-text-faint); }
@@ -26179,6 +26185,12 @@ async function routeChatSend(){
    });
    if(!d || !d.ok) throw new Error(d && d.error || 'task POST failed');
    if(typeof kbShowToast === 'function') kbShowToast('Задача поставлена');
+   // v458: после создания задачи синкаем в localStorage чтобы появилась в Календаре,
+   // и обновляем счётчик таба «Задачи» в карточке если открыт.
+   if(typeof crmCalSyncTasksToLocal === 'function') crmCalSyncTasksToLocal();
+   if(typeof crmTasksUpdateCount === 'function' && _routeCurrentCard && _routeCurrentCard.client_id){
+    crmTasksUpdateCount(_routeCurrentCard.client_id);
+   }
   } else {
    // v444: для синтетической карты (активированный клиент без карточки Внедрения)
    // card_id содержит client:SD-KZ-... — не UUID, бэк не принимает. Шлём только client_id.
@@ -27029,14 +27041,35 @@ async function _routeRenderFeed(){
   var reqs = [sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50')];
   if(_routeCurrentCard.client_id){
    reqs.push(sbFetch('/api/history?client_id=' + encodeURIComponent(_routeCurrentCard.client_id) + '&limit=50'));
+   // v458: подтягиваем задачи клиента, чтобы они тоже отрисовались в ленте
+   if(typeof crmTasksFetch === 'function'){
+    reqs.push(crmTasksFetch('/api/tasks?client_id=' + encodeURIComponent(_routeCurrentCard.client_id) + '&status=all'));
+   }
   }
   var results = await Promise.all(reqs);
   var byCard = (results[0] && results[0].items) || [];
   var byClient = (results[1] && results[1].items) || [];
-  // Склейка с дедупом по id. Сортировка по created_at desc — как и было.
+  // v458: tasksRes — третий элемент массива, если client_id был
+  var tasksRes = results[2];
+  var tasks = (tasksRes && tasksRes.ok && tasksRes.tasks) ? tasksRes.tasks : [];
+
+  // v458: конвертируем задачи в feed-items с маркером _is_task
+  var taskItems = tasks.map(function(t){
+   return {
+    id: 'task:' + t.id,
+    _is_task: true,
+    _task: t,
+    event_type: 'task',
+    created_at: t.created_at || t.deadline_at,
+    author: t.created_by,
+    text: t.text || ''
+   };
+  });
+
+  // Склейка с дедупом по id. Сортировка по created_at desc.
   var seen = {};
   var merged = [];
-  byCard.concat(byClient).forEach(function(it){
+  byCard.concat(byClient).concat(taskItems).forEach(function(it){
    if(!it || !it.id || seen[it.id]) return;
    seen[it.id] = 1;
    merged.push(it);
@@ -27044,20 +27077,24 @@ async function _routeRenderFeed(){
   merged.sort(function(a, b){
    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
-  var items = merged.slice(0, 50);
+  var items = merged.slice(0, 80); // v458: чуть больше лимит, т.к. задачи добавились
   if(!items.length){
    var empty = document.createElement('div');
    empty.className = 'amocard-empty';
-   empty.textContent = 'Событий пока нет. Напишите первую заметку внизу.';
+   empty.textContent = 'Событий пока нет. Напишите первую заметку или поставьте задачу внизу.';
    feedEl.appendChild(empty);
    return;
   }
   items.forEach(function(n){
+   // v458: задача из /api/tasks — отдельный билдер
+   if(n._is_task){
+    feedEl.appendChild(_buildFeedTask(n._task));
+    return;
+   }
    var et = (n.event_type || 'note').toLowerCase();
    var isStage = et === 'stage_change';
    var isWZ = et === 'whatsapp';
    // v416: запись о созданном тикете распознаём по префиксу 'ticket:' в attachment_url.
-   // Рисуем особым блоком и делаем кликабельной — клик открывает сам тикет.
    var isTicket = (n.attachment_url || '').indexOf('ticket:') === 0;
    if(isTicket){
     feedEl.appendChild(_buildFeedTicket(n));
@@ -27075,6 +27112,68 @@ async function _routeRenderFeed(){
   err.textContent = 'Не удалось загрузить ленту: ' + e.message;
   feedEl.appendChild(err);
  }
+}
+
+// v458: feed-item для задачи. Открытая = бирюзовый аватар ⊙, закрытая = серый ✓.
+// Клик по карточке открывает модалку редактирования (crmTaskEditStart).
+function _buildFeedTask(t){
+ var item = document.createElement('div');
+ item.className = 'amocard-task-feed' + (t.status === 'done' ? ' is-done' : '');
+ item.style.cursor = 'pointer';
+ item.title = t.status === 'done' ? 'Закрытая задача' : 'Открыть задачу';
+ item.onclick = function(){
+  if(typeof crmTaskEditStart === 'function') crmTaskEditStart(t.id);
+ };
+ var ic = document.createElement('div'); ic.className = 'amocard-feed-icon amocard-ic-task';
+ ic.textContent = t.status === 'done' ? '✓' : '⊙';
+ item.appendChild(ic);
+ var body = document.createElement('div'); body.className = 'amocard-feed-body';
+ // Meta: type + deadline + assignee + author
+ var meta = document.createElement('div'); meta.className = 'amocard-feed-meta';
+ var typeName = 'Задача';
+ var typeColor = '#c5cad1';
+ if(typeof crmTasksTypeById === 'function'){
+  var ty = crmTasksTypeById(t.type_id);
+  if(ty){ typeName = ty.name; typeColor = ty.color || '#c5cad1'; }
+ }
+ var typeSpan = document.createElement('span');
+ typeSpan.style.color = typeColor; typeSpan.style.fontWeight = '600';
+ typeSpan.textContent = (t.status === 'done' ? '✓ ' : '⊙ ') + typeName;
+ meta.appendChild(typeSpan);
+ if(t.deadline_at){
+  var dlSep = document.createElement('span'); dlSep.className = 'amocard-dot'; meta.appendChild(dlSep);
+  var dl = document.createElement('span');
+  dl.textContent = (typeof crmTasksFmtDeadline === 'function') ? crmTasksFmtDeadline(t) : t.deadline_at;
+  if(typeof crmTasksIsOverdue === 'function' && crmTasksIsOverdue(t)) dl.style.color = '#f37575';
+  meta.appendChild(dl);
+ }
+ if(t.assignee_operator){
+  var sep2 = document.createElement('span'); sep2.className = 'amocard-dot'; meta.appendChild(sep2);
+  var ass = document.createElement('span'); ass.textContent = 'для ' + t.assignee_operator; meta.appendChild(ass);
+ }
+ if(t.created_by && t.created_by !== t.assignee_operator){
+  var sep3 = document.createElement('span'); sep3.className = 'amocard-dot'; meta.appendChild(sep3);
+  var auth = document.createElement('span'); auth.className = 'amocard-who'; auth.textContent = 'от ' + t.created_by; meta.appendChild(auth);
+ }
+ body.appendChild(meta);
+ // Текст задачи
+ if(t.text){
+  var text = document.createElement('div'); text.className = 'amocard-feed-text';
+  if(t.status === 'done') text.style.textDecoration = 'line-through';
+  text.textContent = t.text;
+  body.appendChild(text);
+ }
+ // Результат (для закрытых)
+ if(t.result){
+  var res = document.createElement('div');
+  res.style.fontSize = '11px'; res.style.color = '#9ca3af';
+  res.style.marginTop = '4px'; res.style.paddingTop = '4px';
+  res.style.borderTop = '0.5px solid rgba(255,255,255,.05)';
+  res.textContent = 'Результат: ' + t.result;
+  body.appendChild(res);
+ }
+ item.appendChild(body);
+ return item;
 }
 
 function _fmtFeedDate(iso){
@@ -28874,8 +28973,68 @@ window.crmCalNavWeek = function(delta){
 function crmCalSetList(key){ crmCalState.list = key; crmCalRender(); }
 function crmCalSetOperator(name){ crmCalState.operator = crmCalState.operator === name ? null : name; crmCalRender(); }
 function crmCalSelect(id){ crmCalState.selectedId = id; crmCalRenderRight(); }
+// v458: синк задач из Supabase /api/tasks в localStorage crm_events.
+// При каждом открытии Календаря выкидываем старые синхронизированные записи
+// (помеченные _sync_task=true) и загружаем актуальные. Это позволяет существующему
+// календарному UI (без переписывания на async) показывать задачи рядом с обычными
+// событиями. Поля event-а собираются из task-а на лету.
+async function crmCalSyncTasksToLocal(){
+ if(typeof crmTasksFetch !== 'function') return;
+ try {
+  var d = await crmTasksFetch('/api/tasks?status=open');
+  if(!d || !d.ok) return;
+  var existing = crmEventsAll();
+  // Сначала выкидываем все старые task-синки чтобы при удалении задачи в БД она исчезла и из календаря
+  existing = existing.filter(function(e){ return !e._sync_task; });
+  // Маппинг типа задачи (task_types.id) → тип события календаря
+  // (training/meeting/deadline/other — то что понимает старый календарь)
+  var typeMap = {
+   1:'other',     // Связаться
+   2:'meeting',   // Встреча
+   3:'training',  // Вебинар
+   4:'deadline',  // Оплата
+   5:'other',     // Написать
+   6:'other',     // Перезвонить
+   13:'training', // Обучение Команды
+   14:'training', // Обучение клиента
+   15:'deadline', // срок интеграции
+   17:'deadline'  // Горит
+   // default: 'other'
+  };
+  (d.tasks || []).forEach(function(t){
+   if(!t.deadline_at) return;
+   var ds = t.deadline_at.slice(0,10);
+   var ts = t.is_all_day ? '' : (t.deadline_at.length >= 16 ? t.deadline_at.slice(11,16) : '');
+   var te = (t.deadline_end_at && !t.is_all_day) ? t.deadline_end_at.slice(11,16) : '';
+   existing.push({
+    id: 'task_' + t.id,             // префиксуем чтоб не путать с native crm_event-ами
+    _sync_task: true,                // маркер для следующей чистки
+    _task_id: t.id,                  // обратная ссылка на API-задачу
+    title: t.text || (t.contact_name || 'Задача'),
+    date: ds,
+    time_start: ts,
+    time_end: te,
+    type: typeMap[t.type_id] || 'other',
+    priority: 4,
+    client: t.contact_name || t.client_id || '',
+    operator: t.assignee_operator || '',
+    location: '',
+    notes: 'Задача из модуля Tasks (client_id: ' + (t.client_id||'—') + ')',
+    status: t.status === 'done' ? 'done' : 'planned',
+    created_at: t.created_at,
+    created_by: t.created_by
+   });
+  });
+  crmEventsSaveAll(existing);
+ } catch(e){ console.warn('[cal] task sync failed:', e); }
+}
+
 function crmCalendarInit(){
  crmCalState.selectedId = null;
+ // v458: подтягиваем задачи перед рендером (асинхронно — рендер сразу перерисует после загрузки)
+ if(typeof crmCalSyncTasksToLocal === 'function'){
+  crmCalSyncTasksToLocal().then(function(){ if(typeof crmCalRender === 'function') crmCalRender(); });
+ }
  // v336: автофильтр по текущему пользователю — каждый видит свои задачи по умолчанию
  if(!crmCalState._userInited){
  var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
@@ -32146,6 +32305,21 @@ var mytasksState = {
 function _mtMaybeReload(){
  var mt = document.getElementById('view-mytasks');
  if(mt && mt.style.display !== 'none' && typeof mytasksLoad === 'function') mytasksLoad();
+ // v458: синкаем задачи в localStorage crm_events чтобы они подхватились в Календаре
+ // (асинхронно, без блокировки). Если календарь сейчас открыт — он перерисуется тоже.
+ if(typeof crmCalSyncTasksToLocal === 'function'){
+  crmCalSyncTasksToLocal().then(function(){
+   var calView = document.getElementById('view-calendar');
+   if(calView && calView.style.display !== 'none' && typeof crmCalRender === 'function'){
+    try { crmCalRender(); } catch(_){}
+   }
+  });
+ }
+ // Лента в route-карточке — если открыта, перерисуем
+ var cardView = document.getElementById('view-kb-card');
+ if(cardView && cardView.style.display !== 'none' && _routeCurrentTab === 'amo' && typeof _routeRenderFeed === 'function'){
+  try { _routeRenderFeed(); } catch(_){}
+ }
 }
 
 function mytasksHasActiveFilter(){
