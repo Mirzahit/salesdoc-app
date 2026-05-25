@@ -4857,6 +4857,27 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 
 .mt-loading { padding:40px; text-align:center; color:#6b7280; font-size:13px; grid-column:1/-1; }
 .mt-empty { padding:24px 14px; text-align:center; color:#6b7280; font-size:12px; }
+
+/* v452: индикатор задач в карточке kb-канбана (красный/жёлтый/серый кружок) */
+.kb-card { position:relative; }
+.kb-task-dot { position:absolute; top:8px; right:8px; width:8px; height:8px; border-radius:50%; box-shadow:0 0 0 1.5px rgba(11,18,32,.9); pointer-events:auto; cursor:help; }
+
+/* Кастомные пресеты — с возможностью удаления (× появляется при hover) */
+.mt-preset-custom { position:relative; padding-right:24px !important; }
+.mt-preset-custom .mt-preset-del { position:absolute; right:6px; top:50%; transform:translateY(-50%); width:14px; height:14px; line-height:13px; text-align:center; border-radius:50%; background:rgba(243,117,117,.15); color:#f37575; font-size:11px; cursor:pointer; opacity:0; transition:opacity .15s; }
+.mt-preset-custom:hover .mt-preset-del { opacity:1; }
+.mt-preset-custom .mt-preset-del:hover { background:#f37575; color:#fff; }
+
+/* Кнопка «Фильтр» — точка при активном фильтре */
+#mt-filter-btn.has-active::after { content:''; display:inline-block; width:6px; height:6px; background:#2563eb; border-radius:50%; margin-left:6px; vertical-align:middle; }
+
+/* Чекбоксы в filter modal — компактная сетка */
+.mt-filter-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:6px 12px; margin-bottom:6px; }
+.mt-filter-check { display:flex; align-items:center; gap:6px; font-size:12px; color:#e5e7eb; cursor:pointer; padding:4px 6px; border-radius:4px; }
+.mt-filter-check:hover { background:rgba(255,255,255,.04); }
+.mt-filter-check input { width:auto; cursor:pointer; }
+.mt-filter-section { margin-bottom:16px; }
+.mt-filter-section-title { font-size:11px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px; }
 </style>
 </head>
 <body>
@@ -6850,9 +6871,12 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
      <button class="mt-preset" data-preset="all" onclick="mytasksSetPreset('all')">Все</button>
      <button class="mt-preset" data-preset="failed" onclick="mytasksSetPreset('failed')">Просрочены</button>
      <button class="mt-preset" data-preset="compl" onclick="mytasksSetPreset('compl')">Выполненные</button>
+     <!-- v452: контейнер для кастомных пресетов юзера (загружаются из /api/tasks-presets) -->
+     <span id="mt-custom-presets"></span>
     </div>
    </div>
    <div class="mt-topbar-right">
+    <button class="mt-btn-secondary" onclick="mytasksFilterModalOpen()" id="mt-filter-btn" title="Фильтр">⚙ Фильтр</button>
     <button class="mt-btn-secondary" onclick="mytasksRefresh()" title="Обновить">↻</button>
     <button class="mt-btn-primary" onclick="mytasksNewTaskStart()">+ Задача</button>
    </div>
@@ -12234,7 +12258,10 @@ if(v==='integrations' && typeof intgSbLoad === 'function'){ try { intgSbLoad(); 
  if(v==='statistics') statInit();
  if(v==='academy') acadLoad();
  if(v==='reports') reportsInit();
- if(v==='kanban'){if(!window._kbLoaded){kbLoad();window._kbLoaded=true;}else{kbRenderBoard();}}
+ if(v==='kanban'){if(!window._kbLoaded){kbLoad();window._kbLoaded=true;}else{kbRenderBoard();}
+ // v452: подгрузить индикаторы задач (красная/жёлтая/серая точка) — асинхронно, перерендер сам.
+ if(typeof kbLoadTaskIndicators === 'function'){ try { kbLoadTaskIndicators(); } catch(_){} }
+ }
  if(v==='route'){ routeLoad(); }
  if(v==='botadmin'){ if(typeof botAdminInit==='function') botAdminInit(); }
  if(v==='morning'){ if(typeof morningInit==='function') morningInit(); }
@@ -30421,6 +30448,9 @@ function kbCreateCardEl(card) {
  // v278: маленький чекбокс в левом верхнем углу карточки для bulk-выбора
  var checked = window._kbSelected && _kbSelected.has(card.id);
  html += '<div class="kb-card-check'+(checked?' on':'')+'" onclick="event.stopPropagation();kbToggleSelect(\''+card.id+'\')"></div>';
+ // v452: индикатор статуса задач (красная/жёлтая/серая точка). Тихо ничего не выводит,
+ // если у клиента есть открытые задачи но не сегодня и не просрочены.
+ if(typeof kbTaskIndicatorHtml === 'function') html += kbTaskIndicatorHtml(card.client_id);
  if(hasNext) html += '<button class="kb-next-btn" onclick="event.stopPropagation();kbNextStage(\''+card.id+'\')">' + kbColumns[curIdx+1] + ' &#8250;</button>';
  html += '<div class="kb-client">' + card.client + '</div>';
  html += '<div class="kb-meta">';
@@ -31505,10 +31535,12 @@ async function crmTaskCloseSubmit(taskId){
   var bg = document.querySelector('.ct-modal-bg'); if(bg) bg.remove();
   if(typeof kbShowToast === 'function') kbShowToast('Задача закрыта');
   var card = window._kbCurrentCard;
-  // Спросим — поставить ли следующую задачу
+  // Авто-рефреш страницы «Мои задачи» если она открыта (drop-to-«Завершить»)
+  if(typeof _mtMaybeReload === 'function') _mtMaybeReload();
+  // Спросим — поставить ли следующую задачу (только в контексте карточки клиента)
   setTimeout(function(){
-   var next = confirm('Задача закрыта. Поставить следующую задачу этому клиенту?');
    if(card){
+    var next = confirm('Задача закрыта. Поставить следующую задачу этому клиенту?');
     crmClientTasksRender(card).then(function(){
      if(next){
       var txt2 = document.getElementById('ct-form-text');
@@ -31534,6 +31566,7 @@ async function crmTaskDelete(taskId){
   if(typeof kbShowToast === 'function') kbShowToast('Задача удалена');
   var card = window._kbCurrentCard;
   if(card) crmClientTasksRender(card);
+  if(typeof _mtMaybeReload === 'function') _mtMaybeReload();
  } catch(e){ alert('Ошибка сети: ' + (e.message || e)); }
 }
 
@@ -31629,6 +31662,7 @@ async function crmTaskEditSubmit(taskId){
   if(typeof kbShowToast === 'function') kbShowToast('Задача обновлена');
   var card = window._kbCurrentCard;
   if(card) crmClientTasksRender(card);
+  if(typeof _mtMaybeReload === 'function') _mtMaybeReload();
  } catch(e){ alert('Ошибка сети: ' + (e.message || e)); }
 }
 // === конец v452 модуля «Задачи» (таб карточки клиента) ===
@@ -31639,11 +31673,30 @@ async function crmTaskEditSubmit(taskId){
 // ============================================================================
 
 var mytasksState = {
- preset: 'my',         // 'my' | 'all' | 'failed' | 'compl'
+ preset: 'my',         // 'my' | 'all' | 'failed' | 'compl' | 'preset_<UUID>'
  assignee: null,       // имя оператора для preset='my' (заполняется из currentUser)
  buckets: null,        // последний загруженный ответ /api/tasks?kanban=1
+ customPresets: [],    // загруженные пресеты юзера из task_presets
+ filter: {             // активные фильтры (применяются на клиенте поверх загруженного канбана)
+  type_ids: [],        // [1, 4, 17] — массив id типов; пусто = все
+  assignees: [],       // ['Айдос','Самат'] — массив имён; пусто = все
+  date_from: null,     // YYYY-MM-DD; null = без нижней границы
+  date_to: null        // YYYY-MM-DD; null = без верхней границы
+ },
  _dragTaskId: null     // id перетаскиваемой задачи
 };
+
+// Универсальный авто-рефреш «Моих задач» после любого изменения task в API.
+// Вызывается из close/delete/edit/create — не делает ничего, если страница не открыта.
+function _mtMaybeReload(){
+ var mt = document.getElementById('view-mytasks');
+ if(mt && mt.style.display !== 'none' && typeof mytasksLoad === 'function') mytasksLoad();
+}
+
+function mytasksHasActiveFilter(){
+ var f = mytasksState.filter;
+ return (f.type_ids.length || f.assignees.length || f.date_from || f.date_to);
+}
 
 // Конфиг колонок (точные цвета из spec §3 «Дизайн-токены»)
 var MT_COLUMNS = [
@@ -31665,8 +31718,51 @@ function mytasksInit(){
  } else {
   mytasksState.assignee = (typeof kbOperators !== 'undefined' && kbOperators[0]) || null;
  }
- // Прогрузим типы задач (нужны для рендера карточек)
- crmTasksLoadTypes().then(function(){ mytasksLoad(); });
+ // Прогрузим типы задач (нужны для рендера карточек) + кастомные пресеты юзера
+ crmTasksLoadTypes().then(function(){
+  mytasksLoadCustomPresets().then(function(){ mytasksLoad(); });
+ });
+}
+
+// Загрузка кастомных пресетов текущего юзера + рендер их как кнопок в топ-баре.
+async function mytasksLoadCustomPresets(){
+ var owner = mytasksState.assignee;
+ if(!owner){ return; }
+ try {
+  var d = await crmTasksFetch('/api/tasks-presets?owner=' + encodeURIComponent(owner));
+  if(d && d.ok) mytasksState.customPresets = d.presets || [];
+ } catch(e){ /* silent — кастомные пресеты не критичны */ }
+ mytasksRenderCustomPresets();
+}
+
+function mytasksRenderCustomPresets(){
+ var box = document.getElementById('mt-custom-presets');
+ if(!box) return;
+ var html = '';
+ (mytasksState.customPresets || []).forEach(function(p){
+  var key = 'preset_' + p.id;
+  var active = mytasksState.preset === key ? ' is-active' : '';
+  var idEsc = ctEsc(p.id);
+  var nameEsc = ctEsc(p.name);
+  html += '<button class="mt-preset mt-preset-custom'+active+'" data-preset="'+key+'" onclick="mytasksSetPreset(\''+key+'\')">'+nameEsc;
+  html += '<span class="mt-preset-del" onclick="event.stopPropagation();mytasksDeletePreset(\''+idEsc+'\',\''+nameEsc.replace(/'/g,"\\'")+'\')" title="Удалить пресет">×</span>';
+  html += '</button>';
+ });
+ ctRender(box, html);
+}
+
+// Удаление кастомного пресета (с confirm)
+async function mytasksDeletePreset(presetId, name){
+ if(!confirm('Удалить пресет «' + name + '»?')) return;
+ try {
+  var d = await crmTasksFetch('/api/tasks-presets?id=' + encodeURIComponent(presetId), { method:'DELETE' });
+  if(!d || !d.ok){ alert('Не удалось удалить: ' + (d && d.error || 'неизв.')); return; }
+  if(typeof kbShowToast === 'function') kbShowToast('Пресет удалён');
+  // Если активный пресет был этот — переключимся на «Мои»
+  if(mytasksState.preset === 'preset_' + presetId) mytasksState.preset = 'my';
+  await mytasksLoadCustomPresets();
+  mytasksLoad();
+ } catch(e){ alert('Ошибка сети: ' + (e.message || e)); }
 }
 
 function mytasksSetPreset(p){
@@ -31674,7 +31770,21 @@ function mytasksSetPreset(p){
  document.querySelectorAll('#mt-presets .mt-preset').forEach(function(b){
   b.classList.toggle('is-active', b.dataset.preset === p);
  });
+ // Если выбрали кастомный пресет — применяем его сохранённый filter
+ if(p && p.indexOf('preset_') === 0){
+  var id = p.slice('preset_'.length);
+  var found = (mytasksState.customPresets || []).find(function(x){ return x.id === id; });
+  if(found && found.filter){
+   mytasksState.filter = Object.assign({type_ids:[],assignees:[],date_from:null,date_to:null}, found.filter);
+  }
+ }
+ mytasksUpdateFilterBtnIndicator();
  mytasksLoad();
+}
+
+function mytasksUpdateFilterBtnIndicator(){
+ var btn = document.getElementById('mt-filter-btn');
+ if(btn) btn.classList.toggle('has-active', mytasksHasActiveFilter());
 }
 
 function mytasksRefresh(){ mytasksLoad(); }
@@ -31707,13 +31817,15 @@ function mytasksRender(){
  var kanban = document.getElementById('mt-kanban');
  if(!kanban) return;
  var preset = mytasksState.preset;
- var buckets = mytasksState.buckets || {};
+ var buckets = mytasksApplyFilter(mytasksState.buckets || {});
 
- var visible = MT_COLUMNS.filter(function(c){ return c.presets.indexOf(preset) >= 0; });
+ // Кастомные пресеты показывают «все» колонки (как preset='all').
+ var presetForColumns = (preset && preset.indexOf('preset_') === 0) ? 'all' : preset;
+ var visible = MT_COLUMNS.filter(function(c){ return c.presets.indexOf(presetForColumns) >= 0; });
  // Класс для grid layout: для 'all' — широкая раскладка, для 'compl' — одна колонка
  var cls = 'mt-kanban';
- if(preset === 'all') cls += ' is-all';
- if(preset === 'compl') cls += ' is-compl';
+ if(presetForColumns === 'all') cls += ' is-all';
+ if(presetForColumns === 'compl') cls += ' is-compl';
  kanban.className = cls;
 
  var html = '';
@@ -31741,6 +31853,134 @@ function mytasksPluralize(n, one, few, many){
  if(mod10 === 1) return one;
  if(mod10 >= 2 && mod10 <= 4) return few;
  return many;
+}
+
+// Применяет mytasksState.filter к загруженным buckets — фильтрация на клиенте.
+// Возвращает новый объект buckets с отфильтрованными массивами.
+function mytasksApplyFilter(buckets){
+ var f = mytasksState.filter;
+ if(!mytasksHasActiveFilter()) return buckets;
+ var out = {};
+ var fromMs = f.date_from ? new Date(f.date_from + 'T00:00:00').getTime() : null;
+ var toMs = f.date_to ? new Date(f.date_to + 'T23:59:59').getTime() : null;
+ Object.keys(buckets).forEach(function(k){
+  out[k] = (buckets[k] || []).filter(function(t){
+   if(f.type_ids.length && f.type_ids.indexOf(t.type_id) < 0) return false;
+   if(f.assignees.length && f.assignees.indexOf(t.assignee_operator) < 0) return false;
+   if(fromMs !== null || toMs !== null){
+    var dt = t.deadline_at ? new Date(t.deadline_at).getTime() : 0;
+    if(fromMs !== null && dt < fromMs) return false;
+    if(toMs !== null && dt > toMs) return false;
+   }
+   return true;
+  });
+ });
+ return out;
+}
+
+// ============================================================================
+// Filter modal — UI для редактирования mytasksState.filter
+// ============================================================================
+async function mytasksFilterModalOpen(){
+ await crmTasksLoadTypes();
+ var types = crmTasksTypesCache || [];
+ var ops = (typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators.slice() : ['Айдос','Акбар','Самат'];
+ var f = mytasksState.filter;
+
+ var typeBoxes = types.map(function(t){
+  var checked = f.type_ids.indexOf(t.id) >= 0 ? ' checked' : '';
+  return '<label class="mt-filter-check"><input type="checkbox" data-type-id="'+t.id+'"'+checked+'><span style="color:'+ctEsc(t.color)+'">●</span> '+ctEsc(t.name)+'</label>';
+ }).join('');
+ var opBoxes = ops.map(function(op){
+  var checked = f.assignees.indexOf(op) >= 0 ? ' checked' : '';
+  return '<label class="mt-filter-check"><input type="checkbox" data-assignee="'+ctEsc(op)+'"'+checked+'> '+ctEsc(op)+'</label>';
+ }).join('');
+
+ var bg = document.createElement('div');
+ bg.className = 'ct-modal-bg';
+ bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
+ var inner = '<div class="ct-modal" onclick="event.stopPropagation()" style="max-width:680px">' +
+  '<div class="ct-modal-title">Фильтр задач</div>' +
+  '<div class="mt-filter-section">' +
+   '<div class="mt-filter-section-title">Тип задачи</div>' +
+   '<div class="mt-filter-grid" id="mt-filter-types">'+typeBoxes+'</div>' +
+  '</div>' +
+  '<div class="mt-filter-section">' +
+   '<div class="mt-filter-section-title">Ответственный</div>' +
+   '<div class="mt-filter-grid" id="mt-filter-assignees">'+opBoxes+'</div>' +
+  '</div>' +
+  '<div class="mt-filter-section">' +
+   '<div class="mt-filter-section-title">Дедлайн в диапазоне</div>' +
+   '<div class="ct-modal-row">' +
+    '<div class="ct-modal-field"><label class="ct-modal-label">С</label><input type="date" id="mt-filter-from" value="'+ctEsc(f.date_from||'')+'"></div>' +
+    '<div class="ct-modal-field"><label class="ct-modal-label">По</label><input type="date" id="mt-filter-to" value="'+ctEsc(f.date_to||'')+'"></div>' +
+   '</div>' +
+  '</div>' +
+  '<div class="mt-filter-section" style="border-top:1px solid #1e2837;padding-top:14px">' +
+   '<div class="mt-filter-section-title">Сохранить как пресет</div>' +
+   '<div class="ct-modal-row">' +
+    '<div class="ct-modal-field" style="flex:2"><input type="text" id="mt-filter-preset-name" placeholder="Название пресета — например: «Горячие лиды Айдоса»"></div>' +
+    '<div class="ct-modal-field" style="flex:0"><button class="ct-modal-btn ct-modal-btn-secondary" onclick="mytasksFilterSavePreset()" style="white-space:nowrap">Сохранить</button></div>' +
+   '</div>' +
+  '</div>' +
+  '<div class="ct-modal-actions" style="justify-content:space-between">' +
+   '<button class="ct-modal-btn ct-modal-btn-secondary" onclick="mytasksFilterReset()">Сбросить</button>' +
+   '<div>' +
+    '<button class="ct-modal-btn ct-modal-btn-secondary" onclick="this.closest(\'.ct-modal-bg\').remove()">Отмена</button>' +
+    '<button class="ct-modal-btn ct-modal-btn-primary" onclick="mytasksFilterApply()">Применить</button>' +
+   '</div>' +
+  '</div>' +
+ '</div>';
+ bg.insertAdjacentHTML('beforeend', inner);
+ document.body.appendChild(bg);
+}
+
+// Собирает текущее состояние модалки → mytasksState.filter
+function mytasksFilterReadFromModal(){
+ var typeIds = [];
+ document.querySelectorAll('#mt-filter-types input[type=checkbox]:checked').forEach(function(c){
+  typeIds.push(parseInt(c.dataset.typeId, 10));
+ });
+ var assignees = [];
+ document.querySelectorAll('#mt-filter-assignees input[type=checkbox]:checked').forEach(function(c){
+  assignees.push(c.dataset.assignee);
+ });
+ var df = document.getElementById('mt-filter-from').value || null;
+ var dt = document.getElementById('mt-filter-to').value || null;
+ return { type_ids: typeIds, assignees: assignees, date_from: df, date_to: dt };
+}
+
+function mytasksFilterApply(){
+ mytasksState.filter = mytasksFilterReadFromModal();
+ var bg = document.querySelector('.ct-modal-bg'); if(bg) bg.remove();
+ mytasksUpdateFilterBtnIndicator();
+ mytasksRender();
+}
+
+function mytasksFilterReset(){
+ mytasksState.filter = { type_ids:[], assignees:[], date_from:null, date_to:null };
+ var bg = document.querySelector('.ct-modal-bg'); if(bg) bg.remove();
+ mytasksUpdateFilterBtnIndicator();
+ mytasksRender();
+}
+
+async function mytasksFilterSavePreset(){
+ var name = (document.getElementById('mt-filter-preset-name').value || '').trim();
+ if(!name){ alert('Введи название пресета'); return; }
+ var filter = mytasksFilterReadFromModal();
+ try {
+  var d = await crmTasksFetch('/api/tasks-presets', {
+   method:'POST', body: JSON.stringify({ name: name, filter: filter })
+  });
+  if(!d || !d.ok){ alert('Не удалось сохранить: ' + (d && d.error || 'неизв.')); return; }
+  if(typeof kbShowToast === 'function') kbShowToast('Пресет «' + name + '» сохранён');
+  // Применяем фильтр + переключаемся на новый пресет
+  mytasksState.filter = filter;
+  await mytasksLoadCustomPresets();
+  var bg = document.querySelector('.ct-modal-bg'); if(bg) bg.remove();
+  if(d.preset && d.preset.id) mytasksSetPreset('preset_' + d.preset.id);
+  else { mytasksUpdateFilterBtnIndicator(); mytasksRender(); }
+ } catch(e){ alert('Ошибка сети: ' + (e.message || e)); }
 }
 
 function mytasksCardHtml(t, colId){
@@ -31858,18 +32098,8 @@ function mytasksBindFooter(){
       });
     }
    } else if(target === 'done'){
-    // Открываем модалку закрытия (требует result ≥3 символов)
+    // Открываем модалку закрытия — она сама вызовет _mtMaybeReload() после успеха
     crmTaskCloseStart(taskId);
-    // После закрытия модалки нужно перезагрузить kanban — повесим callback через override
-    // Не идеально, но в spec'е это допускается: модалка сама вызовет render таба карточки,
-    // а на странице мытаски просто обновим через короткую паузу. Лучше — listen-event:
-    var origUpdate = window.crmTaskCloseSubmit;
-    // Делаем одноразовый перехват для рефреша канбана
-    window.crmTaskCloseSubmit = async function(tid){
-     await origUpdate(tid);
-     window.crmTaskCloseSubmit = origUpdate;
-     setTimeout(function(){ mytasksLoad(); }, 200);
-    };
    } else {
     mytasksMove(taskId, target);
    }
@@ -31984,6 +32214,66 @@ async function mytasksNewTaskSubmit(){
  } catch(e){ alert('Ошибка сети: ' + (e.message || e)); }
 }
 // === конец v452 модуля «Мои задачи» (страница-канбан) ===
+
+// ============================================================================
+// v452 — Индикаторы задач в канбане клиентов (kb-cards).
+// Карточка получает цветную точку справа сверху:
+//   красная (#f37575) — есть просроченная open-задача
+//   жёлтая (#FF9F0A) — есть open-задача с дедлайном сегодня (нет просрочек)
+//   серая (#6b7280) — открытых задач нет вообще («брошенный»)
+//   без точки — есть open-задачи, но не сегодня и не просрочены
+// Кэш в window.kbTaskIndicators: { [client_id]: { overdue:N, today:N, open:N } }
+// ============================================================================
+window.kbTaskIndicators = {};
+
+async function kbLoadTaskIndicators(){
+ // Грузим все открытые задачи одним запросом и группируем по client_id.
+ // Чтобы не ходить N раз — для канбана с ~200 карточками это один HTTP-запрос.
+ try {
+  var d = await crmTasksFetch('/api/tasks?status=open');
+  if(!d || !d.ok) return;
+  var now = Date.now();
+  var todayStr = new Date(now).toISOString().slice(0,10);
+  var map = {};
+  (d.tasks || []).forEach(function(t){
+   if(!t.client_id) return;
+   if(!map[t.client_id]) map[t.client_id] = { overdue:0, today:0, open:0 };
+   map[t.client_id].open++;
+   var dt = t.deadline_at;
+   if(!dt) return;
+   var ts = new Date(dt).getTime();
+   if(ts < now) map[t.client_id].overdue++;
+   else if(dt.slice(0,10) === todayStr) map[t.client_id].today++;
+  });
+  window.kbTaskIndicators = map;
+  // Перерисуем канбан, если открыт
+  if(document.getElementById('view-kanban') && document.getElementById('view-kanban').style.display !== 'none'
+     && typeof kbRenderBoard === 'function'){
+   try { kbRenderBoard(); } catch(_){}
+  }
+ } catch(e){ console.warn('[kb] task indicators load failed:', e); }
+}
+
+// HTML-кусок индикатора для конкретной карточки (вставляется в kbCreateCardEl).
+function kbTaskIndicatorHtml(client_id){
+ if(!client_id) return '';
+ var ind = window.kbTaskIndicators ? window.kbTaskIndicators[client_id] : null;
+ var color, title;
+ if(!ind || ind.open === 0){
+  color = '#6b7280';
+  title = 'Нет открытых задач';
+ } else if(ind.overdue > 0){
+  color = '#f37575';
+  title = 'Просрочено: ' + ind.overdue + (ind.open > ind.overdue ? ' (всего открытых: '+ind.open+')' : '');
+ } else if(ind.today > 0){
+  color = '#FF9F0A';
+  title = 'На сегодня: ' + ind.today + (ind.open > ind.today ? ' (всего: '+ind.open+')' : '');
+ } else {
+  // Есть открытые, но не сегодня и не просрочены — точку не показываем (нет срочности)
+  return '';
+ }
+ return '<div class="kb-task-dot" style="background:'+color+'" title="'+ctEsc(title)+'"></div>';
+}
 
 // v226: CRM Контакты — localStorage хранение
 // Структура: localStorage['crm_contacts'] = JSON массив объектов
