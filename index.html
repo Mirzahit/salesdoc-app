@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v459</title>
+<title>SalesDoc — Финансовый Дашборд v460</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7282,6 +7282,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
    <input id="tickets-new-title" type="text" placeholder="Например: «Не работает синхронизация»" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:13px">
    <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Описание</label>
    <textarea id="tickets-new-desc" placeholder="Подробности, шаги воспроизведения..." rows="3" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+   <!-- v460: обязательное поле «Ответственный» — нельзя создать тикет без оператора. -->
+   <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Ответственный *</label>
+   <select id="tickets-new-operator" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:13px">
+    <option value="">— выберите оператора —</option>
+   </select>
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
     <div>
      <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Срочность (через сколько ответить)</label>
@@ -24790,9 +24795,14 @@ async function ticketsLoad(){
   ticketsList = tRes.tickets || [];
   // Заполняем выпадашку операторов (один раз)
   var filt = document.getElementById('tickets-filter-op');
+  var opsList = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
   if(filt && filt.options.length <= 1){
-   var ops = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
-   ops.forEach(function(o){ var opt = document.createElement('option'); opt.value=o.name; opt.textContent=o.name; filt.appendChild(opt); });
+   opsList.forEach(function(o){ var opt = document.createElement('option'); opt.value=o.name; opt.textContent=o.name; filt.appendChild(opt); });
+  }
+  // v460: операторы в модалке нового тикета (для обязательного назначения)
+  var opNewSel = document.getElementById('tickets-new-operator');
+  if(opNewSel && opNewSel.options.length <= 1){
+   opsList.forEach(function(o){ var opt = document.createElement('option'); opt.value=o.name; opt.textContent=o.name; opNewSel.appendChild(opt); });
   }
   // Заполняем выпадашку клиентов КАЖДЫЙ раз (могут добавляться новые между загрузками)
   var newClientSel = document.getElementById('tickets-new-client');
@@ -24839,7 +24849,9 @@ function ticketsUpdateStats(){
  var todayStart = new Date(); todayStart.setHours(0,0,0,0);
  var weekAgo = new Date(Date.now() - 7*86400000);
  ticketsList.forEach(function(t){
-  if(t.sla_due_at && new Date(t.sla_due_at) < new Date() && ['new','in_progress','waiting_client','reopened'].indexOf(t.status) >= 0) overdue++;
+  // v460: тикеты в стадии «Ждём ответ от клиента» НЕ считаются просроченными —
+  // SLA приостановлен пока мы ждём ответа от клиента (не нашей вины).
+  if(t.sla_due_at && new Date(t.sla_due_at) < new Date() && ['new','in_progress','reopened'].indexOf(t.status) >= 0) overdue++;
   if(t.priority === 'critical') critical++;
   if(t.created_at && new Date(t.created_at) >= todayStart) todayCount++;
   if(t.status === 'solved' && t.solved_at && new Date(t.solved_at) >= weekAgo) solvedWeek++;
@@ -24915,6 +24927,12 @@ function ticketsRender(){
    html += '<div class="tk-card" draggable="true" ondragstart="_ticketsDragStart(event,\'' + t.id + '\')" ondragend="this.style.opacity=1" onclick="ticketsOpen(\'' + t.id + '\')">';
    html += '<div style="font-size:14px;font-weight:700;color:var(--rk-text);letter-spacing:-0.01em;line-height:1.3">' + _escHtml(t.title || '(без темы)') + '</div>';
    html += '<div style="font-size:12px;color:var(--rk-text-soft)">' + _escHtml(clientName) + '</div>';
+   // v460: для тикетов в waiting_client показываем когда перевели в ожидание
+   if(t.status === 'waiting_client' && t.waiting_started_at){
+    var ws = new Date(t.waiting_started_at);
+    var wsLabel = String(ws.getDate()).padStart(2,'0') + '.' + String(ws.getMonth()+1).padStart(2,'0') + ' ' + String(ws.getHours()).padStart(2,'0') + ':' + String(ws.getMinutes()).padStart(2,'0');
+    html += '<div style="font-size:10.5px;color:#C2410C;background:rgba(251,146,60,.10);padding:3px 7px;border-radius:5px;margin-top:4px;display:inline-block">⏸ Передано клиенту: ' + wsLabel + '</div>';
+   }
    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">';
    html += '<span style="font-size:11.5px;color:var(--rk-text-2)">' + _escHtml(t.operator || '— не назначен —') + '</span>';
    html += '<div style="display:flex;gap:4px">';
@@ -24932,6 +24950,19 @@ function ticketsRender(){
 
 function _ticketsFmtSLA(t){
  if(!t.sla_due_at || ['solved','closed'].indexOf(t.status) >= 0) return null;
+ // v460: в стадии «Ждём ответ от клиента» SLA приостановлен — показываем «ждём N дней»
+ // вместо «просрочен» (это не наша вина что клиент молчит).
+ if(t.status === 'waiting_client'){
+  if(!t.waiting_started_at) return { label:'ждём', color:'var(--rk-text-soft)', bg:'rgba(251,146,60,.18)' };
+  var waitMs = Date.now() - new Date(t.waiting_started_at).getTime();
+  var waitDays = Math.floor(waitMs / 86400000);
+  var waitHours = Math.floor((waitMs % 86400000) / 3600000);
+  var label;
+  if(waitDays > 0) label = 'ждём ' + waitDays + ' дн';
+  else if(waitHours > 0) label = 'ждём ' + waitHours + ' ч';
+  else label = 'ждём';
+  return { label: label, color:'#C2410C', bg:'rgba(251,146,60,.20)' };
+ }
  var due = new Date(t.sla_due_at);
  var diff = (due.getTime() - Date.now()) / 1000 / 60; // минут до дедлайна
  if(diff < 0) return { label:'просрочен', color:'#fff', bg:'#EF4444' };
@@ -24994,6 +25025,19 @@ function ticketsOpenNew(){
  document.getElementById('tickets-new-desc').value = '';
  document.getElementById('tickets-new-prio').value = 'normal';
  document.getElementById('tickets-new-channel').value = 'manual';
+ // v460: дефолт ответственного — текущий пользователь, если он в списке операторов
+ var opSel = document.getElementById('tickets-new-operator');
+ if(opSel){
+  opSel.value = '';
+  if(typeof _ticketsCurrentOperatorName === 'function'){
+   var me = _ticketsCurrentOperatorName();
+   if(me){
+    for(var i=0; i<opSel.options.length; i++){
+     if(opSel.options[i].value === me){ opSel.value = me; break; }
+    }
+   }
+  }
+ }
  document.getElementById('tickets-modal').style.display = 'flex';
 }
 function ticketsCloseNew(){
@@ -25006,8 +25050,11 @@ async function ticketsCreate(){
  var description = document.getElementById('tickets-new-desc').value.trim();
  var priority = document.getElementById('tickets-new-prio').value;
  var channel = document.getElementById('tickets-new-channel').value;
+ // v460: обязательный ответственный — нельзя создать тикет в воздух
+ var operator = (document.getElementById('tickets-new-operator')||{}).value || '';
  if(!client_id){ alert('Выберите клиента'); return; }
  if(!title){ alert('Опишите тему обращения'); return; }
+ if(!operator){ alert('Выберите ответственного оператора'); return; }
  try {
   var d = await sbFetch('/api/cards?entity=ticket', {
    method:'POST',
@@ -25017,6 +25064,7 @@ async function ticketsCreate(){
     description: description || null,
     priority: priority,
     channel: channel,
+    operator: operator,  // v460: передаём ответственного
     country: window.currentCountry || 'KZ'
    })
   });

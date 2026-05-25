@@ -454,6 +454,11 @@ async function handleTicketsRoute(req, res) {
     if (body.category && !TICKET_CATEGORIES.includes(body.category)) {
       return res.status(400).json({ ok: false, error: 'category должен быть один из: ' + TICKET_CATEGORIES.join(', ') });
     }
+    // v460: для manual-создания требуем ответственного. Auto-creation из бота (channel=whatsapp/phone/email/form)
+    // может приходить без оператора — будет назначен позже вручную.
+    if (channel === 'manual' && (!body.operator || !String(body.operator).trim())) {
+      return res.status(400).json({ ok: false, error: 'operator обязателен при ручном создании тикета (нельзя создать без ответственного)' });
+    }
     if (body.operator && !TICKET_OPERATORS.includes(body.operator)) {
       return res.status(400).json({ ok: false, error: 'operator должен быть один из: ' + TICKET_OPERATORS.join(', ') });
     }
@@ -523,6 +528,39 @@ async function handleTicketsRoute(req, res) {
     }
     if (body.status === 'solved') {
       patch.solved_at = new Date().toISOString();
+    }
+
+    // v460: пауза SLA в стадии «Ждём ответ от клиента».
+    // Logic:
+    //  → moving INTO waiting_client: сохраняем момент начала ожидания
+    //  → moving OUT of waiting_client: считаем сколько ждали, пушим sla_due_at вперёд на это время,
+    //    добавляем к waiting_total_seconds, обнуляем waiting_started_at
+    if (body.status && body.status !== undefined) {
+      const cur = await sbSelect('tickets', { id: 'eq.' + id, select: 'status,sla_due_at,waiting_started_at,waiting_total_seconds' });
+      if (cur.length) {
+        const oldStatus = cur[0].status;
+        const newStatus = body.status;
+        if (newStatus === 'waiting_client' && oldStatus !== 'waiting_client') {
+          // Вход в ожидание — фиксируем момент
+          patch.waiting_started_at = new Date().toISOString();
+        } else if (oldStatus === 'waiting_client' && newStatus !== 'waiting_client') {
+          // Выход из ожидания — пушим SLA вперёд на длительность паузы
+          if (cur[0].waiting_started_at) {
+            const pauseStart = new Date(cur[0].waiting_started_at).getTime();
+            const pauseMs = Date.now() - pauseStart;
+            if (pauseMs > 0) {
+              // Пушим sla_due_at вперёд на pauseMs миллисекунд
+              if (cur[0].sla_due_at) {
+                const newDue = new Date(new Date(cur[0].sla_due_at).getTime() + pauseMs);
+                patch.sla_due_at = newDue.toISOString();
+              }
+              // Накопленный счётчик пауз
+              patch.waiting_total_seconds = (cur[0].waiting_total_seconds || 0) + Math.round(pauseMs / 1000);
+            }
+            patch.waiting_started_at = null;
+          }
+        }
+      }
     }
     // Смена приоритета пересчитывает SLA (от текущего момента).
     // v413: сравниваем со старым — внешние интеграции (бот) могут шлёт тот же priority,
