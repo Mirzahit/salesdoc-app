@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v455</title>
+<title>SalesDoc — Финансовый Дашборд v456</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4468,6 +4468,16 @@ body.light .amocard-chat-input input:focus { background:#FFFFFF; }
 .amocard-send { padding:7px 14px; border-radius:8px; background:var(--amocard-accent); color:#fff; font-size:13px; font-weight:600; transition:.15s; border:none; cursor:pointer; }
 .amocard-send:hover { background:var(--amocard-accent-deep); }
 
+/* v456: режим-табы (Заметка/Задача) внутри amocard-chat-input */
+.amocard-chat-input.has-mode { flex-direction:column; align-items:stretch; gap:8px; }
+.amocard-chat-mode { display:flex; gap:2px; }
+.amocard-chat-mode-btn { padding:6px 14px; font-size:12px; font-weight:500; color:var(--amocard-text-soft); background:transparent; border:1px solid var(--amocard-border-strong); border-radius:8px; cursor:pointer; font-family:inherit; transition:all .15s; display:flex; align-items:center; gap:5px; }
+.amocard-chat-mode-btn:hover { color:var(--amocard-text); border-color:var(--amocard-accent); }
+.amocard-chat-mode-btn.is-active { background:var(--amocard-accent-bg); border-color:var(--amocard-accent); color:var(--amocard-accent-text, var(--amocard-text)); }
+.amocard-chat-task-fields { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.amocard-chat-row { display:flex; align-items:center; gap:10px; }
+body.light .amocard-chat-mode-btn { background:#FFFFFF; }
+
 .amocard-empty { padding:40px 24px; text-align:center; color:var(--amocard-text-soft); font-size:13px; }
 
 @media (max-width:1200px) {
@@ -7307,10 +7317,24 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
     <span class="amocard-ic">&#9201;</span>
     <span>Нет запланированных задач, рекомендуем <a href="#" onclick="return false">добавить</a></span>
    </div>
-   <div class="amocard-chat-input">
-    <span class="amocard-chat-select"><b>Заметка для команды</b></span>
-    <input id="route-chat-text" type="text" placeholder="клиент это НЕ увидит — только операторы внутри SalesDoc" onkeydown="if(event.key==='Enter'){event.preventDefault();routeChatSend();}">
-    <button id="route-chat-send" class="amocard-send" onclick="routeChatSend()" title="Сохранить заметку">&rarr;</button>
+   <!-- v456: двухрежимный composer (Заметка / Задача). По умолчанию — заметка как было. -->
+   <div class="amocard-chat-input has-mode">
+    <div class="amocard-chat-row">
+     <div class="amocard-chat-mode">
+      <button class="amocard-chat-mode-btn is-active" id="route-chat-mode-note" onclick="routeChatSetMode('note')"><span>📝</span> Заметка</button>
+      <button class="amocard-chat-mode-btn" id="route-chat-mode-task" onclick="routeChatSetMode('task')"><span>✓</span> Задача</button>
+     </div>
+     <div class="amocard-chat-task-fields" id="route-chat-task-fields" style="display:none">
+      <span class="ct-chip" id="route-chat-date-chip" onclick="routeChatChipDate(this)">Сегодня ▾</span>
+      <span class="ct-chip" id="route-chat-time-chip" onclick="routeChatChipTime(this)">—</span>
+      <span class="ct-static" style="color:var(--amocard-text-soft);font-size:12px">для</span>
+      <span class="ct-chip ct-chip-link" id="route-chat-assignee-chip" onclick="routeChatChipAssignee(this)">—</span>
+     </div>
+    </div>
+    <div class="amocard-chat-row">
+     <input id="route-chat-text" type="text" placeholder="клиент это НЕ увидит — только операторы внутри SalesDoc" onkeydown="if(event.key==='Enter'){event.preventDefault();routeChatSend();}">
+     <button id="route-chat-send" class="amocard-send" onclick="routeChatSend()" title="Сохранить">&rarr;</button>
+    </div>
    </div>
   </section>
  </div>
@@ -25849,6 +25873,132 @@ function _pluralDays(n){
 
 // v380: placeholder для отправки сообщения из чат-инпута. Пока сохраняет
 // текст как заметку в card_history. Реальная отправка в WhatsApp/Wazzup — позже.
+// v456: глобальное состояние composer-а в route-card.
+// Mode 'note' → POST /api/history (как было). Mode 'task' → POST /api/tasks с чипами.
+window._routeChatMode = 'note';
+window._routeChatTaskState = null;
+
+function _routeChatInitTaskState(){
+ var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
+ var defaultAssignee = (u.name || '').toString().split(' ')[0]
+  || ((typeof kbOperators !== 'undefined' && kbOperators[0]) || 'Айдос');
+ var now = new Date();
+ now.setHours(now.getHours() + 1, 0, 0, 0);
+ window._routeChatTaskState = {
+  type_id: 1,                                 // «Связаться» по умолчанию
+  date_iso: new Date().toISOString().slice(0,10),
+  time_start: String(now.getHours()).padStart(2,'0') + ':00',
+  is_all_day: false,
+  assignee: defaultAssignee
+ };
+}
+
+function routeChatSetMode(mode){
+ if(mode !== 'note' && mode !== 'task') return;
+ window._routeChatMode = mode;
+ if(mode === 'task' && !window._routeChatTaskState) _routeChatInitTaskState();
+ // Кнопки режима
+ var noteBtn = document.getElementById('route-chat-mode-note');
+ var taskBtn = document.getElementById('route-chat-mode-task');
+ if(noteBtn) noteBtn.classList.toggle('is-active', mode === 'note');
+ if(taskBtn) taskBtn.classList.toggle('is-active', mode === 'task');
+ // Поле task-чипов
+ var fields = document.getElementById('route-chat-task-fields');
+ if(fields) fields.style.display = mode === 'task' ? 'flex' : 'none';
+ // Placeholder и подсказка кнопки
+ var input = document.getElementById('route-chat-text');
+ var sendBtn = document.getElementById('route-chat-send');
+ if(mode === 'task'){
+  if(input) input.placeholder = 'Что нужно сделать? (Enter — поставить)';
+  if(sendBtn) sendBtn.title = 'Поставить задачу';
+  // Обновим лейблы чипов под текущее состояние
+  _routeChatRefreshChips();
+ } else {
+  if(input) input.placeholder = 'клиент это НЕ увидит — только операторы внутри SalesDoc';
+  if(sendBtn) sendBtn.title = 'Сохранить заметку';
+ }
+}
+
+function _routeChatRefreshChips(){
+ if(!window._routeChatTaskState) _routeChatInitTaskState();
+ var s = window._routeChatTaskState;
+ // Дата — относительный лейбл
+ var today = new Date(); today.setHours(0,0,0,0);
+ var d = new Date(s.date_iso + 'T00:00:00');
+ var diff = Math.round((d.getTime() - today.getTime()) / 86400000);
+ var dateLabel;
+ if(diff === 0) dateLabel = 'Сегодня';
+ else if(diff === 1) dateLabel = 'Завтра';
+ else if(diff === 2) dateLabel = 'Послезавтра';
+ else {
+  var mm = String(d.getMonth()+1).padStart(2,'0');
+  dateLabel = String(d.getDate()).padStart(2,'0') + '.' + mm;
+ }
+ var dateEl = document.getElementById('route-chat-date-chip');
+ if(dateEl) dateEl.textContent = dateLabel + ' ▾';
+ var timeEl = document.getElementById('route-chat-time-chip');
+ if(timeEl) timeEl.textContent = (s.is_all_day ? 'Весь день' : s.time_start) + ' ▾';
+ var assEl = document.getElementById('route-chat-assignee-chip');
+ if(assEl) assEl.textContent = s.assignee + ' ▾';
+}
+
+// Чипы переиспользуют общий dropdown crmTasksOpenDropdown (из модуля Задачи).
+function routeChatChipDate(anchor){
+ if(!window._routeChatTaskState) _routeChatInitTaskState();
+ var today = new Date(); today.setHours(0,0,0,0);
+ var toIso = function(d){ return d.toISOString().slice(0,10); };
+ var t1 = new Date(today); t1.setDate(t1.getDate()+1);
+ var t2 = new Date(today); t2.setDate(t2.getDate()+2);
+ var t7 = new Date(today); t7.setDate(t7.getDate()+7);
+ var items = [
+  { value:toIso(today), label:'Сегодня' },
+  { value:toIso(t1), label:'Завтра' },
+  { value:toIso(t2), label:'Послезавтра' },
+  { value:toIso(t7), label:'Через неделю' }
+ ];
+ if(typeof crmTasksOpenDropdown !== 'function'){ alert('Модуль задач не загружен'); return; }
+ crmTasksOpenDropdown(anchor, items, function(v){
+  window._routeChatTaskState.date_iso = v;
+  _routeChatRefreshChips();
+ });
+}
+
+function routeChatChipTime(){
+ if(!window._routeChatTaskState) _routeChatInitTaskState();
+ var s = window._routeChatTaskState;
+ // Простая prompt-модалка для start-time (без end-time на этом уровне)
+ var v = prompt('Время задачи (HH:MM или "all" для «весь день»):', s.is_all_day ? 'all' : s.time_start);
+ if(v == null) return;
+ v = v.trim().toLowerCase();
+ if(v === 'all' || v === 'весь день'){
+  s.is_all_day = true;
+  s.time_start = '';
+ } else if(/^\d{1,2}:\d{2}$/.test(v)){
+  var parts = v.split(':');
+  var hh = parseInt(parts[0],10), mm = parseInt(parts[1],10);
+  if(hh<0||hh>23||mm<0||mm>59){ alert('Неверный формат времени'); return; }
+  s.is_all_day = false;
+  s.time_start = String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+ } else {
+  alert('Формат: HH:MM (например 14:30) или "all"');
+  return;
+ }
+ _routeChatRefreshChips();
+}
+
+function routeChatChipAssignee(anchor){
+ if(!window._routeChatTaskState) _routeChatInitTaskState();
+ var ops = (typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators.slice() : ['Айдос','Акбар','Самат'];
+ var items = ops.map(function(op){
+  return { value:op, label:op, selected: op === window._routeChatTaskState.assignee };
+ });
+ if(typeof crmTasksOpenDropdown !== 'function'){ alert('Модуль задач не загружен'); return; }
+ crmTasksOpenDropdown(anchor, items, function(v){
+  window._routeChatTaskState.assignee = v;
+  _routeChatRefreshChips();
+ });
+}
+
 async function routeChatSend(){
  var input = document.getElementById('route-chat-text');
  var btn = document.getElementById('route-chat-send');
@@ -25856,25 +26006,55 @@ async function routeChatSend(){
  var text = input.value.trim();
  if(!text) return;
  if(!_routeCurrentCard) return;
- // v388: защита от двойного клика — блокируем кнопку и поле на время запроса.
+ // v388: защита от двойного клика
  if(btn && btn.disabled) return;
  if(btn) btn.disabled = true;
  input.disabled = true;
+
+ var mode = window._routeChatMode || 'note';
+
  try {
-  // v444: для синтетической карты (активированный клиент без карточки Внедрения)
-  // card_id содержит client:SD-KZ-... — не UUID, бэк не принимает. Шлём только client_id.
-  var isSynthetic = String(_routeCurrentCard.id || '').indexOf('client:') === 0;
-  var d = await sbFetch('/api/history', {
-   method:'POST',
-   body: JSON.stringify({
-    card_id: isSynthetic ? null : _routeCurrentCard.id,
-    client_id: _routeCurrentCard.client_id,
-    event_type: 'note',
-    text: text,
-    author: 'оператор'
-   })
-  });
-  if(!d.ok) throw new Error(d.error || 'history POST failed');
+  if(mode === 'task'){
+   // v456: создание задачи через /api/tasks
+   if(!window._routeChatTaskState) _routeChatInitTaskState();
+   var s = window._routeChatTaskState;
+   var deadline_at;
+   if(s.is_all_day){
+    deadline_at = s.date_iso + 'T00:00:00';
+   } else {
+    deadline_at = s.date_iso + 'T' + (s.time_start || '09:00') + ':00';
+   }
+   var headers = (typeof crmTasksAuthHeaders === 'function') ? crmTasksAuthHeaders() : {};
+   var d = await sbFetch('/api/tasks', {
+    method:'POST',
+    headers: headers,
+    body: JSON.stringify({
+     client_id: _routeCurrentCard.client_id,
+     type_id: s.type_id,
+     text: text,
+     deadline_at: new Date(deadline_at).toISOString(),
+     is_all_day: !!s.is_all_day,
+     assignee_operator: s.assignee
+    })
+   });
+   if(!d || !d.ok) throw new Error(d && d.error || 'task POST failed');
+   if(typeof kbShowToast === 'function') kbShowToast('Задача поставлена');
+  } else {
+   // v444: для синтетической карты (активированный клиент без карточки Внедрения)
+   // card_id содержит client:SD-KZ-... — не UUID, бэк не принимает. Шлём только client_id.
+   var isSynthetic = String(_routeCurrentCard.id || '').indexOf('client:') === 0;
+   var dNote = await sbFetch('/api/history', {
+    method:'POST',
+    body: JSON.stringify({
+     card_id: isSynthetic ? null : _routeCurrentCard.id,
+     client_id: _routeCurrentCard.client_id,
+     event_type: 'note',
+     text: text,
+     author: 'оператор'
+    })
+   });
+   if(!dNote.ok) throw new Error(dNote.error || 'history POST failed');
+  }
   input.value = '';
   if(_routeCurrentTab === 'amo' && typeof _routeRenderFeed === 'function'){
    _routeRenderFeed();
