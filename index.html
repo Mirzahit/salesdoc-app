@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v450</title>
+<title>SalesDoc — Финансовый Дашборд v451</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6120,6 +6120,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </button>
  </div>
  </div>
+ <!-- v451: всегда видимая строка с реальными датами выбранного периода -->
+ <div id="meta-period-range" style="font-size:12px;color:var(--text-secondary);margin:-4px 0 14px;font-family:Inter,sans-serif"></div>
  <select id="meta-api-period" style="display:none">
  <option value="last_7d">7 дней</option>
  <option value="last_30d" selected>30 дней</option>
@@ -18132,11 +18134,37 @@ function _metaKpiSmall(id, label, value, sub){
 }
 
 // v160: смена периода через pills — обновляет select и сразу перезапрашивает данные
+// v451: пресет периода → «с DD.MM.YYYY по DD.MM.YYYY» для маркетинга.
+// Используется и таргетом, и воронкой amoCRM — показываем реальные даты сразу при клике.
+window._mktPeriodToHumanRange = function(period){
+ var today = new Date();
+ var start = null, end = today;
+ if(period === 'last_7d'){ start = new Date(today); start.setDate(today.getDate() - 7); }
+ else if(period === 'last_30d'){ start = new Date(today); start.setDate(today.getDate() - 30); }
+ else if(period === 'last_90d'){ start = new Date(today); start.setDate(today.getDate() - 90); }
+ else if(period === 'this_month'){ start = new Date(today.getFullYear(), today.getMonth(), 1); }
+ else if(period === 'last_month'){
+  start = new Date(today.getFullYear(), today.getMonth()-1, 1);
+  end = new Date(today.getFullYear(), today.getMonth(), 0);
+ }
+ if(!start) return '';
+ var fmt = function(d){
+  return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear();
+ };
+ return 'с ' + fmt(start) + ' по ' + fmt(end);
+};
+
 window.mktMetaApiSetPeriod = function(period, btn){
  var sel = document.getElementById('meta-api-period');
  if (sel) sel.value = period;
  document.querySelectorAll('.meta-period-pill').forEach(function(b){ b.classList.remove('active'); });
  if (btn) btn.classList.add('active');
+ // v451: показываем реальные даты сразу — не ждём ответа Meta API.
+ var rangeEl = document.getElementById('meta-period-range');
+ if(rangeEl){
+  var r = window._mktPeriodToHumanRange(period);
+  rangeEl.textContent = r ? 'Считаем ' + r : '';
+ }
  if (typeof mktMetaApiLoad === 'function') mktMetaApiLoad();
 };
 // v160: перерисовать таблицу кампаний при изменении фильтра active-only (без повторного запроса)
@@ -31617,6 +31645,14 @@ function kbSaveTasksToSheet(card) {
 // ============================================================
 function mktOpenTargetPage() {
  document.getElementById('view-mkt-target').style.display = 'block';
+ // v451: сразу подписать активный пилл реальными датами, чтобы поле не было пустым
+ var rangeEl = document.getElementById('meta-period-range');
+ if(rangeEl && typeof window._mktPeriodToHumanRange === 'function'){
+  var activeBtn = document.querySelector('.meta-period-pill.active');
+  var defPeriod = (activeBtn && activeBtn.dataset.period) || 'last_30d';
+  var r = window._mktPeriodToHumanRange(defPeriod);
+  rangeEl.textContent = r ? 'Считаем ' + r : '';
+ }
  // v328: автоматически грузим данные Meta API если ещё не загружены
  setTimeout(function(){
  if(typeof mktInitCharts==='function' && !window._mktInited) { mktInitCharts(); window._mktInited = true; }
@@ -31672,6 +31708,18 @@ window.amoSetPeriod = function(period){
  document.querySelectorAll('.amo-pbtn').forEach(function(b){
  b.classList.toggle('amo-pactive', b.dataset.amoP === period);
  });
+ // v451: показываем реальные даты сразу в подписи воронки, не ждём ответа amoCRM
+ var sub = document.getElementById('amo-funnel-sub');
+ if(sub){
+  var labels = { last_7d:'7 дней', last_30d:'30 дней', last_90d:'3 месяца', this_month:'этот месяц', all:'всё время' };
+  var perLabel = labels[period] || period;
+  var rangeBit = '';
+  if(typeof window._mktPeriodToHumanRange === 'function'){
+   var r = window._mktPeriodToHumanRange(period);
+   if(r) rangeBit = ' (' + r + ')';
+  }
+  sub.textContent = 'Период: ' + perLabel + rangeBit + ' · загрузка...';
+ }
  amoLoadFunnel(false);
 };
 window.amoSetTagFilter = function(tag){
@@ -31888,7 +31936,13 @@ function amoRenderFunnel(d){
  var lostBit = d.amo_lost ? ' · ' + d.amo_lost + ' закрыто как «не реализовано»' : '';
  var tagLabel = window._amoCurrentTag === 'meta_any' ? '' : window._amoCurrentTag;
  var tagBit = tagLabel ? ' · канал: ' + tagLabel : '';
- sub.textContent = 'Период: ' + perLabel + tagBit + ' · ' + flow.length + ' шагов · конверсия: ' + convPct + '%' + lostBit;
+ // v451: добавляем реальные даты «с DD.MM по DD.MM» рядом с лейблом периода
+ var rangeBit = '';
+ if(typeof window._mktPeriodToHumanRange === 'function'){
+  var r = window._mktPeriodToHumanRange(d.period || window._amoCurrentPeriod);
+  if(r) rangeBit = ' (' + r + ')';
+ }
+ sub.textContent = 'Период: ' + perLabel + rangeBit + tagBit + ' · ' + flow.length + ' шагов · конверсия: ' + convPct + '%' + lostBit;
  }
 
  // v345: ширина = % от ПЕРВОГО этапа (как в amo, воронка сужается), текст внутри = % от ПРЕДЫДУЩЕГО
