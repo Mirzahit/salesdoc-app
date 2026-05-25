@@ -15197,41 +15197,1186 @@ function _fdxBuildNextSessionCard(s){
 }
 
 // ===== Заглушки остальных вкладок (Этап 2-5) =====
-function fdxRenderGoalsPane(){
+// ===== Вкладка «Цели» =====
+async function fdxRenderGoalsPane(){
  var pane = document.getElementById('fdx-pane-goals');
  if(!pane) return;
  pane.replaceChildren();
- var box = document.createElement('div');
- box.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
- box.textContent = 'Скоро: дерево целей Год → Квартал → Месяц → Неделя с возможностью декомпозиции.';
- pane.appendChild(box);
+ var loader = document.createElement('div');
+ loader.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
+ loader.textContent = 'Загрузка целей…';
+ pane.appendChild(loader);
+
+ var d = await fdxFetch('goals');
+ if(!d){
+  loader.textContent = 'Не удалось загрузить цели.';
+  return;
+ }
+ _fdxState.goals = d.goals || [];
+ pane.replaceChildren();
+
+ // Шапка: заголовок + кнопка «+ Годовая цель»
+ var head = document.createElement('div');
+ head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap';
+ var ttl = document.createElement('div');
+ ttl.style.cssText = 'font-size:14px;font-weight:600;color:var(--text)';
+ ttl.textContent = 'Иерархия целей (страна ' + (currentCountry || 'KZ') + ')';
+ head.appendChild(ttl);
+ if(_fdxCanEdit()){
+  var btn = document.createElement('button');
+  btn.style.cssText = 'padding:8px 14px;border:none;border-radius:8px;background:var(--accent, #5489BB);color:#fff;font-size:12px;font-weight:600;cursor:pointer';
+  btn.textContent = '+ Годовая цель';
+  btn.onclick = function(){ fdxOpenGoalEditor({type:'year', parent_id:null}); };
+  head.appendChild(btn);
+ }
+ pane.appendChild(head);
+
+ // Только цели текущей страны
+ var goals = _fdxState.goals.filter(function(g){ return g.country === (currentCountry || 'KZ'); });
+ var years = goals.filter(function(g){ return g.type === 'year'; });
+
+ if(!years.length){
+  var empty = document.createElement('div');
+  empty.style.cssText = 'padding:60px 20px;text-align:center;color:var(--text-muted);font-size:13px';
+  empty.textContent = _fdxCanEdit() ? 'Цели ещё не созданы. Нажмите «+ Годовая цель».' : 'Цели ещё не созданы.';
+  pane.appendChild(empty);
+  return;
+ }
+
+ // Рекурсивно рисуем дерево
+ years.forEach(function(y){ pane.appendChild(_fdxBuildGoalNode(y, goals, 0)); });
 }
-function fdxRenderMetricsPane(){
+
+function _fdxGoalChildren(goal, all){
+ return all.filter(function(g){ return g.parent_id === goal.id; });
+}
+
+function _fdxBuildGoalNode(g, all, depth){
+ var wrap = document.createElement('div');
+ wrap.style.cssText = 'margin-left:' + (depth * 24) + 'px;margin-bottom:8px';
+ var card = document.createElement('div');
+ card.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:10px;padding:12px 14px';
+
+ var topRow = document.createElement('div');
+ topRow.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap';
+
+ var left = document.createElement('div');
+ left.style.cssText = 'flex:1;min-width:200px';
+ var lbl = document.createElement('div');
+ lbl.style.cssText = 'font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:4px';
+ var typeLabels = { year:'Год', quarter:'Квартал', month:'Месяц', week:'Неделя' };
+ lbl.textContent = typeLabels[g.type] || g.type;
+ if(g.published) lbl.textContent += ' · на табло';
+ left.appendChild(lbl);
+ var title = document.createElement('div');
+ title.style.cssText = 'font-size:14px;color:var(--text);font-weight:600;line-height:1.3';
+ title.textContent = g.title || '—';
+ left.appendChild(title);
+ var dates = document.createElement('div');
+ dates.style.cssText = 'font-size:11.5px;color:var(--text-soft);margin-top:4px';
+ dates.textContent = (g.period_start || '?') + ' → ' + (g.period_end || '?');
+ left.appendChild(dates);
+
+ var right = document.createElement('div');
+ right.style.cssText = 'text-align:right';
+ var pct = (Number(g.target)>0) ? Math.min(100, (Number(g.current)||0)*100/Number(g.target)) : 0;
+ var nums = document.createElement('div');
+ nums.style.cssText = 'font-size:18px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums';
+ nums.textContent = _fdxFmtNum(g.current) + ' / ' + _fdxFmtNum(g.target) + ' ' + (g.unit||'');
+ nums.title = 'Клик — обновить факт';
+ if(_fdxCanEdit()){ nums.style.cursor = 'pointer'; nums.onclick = function(){ fdxQuickUpdateGoalCurrent(g); }; }
+ right.appendChild(nums);
+ var pctL = document.createElement('div');
+ pctL.style.cssText = 'font-size:11.5px;color:var(--text-soft);margin-top:2px';
+ pctL.textContent = Math.round(pct) + '%';
+ right.appendChild(pctL);
+
+ topRow.appendChild(left); topRow.appendChild(right);
+ card.appendChild(topRow);
+
+ // Кнопки действий — только для редакторов
+ if(_fdxCanEdit()){
+  var actions = document.createElement('div');
+  actions.style.cssText = 'display:flex;gap:6px;margin-top:10px;flex-wrap:wrap';
+  var nextType = { year:'quarter', quarter:'month', month:'week' }[g.type];
+  if(nextType){
+   var addBtn = document.createElement('button');
+   addBtn.style.cssText = 'padding:5px 10px;border:1px solid var(--border-faint);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:11px;font-weight:600;cursor:pointer';
+   addBtn.textContent = '+ ' + ({quarter:'Квартал', month:'Месяц', week:'Неделя'})[nextType];
+   addBtn.onclick = function(){ fdxOpenGoalEditor({type:nextType, parent_id:g.id, country:g.country, unit:g.unit}); };
+   actions.appendChild(addBtn);
+  }
+  var editBtn = document.createElement('button');
+  editBtn.style.cssText = 'padding:5px 10px;border:1px solid var(--border-faint);border-radius:6px;background:transparent;color:var(--text-soft);font-size:11px;font-weight:600;cursor:pointer';
+  editBtn.textContent = 'Изменить';
+  editBtn.onclick = function(){ fdxOpenGoalEditor(g); };
+  actions.appendChild(editBtn);
+
+  if(g.type === 'year' || g.type === 'quarter'){
+   var pubBtn = document.createElement('button');
+   pubBtn.style.cssText = 'padding:5px 10px;border:1px solid var(--border-faint);border-radius:6px;background:transparent;color:' + (g.published ? '#D67373' : '#5BA683') + ';font-size:11px;font-weight:600;cursor:pointer';
+   pubBtn.textContent = g.published ? 'Снять с табло' : 'На табло';
+   pubBtn.onclick = function(){ fdxToggleGoalPublished(g); };
+   actions.appendChild(pubBtn);
+  }
+
+  var delBtn = document.createElement('button');
+  delBtn.style.cssText = 'padding:5px 10px;border:1px solid var(--border-faint);border-radius:6px;background:transparent;color:#D67373;font-size:11px;font-weight:600;cursor:pointer;margin-left:auto';
+  delBtn.textContent = 'Удалить';
+  delBtn.onclick = function(){ fdxDeleteGoal(g); };
+  actions.appendChild(delBtn);
+
+  card.appendChild(actions);
+ }
+ wrap.appendChild(card);
+
+ // Дочерние
+ var children = _fdxGoalChildren(g, all);
+ // Порядок: квартал по period_start, неделя по period_start
+ children.sort(function(a,b){ return String(a.period_start||'').localeCompare(String(b.period_start||'')); });
+ children.forEach(function(c){ wrap.appendChild(_fdxBuildGoalNode(c, all, depth + 1)); });
+ return wrap;
+}
+
+// Быстрый ввод факта по клику на цифру
+async function fdxQuickUpdateGoalCurrent(g){
+ var cur = prompt('Текущее значение «' + (g.title || '') + '» (' + (g.unit||'') + '):', g.current || 0);
+ if(cur === null) return;
+ var n = Number(String(cur).replace(',', '.'));
+ if(isNaN(n)){ alert('Введите число'); return; }
+ try {
+  await fdxPost({ entity:'goals', action:'upsert', payload:{ id:g.id, current:n } });
+  if(typeof showNotif === 'function') showNotif('Сохранено', 'Факт обновлён');
+  fdxRenderGoalsPane();
+ } catch(e){
+  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+ }
+}
+
+async function fdxToggleGoalPublished(g){
+ try {
+  await fdxPost({ entity:'goals', action:'upsert', payload:{ id:g.id, published: !g.published } });
+  if(typeof showNotif === 'function') showNotif('Готово', !g.published ? 'Цель на табло' : 'Цель снята с табло');
+  fdxRenderGoalsPane();
+ } catch(e){
+  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+ }
+}
+
+async function fdxDeleteGoal(g){
+ if(!confirm('Удалить цель «' + (g.title||'') + '» и все её дочерние?')) return;
+ try {
+  // Сначала удалить рекурсивно дочерние
+  var all = _fdxState.goals || [];
+  var queue = [g.id], toDelete = [];
+  while(queue.length){
+   var id = queue.shift();
+   toDelete.push(id);
+   all.filter(function(x){ return x.parent_id === id; }).forEach(function(c){ queue.push(c.id); });
+  }
+  // Удаляем от листьев к корню
+  for(var i = toDelete.length - 1; i >= 0; i--){
+   await fdxPost({ entity:'goals', action:'delete', id: toDelete[i] });
+  }
+  if(typeof showNotif === 'function') showNotif('Удалено', 'Цель и дочерние удалены');
+  fdxRenderGoalsPane();
+ } catch(e){
+  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+ }
+}
+
+// Модалка создания/редактирования цели
+function fdxOpenGoalEditor(initial){
+ initial = initial || {};
+ var isEdit = !!initial.id;
+ // Готовим overlay
+ var overlay = document.createElement('div');
+ overlay.id = 'fdx-goal-editor';
+ overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px';
+ var modal = document.createElement('div');
+ modal.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:24px;width:min(520px,92vw);max-height:90vh;overflow-y:auto';
+
+ var ttl = document.createElement('div');
+ ttl.style.cssText = 'font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px';
+ var typeLabels = { year:'годовой', quarter:'квартальной', month:'месячной', week:'недельной' };
+ ttl.textContent = (isEdit ? 'Изменить' : 'Создать') + ' ' + (typeLabels[initial.type] || '') + ' цель';
+ modal.appendChild(ttl);
+ if(initial.parent_id){
+  var par = (_fdxState.goals || []).find(function(x){ return x.id === initial.parent_id; });
+  if(par){
+   var psub = document.createElement('div');
+   psub.style.cssText = 'font-size:11.5px;color:var(--text-muted);margin-bottom:14px';
+   psub.textContent = 'Внутри: ' + par.title;
+   modal.appendChild(psub);
+  }
+ } else {
+  var sp = document.createElement('div'); sp.style.cssText = 'margin-bottom:14px'; modal.appendChild(sp);
+ }
+
+ // Поля формы
+ function addField(labelText, inputEl){
+  var w = document.createElement('div'); w.style.cssText = 'margin-bottom:12px';
+  var l = document.createElement('label');
+  l.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
+  l.textContent = labelText;
+  w.appendChild(l); w.appendChild(inputEl); modal.appendChild(w);
+  return inputEl;
+ }
+ var inputStyle = 'width:100%;padding:9px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px;font-family:inherit';
+
+ var titleI = document.createElement('input');
+ titleI.type = 'text'; titleI.maxLength = 200; titleI.placeholder = 'Например: MRR 7 миллионов';
+ titleI.style.cssText = inputStyle; titleI.value = initial.title || '';
+ addField('Что хотим достичь', titleI);
+
+ var row1 = document.createElement('div'); row1.style.cssText = 'display:grid;grid-template-columns:1fr 130px;gap:10px;margin-bottom:12px';
+ var targetI = document.createElement('input');
+ targetI.type = 'number'; targetI.placeholder = '7000000'; targetI.style.cssText = inputStyle;
+ targetI.value = (initial.target === 0 || initial.target) ? initial.target : '';
+ var tw = document.createElement('div'); var tl = document.createElement('label');
+ tl.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
+ tl.textContent = 'Целевая цифра'; tw.appendChild(tl); tw.appendChild(targetI); row1.appendChild(tw);
+
+ var unitS = document.createElement('select');
+ ['₸','шт','клиентов','%','иное'].forEach(function(u){ var o = document.createElement('option'); o.value=u; o.textContent=u; if((initial.unit||'₸')===u) o.selected=true; unitS.appendChild(o); });
+ unitS.style.cssText = inputStyle;
+ var uw = document.createElement('div'); var ul = document.createElement('label');
+ ul.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
+ ul.textContent = 'Единица'; uw.appendChild(ul); uw.appendChild(unitS); row1.appendChild(uw);
+ modal.appendChild(row1);
+
+ var row2 = document.createElement('div'); row2.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px';
+ var currentI = document.createElement('input');
+ currentI.type = 'number'; currentI.placeholder = '0'; currentI.style.cssText = inputStyle;
+ currentI.value = (initial.current === 0 || initial.current) ? initial.current : '';
+ var cw = document.createElement('div'); var cl = document.createElement('label');
+ cl.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
+ cl.textContent = 'Где сейчас (факт)'; cw.appendChild(cl); cw.appendChild(currentI); row2.appendChild(cw);
+
+ // Период по умолчанию: для типа — текущий
+ var defaults = _fdxDefaultPeriod(initial.type);
+ var dlI = document.createElement('input'); dlI.type = 'date'; dlI.style.cssText = inputStyle;
+ dlI.value = initial.period_end || defaults.end;
+ var dw = document.createElement('div'); var dl = document.createElement('label');
+ dl.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
+ dl.textContent = 'До какого числа'; dw.appendChild(dl); dw.appendChild(dlI); row2.appendChild(dw);
+ modal.appendChild(row2);
+
+ var startI = document.createElement('input');
+ startI.type = 'date'; startI.style.cssText = inputStyle;
+ startI.value = initial.period_start || defaults.start;
+ addField('Дата начала', startI);
+
+ // why (мотивация) — только для year
+ var whyI = null;
+ if((initial.type || 'year') === 'year'){
+  whyI = document.createElement('textarea');
+  whyI.rows = 2; whyI.maxLength = 280; whyI.placeholder = 'Зачем это важно команде (необязательно)';
+  whyI.style.cssText = inputStyle + ';line-height:1.4;resize:vertical';
+  whyI.value = initial.why || '';
+  addField('Зачем это важно', whyI);
+ }
+
+ // Кнопки
+ var btns = document.createElement('div'); btns.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;margin-top:14px';
+ var saveBtn = document.createElement('button');
+ saveBtn.style.cssText = 'padding:10px 18px;border:none;border-radius:8px;background:var(--accent, #5489BB);color:#fff;font-size:13px;font-weight:600;cursor:pointer';
+ saveBtn.textContent = isEdit ? 'Сохранить' : 'Создать';
+ saveBtn.onclick = async function(){
+  var payload = {
+   title: titleI.value.trim(),
+   target: Number(targetI.value) || 0,
+   current: Number(currentI.value) || 0,
+   unit: unitS.value,
+   period_start: startI.value,
+   period_end: dlI.value,
+   type: initial.type || 'year',
+   parent_id: initial.parent_id || null,
+   country: initial.country || currentCountry || 'KZ'
+  };
+  if(whyI) payload.why = whyI.value.trim();
+  if(initial.id) payload.id = initial.id;
+  if(!payload.title){ alert('Заполните «Что хотим достичь»'); return; }
+  if(!payload.target){ alert('Заполните целевую цифру'); return; }
+  if(!payload.period_end){ alert('Укажите дедлайн'); return; }
+  saveBtn.disabled = true;
+  try {
+   await fdxPost({ entity:'goals', action:'upsert', payload: payload });
+   document.body.removeChild(overlay);
+   if(typeof showNotif === 'function') showNotif('Сохранено', isEdit ? 'Цель обновлена' : 'Цель создана');
+   fdxRenderGoalsPane();
+  } catch(e){
+   saveBtn.disabled = false;
+   if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+  }
+ };
+ var cancelBtn = document.createElement('button');
+ cancelBtn.style.cssText = 'padding:10px 18px;border:1px solid var(--border-faint);border-radius:8px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;cursor:pointer';
+ cancelBtn.textContent = 'Отмена';
+ cancelBtn.onclick = function(){ document.body.removeChild(overlay); };
+ btns.appendChild(saveBtn); btns.appendChild(cancelBtn);
+ modal.appendChild(btns);
+
+ overlay.appendChild(modal);
+ document.body.appendChild(overlay);
+ titleI.focus();
+ // ESC закрывает
+ overlay.addEventListener('keydown', function(e){ if(e.key === 'Escape') document.body.removeChild(overlay); });
+}
+
+// Дефолтный период для типа цели (год = текущий год, квартал = текущий квартал, и т.д.)
+function _fdxDefaultPeriod(type){
+ var now = new Date();
+ var y = now.getFullYear();
+ if(type === 'year'){
+  return { start: y + '-01-01', end: y + '-12-31' };
+ }
+ if(type === 'quarter'){
+  var q = Math.floor(now.getMonth() / 3);
+  var startM = q * 3;
+  var endM = startM + 2;
+  return { start: y + '-' + String(startM+1).padStart(2,'0') + '-01', end: y + '-' + String(endM+1).padStart(2,'0') + '-' + new Date(y, endM+1, 0).getDate() };
+ }
+ if(type === 'month'){
+  var m = now.getMonth();
+  return { start: y + '-' + String(m+1).padStart(2,'0') + '-01', end: y + '-' + String(m+1).padStart(2,'0') + '-' + new Date(y, m+1, 0).getDate() };
+ }
+ // week — понедельник до воскресенья
+ var dow = (now.getDay() + 6) % 7;
+ var mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
+ var sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+ var fmt = function(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
+ return { start: fmt(mon), end: fmt(sun) };
+}
+// ===== Вкладка «Опережающие» =====
+async function fdxRenderMetricsPane(){
  var pane = document.getElementById('fdx-pane-metrics');
  if(!pane) return;
  pane.replaceChildren();
- var box = document.createElement('div');
- box.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
- box.textContent = 'Скоро: список опережающих показателей с быстрым вводом фактов и светофором.';
- pane.appendChild(box);
+ var loader = document.createElement('div');
+ loader.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
+ loader.textContent = 'Загрузка показателей…';
+ pane.appendChild(loader);
+
+ var [m, e, g, lights] = await Promise.all([
+  fdxFetch('metrics'),
+  fdxFetch('entries'),
+  fdxFetch('goals'),
+  fdxFetch('analytics', { kind:'metrics_traffic' })
+ ]);
+ _fdxState.metrics = (m && m.metrics) || [];
+ _fdxState.entries = (e && e.entries) || [];
+ _fdxState.goals = (g && g.goals) || [];
+ var lightMap = {};
+ ((lights && lights.rows) || []).forEach(function(r){ lightMap[r.metric_id] = r; });
+
+ pane.replaceChildren();
+
+ // Шапка
+ var head = document.createElement('div');
+ head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap';
+ var ttl = document.createElement('div');
+ ttl.style.cssText = 'font-size:14px;font-weight:600;color:var(--text)';
+ ttl.textContent = 'Опережающие действия (страна ' + (currentCountry || 'KZ') + ')';
+ head.appendChild(ttl);
+ if(_fdxCanEdit()){
+  var addBtn = document.createElement('button');
+  addBtn.style.cssText = 'padding:8px 14px;border:none;border-radius:8px;background:var(--accent, #5489BB);color:#fff;font-size:12px;font-weight:600;cursor:pointer';
+  addBtn.textContent = '+ Показатель';
+  addBtn.onclick = function(){ fdxOpenMetricEditor({}); };
+  head.appendChild(addBtn);
+ }
+ pane.appendChild(head);
+
+ // Фильтр — только активные метрики моей страны
+ var metrics = _fdxState.metrics.filter(function(x){ return x.active !== false && x.country === (currentCountry || 'KZ'); });
+ if(!metrics.length){
+  var empty = document.createElement('div');
+  empty.style.cssText = 'padding:60px 20px;text-align:center;color:var(--text-muted);font-size:13px';
+  empty.textContent = _fdxCanEdit()
+   ? 'Опережающих ещё нет. Это действия которые ведут к цели — например «10 встреч в неделю», «50 звонков в день».'
+   : 'Опережающие действия ещё не заданы.';
+  pane.appendChild(empty);
+  return;
+ }
+
+ // Группировка по цели
+ var byGoal = {};
+ metrics.forEach(function(mm){
+  var key = mm.goal_id || '_none';
+  byGoal[key] = byGoal[key] || [];
+  byGoal[key].push(mm);
+ });
+
+ Object.keys(byGoal).forEach(function(goalId){
+  var goal = _fdxState.goals.find(function(x){ return x.id === goalId; });
+  var section = document.createElement('div');
+  section.style.cssText = 'margin-bottom:18px';
+  var secHead = document.createElement('div');
+  secHead.style.cssText = 'font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:8px;padding-left:4px';
+  secHead.textContent = goal ? (goal.title + ' · ' + ({year:'Год',quarter:'Квартал',month:'Месяц',week:'Неделя'}[goal.type] || '')) : 'Без привязки к цели';
+  section.appendChild(secHead);
+
+  var grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px';
+  byGoal[goalId].forEach(function(mm){
+   grid.appendChild(_fdxBuildMetricCard(mm, lightMap[mm.id]));
+  });
+  section.appendChild(grid);
+  pane.appendChild(section);
+ });
 }
-function fdxRenderSessionsPane(){
+
+function _fdxBuildMetricCard(m, light){
+ var card = document.createElement('div');
+ card.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:12px;padding:14px';
+
+ var topRow = document.createElement('div');
+ topRow.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px';
+ var left = document.createElement('div'); left.style.cssText = 'flex:1;min-width:0';
+ var t = document.createElement('div');
+ t.style.cssText = 'font-size:13.5px;color:var(--text);font-weight:600;line-height:1.3';
+ t.textContent = m.title || '—';
+ left.appendChild(t);
+ var sub = document.createElement('div');
+ sub.style.cssText = 'font-size:11.5px;color:var(--text-soft);margin-top:3px';
+ var periodLabel = m.period === 'day' ? 'день' : 'неделя';
+ sub.textContent = 'Цель: ' + _fdxFmtNum(m.target_per_period) + ' ' + (m.unit||'') + ' / ' + periodLabel + (m.owner ? ' · ' + m.owner : '');
+ left.appendChild(sub);
+ topRow.appendChild(left);
+
+ var colors = { green:{bg:'rgba(127,184,158,.16)',fg:'#5BA683'}, yellow:{bg:'rgba(214,163,114,.16)',fg:'#C28A4D'}, red:{bg:'rgba(214,115,115,.16)',fg:'#D67373'}, gray:{bg:'var(--surface-2)',fg:'var(--text-muted)'} };
+ var lcol = (light && light.color) || 'gray';
+ var c = colors[lcol] || colors.gray;
+ var badge = document.createElement('span');
+ badge.style.cssText = 'font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:' + c.bg + ';color:' + c.fg + ';white-space:nowrap';
+ var pct = light ? Math.round((light.factPct||0) * 100) : 0;
+ badge.textContent = pct + '%';
+ topRow.appendChild(badge);
+ card.appendChild(topRow);
+
+ var nums = document.createElement('div');
+ nums.style.cssText = 'font-size:20px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;margin-bottom:10px';
+ var fact = light ? light.fact : 0;
+ var target = light ? light.target : Number(m.target_per_period) || 0;
+ nums.textContent = _fdxFmtNum(fact) + ' / ' + _fdxFmtNum(target) + ' ' + (m.unit||'');
+ card.appendChild(nums);
+
+ // Быстрый ввод факта
+ var entryRow = document.createElement('div');
+ entryRow.style.cssText = 'display:flex;gap:6px;align-items:center';
+ var input = document.createElement('input');
+ input.type = 'number'; input.placeholder = 'Внести факт';
+ input.style.cssText = 'flex:1;padding:7px 10px;border:1px solid var(--border-faint);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:13px';
+ var submit = document.createElement('button');
+ submit.style.cssText = 'padding:7px 12px;border:1px solid var(--border-faint);border-radius:6px;background:var(--accent, #5489BB);color:#fff;font-size:12px;font-weight:600;cursor:pointer';
+ submit.textContent = 'Записать';
+ submit.onclick = async function(){
+  var v = Number(input.value);
+  if(!v || isNaN(v)){ input.focus(); return; }
+  submit.disabled = true;
+  try {
+   await fdxPost({ entity:'entries', action:'upsert', payload:{ metric_id:m.id, value:v, country:m.country, date: new Date().toISOString().slice(0,10) } });
+   input.value = '';
+   if(typeof showNotif === 'function') showNotif('Записано', '+' + v + ' ' + (m.unit||''));
+   fdxRenderMetricsPane();
+  } catch(e){
+   if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+  } finally { submit.disabled = false; }
+ };
+ input.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); submit.click(); } });
+ entryRow.appendChild(input); entryRow.appendChild(submit);
+ card.appendChild(entryRow);
+
+ // Действия редактора
+ if(_fdxCanEdit()){
+  var actions = document.createElement('div');
+  actions.style.cssText = 'display:flex;gap:6px;margin-top:8px;justify-content:flex-end';
+  var editBtn = document.createElement('button');
+  editBtn.style.cssText = 'padding:4px 8px;border:none;border-radius:4px;background:transparent;color:var(--text-soft);font-size:10.5px;font-weight:600;cursor:pointer';
+  editBtn.textContent = 'Изменить';
+  editBtn.onclick = function(){ fdxOpenMetricEditor(m); };
+  var delBtn = document.createElement('button');
+  delBtn.style.cssText = 'padding:4px 8px;border:none;border-radius:4px;background:transparent;color:#D67373;font-size:10.5px;font-weight:600;cursor:pointer';
+  delBtn.textContent = 'Удалить';
+  delBtn.onclick = async function(){
+   if(!confirm('Удалить показатель «' + (m.title||'') + '»?')) return;
+   try {
+    await fdxPost({ entity:'metrics', action:'delete', id:m.id });
+    if(typeof showNotif === 'function') showNotif('Удалено', 'Показатель удалён');
+    fdxRenderMetricsPane();
+   } catch(e){ if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e)); }
+  };
+  actions.appendChild(editBtn); actions.appendChild(delBtn);
+  card.appendChild(actions);
+ }
+
+ return card;
+}
+
+function fdxOpenMetricEditor(initial){
+ initial = initial || {};
+ var isEdit = !!initial.id;
+ var overlay = document.createElement('div');
+ overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px';
+ var modal = document.createElement('div');
+ modal.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:24px;width:min(520px,92vw);max-height:90vh;overflow-y:auto';
+
+ var ttl = document.createElement('div');
+ ttl.style.cssText = 'font-size:18px;font-weight:700;color:var(--text);margin-bottom:14px';
+ ttl.textContent = isEdit ? 'Изменить показатель' : 'Новый опережающий показатель';
+ modal.appendChild(ttl);
+
+ var inputStyle = 'width:100%;padding:9px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px;font-family:inherit';
+ function addField(labelText, inputEl){
+  var w = document.createElement('div'); w.style.cssText = 'margin-bottom:12px';
+  var l = document.createElement('label');
+  l.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
+  l.textContent = labelText;
+  w.appendChild(l); w.appendChild(inputEl); modal.appendChild(w); return inputEl;
+ }
+
+ var titleI = document.createElement('input');
+ titleI.type = 'text'; titleI.maxLength = 200; titleI.placeholder = 'Например: 10 встреч в неделю';
+ titleI.style.cssText = inputStyle; titleI.value = initial.title || '';
+ addField('Название', titleI);
+
+ // Цель (привязка)
+ var goalS = document.createElement('select'); goalS.style.cssText = inputStyle;
+ var noneOpt = document.createElement('option'); noneOpt.value = ''; noneOpt.textContent = '— без привязки —';
+ goalS.appendChild(noneOpt);
+ (_fdxState.goals || []).filter(function(g){ return g.country === (currentCountry || 'KZ'); }).forEach(function(g){
+  var o = document.createElement('option'); o.value = g.id;
+  o.textContent = ({year:'Год',quarter:'Квартал',month:'Месяц',week:'Неделя'}[g.type] || g.type) + ': ' + g.title;
+  if(initial.goal_id === g.id) o.selected = true;
+  goalS.appendChild(o);
+ });
+ addField('К какой цели ведёт', goalS);
+
+ var row1 = document.createElement('div'); row1.style.cssText = 'display:grid;grid-template-columns:1fr 130px;gap:10px;margin-bottom:12px';
+ var targetI = document.createElement('input');
+ targetI.type = 'number'; targetI.placeholder = '10'; targetI.style.cssText = inputStyle;
+ targetI.value = initial.target_per_period || '';
+ var tw = document.createElement('div'); var tl = document.createElement('label');
+ tl.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
+ tl.textContent = 'Сколько за период'; tw.appendChild(tl); tw.appendChild(targetI); row1.appendChild(tw);
+
+ var periodS = document.createElement('select'); periodS.style.cssText = inputStyle;
+ [['day','в день'],['week','в неделю']].forEach(function(p){
+  var o = document.createElement('option'); o.value = p[0]; o.textContent = p[1];
+  if((initial.period || 'week') === p[0]) o.selected = true;
+  periodS.appendChild(o);
+ });
+ var pw = document.createElement('div'); var pl = document.createElement('label');
+ pl.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
+ pl.textContent = 'Период'; pw.appendChild(pl); pw.appendChild(periodS); row1.appendChild(pw);
+ modal.appendChild(row1);
+
+ var row2 = document.createElement('div'); row2.style.cssText = 'display:grid;grid-template-columns:1fr 130px;gap:10px;margin-bottom:12px';
+ var ownerS = document.createElement('select'); ownerS.style.cssText = inputStyle;
+ var noneO = document.createElement('option'); noneO.value = ''; noneO.textContent = '— общий —'; ownerS.appendChild(noneO);
+ var allOwners = [];
+ ['Мирзахит','Юлия','Айдос','Акбар','Самат','Нурай','Аян','Дулат','Абзал','Айдос Хапез'].forEach(function(n){ if(allOwners.indexOf(n) === -1) allOwners.push(n); });
+ allOwners.forEach(function(n){
+  var o = document.createElement('option'); o.value = n; o.textContent = n;
+  if(initial.owner === n) o.selected = true;
+  ownerS.appendChild(o);
+ });
+ var ow = document.createElement('div'); var ol = document.createElement('label');
+ ol.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
+ ol.textContent = 'Ответственный'; ow.appendChild(ol); ow.appendChild(ownerS); row2.appendChild(ow);
+
+ var unitS = document.createElement('select'); unitS.style.cssText = inputStyle;
+ ['шт','раз','мин','часов','%'].forEach(function(u){ var o = document.createElement('option'); o.value=u; o.textContent=u; if((initial.unit||'шт')===u) o.selected=true; unitS.appendChild(o); });
+ var uw2 = document.createElement('div'); var ul2 = document.createElement('label');
+ ul2.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
+ ul2.textContent = 'Единица'; uw2.appendChild(ul2); uw2.appendChild(unitS); row2.appendChild(uw2);
+ modal.appendChild(row2);
+
+ var btns = document.createElement('div'); btns.style.cssText = 'display:flex;gap:10px;margin-top:14px;flex-wrap:wrap';
+ var saveBtn = document.createElement('button');
+ saveBtn.style.cssText = 'padding:10px 18px;border:none;border-radius:8px;background:var(--accent, #5489BB);color:#fff;font-size:13px;font-weight:600;cursor:pointer';
+ saveBtn.textContent = isEdit ? 'Сохранить' : 'Создать';
+ saveBtn.onclick = async function(){
+  var payload = {
+   title: titleI.value.trim(),
+   target_per_period: Number(targetI.value) || 0,
+   period: periodS.value,
+   owner: ownerS.value || null,
+   unit: unitS.value,
+   goal_id: goalS.value || null,
+   country: initial.country || currentCountry || 'KZ',
+   active: true
+  };
+  if(initial.id) payload.id = initial.id;
+  if(!payload.title){ alert('Заполните название'); return; }
+  if(!payload.target_per_period){ alert('Заполните цифру за период'); return; }
+  saveBtn.disabled = true;
+  try {
+   await fdxPost({ entity:'metrics', action:'upsert', payload: payload });
+   document.body.removeChild(overlay);
+   if(typeof showNotif === 'function') showNotif('Сохранено', isEdit ? 'Показатель обновлён' : 'Показатель создан');
+   fdxRenderMetricsPane();
+  } catch(e){
+   saveBtn.disabled = false;
+   if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+  }
+ };
+ var cancelBtn = document.createElement('button');
+ cancelBtn.style.cssText = 'padding:10px 18px;border:1px solid var(--border-faint);border-radius:8px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;cursor:pointer';
+ cancelBtn.textContent = 'Отмена';
+ cancelBtn.onclick = function(){ document.body.removeChild(overlay); };
+ btns.appendChild(saveBtn); btns.appendChild(cancelBtn);
+ modal.appendChild(btns);
+
+ overlay.appendChild(modal); document.body.appendChild(overlay); titleI.focus();
+}
+// ===== Вкладка «Планёрки» =====
+async function fdxRenderSessionsPane(){
  var pane = document.getElementById('fdx-pane-sessions');
  if(!pane) return;
  pane.replaceChildren();
- var box = document.createElement('div');
- box.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
- box.textContent = 'Скоро: планёрки 4DX — план/в работе/завершено + режим «идёт сейчас» в 3 шага.';
- pane.appendChild(box);
+ var loader = document.createElement('div');
+ loader.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
+ loader.textContent = 'Загрузка планёрок…';
+ pane.appendChild(loader);
+
+ var [s, c] = await Promise.all([fdxFetch('sessions'), fdxFetch('commitments')]);
+ _fdxState.sessions = (s && s.sessions) || [];
+ _fdxState.commitments = (c && c.commitments) || [];
+ pane.replaceChildren();
+
+ // Если есть активная сессия — показываем её режим «идёт» во весь экран вкладки
+ var active = _fdxState.sessions.find(function(x){ return x.country === (currentCountry || 'KZ') && x.status === 'in_progress'; });
+ if(active){
+  pane.appendChild(_fdxBuildSessionRunner(active));
+  return;
+ }
+
+ // Шапка
+ var head = document.createElement('div');
+ head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap';
+ var ttl = document.createElement('div');
+ ttl.style.cssText = 'font-size:14px;font-weight:600;color:var(--text)';
+ ttl.textContent = 'Планёрки (страна ' + (currentCountry || 'KZ') + ')';
+ head.appendChild(ttl);
+ if(_fdxCanEdit()){
+  var addBtn = document.createElement('button');
+  addBtn.style.cssText = 'padding:8px 14px;border:none;border-radius:8px;background:var(--accent, #5489BB);color:#fff;font-size:12px;font-weight:600;cursor:pointer';
+  addBtn.textContent = '+ Запланировать';
+  addBtn.onclick = function(){ fdxOpenSessionEditor({}); };
+  head.appendChild(addBtn);
+ }
+ pane.appendChild(head);
+
+ var sessions = _fdxState.sessions.filter(function(x){ return x.country === (currentCountry || 'KZ'); });
+ if(!sessions.length){
+  var empty = document.createElement('div');
+  empty.style.cssText = 'padding:60px 20px;text-align:center;color:var(--text-muted);font-size:13px';
+  empty.textContent = 'Планёрок ещё нет. Запланируйте первую.';
+  pane.appendChild(empty);
+  return;
+ }
+
+ // Группы: запланированные / завершённые
+ var planned = sessions.filter(function(x){ return x.status === 'planned'; }).sort(function(a,b){ return Date.parse(a.scheduled_at||0) - Date.parse(b.scheduled_at||0); });
+ var done = sessions.filter(function(x){ return x.status === 'done'; }).sort(function(a,b){ return (b.completed_at||0) - (a.completed_at||0); }).slice(0, 10);
+
+ if(planned.length){
+  pane.appendChild(_fdxBuildSectionHeader('Запланированные'));
+  planned.forEach(function(s){ pane.appendChild(_fdxBuildSessionCard(s)); });
+ }
+ if(done.length){
+  pane.appendChild(_fdxBuildSectionHeader('Прошедшие (последние 10)'));
+  done.forEach(function(s){ pane.appendChild(_fdxBuildSessionCard(s)); });
+ }
 }
-function fdxRenderAnalyticsPane(){
+
+function _fdxBuildSectionHeader(text){
+ var h = document.createElement('div');
+ h.style.cssText = 'font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin:14px 4px 8px';
+ h.textContent = text;
+ return h;
+}
+
+function _fdxBuildSessionCard(s){
+ var card = document.createElement('div');
+ card.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap';
+ var left = document.createElement('div');
+ var when = s.scheduled_at ? new Date(s.scheduled_at).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+ var t1 = document.createElement('div'); t1.style.cssText = 'font-size:13px;color:var(--text);font-weight:600';
+ t1.textContent = when + ' · ' + (s.team || 'команда');
+ var t2 = document.createElement('div'); t2.style.cssText = 'font-size:11.5px;color:var(--text-soft);margin-top:2px';
+ var count = (_fdxState.commitments||[]).filter(function(c){ return c.session_id === s.id; }).length;
+ t2.textContent = (s.facilitator_email ? 'ведёт ' + s.facilitator_email : 'без ведущего') + ' · ' + count + ' обязательств';
+ left.appendChild(t1); left.appendChild(t2);
+ card.appendChild(left);
+
+ var actions = document.createElement('div');
+ actions.style.cssText = 'display:flex;gap:6px';
+ if(s.status === 'planned' && _fdxCanEdit()){
+  var startBtn = document.createElement('button');
+  startBtn.style.cssText = 'padding:6px 12px;border:none;border-radius:6px;background:#5BA683;color:#fff;font-size:11.5px;font-weight:600;cursor:pointer';
+  startBtn.textContent = 'Начать сейчас';
+  startBtn.onclick = async function(){
+   try {
+    await fdxPost({ entity:'sessions', action:'upsert', payload:{ id:s.id, status:'in_progress', started_at: Date.now() } });
+    fdxRenderSessionsPane();
+   } catch(e){ if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e)); }
+  };
+  actions.appendChild(startBtn);
+ }
+ if(s.status === 'done'){
+  var openBtn = document.createElement('button');
+  openBtn.style.cssText = 'padding:6px 12px;border:1px solid var(--border-faint);border-radius:6px;background:transparent;color:var(--text-soft);font-size:11.5px;font-weight:600;cursor:pointer';
+  openBtn.textContent = 'Посмотреть';
+  openBtn.onclick = function(){ fdxShowSessionDetails(s); };
+  actions.appendChild(openBtn);
+ }
+ card.appendChild(actions);
+ return card;
+}
+
+function fdxOpenSessionEditor(initial){
+ initial = initial || {};
+ var isEdit = !!initial.id;
+ var overlay = document.createElement('div');
+ overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px';
+ var modal = document.createElement('div');
+ modal.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:24px;width:min(440px,92vw)';
+
+ var ttl = document.createElement('div');
+ ttl.style.cssText = 'font-size:18px;font-weight:700;color:var(--text);margin-bottom:14px';
+ ttl.textContent = isEdit ? 'Изменить планёрку' : 'Запланировать планёрку';
+ modal.appendChild(ttl);
+
+ var inputStyle = 'width:100%;padding:9px 12px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:14px';
+ function addField(labelText, inputEl){
+  var w = document.createElement('div'); w.style.cssText = 'margin-bottom:12px';
+  var l = document.createElement('label');
+  l.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
+  l.textContent = labelText;
+  w.appendChild(l); w.appendChild(inputEl); modal.appendChild(w);
+  return inputEl;
+ }
+
+ var whenI = document.createElement('input');
+ whenI.type = 'datetime-local'; whenI.style.cssText = inputStyle;
+ if(initial.scheduled_at){ whenI.value = String(initial.scheduled_at).slice(0,16); }
+ else {
+  // Дефолт — понедельник 10:00 следующей недели
+  var d = new Date(); d.setDate(d.getDate() + (8 - d.getDay()) % 7); d.setHours(10,0,0,0);
+  whenI.value = d.toISOString().slice(0,16);
+ }
+ addField('Когда', whenI);
+
+ var teamS = document.createElement('select'); teamS.style.cssText = inputStyle;
+ [['all','Вся команда'],['sales','Продажи'],['support','Поддержка'],['integration','Интеграция']].forEach(function(p){
+  var o = document.createElement('option'); o.value = p[0]; o.textContent = p[1];
+  if((initial.team || 'all') === p[0]) o.selected = true;
+  teamS.appendChild(o);
+ });
+ addField('Кто участвует', teamS);
+
+ var btns = document.createElement('div'); btns.style.cssText = 'display:flex;gap:10px;margin-top:14px';
+ var saveBtn = document.createElement('button');
+ saveBtn.style.cssText = 'padding:10px 18px;border:none;border-radius:8px;background:var(--accent, #5489BB);color:#fff;font-size:13px;font-weight:600;cursor:pointer';
+ saveBtn.textContent = isEdit ? 'Сохранить' : 'Запланировать';
+ saveBtn.onclick = async function(){
+  var payload = {
+   scheduled_at: whenI.value,
+   team: teamS.value,
+   country: initial.country || currentCountry || 'KZ',
+   facilitator_email: (currentUser && currentUser.email) || ''
+  };
+  if(initial.id) payload.id = initial.id;
+  if(!payload.scheduled_at){ alert('Укажите дату и время'); return; }
+  saveBtn.disabled = true;
+  try {
+   await fdxPost({ entity:'sessions', action:'upsert', payload: payload });
+   document.body.removeChild(overlay);
+   if(typeof showNotif === 'function') showNotif('Готово', 'Планёрка запланирована');
+   fdxRenderSessionsPane();
+  } catch(e){
+   saveBtn.disabled = false;
+   if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+  }
+ };
+ var cancelBtn = document.createElement('button');
+ cancelBtn.style.cssText = 'padding:10px 18px;border:1px solid var(--border-faint);border-radius:8px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;cursor:pointer';
+ cancelBtn.textContent = 'Отмена';
+ cancelBtn.onclick = function(){ document.body.removeChild(overlay); };
+ btns.appendChild(saveBtn); btns.appendChild(cancelBtn);
+ modal.appendChild(btns);
+ overlay.appendChild(modal); document.body.appendChild(overlay);
+}
+
+// Режим «идёт сейчас» — 3 шага
+function _fdxBuildSessionRunner(s){
+ var wrap = document.createElement('div');
+ wrap.style.cssText = 'max-width:900px;margin:0 auto';
+
+ // Текущий шаг хранится в state.sessionStep
+ if(typeof _fdxState.sessionStep !== 'number') _fdxState.sessionStep = 1;
+ var step = _fdxState.sessionStep;
+
+ // Шапка с прогрессом
+ var head = document.createElement('div');
+ head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap';
+ var t = document.createElement('div');
+ var when = s.scheduled_at ? new Date(s.scheduled_at).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+ var t1 = document.createElement('div'); t1.style.cssText = 'font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700';
+ t1.textContent = 'Идёт планёрка · ' + when;
+ var t2 = document.createElement('div'); t2.style.cssText = 'font-size:18px;color:var(--text);font-weight:700;margin-top:2px';
+ var titles = ['Что было обещано', 'Обзор табло', 'Что обещаем на следующую неделю'];
+ t2.textContent = 'Шаг ' + step + ' из 3: ' + titles[step-1];
+ t.appendChild(t1); t.appendChild(t2);
+ head.appendChild(t);
+
+ var endBtn = document.createElement('button');
+ endBtn.style.cssText = 'padding:8px 14px;border:1px solid var(--border-faint);border-radius:8px;background:transparent;color:#D67373;font-size:12px;font-weight:600;cursor:pointer';
+ endBtn.textContent = 'Завершить планёрку';
+ endBtn.onclick = async function(){
+  if(!confirm('Завершить планёрку?')) return;
+  try {
+   await fdxPost({ action:'complete_session', id:s.id, entity:'sessions' });
+   _fdxState.sessionStep = 1;
+   if(typeof showNotif === 'function') showNotif('Готово', 'Планёрка завершена');
+   fdxRenderSessionsPane();
+  } catch(e){ if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e)); }
+ };
+ head.appendChild(endBtn);
+ wrap.appendChild(head);
+
+ // Контент шага
+ var stepBox = document.createElement('div');
+ stepBox.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:12px;padding:20px;min-height:300px';
+
+ if(step === 1) _fdxRunnerStep1(stepBox, s);
+ else if(step === 2) _fdxRunnerStep2(stepBox, s);
+ else _fdxRunnerStep3(stepBox, s);
+
+ wrap.appendChild(stepBox);
+
+ // Навигация шагов
+ var nav = document.createElement('div');
+ nav.style.cssText = 'display:flex;justify-content:space-between;gap:10px;margin-top:14px';
+ var prev = document.createElement('button');
+ prev.style.cssText = 'padding:10px 18px;border:1px solid var(--border-faint);border-radius:8px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;cursor:pointer';
+ prev.textContent = '← Назад';
+ prev.disabled = step === 1;
+ prev.style.opacity = step === 1 ? '.4' : '1';
+ prev.onclick = function(){ _fdxState.sessionStep = Math.max(1, step - 1); fdxRenderSessionsPane(); };
+
+ var next = document.createElement('button');
+ next.style.cssText = 'padding:10px 18px;border:none;border-radius:8px;background:var(--accent, #5489BB);color:#fff;font-size:13px;font-weight:600;cursor:pointer';
+ next.textContent = step < 3 ? 'Дальше →' : 'Готово';
+ next.onclick = function(){
+  if(step < 3){ _fdxState.sessionStep = step + 1; fdxRenderSessionsPane(); }
+  else { endBtn.click(); }
+ };
+ nav.appendChild(prev); nav.appendChild(next);
+ wrap.appendChild(nav);
+ return wrap;
+}
+
+function _fdxRunnerStep1(box, s){
+ // Обязательства предыдущей сессии — какие были, что выполнено
+ var prev = (_fdxState.sessions||[]).filter(function(x){
+  return x.country === s.country && x.status === 'done' && (x.completed_at || x.scheduled_at);
+ }).sort(function(a,b){ return (b.completed_at||0) - (a.completed_at||0); })[0];
+
+ if(!prev){
+  var p = document.createElement('div');
+  p.style.cssText = 'text-align:center;color:var(--text-muted);font-size:13px;padding:40px 0';
+  p.textContent = 'Это первая планёрка — обязательств с прошлой нет.';
+  box.appendChild(p);
+  return;
+ }
+ var ttl = document.createElement('div');
+ ttl.style.cssText = 'font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:12px';
+ ttl.textContent = 'Обязательства с планёрки ' + new Date(prev.scheduled_at || prev.completed_at).toLocaleDateString('ru-RU');
+ box.appendChild(ttl);
+
+ var prevCommits = (_fdxState.commitments||[]).filter(function(c){ return c.session_id === prev.id; });
+ if(!prevCommits.length){
+  var n = document.createElement('div');
+  n.style.cssText = 'color:var(--text-muted);font-size:13px;padding:20px 0';
+  n.textContent = 'На прошлой планёрке обязательств не давали.';
+  box.appendChild(n);
+  return;
+ }
+ prevCommits.forEach(function(c){
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border-faint)';
+  var info = document.createElement('div'); info.style.cssText = 'flex:1';
+  var t1 = document.createElement('div'); t1.style.cssText = 'font-size:13px;color:var(--text)';
+  t1.textContent = (c.owner ? c.owner + ' — ' : '') + (c.text || '');
+  info.appendChild(t1);
+  var statusBadge = document.createElement('span');
+  var colors = { done:'#5BA683', failed:'#D67373', pending:'var(--text-soft)' };
+  statusBadge.style.cssText = 'font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(120,120,128,.12);color:' + (colors[c.status]||colors.pending);
+  statusBadge.textContent = c.status === 'done' ? 'Выполнено' : (c.status === 'failed' ? 'Не сделано' : 'Висит');
+  row.appendChild(info); row.appendChild(statusBadge);
+
+  if(c.status === 'pending'){
+   var doneBtn = document.createElement('button');
+   doneBtn.style.cssText = 'padding:5px 10px;border:none;border-radius:6px;background:#5BA683;color:#fff;font-size:11px;font-weight:600;cursor:pointer';
+   doneBtn.textContent = 'Выполнено';
+   doneBtn.onclick = async function(){
+    try { await fdxPost({ action:'resolve_commitment', id:c.id, status:'done' }); fdxRenderSessionsPane(); }
+    catch(e){ if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e)); }
+   };
+   var failBtn = document.createElement('button');
+   failBtn.style.cssText = 'padding:5px 10px;border:none;border-radius:6px;background:transparent;color:#D67373;font-size:11px;font-weight:600;cursor:pointer';
+   failBtn.textContent = 'Не сделано';
+   failBtn.onclick = async function(){
+    try { await fdxPost({ action:'resolve_commitment', id:c.id, status:'failed' }); fdxRenderSessionsPane(); }
+    catch(e){ if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e)); }
+   };
+   row.appendChild(doneBtn); row.appendChild(failBtn);
+  }
+  box.appendChild(row);
+ });
+}
+
+async function _fdxRunnerStep2(box, s){
+ var ttl = document.createElement('div');
+ ttl.style.cssText = 'font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:12px';
+ ttl.textContent = 'Где мы сейчас';
+ box.appendChild(ttl);
+
+ var loading = document.createElement('div');
+ loading.style.cssText = 'color:var(--text-muted);font-size:13px';
+ loading.textContent = 'Загрузка табло…';
+ box.appendChild(loading);
+
+ var d = await fdxFetch('board');
+ box.replaceChildren(ttl);
+
+ if(!d || !d.board || !d.board.year_goals || !d.board.year_goals.length){
+  var p = document.createElement('div');
+  p.style.cssText = 'color:var(--text-muted);font-size:13px;padding:20px 0';
+  p.textContent = 'Главная цель не задана.';
+  box.appendChild(p);
+  return;
+ }
+ var year = d.board.year_goals[0];
+ var card = document.createElement('div');
+ card.style.cssText = 'padding:14px;background:var(--surface-2);border-radius:8px;margin-bottom:10px';
+ var t = document.createElement('div'); t.style.cssText = 'font-size:13px;color:var(--text);font-weight:600';
+ t.textContent = year.title;
+ card.appendChild(t);
+ var n = document.createElement('div'); n.style.cssText = 'font-size:18px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;margin-top:4px';
+ n.textContent = _fdxFmtNum(year.current) + ' / ' + _fdxFmtNum(year.target) + ' ' + (year.unit||'');
+ card.appendChild(n);
+ box.appendChild(card);
+
+ (d.board.metric_lights || []).forEach(function(L){
+  var m = L.metric; var lg = L.light || {color:'gray'};
+  var colors = { green:'#5BA683', yellow:'#C28A4D', red:'#D67373', gray:'var(--text-muted)' };
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-faint)';
+  var ti = document.createElement('div'); ti.style.cssText = 'font-size:13px;color:var(--text)'; ti.textContent = m.title;
+  var ri = document.createElement('div'); ri.style.cssText = 'font-size:13px;color:' + colors[lg.color] + ';font-weight:600;font-variant-numeric:tabular-nums';
+  ri.textContent = _fdxFmtNum(lg.fact) + '/' + _fdxFmtNum(lg.target) + ' · ' + Math.round((lg.factPct||0)*100) + '%';
+  row.appendChild(ti); row.appendChild(ri);
+  box.appendChild(row);
+ });
+}
+
+function _fdxRunnerStep3(box, s){
+ var ttl = document.createElement('div');
+ ttl.style.cssText = 'font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:12px';
+ ttl.textContent = 'Кто что обещает на следующую неделю';
+ box.appendChild(ttl);
+
+ var listBox = document.createElement('div');
+ listBox.style.cssText = 'margin-bottom:14px';
+ var renderList = function(){
+  listBox.replaceChildren();
+  var current = (_fdxState.commitments || []).filter(function(c){ return c.session_id === s.id; });
+  if(!current.length){
+   var n = document.createElement('div');
+   n.style.cssText = 'color:var(--text-muted);font-size:12.5px;padding:8px 0;font-style:italic';
+   n.textContent = 'Пока пусто. Добавьте обязательства ниже.';
+   listBox.appendChild(n);
+   return;
+  }
+  current.forEach(function(c){
+   var r = document.createElement('div');
+   r.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-faint)';
+   var ti = document.createElement('div'); ti.style.cssText = 'flex:1;font-size:13px;color:var(--text)';
+   ti.textContent = (c.owner ? c.owner + ' — ' : '') + c.text;
+   var delBtn = document.createElement('button');
+   delBtn.style.cssText = 'padding:4px 8px;border:none;border-radius:4px;background:transparent;color:#D67373;font-size:10.5px;font-weight:600;cursor:pointer';
+   delBtn.textContent = 'Убрать';
+   delBtn.onclick = async function(){
+    try { await fdxPost({ entity:'commitments', action:'delete', id:c.id }); renderList(); var fresh = await fdxFetch('commitments'); _fdxState.commitments = (fresh && fresh.commitments) || []; renderList(); }
+    catch(e){ if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e)); }
+   };
+   r.appendChild(ti); r.appendChild(delBtn);
+   listBox.appendChild(r);
+  });
+ };
+ box.appendChild(listBox);
+ renderList();
+
+ // Форма добавления
+ var form = document.createElement('div');
+ form.style.cssText = 'display:grid;grid-template-columns:140px 1fr 100px;gap:8px;align-items:center;padding:12px;background:var(--surface-2);border-radius:8px';
+ var ownerS = document.createElement('select');
+ ownerS.style.cssText = 'padding:8px;border:1px solid var(--border-faint);border-radius:6px;background:var(--surface);color:var(--text);font-size:12.5px';
+ ['','Мирзахит','Юлия','Айдос','Акбар','Самат','Нурай','Аян','Дулат','Абзал'].forEach(function(n){
+  var o = document.createElement('option'); o.value = n; o.textContent = n || '— Кто —';
+  ownerS.appendChild(o);
+ });
+ var textI = document.createElement('input');
+ textI.type = 'text'; textI.placeholder = 'Что обещает сделать (одной фразой)';
+ textI.style.cssText = 'padding:8px;border:1px solid var(--border-faint);border-radius:6px;background:var(--surface);color:var(--text);font-size:12.5px';
+ var addBtn = document.createElement('button');
+ addBtn.style.cssText = 'padding:8px;border:none;border-radius:6px;background:var(--accent, #5489BB);color:#fff;font-size:12px;font-weight:600;cursor:pointer';
+ addBtn.textContent = '+ Добавить';
+ addBtn.onclick = async function(){
+  if(!textI.value.trim()){ textI.focus(); return; }
+  addBtn.disabled = true;
+  try {
+   await fdxPost({ entity:'commitments', action:'upsert', payload:{
+    session_id: s.id, country: s.country, owner: ownerS.value || null, text: textI.value.trim()
+   }});
+   textI.value = '';
+   var fresh = await fdxFetch('commitments');
+   _fdxState.commitments = (fresh && fresh.commitments) || [];
+   renderList();
+  } catch(e){ if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e)); }
+  finally { addBtn.disabled = false; textI.focus(); }
+ };
+ textI.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); addBtn.click(); } });
+ form.appendChild(ownerS); form.appendChild(textI); form.appendChild(addBtn);
+ box.appendChild(form);
+}
+
+function fdxShowSessionDetails(s){
+ var commits = (_fdxState.commitments||[]).filter(function(c){ return c.session_id === s.id; });
+ var done = commits.filter(function(c){ return c.status === 'done'; }).length;
+ var lines = [
+  'Планёрка ' + new Date(s.scheduled_at || s.completed_at).toLocaleString('ru-RU'),
+  'Команда: ' + (s.team || '—'),
+  'Обязательств: ' + commits.length + ' (выполнено: ' + done + ')',
+  ''
+ ];
+ commits.forEach(function(c){
+  lines.push('• ' + (c.owner || '?') + ': ' + c.text + (c.status === 'done' ? ' ✓' : (c.status === 'failed' ? ' ×' : '')));
+ });
+ alert(lines.join('\n'));
+}
+// ===== Вкладка «Аналитика» =====
+async function fdxRenderAnalyticsPane(){
  var pane = document.getElementById('fdx-pane-analytics');
  if(!pane) return;
  pane.replaceChildren();
- var box = document.createElement('div');
- box.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
- box.textContent = 'Скоро: % выполнения обязательств по сотрудникам + светофор показателей за период.';
- pane.appendChild(box);
+
+ if(!_fdxCanEdit()){
+  var noAccess = document.createElement('div');
+  noAccess.style.cssText = 'padding:60px 20px;text-align:center;color:var(--text-muted);font-size:13px';
+  noAccess.textContent = 'Аналитика доступна только CEO/руководителю.';
+  pane.appendChild(noAccess);
+  return;
+ }
+
+ var loader = document.createElement('div');
+ loader.style.cssText = 'padding:40px;text-align:center;color:var(--text-muted);font-size:13px';
+ loader.textContent = 'Загрузка аналитики…';
+ pane.appendChild(loader);
+
+ // Период — последние 30 дней
+ var from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0,10);
+ var to = new Date().toISOString().slice(0,10);
+ var [byPerson, traffic] = await Promise.all([
+  fdxFetch('analytics', { kind:'commitments_by_person', from: from, to: to }),
+  fdxFetch('analytics', { kind:'metrics_traffic' })
+ ]);
+ pane.replaceChildren();
+
+ // Виджет 1: выполнение обязательств за 30 дней
+ var w1 = document.createElement('div');
+ w1.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:12px;padding:18px;margin-bottom:14px';
+ var h1 = document.createElement('div');
+ h1.style.cssText = 'font-size:14px;color:var(--text);font-weight:600;margin-bottom:4px';
+ h1.textContent = 'Выполнение обязательств — последние 30 дней';
+ w1.appendChild(h1);
+ var sub1 = document.createElement('div');
+ sub1.style.cssText = 'font-size:11.5px;color:var(--text-muted);margin-bottom:14px';
+ sub1.textContent = 'Кто стабильно выполняет то что обещает на планёрках';
+ w1.appendChild(sub1);
+
+ var rows = (byPerson && byPerson.rows) || [];
+ if(!rows.length){
+  var p = document.createElement('div'); p.style.cssText = 'color:var(--text-muted);font-size:13px;padding:20px 0;text-align:center';
+  p.textContent = 'Обязательств в этом периоде ещё нет.';
+  w1.appendChild(p);
+ } else {
+  rows.forEach(function(r){
+   var row = document.createElement('div');
+   row.style.cssText = 'display:grid;grid-template-columns:140px 1fr 70px;gap:10px;align-items:center;margin-bottom:8px';
+   var n = document.createElement('div'); n.style.cssText = 'font-size:13px;color:var(--text);font-weight:600';
+   n.textContent = r.owner;
+   row.appendChild(n);
+   var bar = document.createElement('div');
+   bar.style.cssText = 'height:12px;background:var(--surface-2);border-radius:999px;overflow:hidden';
+   var fill = document.createElement('div');
+   var color = r.pct >= 80 ? '#5BA683' : (r.pct >= 50 ? '#C28A4D' : '#D67373');
+   fill.style.cssText = 'height:100%;background:' + color + ';width:' + r.pct + '%';
+   bar.appendChild(fill);
+   row.appendChild(bar);
+   var v = document.createElement('div');
+   v.style.cssText = 'font-size:13px;color:var(--text);font-weight:700;text-align:right;font-variant-numeric:tabular-nums';
+   v.textContent = r.pct + '% (' + r.done + '/' + r.total + ')';
+   row.appendChild(v);
+   w1.appendChild(row);
+  });
+ }
+ pane.appendChild(w1);
+
+ // Виджет 2: светофор показателей
+ var w2 = document.createElement('div');
+ w2.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:12px;padding:18px';
+ var h2 = document.createElement('div');
+ h2.style.cssText = 'font-size:14px;color:var(--text);font-weight:600;margin-bottom:4px';
+ h2.textContent = 'Опережающие действия — статус сейчас';
+ w2.appendChild(h2);
+ var sub2 = document.createElement('div');
+ sub2.style.cssText = 'font-size:11.5px;color:var(--text-muted);margin-bottom:14px';
+ sub2.textContent = 'Зелёные двигают нас к цели. Красные требуют внимания.';
+ w2.appendChild(sub2);
+
+ var trows = (traffic && traffic.rows) || [];
+ if(!trows.length){
+  var p2 = document.createElement('div'); p2.style.cssText = 'color:var(--text-muted);font-size:13px;padding:20px 0;text-align:center';
+  p2.textContent = 'Опережающих ещё нет.';
+  w2.appendChild(p2);
+ } else {
+  // Сортировка: красные сверху, зелёные снизу
+  var order = { red:0, yellow:1, gray:2, green:3 };
+  trows.sort(function(a,b){ return (order[a.color]||9) - (order[b.color]||9); });
+  trows.forEach(function(r){
+   var row = document.createElement('div');
+   row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-faint)';
+   var colors = { green:'#5BA683', yellow:'#C28A4D', red:'#D67373', gray:'var(--text-muted)' };
+   var labels = { green:'идёт по плану', yellow:'отстаёт', red:'сильно отстаёт', gray:'без данных' };
+   var t = document.createElement('div'); t.style.cssText = 'font-size:13px;color:var(--text);flex:1';
+   t.textContent = r.title;
+   var stt = document.createElement('span');
+   stt.style.cssText = 'font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(120,120,128,.12);color:' + colors[r.color];
+   stt.textContent = labels[r.color];
+   var nv = document.createElement('span');
+   nv.style.cssText = 'font-size:13px;color:var(--text);font-variant-numeric:tabular-nums;font-weight:600;min-width:80px;text-align:right';
+   nv.textContent = _fdxFmtNum(r.fact) + '/' + _fdxFmtNum(r.target);
+   row.appendChild(t); row.appendChild(stt); row.appendChild(nv);
+   w2.appendChild(row);
+  });
+ }
+ pane.appendChild(w2);
 }
 
 // v449: устаревшие wig*-функции удалены — заменены на fdx* выше. /api/wig остаётся живым для миграции,
