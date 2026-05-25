@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v462</title>
+<title>SalesDoc — Финансовый Дашборд v463</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12381,13 +12381,15 @@ if(v==='integrations' && typeof intgSbLoad === 'function'){ try { intgSbLoad(); 
  }
 }
 
-// === v462: SPA history management ============================================
-// Без этого браузерный «Назад» (стрелка ← / Alt+← / touchpad swipe) выкидывал из
-// приложения, т.к. SPA не использовала history API. Теперь:
-//   • showView('X') → history.pushState с hash #X
-//   • kbOpenCard(card) → history.pushState с #card/<client_id> (overlay карточки клиента)
-//   • popstate (back/forward/swipe) → восстанавливаем state из стека без двойного push'а
-//   • Глубокий линк #marketing → откроет нужный view при первой загрузке
+// === v463: SPA history management — расширено на 3 overlay-карточки =========
+// Без этого браузерный «Назад» (стрелка ← / Alt+← / touchpad swipe) выкидывал
+// из приложения. Теперь весь back/forward работает через history API:
+//   • showView('X')          → push #X
+//   • kbOpenCard(card)        → push #kbcard/<client_id>   (карточка канбана клиентов)
+//   • ticketsOpen(id)         → push #ticket/<ticket_id>   (карточка тикета поддержки)
+//   • routeOpenClient(cid)    → push #route/<client_id>    (карточка в Маршруте клиента)
+//   • popstate (back/swipe)   → закрываем overlay'ы и восстанавливаем view
+//   • Глубокий линк #marketing работает с первой загрузки
 // ============================================================================
 (function spaInitHistory(){
  var _suppress = false;                          // флаг чтоб popstate не делал лишний push
@@ -12405,69 +12407,120 @@ if(v==='integrations' && typeof intgSbLoad === 'function'){ try { intgSbLoad(); 
   } catch(_){}
  };
 
- // Если kbOpenCard уже определена в момент IIFE — оборачиваем её сразу. Если нет
- // (определяется ниже по файлу), делаем отложенную обёртку через прокси-вызов.
- function wrapKbOpenCard(){
-  var orig = window.kbOpenCard;
+ // Универсальная обёртка для overlay-открывалок. Делаем lazy через setInterval —
+ // некоторые функции определяются ниже по файлу.
+ function wrapOverlay(name, makeState, makeHash){
+  var orig = window[name];
   if(typeof orig !== 'function' || orig._spaWrapped) return false;
-  window.kbOpenCard = function(card){
-   orig(card);
-   if(_suppress) return;
-   var id = card && (card.client_id || card.id) || '';
-   try { history.pushState({ kind:'card', id:id }, '', '#card/' + encodeURIComponent(id)); } catch(_){}
+  window[name] = function(arg){
+   var ret = orig.apply(this, arguments);
+   if(!_suppress){
+    var st, h;
+    try { st = makeState(arg); h = makeHash(arg); } catch(_){}
+    if(st && h && location.hash !== h){
+     try { history.pushState(st, '', h); } catch(_){}
+    }
+   }
+   return ret;
   };
-  window.kbOpenCard._spaWrapped = true;
+  window[name]._spaWrapped = true;
   return true;
  }
- // Пробуем сразу, и через timeout если функция ещё не определена
- if(!wrapKbOpenCard()){
+
+ // Конфиг обёрток
+ var wrappers = [
+  { name:'kbOpenCard',     state:function(c){ var id=c&&(c.client_id||c.id)||''; return { kind:'kbcard', id:id }; }, hash:function(c){ return '#kbcard/'+encodeURIComponent(c&&(c.client_id||c.id)||''); } },
+  { name:'ticketsOpen',    state:function(id){ return { kind:'ticket', id:String(id||'') }; },                       hash:function(id){ return '#ticket/'+encodeURIComponent(id||''); } },
+  { name:'routeOpenClient',state:function(cid){ return { kind:'routecard', id:String(cid||'') }; },                  hash:function(cid){ return '#route/'+encodeURIComponent(cid||''); } }
+ ];
+
+ function tryWrapAll(){
+  var allDone = true;
+  wrappers.forEach(function(w){
+   if(typeof window[w.name] === 'function' && !window[w.name]._spaWrapped){
+    wrapOverlay(w.name, w.state, w.hash);
+   }
+   if(!(window[w.name] && window[w.name]._spaWrapped)) allDone = false;
+  });
+  return allDone;
+ }
+
+ if(!tryWrapAll()){
   var tries = 0;
   var iv = setInterval(function(){
-   if(wrapKbOpenCard() || ++tries > 50) clearInterval(iv);
+   if(tryWrapAll() || ++tries > 50) clearInterval(iv);
   }, 100);
+ }
+
+ // Закрытие overlay'ев — синхронизировано с попстейтом.
+ function closeOpenOverlays(){
+  // kb-card overlay
+  var kbView = document.getElementById('view-kb-card');
+  if(kbView && kbView.style.display !== 'none' && typeof kbCloseCardPage === 'function'){
+   try { kbCloseCardPage(); } catch(_){}
+  }
+  // ticket-card overlay
+  var tkView = document.getElementById('view-ticket-card');
+  if(tkView && tkView.style.display !== 'none' && typeof ticketCloseCard === 'function'){
+   try { ticketCloseCard(); } catch(_){}
+  }
+  // route-card overlay внутри view-route (если есть отдельная функция закрытия)
+  if(typeof _routeCloseCard === 'function'){
+   try { _routeCloseCard(); } catch(_){}
+  } else if(typeof window._routeCurrentCard !== 'undefined' && window._routeCurrentCard){
+   // Запасной путь: просто обнуляем + скрываем элемент маршрут-карточки
+   try {
+    var rc = document.getElementById('route-card-page');
+    if(rc) rc.style.display = 'none';
+    window._routeCurrentCard = null;
+   } catch(_){}
+  }
  }
 
  window.addEventListener('popstate', function(ev){
   _suppress = true;
   try {
    var state = ev.state || null;
-   // Если сейчас открыта карточка клиента, а новое состояние — не карточка → закрываем
-   var cardView = document.getElementById('view-kb-card');
-   var cardOpen = cardView && cardView.style.display !== 'none';
-   if(cardOpen && (!state || state.kind !== 'card')){
-    if(typeof kbCloseCardPage === 'function') kbCloseCardPage();
+   // 1) Закрыть любые открытые overlay'и если новое состояние — НЕ overlay этого типа
+   var kbOpen = (function(){ var el=document.getElementById('view-kb-card'); return el && el.style.display!=='none'; })();
+   var tkOpen = (function(){ var el=document.getElementById('view-ticket-card'); return el && el.style.display!=='none'; })();
+   if(kbOpen && (!state || state.kind !== 'kbcard')){
+    if(typeof kbCloseCardPage === 'function') try { kbCloseCardPage(); } catch(_){}
    }
-   if(state){
-    if(state.kind === 'view' && state.view){
-     _origShowView(state.view);
-    } else if(state.kind === 'card' && state.id){
-     // Восстановить карточку: поиск в kbCards по client_id или id
-     if(typeof kbCards !== 'undefined' && Array.isArray(kbCards)){
-      var c = kbCards.find(function(x){ return (x.client_id === state.id) || (x.id === state.id); });
-      if(c){
-       // Вызовем оригинал напрямую — обёртка добавит state, но _suppress=true это блокирует
-       var openFn = window.kbOpenCard && window.kbOpenCard._spaWrapped
-        ? (function(){ var f = window.kbOpenCard; return function(card){ /* инлайн оригинал поведения */ f.toString(); /* fallback на orig: */ }; })()
-        : null;
-       // Простейший путь: разворачивать карточку через kbOpenCard (defer suppress)
-       if(typeof window.kbOpenCard === 'function') window.kbOpenCard(c);
-      }
-     }
+   if(tkOpen && (!state || state.kind !== 'ticket')){
+    if(typeof ticketCloseCard === 'function') try { ticketCloseCard(); } catch(_){}
+   }
+
+   // 2) Восстановить нужное состояние
+   if(!state) return;
+   if(state.kind === 'view' && state.view){
+    _origShowView(state.view);
+   } else if(state.kind === 'kbcard' && state.id){
+    if(typeof kbCards !== 'undefined' && Array.isArray(kbCards)){
+     var c = kbCards.find(function(x){ return (x.client_id === state.id) || (x.id === state.id); });
+     if(c && typeof window.kbOpenCard === 'function') window.kbOpenCard(c);
     }
+   } else if(state.kind === 'ticket' && state.id){
+    if(typeof window.ticketsOpen === 'function') window.ticketsOpen(state.id);
+   } else if(state.kind === 'routecard' && state.id){
+    if(typeof window.routeOpenClient === 'function') window.routeOpenClient(state.id);
    }
   } catch(e){ console.warn('[spa] popstate:', e); }
   _suppress = false;
  });
 
- // На первой загрузке — фиксируем initial state
+ // На первой загрузке — фиксируем initial state. Без deep-link логики для overlay'ев
+ // (их состояние требует загруженных данных, которые подтягиваются после)
  try {
   var initHash = (location.hash || '').replace(/^#/, '');
-  if(initHash && initHash.indexOf('card/') !== 0){
+  if(initHash && /^(kbcard|ticket|route|card)\//.test(initHash)){
+   // Hash — на overlay. Просто пишем заглушку — пользователь сам перейдёт куда нужно
+   history.replaceState({ kind:'view', view:'dashboard' }, '', location.hash);
+  } else if(initHash){
    history.replaceState({ kind:'view', view:initHash }, '', location.hash);
-   // Глубокий линк — открыть запрошенный view
    _suppress = true; try { _origShowView(initHash); } catch(_){} _suppress = false;
   } else {
-   history.replaceState({ kind:'view', view:'morning' }, '', location.hash || '');
+   history.replaceState({ kind:'view', view:'morning' }, '', '');
   }
  } catch(_){}
 })();
