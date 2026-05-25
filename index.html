@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v458</title>
+<title>SalesDoc — Финансовый Дашборд v459</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4428,12 +4428,35 @@ body.light #view-ticket-card.amocard-active {
 .amocard-feed-icon.amocard-ic-note { background:var(--amocard-amber-bg); color:var(--amocard-amber); }
 .amocard-feed-icon.amocard-ic-wz { background:var(--amocard-green-bg); color:var(--amocard-green); }
 .amocard-feed-icon.amocard-ic-stage { background:var(--amocard-blue-bg); color:var(--amocard-blue); }
-/* v458: feed-item для задач */
-.amocard-feed-icon.amocard-ic-task { background:rgba(20,184,166,.16); color:#14b8a6; }
-.amocard-task-feed { background:var(--amocard-surface); border:1px solid #14b8a6; border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; box-shadow:var(--amocard-sh-1); transition:all .15s; }
-.amocard-task-feed:hover { border-color:#0f9c8b; box-shadow:0 4px 12px rgba(0,0,0,.2); }
-.amocard-task-feed.is-done { border-color:var(--amocard-border); opacity:.65; }
-.amocard-task-feed.is-done .amocard-feed-icon.amocard-ic-task { background:rgba(146,152,155,.16); color:#92989b; }
+/* v459: feed-item для задач. Розовый бордер ТОЛЬКО при просрочке (is-overdue),
+   иначе — нейтральный. Done — серый, opacity. */
+.amocard-task-feed { background:var(--amocard-surface); border:1.5px solid var(--amocard-border); border-radius:14px; padding:14px 18px; display:flex; gap:14px; align-items:flex-start; box-shadow:var(--amocard-sh-1); transition:all .15s; }
+.amocard-task-feed:hover { border-color:var(--amocard-border-strong); }
+.amocard-task-feed.is-overdue { border-color:#ec4899; }
+.amocard-task-feed.is-overdue:hover { border-color:#db2777; }
+.amocard-task-feed.is-done { border-color:#475569; opacity:.7; }
+.amocard-task-feed-avatar { width:36px; height:36px; border-radius:50%; border:1.5px solid var(--amocard-border-strong); background:var(--amocard-surface-3); color:var(--amocard-text-soft); display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+.amocard-task-feed.is-overdue .amocard-task-feed-avatar { border-color:#ec4899; background:rgba(236,72,153,.10); color:#ec4899; }
+.amocard-task-feed.is-done .amocard-task-feed-avatar { border-color:#475569; background:rgba(71,85,105,.10); color:#92989b; }
+.amocard-task-feed-body { flex:1; min-width:0; }
+.amocard-task-feed-meta { font-size:13px; color:#cbd5e1; margin-bottom:8px; line-height:1.45; }
+.amocard-task-feed-meta .tf-date { font-weight:500; color:var(--amocard-text); }
+.amocard-task-feed-meta .tf-overdue { color:#ef4444; font-weight:600; }
+.amocard-task-feed-content { font-size:14px; color:var(--amocard-text); margin-bottom:12px; line-height:1.45; }
+.amocard-task-feed.is-done .amocard-task-feed-content { color:var(--amocard-text-soft); }
+.amocard-task-feed-content .tf-type-icon { display:inline-block; margin-right:6px; font-weight:700; font-size:14px; vertical-align:baseline; }
+.amocard-task-feed-content .tf-type-name { font-weight:700; }
+.amocard-task-feed-actions { display:flex; gap:8px; align-items:stretch; }
+.amocard-task-feed-result-input { flex:1; background:#0f1e2e; border:1px solid #334155; color:var(--amocard-text); padding:9px 14px; border-radius:8px; font-size:13px; font-family:inherit; outline:none; transition:border-color .15s; }
+.amocard-task-feed-result-input:focus { border-color:#ec4899; }
+.amocard-task-feed-result-input::placeholder { color:#6b7280; }
+body.light .amocard-task-feed-result-input { background:#fff; border-color:#e5e7eb; color:#0f172a; }
+.amocard-task-feed-done-btn { background:#475569; color:#cbd5e1; border:none; padding:9px 22px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; transition:background .15s; }
+.amocard-task-feed-done-btn:not(:disabled) { background:#ec4899; color:#fff; }
+.amocard-task-feed-done-btn:not(:disabled):hover { background:#db2777; }
+.amocard-task-feed-done-btn:disabled { cursor:not-allowed; }
+.amocard-task-feed-result-display { font-size:13px; color:var(--amocard-text-soft); padding-top:8px; border-top:1px solid var(--amocard-border); margin-top:4px; }
+.amocard-task-feed-result-display b { color:var(--amocard-text); margin-right:4px; }
 .amocard-feed-body { flex:1; min-width:0; }
 .amocard-feed-meta { font-size:11px; color:var(--amocard-text-soft); font-weight:500; margin-bottom:3px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .amocard-feed-meta .amocard-dot { width:4px; height:4px; border-radius:50%; background:var(--amocard-text-faint); }
@@ -27114,66 +27137,159 @@ async function _routeRenderFeed(){
  }
 }
 
-// v458: feed-item для задачи. Открытая = бирюзовый аватар ⊙, закрытая = серый ✓.
-// Клик по карточке открывает модалку редактирования (crmTaskEditStart).
+// v459: feed-item для задачи — точный референс amoCRM (см. скрин юзера).
+// Раскладка:
+//   [⊙ аватар]  | DD.MM.YYYY (N дней) от Автор для Ответственный
+//               | ↗ задача — текст задачи
+//               | [Добавить результат ......] [Выполнить]  ← инлайн закрытие, без модалки
+// Закрытая (status=done): серый бордер, opacity .7, аватар ✓, вместо инпута — «Результат: ...»
 function _buildFeedTask(t){
+ var isDone = t.status === 'done';
+ // v459 fix: розовый бордер ТОЛЬКО если задача просрочена. Открытые в срок — нейтральный.
+ var isOverdue = !isDone && t.deadline_at && new Date(t.deadline_at).getTime() < Date.now();
  var item = document.createElement('div');
- item.className = 'amocard-task-feed' + (t.status === 'done' ? ' is-done' : '');
- item.style.cursor = 'pointer';
- item.title = t.status === 'done' ? 'Закрытая задача' : 'Открыть задачу';
- item.onclick = function(){
-  if(typeof crmTaskEditStart === 'function') crmTaskEditStart(t.id);
- };
- var ic = document.createElement('div'); ic.className = 'amocard-feed-icon amocard-ic-task';
- ic.textContent = t.status === 'done' ? '✓' : '⊙';
- item.appendChild(ic);
- var body = document.createElement('div'); body.className = 'amocard-feed-body';
- // Meta: type + deadline + assignee + author
- var meta = document.createElement('div'); meta.className = 'amocard-feed-meta';
- var typeName = 'Задача';
- var typeColor = '#c5cad1';
- if(typeof crmTasksTypeById === 'function'){
-  var ty = crmTasksTypeById(t.type_id);
-  if(ty){ typeName = ty.name; typeColor = ty.color || '#c5cad1'; }
- }
- var typeSpan = document.createElement('span');
- typeSpan.style.color = typeColor; typeSpan.style.fontWeight = '600';
- typeSpan.textContent = (t.status === 'done' ? '✓ ' : '⊙ ') + typeName;
- meta.appendChild(typeSpan);
+ item.className = 'amocard-task-feed' + (isOverdue ? ' is-overdue' : '') + (isDone ? ' is-done' : '');
+
+ // === Avatar (круг с иконкой) ===
+ var av = document.createElement('div');
+ av.className = 'amocard-task-feed-avatar';
+ av.textContent = isDone ? '✓' : '⊙';
+ item.appendChild(av);
+
+ var body = document.createElement('div');
+ body.className = 'amocard-task-feed-body';
+
+ // === Row 1: дата + просрочка + от/для ===
+ var meta = document.createElement('div');
+ meta.className = 'amocard-task-feed-meta';
  if(t.deadline_at){
-  var dlSep = document.createElement('span'); dlSep.className = 'amocard-dot'; meta.appendChild(dlSep);
-  var dl = document.createElement('span');
-  dl.textContent = (typeof crmTasksFmtDeadline === 'function') ? crmTasksFmtDeadline(t) : t.deadline_at;
-  if(typeof crmTasksIsOverdue === 'function' && crmTasksIsOverdue(t)) dl.style.color = '#f37575';
-  meta.appendChild(dl);
+  var dl = new Date(t.deadline_at);
+  var dd = String(dl.getDate()).padStart(2,'0') + '.' + String(dl.getMonth()+1).padStart(2,'0') + '.' + dl.getFullYear();
+  // Время добавляем если не all-day
+  if(!t.is_all_day){
+   var hh = String(dl.getHours()).padStart(2,'0') + ':' + String(dl.getMinutes()).padStart(2,'0');
+   dd += ' ' + hh;
+  }
+  var dt = document.createElement('span'); dt.className = 'tf-date'; dt.textContent = dd; meta.appendChild(dt);
+  // Просроченность — счётчик «(N дней)» в красном
+  if(!isDone){
+   var diffMs = Date.now() - dl.getTime();
+   var diffDays = Math.floor(diffMs / 86400000);
+   if(diffDays > 0){
+    var od = document.createElement('span'); od.className = 'tf-overdue';
+    od.textContent = ' (' + diffDays + ' ' + _pluralizeDays(diffDays) + ')';
+    meta.appendChild(od);
+   }
+  }
+ }
+ if(t.created_by){
+  var fr = document.createElement('span'); fr.textContent = ' от ' + t.created_by; meta.appendChild(fr);
  }
  if(t.assignee_operator){
-  var sep2 = document.createElement('span'); sep2.className = 'amocard-dot'; meta.appendChild(sep2);
-  var ass = document.createElement('span'); ass.textContent = 'для ' + t.assignee_operator; meta.appendChild(ass);
- }
- if(t.created_by && t.created_by !== t.assignee_operator){
-  var sep3 = document.createElement('span'); sep3.className = 'amocard-dot'; meta.appendChild(sep3);
-  var auth = document.createElement('span'); auth.className = 'amocard-who'; auth.textContent = 'от ' + t.created_by; meta.appendChild(auth);
+  var to = document.createElement('span'); to.textContent = ' для ' + t.assignee_operator; meta.appendChild(to);
  }
  body.appendChild(meta);
- // Текст задачи
- if(t.text){
-  var text = document.createElement('div'); text.className = 'amocard-feed-text';
-  if(t.status === 'done') text.style.textDecoration = 'line-through';
-  text.textContent = t.text;
-  body.appendChild(text);
+
+ // === Row 2: тип-иконка + название типа (bold) + em-dash + текст ===
+ var content = document.createElement('div');
+ content.className = 'amocard-task-feed-content';
+ var typeName = 'задача', typeColor = '#568FFA';
+ if(typeof crmTasksTypeById === 'function'){
+  var ty = crmTasksTypeById(t.type_id);
+  if(ty){ typeName = ty.name || typeName; typeColor = ty.color || typeColor; }
  }
- // Результат (для закрытых)
- if(t.result){
+ var iconSpan = document.createElement('span');
+ iconSpan.className = 'tf-type-icon';
+ iconSpan.style.color = typeColor;
+ iconSpan.textContent = '↗';
+ content.appendChild(iconSpan);
+ var nameSpan = document.createElement('span');
+ nameSpan.className = 'tf-type-name';
+ nameSpan.textContent = typeName;
+ content.appendChild(nameSpan);
+ if(t.text){
+  content.appendChild(document.createTextNode(' — ' + t.text));
+ }
+ body.appendChild(content);
+
+ // === Row 3: инлайн закрытие (если open) или результат (если done) ===
+ if(!isDone){
+  var actions = document.createElement('div');
+  actions.className = 'amocard-task-feed-actions';
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'amocard-task-feed-result-input';
+  input.placeholder = 'Добавить результат';
+  var btn = document.createElement('button');
+  btn.className = 'amocard-task-feed-done-btn';
+  btn.textContent = 'Выполнить';
+  btn.disabled = true;
+  input.oninput = function(){ btn.disabled = input.value.trim().length < 3; };
+  input.onkeydown = function(ev){
+   if(ev.key === 'Enter' && !btn.disabled){
+    ev.preventDefault();
+    _feedCloseTaskInline(t.id, input.value.trim(), input, btn);
+   }
+  };
+  btn.onclick = function(){
+   if(btn.disabled) return;
+   _feedCloseTaskInline(t.id, input.value.trim(), input, btn);
+  };
+  actions.appendChild(input);
+  actions.appendChild(btn);
+  body.appendChild(actions);
+ } else if(t.result){
   var res = document.createElement('div');
-  res.style.fontSize = '11px'; res.style.color = '#9ca3af';
-  res.style.marginTop = '4px'; res.style.paddingTop = '4px';
-  res.style.borderTop = '0.5px solid rgba(255,255,255,.05)';
-  res.textContent = 'Результат: ' + t.result;
+  res.className = 'amocard-task-feed-result-display';
+  var lbl = document.createElement('b'); lbl.textContent = 'Результат:';
+  res.appendChild(lbl);
+  res.appendChild(document.createTextNode(' ' + t.result));
   body.appendChild(res);
  }
+
  item.appendChild(body);
  return item;
+}
+
+// v459: helper для правильного склонения слова «день»
+function _pluralizeDays(n){
+ var mod10 = n % 10, mod100 = n % 100;
+ if(mod100 >= 11 && mod100 <= 14) return 'дней';
+ if(mod10 === 1) return 'день';
+ if(mod10 >= 2 && mod10 <= 4) return 'дня';
+ return 'дней';
+}
+
+// v459: инлайн-закрытие задачи прямо из ленты (без модалки).
+// PATCH /api/tasks?id=X&close=1 с body.result, минимум 3 символа.
+async function _feedCloseTaskInline(taskId, result, inputEl, btnEl){
+ if(!result || result.trim().length < 3) return;
+ if(typeof crmTasksFetch !== 'function'){ alert('Модуль задач не загружен'); return; }
+ btnEl.disabled = true;
+ btnEl.textContent = '...';
+ inputEl.disabled = true;
+ try {
+  var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId) + '&close=1', {
+   method:'PATCH',
+   body: JSON.stringify({ result: result.trim() })
+  });
+  if(!d || !d.ok){
+   alert('Не удалось закрыть: ' + (d && d.error || 'неизв.'));
+   btnEl.disabled = false; btnEl.textContent = 'Выполнить'; inputEl.disabled = false;
+   return;
+  }
+  if(typeof kbShowToast === 'function') kbShowToast('Задача закрыта');
+  // Перерисуем ленту, таб «Задачи», календарь и страницу «Мои задачи» через единый хелпер
+  if(typeof _mtMaybeReload === 'function') _mtMaybeReload();
+  // Если карточка клиента открыта — обновим её таб «Задачи»
+  if(typeof window._kbCurrentCard !== 'undefined' && window._kbCurrentCard && typeof crmClientTasksRender === 'function'){
+   var pane = document.querySelector('.crm-tab-pane[data-pane="tasks"]:not([hidden])');
+   if(pane) crmClientTasksRender(window._kbCurrentCard);
+  }
+ } catch(e){
+  alert('Ошибка сети: ' + (e.message || e));
+  btnEl.disabled = false; btnEl.textContent = 'Выполнить'; inputEl.disabled = false;
+ }
 }
 
 function _fmtFeedDate(iso){
