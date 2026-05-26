@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v465</title>
+<title>SalesDoc — Финансовый Дашборд v466</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -24869,11 +24869,19 @@ function _ticketsCurrentOperatorName(){
  return null;
 }
 
-// v445+v465: scope «Мои/Все» для канбана Тикетов. Сохраняется в localStorage между сессиями.
-// Default: оператору — «Мои», CEO/админу — «Все».
-// v465 FIX: ключ теперь per-user. Раньше был глобальный 'tickets_scope' — если кто-то на
-// этом браузере нажал «Все», то Айдос при логине тоже видел «Все» (включая чужие тикеты).
-// Теперь каждый юзер хранит свой выбор отдельно: tickets_scope_<userId>.
+// v445+v465+v466: scope «Мои/Все» для канбана Тикетов. Сохраняется в localStorage per-user.
+// v466: автоматическая миграция со старого глобального ключа — выполняется при загрузке
+// скрипта, чтобы юзер не лез в DevTools руками.
+(function _ticketsScopeMigration(){
+ try {
+  // Если старый глобальный ключ ещё есть — удалить. На будущем заходе оператор по
+  // дефолту получит scope='mine' через _ticketsCurrentOperatorName() в _ticketsGetScope.
+  if(localStorage.getItem('tickets_scope') !== null){
+   localStorage.removeItem('tickets_scope');
+  }
+ } catch(_){}
+})();
+
 function _ticketsScopeKey(){
  var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
  var uid = u.id || u.email || u.name || 'anon';
