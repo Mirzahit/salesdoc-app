@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v464</title>
+<title>SalesDoc — Финансовый Дашборд v465</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -24869,17 +24869,28 @@ function _ticketsCurrentOperatorName(){
  return null;
 }
 
-// v445: scope «Мои/Все» для канбана Тикетов. Сохраняется в localStorage между сессиями.
+// v445+v465: scope «Мои/Все» для канбана Тикетов. Сохраняется в localStorage между сессиями.
 // Default: оператору — «Мои», CEO/админу — «Все».
+// v465 FIX: ключ теперь per-user. Раньше был глобальный 'tickets_scope' — если кто-то на
+// этом браузере нажал «Все», то Айдос при логине тоже видел «Все» (включая чужие тикеты).
+// Теперь каждый юзер хранит свой выбор отдельно: tickets_scope_<userId>.
+function _ticketsScopeKey(){
+ var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
+ var uid = u.id || u.email || u.name || 'anon';
+ return 'tickets_scope_' + String(uid).replace(/[^a-zA-Zа-яА-Я0-9_-]/g,'_');
+}
 function _ticketsGetScope(){
  var saved = null;
- try { saved = localStorage.getItem('tickets_scope'); } catch(_){}
+ try { saved = localStorage.getItem(_ticketsScopeKey()); } catch(_){}
  if(saved === 'mine' || saved === 'all') return saved;
+ // Если у этого юзера ещё нет сохранённого выбора — оператор по умолчанию видит «Мои»
  return _ticketsCurrentOperatorName() ? 'mine' : 'all';
 }
 function _ticketsSetScope(scope){
  if(scope !== 'mine' && scope !== 'all') return;
- try { localStorage.setItem('tickets_scope', scope); } catch(_){}
+ try { localStorage.setItem(_ticketsScopeKey(), scope); } catch(_){}
+ // v465: чистим старый глобальный ключ (миграция) — чтобы не возвращался при race
+ try { localStorage.removeItem('tickets_scope'); } catch(_){}
  // При клике «Мои» сбрасываем фильтр оператора (иначе конфликт «мои + Айдос» = только Айдос)
  if(scope === 'mine'){
   var fOp = document.getElementById('tickets-filter-op');
