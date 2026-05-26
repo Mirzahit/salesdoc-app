@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v463</title>
+<title>SalesDoc — Финансовый Дашборд v464</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12381,6 +12381,26 @@ if(v==='integrations' && typeof intgSbLoad === 'function'){ try { intgSbLoad(); 
  }
 }
 
+// v464: ESC закрывает любую открытую модалку. Раньше модалки не пушились в history,
+// поэтому браузерный back прыгал поверх модалок и менял view — теперь ESC даёт явный
+// способ закрыть верхнюю модалку без задевания SPA-навигации.
+document.addEventListener('keydown', function(ev){
+ if(ev.key !== 'Escape' && ev.keyCode !== 27) return;
+ // Закрываем самую верхнюю модалку (последнюю в DOM-порядке)
+ var modals = document.querySelectorAll('.ct-modal-bg, .crm-modal-bg');
+ if(modals.length){
+  ev.stopPropagation();
+  modals[modals.length - 1].remove();
+  return;
+ }
+ // Также закрываем dropdown'ы (выбор типа, ассайна и т.д.)
+ var dds = document.querySelectorAll('.ct-dd, .ct-time-popover');
+ if(dds.length){
+  dds.forEach(function(d){ d.remove(); });
+  return;
+ }
+});
+
 // === v463: SPA history management — расширено на 3 overlay-карточки =========
 // Без этого браузерный «Назад» (стрелка ← / Alt+← / touchpad swipe) выкидывал
 // из приложения. Теперь весь back/forward работает через history API:
@@ -12453,27 +12473,19 @@ if(v==='integrations' && typeof intgSbLoad === 'function'){ try { intgSbLoad(); 
  }
 
  // Закрытие overlay'ев — синхронизировано с попстейтом.
+ // v464 fix: функция называется routeCloseCard (без underscore), а не _routeCloseCard.
  function closeOpenOverlays(){
-  // kb-card overlay
   var kbView = document.getElementById('view-kb-card');
   if(kbView && kbView.style.display !== 'none' && typeof kbCloseCardPage === 'function'){
    try { kbCloseCardPage(); } catch(_){}
   }
-  // ticket-card overlay
   var tkView = document.getElementById('view-ticket-card');
   if(tkView && tkView.style.display !== 'none' && typeof ticketCloseCard === 'function'){
    try { ticketCloseCard(); } catch(_){}
   }
-  // route-card overlay внутри view-route (если есть отдельная функция закрытия)
-  if(typeof _routeCloseCard === 'function'){
-   try { _routeCloseCard(); } catch(_){}
-  } else if(typeof window._routeCurrentCard !== 'undefined' && window._routeCurrentCard){
-   // Запасной путь: просто обнуляем + скрываем элемент маршрут-карточки
-   try {
-    var rc = document.getElementById('route-card-page');
-    if(rc) rc.style.display = 'none';
-    window._routeCurrentCard = null;
-   } catch(_){}
+  var rcView = document.getElementById('view-route-card');
+  if(rcView && rcView.style.display !== 'none' && typeof routeCloseCard === 'function'){
+   try { routeCloseCard(); } catch(_){}
   }
  }
 
@@ -12482,13 +12494,18 @@ if(v==='integrations' && typeof intgSbLoad === 'function'){ try { intgSbLoad(); 
   try {
    var state = ev.state || null;
    // 1) Закрыть любые открытые overlay'и если новое состояние — НЕ overlay этого типа
+   // v464 fix: добавлен route-card overlay
    var kbOpen = (function(){ var el=document.getElementById('view-kb-card'); return el && el.style.display!=='none'; })();
    var tkOpen = (function(){ var el=document.getElementById('view-ticket-card'); return el && el.style.display!=='none'; })();
+   var rcOpen = (function(){ var el=document.getElementById('view-route-card'); return el && el.style.display!=='none'; })();
    if(kbOpen && (!state || state.kind !== 'kbcard')){
     if(typeof kbCloseCardPage === 'function') try { kbCloseCardPage(); } catch(_){}
    }
    if(tkOpen && (!state || state.kind !== 'ticket')){
     if(typeof ticketCloseCard === 'function') try { ticketCloseCard(); } catch(_){}
+   }
+   if(rcOpen && (!state || state.kind !== 'routecard')){
+    if(typeof routeCloseCard === 'function') try { routeCloseCard(); } catch(_){}
    }
 
    // 2) Восстановить нужное состояние
@@ -29321,6 +29338,13 @@ async function crmCalSyncTasksToLocal(){
   var existing = crmEventsAll();
   // Сначала выкидываем все старые task-синки чтобы при удалении задачи в БД она исчезла и из календаря
   existing = existing.filter(function(e){ return !e._sync_task; });
+  // v464: защита от quota exceeded в localStorage. На больших командах число открытых
+  // задач может быть тысячами, а localStorage обычно ~5MB. Кэпим разумным числом.
+  var tasksArr = d.tasks || [];
+  if(tasksArr.length > 500){
+   console.warn('[cal] task sync: capping at 500 of', tasksArr.length, 'tasks to avoid localStorage overflow');
+   tasksArr = tasksArr.slice(0, 500);
+  }
   // Маппинг типа задачи (task_types.id) → тип события календаря
   // (training/meeting/deadline/other — то что понимает старый календарь)
   var typeMap = {
@@ -29336,7 +29360,7 @@ async function crmCalSyncTasksToLocal(){
    17:'deadline'  // Горит
    // default: 'other'
   };
-  (d.tasks || []).forEach(function(t){
+  tasksArr.forEach(function(t){
    if(!t.deadline_at) return;
    var ds = t.deadline_at.slice(0,10);
    var ts = t.is_all_day ? '' : (t.deadline_at.length >= 16 ? t.deadline_at.slice(11,16) : '');
