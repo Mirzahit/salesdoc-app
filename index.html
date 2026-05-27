@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v475</title>
+<title>SalesDoc — Финансовый Дашборд v476</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3476,6 +3476,10 @@ body.light .theme-btn.active{background:rgba(76,140,245,.1);color:#1967D2}
 .theme-lamp:active .face{scale:0.99}
 .theme-lamp:focus-visible{outline:2px solid var(--emerald);outline-offset:3px}
 .theme-lamp .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}
+/* v476: country-lamp — расширяет .theme-lamp, вместо SVG-месяца показывает текст KZ/KG */
+.country-lamp{aspect-ratio:2.1/1}
+.country-lamp .cl-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Inter',sans-serif;font-weight:700;font-size:0.95em;letter-spacing:0.05em;color:hsl(0 0% 78%);z-index:5;pointer-events:none;transition:color var(--step) var(--ease);line-height:1}
+.country-lamp[aria-pressed='true'] .cl-label{color:hsl(0 0% 20%)}
 /* Light theme: readable text colors on white background */
 body.light .kpi-label{color:#6B7A99!important}
 body.light .kpi-value{color:#111827!important;-webkit-text-fill-color:#111827!important}
@@ -5174,10 +5178,18 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <button class="cal-apply-btn" onclick="calApply()" style="width:100%">ПРИМЕНИТЬ</button>
  </div>
  </div>
- <div class="theme-switch" id="topbar-country" style="display:none">
- <button class="theme-btn country-top-btn active" data-country="KZ" onclick="switchCountry('KZ')">KZ</button>
- <button class="theme-btn country-top-btn" data-country="KG" onclick="switchCountry('KG')">KG</button>
+ <button id="country-lamp" class="theme-lamp country-lamp" aria-pressed="false" aria-label="Переключить страну" title="Переключить страну (KZ/KG)" onclick="toggleCountry()" style="display:none">
+ <div class="socket"><div class="socket-shadow"></div></div>
+ <div class="face">
+ <div class="face-shadow"></div>
+ <div class="face-glowdrop"></div>
+ <div class="face-plate"></div>
+ <div class="face-shine"><div class="face-shine-shadow"></div></div>
+ <div class="face-glows"><div></div></div>
+ <span class="cl-label" id="country-lamp-label">KZ</span>
  </div>
+ <span class="sr-only">Переключить страну</span>
+ </button>
  <button id="theme-lamp" class="theme-lamp" aria-pressed="false" aria-label="Переключить тему" title="Переключить тему" onclick="toggleTheme()">
  <div class="socket"><div class="socket-shadow"></div></div>
  <div class="face">
@@ -8919,11 +8931,22 @@ function updateCountrySwitcherUI() {
  document.querySelectorAll('.country-btn,.country-top-btn').forEach(function(btn){
  btn.classList.toggle('active', btn.dataset.country === currentCountry);
  });
+ // v476: новый country-lamp в топбаре — toggle с буквами KZ/KG
+ var lamp = document.getElementById('country-lamp');
+ if(lamp){
+  lamp.setAttribute('aria-pressed', currentCountry === 'KG' ? 'true' : 'false');
+  var lbl = document.getElementById('country-lamp-label');
+  if(lbl) lbl.textContent = currentCountry;
+ }
  var titleEl = document.querySelector('.page-title');
  if (titleEl) {
  var base = titleEl.textContent.replace(/\s*[\u{1F1E6}-\u{1F1FF}]{2}\s*/gu, '').trim();
  titleEl.textContent = COUNTRY_CONFIG[currentCountry].flag + ' ' + base;
  }
+}
+// v476: toggle страны для country-lamp кнопки в топбаре
+function toggleCountry(){
+ switchCountry(currentCountry === 'KZ' ? 'KG' : 'KZ');
 }
 
 function setSyncStatus(state, text) {
@@ -13358,10 +13381,10 @@ async function doLogin() {
  if (currentUser.country) {
  switchCountry(currentUser.country);
  document.getElementById('country-switcher').style.display = 'none';
- document.getElementById('topbar-country').style.display = 'none';
+ document.getElementById('country-lamp').style.display = 'none';
  } else {
  document.getElementById('country-switcher').style.display = 'none';
- document.getElementById('topbar-country').style.display = '';
+ document.getElementById('country-lamp').style.display = '';
  }
  updateCountrySwitcherUI();
  initCalendar();
@@ -13411,12 +13434,12 @@ async function doLogin() {
  switchCountry(currentUser.country);
  var cs = document.getElementById('country-switcher');
  if(cs) cs.style.display = 'none';
- var tc = document.getElementById('topbar-country');
+ var tc = document.getElementById('country-lamp');
  if(tc) tc.style.display = 'none';
  } else {
  var cs = document.getElementById('country-switcher');
  if(cs) cs.style.display = 'none';
- var tc = document.getElementById('topbar-country');
+ var tc = document.getElementById('country-lamp');
  if(tc) tc.style.display = '';
  }
  updateCountrySwitcherUI();
