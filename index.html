@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v484</title>
+<title>SalesDoc — Финансовый Дашборд v485</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4508,7 +4508,10 @@ body.light #view-ticket-card.amocard-active {
 .amocard-feed { flex:1; overflow-y:auto; padding:18px 24px 12px; display:flex; flex-direction:column; gap:14px; min-height:0; }
 .amocard-note { background:var(--amocard-surface); border:1px solid var(--amocard-border); border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; box-shadow:var(--amocard-sh-1); }
 .amocard-feed-icon { width:32px; height:32px; border-radius:50%; background:var(--amocard-surface-3); color:var(--amocard-text-soft); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
-.amocard-feed-icon.amocard-ic-note { background:var(--amocard-amber-bg); color:var(--amocard-amber); }
+/* v485: note-иконка в стиле amoCRM — outlined круг с file-text внутри (как на референсе) */
+.amocard-feed-icon.amocard-ic-note { background:transparent; color:#7FAFD9; border:1.5px solid #7FAFD9 }
+.amocard-feed-icon.amocard-ic-note svg { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.5 }
+body.light .amocard-feed-icon.amocard-ic-note { color:#5489BB; border-color:#5489BB }
 .amocard-feed-icon.amocard-ic-wz { background:var(--amocard-green-bg); color:var(--amocard-green); }
 .amocard-feed-icon.amocard-ic-stage { background:var(--amocard-blue-bg); color:var(--amocard-blue); }
 /* v459: feed-item для задач. Розовый бордер ТОЛЬКО при просрочке (is-overdue),
@@ -27810,21 +27813,49 @@ function _fmtFeedDate(iso){
  var d = new Date(iso);
  if(!d || isNaN(d.getTime())) return '';
  try {
-  return d.toLocaleDateString('ru-RU') + ' ' + d.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+  // v485: «Сегодня HH:MM» / «Вчера HH:MM» / «DD.MM.YYYY HH:MM»
+  var today = new Date(); today.setHours(0,0,0,0);
+  var dday = new Date(d); dday.setHours(0,0,0,0);
+  var diff = Math.round((today - dday) / 86400000);
+  var hm = d.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+  if(diff === 0) return 'Сегодня ' + hm;
+  if(diff === 1) return 'Вчера ' + hm;
+  return d.toLocaleDateString('ru-RU') + ' ' + hm;
  } catch(_){ return ''; }
 }
 
 function _buildFeedNote(n, eventType){
  var note = document.createElement('div'); note.className = 'amocard-note';
  var ic = document.createElement('div'); ic.className = 'amocard-feed-icon amocard-ic-note';
- ic.textContent = eventType === 'system' ? '✓' : '✎';
+ // v485: outlined file-text иконка (как в amoCRM) — для системных событий оставляем ✓
+ if(eventType === 'system'){
+  ic.textContent = '✓';
+ } else {
+  var svgNS = 'http://www.w3.org/2000/svg';
+  var svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox','0 0 24 24');
+  svg.setAttribute('fill','none');
+  svg.setAttribute('stroke','currentColor');
+  svg.setAttribute('stroke-width','1.5');
+  svg.setAttribute('stroke-linecap','round');
+  svg.setAttribute('stroke-linejoin','round');
+  ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z','M14 2v6h6','M16 13H8','M16 17H8','M10 9H8'].forEach(function(d){
+   var p = document.createElementNS(svgNS, 'path');
+   p.setAttribute('d', d);
+   svg.appendChild(p);
+  });
+  ic.appendChild(svg);
+ }
  note.appendChild(ic);
  var body = document.createElement('div'); body.className = 'amocard-feed-body';
  var meta = document.createElement('div'); meta.className = 'amocard-feed-meta';
  var dt = document.createElement('span'); dt.textContent = _fmtFeedDate(n.created_at); meta.appendChild(dt);
- if(n.author){
-  var dot = document.createElement('span'); dot.className = 'amocard-dot'; meta.appendChild(dot);
-  var who = document.createElement('span'); who.className = 'amocard-who'; who.textContent = '— ' + n.author; meta.appendChild(who);
+ // v485: маппинг ролей в человекочитаемые названия + убран «— » префикс
+ var author = n.author;
+ var roleMap = { 'оператор':'Администрация', 'operator':'Администрация', 'admin':'Администрация' };
+ if(author && roleMap[String(author).toLowerCase()]) author = roleMap[String(author).toLowerCase()];
+ if(author){
+  var who = document.createElement('span'); who.className = 'amocard-who'; who.textContent = author; meta.appendChild(who);
  }
  body.appendChild(meta);
  var text = document.createElement('div'); text.className = 'amocard-feed-text';
