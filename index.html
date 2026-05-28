@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v506</title>
+<title>SalesDoc — Финансовый Дашборд v507</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21752,7 +21752,8 @@ function intgRenderCard(card){
 // v505: лента в карточке интеграции — переиспользуем компоненты Внедрения
 // (_buildFeedNote / _buildFeedStageChange / _buildFeedWZ / _buildFeedTicket).
 // Сортировка как в чате — старые сверху, новые снизу + автоскролл вниз.
-function intgRenderCardFeed(items){
+// v507: + pseudo-event «параллельное внедрение» — показываем активный маршрут клиента.
+async function intgRenderCardFeed(items){
  var feedEl = document.getElementById('intg-card-feed');
  if(!feedEl) return;
  // Обернуть feedEl в .amocard-feed чтобы CSS-стили карточек применились
@@ -21784,6 +21785,15 @@ function intgRenderCardFeed(items){
    else if(typeof _buildFeedNote === 'function'){ feedEl.appendChild(_buildFeedNote(n, et)); }
   } catch(e){ console.warn('[intg-feed] build failed', n, e); }
  });
+ // v507: pseudo-event «параллельное внедрение» — показываем активную карточку маршрута клиента
+ try {
+  if(_intgCurrentCard && _intgCurrentCard.client_id){
+   var rp = await sbFetch('/api/cards?entity=card&client_id=' + encodeURIComponent(_intgCurrentCard.client_id));
+   var routeList = (rp && rp.ok && Array.isArray(rp.cards)) ? rp.cards : [];
+   routeList.filter(function(x){ return x.stage && x.stage !== 'Архив' && x.stage !== 'Активирован'; })
+            .forEach(function(p){ feedEl.appendChild(_buildFeedProcess(p, 'route')); });
+  }
+ } catch(_){}
  // Автоскролл вниз — к самой свежей записи
  try {
   requestAnimationFrame(function(){
@@ -27938,6 +27948,16 @@ async function _routeRenderFeed(){
     feedEl.appendChild(_buildFeedNote(n, et));
    }
   });
+  // v507: pseudo-event «параллельная интеграция» — показываем активные процессы клиента
+  // прямо в ленте, чтобы оператор Внедрения видел что параллельно идёт интеграция.
+  try {
+   if(_routeCurrentCard && _routeCurrentCard.client_id){
+    var ipResp = await sbFetch('/api/cards?entity=integration&client_id=' + encodeURIComponent(_routeCurrentCard.client_id));
+    var intgList = (ipResp && ipResp.ok && Array.isArray(ipResp.integrations)) ? ipResp.integrations : [];
+    intgList.filter(function(x){ return ['Новая','В работе','На паузе'].indexOf(x.status) !== -1; })
+            .forEach(function(p){ feedEl.appendChild(_buildFeedProcess(p, 'integration')); });
+   }
+  } catch(_){}
   // v487: автоскролл к самой свежей записи. #route-card-feed сам имеет overflow-y:auto,
   // поэтому скроллим именно его. Двойной rAF — чтобы DOM успел измериться после appendChild.
   try {
@@ -28178,6 +28198,74 @@ function _afaOpen(menu){
 }
 function _afaClose(){
  document.querySelectorAll('.afa-menu.is-open').forEach(function(m){ m.classList.remove('is-open'); });
+}
+// v507: pseudo-event «Параллельный процесс» — отрисовывает в ленте клиента (любой)
+// что у него идёт параллельно. Цветная иконка + статус + клик → открывает другую карточку.
+// kind: 'integration' (идёт интеграция) | 'route' (идёт внедрение)
+function _buildFeedProcess(p, kind){
+ var note = document.createElement('div');
+ note.className = 'amocard-note';
+ note.style.cursor = 'pointer';
+ // Цвет/название по типу процесса
+ var cfg = kind === 'integration'
+  ? { color:'#FF9F0A', bg:'rgba(255,159,10,.16)', label:'Параллельная интеграция', openFn:function(){ if(typeof intgOpenCard==='function') intgOpenCard(p.id); } }
+  : { color:'#34C77A', bg:'rgba(52,199,122,.16)', label:'Параллельное внедрение',  openFn:function(){ if(typeof routeOpenCard==='function') routeOpenCard(p.id); } };
+ note.style.borderColor = cfg.color;
+ note.style.borderLeftWidth = '3px';
+ note.addEventListener('click', function(){ try { cfg.openFn(); } catch(_){} });
+ // Иконка
+ var ic = document.createElement('div');
+ ic.className = 'amocard-feed-icon';
+ ic.style.background = cfg.bg;
+ ic.style.color = cfg.color;
+ ic.style.border = '1.5px solid ' + cfg.color;
+ var svgNS = 'http://www.w3.org/2000/svg';
+ var svg = document.createElementNS(svgNS, 'svg');
+ svg.setAttribute('viewBox','0 0 24 24');
+ svg.setAttribute('fill','none');
+ svg.setAttribute('stroke','currentColor');
+ svg.setAttribute('stroke-width','1.6');
+ svg.setAttribute('stroke-linecap','round');
+ svg.setAttribute('stroke-linejoin','round');
+ // Иконка-стрелка (link/arrow)
+ var paths = ['M10 14a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71','M14 10a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'];
+ paths.forEach(function(d){ var pp = document.createElementNS(svgNS,'path'); pp.setAttribute('d', d); svg.appendChild(pp); });
+ ic.style.width = '32px'; ic.style.height = '32px'; ic.style.borderRadius = '50%';
+ ic.style.display = 'flex'; ic.style.alignItems = 'center'; ic.style.justifyContent = 'center';
+ ic.appendChild(svg);
+ svg.style.width = '16px'; svg.style.height = '16px';
+ note.appendChild(ic);
+ // Тело
+ var body = document.createElement('div'); body.className = 'amocard-feed-body';
+ var meta = document.createElement('div'); meta.className = 'amocard-feed-meta';
+ var labelSpan = document.createElement('span');
+ labelSpan.textContent = cfg.label;
+ labelSpan.style.color = cfg.color;
+ labelSpan.style.fontWeight = '600';
+ meta.appendChild(labelSpan);
+ if(p.status){
+  var st = document.createElement('span');
+  st.textContent = ' · ' + p.status;
+  meta.appendChild(st);
+ }
+ if(p.operator){
+  var op = document.createElement('span');
+  op.textContent = ' · ' + p.operator;
+  meta.appendChild(op);
+ }
+ body.appendChild(meta);
+ var title = document.createElement('div');
+ title.className = 'amocard-feed-text';
+ var name = '';
+ if(kind === 'integration'){
+  name = (p.type || 'Интеграция') + (p.package ? ' (' + p.package + ')' : '');
+ } else {
+  name = 'Этап: ' + (p.stage || p.status || '—');
+ }
+ title.textContent = name + ' — открыть карточку';
+ body.appendChild(title);
+ note.appendChild(body);
+ return note;
 }
 async function _feedTogglePin(kind, id, newVal, node){
  try {
