@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v485</title>
+<title>SalesDoc — Финансовый Дашборд v486</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -27612,10 +27612,12 @@ async function _routeRenderFeed(){
    seen[it.id] = 1;
    merged.push(it);
   });
+  // v486: сначала берём 80 самых СВЕЖИХ (desc-сортировка + slice), потом разворачиваем
+  // чтобы порядок в ленте был asc (старые сверху, новые снизу) — как в чате/мессенджерах.
   merged.sort(function(a, b){
    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
-  var items = merged.slice(0, 80); // v458: чуть больше лимит, т.к. задачи добавились
+  var items = merged.slice(0, 80).reverse();
   if(!items.length){
    var empty = document.createElement('div');
    empty.className = 'amocard-empty';
@@ -27644,6 +27646,11 @@ async function _routeRenderFeed(){
     feedEl.appendChild(_buildFeedNote(n, et));
    }
   });
+  // v486: автоскролл к самой свежей записи (она теперь внизу)
+  try {
+   var scroller = feedEl.closest('[style*="overflow"]') || feedEl.parentElement || feedEl;
+   requestAnimationFrame(function(){ scroller.scrollTop = scroller.scrollHeight; });
+  } catch(_){}
  } catch(e){
   var err = document.createElement('div');
   err.className = 'amocard-empty';
