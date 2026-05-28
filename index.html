@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v508</title>
+<title>SalesDoc — Финансовый Дашборд v509</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4486,6 +4486,15 @@ body.light #view-ticket-card.amocard-active {
 .amocard-pipe-step.done { background:var(--amocard-green); }
 .amocard-pipe-step.active { background:var(--amocard-blue); }
 .amocard-pipe-step.active::after { content:''; position:absolute; top:-3px; left:0; right:0; height:12px; background:var(--amocard-blue); border-radius:3px; box-shadow:0 2px 6px rgba(59,130,246,.40); }
+/* v509: чип «параллельный процесс» в шапке карточки клиента (Внедрение↔Интеграция) */
+.x-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; font-size:11px; font-weight:600; cursor:pointer; transition:all .15s; border:1px solid transparent; user-select:none; }
+.x-chip:hover { transform:translateY(-1px); }
+.x-chip svg { width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2; flex-shrink:0; }
+.x-chip-route { background:rgba(52,199,122,.14); color:#34C77A; border-color:rgba(52,199,122,.32); }
+.x-chip-route:hover { background:rgba(52,199,122,.22); }
+.x-chip-intg  { background:rgba(255,159,10,.14); color:#FF9F0A; border-color:rgba(255,159,10,.32); }
+.x-chip-intg:hover { background:rgba(255,159,10,.22); }
+.x-chip-stack { display:inline-flex; gap:6px; flex-wrap:wrap; }
 
 .amocard-tabs { display:flex; gap:0; padding:14px 0 0; background:var(--amocard-surface); overflow-x:auto; scrollbar-width:none; -ms-overflow-style:none; scroll-behavior:smooth; }
 .amocard-tabs::-webkit-scrollbar { display:none; height:0; }
@@ -7537,6 +7546,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
       <div id="route-card-name" class="amocard-name">&mdash;</div>
       <div class="amocard-id-row">
        <span id="route-card-id" class="amocard-id">&mdash;</span>
+       <span id="route-cross-chip" class="x-chip-stack"></span>
       </div>
      </div>
     </div>
@@ -7671,6 +7681,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
     <div style="min-width:0">
      <div id="intg-card-name" style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
      <div id="intg-card-sub" style="font-size:11px;color:var(--text-muted);margin-top:2px"></div>
+     <div id="intg-cross-chip" class="x-chip-stack" style="margin-top:6px"></div>
     </div>
    </div>
    <!-- v445: быстрая кнопка «Передать» — поповер со списком интеграторов -->
@@ -21788,20 +21799,7 @@ async function intgRenderCardFeed(items){
    else if(typeof _buildFeedNote === 'function'){ feedEl.appendChild(_buildFeedNote(n, et)); }
   } catch(e){ console.warn('[intg-feed] build failed', n, e); }
  });
- // v507: pseudo-event «параллельное внедрение» — показываем активную карточку маршрута клиента
- // v508: дедуп — у клиента бывает несколько маршрутных карт (разным операторам), показываем ОДНУ
- // (самую свежую активную) — иначе пользователь видит 3-4 одинаковые «параллельных внедрения».
- try {
-  if(_intgCurrentCard && _intgCurrentCard.client_id){
-   var rp = await sbFetch('/api/cards?entity=card&client_id=' + encodeURIComponent(_intgCurrentCard.client_id));
-   var routeList = (rp && rp.ok && Array.isArray(rp.cards)) ? rp.cards : [];
-   var activeRoute = routeList
-    .filter(function(x){ return x.stage && x.stage !== 'Архив' && x.stage !== 'Активирован'; })
-    .sort(function(a,b){ return String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')); })
-    .slice(0, 1);
-   activeRoute.forEach(function(p){ feedEl.appendChild(_buildFeedProcess(p, 'route')); });
-  }
- } catch(_){}
+ // v509: pseudo-event «параллельное внедрение» убран из ленты — теперь как чип в шапке (_intgRenderCrossChip).
  // Автоскролл вниз — к самой свежей записи
  try {
   requestAnimationFrame(function(){
@@ -27956,18 +27954,9 @@ async function _routeRenderFeed(){
     feedEl.appendChild(_buildFeedNote(n, et));
    }
   });
-  // v507: pseudo-event «параллельная интеграция» — показываем активные процессы клиента.
-  // v508: интеграций может быть несколько (Интеграция + Доработка + Разработка) — это валидно,
-  // показываем все активные. Дедупа по типу нет — разные процессы.
-  try {
-   if(_routeCurrentCard && _routeCurrentCard.client_id){
-    var ipResp = await sbFetch('/api/cards?entity=integration&client_id=' + encodeURIComponent(_routeCurrentCard.client_id));
-    var intgList = (ipResp && ipResp.ok && Array.isArray(ipResp.integrations)) ? ipResp.integrations : [];
-    intgList.filter(function(x){ return ['Новая','В работе','На паузе'].indexOf(x.status) !== -1; })
-            .sort(function(a,b){ return String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')); })
-            .forEach(function(p){ feedEl.appendChild(_buildFeedProcess(p, 'integration')); });
-   }
-  } catch(_){}
+  // v509: pseudo-event из ленты убран (по итогу консультации с UX-критиком — дублировал
+  // мини-блок «Интеграции клиента» сверху + создавал шум в потоке). Связь теперь живёт
+  // как компактный чип в шапке (см. _routeRenderCrossChip).
   // v487: автоскролл к самой свежей записи. #route-card-feed сам имеет overflow-y:auto,
   // поэтому скроллим именно его. Двойной rAF — чтобы DOM успел измериться после appendChild.
   try {
