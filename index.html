@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v498</title>
+<title>SalesDoc — Финансовый Дашборд v499</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20892,9 +20892,12 @@ async function intgLoad() {
  }
 
  window._intgLoaded = true;
+ console.log('[intg] Sheets-архив: ' + intgData.length + ' записей, loaded=' + loaded);
  intgRender();
  if (btn) { btn.classList.remove('btn-loading'); btn.textContent = 'Обновить'; }
- if (st) st.textContent = loaded ? intgData.length + ' записей загружено' : 'Не удалось загрузить. Откройте F12 → Console для деталей.';
+ // v498: показываем оба источника в статусе
+ var sbCount = (window.intgSbItems || []).length;
+ if (st) st.textContent = (loaded ? ('Архив: ' + intgData.length) : 'Архив: ошибка') + ' · Активные: ' + sbCount;
 }
 
 function parseIntgRows(rows) {
@@ -21258,12 +21261,18 @@ async function intgSbLoad(){
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
   var d = await sbFetch('/api/cards?entity=integration');
-  if(!d.ok) throw new Error(d.error || 'load failed');
+  console.log('[intg] /api/cards?entity=integration →', d);
+  if(!d || !d.ok) throw new Error((d && d.error) || 'load failed');
   window.intgSbItems = d.integrations || [];
+  console.log('[intg] Supabase: ' + window.intgSbItems.length + ' активных карточек');
   if(listEl) intgSbRender(window.intgSbItems);
   // v497: после загрузки Supabase — переотрисуем общую kanban-таблицу с объединёнными данными
-  if(typeof intgRender === 'function' && window._intgLoaded) intgRender();
+  if(typeof intgRender === 'function') intgRender();
+  // v498: статус — показываем оба источника
+  var st = document.getElementById('intg-status');
+  if(st) st.textContent = 'Архив: ' + (intgData||[]).length + ' · Активные: ' + window.intgSbItems.length;
  } catch(e){
+  console.error('[intg] Supabase load failed:', e);
   if(listEl){
    listEl.replaceChildren();
    var err = document.createElement('div');
@@ -21271,6 +21280,8 @@ async function intgSbLoad(){
    err.textContent = 'Не удалось загрузить: ' + (e.message || 'ошибка');
    listEl.appendChild(err);
   }
+  var st2 = document.getElementById('intg-status');
+  if(st2) st2.textContent = 'Архив: ' + (intgData||[]).length + ' · Активные: ошибка (' + (e.message||e) + ')';
  } finally {
   if(btn){ btn.disabled = false; btn.textContent = 'Обновить'; }
  }
