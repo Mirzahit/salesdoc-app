@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v507</title>
+<title>SalesDoc — Финансовый Дашборд v508</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21758,8 +21758,11 @@ async function intgRenderCardFeed(items){
  if(!feedEl) return;
  // Обернуть feedEl в .amocard-feed чтобы CSS-стили карточек применились
  feedEl.className = 'amocard-feed';
- feedEl.style.maxHeight = 'calc(100vh - 280px)';
+ // v508: высоту не зашиваем — родитель (flex:1 в .view-integration-card) даёт правильное место.
+ // Раньше maxHeight:calc(100vh-280px) оставлял пустой блок внизу.
+ feedEl.style.maxHeight = '';
  feedEl.style.overflowY = 'auto';
+ feedEl.style.height = '100%';
  feedEl.replaceChildren();
  if(!items || !items.length){
   var empty = document.createElement('div');
@@ -21786,12 +21789,17 @@ async function intgRenderCardFeed(items){
   } catch(e){ console.warn('[intg-feed] build failed', n, e); }
  });
  // v507: pseudo-event «параллельное внедрение» — показываем активную карточку маршрута клиента
+ // v508: дедуп — у клиента бывает несколько маршрутных карт (разным операторам), показываем ОДНУ
+ // (самую свежую активную) — иначе пользователь видит 3-4 одинаковые «параллельных внедрения».
  try {
   if(_intgCurrentCard && _intgCurrentCard.client_id){
    var rp = await sbFetch('/api/cards?entity=card&client_id=' + encodeURIComponent(_intgCurrentCard.client_id));
    var routeList = (rp && rp.ok && Array.isArray(rp.cards)) ? rp.cards : [];
-   routeList.filter(function(x){ return x.stage && x.stage !== 'Архив' && x.stage !== 'Активирован'; })
-            .forEach(function(p){ feedEl.appendChild(_buildFeedProcess(p, 'route')); });
+   var activeRoute = routeList
+    .filter(function(x){ return x.stage && x.stage !== 'Архив' && x.stage !== 'Активирован'; })
+    .sort(function(a,b){ return String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')); })
+    .slice(0, 1);
+   activeRoute.forEach(function(p){ feedEl.appendChild(_buildFeedProcess(p, 'route')); });
   }
  } catch(_){}
  // Автоскролл вниз — к самой свежей записи
@@ -27948,13 +27956,15 @@ async function _routeRenderFeed(){
     feedEl.appendChild(_buildFeedNote(n, et));
    }
   });
-  // v507: pseudo-event «параллельная интеграция» — показываем активные процессы клиента
-  // прямо в ленте, чтобы оператор Внедрения видел что параллельно идёт интеграция.
+  // v507: pseudo-event «параллельная интеграция» — показываем активные процессы клиента.
+  // v508: интеграций может быть несколько (Интеграция + Доработка + Разработка) — это валидно,
+  // показываем все активные. Дедупа по типу нет — разные процессы.
   try {
    if(_routeCurrentCard && _routeCurrentCard.client_id){
     var ipResp = await sbFetch('/api/cards?entity=integration&client_id=' + encodeURIComponent(_routeCurrentCard.client_id));
     var intgList = (ipResp && ipResp.ok && Array.isArray(ipResp.integrations)) ? ipResp.integrations : [];
     intgList.filter(function(x){ return ['Новая','В работе','На паузе'].indexOf(x.status) !== -1; })
+            .sort(function(a,b){ return String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')); })
             .forEach(function(p){ feedEl.appendChild(_buildFeedProcess(p, 'integration')); });
    }
   } catch(_){}
