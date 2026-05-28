@@ -76,11 +76,12 @@ function _parseDate(v, dateCorrection) {
   // gviz Date(YYYY,M,D)
   const m1 = s.match(/Date\((\d+),(\d+),(\d+)\)/);
   if (m1) return m1[1] + '-' + String(parseInt(m1[2]) + 1).padStart(2, '0') + '-' + String(m1[3]).padStart(2, '0');
-  // DD.MM.YYYY
+  // DD.MM.YYYY (с защитой от переполнения дня через Date)
   const m2 = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
   if (m2) {
-    let d = parseInt(m2[1]) + (dateCorrection || 0);
-    return m2[3] + '-' + m2[2].padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    const dObj = new Date(parseInt(m2[3]), parseInt(m2[2]) - 1, parseInt(m2[1]) + (dateCorrection || 0));
+    if (isNaN(dObj.getTime())) return null;
+    return dObj.getFullYear() + '-' + String(dObj.getMonth() + 1).padStart(2, '0') + '-' + String(dObj.getDate()).padStart(2, '0');
   }
   if (s.match(/^\d{4}-\d{2}-\d{2}/)) return s.substring(0, 10);
   try {
