@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v490</title>
+<title>SalesDoc — Финансовый Дашборд v491</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4588,14 +4588,16 @@ body.light .amocard-task-hint { background:var(--amocard-amber-bg); color:#92400
 .amocard-chat-select { font-size:13px; color:var(--amocard-text-soft); display:flex; align-items:center; gap:4px; cursor:pointer; padding:6px 10px; border-radius:8px; background:var(--amocard-surface-3); }
 .amocard-chat-select b { color:var(--amocard-text-2); font-weight:600; }
 /* По умолчанию (тёмная тема проекта) — поле тёмное на тёмном с явной рамкой */
-.amocard-chat-input input { flex:1; border:1px solid var(--amocard-border-strong); background:#234049; font-size:13px; padding:9px 12px; outline:none; color:var(--amocard-text); font-family:inherit; border-radius:8px; transition:.15s; box-shadow:var(--amocard-sh-1); }
-.amocard-chat-input input::placeholder { color:#A8B5AD; opacity:0.85; }
-.amocard-chat-input input:focus { border-color:var(--amocard-accent); background:#2A4A54; box-shadow:0 0 0 3px var(--amocard-accent-bg); }
+.amocard-chat-input input, .amocard-chat-input textarea { flex:1; border:1px solid var(--amocard-border-strong); background:#234049; font-size:13px; padding:9px 12px; outline:none; color:var(--amocard-text); font-family:inherit; border-radius:8px; transition:.15s; box-shadow:var(--amocard-sh-1); }
+.amocard-chat-input input::placeholder, .amocard-chat-input textarea::placeholder { color:#A8B5AD; opacity:0.85; }
+/* v491: textarea для примечания — auto-grow, Shift+Enter для новой строки */
+.amocard-chat-input textarea { resize:none; line-height:1.4; min-height:38px; max-height:200px; overflow-y:auto; }
+.amocard-chat-input input:focus, .amocard-chat-input textarea:focus { border-color:var(--amocard-accent); background:#2A4A54; box-shadow:0 0 0 3px var(--amocard-accent-bg); }
 /* Светлая тема — белое поле с серой рамкой */
-body.light .amocard-chat-input input { background:#FFFFFF; }
-body.light .amocard-chat-input input::placeholder { color:#6B7280; opacity:1; }
-body.light .amocard-chat-input input:focus { background:#FFFFFF; }
-.amocard-chat-input input::placeholder { color:var(--amocard-text-faint); }
+body.light .amocard-chat-input input, .amocard-chat-input textarea { background:#FFFFFF; }
+body.light .amocard-chat-input input::placeholder, .amocard-chat-input textarea::placeholder { color:#6B7280; opacity:1; }
+body.light .amocard-chat-input input:focus, .amocard-chat-input textarea:focus { background:#FFFFFF; }
+.amocard-chat-input input::placeholder, .amocard-chat-input textarea::placeholder { color:var(--amocard-text-faint); }
 .amocard-send { padding:7px 14px; border-radius:8px; background:var(--amocard-accent); color:#fff; font-size:13px; font-weight:600; transition:.15s; border:none; cursor:pointer; }
 .amocard-send:hover { background:var(--amocard-accent-deep); }
 
@@ -4819,7 +4821,7 @@ body.light #view-route {
 .amocard-stage-change { font-size:11px !important; padding:6px 12px !important; }
 .amocard-badge-stage { font-size:10px !important; padding:2px 7px !important; }
 .amocard-chat-select { font-size:12px !important; padding:5px 9px !important; }
-.amocard-chat-input input { font-size:12px !important; padding:7px 10px !important; }
+.amocard-chat-input input, .amocard-chat-input textarea { font-size:12px !important; padding:7px 10px !important; }
 .amocard-empty { font-size:11.5px !important; padding:32px 20px !important; }
 /* Мои клиенты — карточки активных */
 #myc-grid > div { padding:12px !important; }
@@ -7571,7 +7573,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
      <!-- v489: trigger типа записи и input в одной строке (как в amoCRM): «Примечание: ...» -->
      <span class="amocard-mode-trigger" id="route-chat-mode-trigger" onclick="routeChatToggleModePopup(event)" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"><u id="route-chat-mode-label">Примечание</u></span>
      <span class="amocard-mode-sep">:</span>
-     <input id="route-chat-text" type="text" placeholder="введите текст" onkeydown="if(event.key==='Enter'){event.preventDefault();routeChatSend();}" oninput="routeChatUpdateSendBtn()">
+     <textarea id="route-chat-text" rows="1" placeholder="введите текст — Enter отправить, Shift+Enter новая строка" onkeydown="routeChatTextKey(event)" oninput="routeChatTextInput(this)"></textarea>
      <button id="route-chat-send" class="amocard-send" onclick="routeChatSend()" title="Сохранить" disabled>&rarr;</button>
      <div class="amocard-mode-popup" id="route-chat-mode-popup" role="menu">
       <div class="amocard-mode-popup-item is-disabled" role="menuitem" title="Скоро — потребуется интеграция с WhatsApp">Чат</div>
@@ -26653,6 +26655,19 @@ function routeChatUpdateSendBtn(){
  if(!input || !btn) return;
  btn.disabled = !input.value.trim();
 }
+// v491: textarea — Enter отправляет, Shift+Enter добавляет новую строку. Плюс auto-resize.
+function routeChatTextKey(ev){
+ if(ev.key === 'Enter' && !ev.shiftKey){
+  ev.preventDefault();
+  routeChatSend();
+ }
+}
+function routeChatTextInput(el){
+ // Auto-resize: сброс height, потом установка по scrollHeight (с учётом max-height из CSS)
+ el.style.height = 'auto';
+ el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+ routeChatUpdateSendBtn();
+}
 
 function _routeChatRefreshChips(){
  if(!window._routeChatTaskState) _routeChatInitTaskState();
@@ -27897,13 +27912,7 @@ function _addFeedActions(node, opts){
  handle.title = 'Действия';
  var menu = document.createElement('div');
  menu.className = 'afa-menu';
- // Закрепить — заглушка пока (нет колонки в БД)
- var btnPin = document.createElement('button'); btnPin.className = 'afa-act'; btnPin.type='button';
- btnPin.innerHTML = '';
- btnPin.appendChild(_afaIcon('M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z'));
- var pinTxt = document.createTextNode('Закрепить'); btnPin.appendChild(pinTxt);
- btnPin.addEventListener('click', function(ev){ ev.stopPropagation(); if(typeof kbShowToast === 'function') kbShowToast('Закрепление — скоро'); _afaClose(); });
- // Удалить
+ // v491: оставлено только «Удалить» (Закрепить и Изменить требуют расширения схемы БД — добавим отдельно).
  var btnDel = document.createElement('button'); btnDel.className = 'afa-act afa-del'; btnDel.type='button';
  btnDel.appendChild(_afaIcon('M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'));
  btnDel.appendChild(document.createTextNode('Удалить'));
@@ -27913,14 +27922,7 @@ function _addFeedActions(node, opts){
   if(!confirm('Удалить эту запись?')) return;
   _feedDeleteItem(opts.kind, opts.id, node);
  });
- // Изменить — заглушка
- var btnEdit = document.createElement('button'); btnEdit.className = 'afa-act'; btnEdit.type='button';
- btnEdit.appendChild(_afaIcon('M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z'));
- btnEdit.appendChild(document.createTextNode('Изменить'));
- btnEdit.addEventListener('click', function(ev){ ev.stopPropagation(); if(typeof kbShowToast === 'function') kbShowToast('Редактирование — скоро'); _afaClose(); });
- menu.appendChild(btnPin);
  menu.appendChild(btnDel);
- menu.appendChild(btnEdit);
  // Раскрытие при hover/click на handle
  handle.addEventListener('mouseenter', function(){ _afaOpen(menu); });
  handle.addEventListener('click', function(ev){ ev.stopPropagation(); _afaOpen(menu); });
