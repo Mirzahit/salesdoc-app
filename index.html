@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v521</title>
+<title>SalesDoc — Финансовый Дашборд v522</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4593,7 +4593,7 @@ body.light #view-ticket-card.amocard-active {
 .tf-resched-btn:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:var(--text,#e5e7eb)}
 body.light .tf-resched-btn:hover{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);color:#0f172a}
 .tf-resched-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.tf-rsch-pop{position:absolute;background:var(--surface,#1C1C1E);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:12px;padding:6px;min-width:240px;box-shadow:0 16px 40px rgba(0,0,0,.55);z-index:10000;font-family:inherit}
+.tf-rsch-pop{position:fixed;background:var(--surface,#1C1C1E);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:12px;padding:8px;min-width:280px;max-width:340px;box-shadow:0 16px 40px rgba(0,0,0,.55);z-index:10000;font-family:inherit;display:flex;flex-direction:column;gap:4px}
 body.light .tf-rsch-pop{background:#FFFFFF;border-color:rgba(0,0,0,.10);box-shadow:0 16px 40px rgba(0,0,0,.18)}
 .tf-rsch-opt{display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--text,#e5e7eb);font-size:13px;padding:9px 12px;border-radius:7px;cursor:pointer;font-family:inherit;transition:background .12s}
 .tf-rsch-opt:hover:not(:disabled){background:var(--accent-bg,rgba(52,199,122,.14));color:var(--accent-text,#6EE3A0)}
@@ -5070,7 +5070,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 .ct-act-del:hover { background:rgba(243,117,117,.10); }
 
 /* --- Дропдаун выбора типа/даты/времени/оператора --- */
-.ct-dd { position:absolute; z-index:10005; background:#0e1626; border:1px solid #2a3a52; border-radius:8px; padding:6px 0; box-shadow:0 8px 24px rgba(0,0,0,.5); min-width:180px; max-height:320px; overflow-y:auto; }
+.ct-dd { position:fixed; z-index:10005; background:#0e1626; border:1px solid #2a3a52; border-radius:8px; padding:6px 0; box-shadow:0 8px 24px rgba(0,0,0,.5); min-width:180px; max-height:320px; overflow-y:auto; }
 .ct-dd-item { padding:8px 14px; font-size:12px; color:#e5e7eb; cursor:pointer; display:flex; align-items:center; gap:8px; font-family:inherit; }
 .ct-dd-item:hover { background:#15233a; }
 .ct-dd-item.is-selected { background:#15233a; color:#60a5fa; }
@@ -28447,16 +28447,20 @@ function _feedReschedOpen(task, anchorBtn){
  foot.appendChild(cancelBtn);
  foot.appendChild(goBtn);
  pop.appendChild(foot);
+ // v522: position:fixed + измеряем реальный размер popup после вставки
  document.body.appendChild(pop);
- // Позиционирование рядом с кнопкой
+ var pr = pop.getBoundingClientRect();
+ var w = pr.width || 300, h = pr.height || 280;
  var r = anchorBtn.getBoundingClientRect();
- var w = 260, h = 320;
  var x = r.left;
  var y = r.bottom + 6;
- if(x + w > window.innerWidth - 12) x = window.innerWidth - w - 12;
- if(y + h > window.innerHeight - 12) y = r.top - h - 6;
- if(x < 12) x = 12;
+ // Выходит за правый край → сдвигаем чтоб правый край был у anchor
+ if(x + w > window.innerWidth - 12) x = Math.max(12, r.right - w);
+ // Выходит за нижний край → открываем над кнопкой
+ if(y + h > window.innerHeight - 12) y = Math.max(12, r.top - h - 6);
+ // Защита если popup всё ещё выше экрана (короткий viewport)
  if(y < 12) y = 12;
+ if(x < 12) x = 12;
  pop.style.left = x + 'px';
  pop.style.top = y + 'px';
  window._feedReschedPop = pop;
@@ -34251,8 +34255,6 @@ function crmTasksOpenDropdown(anchor, items, onSelect){
  var rect = anchor.getBoundingClientRect();
  var dd = document.createElement('div');
  dd.className = 'ct-dd';
- dd.style.left = rect.left + 'px';
- dd.style.top = (rect.bottom + 4) + 'px';
  items.forEach(function(it){
   var item = document.createElement('div');
   item.className = 'ct-dd-item' + (it.selected ? ' is-selected' : '');
@@ -34262,6 +34264,17 @@ function crmTasksOpenDropdown(anchor, items, onSelect){
   dd.appendChild(item);
  });
  document.body.appendChild(dd);
+ // v522: позиционирование с auto-flip если внизу не помещается
+ var dr = dd.getBoundingClientRect();
+ var w = dr.width || 200, h = dr.height || 200;
+ var x = rect.left;
+ var y = rect.bottom + 4;
+ if(x + w > window.innerWidth - 12) x = Math.max(12, window.innerWidth - w - 12);
+ if(y + h > window.innerHeight - 12) y = Math.max(12, rect.top - h - 4);
+ if(y < 12) y = 12;
+ if(x < 12) x = 12;
+ dd.style.left = x + 'px';
+ dd.style.top = y + 'px';
  setTimeout(function(){
   document.addEventListener('click', function close(e){
    if(!dd.contains(e.target) && e.target !== anchor){
