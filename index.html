@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v515</title>
+<title>SalesDoc — Финансовый Дашборд v517</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -30147,10 +30147,19 @@ function crmCalRenderDay(){
  e.priority === 2 || e.priority === 'med' ? ' p-med' :
  e.priority === 3 || e.priority === 'low' ? ' p-low' : '';
  var dblAttrD = e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\''+e.client_id+'\')"' : '';
- var titleAttrD = e.client_id ? 'title="Двойной клик — карточка клиента" ' : '';
- html += '<div class="tt-day-task'+pCls+'" '+titleAttrD+'onclick="event.stopPropagation();crmCalSelect(\''+e.id+'\')"'+dblAttrD+'>'
+ // v517: расширенная подпись — время · название (клиент · тип · ответственный)
+ var typeLabelD = ({training:'Обучение',meeting:'Встреча',deadline:'Дедлайн',other:'Задача'})[e.type] || 'Задача';
+ var metaPartsD = [];
+ if(e.client && e.client !== '—') metaPartsD.push(kbEsc(e.client));
+ metaPartsD.push(typeLabelD);
+ if(e.operator && e.operator !== '—') metaPartsD.push(kbEsc(e.operator));
+ if(e.created_by && e.created_by !== e.operator) metaPartsD.push('от ' + kbEsc(e.created_by));
+ var metaD = metaPartsD.length ? '<div style="font-size:11px;opacity:.75;margin-top:2px">' + metaPartsD.join(' · ') + '</div>' : '';
+ var fullTitleD = (e.time_start||'') + (e.client && e.client !== '—' ? ' · ' + e.client : '') + ' · ' + (e.title||'') + (e.operator && e.operator !== '—' ? ' · ' + e.operator : '');
+ html += '<div class="tt-day-task'+pCls+'" title="'+kbEsc(fullTitleD)+'" onclick="event.stopPropagation();crmCalSelect(\''+e.id+'\')"'+dblAttrD+'>'
  + '<b>'+(e.time_start||'')+(e.time_end?' — '+e.time_end:'')+'</b> '
  + kbEsc(e.title||'')
+ + metaD
  + '</div>';
  });
  html += '</td></tr>';
@@ -30411,11 +30420,22 @@ async function crmCalSyncTasksToLocal(){
    // default: 'other'
   };
   var skippedNoDate = 0;
+  var pad2 = function(n){ return n < 10 ? '0' + n : '' + n; };
   tasksArr.forEach(function(t){
    if(!t.deadline_at){ skippedNoDate++; return; }
-   var ds = t.deadline_at.slice(0,10);
-   var ts = t.is_all_day ? '' : (t.deadline_at.length >= 16 ? t.deadline_at.slice(11,16) : '');
-   var te = (t.deadline_end_at && !t.is_all_day) ? t.deadline_end_at.slice(11,16) : '';
+   // v517: конвертация UTC → локальное (Almaty GMT+5). Раньше slice брал UTC напрямую,
+   // задача на 15:00 локального времени отображалась как 10:00 в календаре.
+   var d = new Date(t.deadline_at);
+   var ds = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+   var ts = '';
+   if(!t.is_all_day){
+    ts = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+   }
+   var te = '';
+   if(t.deadline_end_at && !t.is_all_day){
+    var de = new Date(t.deadline_end_at);
+    te = pad2(de.getHours()) + ':' + pad2(de.getMinutes());
+   }
    existing.push({
     id: 'task_' + t.id,             // префиксуем чтоб не путать с native crm_event-ами
     _sync_task: true,                // маркер для следующей чистки
@@ -30426,6 +30446,7 @@ async function crmCalSyncTasksToLocal(){
     time_start: ts,
     time_end: te,
     type: typeMap[t.type_id] || 'other',
+    type_id: t.type_id || null,      // v517: для показа полного типа в подписи
     priority: 4,
     client: t.contact_name || t.client_id || '',
     operator: t.assignee_operator || '',
@@ -31688,13 +31709,36 @@ async function _acResolveClientId(clientName, host){
   try {
    var d = await sbFetch('/api/clients?search=' + encodeURIComponent(queries[i]));
    if(d && d.ok && d.clients && d.clients.length){
-    // Если несколько — берём первый с непустым company_name
     var pick = d.clients.find(function(c){ return c.company_name; }) || d.clients[0];
     _acClientIdCache[key] = pick.client_id;
     return pick.client_id;
    }
   } catch(_){}
  }
+ // v516: не нашли — автоматически создаём запись в clients (lazy auto-creation).
+ // Действующих клиентов 254 в Sheets, а в Supabase 19 — остальные создаются по требованию
+ // когда впервые жмут «+ Задача» или клик по имени.
+ try {
+  var country = (typeof currentCountry !== 'undefined' && currentCountry) ? currentCountry : 'KZ';
+  var d2 = await sbFetch('/api/clients', {
+   method: 'POST',
+   body: JSON.stringify({
+    company_name: clientName,
+    country: country,
+    host: host || null,
+    status: 'active',
+    source: 'sheets_auto_create'
+   })
+  });
+  if(d2 && d2.ok && d2.client && d2.client.client_id){
+   _acClientIdCache[key] = d2.client.client_id;
+   // Привяжем платежи этого клиента (если есть в payments без client_id)
+   try {
+    await sbFetch('/api/payments?action=relink_unmatched&company=' + encodeURIComponent(clientName) + '&client_id=' + d2.client.client_id, { method: 'POST' });
+   } catch(_){}
+   return d2.client.client_id;
+  }
+ } catch(e){ console.warn('[_acResolveClientId] auto-create failed:', e); }
  return null;
 }
 
