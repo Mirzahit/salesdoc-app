@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v514</title>
+<title>SalesDoc — Финансовый Дашборд v515</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -31651,7 +31651,7 @@ function acRender(){
      var clientEsc = (c.client || '').replace(/'/g, "\\'");
      var hostEscBtn = (c.host || '').replace(/'/g, "\\'");
      return '<tr>'
-      + '<td><b>'+kbEsc(c.client)+'</b></td>'
+      + '<td><b style="color:var(--accent-text,#34C77A);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="acOpenClientCard(\''+clientEsc+'\',\''+hostEscBtn+'\')" title="Открыть карту клиента">'+kbEsc(c.client)+'</b></td>'
       + '<td style="color:var(--text-soft);font-size:12px">'+kbEsc(c.host||'—')+'</td>'
       + '<td class="num">'+(c.monthlyQty||0)+'</td>'
       + '<td class="num">'+(c.monthlySum?fmtSum(c.monthlySum):'—')+'</td>'
@@ -31659,10 +31659,7 @@ function acRender(){
       + '<td style="color:'+accessColor+';font-size:12px;white-space:nowrap">'+accessStr+'</td>'
       + '<td><span class="sd-score '+riskCls+'">'+riskLabel+'</span></td>'
       + '<td><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" onclick="acTagModal(\''+clientEsc+'\')">+</button></div></td>'
-      + '<td><div style="display:flex;gap:6px;flex-wrap:wrap">'
-      +  '<button class="sd-risk-action" onclick="acOpenClientCard(\''+clientEsc+'\',\''+hostEscBtn+'\')">Карта</button>'
-      +  '<button class="sd-risk-action" onclick="acQuickTaskFor(\''+clientEsc+'\',\''+hostEscBtn+'\')" style="background:rgba(52,199,122,.14);color:#34C77A;border-color:rgba(52,199,122,.32)">+ Задача</button>'
-      + '</div></td>'
+      + '<td><button class="sd-risk-action" onclick="acOpenClientCardWithTask(\''+clientEsc+'\',\''+hostEscBtn+'\')" style="background:rgba(52,199,122,.14);color:#34C77A;border-color:rgba(52,199,122,.32)">+ Задача</button></td>'
       + '</tr>';
     }).join('');
    });
@@ -31713,6 +31710,34 @@ async function acOpenClientCard(clientName, host){
    return;
   }
   if(typeof routeOpenClient === 'function') routeOpenClient(cid);
+ } finally {
+  if(btn){ btn.disabled = false; if(prev !== null) btn.textContent = prev; }
+ }
+}
+
+// v515: открыть карту клиента и сразу переключить composer в режим «Задача»
+async function acOpenClientCardWithTask(clientName, host){
+ var btn = event && event.currentTarget;
+ var prev = btn ? btn.textContent : null;
+ if(btn){ btn.disabled = true; btn.textContent = '...'; }
+ try {
+  var cid = await _acResolveClientId(clientName, host);
+  if(!cid){
+   if(typeof kbShowToast === 'function') kbShowToast('Клиент не найден — задачу не создать');
+   else alert('Клиент «' + clientName + '» не найден в Supabase');
+   return;
+  }
+  if(typeof routeOpenClient === 'function'){
+   routeOpenClient(cid);
+   // Дождёмся открытия карточки и переключим composer в task-режим + фокус на textarea
+   setTimeout(function(){
+    if(typeof routeChatSetMode === 'function'){
+     try { routeChatSetMode('task'); } catch(_){}
+    }
+    var ta = document.getElementById('route-chat-text');
+    if(ta) try { ta.focus(); } catch(_){}
+   }, 400);
+  }
  } finally {
   if(btn){ btn.disabled = false; if(prev !== null) btn.textContent = prev; }
  }
