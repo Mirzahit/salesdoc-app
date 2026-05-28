@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v501</title>
+<title>SalesDoc — Финансовый Дашборд v502</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5817,6 +5817,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div style="display:flex;align-items:center;gap:10px">
  <button class="add-btn" onclick="intgLoad()" id="intg-refresh-btn" style="font-size:11px;padding:5px 14px">Обновить</button>
  <select id="intg-filter-status" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgRender()">
+ <option value="">Все статусы</option>
  <option value="Выполняется">Выполняется</option>
  <option value="В очереди">В очереди</option>
  <option value="Очередь">Очередь</option>
@@ -5826,7 +5827,6 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <option value="Отменено">Отменено</option>
  <option value="Перенесено">Перенесено</option>
  <option value="Архив">Архив</option>
- <option value="">Все статусы</option>
  </select>
  <select id="intg-filter-type" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgRender()">
  <option value="">Все типы</option>
@@ -20938,7 +20938,8 @@ function parseIntgRows(rows) {
  intgData.push({
  company: company,
  country: String(row[0]||'').trim().toUpperCase() || '—',
- type: String(row[colType]||'').trim() || '—',
+ // v502: default 'Интеграция' вместо '—' — иначе запись не попадёт ни в одну из 3 kanban-колонок (Интеграция/Доработка/Разработка) и станет невидимой
+ type: String(row[colType]||'').trim() || 'Интеграция',
  status: String(row[colStatus]||'').trim() || '—',
  state: String(row[colState]||'').trim() || '—',
  dateStart: parseDateFromSheet(row[colDateStart]) || '—',
@@ -20963,7 +20964,13 @@ function intgRender() {
  var filterPackage = (document.getElementById('intg-filter-package')||{}).value || '';
  // v497: объединяем Sheets-архив + активные карточки из Supabase в один массив для kanban
  var sbRows = (window.intgSbItems || []).map(_intgSbToRow);
- var data = intgData.concat(sbRows);
+ // v502: дедуп по нормализованному названию компании — приоритет Supabase (свежее).
+ // Без дедупа одна и та же компания мигрированная из Sheets в Supabase задваивается.
+ var _norm = function(s){ return String(s||'').toLowerCase().replace(/[^a-zа-я0-9]/gi,''); };
+ var sbKeys = {};
+ sbRows.forEach(function(r){ sbKeys[_norm(r.company)] = true; });
+ var sheetsUniq = intgData.filter(function(r){ return !sbKeys[_norm(r.company)]; });
+ var data = sbRows.concat(sheetsUniq);
  if (filterType) data = data.filter(function(r){ return r.type === filterType; });
  if (filterStatus) data = data.filter(function(r){ return r.status === filterStatus; });
  if (filterCountry) data = data.filter(function(r){ return r.country === filterCountry; });
@@ -20988,7 +20995,7 @@ function intgRender() {
 
  // Period stats
  var INTG_PLAN = 10;
- var allData = intgData.concat(sbRows);
+ var allData = data; // v502: используем дедуплицированный массив
  if (filterCountry) allData = allData.filter(function(r){ return r.country === filterCountry; });
  var types = ['Интеграция','Доработка','Разработка'];
  // v224: iOS systemBlue + systemOrange + systemIndigo
@@ -21260,8 +21267,9 @@ async function intgSbLoad(){
  var btn = document.getElementById('intg-sb-refresh');
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
-  var d = await sbFetch('/api/cards?entity=integration');
-  console.log('[intg] /api/cards?entity=integration →', d);
+  // v502: include_archive=1 — без него Supabase отдаёт только активные (без «Архив»), исторические интеграции теряются.
+  var d = await sbFetch('/api/cards?entity=integration&include_archive=1');
+  console.log('[intg] /api/cards?entity=integration&include_archive=1 →', d);
   if(!d || !d.ok) throw new Error((d && d.error) || 'load failed');
   window.intgSbItems = d.integrations || [];
   console.log('[intg] Supabase: ' + window.intgSbItems.length + ' активных карточек');
