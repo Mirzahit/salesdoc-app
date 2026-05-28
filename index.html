@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v510</title>
+<title>SalesDoc — Финансовый Дашборд v511</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21777,6 +21777,44 @@ function intgRenderCard(card){
    _assignIntgOperator(card, newOp);
   });
  }
+ // v511: чип активного Маршрута в шапке (визуальная связь Внедрение↔Интеграция)
+ if(typeof _intgRenderCrossChip === 'function') _intgRenderCrossChip();
+}
+
+// v511: чип Маршрута/Внедрения в шапке карты интеграции. Показываем ОДИН — самый свежий
+// активный маршрут (stage != 'Архив'). Если активного нет — ничего (не предлагаем создать).
+async function _intgRenderCrossChip(){
+ var box = document.getElementById('intg-cross-chip');
+ if(!box) return;
+ box.replaceChildren();
+ var card = _intgCurrentCard;
+ if(!card || !card.client_id) return;
+ var cid = card.client_id;
+ var list = [];
+ try {
+  var d = await sbFetch('/api/cards?entity=card&client_id=' + encodeURIComponent(cid));
+  if(d && d.ok && Array.isArray(d.cards)) list = d.cards;
+ } catch(_){}
+ // Защита от гонки
+ if(!_intgCurrentCard || _intgCurrentCard.client_id !== cid) return;
+ // Фильтр по client_id на всякий случай (API игнорит ?client_id для kanban_cards) + только активные
+ var active = list.filter(function(c){
+  return c.client_id === cid && c.stage && c.stage !== 'Архив' && c.stage !== 'Активирован';
+ });
+ if(!active.length) return;
+ active.sort(function(a, b){
+  return String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || ''));
+ });
+ var top = active[0];
+ var chip = document.createElement('span');
+ chip.className = 'x-chip x-chip-route';
+ chip.title = 'Открыть карту Внедрения';
+ chip.textContent = 'Внедрение · ' + (top.stage || '—') + ' · ' + (top.operator || 'без оператора');
+ chip.onclick = function(){
+  if(typeof intgCloseCard === 'function') intgCloseCard();
+  if(typeof routeOpenCard === 'function') routeOpenCard(top.id);
+ };
+ box.appendChild(chip);
 }
 
 // v505: лента в карточке интеграции — переиспользуем компоненты Внедрения
@@ -26720,6 +26758,72 @@ function _routeRenderCardHead(){
   var b = document.getElementById('route-card-assign');
   if(b) b.replaceChildren();
  }
+ // v511: чипы интеграций в шапке (визуальная связь Внедрение↔Интеграция)
+ if(typeof _routeRenderCrossChip === 'function') _routeRenderCrossChip();
+}
+
+// v511: чипы интеграций в шапке карты клиента/Маршрута. Активные интеграции — кликабельны,
+// если ни одной нет — чип «+ Создать интеграцию».
+async function _routeRenderCrossChip(){
+ var box = document.getElementById('route-cross-chip');
+ if(!box) return;
+ box.replaceChildren();
+ var card = _routeCurrentCard;
+ if(!card || !card.client_id) return;
+ var cid = card.client_id;
+ var list = [];
+ try {
+  var d = await sbFetch('/api/cards?entity=integration&client_id=' + encodeURIComponent(cid));
+  if(d && d.ok && Array.isArray(d.integrations)) list = d.integrations;
+ } catch(_){}
+ // Защита от гонки
+ if(!_routeCurrentCard || _routeCurrentCard.client_id !== cid) return;
+ var ACTIVE = ['Новая','В работе','На паузе'];
+ var active = list.filter(function(x){ return ACTIVE.indexOf(x.status) !== -1; });
+ if(active.length){
+  active.forEach(function(it){
+   var chip = document.createElement('span');
+   chip.className = 'x-chip x-chip-intg';
+   chip.title = 'Открыть карту интеграции';
+   chip.textContent = 'Интеграция · ' + (it.status || '—') + ' · ' + (it.operator || 'без оператора');
+   chip.onclick = function(){
+    if(typeof routeCloseCard === 'function') routeCloseCard();
+    if(typeof intgOpenCard === 'function') intgOpenCard(it.id);
+   };
+   box.appendChild(chip);
+  });
+ } else {
+  var add = document.createElement('span');
+  add.className = 'x-chip x-chip-intg';
+  add.title = 'Создать карту интеграции для этого клиента';
+  add.textContent = '+ Создать интеграцию';
+  add.onclick = async function(){
+   if(add.dataset.busy === '1') return;
+   add.dataset.busy = '1';
+   var prev = add.textContent; add.textContent = '...';
+   try {
+    var body = {
+     client_id: cid,
+     company_name: (card.clients && card.clients.company_name) || cid,
+     country: card.country || (card.clients && card.clients.country) || 'KZ',
+     status: 'Новая'
+    };
+    var r = await sbFetch('/api/cards?entity=integration', { method:'POST', body: JSON.stringify(body) });
+    if(!r || !r.ok || !r.integration){
+     alert('Не удалось создать: ' + (r && r.error || 'ошибка'));
+     add.textContent = prev; add.dataset.busy = '';
+     return;
+    }
+    if(typeof kbShowToast === 'function') kbShowToast('Интеграция создана');
+    if(typeof routeCloseCard === 'function') routeCloseCard();
+    if(typeof intgOpenCard === 'function') intgOpenCard(r.integration.id);
+   } catch(e){
+    alert('Ошибка сети: ' + (e.message || e));
+    add.textContent = prev; add.dataset.busy = '';
+   }
+  };
+  box.appendChild(add);
+ }
 }
 
 function _pluralDays(n){
@@ -31545,6 +31649,7 @@ function acRender(){
       return '<span class="ac-tag" title="'+t+'">'+(labels[t]||t)+'</span>';
      }).join('');
      var clientEsc = (c.client || '').replace(/'/g, "\\'");
+     var hostEscBtn = (c.host || '').replace(/'/g, "\\'");
      return '<tr>'
       + '<td><b>'+kbEsc(c.client)+'</b></td>'
       + '<td style="color:var(--text-soft);font-size:12px">'+kbEsc(c.host||'—')+'</td>'
@@ -31554,7 +31659,10 @@ function acRender(){
       + '<td style="color:'+accessColor+';font-size:12px;white-space:nowrap">'+accessStr+'</td>'
       + '<td><span class="sd-score '+riskCls+'">'+riskLabel+'</span></td>'
       + '<td><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" onclick="acTagModal(\''+clientEsc+'\')">+</button></div></td>'
-      + '<td>'+(c.cardId ? '<button class="sd-risk-action" onclick="supportOpenCard(\''+c.cardId+'\')">Открыть</button>' : '')+'</td>'
+      + '<td><div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +  '<button class="sd-risk-action" onclick="acOpenClientCard(\''+clientEsc+'\',\''+hostEscBtn+'\')">Карта</button>'
+      +  '<button class="sd-risk-action" onclick="acQuickTaskFor(\''+clientEsc+'\',\''+hostEscBtn+'\')" style="background:rgba(52,199,122,.14);color:#34C77A;border-color:rgba(52,199,122,.32)">+ Задача</button>'
+      + '</div></td>'
       + '</tr>';
     }).join('');
    });
@@ -31567,6 +31675,98 @@ function acRender(){
  if(typeof acRenderPrefixMerged === 'function') acRenderPrefixMerged();
  // v295: MRR / ARR / Churn / NRR
  try { acRenderMRRStrip(); } catch(_){}
+}
+
+// v511: ищем client_id в Supabase по имени/хосту, кэшируем в памяти.
+// Используется кнопками «Карта» и «+ Задача» в таблице Действующих, где
+// в acGetActiveClients есть только текстовое имя клиента, а не UUID из clients.
+var _acClientIdCache = {};
+async function _acResolveClientId(clientName, host){
+ var key = (clientName || '') + '|' + (host || '');
+ if(_acClientIdCache[key]) return _acClientIdCache[key];
+ var queries = [];
+ if(clientName) queries.push(clientName);
+ if(host && host !== clientName) queries.push(host);
+ for(var i = 0; i < queries.length; i++){
+  try {
+   var d = await sbFetch('/api/clients?search=' + encodeURIComponent(queries[i]));
+   if(d && d.ok && d.clients && d.clients.length){
+    // Если несколько — берём первый с непустым company_name
+    var pick = d.clients.find(function(c){ return c.company_name; }) || d.clients[0];
+    _acClientIdCache[key] = pick.client_id;
+    return pick.client_id;
+   }
+  } catch(_){}
+ }
+ return null;
+}
+
+async function acOpenClientCard(clientName, host){
+ var btn = event && event.currentTarget;
+ var prev = btn ? btn.textContent : null;
+ if(btn){ btn.disabled = true; btn.textContent = '...'; }
+ try {
+  var cid = await _acResolveClientId(clientName, host);
+  if(!cid){
+   if(typeof kbShowToast === 'function') kbShowToast('Клиент не найден в базе');
+   else alert('Клиент «' + clientName + '» не найден в Supabase');
+   return;
+  }
+  if(typeof routeOpenClient === 'function') routeOpenClient(cid);
+ } finally {
+  if(btn){ btn.disabled = false; if(prev !== null) btn.textContent = prev; }
+ }
+}
+
+async function acQuickTaskFor(clientName, host){
+ var btn = event && event.currentTarget;
+ var prev = btn ? btn.textContent : null;
+ if(btn){ btn.disabled = true; btn.textContent = '...'; }
+ try {
+  var cid = await _acResolveClientId(clientName, host);
+  if(!cid){
+   if(typeof kbShowToast === 'function') kbShowToast('Клиент не найден — задачу не создать');
+   else alert('Клиент «' + clientName + '» не найден в Supabase');
+   return;
+  }
+  // Если есть полная модалка — переиспользуем и предвыбираем клиента
+  if(typeof mytasksNewTaskStart === 'function'){
+   await mytasksNewTaskStart();
+   var sel = document.getElementById('mt-new-client');
+   if(sel){
+    // Если client_id уже есть в селекте — выбираем
+    var has = false;
+    for(var i = 0; i < sel.options.length; i++){
+     if(sel.options[i].value === cid){ sel.value = cid; has = true; break; }
+    }
+    // Если нет (список ограничен 200 активных) — добавляем option и выбираем
+    if(!has){
+     var opt = document.createElement('option');
+     opt.value = cid; opt.textContent = clientName + ' (' + cid + ')';
+     sel.appendChild(opt); sel.value = cid;
+    }
+   }
+   var ta = document.getElementById('mt-new-text');
+   if(ta) try { ta.focus(); } catch(_){}
+   return;
+  }
+  // Fallback: prompt + POST /api/tasks
+  var text = window.prompt('Текст задачи для «' + clientName + '»:');
+  if(!text || !text.trim()) return;
+  var deadline = new Date(Date.now() + 86400000);
+  var body = {
+   client_id: cid,
+   type_id: 1,
+   text: text.trim(),
+   deadline_at: deadline.toISOString(),
+   is_all_day: true
+  };
+  var d = await sbFetch('/api/tasks', { method:'POST', body: JSON.stringify(body) });
+  if(!d || !d.ok){ alert('Не удалось создать: ' + (d && d.error || 'ошибка')); return; }
+  if(typeof kbShowToast === 'function') kbShowToast('Задача поставлена');
+ } finally {
+  if(btn){ btn.disabled = false; if(prev !== null) btn.textContent = prev; }
+ }
 }
 
 // v303: рендер блока «host'ы сматченные через префикс»
