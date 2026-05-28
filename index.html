@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v488</title>
+<title>SalesDoc — Финансовый Дашборд v489</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4596,11 +4596,11 @@ body.light .amocard-chat-row-fields { border-color:rgba(15,23,42,.08); }
 .amocard-chat-mode-btn:hover { color:var(--amocard-text); }
 .amocard-chat-mode-btn.is-active { background:var(--amocard-accent); color:#fff; }
 .amocard-chat-mode-btn svg { width:13px; height:13px; }
-/* v488: trigger + popup в стиле amoCRM (синяя ссылка → dropdown с типами записи) */
-.amocard-mode-trigger { display:inline-flex; align-items:center; gap:4px; color:#7FAFD9; cursor:pointer; font-size:13px; font-weight:600; padding:4px 6px; border-radius:6px; transition:background .15s; user-select:none; }
-.amocard-mode-trigger:hover { background:rgba(127,175,217,.10); }
+/* v489: trigger — синяя подчёркнутая ссылка inline перед input (как amoCRM) */
+.amocard-mode-trigger { display:inline-flex; align-items:center; color:#7FAFD9; cursor:pointer; font-size:13px; font-weight:500; padding:0; border:none; background:transparent; user-select:none; transition:color .15s; flex-shrink:0; }
+.amocard-mode-trigger:hover { color:#A6C8E5; }
 .amocard-mode-trigger u { text-decoration:underline; text-underline-offset:2px; }
-.amocard-mode-trigger .amocard-mode-caret { font-size:10px; opacity:.7; }
+.amocard-mode-sep { color:var(--amocard-text-soft,#8B95A1); font-size:13px; margin:0 2px 0 0; flex-shrink:0; }
 .amocard-mode-popup { position:absolute; bottom:calc(100% + 4px); left:0; background:var(--surface,#1C1C1E); border:1px solid var(--border,rgba(255,255,255,.10)); border-radius:8px; box-shadow:0 12px 32px rgba(0,0,0,.45); padding:6px; min-width:160px; z-index:100; display:none; }
 .amocard-mode-popup.is-open { display:block; }
 .amocard-mode-popup-item { padding:8px 12px; cursor:pointer; border-radius:6px; font-size:13px; color:var(--text,#fff); display:flex; align-items:center; justify-content:space-between; gap:8px; transition:background .12s; }
@@ -7544,15 +7544,6 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
    </div>
    <!-- v457: двухрежимный composer с тремя рядами: mode / task-params / input. -->
    <div class="amocard-chat-input has-mode">
-    <div class="amocard-chat-row" style="position:relative">
-     <!-- v488: dropdown-trigger в стиле amoCRM (синяя подчёркнутая ссылка → popup со списком) -->
-     <span class="amocard-mode-trigger" id="route-chat-mode-trigger" onclick="routeChatToggleModePopup(event)" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"><u id="route-chat-mode-label">Примечание</u><span class="amocard-mode-caret">▾</span></span>
-     <div class="amocard-mode-popup" id="route-chat-mode-popup" role="menu">
-      <div class="amocard-mode-popup-item is-disabled" role="menuitem" title="Скоро — потребуется интеграция с WhatsApp">Чат</div>
-      <div class="amocard-mode-popup-item is-active" role="menuitem" data-mode="note" onclick="routeChatPickMode('note')">Примечание</div>
-      <div class="amocard-mode-popup-item" role="menuitem" data-mode="task" onclick="routeChatPickMode('task')">Задача</div>
-     </div>
-    </div>
     <div class="amocard-chat-row amocard-chat-row-fields amocard-chat-task-fields" id="route-chat-task-fields" style="display:none">
      <span class="ct-chip" id="route-chat-type-chip" onclick="routeChatChipType(this)">● Связаться ▾</span>
      <span class="ct-chip" id="route-chat-date-chip" onclick="routeChatChipDate(this)">Сегодня ▾</span>
@@ -7560,9 +7551,17 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
      <span class="ct-static" style="color:var(--amocard-text-soft);font-size:12px;white-space:nowrap">для</span>
      <span class="ct-chip" id="route-chat-assignee-chip" onclick="routeChatChipAssignee(this)">—</span>
     </div>
-    <div class="amocard-chat-row">
-     <input id="route-chat-text" type="text" placeholder="клиент это НЕ увидит — только операторы внутри SalesDoc" onkeydown="if(event.key==='Enter'){event.preventDefault();routeChatSend();}" oninput="routeChatUpdateSendBtn()">
+    <div class="amocard-chat-row" style="position:relative">
+     <!-- v489: trigger типа записи и input в одной строке (как в amoCRM): «Примечание: ...» -->
+     <span class="amocard-mode-trigger" id="route-chat-mode-trigger" onclick="routeChatToggleModePopup(event)" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"><u id="route-chat-mode-label">Примечание</u></span>
+     <span class="amocard-mode-sep">:</span>
+     <input id="route-chat-text" type="text" placeholder="введите текст" onkeydown="if(event.key==='Enter'){event.preventDefault();routeChatSend();}" oninput="routeChatUpdateSendBtn()">
      <button id="route-chat-send" class="amocard-send" onclick="routeChatSend()" title="Сохранить" disabled>&rarr;</button>
+     <div class="amocard-mode-popup" id="route-chat-mode-popup" role="menu">
+      <div class="amocard-mode-popup-item is-disabled" role="menuitem" title="Скоро — потребуется интеграция с WhatsApp">Чат</div>
+      <div class="amocard-mode-popup-item is-active" role="menuitem" data-mode="note" onclick="routeChatPickMode('note')">Примечание</div>
+      <div class="amocard-mode-popup-item" role="menuitem" data-mode="task" onclick="routeChatPickMode('task')">Задача</div>
+     </div>
     </div>
    </div>
   </section>
