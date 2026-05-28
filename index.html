@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v481</title>
+<title>SalesDoc — Финансовый Дашборд v482</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4474,7 +4474,10 @@ body.light #view-ticket-card.amocard-active {
 .amocard-stage-chevron:hover { background:var(--amocard-surface-3); color:var(--amocard-text-2); }
 
 .amocard-pipeline { display:flex; gap:3px; height:6px; border-radius:3px; overflow:hidden; }
-.amocard-pipe-step { flex:1; background:var(--amocard-surface-3); position:relative; cursor:default; }
+.amocard-pipe-step { flex:1; background:var(--amocard-surface-3); position:relative; cursor:pointer; transition:filter .15s,transform .15s }
+.amocard-pipe-step:hover { filter:brightness(1.4) }
+.amocard-pipe-step:not(.done):not(.active):hover { background:var(--amocard-blue); opacity:0.55 }
+.amocard-pipe-step.is-saving { opacity:0.5; pointer-events:none }
 .amocard-pipe-step.done { background:var(--amocard-green); }
 .amocard-pipe-step.active { background:var(--amocard-blue); }
 .amocard-pipe-step.active::after { content:''; position:absolute; top:-3px; left:0; right:0; height:12px; background:var(--amocard-blue); border-radius:3px; box-shadow:0 2px 6px rgba(59,130,246,.40); }
@@ -24748,6 +24751,36 @@ async function routeDrop(ev, newStage){
  routeDragCardId = null;
 }
 
+// v482: переключение этапа по клику в pipeline карточки клиента (как в amoCRM).
+async function routePipeSetStage(newStage){
+ var card = _routeCurrentCard;
+ if(!card || !card.id) return;
+ if(card.stage === newStage) return;
+ var isSynthetic = String(card.id || '').indexOf('client:') === 0;
+ if(isSynthetic) return;
+ var oldStage = card.stage;
+ // Оптимистично обновляем
+ card.stage = newStage;
+ card.stage_entered_at = new Date().toISOString();
+ // Перерисуем шапку карточки (pipeline)
+ if(typeof _routeRenderCardHead === 'function'){ try { _routeRenderCardHead(); } catch(_){} }
+ try {
+  var d = await sbFetch('/api/cards?id=' + card.id, {
+   method: 'PATCH',
+   body: JSON.stringify({ stage: newStage })
+  });
+  if(!d || !d.ok) throw new Error((d && d.error) || 'save failed');
+  if(typeof kbShowToast === 'function') kbShowToast('Этап → ' + newStage);
+  // Обновим список карточек если открыт канбан
+  var inList = routeCards.find(function(c){ return c.id === card.id; });
+  if(inList){ inList.stage = newStage; inList.stage_entered_at = card.stage_entered_at; }
+ } catch(e){
+  card.stage = oldStage;
+  if(typeof _routeRenderCardHead === 'function'){ try { _routeRenderCardHead(); } catch(_){} }
+  alert('Не удалось сменить этап: ' + (e.message || e));
+ }
+}
+
 // v415: бросили карточку в зону удаления. Архивирует (DELETE = soft delete, stage='Архив').
 // С подтверждением — чтобы случайно не снести боевого клиента.
 async function routeTrashDrop(ev){
@@ -26383,7 +26416,14 @@ function _routeRenderCardHead(){
    if(isArchive) step.classList.add('done');
    else if(i < currentIdx) step.classList.add('done');
    else if(i === currentIdx) step.classList.add('active');
-   step.title = stageName;
+   step.title = 'Перейти на этап «' + stageName + '»';
+   // v482: клик переключает этап клиента (как в amoCRM). Не для синтетических карт.
+   if(!isSynthetic){
+    step.addEventListener('click', function(){ routePipeSetStage(stageName); });
+   } else {
+    step.style.cursor = 'default';
+    step.title = stageName;
+   }
    pipeEl.appendChild(step);
   });
  }
