@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v489</title>
+<title>SalesDoc — Финансовый Дашборд v490</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4506,7 +4506,23 @@ body.light #view-ticket-card.amocard-active {
 .amocard-field-value .amocard-faint { color:var(--amocard-text-faint); }
 
 .amocard-feed { flex:1; overflow-y:auto; padding:18px 24px 12px; display:flex; flex-direction:column; gap:14px; min-height:0; }
-.amocard-note { background:var(--amocard-surface); border:1px solid var(--amocard-border); border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; box-shadow:var(--amocard-sh-1); }
+.amocard-note { background:var(--amocard-surface); border:1px solid var(--amocard-border); border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; box-shadow:var(--amocard-sh-1); position:relative; }
+/* v490: hover-actions для записей ленты (amoCRM-style) */
+.afa-handle{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:18px;height:42px;border-radius:5px;background:rgba(255,255,255,.08);opacity:0;transition:opacity .15s,background .15s;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
+.afa-handle::before{content:'';width:4px;height:18px;background:rgba(255,255,255,.55);border-radius:2px}
+.amocard-note:hover .afa-handle,.amocard-task-feed:hover .afa-handle{opacity:1}
+.afa-handle:hover{background:rgba(255,255,255,.18)}
+.afa-menu{position:absolute;right:30px;top:50%;transform:translateY(-50%);background:var(--surface,#1C1C1E);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:10px;padding:6px;display:none;gap:2px;box-shadow:0 12px 32px rgba(0,0,0,.45);z-index:3;white-space:nowrap}
+.afa-menu.is-open{display:inline-flex}
+.afa-act{padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text);display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;font-family:inherit;transition:background .12s}
+.afa-act:hover{background:rgba(255,255,255,.06)}
+.afa-act.afa-del{color:#FF6B5C}
+.afa-act svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+body.light .afa-handle{background:rgba(0,0,0,.06)}
+body.light .afa-handle::before{background:rgba(0,0,0,.45)}
+body.light .afa-handle:hover{background:rgba(0,0,0,.12)}
+body.light .afa-menu{background:#FFFFFF;border-color:rgba(0,0,0,.10)}
+body.light .afa-act:hover{background:rgba(0,0,0,.05)}
 .amocard-feed-icon { width:32px; height:32px; border-radius:50%; background:var(--amocard-surface-3); color:var(--amocard-text-soft); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
 /* v485: note-иконка в стиле amoCRM — outlined круг с file-text внутри (как на референсе) */
 .amocard-feed-icon.amocard-ic-note { background:transparent; color:#7FAFD9; border:1.5px solid #7FAFD9 }
@@ -4516,7 +4532,7 @@ body.light .amocard-feed-icon.amocard-ic-note { color:#5489BB; border-color:#548
 .amocard-feed-icon.amocard-ic-stage { background:var(--amocard-blue-bg); color:var(--amocard-blue); }
 /* v459: feed-item для задач. Розовый бордер ТОЛЬКО при просрочке (is-overdue),
    иначе — нейтральный. Done — серый, opacity. */
-.amocard-task-feed { background:var(--amocard-surface); border:1.5px solid var(--amocard-border); border-radius:14px; padding:14px 18px; display:flex; gap:14px; align-items:flex-start; box-shadow:var(--amocard-sh-1); transition:all .15s; }
+.amocard-task-feed { background:var(--amocard-surface); border:1.5px solid var(--amocard-border); border-radius:14px; padding:14px 18px; display:flex; gap:14px; align-items:flex-start; box-shadow:var(--amocard-sh-1); transition:all .15s; position:relative; }
 .amocard-task-feed:hover { border-color:var(--amocard-border-strong); }
 .amocard-task-feed.is-overdue { border-color:#ec4899; }
 .amocard-task-feed.is-overdue:hover { border-color:#db2777; }
@@ -27824,6 +27840,10 @@ function _buildFeedTask(t){
  }
 
  item.appendChild(body);
+ // v490: hover-actions для задачи
+ if(t.id){
+  _addFeedActions(item, { kind:'task', id:t.id });
+ }
  return item;
 }
 
@@ -27868,6 +27888,82 @@ async function _feedCloseTaskInline(taskId, result, inputEl, btnEl){
  }
 }
 
+// v490: hover-actions (Закрепить/Удалить/Изменить) для записей ленты — как в amoCRM.
+// При hover на карточку — справа появляется тонкая ручка. При hover/click на ручку — раскрывается меню.
+function _addFeedActions(node, opts){
+ // opts: { kind: 'note'|'task', id, canDelete }
+ var handle = document.createElement('div');
+ handle.className = 'afa-handle';
+ handle.title = 'Действия';
+ var menu = document.createElement('div');
+ menu.className = 'afa-menu';
+ // Закрепить — заглушка пока (нет колонки в БД)
+ var btnPin = document.createElement('button'); btnPin.className = 'afa-act'; btnPin.type='button';
+ btnPin.innerHTML = '';
+ btnPin.appendChild(_afaIcon('M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z'));
+ var pinTxt = document.createTextNode('Закрепить'); btnPin.appendChild(pinTxt);
+ btnPin.addEventListener('click', function(ev){ ev.stopPropagation(); if(typeof kbShowToast === 'function') kbShowToast('Закрепление — скоро'); _afaClose(); });
+ // Удалить
+ var btnDel = document.createElement('button'); btnDel.className = 'afa-act afa-del'; btnDel.type='button';
+ btnDel.appendChild(_afaIcon('M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'));
+ btnDel.appendChild(document.createTextNode('Удалить'));
+ btnDel.addEventListener('click', function(ev){
+  ev.stopPropagation();
+  _afaClose();
+  if(!confirm('Удалить эту запись?')) return;
+  _feedDeleteItem(opts.kind, opts.id, node);
+ });
+ // Изменить — заглушка
+ var btnEdit = document.createElement('button'); btnEdit.className = 'afa-act'; btnEdit.type='button';
+ btnEdit.appendChild(_afaIcon('M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z'));
+ btnEdit.appendChild(document.createTextNode('Изменить'));
+ btnEdit.addEventListener('click', function(ev){ ev.stopPropagation(); if(typeof kbShowToast === 'function') kbShowToast('Редактирование — скоро'); _afaClose(); });
+ menu.appendChild(btnPin);
+ menu.appendChild(btnDel);
+ menu.appendChild(btnEdit);
+ // Раскрытие при hover/click на handle
+ handle.addEventListener('mouseenter', function(){ _afaOpen(menu); });
+ handle.addEventListener('click', function(ev){ ev.stopPropagation(); _afaOpen(menu); });
+ // Закрытие при mouseleave с карточки
+ node.addEventListener('mouseleave', function(){ menu.classList.remove('is-open'); });
+ node.appendChild(handle);
+ node.appendChild(menu);
+}
+function _afaIcon(d){
+ var svgNS = 'http://www.w3.org/2000/svg';
+ var s = document.createElementNS(svgNS, 'svg');
+ s.setAttribute('viewBox','0 0 24 24'); s.setAttribute('stroke-linecap','round'); s.setAttribute('stroke-linejoin','round');
+ var p = document.createElementNS(svgNS, 'path'); p.setAttribute('d', d);
+ s.appendChild(p);
+ return s;
+}
+function _afaOpen(menu){
+ // Закроем все другие открытые меню
+ document.querySelectorAll('.afa-menu.is-open').forEach(function(m){ if(m !== menu) m.classList.remove('is-open'); });
+ menu.classList.add('is-open');
+}
+function _afaClose(){
+ document.querySelectorAll('.afa-menu.is-open').forEach(function(m){ m.classList.remove('is-open'); });
+}
+async function _feedDeleteItem(kind, id, node){
+ try {
+  var url, opts = { method:'DELETE' };
+  if(kind === 'task'){
+   var realId = String(id).replace(/^task:/,'');
+   url = '/api/tasks?id=' + encodeURIComponent(realId);
+   var d = await crmTasksFetch(url, opts);
+   if(!d || !d.ok) throw new Error((d && d.error) || 'удалить не удалось');
+  } else {
+   url = '/api/history?id=' + encodeURIComponent(id);
+   var d = await sbFetch(url, opts);
+   if(!d || !d.ok) throw new Error((d && d.error) || 'удалить не удалось');
+  }
+  if(node && node.parentNode) node.parentNode.removeChild(node);
+  if(typeof kbShowToast === 'function') kbShowToast('Удалено');
+ } catch(e){
+  alert('Не удалось удалить: ' + (e.message || e));
+ }
+}
 function _fmtFeedDate(iso){
  // v391: защита от null/undefined/Invalid Date — возвращаем пусто вместо «Invalid Date».
  if(!iso) return '';
@@ -27923,6 +28019,10 @@ function _buildFeedNote(n, eventType){
  text.textContent = n.text || '(пусто)';
  body.appendChild(text);
  note.appendChild(body);
+ // v490: hover-actions (заметки можно удалять, кроме system)
+ if(n.id && eventType !== 'system' && eventType !== 'stage_change'){
+  _addFeedActions(note, { kind:'note', id:n.id });
+ }
  return note;
 }
 
