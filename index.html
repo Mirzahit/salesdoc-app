@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v486</title>
+<title>SalesDoc — Финансовый Дашборд v487</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -27646,10 +27646,12 @@ async function _routeRenderFeed(){
     feedEl.appendChild(_buildFeedNote(n, et));
    }
   });
-  // v486: автоскролл к самой свежей записи (она теперь внизу)
+  // v487: автоскролл к самой свежей записи. #route-card-feed сам имеет overflow-y:auto,
+  // поэтому скроллим именно его. Двойной rAF — чтобы DOM успел измериться после appendChild.
   try {
-   var scroller = feedEl.closest('[style*="overflow"]') || feedEl.parentElement || feedEl;
-   requestAnimationFrame(function(){ scroller.scrollTop = scroller.scrollHeight; });
+   requestAnimationFrame(function(){
+    requestAnimationFrame(function(){ feedEl.scrollTop = feedEl.scrollHeight; });
+   });
   } catch(_){}
  } catch(e){
   var err = document.createElement('div');
