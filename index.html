@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v522</title>
+<title>SalesDoc — Финансовый Дашборд v523</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -28694,8 +28694,9 @@ async function _feedTogglePin(kind, id, newVal, node){
  }
 }
 function _feedStartEdit(kind, id, node, textEl){
+ // v523: для задачи — расширенный редактор с датой и временем
+ if(kind === 'task'){ return _feedStartEditTask(id, node); }
  if(!textEl){
-  // ищем элемент с текстом — для note это .amocard-feed-text, для task .amocard-task-feed-content
   textEl = node.querySelector('.amocard-feed-text') || node.querySelector('.amocard-task-feed-content');
  }
  if(!textEl) return;
@@ -28714,17 +28715,9 @@ function _feedStartEdit(kind, id, node, textEl){
   if(!newText || newText === original){ cancel(); return; }
   saving = true;
   try {
-   var d;
-   if(kind === 'task'){
-    var realId = String(id).replace(/^task:/,'');
-    d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(realId), {
-     method:'PATCH', body: JSON.stringify({ text: newText })
-    });
-   } else {
-    d = await sbFetch('/api/history?id=' + encodeURIComponent(id), {
-     method:'PATCH', body: JSON.stringify({ text: newText })
-    });
-   }
+   var d = await sbFetch('/api/history?id=' + encodeURIComponent(id), {
+    method:'PATCH', body: JSON.stringify({ text: newText })
+   });
    if(!d || !d.ok) throw new Error((d && d.error) || 'не удалось сохранить');
    var newEl = document.createElement('div');
    newEl.className = textEl.className;
@@ -28736,14 +28729,117 @@ function _feedStartEdit(kind, id, node, textEl){
    cancel();
   }
  };
- var cancel = function(){
-  ta.replaceWith(textEl);
- };
+ var cancel = function(){ ta.replaceWith(textEl); };
  ta.addEventListener('keydown', function(ev){
   if(ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault(); save(); }
   if(ev.key === 'Escape'){ ev.preventDefault(); cancel(); }
  });
  ta.addEventListener('blur', function(){ setTimeout(save, 100); });
+}
+
+// v523: редактор задачи с полями текст / дата / время
+async function _feedStartEditTask(id, node){
+ var realId = String(id).replace(/^task:/,'');
+ // Загружаем актуальную задачу
+ var taskResp;
+ try { taskResp = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(realId)); }
+ catch(e){ alert('Не удалось загрузить задачу: ' + e.message); return; }
+ if(!taskResp || !taskResp.ok || !taskResp.task){
+  alert('Задача не найдена'); return;
+ }
+ var task = taskResp.task;
+ var dlISO = task.deadline_at;
+ var dlDate = '', dlTime = '';
+ if(dlISO){
+  var dObj = new Date(dlISO);
+  var p2 = function(n){ return n < 10 ? '0' + n : '' + n; };
+  dlDate = dObj.getFullYear() + '-' + p2(dObj.getMonth()+1) + '-' + p2(dObj.getDate());
+  dlTime = p2(dObj.getHours()) + ':' + p2(dObj.getMinutes());
+ }
+ // Закрыть открытый popup редактирования если есть
+ if(window._feedEditPop){ try { window._feedEditPop.remove(); } catch(_){} window._feedEditPop = null; }
+ var pop = document.createElement('div');
+ pop.className = 'tf-rsch-pop';
+ pop.onclick = function(e){ e.stopPropagation(); };
+ pop.style.minWidth = '300px';
+ // Поле текста
+ var taText = document.createElement('textarea');
+ taText.value = task.text || '';
+ taText.className = 'tf-rsch-reason';
+ taText.style.minHeight = '60px';
+ taText.placeholder = 'Текст задачи';
+ // Дата + время
+ var row = document.createElement('div');
+ row.style.cssText = 'display:flex;gap:6px;margin-top:6px';
+ var inDate = document.createElement('input');
+ inDate.type = 'date'; inDate.value = dlDate;
+ inDate.style.cssText = 'flex:1;padding:7px 10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:var(--text);font-family:inherit;font-size:13px';
+ var inTime = document.createElement('input');
+ inTime.type = 'time'; inTime.value = dlTime;
+ inTime.disabled = !!task.is_all_day;
+ inTime.style.cssText = 'width:100px;padding:7px 10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:var(--text);font-family:inherit;font-size:13px';
+ row.appendChild(inDate); row.appendChild(inTime);
+ // «Весь день» toggle
+ var allDayRow = document.createElement('label');
+ allDayRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:var(--text-soft);cursor:pointer';
+ var cbAllDay = document.createElement('input');
+ cbAllDay.type = 'checkbox'; cbAllDay.checked = !!task.is_all_day;
+ cbAllDay.onchange = function(){ inTime.disabled = cbAllDay.checked; };
+ allDayRow.appendChild(cbAllDay);
+ allDayRow.appendChild(document.createTextNode(' Весь день'));
+ // Кнопки
+ var foot = document.createElement('div');
+ foot.className = 'tf-rsch-foot';
+ var cancelBtn = document.createElement('button');
+ cancelBtn.type = 'button'; cancelBtn.className = 'tf-rsch-cancel'; cancelBtn.textContent = 'Отмена';
+ cancelBtn.onclick = function(){ pop.remove(); window._feedEditPop = null; document.removeEventListener('keydown', escHandler, true); };
+ var saveBtn = document.createElement('button');
+ saveBtn.type = 'button'; saveBtn.className = 'tf-rsch-go'; saveBtn.textContent = 'Сохранить';
+ saveBtn.onclick = async function(){
+  var newText = taText.value.trim();
+  if(!newText){ taText.focus(); return; }
+  saveBtn.disabled = true; saveBtn.textContent = '...';
+  var patch = { text: newText, is_all_day: cbAllDay.checked };
+  if(inDate.value){
+   var t = cbAllDay.checked ? '00:00' : (inTime.value || '09:00');
+   patch.deadline_at = new Date(inDate.value + 'T' + t + ':00').toISOString();
+  }
+  try {
+   var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(realId), {
+    method:'PATCH', body: JSON.stringify(patch)
+   });
+   if(!d || !d.ok) throw new Error((d && d.error) || 'не удалось сохранить');
+   if(typeof kbShowToast === 'function') kbShowToast('Задача обновлена');
+   pop.remove(); window._feedEditPop = null;
+   document.removeEventListener('keydown', escHandler, true);
+   if(typeof _routeRenderFeed === 'function') _routeRenderFeed();
+  } catch(e){
+   alert('Не удалось сохранить: ' + (e.message || e));
+   saveBtn.disabled = false; saveBtn.textContent = 'Сохранить';
+  }
+ };
+ foot.appendChild(cancelBtn); foot.appendChild(saveBtn);
+ pop.appendChild(taText);
+ pop.appendChild(row);
+ pop.appendChild(allDayRow);
+ pop.appendChild(foot);
+ document.body.appendChild(pop);
+ // Позиционирование — над node по центру
+ var nr = node.getBoundingClientRect();
+ var pr = pop.getBoundingClientRect();
+ var x = Math.max(12, nr.left + nr.width/2 - pr.width/2);
+ var y = nr.top + nr.height/2 - pr.height/2;
+ if(x + pr.width > window.innerWidth - 12) x = window.innerWidth - pr.width - 12;
+ if(y < 12) y = 12;
+ if(y + pr.height > window.innerHeight - 12) y = window.innerHeight - pr.height - 12;
+ pop.style.left = x + 'px';
+ pop.style.top = y + 'px';
+ window._feedEditPop = pop;
+ setTimeout(function(){ taText.focus(); }, 50);
+ var escHandler = function(ev){
+  if(ev.key === 'Escape'){ pop.remove(); window._feedEditPop = null; document.removeEventListener('keydown', escHandler, true); }
+ };
+ document.addEventListener('keydown', escHandler, true);
 }
 async function _feedDeleteItem(kind, id, node){
  try {
