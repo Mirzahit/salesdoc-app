@@ -221,19 +221,51 @@ async function handlePatch(req, res) {
     return res.status(200).json({ ok: true, task: updated[0] });
   }
 
-  // ---- PATCH ?move=TARGET — drag-перенос ----
+  // ---- PATCH ?move=TARGET — drag-перенос (с историей в card_history) ----
   if (q.move) {
     const target = q.move;
     if (!MOVE_TARGETS.includes(target)) {
       return res.status(400).json({ ok: false, error: 'move target должен быть один из: ' + MOVE_TARGETS.join(', ') });
     }
-    // move=done без result — отказ (UI должен вместо этого открыть модалку закрытия).
     if (target === 'done') {
       return res.status(400).json({ ok: false, error: 'для закрытия используйте ?close=1 с body.result' });
     }
     const newDeadline = computeMoveDeadline(target, task.deadline_at);
-    const updated = await sbUpdate('tasks', { id: 'eq.' + id }, { deadline_at: newDeadline });
-    return res.status(200).json({ ok: true, task: updated[0], deadline_at: newDeadline });
+    const oldDeadline = task.deadline_at;
+    // v520: считаем переносы и сохраняем причину если есть в body
+    const bodyM = await readBody(req);
+    const reason = (bodyM.reason || '').toString().trim() || null;
+    const updated = await sbUpdate('tasks', { id: 'eq.' + id }, {
+      deadline_at: newDeadline,
+      reschedule_count: (task.reschedule_count || 0) + 1,
+      last_reschedule_at: new Date().toISOString(),
+      last_reschedule_reason: reason
+    });
+    // Записываем перенос в ленту клиента (если client_id есть)
+    if (task.client_id) {
+      try {
+        const fmtDt = (iso) => {
+          if (!iso) return '—';
+          const d = new Date(iso);
+          const ymd = d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: APP_TZ });
+          const hm  = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: APP_TZ });
+          return `${ymd} ${hm}`;
+        };
+        const userName = (req.headers['x-user-name'] || '').toString().trim() || 'оператор';
+        const taskText = (task.text || '').slice(0, 80);
+        const reasonStr = reason ? ` · причина: ${reason}` : '';
+        await sbInsert('card_history', {
+          card_id: null,
+          client_id: task.client_id,
+          event_type: 'task_reschedule',
+          text: `Задача «${taskText}» перенесена с ${fmtDt(oldDeadline)} на ${fmtDt(newDeadline)}${reasonStr}. Всего переносов: ${(task.reschedule_count || 0) + 1}`,
+          author: userName
+        });
+      } catch (histErr) {
+        console.warn('[tasks] history insert failed:', histErr.message || histErr);
+      }
+    }
+    return res.status(200).json({ ok: true, task: updated[0], deadline_at: newDeadline, reschedule_count: (task.reschedule_count || 0) + 1 });
   }
 
   // ---- PATCH ?id=UUID — обычное редактирование (whitelist) ----
