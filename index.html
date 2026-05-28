@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v479</title>
+<title>SalesDoc — Финансовый Дашборд v480</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2410,15 +2410,8 @@ body:not(.light){background-image:radial-gradient(ellipse 80% 60% at 15% 10%, rg
 .period-selector{display:flex;align-items:center}
 .add-btn{padding:7px 18px;border-radius:8px;font-size:12px;cursor:pointer;background:linear-gradient(135deg,var(--gold-bright),var(--gold-mid));color:var(--dark-void);font-weight:700;border:none;font-family:'Inter',sans-serif;letter-spacing:.5px;box-shadow:0 4px 15px rgba(84,137,187,.35);transition:all .2s}
 .add-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(84,137,187,.5)}
-/* v478: компактная круглая sync-btn (по образцу theme-lamp) */
-.sync-btn{width:36px;height:36px;padding:0;border-radius:50%;cursor:pointer;background:rgba(72,217,140,0.12);color:var(--accent-bright,#48D98C);border:1px solid rgba(72,217,140,0.32);transition:all .2s;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-.sync-btn:hover{background:rgba(72,217,140,0.22);transform:scale(1.05)}
-.sync-btn:active{transform:scale(0.97)}
-.sync-btn svg{width:18px;height:18px;stroke:currentColor;transition:transform .3s}
-.sync-btn.syncing svg{animation:spin 1s linear infinite}
+/* v479: sync-btn теперь theme-lamp + sync-lamp (визуально пара с темой и странами) */
 .sync-btn .sync-icon{display:none}
-body.light .sync-btn{background:rgba(31,143,82,0.12);color:#1F8F52;border-color:rgba(31,143,82,0.32)}
-body.light .sync-btn:hover{background:rgba(31,143,82,0.22)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .btn-loading{pointer-events:none;opacity:.7}
 .btn-loading::before{content:'';display:inline-block;width:12px;height:12px;border:2px solid rgba(84,137,187,.3);border-top-color:#5489BB;border-radius:50%;animation:spin .8s linear infinite;margin-right:6px;vertical-align:middle}
@@ -3491,6 +3484,14 @@ body.light .theme-btn.active{background:rgba(76,140,245,.1);color:#1967D2}
 .country-lamp[aria-pressed='true'] .face-shine{opacity:0.35}
 .country-lamp[aria-pressed='true'] .socket-shadow{opacity:0.5}
 .country-lamp[aria-pressed='true'] .face-glowdrop{scale:0.6}
+/* v479: sync-lamp — расширяет .theme-lamp, вместо SVG-месяца показывает SVG-стрелки refresh */
+.sync-lamp{aspect-ratio:1.8/1}
+.sync-lamp .sl-icon{position:absolute;top:50%;left:50%;width:40%;height:40%;transform:translate(-50%,-50%);color:hsl(0 0% 72%);z-index:5;pointer-events:none;display:flex;align-items:center;justify-content:center;transition:color var(--step) var(--ease)}
+.sync-lamp .sl-icon svg{width:100%;height:100%;stroke:currentColor;stroke-width:2;fill:none;display:block}
+.sync-lamp:hover .sl-icon{transform:translate(-50%,-50%) rotate(60deg);transition:transform .35s ease}
+.sync-lamp.syncing .sl-icon{animation:sl-spin 1s linear infinite;color:var(--accent-bright,#48D98C)}
+@keyframes sl-spin{from{transform:translate(-50%,-50%) rotate(0)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+body.light .sync-lamp .sl-icon{color:hsl(0 0% 35%)}
 /* Light theme: readable text colors on white background */
 body.light .kpi-label{color:#6B7A99!important}
 body.light .kpi-value{color:#111827!important;-webkit-text-fill-color:#111827!important}
@@ -5232,11 +5233,22 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
  <span class="sr-only">Переключить тему</span>
  </button>
- <button class="sync-btn" id="sync-btn" onclick="syncFromSheets()" title="Синхронизировать" aria-label="Синхронизировать">
+ <button id="sync-btn" class="theme-lamp sync-lamp sync-btn" onclick="syncFromSheets()" title="Синхронизировать" aria-label="Синхронизировать">
+ <div class="socket"><div class="socket-shadow"></div></div>
+ <div class="face">
+ <div class="face-shadow"></div>
+ <div class="face-glowdrop"></div>
+ <div class="face-plate"></div>
+ <div class="face-shine"><div class="face-shine-shadow"></div></div>
+ <div class="face-glows"><div></div></div>
+ <span class="sl-icon">
  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
  <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
  <path d="M21 4v5h-5"/>
  </svg>
+ </span>
+ </div>
+ <span class="sr-only">Синхронизировать</span>
  </button>
  <button class="add-btn" onclick="openModal()" style="display:none">+ Добавить</button>
  </div>
