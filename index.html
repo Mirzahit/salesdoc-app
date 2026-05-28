@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v502</title>
+<title>SalesDoc — Финансовый Дашборд v503</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20963,13 +20963,12 @@ function intgRender() {
  var filterCountry = (document.getElementById('intg-filter-country')||{}).value || '';
  var filterPackage = (document.getElementById('intg-filter-package')||{}).value || '';
  // v497: объединяем Sheets-архив + активные карточки из Supabase в один массив для kanban
- var sbRows = (window.intgSbItems || []).map(_intgSbToRow);
- // v502: дедуп по нормализованному названию компании — приоритет Supabase (свежее).
- // Без дедупа одна и та же компания мигрированная из Sheets в Supabase задваивается.
+ // v503: фильтр null после _intgSbToRow, защита от падений
+ var sbRows = (window.intgSbItems || []).map(_intgSbToRow).filter(function(r){ return r; });
  var _norm = function(s){ return String(s||'').toLowerCase().replace(/[^a-zа-я0-9]/gi,''); };
  var sbKeys = {};
- sbRows.forEach(function(r){ sbKeys[_norm(r.company)] = true; });
- var sheetsUniq = intgData.filter(function(r){ return !sbKeys[_norm(r.company)]; });
+ sbRows.forEach(function(r){ var k = _norm(r.company); if(k) sbKeys[k] = true; });
+ var sheetsUniq = (intgData || []).filter(function(r){ var k = _norm(r.company); return !k || !sbKeys[k]; });
  var data = sbRows.concat(sheetsUniq);
  if (filterType) data = data.filter(function(r){ return r.type === filterType; });
  if (filterStatus) data = data.filter(function(r){ return r.status === filterStatus; });
@@ -21267,9 +21266,10 @@ async function intgSbLoad(){
  var btn = document.getElementById('intg-sb-refresh');
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
-  // v502: include_archive=1 — без него Supabase отдаёт только активные (без «Архив»), исторические интеграции теряются.
-  var d = await sbFetch('/api/cards?entity=integration&include_archive=1');
-  console.log('[intg] /api/cards?entity=integration&include_archive=1 →', d);
+  // v503: include_archive=1 убран — отдавал слишком много, страница зависала.
+  // Активные карточки идут с Supabase, исторический архив — с Sheets (через intgLoad).
+  var d = await sbFetch('/api/cards?entity=integration');
+  console.log('[intg] /api/cards?entity=integration →', d);
   if(!d || !d.ok) throw new Error((d && d.error) || 'load failed');
   window.intgSbItems = d.integrations || [];
   console.log('[intg] Supabase: ' + window.intgSbItems.length + ' активных карточек');
@@ -21295,32 +21295,36 @@ async function intgSbLoad(){
  }
 }
 // v497: маппинг Supabase-карточки в формат intgData (Sheets-формат).
+// v503: жёсткая защита от плохих данных — любой item не должен ронять весь рендер.
 function _intgSbToRow(it){
- var statusMap = { 'Новая':'В очереди', 'В работе':'Выполняется', 'На паузе':'Перенесено', 'Готово':'Готово', 'Отменено':'Отменено' };
- var deadline = '—';
- if(it.deadline){ try { deadline = new Date(it.deadline).toISOString().slice(0,10); } catch(_){} }
- var dateStart = '—';
- if(it.created_at){ try { dateStart = new Date(it.created_at).toISOString().slice(0,10); } catch(_){} }
- return {
-  _sb: true,        // маркер — это Supabase-карточка, не Sheets
-  _sb_id: it.id,    // для onclick → intgOpenCard
-  company: it.company_name || '—',
-  country: (it.country || '').toUpperCase() || '—',
-  type: it.type || 'Интеграция',
-  status: statusMap[it.status] || it.status || 'В очереди',
-  state: '—',
-  dateStart: dateStart,
-  deadline: deadline,
-  dateDone: '—',
-  operator: it.operator || '—',
-  manager: it.manager || '—',
-  login: it.login || '',
-  server: it.server || '',
-  contact: it.contact || '',
-  comment: it.comment || '',
-  dbType: it.db_type || '',
-  package: it.package || ''
- };
+ if(!it || typeof it !== 'object') return null;
+ try {
+  var statusMap = { 'Новая':'В очереди', 'В работе':'Выполняется', 'На паузе':'Перенесено', 'Готово':'Готово', 'Отменено':'Отменено' };
+  var deadline = '—';
+  if(it.deadline){ try { deadline = new Date(it.deadline).toISOString().slice(0,10); } catch(_){} }
+  var dateStart = '—';
+  if(it.created_at){ try { dateStart = new Date(it.created_at).toISOString().slice(0,10); } catch(_){} }
+  return {
+   _sb: true,
+   _sb_id: it.id,
+   company: it.company_name || '—',
+   country: String(it.country || '').toUpperCase() || '—',
+   type: it.type || 'Интеграция',
+   status: statusMap[it.status] || it.status || 'В очереди',
+   state: '—',
+   dateStart: dateStart,
+   deadline: deadline,
+   dateDone: '—',
+   operator: it.operator || '—',
+   manager: it.manager || '—',
+   login: it.login || '',
+   server: it.server || '',
+   contact: it.contact || '',
+   comment: it.comment || '',
+   dbType: it.db_type || '',
+   package: it.package || ''
+  };
+ } catch(e){ console.warn('[intg] _intgSbToRow failed for', it, e); return null; }
 }
 
 // v432: канбан-доска как во Внедрении. 5 колонок по статусам. Карточки кликабельные.
