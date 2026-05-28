@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v509</title>
+<title>SalesDoc — Финансовый Дашборд v510</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21623,11 +21623,30 @@ async function intgOpenCard(integrationId){
   if(!d.ok || !d.integrations || !d.integrations.length) throw new Error('Не найдено');
   _intgCurrentCard = d.integrations[0];
   intgRenderCard(_intgCurrentCard);
-  // Параллельно грузим ленту по client_id
+  // Параллельно грузим ленту по client_id + по card_id текущей интеграции + по card_id Маршрутов клиента
   if(_intgCurrentCard.client_id){
    try {
-    var h = await sbFetch('/api/history?client_id=' + encodeURIComponent(_intgCurrentCard.client_id) + '&limit=50');
-    intgRenderCardFeed((h && h.items) || []);
+    var hReqs = [
+     sbFetch('/api/history?client_id=' + encodeURIComponent(_intgCurrentCard.client_id) + '&limit=50'),
+     sbFetch('/api/history?card_id=' + encodeURIComponent(_intgCurrentCard.id) + '&limit=50')
+    ];
+    // v510: history по карточкам Маршрута клиента — чтобы интегратор видел заметки Внедрения
+    var routeRes = await sbFetch('/api/cards?entity=card&client_id=' + encodeURIComponent(_intgCurrentCard.client_id));
+    var routeList = (routeRes && routeRes.ok && Array.isArray(routeRes.cards)) ? routeRes.cards : [];
+    routeList.forEach(function(rc){
+     hReqs.push(sbFetch('/api/history?card_id=' + encodeURIComponent(rc.id) + '&limit=50'));
+    });
+    var all = await Promise.all(hReqs);
+    // Объединяем, дедупим по id
+    var seen = {}, merged = [];
+    all.forEach(function(r){
+     ((r && r.items) || []).forEach(function(it){
+      if(!it || !it.id || seen[it.id]) return;
+      seen[it.id] = 1;
+      merged.push(it);
+     });
+    });
+    intgRenderCardFeed(merged);
    } catch(_){ intgRenderCardFeed([]); }
   } else {
    intgRenderCardFeed([]);
@@ -27896,6 +27915,23 @@ async function _routeRenderFeed(){
   // v458: tasksRes — третий элемент массива, если client_id был
   var tasksRes = results[2];
   var tasks = (tasksRes && tasksRes.ok && tasksRes.tasks) ? tasksRes.tasks : [];
+  // v510: дополнительно — история по card_id интеграций клиента (если intg-заметки писались с card_id, а не с client_id)
+  var byIntgCards = [];
+  try {
+   if(_routeCurrentCard && _routeCurrentCard.client_id){
+    var ipResp = await sbFetch('/api/cards?entity=integration&client_id=' + encodeURIComponent(_routeCurrentCard.client_id));
+    var intgList = (ipResp && ipResp.ok && Array.isArray(ipResp.integrations)) ? ipResp.integrations : [];
+    var intgHistReqs = intgList.map(function(intg){
+     return sbFetch('/api/history?card_id=' + encodeURIComponent(intg.id) + '&limit=50');
+    });
+    if(intgHistReqs.length){
+     var intgRes = await Promise.all(intgHistReqs);
+     intgRes.forEach(function(r){
+      if(r && r.items && r.items.length) byIntgCards = byIntgCards.concat(r.items);
+     });
+    }
+   }
+  } catch(_){}
 
   // v458: конвертируем задачи в feed-items с маркером _is_task
   var taskItems = tasks.map(function(t){
@@ -27913,7 +27949,7 @@ async function _routeRenderFeed(){
   // Склейка с дедупом по id. Сортировка по created_at desc.
   var seen = {};
   var merged = [];
-  byCard.concat(byClient).concat(taskItems).forEach(function(it){
+  byCard.concat(byClient).concat(byIntgCards).concat(taskItems).forEach(function(it){
    if(!it || !it.id || seen[it.id]) return;
    seen[it.id] = 1;
    merged.push(it);
