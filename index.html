@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v496</title>
+<title>SalesDoc — Финансовый Дашборд v497</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5853,7 +5853,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
       Сюда попадают: автоматом при оплате «Нов интеграция» от payment_bot
       + вручную добавленные через приложение. Архив из Google-таблицы остаётся ниже.
       v435: убран зелёный фон/рамка — без обёртки. -->
- <div id="intg-sb-block" style="margin-bottom:20px">
+ <div id="intg-sb-block" style="margin-bottom:20px;display:none">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
    <div>
     <div style="font-size:13px;font-weight:600;color:var(--text)">Новые интеграции (из приложения)</div>
@@ -12589,7 +12589,7 @@ function showView(v) {
  if(v==='plan'){ var cbBtn=document.getElementById('ceo-bonus-btn'); if(cbBtn) cbBtn.style.display=(currentUser&&currentUser.role==='admin')?'flex':'none'; }
  if(v==='marketing'){mktInit();}
  if(v==='expenses'){expInit();expLoad();}
- if(v==='integrations'&&!window._intgLoaded){intgLoad();window._intgLoaded=true;} else if(v==='integrations'){intgRender();}
+ if(v==='integrations'&&!window._intgLoaded){intgLoad();intgSbLoad();window._intgLoaded=true;} else if(v==='integrations'){intgSbLoad();intgRender();}
 // v430: при каждом открытии вкладки тянем свежие данные из Supabase
 if(v==='integrations' && typeof intgSbLoad === 'function'){ try { intgSbLoad(); } catch(_){} }
  if(v==='tests') testsRender();
@@ -20958,7 +20958,9 @@ function intgRender() {
  var filterStatus = (document.getElementById('intg-filter-status')||{}).value || '';
  var filterCountry = (document.getElementById('intg-filter-country')||{}).value || '';
  var filterPackage = (document.getElementById('intg-filter-package')||{}).value || '';
- var data = intgData;
+ // v497: объединяем Sheets-архив + активные карточки из Supabase в один массив для kanban
+ var sbRows = (window.intgSbItems || []).map(_intgSbToRow);
+ var data = intgData.concat(sbRows);
  if (filterType) data = data.filter(function(r){ return r.type === filterType; });
  if (filterStatus) data = data.filter(function(r){ return r.status === filterStatus; });
  if (filterCountry) data = data.filter(function(r){ return r.country === filterCountry; });
@@ -20983,7 +20985,7 @@ function intgRender() {
 
  // Period stats
  var INTG_PLAN = 10;
- var allData = intgData;
+ var allData = intgData.concat(sbRows);
  if (filterCountry) allData = allData.filter(function(r){ return r.country === filterCountry; });
  var types = ['Интеграция','Доработка','Разработка'];
  // v224: iOS systemBlue + systemOrange + systemIndigo
@@ -21171,7 +21173,10 @@ function intgRender() {
  var pkgBadge = (pkgKey && pkgStyle) ? '<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:4px;background:'+pkgStyle[0]+';color:'+pkgStyle[1]+';letter-spacing:.3px">'+pkgKey.toUpperCase()+'</span>' : (pkgKey ? '<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.06);color:#94A3B8;letter-spacing:.3px">'+pkgKey.toUpperCase()+'</span>' : '');
  var badges = '<div style="display:flex;gap:4px;margin-left:auto;flex-shrink:0">' + pkgBadge + countryBadge + '</div>';
  // v222: карточка интеграции — Emerald Depth токены, без синих акцентов
- var h = '<div class="intg-card" onclick="this.classList.toggle(\'intg-open\')" style="background:var(--surface-2);border-radius:10px;padding:10px 12px;cursor:pointer;transition:all .15s;margin-bottom:6px;border:1px solid var(--border-faint)">';
+ // v497: Supabase-карточки кликабельны → открывают full карточку интеграции (intgOpenCard).
+ // Sheets-архив — тоже кликается, но просто разворачивает деталь (toggle).
+ var clickAttr = r._sb && r._sb_id ? 'onclick="event.stopPropagation();intgOpenCard(\'' + r._sb_id + '\')"' : 'onclick="this.classList.toggle(\'intg-open\')"';
+ var h = '<div class="intg-card" ' + clickAttr + ' style="background:var(--surface-2);border-radius:10px;padding:10px 12px;cursor:pointer;transition:all .15s;margin-bottom:6px;border:1px solid var(--border-faint)">';
  h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">';
  if (queueNum > 0) h += '<div style="width:20px;height:20px;border-radius:50%;background:var(--accent-bg);color:var(--accent-text);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:Inter,sans-serif">'+queueNum+'</div>';
  h += '<div style="font-size:12px;font-weight:700;color:#E2E8F0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'+(r.status==='Отменено'?';text-decoration:line-through;opacity:.5':'')+'">'+r.company+'</div>';
@@ -21242,25 +21247,58 @@ function intgRender() {
 // v430: Supabase-блок новых интеграций над архивной таблицей.
 // Грузит /api/cards?entity=integration — те что попали через payment_bot или ручное создание.
 // Не трогает intgData (там Sheets-архив).
+// v497: Supabase-карточки храним глобально, чтобы intgRender могла объединить их с архивом Sheets.
+window.intgSbItems = [];
 async function intgSbLoad(){
  var listEl = document.getElementById('intg-sb-list');
  var btn = document.getElementById('intg-sb-refresh');
- if(!listEl) return;
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
   var d = await sbFetch('/api/cards?entity=integration');
   if(!d.ok) throw new Error(d.error || 'load failed');
-  var items = d.integrations || [];
-  intgSbRender(items);
+  window.intgSbItems = d.integrations || [];
+  if(listEl) intgSbRender(window.intgSbItems);
+  // v497: после загрузки Supabase — переотрисуем общую kanban-таблицу с объединёнными данными
+  if(typeof intgRender === 'function' && window._intgLoaded) intgRender();
  } catch(e){
-  listEl.replaceChildren();
-  var err = document.createElement('div');
-  err.style.cssText = 'font-size:12px;color:#D67373;padding:8px 0';
-  err.textContent = 'Не удалось загрузить: ' + (e.message || 'ошибка');
-  listEl.appendChild(err);
+  if(listEl){
+   listEl.replaceChildren();
+   var err = document.createElement('div');
+   err.style.cssText = 'font-size:12px;color:#D67373;padding:8px 0';
+   err.textContent = 'Не удалось загрузить: ' + (e.message || 'ошибка');
+   listEl.appendChild(err);
+  }
  } finally {
   if(btn){ btn.disabled = false; btn.textContent = 'Обновить'; }
  }
+}
+// v497: маппинг Supabase-карточки в формат intgData (Sheets-формат).
+function _intgSbToRow(it){
+ var statusMap = { 'Новая':'В очереди', 'В работе':'Выполняется', 'На паузе':'Перенесено', 'Готово':'Готово', 'Отменено':'Отменено' };
+ var deadline = '—';
+ if(it.deadline){ try { deadline = new Date(it.deadline).toISOString().slice(0,10); } catch(_){} }
+ var dateStart = '—';
+ if(it.created_at){ try { dateStart = new Date(it.created_at).toISOString().slice(0,10); } catch(_){} }
+ return {
+  _sb: true,        // маркер — это Supabase-карточка, не Sheets
+  _sb_id: it.id,    // для onclick → intgOpenCard
+  company: it.company_name || '—',
+  country: (it.country || '').toUpperCase() || '—',
+  type: it.type || 'Интеграция',
+  status: statusMap[it.status] || it.status || 'В очереди',
+  state: '—',
+  dateStart: dateStart,
+  deadline: deadline,
+  dateDone: '—',
+  operator: it.operator || '—',
+  manager: it.manager || '—',
+  login: it.login || '',
+  server: it.server || '',
+  contact: it.contact || '',
+  comment: it.comment || '',
+  dbType: it.db_type || '',
+  package: it.package || ''
+ };
 }
 
 // v432: канбан-доска как во Внедрении. 5 колонок по статусам. Карточки кликабельные.
