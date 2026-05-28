@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v519</title>
+<title>SalesDoc — Финансовый Дашборд v520</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4585,6 +4585,31 @@ body.light #view-ticket-card.amocard-active {
 .afa-act.afa-del{color:#FF6B5C}
 .afa-act svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
 .afa-act.afa-pin-on{color:#F2B73D}
+/* v520: reschedule UI — компактная кнопка + popup */
+.tf-resched-badge{display:inline-block;margin-left:8px;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:rgba(245,158,11,.16);color:#F59E0B;border:1px solid rgba(245,158,11,.32);cursor:default;vertical-align:middle}
+.tf-resched-badge.is-hot{background:rgba(239,68,68,.16);color:#EF4444;border-color:rgba(239,68,68,.32)}
+.tf-resched-btn{background:transparent;border:1px solid transparent;color:var(--text-soft,#94a3b8);font-size:12px;font-weight:500;padding:6px 10px;border-radius:8px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px;transition:all .12s;opacity:.55}
+.amocard-task-feed:hover .tf-resched-btn{opacity:1}
+.tf-resched-btn:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14);color:var(--text,#e5e7eb)}
+body.light .tf-resched-btn:hover{background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.12);color:#0f172a}
+.tf-resched-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tf-rsch-pop{position:absolute;background:var(--surface,#1C1C1E);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:12px;padding:6px;min-width:240px;box-shadow:0 16px 40px rgba(0,0,0,.55);z-index:10000;font-family:inherit}
+body.light .tf-rsch-pop{background:#FFFFFF;border-color:rgba(0,0,0,.10);box-shadow:0 16px 40px rgba(0,0,0,.18)}
+.tf-rsch-opt{display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--text,#e5e7eb);font-size:13px;padding:9px 12px;border-radius:7px;cursor:pointer;font-family:inherit;transition:background .12s}
+.tf-rsch-opt:hover:not(:disabled){background:var(--accent-bg,rgba(52,199,122,.14));color:var(--accent-text,#6EE3A0)}
+.tf-rsch-opt:disabled{opacity:.45;cursor:default}
+.tf-rsch-opt.is-active{background:var(--accent-bg,rgba(52,199,122,.14));color:var(--accent-text,#6EE3A0)}
+.tf-rsch-sep{height:1px;background:var(--border,rgba(255,255,255,.10));margin:6px 4px}
+.tf-rsch-reason{width:100%;background:var(--surface-2,#1F1F24);border:1px solid var(--border,rgba(255,255,255,.14));color:var(--text,#e5e7eb);padding:8px 10px;border-radius:7px;font-size:12px;font-family:inherit;outline:none;box-sizing:border-box;resize:vertical;min-height:34px}
+body.light .tf-rsch-reason{background:#F5F7F3;border-color:rgba(0,0,0,.14);color:#0f172a}
+.tf-rsch-reason:focus{border-color:var(--accent,#34C77A)}
+.tf-rsch-foot{display:flex;gap:6px;padding:6px 4px 2px;justify-content:flex-end}
+.tf-rsch-go{background:var(--accent,#34C77A);color:#fff;border:none;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .12s}
+.tf-rsch-go:hover:not(:disabled){background:var(--accent-hover,#48D98C)}
+.tf-rsch-go:disabled{opacity:.55;cursor:not-allowed}
+.tf-rsch-cancel{background:transparent;color:var(--text-soft,#94a3b8);border:1px solid var(--border,rgba(255,255,255,.14));padding:7px 12px;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit}
+.tf-rsch-cancel:hover{background:rgba(255,255,255,.06)}
+body.light .tf-rsch-cancel:hover{background:rgba(0,0,0,.05)}
 /* v494: закреплённые записи прилипают к верху ленты при скролле (sticky) */
 .afa-pinned{border-color:#F2B73D !important;box-shadow:0 4px 12px rgba(0,0,0,.35),0 0 0 1px rgba(242,183,61,.35);position:sticky;top:8px;z-index:5;background:var(--amocard-surface,#1C2A2F)}
 .afa-pinned::before{content:'';position:absolute;left:-1px;top:-1px;bottom:-1px;width:3px;background:#F2B73D;border-radius:14px 0 0 14px}
@@ -28218,6 +28243,25 @@ function _buildFeedTask(t){
  if(t.assignee_operator){
   var to = document.createElement('span'); to.textContent = ' для ' + t.assignee_operator; meta.appendChild(to);
  }
+ // v520: badge счётчика переносов (если > 0)
+ var rsCount = +t.reschedule_count || 0;
+ if(rsCount > 0){
+  var bd = document.createElement('span');
+  bd.className = 'tf-resched-badge' + (rsCount >= 3 ? ' is-hot' : '');
+  bd.textContent = '×' + rsCount;
+  // Tooltip с датой и причиной последнего переноса
+  var tipParts = ['Перенесено ' + rsCount + ' ' + _pluralizeRsch(rsCount)];
+  if(t.last_reschedule_at){
+   try {
+    var lr = new Date(t.last_reschedule_at);
+    var lrStr = String(lr.getDate()).padStart(2,'0') + '.' + String(lr.getMonth()+1).padStart(2,'0') + '.' + lr.getFullYear();
+    tipParts.push('Последний: ' + lrStr);
+   } catch(_){}
+  }
+  if(t.last_reschedule_reason) tipParts.push('Причина: ' + t.last_reschedule_reason);
+  bd.title = tipParts.join(' · ');
+  meta.appendChild(bd);
+ }
  body.appendChild(meta);
 
  // === Row 2: тип-иконка + название типа (bold) + em-dash + текст ===
@@ -28267,6 +28311,17 @@ function _buildFeedTask(t){
   };
   actions.appendChild(input);
   actions.appendChild(btn);
+  // v520: кнопка «Перенести» — компактная, рядом с «Выполнить»
+  var rschBtn = document.createElement('button');
+  rschBtn.type = 'button';
+  rschBtn.className = 'tf-resched-btn';
+  // нейтральный SVG: календарь со стрелкой
+  rschBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/><polyline points="11 14 14 17 11 20"/></svg><span>Перенести</span>';
+  rschBtn.onclick = function(ev){
+   ev.stopPropagation();
+   _feedReschedOpen(t, rschBtn);
+  };
+  actions.appendChild(rschBtn);
   body.appendChild(actions);
  } else if(t.result){
   var res = document.createElement('div');
@@ -28293,6 +28348,159 @@ function _pluralizeDays(n){
  if(mod10 === 1) return 'день';
  if(mod10 >= 2 && mod10 <= 4) return 'дня';
  return 'дней';
+}
+
+// v520: склонение для «раз/раза»
+function _pluralizeRsch(n){
+ var mod10 = n % 10, mod100 = n % 100;
+ if(mod100 >= 11 && mod100 <= 14) return 'раз';
+ if(mod10 === 1) return 'раз';
+ if(mod10 >= 2 && mod10 <= 4) return 'раза';
+ return 'раз';
+}
+
+// v520: popup «Перенести задачу» — рядом с кнопкой
+// PATCH /api/tasks?id=X&move=TARGET с body {reason}
+window._feedReschedPop = null;
+function _feedReschedClose(){
+ if(window._feedReschedPop){
+  try { window._feedReschedPop.remove(); } catch(_){}
+  window._feedReschedPop = null;
+ }
+ if(window._feedReschedOutside){
+  document.removeEventListener('mousedown', window._feedReschedOutside, true);
+  window._feedReschedOutside = null;
+ }
+ if(window._feedReschedKey){
+  document.removeEventListener('keydown', window._feedReschedKey, true);
+  window._feedReschedKey = null;
+ }
+}
+function _feedReschedOpen(task, anchorBtn){
+ _feedReschedClose();
+ var pop = document.createElement('div');
+ pop.className = 'tf-rsch-pop';
+ pop.onclick = function(e){ e.stopPropagation(); };
+ var state = { target: null, reason: '', busy: false };
+ var targets = [
+  { id:'today',         label:'На сегодня' },
+  { id:'tomorrow',      label:'На завтра' },
+  { id:'after_tomorrow',label:'На послезавтра' },
+  { id:'next_week',     label:'На следующую неделю' },
+  { id:'next_month',    label:'На следующий месяц' }
+ ];
+ var optBtns = [];
+ targets.forEach(function(tg){
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'tf-rsch-opt';
+  b.textContent = tg.label;
+  b.onclick = function(){
+   if(state.busy) return;
+   state.target = tg.id;
+   optBtns.forEach(function(x){ x.classList.remove('is-active'); });
+   b.classList.add('is-active');
+   goBtn.disabled = false;
+  };
+  optBtns.push(b);
+  pop.appendChild(b);
+ });
+ var sep = document.createElement('div'); sep.className = 'tf-rsch-sep'; pop.appendChild(sep);
+ var reasonInp = document.createElement('textarea');
+ reasonInp.className = 'tf-rsch-reason';
+ reasonInp.placeholder = 'Причина (опционально)';
+ reasonInp.rows = 1;
+ reasonInp.oninput = function(){ state.reason = reasonInp.value; };
+ reasonInp.onkeydown = function(ev){
+  if(ev.key === 'Enter' && !ev.shiftKey){
+   ev.preventDefault();
+   if(!goBtn.disabled) goBtn.click();
+  }
+  if(ev.key === 'Escape'){ ev.preventDefault(); _feedReschedClose(); }
+ };
+ pop.appendChild(reasonInp);
+ var foot = document.createElement('div'); foot.className = 'tf-rsch-foot';
+ var cancelBtn = document.createElement('button');
+ cancelBtn.type = 'button'; cancelBtn.className = 'tf-rsch-cancel'; cancelBtn.textContent = 'Отмена';
+ cancelBtn.onclick = function(){ _feedReschedClose(); };
+ var goBtn = document.createElement('button');
+ goBtn.type = 'button'; goBtn.className = 'tf-rsch-go'; goBtn.textContent = 'Перенести';
+ goBtn.disabled = true;
+ goBtn.onclick = async function(){
+  if(state.busy || !state.target) return;
+  state.busy = true;
+  goBtn.disabled = true; goBtn.textContent = '...';
+  optBtns.forEach(function(x){ x.disabled = true; });
+  reasonInp.disabled = true;
+  cancelBtn.disabled = true;
+  var ok = await _feedReschedDo(task.id, state.target, state.reason);
+  if(!ok){
+   state.busy = false;
+   goBtn.disabled = false; goBtn.textContent = 'Перенести';
+   optBtns.forEach(function(x){ x.disabled = false; });
+   reasonInp.disabled = false;
+   cancelBtn.disabled = false;
+   return;
+  }
+  _feedReschedClose();
+ };
+ foot.appendChild(cancelBtn);
+ foot.appendChild(goBtn);
+ pop.appendChild(foot);
+ document.body.appendChild(pop);
+ // Позиционирование рядом с кнопкой
+ var r = anchorBtn.getBoundingClientRect();
+ var w = 260, h = 320;
+ var x = r.left;
+ var y = r.bottom + 6;
+ if(x + w > window.innerWidth - 12) x = window.innerWidth - w - 12;
+ if(y + h > window.innerHeight - 12) y = r.top - h - 6;
+ if(x < 12) x = 12;
+ if(y < 12) y = 12;
+ pop.style.left = x + 'px';
+ pop.style.top = y + 'px';
+ window._feedReschedPop = pop;
+ // Outside click & ESC
+ window._feedReschedOutside = function(ev){
+  if(!pop.contains(ev.target) && ev.target !== anchorBtn && !anchorBtn.contains(ev.target)){
+   _feedReschedClose();
+  }
+ };
+ setTimeout(function(){
+  document.addEventListener('mousedown', window._feedReschedOutside, true);
+ }, 50);
+ window._feedReschedKey = function(ev){
+  if(ev.key === 'Escape'){ _feedReschedClose(); }
+ };
+ document.addEventListener('keydown', window._feedReschedKey, true);
+}
+
+async function _feedReschedDo(taskId, target, reason){
+ if(typeof crmTasksFetch !== 'function'){ alert('Модуль задач не загружен'); return false; }
+ var labels = { today:'на сегодня', tomorrow:'на завтра', after_tomorrow:'на послезавтра', next_week:'на следующую неделю', next_month:'на следующий месяц' };
+ try {
+  var payload = { reason: (reason && reason.trim()) ? reason.trim() : null };
+  var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId) + '&move=' + encodeURIComponent(target), {
+   method:'PATCH',
+   body: JSON.stringify(payload)
+  });
+  if(!d || !d.ok){
+   alert('Не удалось перенести: ' + (d && d.error || 'неизв.'));
+   return false;
+  }
+  if(typeof kbShowToast === 'function') kbShowToast('Задача перенесена ' + (labels[target] || ''));
+  // Перерисуем ленту, мои задачи, календарь и т.д.
+  if(typeof _mtMaybeReload === 'function') _mtMaybeReload();
+  if(typeof window._kbCurrentCard !== 'undefined' && window._kbCurrentCard && typeof crmClientTasksRender === 'function'){
+   var pane = document.querySelector('.crm-tab-pane[data-pane="tasks"]:not([hidden])');
+   if(pane) crmClientTasksRender(window._kbCurrentCard);
+  }
+  if(typeof _routeRenderFeed === 'function') _routeRenderFeed();
+  return true;
+ } catch(e){
+  alert('Ошибка сети: ' + (e.message || e));
+  return false;
+ }
 }
 
 // v459: инлайн-закрытие задачи прямо из ленты (без модалки).
@@ -34927,7 +35135,11 @@ function mytasksBindFooter(){
 
 async function mytasksMove(taskId, target){
  try {
-  var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId) + '&move=' + encodeURIComponent(target), { method:'PATCH' });
+  // v520: фиксируем drag-перенос в card_history через reason='drag в календаре'
+  var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId) + '&move=' + encodeURIComponent(target), {
+   method:'PATCH',
+   body: JSON.stringify({ reason: 'drag в календаре' })
+  });
   if(!d || !d.ok){ alert('Не удалось переместить: ' + (d && d.error || 'неизв.')); return; }
   if(typeof kbShowToast === 'function') kbShowToast('Перенесено');
   mytasksLoad();
