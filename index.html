@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v491</title>
+<title>SalesDoc — Финансовый Дашборд v492</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4518,6 +4518,11 @@ body.light #view-ticket-card.amocard-active {
 .afa-act:hover{background:rgba(255,255,255,.06)}
 .afa-act.afa-del{color:#FF6B5C}
 .afa-act svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+.afa-act.afa-pin-on{color:#F2B73D}
+.afa-pinned{border-color:#F2B73D !important;box-shadow:0 0 0 1px rgba(242,183,61,.25),var(--amocard-sh-1)}
+.afa-pinned::before{content:'';position:absolute;left:-1px;top:-1px;bottom:-1px;width:3px;background:#F2B73D;border-radius:14px 0 0 14px}
+.afa-edit-input{width:100%;min-height:60px;background:rgba(255,255,255,.04);border:1px solid var(--accent,#48D98C);border-radius:6px;padding:6px 8px;color:var(--text);font-family:inherit;font-size:13px;line-height:1.4;resize:vertical;outline:none}
+body.light .afa-edit-input{background:#FFFFFF;color:#1A1A1C}
 body.light .afa-handle{background:rgba(0,0,0,.06)}
 body.light .afa-handle::before{background:rgba(0,0,0,.45)}
 body.light .afa-handle:hover{background:rgba(0,0,0,.12)}
@@ -27700,7 +27705,10 @@ async function _routeRenderFeed(){
   merged.sort(function(a, b){
    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
-  var items = merged.slice(0, 80).reverse();
+  // v492: закреплённые (pinned) всегда наверху (внутри ленты — над всеми остальными).
+  var pinnedItems = merged.filter(function(it){ return it.pinned || (it._task && it._task.pinned); });
+  var regularItems = merged.filter(function(it){ return !(it.pinned || (it._task && it._task.pinned)); });
+  var items = pinnedItems.concat(regularItems.slice(0, 80).reverse());
   if(!items.length){
    var empty = document.createElement('div');
    empty.className = 'amocard-empty';
@@ -27857,7 +27865,8 @@ function _buildFeedTask(t){
  item.appendChild(body);
  // v490: hover-actions для задачи
  if(t.id){
-  _addFeedActions(item, { kind:'task', id:t.id });
+  _addFeedActions(item, { kind:'task', id:t.id, pinned:!!t.pinned, textEl:content });
+  if(t.pinned) item.classList.add('afa-pinned');
  }
  return item;
 }
@@ -27912,7 +27921,18 @@ function _addFeedActions(node, opts){
  handle.title = 'Действия';
  var menu = document.createElement('div');
  menu.className = 'afa-menu';
- // v491: оставлено только «Удалить» (Закрепить и Изменить требуют расширения схемы БД — добавим отдельно).
+ // Закрепить
+ var btnPin = document.createElement('button'); btnPin.className = 'afa-act'; btnPin.type='button';
+ var pinned = !!opts.pinned;
+ btnPin.appendChild(_afaIcon('M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z'));
+ btnPin.appendChild(document.createTextNode(pinned ? 'Открепить' : 'Закрепить'));
+ if(pinned) btnPin.classList.add('afa-pin-on');
+ btnPin.addEventListener('click', function(ev){
+  ev.stopPropagation();
+  _afaClose();
+  _feedTogglePin(opts.kind, opts.id, !pinned, node);
+ });
+ // Удалить
  var btnDel = document.createElement('button'); btnDel.className = 'afa-act afa-del'; btnDel.type='button';
  btnDel.appendChild(_afaIcon('M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6'));
  btnDel.appendChild(document.createTextNode('Удалить'));
@@ -27922,7 +27942,18 @@ function _addFeedActions(node, opts){
   if(!confirm('Удалить эту запись?')) return;
   _feedDeleteItem(opts.kind, opts.id, node);
  });
+ // Изменить
+ var btnEdit = document.createElement('button'); btnEdit.className = 'afa-act'; btnEdit.type='button';
+ btnEdit.appendChild(_afaIcon('M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z'));
+ btnEdit.appendChild(document.createTextNode('Изменить'));
+ btnEdit.addEventListener('click', function(ev){
+  ev.stopPropagation();
+  _afaClose();
+  _feedStartEdit(opts.kind, opts.id, node, opts.textEl);
+ });
+ menu.appendChild(btnPin);
  menu.appendChild(btnDel);
+ menu.appendChild(btnEdit);
  // Раскрытие при hover/click на handle
  handle.addEventListener('mouseenter', function(){ _afaOpen(menu); });
  handle.addEventListener('click', function(ev){ ev.stopPropagation(); _afaOpen(menu); });
@@ -27946,6 +27977,78 @@ function _afaOpen(menu){
 }
 function _afaClose(){
  document.querySelectorAll('.afa-menu.is-open').forEach(function(m){ m.classList.remove('is-open'); });
+}
+async function _feedTogglePin(kind, id, newVal, node){
+ try {
+  var d;
+  if(kind === 'task'){
+   var realId = String(id).replace(/^task:/,'');
+   d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(realId), {
+    method:'PATCH', body: JSON.stringify({ pinned: newVal })
+   });
+  } else {
+   d = await sbFetch('/api/history?id=' + encodeURIComponent(id), {
+    method:'PATCH', body: JSON.stringify({ pinned: newVal })
+   });
+  }
+  if(!d || !d.ok) throw new Error((d && d.error) || 'не удалось обновить');
+  if(typeof kbShowToast === 'function') kbShowToast(newVal ? 'Закреплено' : 'Откреплено');
+  if(typeof _routeRenderFeed === 'function') _routeRenderFeed();
+ } catch(e){
+  alert('Не удалось закрепить: ' + (e.message || e) + '\n\nЕсли в БД нет колонки pinned — добавьте её в Supabase Studio:\nALTER TABLE card_history ADD COLUMN pinned BOOLEAN DEFAULT FALSE;\nALTER TABLE tasks ADD COLUMN pinned BOOLEAN DEFAULT FALSE;');
+ }
+}
+function _feedStartEdit(kind, id, node, textEl){
+ if(!textEl){
+  // ищем элемент с текстом — для note это .amocard-feed-text, для task .amocard-task-feed-content
+  textEl = node.querySelector('.amocard-feed-text') || node.querySelector('.amocard-task-feed-content');
+ }
+ if(!textEl) return;
+ var original = textEl.textContent;
+ var ta = document.createElement('textarea');
+ ta.value = original;
+ ta.className = 'afa-edit-input';
+ ta.rows = Math.min(8, Math.max(1, original.split('\n').length));
+ textEl.replaceWith(ta);
+ ta.focus();
+ ta.setSelectionRange(ta.value.length, ta.value.length);
+ var saving = false;
+ var save = async function(){
+  if(saving) return;
+  var newText = ta.value.trim();
+  if(!newText || newText === original){ cancel(); return; }
+  saving = true;
+  try {
+   var d;
+   if(kind === 'task'){
+    var realId = String(id).replace(/^task:/,'');
+    d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(realId), {
+     method:'PATCH', body: JSON.stringify({ text: newText })
+    });
+   } else {
+    d = await sbFetch('/api/history?id=' + encodeURIComponent(id), {
+     method:'PATCH', body: JSON.stringify({ text: newText })
+    });
+   }
+   if(!d || !d.ok) throw new Error((d && d.error) || 'не удалось сохранить');
+   var newEl = document.createElement('div');
+   newEl.className = textEl.className;
+   newEl.textContent = newText;
+   ta.replaceWith(newEl);
+   if(typeof kbShowToast === 'function') kbShowToast('Сохранено');
+  } catch(e){
+   alert('Не удалось сохранить: ' + (e.message || e));
+   cancel();
+  }
+ };
+ var cancel = function(){
+  ta.replaceWith(textEl);
+ };
+ ta.addEventListener('keydown', function(ev){
+  if(ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault(); save(); }
+  if(ev.key === 'Escape'){ ev.preventDefault(); cancel(); }
+ });
+ ta.addEventListener('blur', function(){ setTimeout(save, 100); });
 }
 async function _feedDeleteItem(kind, id, node){
  try {
@@ -28023,7 +28126,8 @@ function _buildFeedNote(n, eventType){
  note.appendChild(body);
  // v490: hover-actions (заметки можно удалять, кроме system)
  if(n.id && eventType !== 'system' && eventType !== 'stage_change'){
-  _addFeedActions(note, { kind:'note', id:n.id });
+  _addFeedActions(note, { kind:'note', id:n.id, pinned:!!n.pinned, textEl:text });
+  if(n.pinned) note.classList.add('afa-pinned');
  }
  return note;
 }

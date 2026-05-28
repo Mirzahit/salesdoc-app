@@ -28,7 +28,8 @@ import { checkAuth } from './_auth.js';
 
 const ALLOWED_PATCH_FIELDS = [
   'text', 'deadline_at', 'deadline_end_at', 'is_all_day',
-  'type_id', 'assignee_operator', 'contact_name', 'stage_label', 'stage_color'
+  'type_id', 'assignee_operator', 'contact_name', 'stage_label', 'stage_color',
+  'pinned'
 ];
 
 const MOVE_TARGETS = ['today', 'tomorrow', 'after_tomorrow', 'next_week', 'next_month', 'done'];

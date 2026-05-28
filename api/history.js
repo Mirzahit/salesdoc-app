@@ -2,11 +2,14 @@
 //
 // GET    /api/history?card_id=UUID    → история карточки (последние сверху)
 // POST   /api/history                 → новая запись (body: { card_id, event_type, text, author })
+// PATCH  /api/history?id=UUID         → редактировать (whitelist: text, pinned)
 // DELETE /api/history?id=UUID         → удалить запись (только заметки, не stage_change/system)
 //
 // event_type: 'call' | 'whatsapp' | 'note' | 'stage_change' | 'file' | 'system'
 
-import { sbSelect, sbInsert, sbDelete } from './_supabase.js';
+import { sbSelect, sbInsert, sbUpdate, sbDelete } from './_supabase.js';
+
+const ALLOWED_PATCH_FIELDS = ['text', 'pinned'];
 import { checkAuth } from './_auth.js';
 
 // v430: добавлен 'integration_note' — заметки от команды интеграторов.
@@ -45,6 +48,28 @@ export default async function handler(req, res) {
       };
       const result = await sbInsert('card_history', row);
       return res.status(201).json({ ok: true, item: result[0] });
+    }
+
+    if (req.method === 'PATCH') {
+      const { id } = req.query || {};
+      if (!id) return res.status(400).json({ ok: false, error: 'нужен id' });
+      const body = await readBody(req);
+      const patch = {};
+      for (const k of ALLOWED_PATCH_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(body, k)) patch[k] = body[k];
+      }
+      if (!Object.keys(patch).length) {
+        return res.status(400).json({ ok: false, error: 'нечего обновлять. Разрешены поля: ' + ALLOWED_PATCH_FIELDS.join(', ') });
+      }
+      // Защита: системные события и смены этапа редактировать нельзя.
+      const rows = await sbSelect('card_history', { id: 'eq.' + id, limit: 1 });
+      if (!rows.length) return res.status(404).json({ ok: false, error: 'запись не найдена' });
+      const evt = rows[0].event_type;
+      if (evt === 'stage_change' || evt === 'system') {
+        return res.status(403).json({ ok: false, error: 'системные события нельзя редактировать' });
+      }
+      const updated = await sbUpdate('card_history', { id: 'eq.' + id }, patch);
+      return res.status(200).json({ ok: true, item: updated[0] || null });
     }
 
     if (req.method === 'DELETE') {
