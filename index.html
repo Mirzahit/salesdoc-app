@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v487</title>
+<title>SalesDoc — Финансовый Дашборд v488</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -4596,6 +4596,22 @@ body.light .amocard-chat-row-fields { border-color:rgba(15,23,42,.08); }
 .amocard-chat-mode-btn:hover { color:var(--amocard-text); }
 .amocard-chat-mode-btn.is-active { background:var(--amocard-accent); color:#fff; }
 .amocard-chat-mode-btn svg { width:13px; height:13px; }
+/* v488: trigger + popup в стиле amoCRM (синяя ссылка → dropdown с типами записи) */
+.amocard-mode-trigger { display:inline-flex; align-items:center; gap:4px; color:#7FAFD9; cursor:pointer; font-size:13px; font-weight:600; padding:4px 6px; border-radius:6px; transition:background .15s; user-select:none; }
+.amocard-mode-trigger:hover { background:rgba(127,175,217,.10); }
+.amocard-mode-trigger u { text-decoration:underline; text-underline-offset:2px; }
+.amocard-mode-trigger .amocard-mode-caret { font-size:10px; opacity:.7; }
+.amocard-mode-popup { position:absolute; bottom:calc(100% + 4px); left:0; background:var(--surface,#1C1C1E); border:1px solid var(--border,rgba(255,255,255,.10)); border-radius:8px; box-shadow:0 12px 32px rgba(0,0,0,.45); padding:6px; min-width:160px; z-index:100; display:none; }
+.amocard-mode-popup.is-open { display:block; }
+.amocard-mode-popup-item { padding:8px 12px; cursor:pointer; border-radius:6px; font-size:13px; color:var(--text,#fff); display:flex; align-items:center; justify-content:space-between; gap:8px; transition:background .12s; }
+.amocard-mode-popup-item:hover { background:rgba(255,255,255,.06); }
+.amocard-mode-popup-item.is-active::after { content:'✓'; color:#7FAFD9; font-size:12px; }
+.amocard-mode-popup-item.is-disabled { opacity:.4; cursor:not-allowed; }
+.amocard-mode-popup-item.is-disabled:hover { background:transparent; }
+body.light .amocard-mode-trigger { color:#5489BB; }
+body.light .amocard-mode-popup { background:#FFFFFF; border-color:rgba(0,0,0,.12); }
+body.light .amocard-mode-popup-item { color:#1A1A1C; }
+body.light .amocard-mode-popup-item:hover { background:rgba(0,0,0,.05); }
 
 .amocard-chat-task-fields { display:flex; align-items:center; gap:6px; flex-wrap:wrap; flex:1; }
 /* Чип ассайна с цветным dot оператора */
@@ -7528,10 +7544,13 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
    </div>
    <!-- v457: двухрежимный composer с тремя рядами: mode / task-params / input. -->
    <div class="amocard-chat-input has-mode">
-    <div class="amocard-chat-row">
-     <div class="amocard-chat-mode" role="tablist" aria-label="Тип записи">
-      <button class="amocard-chat-mode-btn is-active" id="route-chat-mode-note" onclick="routeChatSetMode('note')" role="tab" aria-pressed="true" aria-label="Заметка для команды"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>Заметка</button>
-      <button class="amocard-chat-mode-btn" id="route-chat-mode-task" onclick="routeChatSetMode('task')" role="tab" aria-pressed="false" aria-label="Поставить задачу"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Задача</button>
+    <div class="amocard-chat-row" style="position:relative">
+     <!-- v488: dropdown-trigger в стиле amoCRM (синяя подчёркнутая ссылка → popup со списком) -->
+     <span class="amocard-mode-trigger" id="route-chat-mode-trigger" onclick="routeChatToggleModePopup(event)" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"><u id="route-chat-mode-label">Примечание</u><span class="amocard-mode-caret">▾</span></span>
+     <div class="amocard-mode-popup" id="route-chat-mode-popup" role="menu">
+      <div class="amocard-mode-popup-item is-disabled" role="menuitem" title="Скоро — потребуется интеграция с WhatsApp">Чат</div>
+      <div class="amocard-mode-popup-item is-active" role="menuitem" data-mode="note" onclick="routeChatPickMode('note')">Примечание</div>
+      <div class="amocard-mode-popup-item" role="menuitem" data-mode="task" onclick="routeChatPickMode('task')">Задача</div>
      </div>
     </div>
     <div class="amocard-chat-row amocard-chat-row-fields amocard-chat-task-fields" id="route-chat-task-fields" style="display:none">
@@ -26554,7 +26573,16 @@ function routeChatSetMode(mode){
  // v457 fix: при каждом входе в task-mode пересчитываем defaults — иначе устаревшее
  // (например 00:00 если открыли в полночь и оставили вкладку до утра)
  if(mode === 'task') _routeChatInitTaskState();
- // Кнопки режима + aria
+ // v488: обновляем dropdown-trigger label и активный пункт в popup
+ var label = document.getElementById('route-chat-mode-label');
+ if(label) label.textContent = mode === 'task' ? 'Задача' : 'Примечание';
+ var popup = document.getElementById('route-chat-mode-popup');
+ if(popup){
+  popup.querySelectorAll('.amocard-mode-popup-item').forEach(function(it){
+   it.classList.toggle('is-active', it.dataset.mode === mode);
+  });
+ }
+ // Старые кнопки (если ещё где-то остались)
  var noteBtn = document.getElementById('route-chat-mode-note');
  var taskBtn = document.getElementById('route-chat-mode-task');
  if(noteBtn){ noteBtn.classList.toggle('is-active', mode === 'note'); noteBtn.setAttribute('aria-pressed', mode === 'note'); }
@@ -26572,10 +26600,35 @@ function routeChatSetMode(mode){
   // Подгрузим типы задач для type-chip (если ещё не закэшированы)
   if(typeof crmTasksLoadTypes === 'function') crmTasksLoadTypes().then(_routeChatRefreshChips);
  } else {
-  if(input) input.placeholder = 'клиент это НЕ увидит — только операторы внутри SalesDoc';
+  if(input) input.placeholder = 'введите текст — клиент НЕ увидит, только операторы SalesDoc';
   if(sendBtn) sendBtn.title = 'Сохранить заметку';
  }
  routeChatUpdateSendBtn();
+}
+// v488: dropdown-popup для выбора типа записи (Чат/Примечание/Задача)
+function routeChatToggleModePopup(ev){
+ if(ev) ev.stopPropagation();
+ var popup = document.getElementById('route-chat-mode-popup');
+ if(!popup) return;
+ var open = popup.classList.toggle('is-open');
+ var trig = document.getElementById('route-chat-mode-trigger');
+ if(trig) trig.setAttribute('aria-expanded', open ? 'true' : 'false');
+ if(open){
+  // Закрытие по клику вне popup
+  setTimeout(function(){
+   document.addEventListener('click', _routeChatModePopupClose, { once:true });
+  }, 0);
+ }
+}
+function _routeChatModePopupClose(){
+ var popup = document.getElementById('route-chat-mode-popup');
+ if(popup) popup.classList.remove('is-open');
+ var trig = document.getElementById('route-chat-mode-trigger');
+ if(trig) trig.setAttribute('aria-expanded', 'false');
+}
+function routeChatPickMode(mode){
+ _routeChatModePopupClose();
+ routeChatSetMode(mode);
 }
 
 // v457: enable/disable кнопки send в зависимости от наличия текста
