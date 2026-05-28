@@ -30196,7 +30196,7 @@ function crmCalRenderDay(){
  html += '<table class="tt-day-grid"><tbody>';
  for(var h = 6; h <= 22; h++){
  html += '<tr><td class="tt-hour">'+String(h).padStart(2,'0')+':00</td>'
- + '<td class="tt-hour-slot" onclick="crmCalAddTaskAt(\''+date+'\','+h+')">';
+ + '<td class="tt-hour-slot" onclick="crmCalAddTaskAt(\''+date+'\','+h+', event)">';
  (byHour[h] || []).forEach(function(e){
  var pCls = e.priority === 1 || e.priority === 'high' ? ' p-high' :
  e.priority === 2 || e.priority === 'med' ? ' p-med' :
@@ -30238,17 +30238,565 @@ window.crmCalDropOnDate = function(date, ev){
  crmEventsSaveAll(all);
  crmCalRender();
 };
-window.crmCalAddTaskAt = function(date, hour){
- // Quick add задачи в выбранный час — открывает модалку с предзаполнением.
- // v454 fix: модалка использует id="ev-time" (см. crmEventOpenModal), а здесь подставлялось
- // в несуществующий "ev-time-start" — поле оставалось пустым.
- if(typeof crmEventOpenModal !== 'function') return;
- crmEventOpenModal();
- setTimeout(function(){
- var di = document.getElementById('ev-date'); if(di) di.value = date;
- var ti = document.getElementById('ev-time'); if(ti) ti.value = String(hour).padStart(2,'0')+':00';
- }, 60);
+// v518: TickTick-стиль quick-add. Старая модалка crmEventOpenModal остаётся для
+// сценариев «Редактировать»/«Создать из карточки клиента». Здесь — лёгкий popup
+// рядом с курсором: дата-чип, textarea, Enter — save, Esc — cancel.
+window.crmCalAddTaskAt = function(date, hour, anchorEv){
+ try { ttQuickAddOpen(date, hour, anchorEv); }
+ catch(e){
+  console.error('[ttQuickAdd]', e);
+  // fallback на полную модалку, чтобы юзер не остался без UI
+  if(typeof crmEventOpenModal === 'function'){
+   crmEventOpenModal();
+   setTimeout(function(){
+    var di = document.getElementById('ev-date'); if(di) di.value = date;
+    var ti = document.getElementById('ev-time'); if(ti) ti.value = String(hour).padStart(2,'0')+':00';
+   }, 60);
+  }
+ }
 };
+
+// ============================================================
+// v518: TickTick-стиль quick-add popup
+// ============================================================
+// Глобальное состояние одного активного popup-а.
+window._ttQa = window._ttQa || null;
+
+function ttQaCloseAll(){
+ var pops = document.querySelectorAll('.tt-qa-pop, .tt-dp');
+ pops.forEach(function(p){ p.remove(); });
+ if(window._ttQaOutsideHandler){
+  document.removeEventListener('mousedown', window._ttQaOutsideHandler, true);
+  window._ttQaOutsideHandler = null;
+ }
+ if(window._ttQaKeyHandler){
+  document.removeEventListener('keydown', window._ttQaKeyHandler, true);
+  window._ttQaKeyHandler = null;
+ }
+ window._ttQa = null;
+}
+
+function ttQaFmtChip(state){
+ // «Сегодня, 15:00 - 15:45» или «28 мая, 15:00 - 15:45» или «28 мая, весь день»
+ var today = crmDateStr(new Date());
+ var tomorrow = crmDateStr(crmAddDays(new Date(), 1));
+ var dateLabel;
+ if(state.date === today) dateLabel = 'Сегодня';
+ else if(state.date === tomorrow) dateLabel = 'Завтра';
+ else {
+  var d = new Date(state.date + 'T00:00:00');
+  dateLabel = d.toLocaleDateString('ru-RU', { day:'numeric', month:'long' });
+ }
+ if(state.is_all_day) return dateLabel + ', весь день';
+ var endLabel = state.time_end ? ' - ' + state.time_end : '';
+ return dateLabel + ', ' + (state.time_start || '') + endLabel;
+}
+
+function ttQaIcon(name){
+ // Нейтральные SVG-иконки stroke=currentColor (без эмодзи).
+ var icons = {
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>',
+  sun:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.8" y2="4.2"/></svg>',
+  evening:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"/><path d="M5 14a7 7 0 0 1 14 0"/><line x1="12" y1="3" x2="12" y2="5"/><line x1="5" y1="6" x2="6" y2="7"/><line x1="19" y1="6" x2="18" y2="7"/></svg>',
+  moon:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
+  plus7: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><text x="12" y="18" font-size="9" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">+7</text></svg>',
+  inbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.5 5h13l3.5 7v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7z"/></svg>',
+  more:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>',
+  send:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>'
+ };
+ return icons[name] || '';
+}
+
+function ttQuickAddOpen(date, hour, anchorEv){
+ ttQaCloseAll();
+ var startStr = String(hour).padStart(2,'0') + ':00';
+ var endH = (hour + 1) > 23 ? 23 : (hour + 1);
+ // По дефолту длительность 45 минут (как в TickTick)
+ var endMin = 45;
+ var endStr;
+ if(hour >= 23){ endStr = '23:59'; }
+ else { endStr = String(hour).padStart(2,'0') + ':' + String(endMin).padStart(2,'0'); }
+ var state = {
+  date: date,
+  time_start: startStr,
+  time_end: endStr,
+  is_all_day: false
+ };
+ window._ttQa = { state: state };
+
+ var pop = document.createElement('div');
+ pop.className = 'tt-qa-pop';
+ pop.id = 'tt-qa-pop';
+ pop.onclick = function(e){ e.stopPropagation(); };
+ // Render внутрь
+ ttQaRender(pop, state);
+ document.body.appendChild(pop);
+
+ // Позиционирование рядом с курсором (или по центру если нет event)
+ var x, y;
+ if(anchorEv && typeof anchorEv.clientX === 'number'){
+  x = anchorEv.clientX + 12;
+  y = anchorEv.clientY + 8;
+ } else {
+  x = window.innerWidth / 2 - 170;
+  y = window.innerHeight / 2 - 140;
+ }
+ var w = 340, h = 220; // примерно
+ if(x + w > window.innerWidth - 12) x = window.innerWidth - w - 12;
+ if(y + h > window.innerHeight - 12) y = window.innerHeight - h - 12;
+ if(x < 12) x = 12;
+ if(y < 12) y = 12;
+ pop.style.left = x + 'px';
+ pop.style.top = y + 'px';
+
+ // Focus textarea
+ setTimeout(function(){
+  var ta = pop.querySelector('.tt-qa-input');
+  if(ta) ta.focus();
+ }, 30);
+
+ // Outside click — закрыть
+ window._ttQaOutsideHandler = function(e){
+  var inPop = e.target.closest('.tt-qa-pop, .tt-dp');
+  if(!inPop) ttQaCloseAll();
+ };
+ document.addEventListener('mousedown', window._ttQaOutsideHandler, true);
+
+ // Esc — отменить, Enter (без Shift) — сохранить
+ window._ttQaKeyHandler = function(e){
+  if(e.key === 'Escape'){ e.preventDefault(); ttQaCloseAll(); }
+  else if(e.key === 'Enter' && !e.shiftKey){
+   // только если фокус в textarea этого popup
+   var ta = document.querySelector('#tt-qa-pop .tt-qa-input');
+   if(document.activeElement === ta){
+    e.preventDefault();
+    ttQaSave();
+   }
+  }
+ };
+ document.addEventListener('keydown', window._ttQaKeyHandler, true);
+}
+
+function ttQaRender(pop, state){
+ var chipLabel = kbEsc(ttQaFmtChip(state));
+ pop.innerHTML =
+  '<div class="tt-qa-chip" onclick="ttDpOpen(event)" title="Изменить дату и время">'
+   + ttQaIcon('clock')
+   + '<span>'+chipLabel+'</span>'
+  + '</div>'
+  + '<textarea class="tt-qa-input" placeholder="Что бы вы хотели сделать?"></textarea>'
+  + '<div class="tt-qa-foot">'
+   + '<div class="tt-qa-foot-l">'
+    // TODO MVP: кнопка «Входящие» — выбор контекста/проекта (пока заглушка)
+    + '<button class="tt-qa-btn" type="button" disabled title="Входящие (скоро)">'+ttQaIcon('inbox')+'<span>Входящие</span></button>'
+   + '</div>'
+   + '<div class="tt-qa-foot-r">'
+    // TODO MVP: «...» — расширенные опции (priority/notes — пока недоступно)
+    + '<button class="tt-qa-icon-btn" type="button" disabled title="Доп. опции (скоро)">'+ttQaIcon('more')+'</button>'
+    + '<button class="tt-qa-btn primary" type="button" onclick="ttQaSave()" title="Сохранить (Enter)">'+ttQaIcon('send')+'<span>Сохранить</span></button>'
+   + '</div>'
+  + '</div>';
+}
+
+// Обновить только чип (после изменения через date-picker)
+function ttQaRefreshChip(){
+ var pop = document.getElementById('tt-qa-pop');
+ if(!pop || !window._ttQa) return;
+ var chipSpan = pop.querySelector('.tt-qa-chip span');
+ if(chipSpan) chipSpan.textContent = ttQaFmtChip(window._ttQa.state);
+}
+
+async function ttQaSave(){
+ if(!window._ttQa) return;
+ var pop = document.getElementById('tt-qa-pop');
+ if(!pop) return;
+ var ta = pop.querySelector('.tt-qa-input');
+ var text = (ta && ta.value || '').trim();
+ if(!text){
+  if(ta) ta.focus();
+  if(typeof kbShowToast === 'function') kbShowToast('Введите текст задачи');
+  return;
+ }
+ var saveBtn = pop.querySelector('.tt-qa-btn.primary');
+ if(saveBtn){ saveBtn.disabled = true; }
+
+ var s = window._ttQa.state;
+ // Сконструировать ISO-deadline (локальное время → ISO).
+ // По правилу проекта: timezone Almaty GMT+5, но new Date().toISOString() даст UTC,
+ // что согласуется с тем, как уже шлёт основной flow (см. ~/строка 27148).
+ var startStr = s.is_all_day ? '00:00' : (s.time_start || '09:00');
+ var startISO = new Date(s.date + 'T' + startStr + ':00').toISOString();
+ var endISO = null;
+ if(!s.is_all_day && s.time_end){
+  endISO = new Date(s.date + 'T' + s.time_end + ':00').toISOString();
+ }
+
+ var assignee = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : null;
+
+ var body = {
+  client_id: null,
+  type_id: 1,
+  text: text,
+  deadline_at: startISO,
+  deadline_end_at: endISO,
+  is_all_day: !!s.is_all_day,
+  assignee_operator: assignee
+ };
+
+ try {
+  var headers = (typeof crmTasksAuthHeaders === 'function') ? crmTasksAuthHeaders() : {};
+  var d = await sbFetch('/api/tasks', {
+   method:'POST',
+   headers: headers,
+   body: JSON.stringify(body)
+  });
+  if(!d || !d.ok) throw new Error(d && d.error || 'task POST failed');
+  if(typeof kbShowToast === 'function') kbShowToast('Задача создана');
+  ttQaCloseAll();
+  // Синк в localStorage + перерисовать календарь
+  if(typeof crmCalSyncTasksToLocal === 'function'){
+   try {
+    var p = crmCalSyncTasksToLocal();
+    if(p && p.then) p.then(function(){ if(typeof crmCalRender === 'function') crmCalRender(); });
+    else if(typeof crmCalRender === 'function') crmCalRender();
+   } catch(_){ if(typeof crmCalRender === 'function') crmCalRender(); }
+  } else if(typeof crmCalRender === 'function') crmCalRender();
+  // TODO MVP: локальный таймаут-напоминание «за 5 минут» (без push)
+  // Пока опускаем — нужно решить, хранить ли напоминание в state и поднимать ли при refresh.
+ } catch(e){
+  console.error('[ttQaSave]', e);
+  if(typeof kbShowToast === 'function') kbShowToast('Не удалось сохранить: ' + (e.message || e));
+  if(saveBtn){ saveBtn.disabled = false; }
+ }
+}
+
+// ============================================================
+// v518: Date-picker popup (Этап 2)
+// ============================================================
+window._ttDp = window._ttDp || null;
+
+function ttDpOpen(ev){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ if(!window._ttQa) return;
+ // Закрыть прошлый dp если был
+ var prev = document.getElementById('tt-dp'); if(prev) prev.remove();
+
+ var src = window._ttQa.state;
+ // Клон стейта чтобы Cancel/Очистить не ломали родительский
+ var dpState = {
+  tab: 'date',                          // 'date' | 'duration'
+  date: src.date,
+  time_start: src.time_start || '09:00',
+  time_end: src.time_end || '',
+  is_all_day: !!src.is_all_day,
+  // вспомогательное — отображаемый месяц в мини-календаре
+  view_y: parseInt(src.date.slice(0,4), 10),
+  view_m: parseInt(src.date.slice(5,7), 10) - 1,
+  reminder: '5m'                        // дефолт: за 5 минут (TODO: не шлём пока на бэк)
+ };
+ window._ttDp = { state: dpState };
+
+ var dp = document.createElement('div');
+ dp.className = 'tt-dp';
+ dp.id = 'tt-dp';
+ dp.onclick = function(e){ e.stopPropagation(); };
+ document.body.appendChild(dp);
+
+ // Позиционирование — рядом с чипом quick-add
+ var anchor = document.querySelector('#tt-qa-pop .tt-qa-chip');
+ if(anchor){
+  var r = anchor.getBoundingClientRect();
+  var x = r.left;
+  var y = r.bottom + 8;
+  var w = 300, h = 420;
+  if(x + w > window.innerWidth - 12) x = window.innerWidth - w - 12;
+  if(y + h > window.innerHeight - 12){
+   // показать сверху от чипа
+   y = r.top - h - 8;
+   if(y < 12) y = 12;
+  }
+  if(x < 12) x = 12;
+  dp.style.left = x + 'px';
+  dp.style.top = y + 'px';
+ } else {
+  dp.style.left = '50%';
+  dp.style.top = '50%';
+  dp.style.transform = 'translate(-50%,-50%)';
+ }
+ ttDpRender();
+}
+
+function ttDpRender(){
+ var dp = document.getElementById('tt-dp');
+ if(!dp || !window._ttDp) return;
+ var s = window._ttDp.state;
+ var tabs =
+  '<div class="tt-dp-tabs">'
+   + '<button class="tt-dp-tab '+(s.tab==='date'?'on':'')+'" onclick="ttDpSetTab(\'date\')">Дата</button>'
+   + '<button class="tt-dp-tab '+(s.tab==='duration'?'on':'')+'" onclick="ttDpSetTab(\'duration\')">Длительность</button>'
+  + '</div>';
+ var body = s.tab === 'date' ? ttDpRenderDateTab() : ttDpRenderDurationTab();
+ var foot =
+  '<div class="tt-dp-foot">'
+   + '<button type="button" onclick="ttDpClear()">Очистить</button>'
+   + '<button type="button" class="primary" onclick="ttDpApply()">OK</button>'
+  + '</div>';
+ dp.innerHTML = tabs + body + foot;
+}
+
+function ttDpSetTab(tab){
+ if(!window._ttDp) return;
+ window._ttDp.state.tab = tab;
+ ttDpRender();
+}
+
+function ttDpRenderDateTab(){
+ var s = window._ttDp.state;
+ var presets =
+  '<div class="tt-dp-presets">'
+   + '<button class="tt-dp-preset" type="button" onclick="ttDpPreset(\'morning\')" title="Утро 08:00">'+ttQaIcon('sun')+'<span>Утро</span></button>'
+   + '<button class="tt-dp-preset" type="button" onclick="ttDpPreset(\'evening\')" title="Вечер 18:00">'+ttQaIcon('evening')+'<span>Вечер</span></button>'
+   + '<button class="tt-dp-preset" type="button" onclick="ttDpPreset(\'plus7\')" title="Через 7 дней">'+ttQaIcon('plus7')+'<span>+7 дней</span></button>'
+   + '<button class="tt-dp-preset" type="button" onclick="ttDpPreset(\'night\')" title="Ночь 22:00">'+ttQaIcon('moon')+'<span>Ночь</span></button>'
+  + '</div>';
+ var cal = ttDpRenderCal();
+ var timeRow =
+  '<div class="tt-dp-row">'
+   + '<label>Время</label>'
+   + '<input type="time" value="'+kbEsc(s.time_start)+'" onchange="ttDpSetTime(this.value)">'
+  + '</div>';
+ var remindRow =
+  '<div class="tt-dp-row">'
+   + '<label>Напомнить</label>'
+   + '<select onchange="ttDpSetReminder(this.value)">'
+    + '<option value="none"'+(s.reminder==='none'?' selected':'')+'>Не напоминать</option>'
+    + '<option value="0"'+(s.reminder==='0'?' selected':'')+'>Во время</option>'
+    + '<option value="5m"'+(s.reminder==='5m'?' selected':'')+'>За 5 минут</option>'
+    + '<option value="30m"'+(s.reminder==='30m'?' selected':'')+'>За 30 минут</option>'
+    + '<option value="1h"'+(s.reminder==='1h'?' selected':'')+'>За 1 час</option>'
+   + '</select>'
+  + '</div>';
+ // TODO MVP: повтор — пока «Не повторять»
+ var repeatRow =
+  '<div class="tt-dp-row">'
+   + '<label>Повтор</label>'
+   + '<select disabled title="Скоро"><option>Не повторять</option></select>'
+  + '</div>';
+ return presets + cal + timeRow + remindRow + repeatRow;
+}
+
+function ttDpRenderDurationTab(){
+ var s = window._ttDp.state;
+ var endDate = s.date; // в MVP — в тот же день
+ var endTime = s.time_end || s.time_start;
+ var startRow =
+  '<div class="tt-dp-row"><label>Начать</label>'
+   + '<input type="date" value="'+kbEsc(s.date)+'" onchange="ttDpSetDate(this.value)">'
+  + '</div>'
+  + '<div class="tt-dp-row"><label></label>'
+   + '<input type="time" value="'+kbEsc(s.time_start)+'" onchange="ttDpSetTime(this.value)" '+(s.is_all_day?'disabled':'')+'>'
+  + '</div>';
+ var endRow =
+  '<div class="tt-dp-row"><label>Закончить</label>'
+   + '<input type="date" value="'+kbEsc(endDate)+'" onchange="ttDpSetEndDate(this.value)">'
+  + '</div>'
+  + '<div class="tt-dp-row"><label></label>'
+   + '<input type="time" value="'+kbEsc(endTime)+'" onchange="ttDpSetEndTime(this.value)" '+(s.is_all_day?'disabled':'')+'>'
+  + '</div>';
+ var allDayRow =
+  '<div class="tt-dp-row">'
+   + '<label>Весь день</label>'
+   + '<label class="tt-dp-toggle"><input type="checkbox" '+(s.is_all_day?'checked':'')+' onchange="ttDpToggleAllDay(this.checked)"><span>'+(s.is_all_day?'Да':'Нет')+'</span></label>'
+  + '</div>';
+ // TODO MVP: таймзоны — только Almaty GMT+5
+ var tzRow =
+  '<div class="tt-dp-row">'
+   + '<label>Таймзона</label>'
+   + '<select disabled><option>Almaty (GMT+5)</option></select>'
+  + '</div>';
+ var remindRow =
+  '<div class="tt-dp-row">'
+   + '<label>Напомнить</label>'
+   + '<select onchange="ttDpSetReminder(this.value)">'
+    + '<option value="none"'+(s.reminder==='none'?' selected':'')+'>Не напоминать</option>'
+    + '<option value="0"'+(s.reminder==='0'?' selected':'')+'>Во время</option>'
+    + '<option value="5m"'+(s.reminder==='5m'?' selected':'')+'>За 5 минут</option>'
+    + '<option value="30m"'+(s.reminder==='30m'?' selected':'')+'>За 30 минут</option>'
+    + '<option value="1h"'+(s.reminder==='1h'?' selected':'')+'>За 1 час</option>'
+   + '</select>'
+  + '</div>';
+ return startRow + endRow + allDayRow + tzRow + remindRow;
+}
+
+function ttDpRenderCal(){
+ var s = window._ttDp.state;
+ var y = s.view_y, m = s.view_m;
+ var first = new Date(y, m, 1);
+ var startDay = (first.getDay() + 6) % 7;
+ var today = crmDateStr(new Date());
+ var monthName = first.toLocaleDateString('ru-RU', { month:'long', year:'numeric' });
+ var html =
+  '<div class="tt-dp-cal">'
+   + '<div class="tt-dp-cal-head">'
+    + '<button class="tt-mini-arrow" type="button" onclick="ttDpNavMonth(-1)">&lsaquo;</button>'
+    + '<div class="tt-dp-cal-title">'+kbEsc(monthName)+'</div>'
+    + '<button class="tt-mini-arrow" type="button" onclick="ttDpNavMonth(1)">&rsaquo;</button>'
+   + '</div>'
+   + '<table><thead><tr><th>пн</th><th>вт</th><th>ср</th><th>чт</th><th>пт</th><th>сб</th><th>вс</th></tr></thead><tbody>';
+ var d = 1 - startDay;
+ for(var w = 0; w < 6; w++){
+  html += '<tr>';
+  for(var dow = 0; dow < 7; dow++){
+   var dt = new Date(y, m, d);
+   var ds = crmDateStr(dt);
+   var cls = '';
+   if(dt.getMonth() !== m) cls = 'muted';
+   else if(ds === s.date) cls = 'sel';
+   else if(ds === today) cls = 'today';
+   var clickAttr = cls === 'muted' ? '' : ' onclick="ttDpSetDate(\''+ds+'\')"';
+   html += '<td class="'+cls+'"'+clickAttr+'>'+dt.getDate()+'</td>';
+   d++;
+  }
+  html += '</tr>';
+ }
+ html += '</tbody></table></div>';
+ return html;
+}
+
+function ttDpNavMonth(delta){
+ if(!window._ttDp) return;
+ var s = window._ttDp.state;
+ var d = new Date(s.view_y, s.view_m + delta, 1);
+ s.view_y = d.getFullYear();
+ s.view_m = d.getMonth();
+ ttDpRender();
+}
+
+function ttDpSetDate(ds){
+ if(!window._ttDp) return;
+ var s = window._ttDp.state;
+ s.date = ds;
+ s.view_y = parseInt(ds.slice(0,4), 10);
+ s.view_m = parseInt(ds.slice(5,7), 10) - 1;
+ ttDpRender();
+}
+
+function ttDpSetTime(v){
+ if(!window._ttDp || !v) return;
+ window._ttDp.state.time_start = v;
+ // если end раньше start — подвинуть на +45 мин
+ var s = window._ttDp.state;
+ if(s.time_end && s.time_end <= s.time_start){
+  s.time_end = ttAddMinutes(s.time_start, 45);
+ }
+}
+
+function ttDpSetEndTime(v){
+ if(!window._ttDp || !v) return;
+ window._ttDp.state.time_end = v;
+}
+
+function ttDpSetEndDate(v){
+ // MVP: игнорируем разные даты start/end — задача за один день. TODO: multi-day support.
+ if(!window._ttDp || !v) return;
+ if(v !== window._ttDp.state.date){
+  if(typeof kbShowToast === 'function') kbShowToast('Multi-day задачи — скоро. Конец привязан к дате начала.');
+ }
+}
+
+function ttDpToggleAllDay(checked){
+ if(!window._ttDp) return;
+ window._ttDp.state.is_all_day = !!checked;
+ ttDpRender();
+}
+
+function ttDpSetReminder(v){
+ if(!window._ttDp) return;
+ window._ttDp.state.reminder = v;
+}
+
+function ttDpPreset(kind){
+ if(!window._ttDp) return;
+ var s = window._ttDp.state;
+ var today = new Date();
+ if(kind === 'morning'){
+  s.date = crmDateStr(today);
+  s.time_start = '08:00';
+  s.time_end = '08:45';
+ } else if(kind === 'evening'){
+  s.date = crmDateStr(today);
+  s.time_start = '18:00';
+  s.time_end = '18:45';
+ } else if(kind === 'night'){
+  s.date = crmDateStr(today);
+  s.time_start = '22:00';
+  s.time_end = '22:45';
+ } else if(kind === 'plus7'){
+  var d = crmAddDays(today, 7);
+  s.date = crmDateStr(d);
+ }
+ s.view_y = parseInt(s.date.slice(0,4), 10);
+ s.view_m = parseInt(s.date.slice(5,7), 10) - 1;
+ s.is_all_day = false;
+ ttDpRender();
+}
+
+function ttDpClear(){
+ if(!window._ttDp) return;
+ var s = window._ttDp.state;
+ s.is_all_day = false;
+ s.time_start = '09:00';
+ s.time_end = '09:45';
+ ttDpRender();
+}
+
+function ttDpApply(){
+ if(!window._ttDp || !window._ttQa) return;
+ var s = window._ttDp.state;
+ var q = window._ttQa.state;
+ q.date = s.date;
+ q.is_all_day = !!s.is_all_day;
+ if(s.is_all_day){
+  q.time_start = '';
+  q.time_end = '';
+ } else {
+  q.time_start = s.time_start || '09:00';
+  q.time_end = s.time_end || '';
+ }
+ q.reminder = s.reminder;
+ var dp = document.getElementById('tt-dp'); if(dp) dp.remove();
+ window._ttDp = null;
+ ttQaRefreshChip();
+ // Вернуть фокус в textarea
+ var ta = document.querySelector('#tt-qa-pop .tt-qa-input');
+ if(ta) ta.focus();
+}
+
+function ttAddMinutes(hhmm, addM){
+ if(!hhmm) return '';
+ var p = hhmm.split(':');
+ var total = (parseInt(p[0],10)||0)*60 + (parseInt(p[1],10)||0) + (addM||0);
+ if(total >= 24*60) total = 24*60 - 1;
+ var h = Math.floor(total/60), m = total%60;
+ return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+
+// Экспорт в window для inline-onclick
+window.ttQuickAddOpen = ttQuickAddOpen;
+window.ttQaCloseAll = ttQaCloseAll;
+window.ttQaSave = ttQaSave;
+window.ttDpOpen = ttDpOpen;
+window.ttDpSetTab = ttDpSetTab;
+window.ttDpNavMonth = ttDpNavMonth;
+window.ttDpSetDate = ttDpSetDate;
+window.ttDpSetTime = ttDpSetTime;
+window.ttDpSetEndTime = ttDpSetEndTime;
+window.ttDpSetEndDate = ttDpSetEndDate;
+window.ttDpToggleAllDay = ttDpToggleAllDay;
+window.ttDpSetReminder = ttDpSetReminder;
+window.ttDpPreset = ttDpPreset;
+window.ttDpClear = ttDpClear;
+window.ttDpApply = ttDpApply;
 
 function crmCalTaskHtml(e, today){
  var pcls = 'p'+(e.priority || 4);
