@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v492</title>
+<title>SalesDoc — Финансовый Дашборд v493</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -27702,13 +27702,12 @@ async function _routeRenderFeed(){
   });
   // v486: сначала берём 80 самых СВЕЖИХ (desc-сортировка + slice), потом разворачиваем
   // чтобы порядок в ленте был asc (старые сверху, новые снизу) — как в чате/мессенджерах.
+  // v493: pinned-записи НЕ двигаем — остаются на своём месте по дате,
+  // только визуальный маркер (жёлтая полоска + border) показывает что они закреплены.
   merged.sort(function(a, b){
    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
-  // v492: закреплённые (pinned) всегда наверху (внутри ленты — над всеми остальными).
-  var pinnedItems = merged.filter(function(it){ return it.pinned || (it._task && it._task.pinned); });
-  var regularItems = merged.filter(function(it){ return !(it.pinned || (it._task && it._task.pinned)); });
-  var items = pinnedItems.concat(regularItems.slice(0, 80).reverse());
+  var items = merged.slice(0, 80).reverse();
   if(!items.length){
    var empty = document.createElement('div');
    empty.className = 'amocard-empty';
