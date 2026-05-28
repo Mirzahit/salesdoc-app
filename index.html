@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v503</title>
+<title>SalesDoc — Финансовый Дашборд v504</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21205,7 +21205,80 @@ function intgRender() {
  return h;
  }
 
- kanbanEl.innerHTML = types.map(function(type) {
+ // v504: канбан в стиле «Внедрения» — 5 колонок по СТАТУСУ + горизонтальный скролл.
+ // Тип (Интеграция/Доработка/Разработка) теперь — цветная метка на карточке.
+ var STAGE_GROUPS = [
+  { key:'new',    label:'Новые',    color:'#5489BB', statuses:['В очереди','Очередь','Новая'] },
+  { key:'work',   label:'В работе', color:'#FF9F0A', statuses:['Выполняется','В работе','Тестируют'] },
+  { key:'pause',  label:'На паузе', color:'#9E9E9E', statuses:['Перенесено','На паузе'] },
+  { key:'done',   label:'Готово',   color:'#34C77A', statuses:['Готово','Протестирован','Архив'] },
+  { key:'cancel', label:'Отменено', color:'#D67373', statuses:['Отменено'] }
+ ];
+ var byStage = {};
+ STAGE_GROUPS.forEach(function(g){ byStage[g.key] = []; });
+ data.forEach(function(r){
+  var matched = false;
+  for(var gi = 0; gi < STAGE_GROUPS.length; gi++){
+   if(STAGE_GROUPS[gi].statuses.indexOf(r.status) >= 0){ byStage[STAGE_GROUPS[gi].key].push(r); matched = true; break; }
+  }
+  if(!matched) byStage['new'].push(r);
+ });
+ ['new','work','pause'].forEach(function(k){ byStage[k].sort(function(a,b){ return parseD(a.dateStart) - parseD(b.dateStart); }); });
+ ['done','cancel'].forEach(function(k){ byStage[k].sort(function(a,b){ return parseD(b.dateDone) - parseD(a.dateDone); }); });
+
+ kanbanEl.style.display = 'grid';
+ kanbanEl.style.gridTemplateColumns = 'repeat(5,minmax(280px,1fr))';
+ kanbanEl.style.gap = '14px';
+ kanbanEl.style.overflowX = 'auto';
+ kanbanEl.style.minHeight = '420px';
+
+ var html = '';
+ STAGE_GROUPS.forEach(function(g){
+  var items = byStage[g.key];
+  html += '<div class="route-col-amo" style="--route-col-color:' + g.color + ';max-height:none;min-width:280px">';
+  html += '<div class="route-col-amo-head"><div class="route-col-amo-title-row">';
+  html += '<div class="route-col-amo-title">' + g.label + '</div>';
+  html += '<div class="route-col-amo-count">' + items.length + '</div>';
+  html += '</div></div>';
+  html += '<div class="route-col-amo-body" style="overflow:visible">';
+  if(!items.length){
+   html += '<div class="route-col-amo-empty">Пусто</div>';
+  } else {
+   items.forEach(function(r){
+    var tCol = typeBorder[r.type] || '#94A3B8';
+    var clickAttr = r._sb && r._sb_id ? 'onclick="intgOpenCard(\'' + _escHtml(r._sb_id) + '\')"' : '';
+    var typeBadge = '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:' + tCol + '22;color:' + tCol + ';letter-spacing:.3px">' + String(r.type||'—').slice(0,3).toUpperCase() + '</span>';
+    var countryBadge = (r.country && r.country !== '—') ? '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:' + (r.country==='KG'?'rgba(94,92,224,.18)':'rgba(52,199,122,.16)') + ';color:' + (r.country==='KG'?'#5E5CE0':'#0A84FF') + '">' + r.country + '</span>' : '';
+    var pkgBadge = (r.package && r.package !== '—') ? '<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:#94A3B8">' + r.package.toUpperCase() + '</span>' : '';
+    var deadline = fmtD(r.deadline);
+    var isOverdue = false;
+    if(deadline && r.status !== 'Готово' && r.status !== 'Отменено' && r.status !== 'Архив'){
+     try { isOverdue = parseD(r.deadline) < new Date(); } catch(_){}
+    }
+    var dlBadge = '';
+    if(deadline){
+     var dlCol = isOverdue ? '#FF453A' : (r.status === 'Готово' ? '#30D158' : 'var(--text-soft)');
+     dlBadge = '<span style="font-size:10.5px;color:' + dlCol + ';font-weight:' + (isOverdue?'700':'500') + '">' + (isOverdue?'просрочен ':'') + deadline + '</span>';
+    }
+    html += '<div class="tk-card" ' + clickAttr + ' style="border-left:3px solid ' + tCol + '">';
+    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">';
+    html += '<div style="font-weight:600;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1' + (r.status==='Отменено'?';text-decoration:line-through;opacity:.55':'') + '">' + _escHtml(r.company || '—') + '</div>';
+    html += '<div style="display:flex;gap:3px;flex-shrink:0">' + typeBadge + countryBadge + '</div></div>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;color:var(--text-soft)">';
+    html += '<span>' + (r.operator && r.operator !== '—' ? _escHtml(r.operator) : '<span style="color:#D67373">не назначен</span>') + '</span>';
+    html += pkgBadge;
+    html += '</div>';
+    if(dlBadge) html += '<div style="display:flex;justify-content:flex-end">' + dlBadge + '</div>';
+    html += '</div>';
+   });
+  }
+  html += '</div></div>';
+ });
+ kanbanEl.innerHTML = html;
+ return; // v504: ниже идёт старый рендер по типам — пропускаем
+
+ // === LEGACY (не используется в v504) ===
+ var _legacy = types.map(function(type) {
  var tc = typeBorder[type];
  var typeItems = data.filter(function(r){ return r.type === type; });
  // Для статусов Готово/Отменено — фильтруем по периоду
