@@ -5906,34 +5906,30 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 
  <!-- INTEGRATIONS QUEUE VIEW -->
  <div id="view-integrations" style="display:none;position:relative">
- <!-- Top bar -->
+ <!-- Top bar — v524: фильтры и обновление работают на Supabase (intgSbLoad/intgSbRerender) -->
  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
  <div style="display:flex;align-items:center;gap:10px">
- <button class="add-btn" onclick="intgLoad()" id="intg-refresh-btn" style="font-size:11px;padding:5px 14px">Обновить</button>
- <select id="intg-filter-status" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgRender()">
+ <button class="add-btn" onclick="intgSbLoad()" id="intg-refresh-btn" style="font-size:11px;padding:5px 14px">Обновить</button>
+ <select id="intg-filter-status" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgSbRerender()">
  <option value="">Все статусы</option>
- <option value="Выполняется">Выполняется</option>
- <option value="В очереди">В очереди</option>
- <option value="Очередь">Очередь</option>
- <option value="Тестируют">Тестируют</option>
+ <option value="Новая">Новые</option>
+ <option value="В работе">В работе</option>
+ <option value="На паузе">На паузе</option>
  <option value="Готово">Готово</option>
- <option value="Протестирован">Протестирован</option>
  <option value="Отменено">Отменено</option>
- <option value="Перенесено">Перенесено</option>
- <option value="Архив">Архив</option>
  </select>
- <select id="intg-filter-type" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgRender()">
+ <select id="intg-filter-type" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgSbRerender()">
  <option value="">Все типы</option>
  <option value="Интеграция">Интеграция</option>
  <option value="Доработка">Доработка</option>
  <option value="Разработка">Разработка</option>
  </select>
- <select id="intg-filter-country" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgRender()">
+ <select id="intg-filter-country" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgSbRerender()">
  <option value="">Все страны</option>
  <option value="KZ">KZ</option>
  <option value="KG">KG</option>
  </select>
- <select id="intg-filter-package" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgRender()">
+ <select id="intg-filter-package" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgSbRerender()">
  <option value="">Все пакеты</option>
  <option value="Стандарт">Стандарт</option>
  <option value="Стандарт+">Стандарт+</option>
@@ -5943,15 +5939,14 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div id="intg-status" style="font-size:11px;color:var(--text-muted)"></div>
  </div>
 
- <!-- v430: блок новых интеграций (источник — наша база Supabase).
-      Сюда попадают: автоматом при оплате «Нов интеграция» от payment_bot
-      + вручную добавленные через приложение. Архив из Google-таблицы остаётся ниже.
-      v435: убран зелёный фон/рамка — без обёртки. -->
+ <!-- v524: единый блок интеграций. Источник — Supabase (миграция из Google Sheets выполнена 2026-05-29, ~275 записей).
+      Канбан + аналитика (по периоду, пакетам, месяцам) — всё в одном месте.
+      v435/v500: убран зелёный фон/рамка и дублирующий нижний details-блок «История компаний». -->
  <div id="intg-sb-block" style="margin-bottom:20px;display:none">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
    <div>
-    <div style="font-size:13px;font-weight:600;color:var(--text)">Новые интеграции (из приложения)</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Появляются автоматически при оплате «Нов интеграция». Старые задачи из Google-таблицы — в архиве ниже.</div>
+    <div style="font-size:13px;font-weight:600;color:var(--text)">Интеграции</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Все интеграции — текущие и архив. Источник: Supabase.</div>
    </div>
    <div style="display:flex;align-items:center;gap:10px">
     <!-- v448: «Мои/Все» для интеграторов — как в Тикетах. Аян/Дулат/Абзал сразу видят свои. -->
@@ -5962,36 +5957,25 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
     <button onclick="intgSbLoad()" id="intg-sb-refresh" style="padding:5px 12px;border-radius:6px;border:1px solid var(--border-faint);background:transparent;color:var(--text-soft);cursor:pointer;font-size:11px">Обновить</button>
    </div>
   </div>
+  <!-- Канбан карточек (рендерится intgSbRender из window.intgSbItems) -->
   <div id="intg-sb-list">
    <div style="font-size:12px;color:var(--text-muted);padding:8px 0">Загрузка…</div>
   </div>
- </div>
 
- <!-- v500: kanban теперь содержит и активные (Supabase), и архив (Sheets) — прятать всё под details бессмысленно, открыт по умолчанию. -->
- <details style="margin-top:24px" open>
-  <summary style="cursor:pointer;padding:10px 14px;background:var(--surface-2);border-radius:10px;font-size:13px;font-weight:600;color:var(--text-soft);user-select:none;list-style:none">
-   История компаний
-   <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:6px">все активные + архив. Нажмите чтобы свернуть.</span>
-  </summary>
-  <div style="padding-top:14px">
-   <!-- Period stats — 3 cards by type -->
+  <!-- v524: аналитика на тех же Supabase-данных. Перенесена сюда из удалённого нижнего блока.
+       Рендерится в intgSbRenderAnalytics(items) после intgSbRender. ID сохранены — JS уже их знает. -->
+  <div style="margin-top:18px">
    <div id="intg-period-stats" style="margin-bottom:16px"></div>
-
-   <!-- Kanban -->
-   <div id="intg-kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;min-height:300px"></div>
-
-   <!-- Dashboard по пакетам -->
    <div class="panel" id="intg-chart-type" style="min-height:100px;margin-bottom:16px">
-   <div class="panel-title" style="margin-bottom:10px">По пакетам</div>
-   <div id="intg-package-stats"></div>
+    <div class="panel-title" style="margin-bottom:10px">По пакетам</div>
+    <div id="intg-package-stats"></div>
    </div>
-   <!-- Monthly breakdown table -->
    <div class="panel" id="intg-monthly-panel" style="min-height:100px;margin-bottom:16px">
-   <div class="panel-title" style="margin-bottom:10px">Выполнено по месяцам</div>
-   <div id="intg-monthly-table" style="overflow-x:auto"></div>
+    <div class="panel-title" style="margin-bottom:10px">Выполнено по месяцам</div>
+    <div id="intg-monthly-table" style="overflow-x:auto"></div>
    </div>
   </div>
- </details>
+ </div>
  </div>
 
  <!-- MARKETING VIEW -->
@@ -9517,7 +9501,8 @@ function renderAll() {
  if(typeof renderRecognizedRevenue==='function') renderRecognizedRevenue();
  renderActCounters(); renderAllPayments(); renderAllActs(); renderPlanView();
  renderKeyClients(); renderEmployees();
- if (window._intgLoaded) intgRender();
+ // v524: Sheets-источник убран — рендерим Supabase. intgSbRender пересчитает kanban + аналитику.
+ if (window._intgLoaded && typeof intgSbRerender === 'function') intgSbRerender();
  // v293 fix: cs-payments был удалён в v283 (Профиль почистили) — null-check обязателен
  const _csPay=document.getElementById('cs-payments'); if(_csPay) _csPay.textContent=payments.length;
  const _csa=document.getElementById('cs-acts'); if(_csa) _csa.textContent=acts.length;
@@ -12685,9 +12670,8 @@ function showView(v) {
  if(v==='plan'){ var cbBtn=document.getElementById('ceo-bonus-btn'); if(cbBtn) cbBtn.style.display=(currentUser&&currentUser.role==='admin')?'flex':'none'; }
  if(v==='marketing'){mktInit();}
  if(v==='expenses'){expInit();expLoad();}
- if(v==='integrations'&&!window._intgLoaded){intgLoad();intgSbLoad();window._intgLoaded=true;} else if(v==='integrations'){intgSbLoad();intgRender();}
-// v430: при каждом открытии вкладки тянем свежие данные из Supabase
-if(v==='integrations' && typeof intgSbLoad === 'function'){ try { intgSbLoad(); } catch(_){} }
+ // v524: Sheets-источник полностью убран — данные только из Supabase. intgLoad/intgRender больше не вызываем.
+ if(v==='integrations'){ intgSbLoad(); window._intgLoaded=true; }
  if(v==='tests') testsRender();
  if(v==='knowledge') { /* показываем 2 кнопки -- оргсхема и материалы */ }
  if(v==='statistics') statInit();
@@ -21457,29 +21441,23 @@ function intgRender() {
  var st = document.getElementById('intg-status');
  if (st) st.textContent = data.length + ' записей' + (filterType ? ' / тип: '+filterType : '') + (filterStatus ? ' / статус: '+filterStatus : '') + (filterCountry ? ' / страна: '+filterCountry : '') + (filterPackage ? ' / пакет: '+filterPackage : '');
 }
-// v430: Supabase-блок новых интеграций над архивной таблицей.
-// Грузит /api/cards?entity=integration — те что попали через payment_bot или ручное создание.
-// Не трогает intgData (там Sheets-архив).
-// v497: Supabase-карточки храним глобально, чтобы intgRender могла объединить их с архивом Sheets.
+// v430/v524: единственный источник интеграций — Supabase. Архив из Google Sheets полностью мигрирован
+// 2026-05-29 (275 записей: канбан + аналитика по периоду/пакетам/месяцам — всё отсюда).
+// API: /api/cards?entity=integration&include_archive=1 — отдаёт весь массив (активные + архив).
 window.intgSbItems = [];
 async function intgSbLoad(){
  var listEl = document.getElementById('intg-sb-list');
  var btn = document.getElementById('intg-sb-refresh');
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
-  // v503: include_archive=1 убран — отдавал слишком много, страница зависала.
-  // Активные карточки идут с Supabase, исторический архив — с Sheets (через intgLoad).
-  var d = await sbFetch('/api/cards?entity=integration');
-  console.log('[intg] /api/cards?entity=integration →', d);
+  // v524: include_archive=1 — нужны ВСЕ записи (Готово/Отменено тоже), иначе аналитика по периоду
+  // и таблица «Выполнено по месяцам» будут пустые. Архив теперь в Supabase, не в Sheets.
+  var d = await sbFetch('/api/cards?entity=integration&include_archive=1');
+  console.log('[intg] /api/cards?entity=integration&include_archive=1 →', d);
   if(!d || !d.ok) throw new Error((d && d.error) || 'load failed');
   window.intgSbItems = d.integrations || [];
-  console.log('[intg] Supabase: ' + window.intgSbItems.length + ' активных карточек');
-  if(listEl) intgSbRender(window.intgSbItems);
-  // v497: после загрузки Supabase — переотрисуем общую kanban-таблицу с объединёнными данными
-  if(typeof intgRender === 'function') intgRender();
-  // v498: статус — показываем оба источника
-  var st = document.getElementById('intg-status');
-  if(st) st.textContent = 'Архив: ' + (intgData||[]).length + ' · Активные: ' + window.intgSbItems.length;
+  console.log('[intg] Supabase: ' + window.intgSbItems.length + ' карточек (активных + архив)');
+  intgSbRerender();
  } catch(e){
   console.error('[intg] Supabase load failed:', e);
   if(listEl){
@@ -21490,9 +21468,209 @@ async function intgSbLoad(){
    listEl.appendChild(err);
   }
   var st2 = document.getElementById('intg-status');
-  if(st2) st2.textContent = 'Архив: ' + (intgData||[]).length + ' · Активные: ошибка (' + (e.message||e) + ')';
+  if(st2) st2.textContent = 'Ошибка: ' + (e.message||e);
  } finally {
   if(btn){ btn.disabled = false; btn.textContent = 'Обновить'; }
+ }
+}
+
+// v524: единый пересчёт kanban + аналитики с применением фильтров. Вызывается из всех onchange.
+function intgSbRerender(){
+ var all = window.intgSbItems || [];
+ // Фильтры верхнего тулбара
+ var fStatus  = (document.getElementById('intg-filter-status') ||{}).value || '';
+ var fType    = (document.getElementById('intg-filter-type')   ||{}).value || '';
+ var fCountry = (document.getElementById('intg-filter-country')||{}).value || '';
+ var fPackage = (document.getElementById('intg-filter-package')||{}).value || '';
+ var filtered = all.filter(function(it){
+  if(fStatus  && it.status  !== fStatus ) return false;
+  if(fType    && it.type    !== fType   ) return false;
+  if(fCountry && String(it.country||'').toUpperCase() !== fCountry) return false;
+  if(fPackage && it.package !== fPackage) return false;
+  return true;
+ });
+ intgSbRender(filtered);
+ // Аналитика — на ВСЁМ массиве (фильтры влияют только на kanban визуально),
+ // кроме страны/пакета: их учитываем чтоб CEO мог посмотреть один регион/пакет.
+ var analyticsBase = all.filter(function(it){
+  if(fCountry && String(it.country||'').toUpperCase() !== fCountry) return false;
+  if(fPackage && it.package !== fPackage) return false;
+  return true;
+ });
+ if(typeof intgSbRenderAnalytics === 'function') intgSbRenderAnalytics(analyticsBase);
+ var st = document.getElementById('intg-status');
+ if(st) st.textContent = filtered.length + ' / ' + all.length + ' записей'
+   + (fStatus  ? ' · ' + fStatus  : '')
+   + (fType    ? ' · ' + fType    : '')
+   + (fCountry ? ' · ' + fCountry : '')
+   + (fPackage ? ' · ' + fPackage : '');
+}
+
+// v524: аналитика по Supabase-данным. Считает 3 блока: period stats (по типу),
+// package stats (по пакетам за период), monthly table (выполнено по месяцам по типу).
+// Берёт текущий выбранный период из selectedMonth/currentPeriod (общие глобалы дашборда).
+function intgSbRenderAnalytics(items){
+ if(!Array.isArray(items)) items = [];
+ var selM = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth.month : new Date().getMonth();
+ var selY = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth.year  : new Date().getFullYear();
+ var isYearMode = (typeof currentPeriod !== 'undefined') && currentPeriod === 'year';
+ var MONTHS_F = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+ var MONTHS_S = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+ var periodLabel = isYearMode ? String(selY) : (MONTHS_F[selM] + ' ' + selY);
+
+ function toDate(v){
+  if(!v) return null;
+  try { var d = new Date(v); return isNaN(d) ? null : d; } catch(_){ return null; }
+ }
+ function inPeriod(d){
+  if(!d) return false;
+  if(isYearMode) return d.getFullYear() === selY;
+  return d.getMonth() === selM && d.getFullYear() === selY;
+ }
+
+ // ===== PERIOD STATS: 3 карточки по типу =====
+ var psEl = document.getElementById('intg-period-stats');
+ if(psEl){
+  var INTG_PLAN = 10;
+  var types = ['Интеграция','Доработка','Разработка'];
+  var typeColors = {'Интеграция':'#0A84FF','Доработка':'#FF9F0A','Разработка':'#5E5CE0'};
+  var html = '<div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:10px;font-weight:600">ВЫПОЛНЕНО ЗА ' + periodLabel.toUpperCase() + '</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">';
+  var totalDone = 0, totalWork = 0;
+  types.forEach(function(t){
+   var tc = typeColors[t];
+   var ofType = items.filter(function(r){ return r.type === t; });
+   var done = ofType.filter(function(r){
+    if(r.status !== 'Готово') return false;
+    var d = toDate(r.date_done) || toDate(r.deadline);
+    return inPeriod(d);
+   }).length;
+   var work = ofType.filter(function(r){ return r.status !== 'Готово' && r.status !== 'Отменено'; }).length;
+   totalDone += done; totalWork += work;
+   var hasPlan = (t === 'Интеграция');
+   var plan = hasPlan ? INTG_PLAN : 0;
+   var pct = hasPlan ? Math.round(done / plan * 100) : 0;
+   var barCol = hasPlan ? (pct >= 80 ? '#30D158' : pct >= 50 ? '#FF9F0A' : '#FF453A') : '#30D158';
+   var barW = hasPlan ? Math.min(100, pct) : 100;
+   html += '<div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:16px;box-shadow:var(--sh-1)">';
+   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+   html += '<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:' + tc + '">' + t.toUpperCase() + '</span>';
+   if(hasPlan) html += '<span style="font-size:10px;color:var(--text-muted)">план: ' + plan + '</span>';
+   html += '</div>';
+   html += '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">';
+   html += '<span style="font-family:Inter,sans-serif;font-size:26px;color:' + barCol + '">' + done + '</span>';
+   if(hasPlan) html += '<span style="font-size:11px;color:var(--text-muted)">/ ' + plan + '</span><span style="font-size:11px;color:' + barCol + ';font-weight:600;margin-left:auto">' + pct + '%</span>';
+   else html += '<span style="font-size:11px;color:var(--text-muted)">выполнено</span>';
+   html += '</div>';
+   html += '<div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;margin-bottom:6px;overflow:hidden">';
+   html += '<div style="height:100%;width:' + barW + '%;background:' + barCol + ';border-radius:3px"></div></div>';
+   html += '<div style="display:flex;justify-content:space-between;font-size:10px">';
+   html += '<span style="color:#FF9F0A">' + work + ' в работе</span>';
+   if(hasPlan) html += '<span style="color:var(--text-muted)">осталось ' + Math.max(0, plan - done) + '</span>';
+   else html += '<span style="color:var(--text-muted)">всего ' + ofType.length + '</span>';
+   html += '</div></div>';
+  });
+  html += '</div>';
+  html += '<div style="font-size:10px;color:var(--text-muted);text-align:center;border-top:1px solid rgba(255,255,255,.06);padding-top:8px">';
+  html += 'Итого за ' + periodLabel + ': <span style="color:#30D158;font-weight:700">' + totalDone + ' выполнено</span> / <span style="color:#FF9F0A;font-weight:700">' + totalWork + ' в работе</span>';
+  html += '</div>';
+  psEl.innerHTML = html;
+ }
+
+ // ===== PACKAGE STATS: by package за период =====
+ var pkgEl = document.getElementById('intg-package-stats');
+ if(pkgEl){
+  var pkgDone = {}, pkgWork = {};
+  items.forEach(function(r){
+   var pkg = r.package || 'Не указан';
+   var isDone = r.status === 'Готово' && inPeriod(toDate(r.date_done) || toDate(r.deadline));
+   var isWork = r.status !== 'Готово' && r.status !== 'Отменено';
+   if(isDone) pkgDone[pkg] = (pkgDone[pkg]||0) + 1;
+   if(isWork) pkgWork[pkg] = (pkgWork[pkg]||0) + 1;
+  });
+  var styleMap = {
+   'Стандарт':['#8E8E93','rgba(142,142,147,.12)'],
+   'Стандарт+':['#5AC8FA','rgba(90,200,250,.14)'],
+   'Премиум':['#5E5CE0','rgba(94,92,224,.18)'],
+   'Не указан':['#636366','rgba(255,255,255,.04)']
+  };
+  var allPkgs = {};
+  Object.keys(pkgDone).forEach(function(k){ allPkgs[k]=true; });
+  Object.keys(pkgWork).forEach(function(k){ allPkgs[k]=true; });
+  var pkgKeys = Object.keys(allPkgs).sort(function(a,b){ return (pkgDone[b]||0) - (pkgDone[a]||0); });
+  var totalDone = 0; pkgKeys.forEach(function(k){ totalDone += (pkgDone[k]||0); });
+  var ph = '<div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:10px;font-weight:600">' + periodLabel.toUpperCase() + '</div>';
+  if(!pkgKeys.length){
+   ph += '<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:16px">Нет данных за период</div>';
+  } else {
+   ph += '<div style="display:grid;grid-template-columns:repeat(' + Math.min(pkgKeys.length, 4) + ',1fr);gap:10px;margin-bottom:12px">';
+   pkgKeys.forEach(function(pkg){
+    var st = styleMap[pkg] || ['#94A3B8','rgba(255,255,255,.04)'];
+    var done = pkgDone[pkg] || 0;
+    var work = pkgWork[pkg] || 0;
+    var pct = totalDone > 0 ? Math.round(done / totalDone * 100) : 0;
+    ph += '<div style="background:' + st[1] + ';border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;border-left:3px solid ' + st[0] + '">';
+    ph += '<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:' + st[0] + ';margin-bottom:8px">' + pkg.toUpperCase() + '</div>';
+    ph += '<div style="display:flex;align-items:baseline;gap:8px">';
+    ph += '<span style="font-family:Inter,sans-serif;font-size:28px;color:#7FB89E">' + done + '</span>';
+    ph += '<span style="font-size:11px;color:var(--text-muted)">выполнено</span></div>';
+    ph += '<div style="font-size:10px;color:var(--text-muted);margin-top:4px">' + pct + '% от выполненных</div>';
+    ph += '<div style="margin-top:8px;font-size:10px;color:#D6A372">' + work + ' в работе</div>';
+    ph += '</div>';
+   });
+   ph += '</div>';
+  }
+  pkgEl.innerHTML = ph;
+ }
+
+ // ===== MONTHLY TABLE: выполнено по месяцам, по типу =====
+ var mtEl = document.getElementById('intg-monthly-table');
+ if(mtEl){
+  var buckets = {};
+  items.forEach(function(r){
+   if(r.status !== 'Готово') return;
+   var d = toDate(r.date_done) || toDate(r.deadline);
+   if(!d) return;
+   var key = d.getFullYear() + '-' + String(d.getMonth()).padStart(2,'0');
+   if(!buckets[key]) buckets[key] = {int:0, dor:0, raz:0};
+   if(r.type === 'Интеграция')     buckets[key].int++;
+   else if(r.type === 'Доработка')  buckets[key].dor++;
+   else if(r.type === 'Разработка') buckets[key].raz++;
+  });
+  var keys = Object.keys(buckets).sort();
+  if(!keys.length){
+   mtEl.innerHTML = '<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:16px">Нет данных для таблицы</div>';
+  } else {
+   var mh = '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+   mh += '<thead><tr><th style="text-align:left;padding:6px 8px;color:var(--text-muted);border-bottom:2px solid rgba(255,255,255,.08)"></th>';
+   keys.forEach(function(k){
+    var p = k.split('-'); var yr = p[0]; var mi = parseInt(p[1]);
+    var isCur = (mi === selM && parseInt(yr) === selY);
+    mh += '<th style="text-align:center;padding:6px 6px;color:' + (isCur ? '#93C5FD' : 'var(--text-muted)') + ';border-bottom:2px solid rgba(255,255,255,.08);font-weight:' + (isCur ? '700' : '600') + ';font-size:10px' + (isCur ? ';background:rgba(84,137,187,.06)' : '') + '">' + MONTHS_S[mi] + (mi === 0 ? ' ' + yr.slice(2) : '') + '</th>';
+   });
+   mh += '</tr></thead><tbody>';
+   // Интеграция + план
+   mh += '<tr><td style="padding:5px 8px;font-weight:700;color:#4A90D9;font-size:10px;letter-spacing:.5px">Интеграция</td>';
+   keys.forEach(function(k){ var v = buckets[k].int; var p = k.split('-'); var isCur = (parseInt(p[1]) === selM && parseInt(p[0]) === selY); mh += '<td style="text-align:center;padding:5px 4px;color:' + (v >= 10 ? '#7FB89E' : v >= 7 ? '#D6A372' : '#94A3B8') + ';font-weight:' + (isCur ? '700' : '400') + (isCur ? ';background:rgba(84,137,187,.06)' : '') + '">' + v + '</td>'; });
+   mh += '</tr>';
+   mh += '<tr><td style="padding:2px 8px;font-size:9px;color:var(--text-muted)"></td>';
+   keys.forEach(function(k){ var p = k.split('-'); var isCur = (parseInt(p[1]) === selM && parseInt(p[0]) === selY); mh += '<td style="text-align:center;padding:2px 4px;font-size:9px;color:var(--text-muted)' + (isCur ? ';background:rgba(84,137,187,.06)' : '') + '">/ 10</td>'; });
+   mh += '</tr>';
+   // Доработка
+   mh += '<tr><td style="padding:5px 8px;font-weight:700;color:#FF7043;font-size:10px;letter-spacing:.5px">Доработка</td>';
+   keys.forEach(function(k){ var v = buckets[k].dor; var p = k.split('-'); var isCur = (parseInt(p[1]) === selM && parseInt(p[0]) === selY); mh += '<td style="text-align:center;padding:5px 4px;color:#94A3B8;font-weight:' + (isCur ? '700' : '400') + (isCur ? ';background:rgba(84,137,187,.06)' : '') + '">' + v + '</td>'; });
+   mh += '</tr>';
+   // Разработка
+   mh += '<tr><td style="padding:5px 8px;font-weight:700;color:#AB47BC;font-size:10px;letter-spacing:.5px">Разработка</td>';
+   keys.forEach(function(k){ var v = buckets[k].raz; var p = k.split('-'); var isCur = (parseInt(p[1]) === selM && parseInt(p[0]) === selY); mh += '<td style="text-align:center;padding:5px 4px;color:#94A3B8;font-weight:' + (isCur ? '700' : '400') + (isCur ? ';background:rgba(84,137,187,.06)' : '') + '">' + v + '</td>'; });
+   mh += '</tr>';
+   // Итого
+   mh += '<tr style="border-top:2px solid rgba(255,255,255,.08)"><td style="padding:5px 8px;font-weight:700;color:#93C5FD;font-size:10px;letter-spacing:.5px">Итого</td>';
+   keys.forEach(function(k){ var v = buckets[k].int + buckets[k].dor + buckets[k].raz; var p = k.split('-'); var isCur = (parseInt(p[1]) === selM && parseInt(p[0]) === selY); mh += '<td style="text-align:center;padding:5px 4px;color:#93C5FD;font-weight:700' + (isCur ? ';background:rgba(84,137,187,.06)' : '') + '">' + v + '</td>'; });
+   mh += '</tr>';
+   mh += '</tbody></table>';
+   mtEl.innerHTML = mh;
+  }
  }
 }
 // v497: маппинг Supabase-карточки в формат intgData (Sheets-формат).
