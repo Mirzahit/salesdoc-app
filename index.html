@@ -4574,11 +4574,12 @@ body.light #view-ticket-card.amocard-active {
 .amocard-feed { flex:1; overflow-y:auto; padding:18px 24px 12px; display:flex; flex-direction:column; gap:14px; min-height:0; }
 .amocard-note { background:var(--amocard-surface); border:1px solid var(--amocard-border); border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; box-shadow:var(--amocard-sh-1); position:relative; }
 /* v490: hover-actions для записей ленты (amoCRM-style) */
-.afa-handle{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:18px;height:42px;border-radius:5px;background:rgba(255,255,255,.08);opacity:0;transition:opacity .15s,background .15s;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
-.afa-handle::before{content:'';width:4px;height:18px;background:rgba(255,255,255,.55);border-radius:2px}
+/* v524: handle всегда видимый «⋮» (три точки) — без него actions неочевидны на десктопе. */
+.afa-handle{position:absolute;right:6px;top:8px;width:24px;height:24px;border-radius:6px;background:transparent;opacity:.55;transition:opacity .15s,background .15s;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;color:var(--text-soft)}
+.afa-handle::before{content:'\22EE';font-size:18px;font-weight:700;line-height:1;letter-spacing:0}
 .amocard-note:hover .afa-handle,.amocard-task-feed:hover .afa-handle{opacity:1}
-.afa-handle:hover{background:rgba(255,255,255,.18)}
-.afa-menu{position:absolute;right:30px;top:50%;transform:translateY(-50%);background:var(--surface,#1C1C1E);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:10px;padding:6px;display:none;gap:2px;box-shadow:0 12px 32px rgba(0,0,0,.45);z-index:3;white-space:nowrap}
+.afa-handle:hover{background:rgba(255,255,255,.10);opacity:1}
+.afa-menu{position:absolute;right:36px;top:8px;background:var(--surface,#1C1C1E);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:10px;padding:6px;display:none;gap:2px;box-shadow:0 12px 32px rgba(0,0,0,.45);z-index:3;white-space:nowrap}
 .afa-menu.is-open{display:inline-flex}
 .afa-act{padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text);display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;font-family:inherit;transition:background .12s}
 .afa-act:hover{background:rgba(255,255,255,.06)}
@@ -4616,7 +4617,8 @@ body.light .tf-rsch-cancel:hover{background:rgba(0,0,0,.05)}
 body.light .afa-pinned{box-shadow:0 4px 12px rgba(0,0,0,.10),0 0 0 1px rgba(242,183,61,.45);background:#FFFFFF}
 .afa-edit-input{width:100%;min-height:60px;background:rgba(255,255,255,.04);border:1px solid var(--accent,#48D98C);border-radius:6px;padding:6px 8px;color:var(--text);font-family:inherit;font-size:13px;line-height:1.4;resize:vertical;outline:none}
 body.light .afa-edit-input{background:#FFFFFF;color:#1A1A1C}
-body.light .afa-handle{background:rgba(0,0,0,.06)}
+body.light .afa-handle{color:var(--text-soft)}
+body.light .afa-handle:hover{background:rgba(0,0,0,.06)}
 body.light .afa-handle::before{background:rgba(0,0,0,.45)}
 body.light .afa-handle:hover{background:rgba(0,0,0,.12)}
 body.light .afa-menu{background:#FFFFFF;border-color:rgba(0,0,0,.10)}
@@ -5295,7 +5297,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
  <div class="search-overlay" id="search-overlay" onclick="if(event.target===this)closeSearch()">
  <div class="search-box">
- <div style="position:relative"><span class="search-icon"></span><input class="search-input" id="search-input" placeholder="Поиск клиентов, платежей, расходов..." autocomplete="off"></div>
+ <div style="position:relative"><span class="search-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></span><input class="search-input" id="search-input" placeholder="Поиск клиентов, платежей, расходов..." autocomplete="off"></div>
  <div class="search-results" id="search-results"></div>
  <div class="search-hint">ESC — закрыть · Введите минимум 2 символа</div>
  </div>
@@ -5304,7 +5306,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <button class="menu-toggle" id="menu-toggle" onclick="toggleSidebar()" title="Свернуть/развернуть меню"><svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="2.5" y="3.5" width="15" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><line x1="7.5" y1="3.5" x2="7.5" y2="16.5" stroke="currentColor" stroke-width="1.5"/></svg></button>
  <div class="page-title" id="page-title">Обзор финансов</div>
  <div class="topbar-right">
- <button onclick="openSearch()" title="Поиск (Ctrl+K)" style="padding:7px 14px;border-radius:10px;background:var(--glass-bg);border:1px solid var(--dark-border);color:var(--text-muted);font-family:'Inter',sans-serif;font-weight:600;font-size:11px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px"><span style="font-size:14px"></span><span style="opacity:.6;font-size:10px">Ctrl+K</span></button>
+ <button onclick="openSearch()" title="Поиск (Ctrl+K)" style="padding:7px 14px;border-radius:10px;background:var(--glass-bg);border:1px solid var(--dark-border);color:var(--text-muted);font-family:'Inter',sans-serif;font-weight:600;font-size:11px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>Поиск</span><span style="opacity:.55;font-size:10px;margin-left:2px">Ctrl+K</span></button>
  <div class="sync-status" id="sync-status">
  <div class="sync-dot ok" id="sync-dot"></div>
  <span id="sync-label">Доходы KZ 2026</span>
@@ -25130,10 +25132,10 @@ function routeRender(){
     : '<span style="font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(214,115,115,.14);color:#D67373">не назначен</span>';
    html += opCell + '<span style="display:flex;align-items:center;gap:6px">' + dayBadge + checkBadge + '</span>';
    html += '</div>';
+   // v524: «Звонок» убран — tel: на десктопе бесполезен. WhatsApp на всю ширину.
    if(phone){
-    html += '<div style="margin-top:8px;display:flex;gap:6px">';
-    html += '<a href="tel:' + phone + '" onclick="event.stopPropagation()" style="flex:1;text-align:center;padding:4px;border-radius:4px;background:#7FB89E22;color:#7FB89E;text-decoration:none;font-size:11px;font-weight:600">Звонок</a>';
-    html += '<a href="https://wa.me/' + phone.replace(/[^0-9]/g,'') + '" target="_blank" onclick="event.stopPropagation()" style="flex:1;text-align:center;padding:4px;border-radius:4px;background:#25D36622;color:#25D366;text-decoration:none;font-size:11px;font-weight:600">WhatsApp</a>';
+    html += '<div style="margin-top:8px">';
+    html += '<a href="https://wa.me/' + phone.replace(/[^0-9]/g,'') + '" target="_blank" onclick="event.stopPropagation()" style="display:block;text-align:center;padding:5px;border-radius:5px;background:#25D36622;color:#25D366;text-decoration:none;font-size:11px;font-weight:600">WhatsApp</a>';
     html += '</div>';
    }
    html += '</div>';
@@ -30744,6 +30746,7 @@ function ttQaRender(pop, state){
    + '<span>'+chipLabel+'</span>'
   + '</div>'
   + '<textarea class="tt-qa-input" placeholder="Что бы вы хотели сделать?"></textarea>'
+  + '<div style="font-size:10.5px;color:var(--text-faint);padding:0 2px;margin-top:-4px">Enter — сохранить · Shift+Enter — новая строка · Esc — отмена</div>'
   + '<div class="tt-qa-foot">'
    + '<div class="tt-qa-foot-l">'
     // TODO MVP: кнопка «Входящие» — выбор контекста/проекта (пока заглушка)
