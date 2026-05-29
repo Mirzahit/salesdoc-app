@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v539</title>
+<title>SalesDoc — Финансовый Дашборд v540</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7567,12 +7567,14 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
     <div>
      <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Срочность (через сколько ответить)</label>
-     <select id="tickets-new-prio" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);box-sizing:border-box;font-size:13px">
+     <select id="tickets-new-prio" onchange="_ticketsNewPrioHint(this.value)" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);box-sizing:border-box;font-size:13px">
       <option value="low">Низкий (3 дня)</option>
       <option value="normal" selected>Обычный (1 день)</option>
       <option value="high">Высокий (4 часа)</option>
       <option value="critical">Критичный (2 часа)</option>
      </select>
+     <!-- v540: критерии когда какой приоритет ставить — снимает разнобой между операторами -->
+     <div id="tickets-new-prio-hint" style="font-size:10.5px;color:var(--text-muted);margin-top:4px;line-height:1.4;min-height:28px">Клиент работает, есть вопрос или мелкая неудобность</div>
     </div>
     <div>
      <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Канал</label>
@@ -26095,7 +26097,8 @@ function ticketsRender(){
     html += '<div style="font-size:10.5px;color:#C2410C;background:rgba(251,146,60,.10);padding:3px 7px;border-radius:5px;margin-top:4px;display:inline-block">⏸ Передано клиенту: ' + wsLabel + '</div>';
    }
    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">';
-   html += '<span style="font-size:11.5px;color:var(--rk-text-2)">' + _escHtml(t.operator || '— не назначен —') + '</span>';
+   // v540: аватар-кружок + имя — быстрее сканировать чем длинное имя
+   html += '<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--rk-text-2)">' + _ticketsAvatarHtml(t.operator) + (t.operator ? '<span>' + _escHtml(t.operator) + '</span>' : '<span style="color:var(--text-faint)">не назначен</span>') + '</span>';
    html += '<div style="display:flex;gap:4px">';
    // v524: pill приоритета показываем только для high/critical — для normal/low он лишний шум
    if(t.priority === 'critical' || t.priority === 'high'){
@@ -26108,7 +26111,16 @@ function ticketsRender(){
   html += '</div>'; // /col-body
   html += '</div>'; // /col
  });
+ // v540: сохраняем скролл колонок перед innerHTML, восстанавливаем после — иначе после
+ // PATCH тикета или drag&drop вся доска возвращается в начало, теряя позицию оператора.
+ var _scrolls = {};
+ board.querySelectorAll('[data-ticket-stage] .route-col-amo-body').forEach(function(b, i){
+  _scrolls[i] = b.scrollTop;
+ });
  board.innerHTML = html;
+ board.querySelectorAll('[data-ticket-stage] .route-col-amo-body').forEach(function(b, i){
+  if(_scrolls[i]) b.scrollTop = _scrolls[i];
+ });
  _ticketsRenderScopeToggle(); // v445: обновить счётчики Мои/Все
 }
 
@@ -26133,6 +26145,31 @@ function _ticketsFmtSLA(t){
  if(diff < 60) return { label:Math.round(diff) + ' мин', color:'#fff', bg:'#F59E0B' };
  if(diff < 60*4) return { label:Math.round(diff/60) + ' ч', color:'#92400E', bg:'rgba(245,158,11,.16)' };
  return { label:Math.round(diff/60/24) + ' дн', color:'var(--rk-text-soft)', bg:'rgba(120,120,128,.16)' };
+}
+
+// v540: hint про критерии приоритета в модалке нового тикета
+function _ticketsNewPrioHint(v){
+ var hints = {
+  critical: '1С/банк/отчёты не работают, клиент НЕ МОЖЕТ работать. Жжёт.',
+  high: 'Часть функционала сломана, есть обходной путь. Ответить за 4 часа.',
+  normal: 'Клиент работает, есть вопрос или мелкая неудобность.',
+  low: 'Хотелка или вопрос «когда будет?» Можно завтра.'
+ };
+ var el = document.getElementById('tickets-new-prio-hint');
+ if(el) el.textContent = hints[v] || '';
+}
+// v540: цветной аватар-кружок с инициалом — для скорости чтения канбана.
+// Цвет = stable hash от имени, чтобы у Айдоса всегда был один и тот же цвет.
+function _ticketsAvatarHtml(name){
+ if(!name || name === '— не назначен —'){
+  return '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:999px;background:transparent;border:1px dashed var(--border-strong,#444);color:var(--text-faint);font-size:11px;font-weight:600">?</span>';
+ }
+ var palette = ['#5489BB','#34C77A','#FF9F0A','#9E7BFF','#FF6B5C','#0EA5E9','#F472B6'];
+ var hash = 0;
+ for(var i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+ var color = palette[Math.abs(hash) % palette.length];
+ var initial = String(name).trim().charAt(0).toUpperCase();
+ return '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:999px;background:' + color + ';color:#fff;font-size:11px;font-weight:700">' + _escHtml(initial) + '</span>';
 }
 
 function _ticketsFmtPriority(p){
