@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v526</title>
+<title>SalesDoc — Финансовый Дашборд v527</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13204,6 +13204,8 @@ function calSelectMonth(monthIdx) {
  renderAll();
  if (planLastData) { planInit(); planLoad(); }
  if (document.getElementById('view-expenses')?.style.display === 'block') { expInit(); expLoad(); }
+ // v526: канбан Интеграций фильтрует Готово/Отменено по выбранному месяцу — перерисуем при смене
+ if (typeof intgSbRerender === 'function') { try { intgSbRerender(); } catch(_){} }
 }
 
 // v524: быстрая навигация по месяцам — стрелки ◀▶ рядом с триггером периода в топбаре
@@ -21482,12 +21484,31 @@ function intgSbRerender(){
  var fType    = (document.getElementById('intg-filter-type')   ||{}).value || '';
  var fCountry = (document.getElementById('intg-filter-country')||{}).value || '';
  var fPackage = (document.getElementById('intg-filter-package')||{}).value || '';
+ // v526: фильтр по периоду из топбара. Активные (Новая/В работе/На паузе) видны всегда —
+ // это рабочий канбан, оператор должен видеть свои задачи независимо от выбранного месяца.
+ // Готово/Отменено — фильтруем по date_done (когда завершено), чтобы за май видеть только
+ // завершённые в мае. Если date_done пустой — fallback на updated_at или created_at.
+ var selM = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth.month : new Date().getMonth();
+ var selY = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth.year  : new Date().getFullYear();
+ var isYear = (typeof currentPeriod !== 'undefined') && currentPeriod === 'year';
+ function _intgInPeriod(rawDate){
+  if(!rawDate) return false;
+  var d = new Date(rawDate);
+  if(isNaN(d)) return false;
+  if(isYear) return d.getFullYear() === selY;
+  return d.getMonth() === selM && d.getFullYear() === selY;
+ }
+ var ACTIVE_STAGES = {'Новая':1,'В работе':1,'На паузе':1};
  var filtered = all.filter(function(it){
   if(fStatus  && it.status  !== fStatus ) return false;
   if(fType    && it.type    !== fType   ) return false;
   if(fCountry && String(it.country||'').toUpperCase() !== fCountry) return false;
   if(fPackage && it.package !== fPackage) return false;
-  return true;
+  // Активные — всегда
+  if(ACTIVE_STAGES[it.status]) return true;
+  // Готово/Отменено — только если попадает в выбранный месяц
+  var doneDate = it.date_done || it.deadline || it.updated_at || it.created_at;
+  return _intgInPeriod(doneDate);
  });
  intgSbRender(filtered);
  // Аналитика — на ВСЁМ массиве (фильтры влияют только на kanban визуально),
