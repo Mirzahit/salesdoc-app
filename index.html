@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v523</title>
+<title>SalesDoc — Финансовый Дашборд v524</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2486,7 +2486,7 @@ body:not(.light){background-image:radial-gradient(ellipse 80% 60% at 15% 10%, rg
 .kpi-card[data-accent="blue"]{--kpi-accent:#5489BB}
 .kpi-card:hover{border-color:rgba(99,102,241,.5);box-shadow:0 8px 30px rgba(0,0,0,.25);transform:translateY(-2px)}
 .kpi-icon{display:none}
-.kpi-label{font-size:10px;color:#94A3B8;letter-spacing:2.5px;text-transform:uppercase;margin-bottom:6px;font-family:'Inter','Inter',sans-serif;font-weight:500}
+.kpi-label{font-size:12px;color:#94A3B8;letter-spacing:0.3px;margin-bottom:6px;font-family:'Inter','Inter',sans-serif;font-weight:600}
 .kpi-value{font-family:'Inter','Inter',sans-serif;font-size:24px;font-weight:700;color:#F1F5F9;line-height:1;letter-spacing:1px}
 .kpi-value span{font-size:12px;color:var(--text-secondary);margin-left:2px}
 .kpi-delta{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;margin-top:6px;padding:2px 7px;border-radius:20px}
@@ -5309,12 +5309,15 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="sync-dot ok" id="sync-dot"></div>
  <span id="sync-label">Доходы KZ 2026</span>
  </div>
- <div class="period-selector" id="period-selector" style="gap:8px">
+ <div class="period-selector" id="period-selector" style="gap:6px;align-items:center">
+ <!-- v524: стрелки ◀▶ для быстрой смены месяца на ±1 без открытия dropdown -->
+ <button id="period-prev-btn" onclick="periodStep(-1)" title="Предыдущий месяц" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-soft);cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;line-height:1" onmouseover="this.style.background='var(--accent-bg)';this.style.borderColor='var(--accent)'" onmouseout="this.style.background='transparent';this.style.borderColor='var(--border)'">&lsaquo;</button>
  <!-- Selected period display + calendar icon -->
  <button class="period-trigger" id="period-trigger" onclick="toggleCalDropdown()">
- <span id="period-trigger-label" style="font-family:'Inter',sans-serif;font-weight:700;font-size:12px;color:var(--gold-light);letter-spacing:.5px">Март 2026</span>
- <span class="pt-arrow" style="font-size:10px;opacity:.5;transition:transform .2s">▾</span>
+ <span id="period-trigger-label" style="font-family:'Inter',sans-serif;font-weight:700;font-size:15px;color:var(--text);letter-spacing:.2px">Март 2026</span>
+ <span class="pt-arrow" style="font-size:11px;opacity:.6;transition:transform .2s;margin-left:6px">▾</span>
  </button>
+ <button id="period-next-btn" onclick="periodStep(1)" title="Следующий месяц" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-soft);cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;line-height:1" onmouseover="this.style.background='var(--accent-bg)';this.style.borderColor='var(--accent)'" onmouseout="this.style.background='transparent';this.style.borderColor='var(--border)'">&rsaquo;</button>
  </div>
  <!-- CALENDAR DROPDOWN -->
  <div class="cal-dropdown" id="cal-dropdown" style="min-width:300px;max-width:340px">
@@ -5412,7 +5415,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 
  <!-- DASHBOARD -->
  <div id="view-dashboard">
- <button onclick="showDataSources('dashboard')" title="Источники данных" style="position:absolute;right:8px;top:68px;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'">!</button>
+ <button onclick="showDataSources('dashboard')" title="Источники данных" style="position:absolute;right:8px;top:68px;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.55'" aria-label="Источники данных"><span style="font-style:italic;font-family:Georgia,serif;font-weight:700">i</span></button>
 
  <!-- v266: План/факт пилюля — сразу видно «на треке» / «отстаём» -->
  <div id="plan-fact-strip" style="margin-bottom:18px"></div>
@@ -5424,13 +5427,13 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="kpi-card" data-kpi-type="license" style="cursor:pointer"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Новые лицензии</div><div class="kpi-value" id="kpi-license">0 <span>₸</span></div><div class="kpi-delta up" id="delta-license">0%</div></div><div class="kpi-divider"></div>
  <div class="kpi-right">
  <div class="kpi-chip chip-flat" id="m2m-license">
- <div class="kpi-chip-label">M2M</div>
+ <div class="kpi-chip-label">vs прошл.мес</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
  </div>
  <div class="kpi-chip chip-flat" id="a2a-license">
- <div class="kpi-chip-label">A2A</div>
+ <div class="kpi-chip-label">vs прошл.год</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
@@ -5439,13 +5442,13 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="kpi-card" data-kpi-type="subscription" style="cursor:pointer"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Абон. плата</div><div class="kpi-value" id="kpi-sub">0 <span>₸</span></div><div class="kpi-delta up" id="delta-sub">0%</div></div><div class="kpi-divider"></div>
  <div class="kpi-right">
  <div class="kpi-chip chip-flat" id="m2m-sub">
- <div class="kpi-chip-label">M2M</div>
+ <div class="kpi-chip-label">vs прошл.мес</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
  </div>
  <div class="kpi-chip chip-flat" id="a2a-sub">
- <div class="kpi-chip-label">A2A</div>
+ <div class="kpi-chip-label">vs прошл.год</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
@@ -5454,13 +5457,13 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="kpi-card" data-kpi-type="implementation" style="cursor:pointer"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Внедрения</div><div class="kpi-value" id="kpi-impl">0 <span>₸</span></div><div class="kpi-delta up" id="delta-impl">0%</div></div><div class="kpi-divider"></div>
  <div class="kpi-right">
  <div class="kpi-chip chip-flat" id="m2m-impl">
- <div class="kpi-chip-label">M2M</div>
+ <div class="kpi-chip-label">vs прошл.мес</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
  </div>
  <div class="kpi-chip chip-flat" id="a2a-impl">
- <div class="kpi-chip-label">A2A</div>
+ <div class="kpi-chip-label">vs прошл.год</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
@@ -5469,13 +5472,13 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="kpi-card" data-kpi-type="integration" style="cursor:pointer"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Интеграции</div><div class="kpi-value" id="kpi-integ">0 <span>₸</span></div><div class="kpi-delta up" id="delta-integ">0%</div></div><div class="kpi-divider"></div>
  <div class="kpi-right">
  <div class="kpi-chip chip-flat" id="m2m-integ">
- <div class="kpi-chip-label">M2M</div>
+ <div class="kpi-chip-label">vs прошл.мес</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
  </div>
  <div class="kpi-chip chip-flat" id="a2a-integ">
- <div class="kpi-chip-label">A2A</div>
+ <div class="kpi-chip-label">vs прошл.год</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
@@ -5484,28 +5487,28 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="kpi-card"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Итого за период</div><div class="kpi-value" id="kpi-total">0 <span>₸</span></div><div class="kpi-delta up" id="delta-total">0%</div></div><div class="kpi-divider"></div>
  <div class="kpi-right">
  <div class="kpi-chip chip-flat" id="m2m-total">
- <div class="kpi-chip-label">M2M</div>
+ <div class="kpi-chip-label">vs прошл.мес</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
  </div>
  <div class="kpi-chip chip-flat" id="a2a-total">
- <div class="kpi-chip-label">A2A</div>
+ <div class="kpi-chip-label">vs прошл.год</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
  </div>
  </div></div></div>
- <div class="kpi-card" data-kpi-type="new-clients" style="cursor:pointer"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Сред. чек новых</div><div class="kpi-value" id="kpi-avg-new">0 <span>₸</span></div><div class="kpi-delta up" id="delta-avg-new">0 клиентов</div></div><div class="kpi-divider"></div>
+ <div class="kpi-card" data-kpi-type="new-clients" style="cursor:pointer"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Средний чек новых клиентов</div><div class="kpi-value" id="kpi-avg-new">0 <span>₸</span></div><div class="kpi-delta up" id="delta-avg-new">0 клиентов</div></div><div class="kpi-divider"></div>
  <div class="kpi-right">
  <div class="kpi-chip chip-flat" id="m2m-avg">
- <div class="kpi-chip-label">M2M</div>
+ <div class="kpi-chip-label">vs прошл.мес</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
  </div>
  <div class="kpi-chip chip-flat" id="a2a-avg">
- <div class="kpi-chip-label">A2A</div>
+ <div class="kpi-chip-label">vs прошл.год</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
  <div class="kpi-chip-prev"></div>
@@ -5586,7 +5589,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 
  <!-- PAYMENTS -->
  <div id="view-payments" style="display:none;position:relative">
- <button onclick="showDataSources('payments')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'">!</button>
+ <button onclick="showDataSources('payments')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.55'" aria-label="Источники данных"><span style="font-style:italic;font-family:Georgia,serif;font-weight:700">i</span></button>
  <div class="panel">
  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
  <div style="display:flex;align-items:center;gap:10px">
@@ -5632,7 +5635,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 
  <!-- PLAN -->
  <div id="view-plan" style="display:none;position:relative">
- <button onclick="showDataSources('plan')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'">!</button>
+ <button onclick="showDataSources('plan')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.55'" aria-label="Источники данных"><span style="font-style:italic;font-family:Georgia,serif;font-weight:700">i</span></button>
  <button id="ceo-bonus-btn" onclick="showCeoBonus()" title="Мой бонус" style="display:none;position:absolute;right:32px;top:0;width:24px;height:24px;border-radius:50%;border:1px solid rgba(84,137,187,.12);background:rgba(84,137,187,.04);color:var(--text-muted);cursor:pointer;font-size:11px;align-items:center;justify-content:center;opacity:.35;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.35'">$</button>
 
  <!-- MONTH TABS + REFRESH -->
@@ -5666,7 +5669,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 
  <!-- KEY CLIENTS -->
  <div id="view-keyclients" style="display:none;position:relative">
- <button onclick="showDataSources('keyclients')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'">!</button>
+ <button onclick="showDataSources('keyclients')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.55'" aria-label="Источники данных"><span style="font-style:italic;font-family:Georgia,serif;font-weight:700">i</span></button>
  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:8px">
  <div style="display:flex;align-items:center;gap:14px">
  <div style="font-family:'Inter','Inter',sans-serif;font-size:18px;color:var(--gold-bright);letter-spacing:2px">Ключевые клиенты</div>
@@ -5735,7 +5738,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  
  <!-- ASSISTANT (v147 — заменил «ИИ Мирзахит») -->
  <div id="view-assistant" style="display:none;position:relative">
- <button onclick="showDataSources('assistant')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'">!</button>
+ <button onclick="showDataSources('assistant')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.55'" aria-label="Источники данных"><span style="font-style:italic;font-family:Georgia,serif;font-weight:700">i</span></button>
  <div style="display:grid;grid-template-columns:240px 1fr;gap:16px;height:calc(100vh - 140px)">
  <!-- AGENTS SIDEBAR -->
  <div style="display:flex;flex-direction:column;background:var(--dark-card);border:1px solid var(--dark-border);border-radius:16px;overflow:hidden">
@@ -5991,7 +5994,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 
  <!-- MARKETING VIEW -->
  <div id="view-marketing" style="display:none;position:relative">
- <button onclick="showDataSources('marketing')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'">!</button>
+ <button onclick="showDataSources('marketing')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.55'" aria-label="Источники данных"><span style="font-style:italic;font-family:Georgia,serif;font-weight:700">i</span></button>
 
  <!-- v280: AI-виджет Маркетолога -->
  <div id="ai-w-marketing-container"></div>
@@ -6843,7 +6846,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <!-- EXPENSES VIEW -->
  <!-- EXPENSES VIEW -->
  <div id="view-expenses" style="display:none;position:relative">
- <button onclick="showDataSources('expenses')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.4;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'">!</button>
+ <button onclick="showDataSources('expenses')" title="Источники данных" style="position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(84,137,187,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.55'" aria-label="Источники данных"><span style="font-style:italic;font-family:Georgia,serif;font-weight:700">i</span></button>
  <div id="exp-status" style="font-size:12px;color:var(--text-muted);margin-bottom:10px"></div>
 
  <!-- KPI CARDS -->
@@ -7657,7 +7660,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
    <div id="route-card-feed" class="amocard-feed"></div>
    <div id="route-card-task-hint" class="amocard-task-hint" style="display:none">
     <span class="amocard-ic">&#9201;</span>
-    <span>Нет запланированных задач, рекомендуем <a href="#" onclick="return false">добавить</a></span>
+    <span>Нет запланированных задач, рекомендуем <a href="#" onclick="event.preventDefault();routeChatPickMode('task');var t=document.getElementById('route-chat-text');if(t){t.focus();}return false;">добавить</a></span>
    </div>
    <!-- v457: двухрежимный composer с тремя рядами: mode / task-params / input. -->
    <div class="amocard-chat-input has-mode">
@@ -12727,6 +12730,29 @@ document.addEventListener('keydown', function(ev){
   dds.forEach(function(d){ d.remove(); });
   return;
  }
+ // v524: если в фокусе input/textarea/contenteditable — не закрываем overlay-карточки
+ // (Esc там может использоваться для отмены ввода, и пользователь не хочет терять открытую карту).
+ var ae = document.activeElement;
+ if(ae){
+  var tag = (ae.tagName||'').toLowerCase();
+  if(tag === 'input' || tag === 'textarea' || ae.isContentEditable) return;
+ }
+ // v524: фолбэк — закрываем верхнюю открытую overlay-карточку (route/ticket/kb)
+ var rcView = document.getElementById('view-route-card');
+ if(rcView && rcView.style.display !== 'none' && typeof routeCloseCard === 'function'){
+  try { routeCloseCard(); } catch(_){ }
+  return;
+ }
+ var tkView = document.getElementById('view-ticket-card');
+ if(tkView && tkView.style.display !== 'none' && typeof ticketCloseCard === 'function'){
+  try { ticketCloseCard(); } catch(_){ }
+  return;
+ }
+ var kbView = document.getElementById('view-kb-card');
+ if(kbView && kbView.style.display !== 'none' && typeof kbCloseCardPage === 'function'){
+  try { kbCloseCardPage(); } catch(_){ }
+  return;
+ }
 });
 
 // === v463: SPA history management — расширено на 3 overlay-карточки =========
@@ -13192,6 +13218,15 @@ function calSelectMonth(monthIdx) {
  renderAll();
  if (planLastData) { planInit(); planLoad(); }
  if (document.getElementById('view-expenses')?.style.display === 'block') { expInit(); expLoad(); }
+}
+
+// v524: быстрая навигация по месяцам — стрелки ◀▶ рядом с триггером периода в топбаре
+function periodStep(dir){
+ var y = selectedMonth.year, m = selectedMonth.month + (dir > 0 ? 1 : -1);
+ if(m > 11){ m = 0; y++; }
+ if(m < 0){ m = 11; y--; }
+ calSelectedYear = y;
+ calSelectMonth(m);
 }
 
 function calSelectFullYear() {
@@ -25792,7 +25827,10 @@ function ticketsRender(){
    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">';
    html += '<span style="font-size:11.5px;color:var(--rk-text-2)">' + _escHtml(t.operator || '— не назначен —') + '</span>';
    html += '<div style="display:flex;gap:4px">';
-   html += '<span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:' + prioInfo.bg + ';color:' + prioInfo.color + ';letter-spacing:.2px">' + prioInfo.label + '</span>';
+   // v524: pill приоритета показываем только для high/critical — для normal/low он лишний шум
+   if(t.priority === 'critical' || t.priority === 'high'){
+    html += '<span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:' + prioInfo.bg + ';color:' + prioInfo.color + ';letter-spacing:.2px">' + prioInfo.label + '</span>';
+   }
    if(slaInfo) html += '<span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:' + slaInfo.bg + ';color:' + slaInfo.color + '">' + slaInfo.label + '</span>';
    html += '</div></div>';
    html += '</div>';
@@ -28083,6 +28121,12 @@ async function _routeRenderFeed(){
  var feedEl = document.getElementById('route-card-feed');
  if(!feedEl) return;
  if(!_routeCurrentCard){ feedEl.replaceChildren(); return; }
+ // v524: запоминаем была ли лента «у самого низа» — если да, после рендера тоже скроллим вниз
+ // (свежая запись попадает в видимую область). Если пользователь читал историю выше — оставляем
+ // его на той же записи, не выбрасываем вниз.
+ var _prevScroll = feedEl.scrollTop;
+ var _prevHeight = feedEl.scrollHeight;
+ var _wasNearBottom = (feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight) < 80;
  feedEl.replaceChildren();
  try {
   var reqs = [sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50')];
@@ -28177,11 +28221,18 @@ async function _routeRenderFeed(){
   // v509: pseudo-event из ленты убран (по итогу консультации с UX-критиком — дублировал
   // мини-блок «Интеграции клиента» сверху + создавал шум в потоке). Связь теперь живёт
   // как компактный чип в шапке (см. _routeRenderCrossChip).
-  // v487: автоскролл к самой свежей записи. #route-card-feed сам имеет overflow-y:auto,
-  // поэтому скроллим именно его. Двойной rAF — чтобы DOM успел измериться после appendChild.
+  // v487/v524: автоскролл к самой свежей — только если до перерендера лента была у низа.
+  // Иначе сохраняем позицию относительно изменения высоты (sticky-scroll).
   try {
    requestAnimationFrame(function(){
-    requestAnimationFrame(function(){ feedEl.scrollTop = feedEl.scrollHeight; });
+    requestAnimationFrame(function(){
+     if(_wasNearBottom){
+      feedEl.scrollTop = feedEl.scrollHeight;
+     } else {
+      var delta = feedEl.scrollHeight - _prevHeight;
+      feedEl.scrollTop = _prevScroll + (delta > 0 ? delta : 0);
+     }
+    });
    });
   } catch(_){}
  } catch(e){
