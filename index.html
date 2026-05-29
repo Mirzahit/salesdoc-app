@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v538</title>
+<title>SalesDoc — Финансовый Дашборд v539</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7536,10 +7536,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
     </div>
     <div id="ticket-card-desc-box" class="tk-desc-box"></div>
     <div id="ticket-card-feed" class="amocard-feed tk-feed"></div>
+    <!-- v539: input → textarea для нормального многострочного комментария. Ctrl/Cmd+Enter — отправить. Shift+Enter — новая строка. Author = currentUser.name (не «оператор» строкой). -->
     <div class="amocard-chat-input">
-     <span class="amocard-chat-select"><b>Комментарий</b></span>
-     <input id="ticket-comment-text" type="text" placeholder="внутренняя заметка — клиент это НЕ увидит" onkeydown="if(event.key==='Enter'){event.preventDefault();ticketCommentSend();}">
-     <button id="ticket-comment-send" class="amocard-send" onclick="ticketCommentSend()" title="Отправить">&rarr;</button>
+     <span class="amocard-chat-select"><b>Заметка</b></span>
+     <textarea id="ticket-comment-text" rows="2" placeholder="Внутренняя заметка — клиент это НЕ увидит. Ctrl+Enter — отправить" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();ticketCommentSend();}" style="resize:vertical;min-height:36px;max-height:200px;font-family:inherit"></textarea>
+     <button id="ticket-comment-send" class="amocard-send" onclick="ticketCommentSend()" title="Отправить (Ctrl+Enter)">&rarr;</button>
     </div>
    </section>
    <aside id="ticket-card-body" class="tk-sidebar"></aside>
@@ -26069,13 +26070,23 @@ function ticketsRender(){
    var clientName = cl.company_name || t.client_id || '—';
    var slaInfo = _ticketsFmtSLA(t);
    var prioInfo = _ticketsFmtPriority(t.priority);
-   // v398: карточка draggable. Клик открывает страницу тикета, drag — перетаскивает между колонками.
-   // Stop propagation чтобы клик по карточке не срабатывал во время drag.
-   // v419: твёрдый фон + чёткая рамка + мягкая тень. Без эффекта стекла —
-   // пользователь явно попросил без blur. Стили вынесены в класс .tk-card
-   // чтобы тёмная и светлая тема работали корректно (в светлой — тёмная рамка).
-   html += '<div class="tk-card" draggable="true" ondragstart="_ticketsDragStart(event,\'' + t.id + '\')" ondragend="this.style.opacity=1" onclick="ticketsOpen(\'' + t.id + '\')">';
-   html += '<div style="font-size:14px;font-weight:700;color:var(--rk-text);letter-spacing:-0.01em;line-height:1.3">' + _escHtml(t.title || '(без темы)') + '</div>';
+   // v539: цветная левая полоска приоритета — critical=красный, high=янтарный, остальное прозрачное
+   var prioStripeColor = t.priority === 'critical' ? '#EF4444' : (t.priority === 'high' ? '#F59E0B' : 'transparent');
+   // v539: возраст тикета (мин/ч/дн) — главный сигнал срочности для оператора. Для new>30мин — красный.
+   var ageHtml = '';
+   if(t.created_at){
+    var ageMs = Date.now() - new Date(t.created_at).getTime();
+    var ageMin = Math.floor(ageMs / 60000);
+    var ageStr = '';
+    if(ageMin < 1) ageStr = 'только что';
+    else if(ageMin < 60) ageStr = ageMin + ' мин';
+    else if(ageMin < 60 * 24) ageStr = Math.floor(ageMin / 60) + ' ч';
+    else ageStr = Math.floor(ageMin / 60 / 24) + ' дн';
+    var ageAlert = (t.status === 'new' && ageMin > 30);
+    ageHtml = '<span style="font-size:10.5px;color:' + (ageAlert ? '#EF4444' : 'var(--rk-text-faint)') + ';font-weight:' + (ageAlert ? '700' : '400') + '">' + ageStr + '</span>';
+   }
+   html += '<div class="tk-card" draggable="true" ondragstart="_ticketsDragStart(event,\'' + t.id + '\')" ondragend="this.style.opacity=1" onclick="ticketsOpen(\'' + t.id + '\')" style="border-left:3px solid ' + prioStripeColor + '">';
+   html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-size:14px;font-weight:700;color:var(--rk-text);letter-spacing:-0.01em;line-height:1.3;flex:1">' + _escHtml(t.title || '(без темы)') + '</div>' + ageHtml + '</div>';
    html += '<div style="font-size:12px;color:var(--rk-text-soft)">' + _escHtml(clientName) + '</div>';
    // v460: для тикетов в waiting_client показываем когда перевели в ожидание
    if(t.status === 'waiting_client' && t.waiting_started_at){
@@ -26639,7 +26650,7 @@ async function ticketCommentSend(){
  try {
   var d = await sbFetch('/api/cards?entity=ticket_comment', {
    method:'POST',
-   body: JSON.stringify({ ticket_id: _ticketCurrentTicket.id, text: text, author: 'оператор', channel: 'internal' })
+   body: JSON.stringify({ ticket_id: _ticketCurrentTicket.id, text: text, author: ((typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'оператор'), channel: 'internal' })
   });
   if(!d.ok) throw new Error(d.error || 'comment POST failed');
   input.value = '';
