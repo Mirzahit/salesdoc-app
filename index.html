@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v531</title>
+<title>SalesDoc — Финансовый Дашборд v532</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -26243,14 +26243,25 @@ async function ticketsCreate(){
 var _ticketCurrentTicket = null;
 
 async function ticketsOpen(ticketId){
- var t = ticketsList.find(function(x){ return x.id === ticketId; });
+ // v532: валидация UUID перед запросом — иначе ловим 400 от API
+ if(!ticketId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(ticketId))){
+  if(typeof showNotif === 'function') showNotif('Тикет', 'Битая ссылка на тикет — ID пустой или некорректный');
+  return;
+ }
+ var t = (ticketsList || []).find(function(x){ return x.id === ticketId; });
  if(!t){
-  // Возможно открываем напрямую через URL — подгружаем из API
+  // Возможно открываем напрямую через URL или из ленты клиента — подгружаем из API
   try {
    var d = await sbFetch('/api/cards?entity=ticket&id=' + ticketId);
-   if(!d.ok || !d.tickets || !d.tickets.length) throw new Error('тикет не найден');
+   if(!d.ok || !d.tickets || !d.tickets.length){
+    if(typeof showNotif === 'function') showNotif('Тикет не найден', 'Видимо, тикет был удалён. Запись о нём осталась в ленте, но открыть нельзя.');
+    return;
+   }
    t = d.tickets[0];
-  } catch(e){ alert('Ошибка: ' + e.message); return; }
+  } catch(e){
+   if(typeof showNotif === 'function') showNotif('Ошибка', 'Не удалось загрузить тикет: ' + (e.message || e));
+   return;
+  }
  }
  _ticketCurrentTicket = t;
  document.getElementById('view-ticket-card').style.display = 'block';
