@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v530</title>
+<title>SalesDoc — Финансовый Дашборд v531</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -958,23 +958,38 @@ body.light .kb-card:hover{border-color:var(--amo-blue)!important}
  DESIGN SYSTEM v230 — Календарь TickTick-style
  ============================================================ */
 .tt-page{background:var(--surface);border-radius:0;border:none;display:grid;grid-template-columns:240px 1fr 320px;min-height:calc(100vh - 70px);overflow:hidden}
-/* v474: fullscreen-режим календаря — убираем всё кроме самого календаря */
-body.cal-fullscreen .topbar,
-body.cal-fullscreen .sidebar{display:none !important}
-body.cal-fullscreen .main{margin-left:0 !important}
-body.cal-fullscreen .content{padding:0 !important}
-body.cal-fullscreen #view-calendar{min-height:100vh;margin:0;padding:0}
-body.cal-fullscreen #view-calendar .tt-page{grid-template-columns:1fr !important;min-height:100vh;border:none}
-body.cal-fullscreen #view-calendar .tt-side,
-body.cal-fullscreen #view-calendar .tt-right{display:none !important}
-/* Кнопка выхода из fullscreen-режима */
-.cal-exit-fs{position:fixed;top:14px;left:14px;width:36px;height:36px;border-radius:10px;border:1px solid var(--dark-border);background:var(--dark-card);color:var(--text);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:18px;z-index:9999;transition:all .15s;font-family:Inter,sans-serif}
+/* v531: fullscreen-режим календаря.
+   Главный sidebar приложения ОСТАЁТСЯ видимым (для навигации между разделами).
+   Topbar и все паддинги — убираем, чтобы календарь занимал всю доступную ширину
+   (100vw - sidebar) и всю высоту (100vh). */
+body.cal-fullscreen .topbar{display:none !important}
+body.cal-fullscreen .content{padding:0 !important;margin:0 !important}
+body.cal-fullscreen .main{min-height:100vh}
+body.cal-fullscreen #view-calendar{min-height:100vh;margin:0;padding:0;width:100%}
+body.cal-fullscreen #view-calendar .tt-page{min-height:100vh;border:none;border-radius:0}
+/* v531: на сеточных режимах правая панель уже скрыта через .tt-fullwide,
+   а в списочном режиме всё видно как было — sidebar 240px + main + right 320px */
+/* Кнопка выхода из fullscreen-режима (выйти в Дашборд) */
+.cal-exit-fs{position:fixed;top:10px;right:14px;width:32px;height:32px;border-radius:10px;border:1px solid var(--dark-border);background:var(--dark-card);color:var(--text);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:18px;z-index:9999;transition:all .15s;font-family:Inter,sans-serif}
 .cal-exit-fs:hover{background:var(--dark-panel);transform:scale(1.05)}
 body.cal-fullscreen .cal-exit-fs{display:flex}
 /* v336: на режимах Month/Week/Day прячем правую колонку — даём календарю всю ширину как в amoCRM */
 .tt-page.tt-fullwide{grid-template-columns:240px 1fr}
 .tt-page.tt-fullwide .tt-right{display:none}
 @media(max-width:1100px){.tt-page{grid-template-columns:1fr}.tt-side,.tt-right{display:none}}
+/* v531: убираем горизонтальные паддинги вокруг сеток в fullscreen-режиме,
+   чтобы месячная/недельная/дневная сетка использовала всё свободное пространство */
+body.cal-fullscreen .tt-toolbar{padding:10px 14px 8px}
+body.cal-fullscreen .tt-month-nav,
+body.cal-fullscreen .tt-week-nav,
+body.cal-fullscreen .tt-day-nav{padding:0 14px 8px 14px}
+body.cal-fullscreen .tt-month-grid{width:calc(100% - 16px);margin:0 8px 8px 8px}
+body.cal-fullscreen .tt-week-grid{padding:0 8px 8px 8px}
+body.cal-fullscreen .tt-day-grid{width:calc(100% - 16px);margin:0 8px 8px 8px}
+body.cal-fullscreen .tt-allday{margin:0 8px 8px 8px}
+body.cal-fullscreen .tt-list{padding:0 14px 14px}
+body.cal-fullscreen .tt-month-grid td{height:calc((100vh - 180px) / 6)}
+body.cal-fullscreen .tt-week-col{min-height:calc(100vh - 160px)}
 .tt-side{background:var(--surface-3);border-right:1px solid var(--border-faint);padding:18px 12px;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
 .tt-side h4{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-faint);padding:14px 10px 6px;margin:0}
 .tt-side h4:first-child{padding-top:4px}
@@ -1139,7 +1154,8 @@ body.light .tt-mode-btn.on{background:#fff}
 .tt-add-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(84,137,187,.25)}
 /* v335: недельная сетка */
 .tt-week-nav{display:flex;gap:6px;align-items:center;padding:0 28px 14px 28px}
-.tt-week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:0 28px 28px 28px}
+/* v531: воскресенья убраны из календаря — 6 колонок Пн-Сб */
+.tt-week-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:0 28px 28px 28px}
 .tt-week-col{background:var(--surface);border:1px solid var(--border-faint);border-radius:10px;overflow:hidden;min-height:420px;display:flex;flex-direction:column;transition:border-color .15s}
 .tt-week-col.today{border-color:var(--accent-text);background:var(--accent-bg)}
 .tt-week-col.drop{background:rgba(127,184,158,.18);border-color:#7FB89E;outline:2px dashed #7FB89E;outline-offset:-2px}
@@ -30646,6 +30662,16 @@ window.crmCalSetTypeFilter = function(type){
  crmCalRender();
 };
 
+// v531: воскресенье пропускаем — если попали в Вс, прыгаем на ближайший Пн
+function crmCalSkipSunday(d, direction){
+ // direction: +1 — вперёд (на Пн), -1 — назад (на Сб), 0 — на ближайший Пн (вперёд)
+ if(d.getDay() !== 0) return d;
+ var x = new Date(d);
+ if(direction === -1) x.setDate(x.getDate() - 1); // Сб
+ else x.setDate(x.getDate() + 1); // Пн
+ return x;
+}
+
 window.crmCalSetViewMode = function(mode){
  // v339: запоминаем откуда пришли в День — для breadcrumb «Назад в Месяц/Неделю»
  if(mode === 'day' && (crmCalState.viewMode === 'month' || crmCalState.viewMode === 'week')){
@@ -30657,21 +30683,38 @@ window.crmCalSetViewMode = function(mode){
  if((mode === 'month' || mode === 'day') && !crmCalState.viewDate){
  crmCalState.viewDate = crmDateStr(new Date());
  }
+ // v531: в режиме «День» — нельзя стоять на воскресенье
+ if(mode === 'day' && crmCalState.viewDate){
+ var dCheck = new Date(crmCalState.viewDate+'T00:00:00');
+ if(dCheck.getDay() === 0){
+ crmCalState.viewDate = crmDateStr(crmCalSkipSunday(dCheck, 1));
+ }
+ }
  crmCalRender();
 };
 window.crmCalSetViewDate = function(date){
+ // v531: если выбрано воскресенье — прыгаем на ближайший понедельник
+ var d = new Date(date+'T00:00:00');
+ if(d.getDay() === 0){
+ date = crmDateStr(crmCalSkipSunday(d, 1));
+ }
  crmCalState.viewDate = date;
  crmCalRender();
 };
 window.crmCalNavMonth = function(delta){
  var d = crmCalState.viewDate ? new Date(crmCalState.viewDate+'T00:00:00') : new Date();
  d.setMonth(d.getMonth() + delta);
+ // v531: если оказались на Вс — на ближайший Пн (вперёд)
+ if(d.getDay() === 0) d = crmCalSkipSunday(d, 1);
  crmCalState.viewDate = crmDateStr(d);
  crmCalRender();
 };
 window.crmCalNavDay = function(delta){
  var d = crmCalState.viewDate ? new Date(crmCalState.viewDate+'T00:00:00') : new Date();
  d.setDate(d.getDate() + delta);
+ // v531: если попали на воскресенье — пропускаем
+ // вперёд: Сб → Вс → пропускаем на Пн; назад: Пн → Вс → пропускаем на Сб
+ if(d.getDay() === 0) d.setDate(d.getDate() + (delta >= 0 ? 1 : -1));
  crmCalState.viewDate = crmDateStr(d);
  crmCalRender();
 };
@@ -30728,14 +30771,17 @@ function crmCalRenderMonth(){
  + '<button class="tt-mini-arrow" onclick="crmCalNavMonth(1)" title="Следующий месяц">&rsaquo;</button>'
  + crmCalTypeChips()
  + '</div>';
+ // v531: воскресенья отключены — 6 колонок Пн-Сб
  html += '<table class="tt-month-grid"><thead><tr>'
- + ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(function(d){return '<th>'+d+'</th>';}).join('')
+ + ['Пн','Вт','Ср','Чт','Пт','Сб'].map(function(d){return '<th>'+d+'</th>';}).join('')
  + '</tr></thead><tbody>';
  var d = 1 - startDay;
  for(var w = 0; w < 6; w++){
  html += '<tr>';
  for(var dow = 0; dow < 7; dow++){
  var date = new Date(y, m, d);
+ // v531: воскресенье (getDay()===0) — пропускаем, не добавляем колонку
+ if(date.getDay() === 0){ d++; continue; }
  var ds = crmDateStr(date);
  var muted = date.getMonth() !== m;
  var isToday = ds === today;
@@ -30769,6 +30815,15 @@ function crmCalRenderDay(){
  var listEl = document.getElementById('tt-list');
  if(!listEl) return;
  var date = crmCalState.viewDate || crmDateStr(new Date());
+ // v531: если попали в Вс — переключаемся на ближайший Пн и перерисовываем
+ try {
+  var dCheck = new Date(date+'T00:00:00');
+  if(dCheck.getDay() === 0){
+   dCheck.setDate(dCheck.getDate() + 1);
+   date = crmDateStr(dCheck);
+   crmCalState.viewDate = date;
+  }
+ } catch(_){}
  var dayTasks = crmEventsAll().filter(function(e){ return e.date === date; }).sort(function(a,b){ return (a.time_start||'').localeCompare(b.time_start||''); });
  var byHour = {};
  var allDayTasks = [];
@@ -30831,6 +30886,14 @@ window.crmCalDragStartTask = function(ev, taskId){
 window.crmCalDropOnDate = function(date, ev){
  var taskId = ev.dataTransfer.getData('text/task-id');
  if(!taskId) return;
+ // v531: если каким-то образом drop попал в воскресенье — двигаем на Пн
+ try {
+  var dCheck = new Date(date+'T00:00:00');
+  if(dCheck.getDay() === 0){
+   dCheck.setDate(dCheck.getDate() + 1);
+   date = crmDateStr(dCheck);
+  }
+ } catch(_){}
  var all = crmEventsAll();
  var t = all.find(function(x){ return x.id === taskId; });
  if(!t) return;
@@ -30909,6 +30972,14 @@ function ttQaIcon(name){
 
 function ttQuickAddOpen(date, hour, anchorEv){
  ttQaCloseAll();
+ // v531: воскресенье недопустимо — двигаем на ближайший понедельник
+ try {
+  var dCheck = new Date(date+'T00:00:00');
+  if(dCheck.getDay() === 0){
+   dCheck.setDate(dCheck.getDate() + 1);
+   date = crmDateStr(dCheck);
+  }
+ } catch(_){}
  var startStr = String(hour).padStart(2,'0') + ':00';
  var endH = (hour + 1) > 23 ? 23 : (hour + 1);
  // По дефолту длительность 45 минут (как в TickTick)
@@ -31243,12 +31314,14 @@ function ttDpRenderCal(){
     + '<div class="tt-dp-cal-title">'+kbEsc(monthName)+'</div>'
     + '<button class="tt-mini-arrow" type="button" onclick="ttDpNavMonth(1)">&rsaquo;</button>'
    + '</div>'
-   + '<table><thead><tr><th>пн</th><th>вт</th><th>ср</th><th>чт</th><th>пт</th><th>сб</th><th>вс</th></tr></thead><tbody>';
+   + '<table><thead><tr><th>пн</th><th>вт</th><th>ср</th><th>чт</th><th>пт</th><th>сб</th></tr></thead><tbody>';
  var d = 1 - startDay;
  for(var w = 0; w < 6; w++){
   html += '<tr>';
   for(var dow = 0; dow < 7; dow++){
    var dt = new Date(y, m, d);
+   // v531: воскресенье пропускаем
+   if(dt.getDay() === 0){ d++; continue; }
    var ds = crmDateStr(dt);
    var cls = '';
    if(dt.getMonth() !== m) cls = 'muted';
@@ -31275,6 +31348,14 @@ function ttDpNavMonth(delta){
 
 function ttDpSetDate(ds){
  if(!window._ttDp) return;
+ // v531: воскресенье недопустимо — двигаем на ближайший понедельник
+ try {
+  var dCheck = new Date(ds+'T00:00:00');
+  if(dCheck.getDay() === 0){
+   dCheck.setDate(dCheck.getDate() + 1);
+   ds = crmDateStr(dCheck);
+  }
+ } catch(_){}
  var s = window._ttDp.state;
  s.date = ds;
  s.view_y = parseInt(ds.slice(0,4), 10);
@@ -31428,6 +31509,8 @@ function crmCalRenderList(){
  var html = '';
  keys.forEach(function(k){
  var d = k === 'nodate' ? null : new Date(k+'T00:00:00');
+ // v531: воскресенья не показываем в Списке (рабочая неделя Пн-Сб)
+ if(d && d.getDay() === 0) return;
  var dnum = d ? d.getDate() : '&#8709;';
  var dmon = d ? d.toLocaleDateString('ru-RU',{weekday:'long',month:'long'}) : 'Без даты';
  var rel = '';
@@ -31452,12 +31535,15 @@ function crmCalRenderMiniCal(){
  var hasDates = {};
  crmEventsAll().forEach(function(e){ if(e.date && e.status !== 'done') hasDates[e.date] = true; });
  var html = '<div class="tt-mini-head"><button class="tt-mini-arrow" onclick="crmCalMiniNav(-1)" title="Предыдущий месяц">&lsaquo;</button><div class="tt-mini-month">'+first.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})+'</div><button class="tt-mini-arrow" onclick="crmCalMiniNav(1)" title="Следующий месяц">&rsaquo;</button></div>';
- html += '<table><thead><tr><th>пн</th><th>вт</th><th>ср</th><th>чт</th><th>пт</th><th>сб</th><th>вс</th></tr></thead><tbody>';
+ // v531: воскресенья убраны — 6 колонок Пн-Сб
+ html += '<table><thead><tr><th>пн</th><th>вт</th><th>ср</th><th>чт</th><th>пт</th><th>сб</th></tr></thead><tbody>';
  var d = 1 - startDay;
  for(var w = 0; w < 6; w++){
  html += '<tr>';
  for(var dow = 0; dow < 7; dow++){
  var date = new Date(y, m, d);
+ // v531: воскресенье пропускаем
+ if(date.getDay() === 0){ d++; continue; }
  var ds = crmDateStr(date);
  var cls = (date.getMonth() !== m) ? 'muted' : (ds === today ? 'today' : (hasDates[ds] ? 'has' : ''));
  html += '<td class="'+cls+'" onclick="crmCalSetViewDate(\''+ds+'\');crmCalSetViewMode(\'day\')">'+date.getDate()+'</td>';
@@ -31529,8 +31615,9 @@ function crmCalRenderWeek(){
  var monday = new Date(base);
  monday.setDate(base.getDate() - dow);
  var today = crmDateStr(new Date());
+ // v531: воскресенья отключены — 6 дней Пн-Сб
  var weekDates = [];
- for(var i = 0; i < 7; i++){
+ for(var i = 0; i < 6; i++){
  var d = new Date(monday);
  d.setDate(monday.getDate() + i);
  weekDates.push(d);
@@ -31540,7 +31627,7 @@ function crmCalRenderWeek(){
  if(!e.date) return;
  (byDay[e.date] = byDay[e.date] || []).push(e);
  });
- var dayNames = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+ var dayNames = ['Пн','Вт','Ср','Чт','Пт','Сб'];
  var html = '<div class="tt-week-nav">'
  + '<button class="tt-mini-arrow" onclick="crmCalNavWeek(-1)" title="Предыдущая неделя">&lsaquo;</button>'
  + '<button class="tt-today-btn" onclick="crmCalSetViewDate(\''+today+'\')">Сегодня</button>'
