@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v528</title>
+<title>SalesDoc — Финансовый Дашборд v529</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21421,7 +21421,7 @@ function intgRender() {
     html += '<div style="font-weight:600;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1' + (r.status==='Отменено'?';text-decoration:line-through;opacity:.55':'') + '">' + _escHtml(r.company || '—') + '</div>';
     html += '<div style="display:flex;gap:3px;flex-shrink:0">' + typeBadge + countryBadge + '</div></div>';
     html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;color:var(--text-soft)">';
-    html += '<span>' + (r.operator && r.operator !== '—' ? _escHtml(r.operator) : '<span style="color:#D67373">не назначен</span>') + '</span>';
+    html += '<span>' + (r.operator && r.operator !== '—' ? _escHtml(r.operator) : '<span style="font-size:10.5px;font-weight:500;padding:2px 8px;border-radius:999px;background:rgba(120,120,128,.14);color:var(--text-muted)">не назначен</span>') + '</span>';
     html += pkgBadge;
     html += '</div>';
     if(dlBadge) html += '<div style="display:flex;justify-content:flex-end">' + dlBadge + '</div>';
@@ -21906,13 +21906,14 @@ function intgSbRender(items){
     // Карта клиента у этих клиентов почти пустая — интегратору нужны свои поля.
     var clickAttr = 'onclick="intgOpenCard(\'' + _escHtml(r.id) + '\')"';
     html += '<div ' + clickAttr + ' onmouseover="this.style.background=\'var(--ds-glass-card-hover)\';this.style.transform=\'translateY(-1px)\';this.style.borderColor=\'var(--ds-glass-border-bright)\'" onmouseout="this.style.background=\'var(--ds-glass-card)\';this.style.transform=\'\';this.style.borderColor=\'var(--ds-glass-border)\'" style="background:var(--ds-glass-card);backdrop-filter:saturate(180%) blur(12px);-webkit-backdrop-filter:saturate(180%) blur(12px);border:1px solid var(--ds-glass-border);border-radius:14px;padding:12px 14px;cursor:pointer;transition:background .2s,transform .2s,border-color .2s;box-shadow:0 4px 16px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.06)">';
-    html += '<div style="margin-bottom:4px;font-weight:600;font-size:13px;color:var(--accent,#34C77A)">' + _escHtml(r.company_name || '—') + '</div>';
-    if(typePkg) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(typePkg) + '</div>';
+    // v528: единый нейтральный стиль. Имя — основной цвет текста (без accent-зелёного),
+    // тип/пакет — text-soft, «не назначен» — нейтральный pill, а не красный (на 90% карточек он бы орал).
+    html += '<div style="margin-bottom:4px;font-weight:700;font-size:13px;color:var(--text);letter-spacing:-0.005em">' + _escHtml(r.company_name || '—') + '</div>';
+    if(typePkg) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:8px">' + _escHtml(typePkg) + '</div>';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft);gap:6px;flex-wrap:wrap">';
-    // v445: pill «не назначен» вместо красного текста — единый паттерн с канбаном Маршрута
     var intgOpCell = r.operator
      ? '<span>' + _escHtml(r.operator) + '</span>'
-     : '<span style="font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(214,115,115,.14);color:#D67373">не назначен</span>';
+     : '<span style="font-size:10.5px;font-weight:500;padding:2px 8px;border-radius:999px;background:rgba(120,120,128,.14);color:var(--text-muted)">не назначен</span>';
     html += intgOpCell;
     if(dlBadge) html += '<span>' + dlBadge + '</span>';
     html += '</div></div>';
@@ -25364,13 +25365,13 @@ function routeRender(){
    }
    // v366: карточка — Liquid Glass (стекло поверх стекла колонки = двойное преломление)
    html += '<div draggable="true" ondragstart="routeDragStart(\'' + card.id + '\')" ondragend="routeDragEnd(this)" onmouseover="this.style.background=\'var(--ds-glass-card-hover)\';this.style.transform=\'translateY(-1px)\';this.style.borderColor=\'var(--ds-glass-border-bright)\'" onmouseout="this.style.background=\'var(--ds-glass-card)\';this.style.transform=\'\';this.style.borderColor=\'var(--ds-glass-border)\'" style="background:var(--ds-glass-card);backdrop-filter:saturate(180%) blur(12px);-webkit-backdrop-filter:saturate(180%) blur(12px);border:1px solid var(--ds-glass-border);border-radius:14px;padding:12px 14px;cursor:grab;transition:background .2s,transform .2s,border-color .2s;box-shadow:0 4px 16px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.06)">';
-   html += '<div style="margin-bottom:4px"><a onclick="event.stopPropagation();routeOpenCard(\'' + card.id + '\')" style="font-weight:600;font-size:13px;color:var(--accent,#34C77A);cursor:pointer;text-decoration:none" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + _escHtml(name) + '</a></div>';
-   if(card.tariff) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:6px">' + _escHtml(card.tariff) + '</div>';
+   // v528: единый нейтральный стиль (как в Интеграциях). Имя — основной цвет текста, без accent-зелёного.
+   html += '<div style="margin-bottom:4px"><a onclick="event.stopPropagation();routeOpenCard(\'' + card.id + '\')" style="font-weight:700;font-size:13px;color:var(--text);cursor:pointer;text-decoration:none;letter-spacing:-0.005em" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + _escHtml(name) + '</a></div>';
+   if(card.tariff) html += '<div style="font-size:11px;color:var(--text-soft);margin-bottom:8px">' + _escHtml(card.tariff) + '</div>';
    html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-soft);gap:6px;flex-wrap:wrap">';
-   // v445: pill «не назначен» вместо тире — заметно но без accent-полоски
    var opCell = card.operator
     ? '<span>' + _escHtml(card.operator) + '</span>'
-    : '<span style="font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(214,115,115,.14);color:#D67373">не назначен</span>';
+    : '<span style="font-size:10.5px;font-weight:500;padding:2px 8px;border-radius:999px;background:rgba(120,120,128,.14);color:var(--text-muted)">не назначен</span>';
    html += opCell + '<span style="display:flex;align-items:center;gap:6px">' + dayBadge + checkBadge + '</span>';
    html += '</div>';
    // v524: «Звонок» убран — tel: на десктопе бесполезен. WhatsApp на всю ширину.
