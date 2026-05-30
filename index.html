@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v541</title>
+<title>SalesDoc — Финансовый Дашборд v542</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7537,9 +7537,19 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
     </div>
     <div id="ticket-card-desc-box" class="tk-desc-box"></div>
     <div id="ticket-card-feed" class="amocard-feed tk-feed"></div>
+    <!-- v541: AI-предложение ответа клиенту. Появляется по клику «Подсказать» — над composer. -->
+    <div id="ticket-ai-suggest" style="display:none;margin:8px 14px 0;padding:12px;background:rgba(120,80,255,.08);border:1px solid rgba(120,80,255,.18);border-radius:10px">
+     <div style="font-size:10.5px;font-weight:700;color:#9E7BFF;letter-spacing:.6px;margin-bottom:6px">ПОМОЩНИК ПРЕДЛАГАЕТ</div>
+     <div id="ticket-ai-text" style="font-size:13px;color:var(--text);line-height:1.5;white-space:pre-wrap;margin-bottom:10px">…</div>
+     <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button type="button" onclick="ticketAiUse()" class="tt-mode-btn" style="padding:5px 12px;font-size:11px">Использовать</button>
+      <button type="button" onclick="ticketAiRephrase()" class="tt-mode-btn" style="padding:5px 12px;font-size:11px">Перефразировать</button>
+      <button type="button" onclick="ticketAiHide()" class="tt-mode-btn" style="padding:5px 12px;font-size:11px;margin-left:auto">Скрыть</button>
+     </div>
+    </div>
     <!-- v539: input → textarea для нормального многострочного комментария. Ctrl/Cmd+Enter — отправить. Shift+Enter — новая строка. Author = currentUser.name (не «оператор» строкой). -->
     <div class="amocard-chat-input">
-     <span class="amocard-chat-select"><b>Заметка</b></span>
+     <span class="amocard-chat-select" style="display:inline-flex;align-items:center;gap:8px"><b>Заметка</b><button type="button" id="ticket-ai-btn" onclick="ticketAiAsk()" title="Попросить AI подсказать ответ клиенту" style="padding:4px 10px;font-size:11px;font-weight:600;background:rgba(120,80,255,.12);color:#9E7BFF;border:1px solid rgba(120,80,255,.30);border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/></svg>Подсказать</button></span>
      <textarea id="ticket-comment-text" rows="2" placeholder="Внутренняя заметка — клиент это НЕ увидит. Ctrl+Enter — отправить" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();ticketCommentSend();}" style="resize:vertical;min-height:36px;max-height:200px;font-family:inherit"></textarea>
      <button id="ticket-comment-send" class="amocard-send" onclick="ticketCommentSend()" title="Отправить (Ctrl+Enter)">&rarr;</button>
     </div>
@@ -26674,6 +26684,66 @@ async function _ticketLoadComments(){
   var err = document.createElement('div'); err.className = 'amocard-empty'; err.textContent = 'Ошибка загрузки: ' + e.message;
   feedEl.appendChild(err);
  }
+}
+
+// v541: AI-suggested response — кнопка «Подсказать» вызывает /api/chat (агент support_responder),
+// показывает предложение в блоке #ticket-ai-suggest над composer. Использовать/Перефразировать/Скрыть.
+async function ticketAiAsk(rephrase){
+ if(!_ticketCurrentTicket) return;
+ var btn = document.getElementById('ticket-ai-btn');
+ var box = document.getElementById('ticket-ai-suggest');
+ var textEl = document.getElementById('ticket-ai-text');
+ if(!btn || !box || !textEl) return;
+ var origBtnHtml = btn.innerHTML;
+ btn.disabled = true;
+ btn.innerHTML = '<span style="opacity:.7">Думаю…</span>';
+ try {
+  var t = _ticketCurrentTicket;
+  var cl = t.clients || {};
+  var commentsResp = await sbFetch('/api/cards?entity=ticket_comment&ticket_id=' + encodeURIComponent(t.id));
+  var comments = (commentsResp && commentsResp.ok && commentsResp.comments) ? commentsResp.comments : [];
+  var commentsText = comments.map(function(c){ return (c.author || 'неизв.') + ': ' + (c.text || ''); }).join('\n');
+  var prompt = 'Тикет: ' + (t.title || '(без темы)')
+   + '\nКлиент: ' + (cl.company_name || t.client_id || '—')
+   + '\nПриоритет: ' + (t.priority || 'обычный')
+   + (t.category ? '\nКатегория: ' + t.category : '')
+   + '\n\nОписание:\n' + (t.description || '(нет описания)')
+   + '\n\nИстория комментариев:\n' + (commentsText || '(комментариев нет)')
+   + '\n\nПредложи готовый ответ клиенту (1-3 предложения, сразу к делу).'
+   + (rephrase ? '\n\nПерефразируй предыдущий вариант — другими словами, тот же смысл.' : '');
+  var resp = await fetch('/api/chat', {
+   method: 'POST',
+   headers: { 'Content-Type': 'application/json', 'x-app-token': (typeof APP_TOKEN !== 'undefined' ? APP_TOKEN : '') },
+   body: JSON.stringify({
+    agentId: 'support_responder',
+    userEmail: ((typeof currentUser !== 'undefined' && currentUser && currentUser.email) || ''),
+    messages: [{ role: 'user', content: prompt }]
+   })
+  });
+  var data = await resp.json();
+  if(!resp.ok || !data.reply){
+   if(typeof showNotif === 'function') showNotif('Помощник', 'Не получилось — попробуй ещё раз: ' + (data.error || resp.status));
+   return;
+  }
+  textEl.textContent = String(data.reply).trim();
+  box.style.display = 'block';
+ } catch(e){
+  if(typeof showNotif === 'function') showNotif('Помощник', 'Ошибка сети: ' + (e.message || e));
+ } finally {
+  btn.disabled = false;
+  btn.innerHTML = origBtnHtml;
+ }
+}
+function ticketAiUse(){
+ var ta = document.getElementById('ticket-comment-text');
+ var textEl = document.getElementById('ticket-ai-text');
+ if(ta && textEl){ ta.value = textEl.textContent || ''; ta.focus(); }
+ ticketAiHide();
+}
+function ticketAiRephrase(){ ticketAiAsk(true); }
+function ticketAiHide(){
+ var box = document.getElementById('ticket-ai-suggest');
+ if(box) box.style.display = 'none';
 }
 
 async function ticketCommentSend(){

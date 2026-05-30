@@ -212,11 +212,16 @@ export default async function handler(req, res) {
     // v151 SECURITY: серверная защита — Финансист только для CEO.
     // Это страховка на случай, если фронт обойдут. Список можно расширить
     // через ENV ASSISTANT_ALLOWED_EMAILS (через запятую).
-    const allowedRaw = process.env.ASSISTANT_ALLOWED_EMAILS || 'office@salesdoc.io';
-    const allowed = allowedRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    const callerEmail = String(userEmail || '').trim().toLowerCase();
-    if (!callerEmail || allowed.indexOf(callerEmail) === -1) {
-      return res.status(403).json({ error: 'Доступ запрещён: ассистент доступен только определённым пользователям.' });
+    // v541: исключение для support_responder — этот агент нужен ВСЕМ операторам поддержки.
+    // Авторизация уже проверена через checkAuth (x-app-token); дополнительной email-проверки не нужно.
+    const SUPPORT_AGENTS = ['support_responder'];
+    if (SUPPORT_AGENTS.indexOf(agentId) === -1) {
+      const allowedRaw = process.env.ASSISTANT_ALLOWED_EMAILS || 'office@salesdoc.io';
+      const allowed = allowedRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      const callerEmail = String(userEmail || '').trim().toLowerCase();
+      if (!callerEmail || allowed.indexOf(callerEmail) === -1) {
+        return res.status(403).json({ error: 'Доступ запрещён: ассистент доступен только определённым пользователям.' });
+      }
     }
 
     const cfg = loadAgents();
