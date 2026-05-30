@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v545</title>
+<title>SalesDoc — Финансовый Дашборд v546</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20108,7 +20108,10 @@ function planRender(data) {
  var statusKey = pct >= 100 ? 'done' : pct >= 80 ? 'good' : pct >= 50 ? 'warn' : 'bad';
  var statusColors = {done:'#7FB89E', good:'#7FB89E', warn:'#D6A372', bad:'#D67373'};
  var statusColor = statusColors[statusKey];
- var monthIdx = (typeof planTabIdx === 'number') ? planTabIdx : new Date().getMonth();
+ // v546 fix: брать месяц из глобального selectedMonth (топбар), а не из planTabIdx (тот всегда 0 = январь)
+ var monthIdx = (typeof selectedMonth !== 'undefined' && selectedMonth && typeof selectedMonth.month === 'number')
+  ? selectedMonth.month
+  : ((typeof planTabIdx === 'number') ? planTabIdx : new Date().getMonth());
  var monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
  var monthName = monthNames[monthIdx] || '';
  var monthClosed = (data.workDays > 0 && data.doneDays >= data.workDays);
