@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v549</title>
+<title>SalesDoc — Финансовый Дашборд v550</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -33119,7 +33119,30 @@ function acRender(){
  if(tbl){
   var thead = '<thead><tr><th>Клиент</th><th>Хост</th><th class="num">Польз.</th><th class="num">Абонплата</th><th>Оператор</th><th>Доступ до</th><th>Риск</th><th>Теги</th><th>Действия</th></tr></thead><tbody>';
   if(!filtered.length){
-   tbl.innerHTML = thead + '<tr><td colspan="9" class="sd-empty">Нет клиентов по фильтру</td></tr></tbody>';
+   // v550: понятное сообщение вместо «Нет клиентов по фильтру».
+   // Корень: данные платежей в коде статичны (январь-март 2026), апрель-май лежат в Supabase
+   // (не читаются — Фаза 4 миграции). Все active-подписки истекли → showChurned=false режет их.
+   var anyFilterActive = !!(acState.operator || acState.risk || acState.tag || acState.segment || acState.search);
+   var msg;
+   if(anyFilterActive){
+    msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
+        + '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Под этот фильтр ничего не подходит</div>'
+        + '<div style="font-size:12px;margin-bottom:14px">Из ' + all.length + ' клиентов после фильтрации не осталось ни одного</div>'
+        + '<button onclick="acResetFilters()" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Сбросить все фильтры</button>'
+        + '</div>';
+   } else {
+    // Нет фильтров, но и клиентов нет — значит у всех истекла подписка (accessStatus=churned/never)
+    var churnedN = all.filter(function(c){ return c.accessStatus === 'churned'; }).length;
+    var neverN = all.filter(function(c){ return c.accessStatus === 'never'; }).length;
+    msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
+        + '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Нет действующих подписок</div>'
+        + '<div style="font-size:12px;margin-bottom:14px;line-height:1.5">У всех ' + all.length + ' клиентов подписка истекла (' + churnedN + ' отвалившихся) или ни одной оплаты ещё не было (' + neverN + ').<br>Свежие платежи апреля-мая 2026 пока не подгружаются (ждут Фазы 4 миграции).</div>'
+        + '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
+        + '<button onclick="document.getElementById(\'ac-filter-churned\').checked=true;acSetShowChurned(true);" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Показать отвалившихся (' + churnedN + ')</button>'
+        + (neverN ? '<button onclick="document.getElementById(\'ac-filter-nosub\').checked=true;acSetShowNoSub(true);" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Показать без подписки (' + neverN + ')</button>' : '')
+        + '</div></div>';
+   }
+   tbl.innerHTML = thead + '<tr><td colspan="9" style="padding:0;background:transparent">' + msg + '</td></tr></tbody>';
   } else {
    var groups = {};
    AC_SEGMENTS.forEach(function(s){ groups[s.key] = []; });
