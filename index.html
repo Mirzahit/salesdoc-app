@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v540</title>
+<title>SalesDoc — Финансовый Дашборд v541</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7329,6 +7329,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="sd-sub">Активированные клиенты, риск отвала, абонплата, теги</div>
  </div>
  <div class="sd-filters">
+ <input type="search" id="ac-filter-search" placeholder="Поиск по имени или хосту..." oninput="acSetSearch(this.value)" style="padding:7px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2);color:var(--text);font-size:13px;min-width:240px;flex:1 1 240px;font-family:inherit">
  <select class="sd-select" id="ac-filter-op" onchange="acSetOperator(this.value)">
  <option value="">Все операторы</option>
  </select>
@@ -32341,7 +32342,7 @@ function supportChartAging(cards){
 // ============================================================
 var AC_TAGS_KEY = 'crm_client_tags';
 var AC_KZ_CACHE = null;
-var acState = { operator: '', risk: '', tag: '', segment: '', showChurned: false, showNoSub: false };
+var acState = { operator: '', risk: '', tag: '', segment: '', showChurned: false, showNoSub: false, search: '' };
 
 // v253: сегменты клиентов по кол-ву пользователей (qty)
 var AC_SEGMENTS = [
@@ -32863,6 +32864,8 @@ function acSetTag(t){ acState.tag = t || ''; acRender(); }
 function acSetSegment(s){ acState.segment = s || ''; acRender(); }
 function acSetShowChurned(v){ acState.showChurned = !!v; acRender(); }
 function acSetShowNoSub(v){ acState.showNoSub = !!v; acRender(); }
+// v541: поиск по имени клиента/хосту в Действующих
+function acSetSearch(s){ acState.search = (s || '').trim().toLowerCase(); acRender(); }
 // v304: ручная перезагрузка 2025 (на случай если что-то реально добавили)
 function acReloadPrior(){
  var btn = document.getElementById('ac-reload-prior-btn');
@@ -32915,6 +32918,11 @@ function acRender(){
  // v302: по умолчанию скрываем тех, у кого вообще не было подписочных платежей —
  // это шум (старые клиенты без оплат, тестовые записи, клиенты только на услугах)
  if(!acState.showNoSub && c.accessStatus === 'never') return false;
+ // v541: фильтр по поисковой строке (имя клиента или хост)
+ if(acState.search){
+  var hay = ((c.name||'') + ' ' + (c.host||'') + ' ' + (c.client_id||'')).toLowerCase();
+  if(hay.indexOf(acState.search) < 0) return false;
+ }
  return true;
  });
 
