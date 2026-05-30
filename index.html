@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v546</title>
+<title>SalesDoc — Финансовый Дашборд v547</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20171,7 +20171,8 @@ function planRender(data) {
  heroParts.push('<div class="phb-mark" style="left:' + paceMark + '%" title="Где должны быть по дням (' + data.doneDays + '/' + data.workDays + ')"></div>');
  }
  heroParts.push('</div>');
- heroParts.push('<div class="phb-meta"><span>0 ' + _CUR + '</span><span class="phb-meta-mid">' + daysLine + '</span><span>' + planStr + ' ' + _CUR + '</span></div>');
+ // v547: убран лишний «0 ₸» слева под прогресс-баром — он сбивал с толку (читался как баг при ненулевом факте)
+ heroParts.push('<div class="phb-meta"><span></span><span class="phb-meta-mid">' + daysLine + '</span><span>' + planStr + ' ' + _CUR + '</span></div>');
  heroParts.push('</div>');
  heroParts.push('</div>');
  sumBar.textContent = '';
@@ -20271,9 +20272,18 @@ function planRender(data) {
  }
  }
  if (isManager && salesKpi && !isSkip && canSeeSalary) {
- var bonusInfo = calcManagerBonus(agent.name, salesKpi.plan, salesKpi.fact, planTabIdx, salesKpi.pct, agent.kpis);
+ // v547 fix: tabIdx считаем из selectedMonth (топбар), иначе бонусы и штрафы могут зависнуть на январе
+ var _bonusTabIdx = planTabIdx;
+ try {
+ if (typeof selectedMonth !== 'undefined' && selectedMonth && typeof selectedMonth.month === 'number') {
+ for (var _ti = 0; _ti < PLAN_TABS.length; _ti++) {
+ if (PLAN_TABS[_ti].year === selectedMonth.year && PLAN_TABS[_ti].month === selectedMonth.month) { _bonusTabIdx = _ti; break; }
+ }
+ }
+ } catch(_) {}
+ var bonusInfo = calcManagerBonus(agent.name, salesKpi.plan, salesKpi.fact, _bonusTabIdx, salesKpi.pct, agent.kpis);
  // bonusId привязан к месяцу чтобы штрафы не переносились
- var bonusId = 'bonus-' + agent.name.replace(/[^a-zа-яё0-9]/gi,'') + '-' + planTabIdx;
+ var bonusId = 'bonus-' + agent.name.replace(/[^a-zа-яё0-9]/gi,'') + '-' + _bonusTabIdx;
  window['_bonusData_' + bonusId] = bonusInfo;
  window['_bonusMeta_' + bonusId] = {name:agent.name, plan:salesKpi.plan, fact:salesKpi.fact, pct:salesKpi.pct, kpis:agent.kpis};
  var penalty = (window._bonusPenalties && window._bonusPenalties[bonusId]) || 0;
@@ -20701,6 +20711,15 @@ async function planLoad() {
  if (st) st.textContent = 'Загрузка...';
  if (btn) { btn.disabled = true; btn.classList.add('btn-loading'); }
 
+ // v547 fix: ресинк planTabIdx из selectedMonth (топбар) — гарантия что
+ // загружаем лист именно за выбранный месяц, а не за зависший январь.
+ try {
+ if (typeof selectedMonth !== 'undefined' && selectedMonth && typeof selectedMonth.month === 'number') {
+ for (var _pi = 0; _pi < PLAN_TABS.length; _pi++) {
+ if (PLAN_TABS[_pi].year === selectedMonth.year && PLAN_TABS[_pi].month === selectedMonth.month) { planTabIdx = _pi; break; }
+ }
+ }
+ } catch(_) {}
  var tab = PLAN_TABS[planTabIdx] || PLAN_TABS[0];
  var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
  // v272: пробуем несколько вариантов имени листа — пользователь может назвать
@@ -20789,6 +20808,14 @@ function expInit() {
 async function expLoad() {
  var st = document.getElementById('exp-status');
  if (st) st.textContent = 'Загрузка расходов...';
+ // v547 fix: ресинк expTabIdx из selectedMonth (топбар)
+ try {
+ if (typeof selectedMonth !== 'undefined' && selectedMonth && typeof selectedMonth.month === 'number') {
+ for (var _ei = 0; _ei < EXP_TABS.length; _ei++) {
+ if (EXP_TABS[_ei].year === selectedMonth.year && EXP_TABS[_ei].month === selectedMonth.month) { expTabIdx = _ei; break; }
+ }
+ }
+ } catch(_) {}
  var tab = EXP_TABS[expTabIdx] || EXP_TABS[0];
  var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
  var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(tab.name) + '&spreadsheetId=' + EXP_SHEET_ID + '&range=A1:E100';
