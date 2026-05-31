@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v572</title>
+<title>SalesDoc — Финансовый Дашборд v573</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18084,7 +18084,13 @@ window.planOpenSprint = function(id){
  var totalDays = planDaysBetween(sp.start, sp.end);
  var dayN = planDayOf(sp.start);
  document.getElementById('plan-sprint-meta').textContent = planFmtDate(sp.start) + ' — ' + planFmtDate(sp.end) + ' · День ' + dayN + ' из ' + totalDays + ' · ' + (sp.teamNames || '—');
- document.getElementById('view-plan-sprint').style.display = 'block';
+ // v573: переносим overlay в body + скрываем родительский view-planning (как в mktOpenTargetPage)
+ var ov = document.getElementById('view-plan-sprint');
+ if(ov && ov.parentNode !== document.body) document.body.appendChild(ov);
+ var planView = document.getElementById('view-planning');
+ if(planView) planView.style.setProperty('display','none','important');
+ document.body.classList.add('has-overlay');
+ ov.style.display = 'block';
  planRenderKanban();
  // v169: Burndown + Velocity + Ретро (если архив)
  var tasks = planTasksOfSprint(id);
@@ -18094,6 +18100,9 @@ window.planOpenSprint = function(id){
 };
 window.planCloseSprint = function(){
  document.getElementById('view-plan-sprint').style.display = 'none';
+ document.body.classList.remove('has-overlay');
+ var planView = document.getElementById('view-planning');
+ if(planView) planView.style.setProperty('display','block','important');
  _planCurrentSprintId = null;
  // Перерисовать карточку снаружи (могли поменяться счётчики)
  if (typeof planningRender === 'function') planningRender();
