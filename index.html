@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v570</title>
+<title>SalesDoc — Финансовый Дашборд v571</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5232,26 +5232,29 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 </style>
 </head>
 <body>
-<!-- v570: ранний inline-скрипт переноса overlay'ев в body. Срабатывает ДО любого другого JS,
-     гарантирует что position:fixed работает (не блокируется transform родителя). -->
+<!-- v571: ранний inline-скрипт. ВАЖНО: вешаем на DOMContentLoaded и window.load безусловно —
+     иначе на момент выполнения этого скрипта элементы overlay'ев ещё не отрендерены ниже в HTML. -->
 <script>
 (function _earlyDetachOverlays(){
- // Дожидаемся загрузки DOM, потом переносим
  function detach(){
   try {
    var els = document.querySelectorAll('.sd-overlay-screen');
+   var moved = 0;
    for(var i = 0; i < els.length; i++){
     if(els[i].parentNode !== document.body){
      document.body.appendChild(els[i]);
+     moved++;
     }
    }
-  } catch(_){}
+   if(moved > 0) console.log('[overlay-detach] moved ' + moved + ' overlays to body');
+  } catch(e){ console.warn('[overlay-detach] error:', e); }
  }
- if(document.readyState === 'loading'){
-  document.addEventListener('DOMContentLoaded', detach);
- } else {
-  detach();
- }
+ // Срабатывает на трёх событиях для гарантии: DOMContentLoaded, load, и setTimeout
+ document.addEventListener('DOMContentLoaded', detach);
+ window.addEventListener('load', detach);
+ setTimeout(detach, 100);
+ setTimeout(detach, 500);
+ setTimeout(detach, 2000);
 })();
 </script>
 <div id="sd-splash" aria-hidden="true">
@@ -37288,11 +37291,13 @@ function kbSaveTasksToSheet(card) {
 // МАРКЕТИНГ — НАВИГАЦИЯ ПО ПОДСТРАНИЦАМ
 // ============================================================
 function mktOpenTargetPage() {
- // v568: НЕ скрываем родителя view-marketing — overlay-screen position:fixed; z-index:99999
- // сам ложится поверх. Скрытие родителя через display:none ломало рендер дочернего
- // view-mkt-target (он вложен в view-marketing).
+ // v571: сначала переносим overlay в body (если ещё не там), потом скрываем родителя.
+ var ov = document.getElementById('view-mkt-target');
+ if(ov && ov.parentNode !== document.body) document.body.appendChild(ov);
+ var mkt = document.getElementById('view-marketing');
+ if(mkt) mkt.style.setProperty('display','none','important');
  document.body.classList.add('has-overlay');
- document.getElementById('view-mkt-target').style.display = 'block';
+ ov.style.display = 'block';
  // v451: сразу подписать активный пилл реальными датами, чтобы поле не было пустым
  var rangeEl = document.getElementById('meta-period-range');
  if(rangeEl && typeof window._mktPeriodToHumanRange === 'function'){
@@ -37315,7 +37320,9 @@ function mktOpenTargetPage() {
 function mktCloseTargetPage() {
  document.getElementById('view-mkt-target').style.display = 'none';
  document.body.classList.remove('has-overlay');
- // v568: больше не восстанавливаем view-marketing — он и не скрывался при открытии
+ // v571: показываем view-marketing обратно
+ var mkt = document.getElementById('view-marketing');
+ if(mkt) mkt.style.setProperty('display','block','important');
 }
 
 function mktOpenLtvPage() {
