@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v557</title>
+<title>SalesDoc — Финансовый Дашборд v558</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13026,8 +13026,25 @@ document.addEventListener('keydown', function(ev){
  // (их состояние требует загруженных данных, которые подтягиваются после)
  try {
   var initHash = (location.hash || '').replace(/^#/, '');
-  if(initHash && /^(kbcard|ticket|route|card)\//.test(initHash)){
-   // Hash — на overlay. Просто пишем заглушку — пользователь сам перейдёт куда нужно
+  if(initHash && /^route\//.test(initHash)){
+   // v558: deep-link на карту клиента — открываем view-route, затем routeOpenClient.
+   // Ждём пока загрузятся базовые данные.
+   var clientId = initHash.replace(/^route\//, '');
+   try { clientId = decodeURIComponent(clientId); } catch(_){}
+   history.replaceState({ kind:'routecard', id:clientId }, '', location.hash);
+   var _tries = 0;
+   var _interval = setInterval(function(){
+    _tries++;
+    if(typeof window.routeOpenClient === 'function'){
+     clearInterval(_interval);
+     try { window.routeOpenClient(clientId); } catch(e){ console.warn('[deep-link route]', e); }
+    } else if(_tries > 40){
+     clearInterval(_interval);
+     console.warn('[deep-link] routeOpenClient не загрузился за 4 сек');
+    }
+   }, 100);
+  } else if(initHash && /^(kbcard|ticket|card)\//.test(initHash)){
+   // Остальные overlay-хеши пока без deep-link
    history.replaceState({ kind:'view', view:'dashboard' }, '', location.hash);
   } else if(initHash){
    history.replaceState({ kind:'view', view:initHash }, '', location.hash);
