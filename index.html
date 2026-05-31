@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v559</title>
+<title>SalesDoc — Финансовый Дашборд v560</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12662,7 +12662,19 @@ function _loadAvatarFromCloud() {
 function _initialViewAfterLogin(){
  try {
   var h = (location.hash || '').replace(/^#/, '');
-  // overlay-хеши (kbcard/ticket/route/card/...) пропускаем — открыть их надо после загрузки данных
+  // v560: deep-link на карту клиента (#route/CLIENT_ID) — открываем карту overlay после login
+  var routeMatch = h.match(/^route\/(.+)$/);
+  if(routeMatch){
+   var clientId = '';
+   try { clientId = decodeURIComponent(routeMatch[1]); } catch(_){ clientId = routeMatch[1]; }
+   setTimeout(function(){
+    if(typeof window.routeOpenClient === 'function'){
+     try { window.routeOpenClient(clientId); } catch(e){ console.warn('[deep-link route]', e); }
+    }
+   }, 1200);
+   return 'route'; // показываем канбан как fallback view (если карта не откроется — увидит хотя бы канбан)
+  }
+  // overlay-хеши (kbcard/ticket/card/...) пропускаем — открыть их надо после загрузки данных
   if(h && !/^(kbcard|ticket|route|card|client)\//.test(h)){
    // Проверим что такой view существует и доступен текущему юзеру
    if(typeof PERMISSIONS !== 'undefined' && currentUser && currentUser.role){
@@ -32628,48 +32640,61 @@ function acSegmentMeta(key){
  return null;
 }
 
-// v557: загрузка клиентов country-aware. Для KZ — статичный JSON (исторический master-list с monthlySum/monthlyQty).
-// Для KG — Supabase clients (раньше показывались KZ-клиенты независимо от страны топбара).
-// Кэш отдельный per-country, чтобы переключение топбара не путало данные.
+// v557/v560: загрузка клиентов country-aware. Для KZ мерджим статичный JSON (monthlySum/monthlyQty)
+// с Supabase (свежие импортированные). Для KG — только Supabase (179 клиентов).
+// Кэш per-country, чтобы переключение топбара не путало данные.
 var AC_COUNTRY_CACHE = {}; // { KZ: [...], KG: [...] }
-function acLoadKZClients(cb){
+function _acNormForMerge(s){ return String(s||'').toLowerCase().replace(/[^a-zа-яё0-9]/gi,''); }
+async function _acFetchSupabaseClients(country){
+ var token = window._APP_TOKEN || '';
+ try {
+  var r = await fetch('/api/clients?country=' + country + '&limit=2000', { headers: { 'x-app-token': token } });
+  var d = await r.json();
+  if(!d || !d.ok || !Array.isArray(d.clients)) return [];
+  return d.clients;
+ } catch(e){ return []; }
+}
+async function acLoadKZClients(cb){
  var country = (typeof currentCountry !== 'undefined') ? currentCountry : 'KZ';
  if(AC_COUNTRY_CACHE[country]){
   AC_KZ_CACHE = AC_COUNTRY_CACHE[country];
   cb(AC_KZ_CACHE);
   return;
  }
- if(country === 'KZ'){
-  // KZ — статичный JSON
-  fetch('/clients-kz.json?cb='+Date.now()).then(function(r){ return r.json(); }).then(function(data){
-   var items = (data && data.items) ? data.items : [];
-   AC_COUNTRY_CACHE.KZ = items;
-   AC_KZ_CACHE = items;
-   cb(items);
-  }).catch(function(){ AC_COUNTRY_CACHE.KZ = []; AC_KZ_CACHE = []; cb([]); });
- } else {
-  // KG (или другая страна) — Supabase
-  var token = window._APP_TOKEN || '';
-  fetch('/api/clients?country=' + country + '&limit=1000', { headers: { 'x-app-token': token } })
-   .then(function(r){ return r.json(); })
-   .then(function(d){
-    var rows = (d && d.ok && Array.isArray(d.clients)) ? d.clients : [];
-    // Маппим Supabase-формат в формат clients-kz.json (name, host, monthlySum, monthlyQty, operator)
-    var items = rows.map(function(c){
-     return {
-      name: c.company_name || c.client_id,
-      host: c.company_name || c.client_id,
-      monthlySum: 0,         // нет данных по абонплате в clients — TODO подтягивать из payments
-      monthlyQty: 0,         // нет данных по лицензиям
-      operator: c.curator_operator || ''
-     };
-    });
-    AC_COUNTRY_CACHE[country] = items;
-    AC_KZ_CACHE = items;
-    cb(items);
+ // Загружаем оба источника параллельно
+ var staticPromise = (country === 'KZ')
+  ? fetch('/clients-kz.json?cb='+Date.now()).then(function(r){ return r.json(); }).then(function(d){ return (d && d.items) ? d.items : []; }).catch(function(){ return []; })
+  : Promise.resolve([]);
+ var sbPromise = _acFetchSupabaseClients(country);
+ try {
+  var staticItems = await staticPromise;
+  var sbClients = await sbPromise;
+  // Мерджим: static имеет приоритет (там monthlySum/monthlyQty уже посчитаны),
+  // Supabase-клиенты добавляются если их норм-имени нет в static.
+  var seen = {};
+  staticItems.forEach(function(it){ seen[_acNormForMerge(it.name)] = true; seen[_acNormForMerge(it.host)] = true; });
+  var extras = sbClients
+   .filter(function(c){
+    var n = _acNormForMerge(c.company_name);
+    return n && !seen[n];
    })
-   .catch(function(){ AC_COUNTRY_CACHE[country] = []; AC_KZ_CACHE = []; cb([]); });
- }
+   .map(function(c){
+    return {
+     name: c.company_name || c.client_id,
+     host: c.company_name || c.client_id,
+     monthlySum: 0,    // нет данных в clients — заполнится из payments в acGetActiveClients
+     monthlyQty: 0,
+     operator: c.curator_operator || '',
+     _supabase: true,
+     _clientId: c.client_id
+    };
+   });
+  var merged = staticItems.concat(extras);
+  AC_COUNTRY_CACHE[country] = merged;
+  AC_KZ_CACHE = merged;
+  console.log('[acLoadKZClients]', country, ': static=' + staticItems.length, '+ supabase-extra=' + extras.length, '= total=' + merged.length);
+  cb(merged);
+ } catch(e){ AC_COUNTRY_CACHE[country] = []; AC_KZ_CACHE = []; cb([]); }
 }
 
 function acTagsAll(){
