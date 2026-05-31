@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v556</title>
+<title>SalesDoc — Финансовый Дашборд v557</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -9104,6 +9104,9 @@ function switchCountry(code) {
  if (typeof intgData !== 'undefined') intgData = [];
  if (typeof expData !== 'undefined') expData = [];
  Object.keys(SEATED_MAP).forEach(function(k){ delete SEATED_MAP[k]; });
+ // v557: при смене страны сбрасываем AC_KZ_CACHE, чтобы acLoadKZClients подтянул клиентов
+ // нужной страны (KZ→clients-kz.json, KG→Supabase). Иначе на KG показывались KZ-клиенты.
+ AC_KZ_CACHE = null;
  // Пересоздать EXP_TABS для новой страны
  var em = cfg.expMonths || COUNTRY_CONFIG[currentCountry].expMonths;
  EXP_TABS = [];
@@ -32590,12 +32593,48 @@ function acSegmentMeta(key){
  return null;
 }
 
+// v557: загрузка клиентов country-aware. Для KZ — статичный JSON (исторический master-list с monthlySum/monthlyQty).
+// Для KG — Supabase clients (раньше показывались KZ-клиенты независимо от страны топбара).
+// Кэш отдельный per-country, чтобы переключение топбара не путало данные.
+var AC_COUNTRY_CACHE = {}; // { KZ: [...], KG: [...] }
 function acLoadKZClients(cb){
- if(AC_KZ_CACHE){ cb(AC_KZ_CACHE); return; }
- fetch('/clients-kz.json?cb='+Date.now()).then(function(r){ return r.json(); }).then(function(data){
- AC_KZ_CACHE = data && data.items ? data.items : [];
- cb(AC_KZ_CACHE);
- }).catch(function(){ AC_KZ_CACHE = []; cb([]); });
+ var country = (typeof currentCountry !== 'undefined') ? currentCountry : 'KZ';
+ if(AC_COUNTRY_CACHE[country]){
+  AC_KZ_CACHE = AC_COUNTRY_CACHE[country];
+  cb(AC_KZ_CACHE);
+  return;
+ }
+ if(country === 'KZ'){
+  // KZ — статичный JSON
+  fetch('/clients-kz.json?cb='+Date.now()).then(function(r){ return r.json(); }).then(function(data){
+   var items = (data && data.items) ? data.items : [];
+   AC_COUNTRY_CACHE.KZ = items;
+   AC_KZ_CACHE = items;
+   cb(items);
+  }).catch(function(){ AC_COUNTRY_CACHE.KZ = []; AC_KZ_CACHE = []; cb([]); });
+ } else {
+  // KG (или другая страна) — Supabase
+  var token = window._APP_TOKEN || '';
+  fetch('/api/clients?country=' + country + '&limit=1000', { headers: { 'x-app-token': token } })
+   .then(function(r){ return r.json(); })
+   .then(function(d){
+    var rows = (d && d.ok && Array.isArray(d.clients)) ? d.clients : [];
+    // Маппим Supabase-формат в формат clients-kz.json (name, host, monthlySum, monthlyQty, operator)
+    var items = rows.map(function(c){
+     return {
+      name: c.company_name || c.client_id,
+      host: c.company_name || c.client_id,
+      monthlySum: 0,         // нет данных по абонплате в clients — TODO подтягивать из payments
+      monthlyQty: 0,         // нет данных по лицензиям
+      operator: c.curator_operator || ''
+     };
+    });
+    AC_COUNTRY_CACHE[country] = items;
+    AC_KZ_CACHE = items;
+    cb(items);
+   })
+   .catch(function(){ AC_COUNTRY_CACHE[country] = []; AC_KZ_CACHE = []; cb([]); });
+ }
 }
 
 function acTagsAll(){
