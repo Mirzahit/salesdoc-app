@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v564</title>
+<title>SalesDoc — Финансовый Дашборд v565</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1571,6 +1571,19 @@ body.light{
 .topbar{
  background:#1F1F24!important;
  border-bottom:1px solid rgba(255,255,255,.10)!important;
+}
+/* v564: гарантированный сплошной overlay-screen — закрывает родительский view целиком */
+.sd-overlay-screen{
+ background:#0B0B0D!important;
+ isolation:isolate;
+}
+body.light .sd-overlay-screen{
+ background:#FFFFFF!important;
+}
+/* v564: если открыт overlay Маркетинга — view-marketing полностью скрыт (CSS-страховка) */
+body.has-mkt-overlay #view-marketing{
+ display:none!important;
+ visibility:hidden!important;
 }
 body.light .topbar{
  background:#FFFFFF!important;
@@ -6621,7 +6634,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <!-- /FULLSCREEN LTV PAGE -->
 
  <!-- FULLSCREEN TARGET ADS PAGE -->
- <div id="view-mkt-target" style="display:none;position:fixed;inset:0;z-index:9999;background:#0B0B0D;overflow-y:auto">
+ <div id="view-mkt-target" class="sd-overlay-screen" style="display:none;position:fixed;inset:0;z-index:9999;background:#0B0B0D;overflow-y:auto">
  <div class="kbc-header">
  <button class="kbc-back" onclick="mktCloseTargetPage()">&#8592; Маркетинг</button>
  <div class="kbc-title">Таргет: Рекламные кабинеты</div>
@@ -37204,8 +37217,9 @@ function kbSaveTasksToSheet(card) {
 // МАРКЕТИНГ — НАВИГАЦИЯ ПО ПОДСТРАНИЦАМ
 // ============================================================
 function mktOpenTargetPage() {
- // v563: скрываем родительский view-marketing — иначе он просвечивает сквозь overlay (баг прозрачности)
- var mkt = document.getElementById('view-marketing'); if(mkt) mkt.style.display = 'none';
+ // v563/v564: скрываем родительский view-marketing + body-class для CSS-страховки
+ var mkt = document.getElementById('view-marketing'); if(mkt) mkt.style.setProperty('display','none','important');
+ document.body.classList.add('has-mkt-overlay');
  document.getElementById('view-mkt-target').style.display = 'block';
  // v451: сразу подписать активный пилл реальными датами, чтобы поле не было пустым
  var rangeEl = document.getElementById('meta-period-range');
@@ -37228,7 +37242,8 @@ function mktOpenTargetPage() {
 
 function mktCloseTargetPage() {
  document.getElementById('view-mkt-target').style.display = 'none';
- var mkt = document.getElementById('view-marketing'); if(mkt) mkt.style.display = 'block';
+ document.body.classList.remove('has-mkt-overlay');
+ var mkt = document.getElementById('view-marketing'); if(mkt) mkt.style.setProperty('display','block','important');
 }
 
 function mktOpenLtvPage() {
