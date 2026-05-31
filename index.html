@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v566</title>
+<title>SalesDoc — Финансовый Дашборд v567</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1580,16 +1580,30 @@ body.light{
 body.light .sd-overlay-screen{
  background:#FFFFFF!important;
 }
-/* v564/v565: если открыт overlay Маркетинга — скрываем ВСЁ что за ним. CSS-страховка. */
-body.has-mkt-overlay #view-marketing,
-body.has-mkt-overlay .sidebar,
-body.has-mkt-overlay .topbar,
-body.has-mkt-overlay #view-dashboard,
-body.has-mkt-overlay .main > *:not(#view-mkt-target):not(.sidebar-overlay){
+/* v566: УНИВЕРСАЛЬНОЕ — когда открыт ЛЮБОЙ overlay-screen (Таргет, Карта спринта,
+   Карта клиента, Карта тикета, и т.д.), скрываем ВСЁ остальное чтобы не просвечивало. */
+body.has-overlay .sidebar,
+body.has-overlay .topbar,
+body.has-overlay #view-dashboard,
+body.has-overlay #view-marketing,
+body.has-overlay #view-planning,
+body.has-overlay #view-clients,
+body.has-overlay #view-payments,
+body.has-overlay #view-kanban,
+body.has-overlay #view-route,
+body.has-overlay #view-activeclients,
+body.has-overlay #view-newclients,
+body.has-overlay #view-keyclients,
+body.has-overlay #view-integrations,
+body.has-overlay #view-tickets,
+body.has-overlay #view-mytasks,
+body.has-overlay #view-calendar,
+body.has-overlay #view-expenses,
+body.has-overlay #view-plan{
  display:none!important;
  visibility:hidden!important;
 }
-body.has-mkt-overlay #view-mkt-target{
+body.has-overlay .sd-overlay-screen{
  display:block!important;
  z-index:999999!important;
  background:#0B0B0D!important;
@@ -6237,7 +6251,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <!-- /PLANNING VIEW -->
 
  <!-- v168: FULLSCREEN SPRINT BOARD (Канбан внутри спринта) -->
- <div id="view-plan-sprint" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--dark-void);overflow-y:auto">
+ <div id="view-plan-sprint" class="sd-overlay-screen" style="display:none;position:fixed;inset:0;z-index:9999;background:#0B0B0D;overflow-y:auto">
  <div class="kbc-header">
  <button class="kbc-back" onclick="planCloseSprint()">&#8592; Планёрки</button>
  <div class="kbc-title" id="plan-sprint-title">Спринт</div>
@@ -7548,7 +7562,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
       из карточки клиента (через кнопку «+ Тикет»). Двух-колоночный layout amo-стиль. -->
  <!-- v401: карточка тикета — Zendesk-стиль. Слева основная зона (шапка+описание+лента+инпут),
       справа узкий sidebar 280px с компактными полями (label мелкий сверху, поле снизу). -->
- <div id="view-ticket-card" class="amocard-active" style="display:none;position:fixed;inset:0;z-index:9999;overflow:hidden">
+ <div id="view-ticket-card" class="amocard-active sd-overlay-screen" style="display:none;position:fixed;inset:0;z-index:9999;overflow:hidden">
   <div class="tk-wrap">
    <!-- v544: topbar на всю ширину карточки тикета — кнопка «Назад» здесь, не поверх sidebar -->
    <div class="tk-topbar">
@@ -7663,7 +7677,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
       Двух-колоночный layout: слева поля сделки + pipeline + табы, справа лента
       событий + чат-инпут. Класс .amocard-active включает локальные CSS-переменные.
       Все классы префиксованы .amocard-* чтобы не конфликтовать с существующими. -->
- <div id="view-route-card" class="amocard-active" style="display:none;position:fixed;inset:0;z-index:9999;overflow:hidden">
+ <div id="view-route-card" class="amocard-active sd-overlay-screen" style="display:none;position:fixed;inset:0;z-index:9999;overflow:hidden">
  <div class="amocard-wrap">
   <!-- ЛЕВАЯ КОЛОНКА: шапка, pipeline, табы, поля (точно как в mockup) -->
   <section class="amocard-left">
@@ -8013,7 +8027,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <!-- /CASHFLOW VIEW -->
 
  <!-- FULLSCREEN CARD PAGE -->
- <div id="view-kb-card">
+ <div id="view-kb-card" class="sd-overlay-screen">
  <div class="kbc-header">
  <div class="crm-card-head">
  <button class="kbc-back" onclick="kbCloseCardPage()">&#8592; Доска</button>
@@ -22987,6 +23001,35 @@ window.addEventListener('offline',function(){
  if(st)st.innerHTML='<span style="color:#FF7043">Офлайн</span>';
 });
 
+// v566: MutationObserver — следит за всеми .sd-overlay-screen элементами.
+// Когда хоть один виден (display != 'none') → body получает класс has-overlay,
+// который скрывает sidebar/topbar/все view-* (см. CSS-правила выше).
+// Это работает для ВСЕХ overlay'ев независимо от того через какую функцию они открыты.
+(function _autoOverlayClass(){
+ function check(){
+  var overlays = document.querySelectorAll('.sd-overlay-screen');
+  var anyOpen = false;
+  for(var i = 0; i < overlays.length; i++){
+   var el = overlays[i];
+   var st = window.getComputedStyle(el);
+   if(st && st.display !== 'none' && st.visibility !== 'hidden'){ anyOpen = true; break; }
+  }
+  document.body.classList.toggle('has-overlay', anyOpen);
+ }
+ // Запускаем после DOMContentLoaded чтоб элементы существовали
+ var start = function(){
+  check();
+  try {
+   var mo = new MutationObserver(check);
+   document.querySelectorAll('.sd-overlay-screen').forEach(function(el){
+    mo.observe(el, { attributes:true, attributeFilter:['style','class'] });
+   });
+  } catch(_){}
+ };
+ if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+ else start();
+})();
+
 // v563: автоматическое снятие старого SW кэша при загрузке (без ручного unregister)
 if('serviceWorker' in navigator){
  (async function _autoBumpSW(){
@@ -37227,9 +37270,9 @@ function kbSaveTasksToSheet(card) {
 // МАРКЕТИНГ — НАВИГАЦИЯ ПО ПОДСТРАНИЦАМ
 // ============================================================
 function mktOpenTargetPage() {
- // v563/v564: скрываем родительский view-marketing + body-class для CSS-страховки
+ // v566: универсальный body.has-overlay (раньше was has-mkt-overlay)
  var mkt = document.getElementById('view-marketing'); if(mkt) mkt.style.setProperty('display','none','important');
- document.body.classList.add('has-mkt-overlay');
+ document.body.classList.add('has-overlay');
  document.getElementById('view-mkt-target').style.display = 'block';
  // v451: сразу подписать активный пилл реальными датами, чтобы поле не было пустым
  var rangeEl = document.getElementById('meta-period-range');
@@ -37252,7 +37295,7 @@ function mktOpenTargetPage() {
 
 function mktCloseTargetPage() {
  document.getElementById('view-mkt-target').style.display = 'none';
- document.body.classList.remove('has-mkt-overlay');
+ document.body.classList.remove('has-overlay');
  var mkt = document.getElementById('view-marketing'); if(mkt) mkt.style.setProperty('display','block','important');
 }
 
