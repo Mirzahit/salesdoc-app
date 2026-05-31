@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v558</title>
+<title>SalesDoc — Финансовый Дашборд v559</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -28699,7 +28699,11 @@ async function _routeRenderFeed(){
    // v458: подтягиваем задачи клиента, чтобы они тоже отрисовались в ленте
    if(typeof crmTasksFetch === 'function'){
     reqs.push(crmTasksFetch('/api/tasks?client_id=' + encodeURIComponent(_routeCurrentCard.client_id) + '&status=all'));
+   } else {
+    reqs.push(Promise.resolve({ ok:true, tasks: [] }));
    }
+   // v558: подтягиваем платежи клиента — без них лента у большинства клиентов пустая
+   reqs.push(sbFetch('/api/payments?client_id=' + encodeURIComponent(_routeCurrentCard.client_id) + '&limit=200'));
   }
   var results = await Promise.all(reqs);
   var byCard = (results[0] && results[0].items) || [];
@@ -28707,6 +28711,20 @@ async function _routeRenderFeed(){
   // v458: tasksRes — третий элемент массива, если client_id был
   var tasksRes = results[2];
   var tasks = (tasksRes && tasksRes.ok && tasksRes.tasks) ? tasksRes.tasks : [];
+  // v558: payments как feed-items
+  var paymentsRes = results[3];
+  var payItems = (paymentsRes && paymentsRes.ok && Array.isArray(paymentsRes.payments)) ? paymentsRes.payments.map(function(p){
+   var sum = Number(p.amount) || 0;
+   var cur = (_routeCurrentCard.country === 'KG' || p.country === 'KG') ? 'сом' : '₸';
+   var lbl = (p.category_raw || p.category || 'платёж');
+   return {
+    id: 'pay:' + p.id,
+    event_type: 'payment',
+    created_at: p.paid_at,
+    author: p.manager_name || 'бот',
+    text: '💰 ' + sum.toLocaleString('ru-RU') + ' ' + cur + ' · ' + lbl + (p.bank ? ' · ' + p.bank : '')
+   };
+  }) : [];
   // v510: дополнительно — история по card_id интеграций клиента (если intg-заметки писались с card_id, а не с client_id)
   var byIntgCards = [];
   try {
@@ -28738,10 +28756,10 @@ async function _routeRenderFeed(){
    };
   });
 
-  // Склейка с дедупом по id. Сортировка по created_at desc.
+  // Склейка с дедупом по id. Сортировка по created_at desc. v558: payItems тоже добавляем.
   var seen = {};
   var merged = [];
-  byCard.concat(byClient).concat(byIntgCards).concat(taskItems).forEach(function(it){
+  byCard.concat(byClient).concat(byIntgCards).concat(taskItems).concat(payItems).forEach(function(it){
    if(!it || !it.id || seen[it.id]) return;
    seen[it.id] = 1;
    merged.push(it);
