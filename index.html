@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v568</title>
+<title>SalesDoc — Финансовый Дашборд v569</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22981,6 +22981,21 @@ window.addEventListener('offline',function(){
  var st=document.getElementById('sync-status');
  if(st)st.innerHTML='<span style="color:#FF7043">Офлайн</span>';
 });
+
+// v569: переносим ВСЕ .sd-overlay-screen прямо в body. Иначе они застревают внутри
+// родительских view-* которые могут иметь transform/filter/will-change, ломающие
+// position:fixed. Это был корень бага «view-mkt-target виден сквозь view-marketing».
+(function _detachOverlays(){
+ function detach(){
+  document.querySelectorAll('.sd-overlay-screen').forEach(function(el){
+   if(el.parentNode !== document.body){
+    document.body.appendChild(el);
+   }
+  });
+ }
+ if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', detach);
+ else detach();
+})();
 
 // v566: MutationObserver — следит за всеми .sd-overlay-screen элементами.
 // Когда хоть один виден (display != 'none') → body получает класс has-overlay,
