@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v553</title>
+<title>SalesDoc — Финансовый Дашборд v554</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -33399,9 +33399,36 @@ async function acOpenClientCard(clientName, host){
  try {
   var cid = await _acResolveClientId(clientName, host);
   if(!cid){
-   if(typeof kbShowToast === 'function') kbShowToast('Клиент не найден в базе');
-   else alert('Клиент «' + clientName + '» не найден в Supabase');
-   return;
+   // v554: вместо тупого toast — спрашиваем «Создать клиента?». Если ОК — создаём через API.
+   var ok = (typeof confirmAction === 'function')
+    ? await confirmAction({
+       title: 'Клиент не найден в базе',
+       body: '«' + clientName + '» отсутствует в Supabase.\nСоздать новую карточку?',
+       confirmLabel: 'Создать',
+       cancelLabel: 'Отмена'
+      })
+    : confirm('Клиент «' + clientName + '» не найден. Создать?');
+   if(!ok) return;
+   var country = (typeof currentCountry !== 'undefined' && currentCountry) ? currentCountry : 'KZ';
+   try {
+    var created = await sbFetch('/api/clients', {
+     method: 'POST',
+     body: JSON.stringify({ company_name: clientName, country: country, status: 'active' })
+    });
+    if(created && created.ok && created.client && created.client.client_id){
+     cid = created.client.client_id;
+     // Очистим кэш чтоб следующий клик нашёл нового
+     _acAllClientsLookup = null;
+     _acClientIdCache = {};
+     if(typeof showNotif === 'function') showNotif('Клиент создан', clientName + ' добавлен в базу');
+    } else {
+     if(typeof showNotif === 'function') showNotif('Не получилось', 'Ошибка создания: ' + (created && created.error || '—'));
+     return;
+    }
+   } catch(e){
+    if(typeof showNotif === 'function') showNotif('Ошибка сети', e.message || e);
+    return;
+   }
   }
   if(typeof routeOpenClient === 'function') routeOpenClient(cid);
  } finally {
