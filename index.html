@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v567</title>
+<title>SalesDoc — Финансовый Дашборд v568</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1580,34 +1580,15 @@ body.light{
 body.light .sd-overlay-screen{
  background:#FFFFFF!important;
 }
-/* v566: УНИВЕРСАЛЬНОЕ — когда открыт ЛЮБОЙ overlay-screen (Таргет, Карта спринта,
-   Карта клиента, Карта тикета, и т.д.), скрываем ВСЁ остальное чтобы не просвечивало. */
-body.has-overlay .sidebar,
-body.has-overlay .topbar,
-body.has-overlay #view-dashboard,
-body.has-overlay #view-marketing,
-body.has-overlay #view-planning,
-body.has-overlay #view-clients,
-body.has-overlay #view-payments,
-body.has-overlay #view-kanban,
-body.has-overlay #view-route,
-body.has-overlay #view-activeclients,
-body.has-overlay #view-newclients,
-body.has-overlay #view-keyclients,
-body.has-overlay #view-integrations,
-body.has-overlay #view-tickets,
-body.has-overlay #view-mytasks,
-body.has-overlay #view-calendar,
-body.has-overlay #view-expenses,
-body.has-overlay #view-plan{
- display:none!important;
- visibility:hidden!important;
-}
-body.has-overlay .sd-overlay-screen{
- display:block!important;
- z-index:999999!important;
- background:#0B0B0D!important;
- left:0!important;right:0!important;top:0!important;bottom:0!important;
+/* v568: НЕ скрываем родителей! Overlay-screen сам кладётся position:fixed; inset:0;
+   z-index:9999; background:#0B0B0D — сплошной квадрат поверх всего. Прежняя попытка
+   (v566) скрывать через body.has-overlay #view-marketing { display:none } ломала
+   рендер дочернего #view-mkt-target (он физически вложен в #view-marketing), из-за
+   чего overlay открывался чёрным без контента. Теперь — только страховка:
+   повышаем z-index и блокируем скролл фона. */
+body.has-overlay{ overflow:hidden!important; }
+.sd-overlay-screen{
+ z-index:99999!important;
 }
 body.light .topbar{
  background:#FFFFFF!important;
@@ -37270,8 +37251,9 @@ function kbSaveTasksToSheet(card) {
 // МАРКЕТИНГ — НАВИГАЦИЯ ПО ПОДСТРАНИЦАМ
 // ============================================================
 function mktOpenTargetPage() {
- // v566: универсальный body.has-overlay (раньше was has-mkt-overlay)
- var mkt = document.getElementById('view-marketing'); if(mkt) mkt.style.setProperty('display','none','important');
+ // v568: НЕ скрываем родителя view-marketing — overlay-screen position:fixed; z-index:99999
+ // сам ложится поверх. Скрытие родителя через display:none ломало рендер дочернего
+ // view-mkt-target (он вложен в view-marketing).
  document.body.classList.add('has-overlay');
  document.getElementById('view-mkt-target').style.display = 'block';
  // v451: сразу подписать активный пилл реальными датами, чтобы поле не было пустым
@@ -37296,7 +37278,7 @@ function mktOpenTargetPage() {
 function mktCloseTargetPage() {
  document.getElementById('view-mkt-target').style.display = 'none';
  document.body.classList.remove('has-overlay');
- var mkt = document.getElementById('view-marketing'); if(mkt) mkt.style.setProperty('display','block','important');
+ // v568: больше не восстанавливаем view-marketing — он и не скрывался при открытии
 }
 
 function mktOpenLtvPage() {
