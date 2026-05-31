@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v569</title>
+<title>SalesDoc — Финансовый Дашборд v570</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5232,6 +5232,28 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 </style>
 </head>
 <body>
+<!-- v570: ранний inline-скрипт переноса overlay'ев в body. Срабатывает ДО любого другого JS,
+     гарантирует что position:fixed работает (не блокируется transform родителя). -->
+<script>
+(function _earlyDetachOverlays(){
+ // Дожидаемся загрузки DOM, потом переносим
+ function detach(){
+  try {
+   var els = document.querySelectorAll('.sd-overlay-screen');
+   for(var i = 0; i < els.length; i++){
+    if(els[i].parentNode !== document.body){
+     document.body.appendChild(els[i]);
+    }
+   }
+  } catch(_){}
+ }
+ if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', detach);
+ } else {
+  detach();
+ }
+})();
+</script>
 <div id="sd-splash" aria-hidden="true">
  <div class="sd-splash-logo">S</div>
  <div class="sd-splash-spinner"></div>
