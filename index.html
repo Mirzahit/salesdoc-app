@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v552</title>
+<title>SalesDoc — Финансовый Дашборд v553</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7358,8 +7358,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <option value="working">В работе</option>
  <option value="ok">Норма</option>
  </select>
- <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-churned" onchange="acSetShowChurned(this.checked)" style="margin:0"> Показать отвалившихся</label>
- <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-nosub" onchange="acSetShowNoSub(this.checked)" style="margin:0"> Показать без подписки</label>
+ <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-churned" checked onchange="acSetShowChurned(this.checked)" style="margin:0"> Показать отвалившихся</label>
+ <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-nosub" checked onchange="acSetShowNoSub(this.checked)" style="margin:0"> Показать без подписки</label>
  <!-- v549: кнопка «Сбросить фильтры» — появляется когда хоть один фильтр активен -->
  <button id="ac-filter-reset" onclick="acResetFilters()" style="display:none;padding:6px 12px;font-size:11px;font-weight:600;background:rgba(239,68,68,.10);color:#EF4444;border:1px solid rgba(239,68,68,.30);border-radius:6px;cursor:pointer">Сбросить фильтры</button>
  <button onclick="acReloadPrior()" id="ac-reload-prior-btn" title="Перечитать подписки из «Доходы 2025». Нужно только если в таблице 2025 что-то добавили вручную." style="padding:6px 10px;font-size:11px;background:rgba(120,120,128,.08);color:var(--text-soft);border:1px solid var(--border-faint);border-radius:6px;cursor:pointer">Обновить из 2025</button>
@@ -32566,7 +32566,9 @@ function supportChartAging(cards){
 // ============================================================
 var AC_TAGS_KEY = 'crm_client_tags';
 var AC_KZ_CACHE = null;
-var acState = { operator: '', risk: '', tag: '', segment: '', showChurned: false, showNoSub: false, search: '' };
+// v553: showChurned/showNoSub = true по умолчанию — чтобы видеть ВСЕХ клиентов сразу, без нажатия галок.
+// Если кому-то нужно отделить активных — пусть включит фильтр риска или галку выключит.
+var acState = { operator: '', risk: '', tag: '', segment: '', showChurned: true, showNoSub: true, search: '' };
 
 // v253: сегменты клиентов по кол-ву пользователей (qty)
 var AC_SEGMENTS = [
@@ -33250,12 +33252,9 @@ function acRender(){
     var churnedN = all.filter(function(c){ return c.accessStatus === 'churned'; }).length;
     var neverN = all.filter(function(c){ return c.accessStatus === 'never'; }).length;
     msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
-        + '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Нет действующих подписок</div>'
-        + '<div style="font-size:12px;margin-bottom:14px;line-height:1.5">У всех ' + all.length + ' клиентов подписка истекла (' + churnedN + ' отвалившихся) или ни одной оплаты ещё не было (' + neverN + ').<br>Свежие платежи апреля-мая 2026 пока не подгружаются (ждут Фазы 4 миграции).</div>'
-        + '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
-        + '<button onclick="document.getElementById(\'ac-filter-churned\').checked=true;acSetShowChurned(true);" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Показать отвалившихся (' + churnedN + ')</button>'
-        + (neverN ? '<button onclick="document.getElementById(\'ac-filter-nosub\').checked=true;acSetShowNoSub(true);" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Показать без подписки (' + neverN + ')</button>' : '')
-        + '</div></div>';
+        + '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Клиентов нет</div>'
+        + '<div style="font-size:12px;margin-bottom:14px;line-height:1.5">База пуста или данные не загрузились. Нажми ↻ в топбаре чтобы перезагрузить.</div>'
+        + '</div>';
    }
    tbl.innerHTML = thead + '<tr><td colspan="9" style="padding:0;background:transparent">' + msg + '</td></tr></tbody>';
   } else {
