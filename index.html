@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v550</title>
+<title>SalesDoc — Финансовый Дашборд v551</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -9165,9 +9165,124 @@ function findColIdx(headers, ...keywords) {
  return -1;
 }
 
+// === v551: Supabase как источник истины для платежей ============================
+// Платежи (952 шт, KZ+KG) мигрированы в Supabase в Фазе 2 (v512-514). Фронт читает
+// /api/payments?country=XX и маппит в формат который ожидает остальной код
+// (categoryRaw, activationDate, period, и т.д. — см. парсер Sheets ниже).
+//
+// Флаг window._USE_SUPABASE_PAYMENTS = true → читаем из Supabase, Sheets пропускаем.
+// Если false → старый путь (Sheets), для отладки/fallback.
+// При сетевой ошибке Supabase автоматически делаем fallback на Sheets, чтобы юзер
+// не увидел белый экран.
+window._USE_SUPABASE_PAYMENTS = (window._USE_SUPABASE_PAYMENTS !== false);
+
+async function _loadPaymentsFromSupabase(){
+ try {
+  var resp = await sbFetch('/api/payments?country=' + currentCountry);
+  if(!resp || !resp.ok) throw new Error((resp && resp.error) || 'api/payments failed');
+  var rows = resp.payments || [];
+  var allNew = [];
+  var pid = 300;
+  // Сохраняем ручные переключения serviceWritten/seated из текущих данных
+  var oldPayMap = {};
+  if(typeof payments !== 'undefined' && payments){
+   payments.forEach(function(p){ oldPayMap[p.client + '_' + p.date] = p.serviceWritten; });
+  }
+  rows.forEach(function(r){
+   var dateStr = r.paid_at || null;
+   if(!dateStr || !r.company_name || !r.amount) return;
+   var amount = parseFloat(r.amount);
+   if(!amount || amount <= 0) return;
+   var managerRaw = r.manager_name || '';
+   var techRaw = r.tech_support || '';
+   var catRaw = r.category_raw || '';
+   var bankRaw = r.bank || '';
+   var perNum = (r.period_months != null) ? Number(r.period_months) : 0;
+   var qtyNum = (r.qty != null) ? Number(r.qty) : 0;
+   var priceNum = (r.price != null) ? Number(r.price) : 0;
+   var seatedVal = !!r.seated;
+   var key = r.company_name + '_' + dateStr;
+   if(oldPayMap[key] === true) seatedVal = seatedVal; // (seated идёт из БД; serviceWritten ниже)
+   var p = {
+    id: pid++,
+    _sbId: r.id,           // v551: UUID Supabase — для будущих PATCH/DELETE
+    date: dateStr,
+    client: String(r.company_name).trim(),
+    category: mapCategoryFromSheet(catRaw) || r.category || 'other',
+    categoryRaw: catRaw,
+    employee: managerToEmpId(managerRaw),
+    managerName: managerRaw,
+    amount: amount,
+    method: 'bank',
+    bank: bankRaw,
+    status: seatedVal ? 'paid' : 'pending',
+    seated: seatedVal,
+    serviceWritten: oldPayMap[key] === true,
+    comment: techRaw ? ('Тех.поддержка: ' + techRaw) : (r.comment || ''),
+    techSupport: techRaw,
+    qty: qtyNum,
+    price: priceNum,
+    period: perNum,
+    activationDate: r.activation_date || null,
+    periodStart: r.period_start_raw || '',
+    clientId: r.client_id || null,
+    month: (function(){ var m = dateStr.match(/^\d{4}-(\d{2})/); return m ? (parseInt(m[1],10)-1) : 0; })()
+   };
+   // Поддерживаем SEATED_MAP, чтоб ничего из старого кода не сломалось
+   try { SEATED_MAP[p.client + '_' + p.date] = seatedVal; } catch(_){}
+   allNew.push(p);
+  });
+  // Сортируем по дате DESC чтоб совпадало с порядком Sheets-загрузки (свежие сверху)
+  allNew.sort(function(a,b){ return (b.date || '').localeCompare(a.date || ''); });
+  return allNew;
+ } catch(err){
+  console.error('[_loadPaymentsFromSupabase] failed:', err);
+  return null; // null → caller сделает fallback
+ }
+}
+
 async function syncFromSheets() {
  const btn=document.getElementById('sync-btn');
  btn.classList.add('syncing');
+ // v551: Supabase-режим (по умолчанию). Если флаг выключен — старый путь Sheets.
+ if(window._USE_SUPABASE_PAYMENTS){
+  setSyncStatus('loading','Загрузка из Supabase...');
+  try {
+   const _sbNew = await _loadPaymentsFromSupabase();
+   if(_sbNew && _sbNew.length){
+    payments = _sbNew;
+    // Пересобираем acts (как в Sheets-ветке ниже)
+    const implPays = payments.filter(function(p){ return p.category==='implementation' || (p.categoryRaw&&(p.categoryRaw.includes('внедрен')||p.categoryRaw.includes('интеграц'))); });
+    acts = implPays.map(function(p,i){
+     const techEmp = p.techSupport ? employees.find(function(e){return e.name.trim()===p.techSupport.trim();}) : null;
+     return {
+      id: i+1, client: p.client, date: p.date,
+      employee: techEmp ? techEmp.id : p.employee,
+      number: 'АКТ-2026-'+String(i+1).padStart(3,'0'),
+      amount: p.amount,
+      project: 'Внедрение / интеграция — '+p.client,
+      status: 'signed', type: 'implementation',
+      managerName: p.managerName, techSupport: p.techSupport
+     };
+    });
+    setSyncStatus('ok','Supabase · ' + new Date().toLocaleTimeString('ru') + ' · ' + _sbNew.length + ' записей');
+    showNotif('Данные загружены','Supabase · ' + currentCountry + ' — ' + _sbNew.length + ' платежей');
+    try { renderAll(); } catch(_){}
+    if(window._kbLoaded) { window._kbLoaded = false; if(document.getElementById('view-kanban') && document.getElementById('view-kanban').style.display !== 'none') kbLoad(); }
+    if(!planLastData) { try { planInit(); planLoad().then(function(){ renderAll(); }).catch(function(){}); } catch(_){} }
+    try { if(typeof loadExpenses==='function') await loadExpenses(); } catch(_){}
+    btn.classList.remove('syncing');
+    if(typeof checkMorningReport==='function') checkMorningReport();
+    return;
+   }
+   // _sbNew === null или пустой → падаем в Sheets-fallback
+   console.warn('[syncFromSheets] Supabase вернул пусто/ошибку — fallback на Sheets');
+   setSyncStatus('loading','Supabase недоступен, читаем Sheets...');
+  } catch(e){
+   console.error('[syncFromSheets] Supabase error:', e);
+   setSyncStatus('loading','Supabase ошибка, читаем Sheets...');
+  }
+ }
  setSyncStatus('loading','Загрузка из Google Таблицы...');
  try {
  // Load months dynamically — from Jan to current month
