@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v551</title>
+<title>SalesDoc — Финансовый Дашборд v552</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -33326,13 +33326,32 @@ function acRender(){
  try { acRenderMRRStrip(); } catch(_){}
 }
 
-// v511: ищем client_id в Supabase по имени/хосту, кэшируем в памяти.
-// Используется кнопками «Карта» и «+ Задача» в таблице Действующих, где
-// в acGetActiveClients есть только текстовое имя клиента, а не UUID из clients.
+// v511/v552: ищем client_id в Supabase по имени/хосту.
+// v552: добавлен normalized-lookup через полный кэш clients (390 записей, лёгкий fetch).
+// Это решает проблему когда в payments client="adal14" а в clients company_name="Adalz"
+// (canonical после слияния дублей v22). Auto-create отключён — иначе плодим новые дубли.
 var _acClientIdCache = {};
+var _acAllClientsLookup = null; // { normalized_name: client_id }
+function _acNormalize(s){ return String(s||'').toLowerCase().replace(/[^a-zа-яё0-9]/gi,''); }
+async function _acLoadAllClientsLookup(){
+ if(_acAllClientsLookup) return _acAllClientsLookup;
+ try {
+  var d = await sbFetch('/api/clients?limit=1000');
+  if(!d || !d.ok || !Array.isArray(d.clients)) return null;
+  var map = {};
+  d.clients.forEach(function(c){
+   var key = _acNormalize(c.company_name);
+   if(key && !map[key]) map[key] = c.client_id;
+  });
+  _acAllClientsLookup = map;
+  console.log('[_acLoadAllClientsLookup] cached', d.clients.length, 'clients,', Object.keys(map).length, 'unique normalized keys');
+  return map;
+ } catch(e){ console.warn('[_acLoadAllClientsLookup] failed:', e); return null; }
+}
 async function _acResolveClientId(clientName, host){
  var key = (clientName || '') + '|' + (host || '');
  if(_acClientIdCache[key]) return _acClientIdCache[key];
+ // 1) Прямой поиск через API (быстро для точных совпадений)
  var queries = [];
  if(clientName) queries.push(clientName);
  if(host && host !== clientName) queries.push(host);
@@ -33346,23 +33365,31 @@ async function _acResolveClientId(clientName, host){
    }
   } catch(_){}
  }
- // v518: lazy auto-create клиента если не нашли. После v516 массового импорта 423 клиентов
- // это редкая ветка — но нужна для будущих клиентов которые появятся в Sheets но не в Supabase.
- try {
-  var country = (typeof currentCountry !== 'undefined' && currentCountry) ? currentCountry : 'KZ';
-  var d2 = await sbFetch('/api/clients', {
-   method: 'POST',
-   body: JSON.stringify({
-    company_name: clientName,
-    country: country,
-    status: 'active'
-   })
-  });
-  if(d2 && d2.ok && d2.client && d2.client.client_id){
-   _acClientIdCache[key] = d2.client.client_id;
-   return d2.client.client_id;
+ // 2) v552: lookup по нормализованному имени через полный кэш — спасает после слияния дублей.
+ //    «adal14» (host из payments) → «adal14» (normalized) → совпадает с «Adalz»? Нет.
+ //    Но «sapatosh» в payments → «sapatosh» normalized → совпадает с «Sapatosh» canonical → ОК.
+ var lookup = await _acLoadAllClientsLookup();
+ if(lookup){
+  var candidates = [clientName, host].filter(Boolean);
+  for(var j = 0; j < candidates.length; j++){
+   var nk = _acNormalize(candidates[j]);
+   if(nk && lookup[nk]){
+    _acClientIdCache[key] = lookup[nk];
+    return lookup[nk];
+   }
+   // Префикс-матч: «adal14» начинается с «adal» — пробуем подстроку
+   if(nk && nk.length >= 4){
+    var found = null;
+    Object.keys(lookup).forEach(function(lk){
+     if(found) return;
+     if(lk.indexOf(nk) === 0 || nk.indexOf(lk) === 0) found = lookup[lk];
+    });
+    if(found){ _acClientIdCache[key] = found; return found; }
+   }
   }
- } catch(e){ console.warn('[_acResolveClientId] auto-create failed:', e); }
+ }
+ // 3) Auto-create отключён (раньше v518 создавал) — иначе плодим новые дубли.
+ //    Если клиента реально нет — пользователь увидит toast и сможет связать вручную.
  return null;
 }
 
