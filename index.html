@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v571</title>
+<title>SalesDoc — Финансовый Дашборд v572</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1573,23 +1573,30 @@ body.light{
  border-bottom:1px solid rgba(255,255,255,.10)!important;
 }
 /* v564: гарантированный сплошной overlay-screen — закрывает родительский view целиком */
+/* v572: AGRESSIVE — overlay-screen всегда сплошной, всегда поверх. Включает ::before
+   как «бэкдроп» внутри overlay'я (на случай если основной background не работает). */
 .sd-overlay-screen{
  background:#0B0B0D!important;
  isolation:isolate;
+ position:fixed!important;
+ inset:0!important;
+ z-index:999999!important;
+}
+.sd-overlay-screen::before{
+ content:'';
+ position:absolute;
+ inset:0;
+ background:#0B0B0D;
+ z-index:-1;
+ pointer-events:none;
 }
 body.light .sd-overlay-screen{
  background:#FFFFFF!important;
 }
-/* v568: НЕ скрываем родителей! Overlay-screen сам кладётся position:fixed; inset:0;
-   z-index:9999; background:#0B0B0D — сплошной квадрат поверх всего. Прежняя попытка
-   (v566) скрывать через body.has-overlay #view-marketing { display:none } ломала
-   рендер дочернего #view-mkt-target (он физически вложен в #view-marketing), из-за
-   чего overlay открывался чёрным без контента. Теперь — только страховка:
-   повышаем z-index и блокируем скролл фона. */
-body.has-overlay{ overflow:hidden!important; }
-.sd-overlay-screen{
- z-index:99999!important;
+body.light .sd-overlay-screen::before{
+ background:#FFFFFF;
 }
+body.has-overlay{ overflow:hidden!important; }
 body.light .topbar{
  background:#FFFFFF!important;
  border-bottom-color:rgba(0,0,0,.08)!important;
