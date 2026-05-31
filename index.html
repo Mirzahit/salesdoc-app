@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v554</title>
+<title>SalesDoc — Финансовый Дашборд v555</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -33302,7 +33302,7 @@ function acRender(){
      var clientEsc = (c.client || '').replace(/'/g, "\\'");
      var hostEscBtn = (c.host || '').replace(/'/g, "\\'");
      return '<tr>'
-      + '<td><b style="color:var(--accent-text,#34C77A);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="acOpenClientCard(\''+clientEsc+'\',\''+hostEscBtn+'\')" title="Открыть карту клиента">'+kbEsc(c.client)+'</b></td>'
+      + '<td><b style="color:var(--accent-text,#34C77A);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="acOpenClientCard(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" title="Открыть карту клиента">'+kbEsc(c.client)+'</b></td>'
       + '<td style="color:var(--text-soft);font-size:12px">'+kbEsc(c.host||'—')+'</td>'
       + '<td class="num">'+(c.monthlyQty||0)+'</td>'
       + '<td class="num">'+(c.monthlySum?fmtSum(c.monthlySum):'—')+'</td>'
@@ -33310,7 +33310,7 @@ function acRender(){
       + '<td style="color:'+accessColor+';font-size:12px;white-space:nowrap">'+accessStr+'</td>'
       + '<td><span class="sd-score '+riskCls+'">'+riskLabel+'</span></td>'
       + '<td><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" onclick="acTagModal(\''+clientEsc+'\')">+</button></div></td>'
-      + '<td><button class="sd-risk-action" onclick="acOpenClientCardWithTask(\''+clientEsc+'\',\''+hostEscBtn+'\')" style="background:rgba(52,199,122,.14);color:#34C77A;border-color:rgba(52,199,122,.32)">+ Задача</button></td>'
+      + '<td><button class="sd-risk-action" onclick="acOpenClientCardWithTask(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" style="background:rgba(52,199,122,.14);color:#34C77A;border-color:rgba(52,199,122,.32)">+ Задача</button></td>'
       + '</tr>';
     }).join('');
    });
@@ -33392,8 +33392,9 @@ async function _acResolveClientId(clientName, host){
  return null;
 }
 
-async function acOpenClientCard(clientName, host){
- var btn = event && event.currentTarget;
+async function acOpenClientCard(ev, clientName, host){
+ // v555: event передаём явным параметром — иначе в async внутри inline onclick он undefined
+ var btn = ev && ev.currentTarget;
  var prev = btn ? btn.textContent : null;
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
@@ -33437,8 +33438,9 @@ async function acOpenClientCard(clientName, host){
 }
 
 // v515: открыть карту клиента и сразу переключить composer в режим «Задача»
-async function acOpenClientCardWithTask(clientName, host){
- var btn = event && event.currentTarget;
+async function acOpenClientCardWithTask(ev, clientName, host){
+ // v555: event явным параметром
+ var btn = ev && ev.currentTarget;
  var prev = btn ? btn.textContent : null;
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
@@ -33464,8 +33466,9 @@ async function acOpenClientCardWithTask(clientName, host){
  }
 }
 
-async function acQuickTaskFor(clientName, host){
- var btn = event && event.currentTarget;
+async function acQuickTaskFor(ev, clientName, host){
+ // v555: event явным параметром
+ var btn = ev && ev.currentTarget;
  var prev = btn ? btn.textContent : null;
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
