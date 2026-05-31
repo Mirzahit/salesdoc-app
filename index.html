@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v555</title>
+<title>SalesDoc — Финансовый Дашборд v556</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -33332,33 +33332,51 @@ function acRender(){
 var _acClientIdCache = {};
 var _acAllClientsLookup = null; // { normalized_name: client_id }
 function _acNormalize(s){ return String(s||'').toLowerCase().replace(/[^a-zа-яё0-9]/gi,''); }
+// v556: прямой fetch без sbFetch, чтобы НЕ добавлялся country=KZ/KG автоматически.
+// Иначе клиента из «не той» страны не открыть после переключения топбара.
+async function _acFetchClientsBoth(query){
+ var paths = [
+  '/api/clients?country=KZ' + (query ? '&search=' + encodeURIComponent(query) : '&limit=1000'),
+  '/api/clients?country=KG' + (query ? '&search=' + encodeURIComponent(query) : '&limit=1000')
+ ];
+ var token = window._APP_TOKEN || '';
+ var results = await Promise.all(paths.map(function(p){
+  return fetch(p, { headers: { 'x-app-token': token } })
+   .then(function(r){ return r.json(); })
+   .catch(function(){ return { ok:false, clients:[] }; });
+ }));
+ var all = [];
+ results.forEach(function(d){ if(d && d.ok && Array.isArray(d.clients)) all = all.concat(d.clients); });
+ return all;
+}
 async function _acLoadAllClientsLookup(){
  if(_acAllClientsLookup) return _acAllClientsLookup;
  try {
-  var d = await sbFetch('/api/clients?limit=1000');
-  if(!d || !d.ok || !Array.isArray(d.clients)) return null;
+  var clients = await _acFetchClientsBoth(null);
+  if(!clients.length) return null;
   var map = {};
-  d.clients.forEach(function(c){
+  clients.forEach(function(c){
    var key = _acNormalize(c.company_name);
    if(key && !map[key]) map[key] = c.client_id;
   });
   _acAllClientsLookup = map;
-  console.log('[_acLoadAllClientsLookup] cached', d.clients.length, 'clients,', Object.keys(map).length, 'unique normalized keys');
+  console.log('[_acLoadAllClientsLookup] cached', clients.length, 'clients,', Object.keys(map).length, 'unique normalized keys');
   return map;
  } catch(e){ console.warn('[_acLoadAllClientsLookup] failed:', e); return null; }
 }
 async function _acResolveClientId(clientName, host){
  var key = (clientName || '') + '|' + (host || '');
  if(_acClientIdCache[key]) return _acClientIdCache[key];
- // 1) Прямой поиск через API (быстро для точных совпадений)
+ // 1) v556: ищем в ОБЕИХ странах (KZ+KG). sbFetch ограничивал country=currentCountry,
+ //    из-за чего после переключения топбара клиент из другой страны не находился.
  var queries = [];
  if(clientName) queries.push(clientName);
  if(host && host !== clientName) queries.push(host);
  for(var i = 0; i < queries.length; i++){
   try {
-   var d = await sbFetch('/api/clients?search=' + encodeURIComponent(queries[i]));
-   if(d && d.ok && d.clients && d.clients.length){
-    var pick = d.clients.find(function(c){ return c.company_name; }) || d.clients[0];
+   var clients = await _acFetchClientsBoth(queries[i]);
+   if(clients && clients.length){
+    var pick = clients.find(function(c){ return c.company_name; }) || clients[0];
     _acClientIdCache[key] = pick.client_id;
     return pick.client_id;
    }
