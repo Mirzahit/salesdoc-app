@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v562</title>
+<title>SalesDoc — Финансовый Дашборд v563</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1567,10 +1567,14 @@ body.light{
  -webkit-text-fill-color:var(--accent-text)!important;
 }
 /* Topbar — glass поверх атмосферы */
+/* v563: жёсткий сплошной фон topbar */
 .topbar{
- background:var(--glass-2-bg)!important;
- /* v561: backdrop-filter удалён */
- border-bottom:1px solid var(--glass-2-border)!important;
+ background:#1F1F24!important;
+ border-bottom:1px solid rgba(255,255,255,.10)!important;
+}
+body.light .topbar{
+ background:#FFFFFF!important;
+ border-bottom-color:rgba(0,0,0,.08)!important;
 }
 /* v216: iOS Large Title в topbar */
 .page-title{
@@ -1974,13 +1978,17 @@ body.light .cal-dropdown{
  background:none!important;
  font-variant-numeric:tabular-nums!important;
 }
+/* v563: жёсткий сплошной фон (не через переменную) — закрываем прозрачность KPI Маркетинга */
 .meta-kpi-big{
- background:var(--glass-2-bg)!important;
- /* v561: backdrop-filter удалён */
- border:1px solid var(--glass-2-border)!important;
+ background:#1F1F24!important;
+ border:1px solid rgba(255,255,255,.10)!important;
  border-radius:var(--r-lg)!important;
  padding:var(--sp-4) var(--sp-5)!important;
  box-shadow:var(--sh-2)!important;
+}
+body.light .meta-kpi-big{
+ background:#FFFFFF!important;
+ border-color:rgba(0,0,0,.08)!important;
 }
 .meta-kpi-big:hover{
  border-color:var(--border-strong)!important;
@@ -22956,7 +22964,35 @@ window.addEventListener('offline',function(){
  if(st)st.innerHTML='<span style="color:#FF7043">Офлайн</span>';
 });
 
+// v563: автоматическое снятие старого SW кэша при загрузке (без ручного unregister)
 if('serviceWorker' in navigator){
+ (async function _autoBumpSW(){
+  try {
+   var resp = await fetch('/sw.js?cb=' + Date.now(), { cache: 'no-store' });
+   var txt = await resp.text();
+   var m = txt.match(/CACHE_NAME\s*=\s*['"]salesdoc-v(\d+)['"]/);
+   var serverVer = m ? parseInt(m[1], 10) : 0;
+   var localVer = parseInt((localStorage.getItem('sd_last_sw_ver') || '0'), 10);
+   if(serverVer && serverVer > localVer){
+    // Сервер новее → принудительно чистим SW + caches
+    var regs = await navigator.serviceWorker.getRegistrations();
+    for(var i = 0; i < regs.length; i++){ try { await regs[i].unregister(); } catch(_){} }
+    if('caches' in window){
+     var keys = await caches.keys();
+     for(var j = 0; j < keys.length; j++){ try { await caches.delete(keys[j]); } catch(_){} }
+    }
+    localStorage.setItem('sd_last_sw_ver', String(serverVer));
+    // Один раз перезагружаемся (флаг чтоб не зацикливаться)
+    if(!sessionStorage.getItem('sd_sw_reloaded_' + serverVer)){
+     sessionStorage.setItem('sd_sw_reloaded_' + serverVer, '1');
+     location.reload();
+     return;
+    }
+   } else if(serverVer){
+    localStorage.setItem('sd_last_sw_ver', String(serverVer));
+   }
+  } catch(_){}
+ })();
  navigator.serviceWorker.register('/sw.js').then(function(reg){
  reg.update();
  // v218: вместо принудительного reload (выкидывал пользователя из приложения) —
