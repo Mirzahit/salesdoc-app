@@ -179,13 +179,15 @@ async function _fetchSheet(sheetName, cfg) {
   return json;
 }
 
-async function handleImportSheets(req, res) {
-  const country = (req.query.country || 'KZ').toUpperCase();
+// Ядро импорта Sheets→Supabase для одной страны. Переиспользуется ручным
+// эндпоинтом (handleImportSheets) и кроном (cron-import-payments.js), чтобы
+// логика не расходилась. dryRun=true → ничего не пишет, только сводка.
+export async function importSheetsForCountry(country, dryRun) {
+  country = String(country || 'KZ').toUpperCase();
   if (!ALLOWED_COUNTRIES.includes(country)) {
-    return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+    throw new Error('country должен быть KZ или KG');
   }
   const cfg = SHEET_CONFIG[country];
-  const dryRun = String(req.query.dry_run || '1') !== '0' && req.query.dry_run !== 'false';
 
   // Загружаем существующих клиентов для lookup client_id
   const clients = await sbSelect('clients', { country: 'eq.' + country, limit: '1000' });
@@ -256,7 +258,7 @@ async function handleImportSheets(req, res) {
   const matchedClientsCount = willInsert.filter(p => p.client_id).length;
 
   if (dryRun) {
-    return res.status(200).json({
+    return {
       ok: true,
       mode: 'dry_run',
       country,
@@ -274,7 +276,7 @@ async function handleImportSheets(req, res) {
       sample_insert: willInsert.slice(0, 5).map(p => ({
         company_name: p.company_name, paid_at: p.paid_at, amount: p.amount, client_id: p.client_id, sheet_tab: p.sheet_tab, sheet_row: p.sheet_row
       }))
-    });
+    };
   }
 
   // Реальный insert
@@ -289,7 +291,7 @@ async function handleImportSheets(req, res) {
       failed.push({ company_name: p.company_name, paid_at: p.paid_at, amount: p.amount, error: e.message });
     }
   }
-  return res.status(200).json({
+  return {
     ok: true,
     mode: 'apply',
     country,
@@ -297,7 +299,18 @@ async function handleImportSheets(req, res) {
     failed_count: failed.length,
     failed_sample: failed.slice(0, 10),
     sum_inserted: inserted.reduce((s, p) => s + parseFloat(p.amount || 0), 0)
-  });
+  };
+}
+
+// Тонкая обёртка-эндпоинт над importSheetsForCountry (auth + парсинг query).
+async function handleImportSheets(req, res) {
+  const country = (req.query.country || 'KZ').toUpperCase();
+  if (!ALLOWED_COUNTRIES.includes(country)) {
+    return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+  }
+  const dryRun = String(req.query.dry_run || '1') !== '0' && req.query.dry_run !== 'false';
+  const result = await importSheetsForCountry(country, dryRun);
+  return res.status(200).json(result);
 }
 
 export default async function handler(req, res) {
