@@ -306,17 +306,22 @@ export default async function handler(req, res) {
 
     } else if (endpoint === 'all_ads') {
       // Все объявления аккаунта за период (с пагинацией) — для рейтинга эффективности.
-      const adFields = `id,name,effective_status,campaign{name},adset{name},creative{thumbnail_url,object_type,video_id,image_hash},insights.date_preset(${period}){${INSIGHT_FIELDS}}`;
+      // ВАЖНО: вложенный insights по многим объявлениям сразу → Meta error #1
+      // "reduce the amount of data". Поэтому маленький limit на страницу + только
+      // нужные поля insights (без cpm/reach/frequency/cpc/дат).
+      const adInsightFields = 'spend,impressions,clicks,ctr,actions,cost_per_action_type';
+      const adFields = `id,name,effective_status,campaign{name},adset{name},creative{thumbnail_url,object_type,video_id,image_hash},insights.date_preset(${period}){${adInsightFields}}`;
       const MAX_ADS = 500;
+      const PAGE = 25;
       let collected = [];
       let truncated = false;
       let guard = 0;
-      let data = await metaFetch(`/${ACCOUNT}/ads`, { fields: adFields, limit: 200 }, TOKEN);
+      let data = await metaFetch(`/${ACCOUNT}/ads`, { fields: adFields, limit: PAGE }, TOKEN);
       while (data) {
         collected = collected.concat(data.data || []);
         if (collected.length >= MAX_ADS) { truncated = true; break; }
         const next = data.paging && data.paging.next;
-        if (!next || guard++ > 10) break;
+        if (!next || guard++ > 40) break;
         data = await metaFetch(next, null, TOKEN);
       }
       const ads = collected.map(a => {
