@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v575</title>
+<title>SalesDoc — Финансовый Дашборд v576</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6547,7 +6547,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="modal-overlay" id="plan-task-detail-modal" onclick="if(event.target.id==='plan-task-detail-modal')planCloseTaskDetail()" style="z-index:10003">
  <div class="modal" style="max-width:580px">
  <button class="modal-close" onclick="planCloseTaskDetail()"></button>
- <div class="modal-title" id="ptd-title" style="margin-bottom:8px">Задача</div>
+ <input id="ptd-title" class="form-input" placeholder="Название задачи" onchange="planUpdateTaskTitle()" title="Кликни, чтобы переименовать" style="font-size:17px;font-weight:700;margin-bottom:8px;width:100%;background:transparent;border:1px solid transparent;padding:6px 8px;border-radius:8px" onfocus="this.style.borderColor='var(--dark-border)';this.style.background='rgba(255,255,255,.03)'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">
  <div id="ptd-meta" style="font-size:11px;color:var(--text-muted);margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px"></div>
 
  <!-- v195: Даты (редактируемые) -->
@@ -6562,6 +6562,36 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
  </div>
  <div id="ptd-dates-msg" style="font-size:11px;color:#D67373;margin-top:-12px;margin-bottom:14px;min-height:14px"></div>
+
+ <!-- v576: Приоритет / Статус (редактируемые) -->
+ <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+ <div style="flex:1;min-width:140px">
+ <label class="form-label" style="font-size:10px;color:var(--text-muted);margin-bottom:4px;display:block">Приоритет</label>
+ <select id="ptd-priority" class="form-input" onchange="planUpdateTaskPriority(this.value)" style="width:100%">
+ <option value="high">Высокий</option>
+ <option value="mid">Средний</option>
+ <option value="low">Низкий</option>
+ </select>
+ </div>
+ <div style="flex:1;min-width:140px">
+ <label class="form-label" style="font-size:10px;color:var(--text-muted);margin-bottom:4px;display:block">Статус</label>
+ <select id="ptd-status" class="form-input" onchange="planUpdateTaskStatus(this.value)" style="width:100%">
+ <option value="todo">Бэклог</option>
+ <option value="progress">В работе</option>
+ <option value="review">На проверке</option>
+ <option value="done">Готово</option>
+ </select>
+ </div>
+ </div>
+
+ <!-- v576: Ответственные (редактируемые) -->
+ <div style="margin-bottom:18px">
+ <label class="form-label" style="font-size:10px;color:var(--text-muted);margin-bottom:4px;display:block">Ответственные</label>
+ <div id="ptd-owner-chips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:30px;margin-bottom:6px;align-items:center"></div>
+ <select id="ptd-owner-select" class="form-input" onchange="planDetailAddOwner(this.value)" style="width:100%">
+ <option value="">+ Добавить ответственного</option>
+ </select>
+ </div>
 
  <!-- Подзадачи -->
  <div style="margin-bottom:16px">
@@ -18361,26 +18391,26 @@ window.planOpenTaskDetail = function(taskId){
  if (!t) return;
  _planOpenTaskId = taskId;
  // Заголовок
- document.getElementById('ptd-title').textContent = t.title || 'Задача';
- // Мета-информация — аватары, дедлайн, приоритет
- var meta = [];
- var owners = Array.isArray(t.owners) && t.owners.length ? t.owners : (t.owner ? String(t.owner).split(',').map(function(s){return s.trim();}).filter(Boolean) : []);
- if (owners.length) meta.push('<span><strong style="color:var(--text-secondary)">Ответственные:</strong> '+owners.join(', ')+'</span>');
- if (t.due_date) {
- var todayStr = (new Date()).toISOString().slice(0,10);
- var overdue = todayStr > t.due_date && t.status !== 'done';
- meta.push('<span style="color:'+(overdue?'#D67373':'var(--text-secondary)')+'"><strong>Дедлайн:</strong> '+(overdue?'':'')+planFmtDate(t.due_date)+'</span>');
+ // v576: название редактируемое
+ var titleEl = document.getElementById('ptd-title'); if (titleEl) titleEl.value = t.title || '';
+ // v576: приоритет / статус — редактируемые селекты
+ var prEl = document.getElementById('ptd-priority'); if (prEl) prEl.value = t.priority || 'mid';
+ var stEl = document.getElementById('ptd-status'); if (stEl) stEl.value = t.status || 'todo';
+ // v576: ответственные — наполняем выпадающий список (команда спринта + остальные) и чипы
+ var spD = planLoadSprints().find(function(s){return s.id===t.sprint_id;}) || {};
+ var ownerSel = document.getElementById('ptd-owner-select');
+ if (ownerSel && typeof employees !== 'undefined') {
+ var teamIds = (spD.team || []);
+ var teamMembers = employees.filter(function(e){return teamIds.indexOf(e.id) !== -1;});
+ var others = employees.filter(function(e){return e.active!==false && teamIds.indexOf(e.id) === -1;});
+ var opts = '<option value="">+ Добавить ответственного</option>';
+ if (teamMembers.length) { opts += '<optgroup label="Команда спринта">'; teamMembers.forEach(function(e){ opts += '<option value="'+e.id+'|'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+'</option>'; }); opts += '</optgroup>'; }
+ if (others.length) { opts += '<optgroup label="Остальные сотрудники">'; others.forEach(function(e){ opts += '<option value="'+e.id+'|'+(e.name||'').replace(/"/g,'&quot;')+'">'+e.name+' · '+(e.pos||'')+'</option>'; }); opts += '</optgroup>'; }
+ ownerSel.innerHTML = opts;
  }
- if (t.priority) {
- var prMap = { high:{l:'Высокий', c:'#D67373'}, mid:{l:'Средний', c:'#D6A372'}, low:{l:'Низкий', c:'#7FB89E'} };
- var p = prMap[t.priority] || prMap.mid;
- meta.push('<span style="color:'+p.c+'"><strong>Приоритет:</strong> '+p.l+'</span>');
- }
- if (t.status) {
- var stLabel = { todo:'Бэклог', progress:'В работе', review:'На проверке', done:'Готово' };
- meta.push('<span><strong style="color:var(--text-secondary)">Статус:</strong> '+(stLabel[t.status]||t.status)+'</span>');
- }
- document.getElementById('ptd-meta').innerHTML = meta.join('');
+ _planRenderDetailOwners(t);
+ // Мета-сводка сверху (read-only)
+ _planBuildTaskMeta(t);
  // Подзадачи
  _planRenderSubtasks(t);
  document.getElementById('ptd-sub-input').value = '';
@@ -18701,14 +18731,18 @@ window.planUpdateTaskDates = function(){
  // обновим мета-блок наверху модалки и канбан
  if (typeof planRenderKanban === 'function') planRenderKanban();
  // перерисовать meta — проще ребут модалки без скрытия (быстро обновим только meta)
- var t = all[i];
+ _planBuildTaskMeta(all[i]);
+};
+
+// v576: построение мета-сводки задачи (read-only строка сверху карточки)
+function _planBuildTaskMeta(t){
  var meta = [];
  var owners = Array.isArray(t.owners) && t.owners.length ? t.owners : (t.owner ? String(t.owner).split(',').map(function(s){return s.trim();}).filter(Boolean) : []);
  if (owners.length) meta.push('<span><strong style="color:var(--text-secondary)">Ответственные:</strong> '+owners.join(', ')+'</span>');
  if (t.due_date) {
  var todayStr = (new Date()).toISOString().slice(0,10);
  var overdue = todayStr > t.due_date && t.status !== 'done';
- meta.push('<span style="color:'+(overdue?'#D67373':'var(--text-secondary)')+'"><strong>Дедлайн:</strong> '+(overdue?'':'')+planFmtDate(t.due_date)+'</span>');
+ meta.push('<span style="color:'+(overdue?'#D67373':'var(--text-secondary)')+'"><strong>Дедлайн:</strong> '+planFmtDate(t.due_date)+'</span>');
  }
  if (t.priority) {
  var prMap = { high:{l:'Высокий', c:'#D67373'}, mid:{l:'Средний', c:'#D6A372'}, low:{l:'Низкий', c:'#7FB89E'} };
@@ -18721,7 +18755,83 @@ window.planUpdateTaskDates = function(){
  }
  var metaEl = document.getElementById('ptd-meta');
  if (metaEl) metaEl.innerHTML = meta.join('');
+}
+
+// v576: редактирование полей задачи прямо в карточке (название/приоритет/статус/ответственные)
+function _planEditOpenTask(mutate, logType, logText){
+ if (!_planOpenTaskId) return null;
+ var all = planLoadTasks();
+ var i = all.findIndex(function(t){return t.id===_planOpenTaskId;});
+ if (i < 0) return null;
+ var changed = mutate(all[i], all, i);
+ if (changed === false) return null;
+ if (logType) _planLogActivity(all, i, logType, logText);
+ planSaveTasks(all);
+ _planBuildTaskMeta(all[i]);
+ if (typeof _planRenderActivity === 'function') _planRenderActivity(all[i]);
+ if (typeof planRecountSprint === 'function') planRecountSprint(all[i].sprint_id);
+ if (typeof planRenderKanban === 'function') planRenderKanban();
+ return all[i];
+}
+window.planUpdateTaskTitle = function(){
+ var inp = document.getElementById('ptd-title'); if (!inp) return;
+ var v = (inp.value || '').trim();
+ if (!v) { var cur = planLoadTasks().find(function(t){return t.id===_planOpenTaskId;}); if (cur) inp.value = cur.title || ''; return; }
+ _planEditOpenTask(function(t){ if (t.title === v) return false; t.title = v; }, 'edit', 'переименовал(а) задачу: «' + v + '»');
 };
+window.planUpdateTaskPriority = function(val){
+ var lbl = { high:'Высокий', mid:'Средний', low:'Низкий' };
+ _planEditOpenTask(function(t){ if (t.priority === val) return false; t.priority = val; }, 'edit', 'приоритет → ' + (lbl[val] || val));
+};
+window.planUpdateTaskStatus = function(val){
+ var lbl = { todo:'Бэклог', progress:'В работе', review:'На проверке', done:'Готово' };
+ _planEditOpenTask(function(t){ if (t.status === val) return false; t.status = val; }, 'status', 'статус → ' + (lbl[val] || val));
+};
+window.planDetailAddOwner = function(value){
+ if (!value) return;
+ var parts = value.split('|'); var id = parseInt(parts[0],10); var name = parts[1] || '';
+ _planEditOpenTask(function(t){
+ _planNormalizeOwners(t);
+ if (t.owner_ids.indexOf(id) !== -1) return false;
+ t.owner_ids.push(id); t.owners.push(name); t.owner = t.owners.join(', ');
+ }, 'edit', 'добавил(а) ответственного: ' + name);
+ var sel = document.getElementById('ptd-owner-select'); if (sel) sel.value = '';
+ var nt = planLoadTasks().find(function(x){return x.id===_planOpenTaskId;}); if (nt) _planRenderDetailOwners(nt);
+};
+window.planDetailRemoveOwner = function(id){
+ _planEditOpenTask(function(t){
+ _planNormalizeOwners(t);
+ var idx = t.owner_ids.indexOf(id);
+ if (idx === -1) return false;
+ t.owner_ids.splice(idx,1);
+ t.owners.splice(idx,1);
+ t.owner = t.owners.join(', ');
+ }, 'edit', 'убрал(а) ответственного');
+ var nt = planLoadTasks().find(function(x){return x.id===_planOpenTaskId;}); if (nt) _planRenderDetailOwners(nt);
+};
+// v576: приводим owners/owner_ids к одной длине (старые задачи могли иметь только строку owner)
+function _planNormalizeOwners(t){
+ if (!Array.isArray(t.owners)) t.owners = (t.owner ? String(t.owner).split(',').map(function(s){return s.trim();}).filter(Boolean) : []);
+ if (!Array.isArray(t.owner_ids) || t.owner_ids.length !== t.owners.length) {
+ t.owner_ids = t.owners.map(function(nm){
+ var e = (typeof employees !== 'undefined') ? employees.find(function(x){return (x.name||'').trim() === String(nm).trim();}) : null;
+ return e ? e.id : null;
+ });
+ }
+ return t;
+}
+function _planRenderDetailOwners(t){
+ var box = document.getElementById('ptd-owner-chips'); if (!box) return;
+ _planNormalizeOwners(t);
+ var owners = t.owners || [];
+ var ids = t.owner_ids || [];
+ if (!owners.length) { box.innerHTML = '<span style="font-size:11px;color:var(--text-muted)">Не назначены — выбери из списка ниже</span>'; return; }
+ box.innerHTML = owners.map(function(nm, k){
+ var id = ids[k];
+ var rm = (id != null) ? '<button type="button" onclick="planDetailRemoveOwner('+id+')" style="background:rgba(255,255,255,.08);border:none;color:#fff;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;line-height:1;padding:0">×</button>' : '';
+ return '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 4px 4px 10px;border-radius:14px;background:rgba(84,137,187,.12);border:1px solid rgba(84,137,187,.25);color:#7AA7D7;font-size:11px;font-weight:600">'+_planEsc(nm)+rm+'</span>';
+ }).join('');
+}
 
 // v177: drag-and-drop задач между колонками канбана
 window.planDragStart = function(event, taskId){
