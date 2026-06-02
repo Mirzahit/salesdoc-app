@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v578</title>
+<title>SalesDoc — Финансовый Дашборд v579</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5403,18 +5403,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <button class="cal-apply-btn" onclick="calApply()" style="width:100%">ПРИМЕНИТЬ</button>
  </div>
  </div>
- <button id="country-lamp" class="theme-lamp country-lamp" aria-pressed="false" aria-label="Переключить страну" title="Переключить страну (KZ/KG)" onclick="toggleCountry()" style="display:none">
- <div class="socket"><div class="socket-shadow"></div></div>
- <div class="face">
- <div class="face-shadow"></div>
- <div class="face-glowdrop"></div>
- <div class="face-plate"></div>
- <div class="face-shine"><div class="face-shine-shadow"></div></div>
- <div class="face-glows"><div></div></div>
- <span class="cl-label" id="country-lamp-label">KZ</span>
+ <!-- v579: простой сегментный переключатель страны (заменил кнопку-лампу) -->
+ <div class="country-switcher" id="country-top" style="display:none;width:auto;margin:0" title="Переключить страну (KZ/KG)">
+ <button class="country-top-btn" data-country="KZ" onclick="switchCountry('KZ')" style="padding:5px 14px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;letter-spacing:1px;font-family:'Inter',sans-serif">KZ</button>
+ <button class="country-top-btn" data-country="KG" onclick="switchCountry('KG')" style="padding:5px 14px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;letter-spacing:1px;font-family:'Inter',sans-serif">KG</button>
  </div>
- <span class="sr-only">Переключить страну</span>
- </button>
  <button id="theme-lamp" class="theme-lamp" aria-pressed="false" aria-label="Переключить тему" title="Переключить тему" onclick="toggleTheme()">
  <div class="socket"><div class="socket-shadow"></div></div>
  <div class="face">
@@ -5538,6 +5531,21 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="kpi-chip-prev"></div>
  </div>
  </div></div></div>
+ <div class="kpi-card"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Доработки</div><div class="kpi-value" id="kpi-revision">0 <span>₸</span></div><div class="kpi-delta up" id="delta-revision">0%</div></div><div class="kpi-divider"></div>
+ <div class="kpi-right">
+ <div class="kpi-chip chip-flat" id="m2m-revision">
+ <div class="kpi-chip-label">vs прошл.мес</div>
+ <div class="kpi-chip-val">—</div>
+ <div class="kpi-chip-sub">нет данных</div>
+ <div class="kpi-chip-prev"></div>
+ </div>
+ <div class="kpi-chip chip-flat" id="a2a-revision">
+ <div class="kpi-chip-label">vs прошл.год</div>
+ <div class="kpi-chip-val">—</div>
+ <div class="kpi-chip-sub">нет данных</div>
+ <div class="kpi-chip-prev"></div>
+ </div>
+ </div></div></div>
  <div class="kpi-card" data-kpi-type="integration" style="cursor:pointer"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Интеграции</div><div class="kpi-value" id="kpi-integ">0 <span>₸</span></div><div class="kpi-delta up" id="delta-integ">0%</div></div><div class="kpi-divider"></div>
  <div class="kpi-right">
  <div class="kpi-chip chip-flat" id="m2m-integ">
@@ -5547,6 +5555,21 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="kpi-chip-prev"></div>
  </div>
  <div class="kpi-chip chip-flat" id="a2a-integ">
+ <div class="kpi-chip-label">vs прошл.год</div>
+ <div class="kpi-chip-val">—</div>
+ <div class="kpi-chip-sub">нет данных</div>
+ <div class="kpi-chip-prev"></div>
+ </div>
+ </div></div></div>
+ <div class="kpi-card"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Прочее</div><div class="kpi-value" id="kpi-other">0 <span>₸</span></div><div class="kpi-delta up" id="delta-other">0%</div></div><div class="kpi-divider"></div>
+ <div class="kpi-right">
+ <div class="kpi-chip chip-flat" id="m2m-other">
+ <div class="kpi-chip-label">vs прошл.мес</div>
+ <div class="kpi-chip-val">—</div>
+ <div class="kpi-chip-sub">нет данных</div>
+ <div class="kpi-chip-prev"></div>
+ </div>
+ <div class="kpi-chip chip-flat" id="a2a-other">
  <div class="kpi-chip-label">vs прошл.год</div>
  <div class="kpi-chip-val">—</div>
  <div class="kpi-chip-sub">нет данных</div>
@@ -8793,7 +8816,7 @@ function mapCategoryFromSheet(cat) {
  if (c.includes('абон') || c.includes('баланс')) return 'subscription';
  if (c.includes('доп') && c.includes('лиц')) return 'other';
  if (c.includes('лицен') || c.includes('новый клиент') || c.includes('нов клиент')) return 'license';
- if (c.includes('доработ')) return 'implementation';
+ if (c.includes('доработ')) return 'revision';
  return 'other';
 }
 
@@ -9600,7 +9623,7 @@ function parseSheetData(data) {
 
 function parseAmount(v){ if(!v)return 0; return parseFloat(String(v).replace(/[^0-9.]/g,''))||0; }
 function formatDate(v){ if(!v)return new Date().toISOString().split('T')[0]; if(v instanceof Date)return v.toISOString().split('T')[0]; const s=String(v); if(s.includes('.'))return s.split('.').reverse().join('-'); return s.substring(0,10); }
-function mapCategory(v){ const s=String(v||'').toLowerCase(); if(s.includes('доп')&&s.includes('лиц'))return'other'; if(s.includes('лиц')||s.includes('lic'))return'license'; if(s.includes('абон')||s.includes('sub'))return'subscription'; if(s.includes('интеграц')||s.includes('integr'))return'integration'; if(s.includes('внед')||s.includes('impl'))return'implementation'; return'other'; }
+function mapCategory(v){ const s=String(v||'').toLowerCase(); if(s.includes('доп')&&s.includes('лиц'))return'other'; if(s.includes('лиц')||s.includes('lic'))return'license'; if(s.includes('абон')||s.includes('sub'))return'subscription'; if(s.includes('интеграц')||s.includes('integr'))return'integration'; if(s.includes('доработ'))return'revision'; if(s.includes('внед')||s.includes('impl'))return'implementation'; return'other'; }
 function mapStatus(v){ const s=String(v||'').toLowerCase(); if(s.includes('оплач')||s.includes('paid'))return'paid'; return'pending'; }
 
 // ============================================================
@@ -9705,12 +9728,15 @@ function renderAll() {
  updatePeriodLabel();
  const ps=getPeriodPayments(currentPeriod);
  const license=sumByCategory(ps,'license'), sub=sumByCategory(ps,'subscription'), impl=sumByCategory(ps,'implementation'), integ=sumByCategory(ps,'integration');
- const total=license+sub+impl+integ+sumByCategory(ps,'other');
+ const revision=sumByCategory(ps,'revision'), other=sumByCategory(ps,'other');
+ const total=license+sub+impl+integ+revision+other;
  var _cur = COUNTRY_CONFIG[currentCountry].currency;
  document.getElementById('kpi-license').innerHTML=fmt(license)+' <span>'+_cur+'</span>';
  document.getElementById('kpi-sub').innerHTML=fmt(sub)+' <span>'+_cur+'</span>';
  document.getElementById('kpi-impl').innerHTML=fmt(impl)+' <span>'+_cur+'</span>';
  const _integEl=document.getElementById('kpi-integ'); if(_integEl)_integEl.innerHTML=fmt(integ)+' <span>'+_cur+'</span>';
+ const _revEl=document.getElementById('kpi-revision'); if(_revEl)_revEl.innerHTML=fmt(revision)+' <span>'+_cur+'</span>';
+ const _othEl=document.getElementById('kpi-other'); if(_othEl)_othEl.innerHTML=fmt(other)+' <span>'+_cur+'</span>';
  document.getElementById('kpi-total').innerHTML=fmt(total)+' <span>'+_cur+'</span>';
  // Средний чек новых клиентов: "новый" = у кого в categoryRaw (столбец Статья) есть слово "нов"
  (function calcAvgNewCheck(){
@@ -9761,6 +9787,8 @@ function renderAll() {
  'sub':{cur:sub, prev:sumByCategory(prevPay,'subscription')},
  'impl':{cur:impl, prev:sumByCategory(prevPay,'implementation')},
  'integ':{cur:integ, prev:sumByCategory(prevPay,'integration')},
+ 'revision':{cur:revision, prev:sumByCategory(prevPay,'revision')},
+ 'other':{cur:other, prev:sumByCategory(prevPay,'other')},
  'total':{cur:total, prev:prevPay.reduce(function(s,p){return s+p.amount;},0)}
  };
  Object.keys(mapping).forEach(function(k){
@@ -13954,10 +13982,10 @@ async function doLogin() {
  if (currentUser.country) {
  switchCountry(currentUser.country);
  document.getElementById('country-switcher').style.display = 'none';
- document.getElementById('country-lamp').style.display = 'none';
+ document.getElementById('country-top').style.display = 'none';
  } else {
  document.getElementById('country-switcher').style.display = 'none';
- document.getElementById('country-lamp').style.display = '';
+ document.getElementById('country-top').style.display = '';
  }
  updateCountrySwitcherUI();
  initCalendar();
@@ -14007,12 +14035,12 @@ async function doLogin() {
  switchCountry(currentUser.country);
  var cs = document.getElementById('country-switcher');
  if(cs) cs.style.display = 'none';
- var tc = document.getElementById('country-lamp');
+ var tc = document.getElementById('country-top');
  if(tc) tc.style.display = 'none';
  } else {
  var cs = document.getElementById('country-switcher');
  if(cs) cs.style.display = 'none';
- var tc = document.getElementById('country-lamp');
+ var tc = document.getElementById('country-top');
  if(tc) tc.style.display = '';
  }
  updateCountrySwitcherUI();
@@ -15678,7 +15706,9 @@ function renderM2MA2A(ps) {
  var curS = sumByCategory(ps, 'subscription');
  var curI = sumByCategory(ps, 'implementation');
  var curG = sumByCategory(ps, 'integration');
- var curT = curL + curS + curI + curG + sumByCategory(ps, 'other');
+ var curR = sumByCategory(ps, 'revision');
+ var curO = sumByCategory(ps, 'other');
+ var curT = curL + curS + curI + curG + curR + curO;
 
  function sumCat(arr, cat) { return arr.length > 0 ? sumByCategory(arr, cat) : null; }
  function sumAll(arr) { return arr.length > 0 ? arr.reduce(function(a,b){return a+b.amount;},0) : null; }
@@ -15691,6 +15721,10 @@ function renderM2MA2A(ps) {
  setChip('a2a-impl', curI, sumCat(a2aPay,'implementation'), a2aLabel);
  setChip('m2m-integ', curG, sumCat(m2mPay,'integration'), prevLabel);
  setChip('a2a-integ', curG, sumCat(a2aPay,'integration'), a2aLabel);
+ setChip('m2m-revision', curR, sumCat(m2mPay,'revision'), prevLabel);
+ setChip('a2a-revision', curR, sumCat(a2aPay,'revision'), a2aLabel);
+ setChip('m2m-other', curO, sumCat(m2mPay,'other'), prevLabel);
+ setChip('a2a-other', curO, sumCat(a2aPay,'other'), a2aLabel);
  setChip('m2m-total', curT, sumAll(m2mPay), prevLabel);
  setChip('a2a-total', curT, sumAll(a2aPay), a2aLabel);
 

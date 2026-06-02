@@ -14,7 +14,7 @@ import { sbSelect, sbInsert, sbUpdate, sbDelete } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 
 const ALLOWED_COUNTRIES = ['KZ', 'KG'];
-const ALLOWED_CATEGORIES = ['implementation', 'integration', 'subscription', 'license', 'other'];
+const ALLOWED_CATEGORIES = ['implementation', 'integration', 'revision', 'subscription', 'license', 'other'];
 const ALLOWED_SOURCES = ['manual', 'payment_bot', 'sheets_import'];
 const ALLOWED_PATCH_FIELDS = [
   'paid_at', 'company_name', 'client_id', 'category', 'category_raw',
@@ -96,7 +96,8 @@ function _parseDate(v, dateCorrection) {
 function _mapCategory(cat) {
   const c = String(cat || '').toLowerCase().replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
   if (c.includes('интеграц')) return 'integration';
-  if (c.includes('внедрен') || c.includes('доработ')) return 'implementation';
+  if (c.includes('доработ')) return 'revision';
+  if (c.includes('внедрен')) return 'implementation';
   if (c.includes('абон') || c.includes('баланс')) return 'subscription';
   if (c.includes('лицен') || c.includes('новый клиент') || c.includes('нов клиент')) return 'license';
   return 'other';
