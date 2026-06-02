@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v579</title>
+<title>SalesDoc — Финансовый Дашборд v580</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -3596,6 +3596,16 @@ body.light .theme-btn.active{background:rgba(76,140,245,.1);color:#1967D2}
 .country-lamp[aria-pressed='true'] .face-shine{opacity:0.35}
 .country-lamp[aria-pressed='true'] .socket-shadow{opacity:0.5}
 .country-lamp[aria-pressed='true'] .face-glowdrop{scale:0.6}
+/* v580: состояние KG (pressed) — такой же тёмный цвет, как KZ (не белеет на тёмной теме) */
+.country-lamp[aria-pressed='true'] .face-plate{background:conic-gradient(from 45deg,#0000,hsl(0 0% 100% / 0.05)),hsl(0 0% 10%)}
+.country-lamp[aria-pressed='true'] .socket{background:hsl(0 0% 0%);box-shadow:-0.05em 0.1em 0.2em -0.2em white}
+.country-lamp[aria-pressed='true'] .cl-label{color:hsl(0 0% 78%)}
+.country-lamp[aria-pressed='true'] .face{scale:1}
+.country-lamp[aria-pressed='true'] .face-glowdrop{scale:0}
+.country-lamp[aria-pressed='true'] .face-glows,
+.country-lamp[aria-pressed='true'] .face-shine,
+.country-lamp[aria-pressed='true'] .socket-shadow,
+.country-lamp[aria-pressed='true'] .glow{opacity:0}
 /* v479: sync-lamp — расширяет .theme-lamp, вместо SVG-месяца показывает SVG-стрелки refresh */
 .sync-lamp{aspect-ratio:1.8/1}
 .sync-lamp .sl-icon{position:absolute;top:50%;left:50%;width:40%;height:40%;transform:translate(-50%,-50%);color:hsl(0 0% 72%);z-index:5;pointer-events:none;display:flex;align-items:center;justify-content:center;transition:color var(--step) var(--ease)}
@@ -5403,11 +5413,18 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <button class="cal-apply-btn" onclick="calApply()" style="width:100%">ПРИМЕНИТЬ</button>
  </div>
  </div>
- <!-- v579: простой сегментный переключатель страны (заменил кнопку-лампу) -->
- <div class="country-switcher" id="country-top" style="display:none;width:auto;margin:0" title="Переключить страну (KZ/KG)">
- <button class="country-top-btn" data-country="KZ" onclick="switchCountry('KZ')" style="padding:5px 14px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;letter-spacing:1px;font-family:'Inter',sans-serif">KZ</button>
- <button class="country-top-btn" data-country="KG" onclick="switchCountry('KG')" style="padding:5px 14px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;letter-spacing:1px;font-family:'Inter',sans-serif">KG</button>
+ <button id="country-lamp" class="theme-lamp country-lamp" aria-pressed="false" aria-label="Переключить страну" title="Переключить страну (KZ/KG)" onclick="toggleCountry()" style="display:none">
+ <div class="socket"><div class="socket-shadow"></div></div>
+ <div class="face">
+ <div class="face-shadow"></div>
+ <div class="face-glowdrop"></div>
+ <div class="face-plate"></div>
+ <div class="face-shine"><div class="face-shine-shadow"></div></div>
+ <div class="face-glows"><div></div></div>
+ <span class="cl-label" id="country-lamp-label">KZ</span>
  </div>
+ <span class="sr-only">Переключить страну</span>
+ </button>
  <button id="theme-lamp" class="theme-lamp" aria-pressed="false" aria-label="Переключить тему" title="Переключить тему" onclick="toggleTheme()">
  <div class="socket"><div class="socket-shadow"></div></div>
  <div class="face">
@@ -13982,10 +13999,10 @@ async function doLogin() {
  if (currentUser.country) {
  switchCountry(currentUser.country);
  document.getElementById('country-switcher').style.display = 'none';
- document.getElementById('country-top').style.display = 'none';
+ document.getElementById('country-lamp').style.display = 'none';
  } else {
  document.getElementById('country-switcher').style.display = 'none';
- document.getElementById('country-top').style.display = '';
+ document.getElementById('country-lamp').style.display = '';
  }
  updateCountrySwitcherUI();
  initCalendar();
@@ -14035,12 +14052,12 @@ async function doLogin() {
  switchCountry(currentUser.country);
  var cs = document.getElementById('country-switcher');
  if(cs) cs.style.display = 'none';
- var tc = document.getElementById('country-top');
+ var tc = document.getElementById('country-lamp');
  if(tc) tc.style.display = 'none';
  } else {
  var cs = document.getElementById('country-switcher');
  if(cs) cs.style.display = 'none';
- var tc = document.getElementById('country-top');
+ var tc = document.getElementById('country-lamp');
  if(tc) tc.style.display = '';
  }
  updateCountrySwitcherUI();
