@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v580</title>
+<title>SalesDoc — Финансовый Дашборд v581</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8725,6 +8725,7 @@ function initEmployees(){
  nextEmpId = employees.length + 1;
  _employeesLoaded = true;
  console.log('Employees loaded from Sheet: ' + employees.length);
+ if(typeof _afterEmployeesLoaded==='function') _afterEmployeesLoaded();
  })
  .catch(function(e){
  console.error('Failed to load employees:', e);
@@ -8739,6 +8740,7 @@ function _initFallbackEmployees(){
  ];
  nextEmpId = 2;
  _employeesLoaded = true;
+ if(typeof _afterEmployeesLoaded==='function') _afterEmployeesLoaded();
 }
 
 let nextEmpId = 14;
@@ -12233,6 +12235,7 @@ async function saveEmployee() {
  else { employees.push(data); }
  saveCustomEmployees();
  if(typeof saveEmpAccess === 'function') saveEmpAccess();
+ if(typeof saveEmpAccessOne === 'function') saveEmpAccessOne(data); // v581: права на сервер по email
  // v154: если меняли пароль существующего сотрудника — пишем в Sheet, иначе после reload откатится
  if (editId && newPass) {
  try { await apiUpdateUserPassword(editId, newPass); }
@@ -13968,6 +13971,7 @@ async function doLogin() {
  return;
  }
  currentUser = emp;
+ try { loadEmpAccess(); } catch(_){} // v581: подтянуть серверные права и применить к currentUser
 
  // Запомнить меня (сохраняем хеш, не открытый пароль)
  const remember = document.getElementById('remember-me');
@@ -14038,6 +14042,7 @@ async function doLogin() {
  }
  if (emp) {
  currentUser = emp;
+ try { loadEmpAccess(); } catch(_){} // v581: подтянуть серверные права и применить к currentUser
  document.getElementById('login-screen').style.display = 'none';
  document.getElementById('sidebar').style.display = 'flex';
  document.getElementById('main-app').style.display = 'block';
@@ -15292,20 +15297,61 @@ function renderEmpAccessList(accessLabels) {
  }).join('');
 }
 
-function saveEmpAccess() {
- var data = {};
- employees.forEach(function(e){ data[e.id] = e.access; });
- try { localStorage.setItem('sd_emp_access', JSON.stringify(data)); } catch(ex){}
-}
-function loadEmpAccess() {
+// v581: права сотрудников хранятся на СЕРВЕРЕ (Supabase /api/employee-access), ключ — email.
+// Раньше только localStorage браузера CEO → не доходили до сотрудника и слетали при перезагрузке.
+var _empAccessMap = null; // { email(lc): {access...} } — серверный override (авторитет)
+
+function _applyEmpAccessMap(){
+ if(!_empAccessMap) return;
  try {
- var raw = localStorage.getItem('sd_emp_access');
- if (!raw) return;
- var data = JSON.parse(raw);
  employees.forEach(function(e){
- if (data[e.id]) e.access = Object.assign({}, e.access, data[e.id]);
+ var k = (e.email||'').trim().toLowerCase();
+ if(k && _empAccessMap[k]) e.access = Object.assign({}, e.access, _empAccessMap[k]);
  });
+ if(typeof currentUser!=='undefined' && currentUser && currentUser.email){
+ var ck = currentUser.email.trim().toLowerCase();
+ if(_empAccessMap[ck]){ currentUser.access = Object.assign({}, currentUser.access, _empAccessMap[ck]); if(typeof applyUserAccess==='function') applyUserAccess(); }
+ }
  } catch(ex){}
+}
+
+// Сохранить права одного сотрудника на сервер (по email)
+function saveEmpAccessOne(emp){
+ if(!emp) return;
+ var k = (emp.email||'').trim().toLowerCase();
+ if(!k){ if(typeof showNotif==='function') showNotif('Внимание','У сотрудника нет email — права не сохранятся централизованно. Укажите email.'); return; }
+ if(!_empAccessMap) _empAccessMap = {};
+ _empAccessMap[k] = Object.assign({}, emp.access);
+ try { localStorage.setItem('sd_emp_access_srv', JSON.stringify(_empAccessMap)); } catch(ex){}
+ sbFetch('/api/employee-access', { method:'POST', body: JSON.stringify({ email:k, access: emp.access, updated_by: (typeof currentUser!=='undefined'&&currentUser&&currentUser.name)||null }) })
+ .then(function(r){ if(!r||!r.ok){ if(typeof showNotif==='function') showNotif('Ошибка','Права не сохранились на сервере: '+((r&&r.error)||'')); } })
+ .catch(function(){ if(typeof showNotif==='function') showNotif('Ошибка','Права не сохранились (сеть). Повторите.'); });
+}
+
+// Старый вызов (форма): локальный кэш по id для оффлайна; на сервер — saveEmpAccessOne
+function saveEmpAccess() {
+ try { var data={}; employees.forEach(function(e){ data[e.id]=e.access; }); localStorage.setItem('sd_emp_access', JSON.stringify(data)); } catch(ex){}
+}
+
+async function loadEmpAccess() {
+ // 1) оффлайн-кэш сразу
+ if(!_empAccessMap){ try { var c=localStorage.getItem('sd_emp_access_srv'); if(c) _empAccessMap=JSON.parse(c); } catch(ex){} }
+ _applyEmpAccessMap();
+ // 2) сервер — авторитет
+ try {
+ var resp = await sbFetch('/api/employee-access');
+ if(resp && resp.ok && resp.access){
+ _empAccessMap = resp.access;
+ try { localStorage.setItem('sd_emp_access_srv', JSON.stringify(_empAccessMap)); } catch(ex){}
+ _applyEmpAccessMap();
+ }
+ } catch(ex){}
+}
+
+// Вызывать после любой пересборки employees (Sheet/fallback/custom) — переприменяет права
+function _afterEmployeesLoaded(){
+ try { if(typeof loadCustomEmployees==='function') loadCustomEmployees(); } catch(ex){}
+ _applyEmpAccessMap();
 }
 
 function toggleEmpAccess(empId, key) {
@@ -15313,6 +15359,8 @@ function toggleEmpAccess(empId, key) {
  if (!emp || !emp.access) return;
  emp.access[key] = emp.access[key] ? 0 : 1;
  saveEmpAccess();
+ saveEmpAccessOne(emp);
+ if(typeof currentUser!=='undefined' && currentUser && currentUser.id===empId){ currentUser.access = Object.assign({}, emp.access); if(typeof applyUserAccess==='function') applyUserAccess(); }
  const accessLabels = {
  view_dashboard:'Обзор', view_payments:'Оплаты', view_acts:'Акты',
  view_plan:'Планы', view_keyclients:'Клиенты', view_expenses:'Расходы',
