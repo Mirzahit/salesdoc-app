@@ -304,8 +304,50 @@ export default async function handler(req, res) {
       }, TOKEN);
       result = data;
 
+    } else if (endpoint === 'all_ads') {
+      // Все объявления аккаунта за период (с пагинацией) — для рейтинга эффективности.
+      const adFields = `id,name,effective_status,campaign{name},adset{name},creative{thumbnail_url,object_type,video_id,image_hash},insights.date_preset(${period}){${INSIGHT_FIELDS}}`;
+      const MAX_ADS = 500;
+      let collected = [];
+      let truncated = false;
+      let guard = 0;
+      let data = await metaFetch(`/${ACCOUNT}/ads`, { fields: adFields, limit: 200 }, TOKEN);
+      while (data) {
+        collected = collected.concat(data.data || []);
+        if (collected.length >= MAX_ADS) { truncated = true; break; }
+        const next = data.paging && data.paging.next;
+        if (!next || guard++ > 10) break;
+        data = await metaFetch(next, null, TOKEN);
+      }
+      const ads = collected.map(a => {
+        const ins = (a.insights && a.insights.data && a.insights.data[0]) || null;
+        const leads = ins ? summarizeLeads(ins.actions, ins.cost_per_action_type) : { count: 0 };
+        const spend = ins ? parseFloat(ins.spend || 0) : 0;
+        const cr = a.creative || {};
+        return {
+          id: a.id,
+          name: a.name,
+          effective_status: a.effective_status || null,
+          campaign_name: (a.campaign && a.campaign.name) || null,
+          adset_name: (a.adset && a.adset.name) || null,
+          creative: {
+            thumbnail_url: cr.thumbnail_url || null,
+            type: cr.video_id ? 'видео' : 'баннер',
+            video_id: cr.video_id || null,
+            image_hash: cr.image_hash || null
+          },
+          spend,
+          impressions: ins ? Number(ins.impressions || 0) : 0,
+          clicks: ins ? Number(ins.clicks || 0) : 0,
+          ctr: ins ? parseFloat(ins.ctr || 0) : 0,
+          leads: leads.count || 0,
+          cost_per_lead: (leads.count > 0) ? (spend / leads.count) : null
+        };
+      });
+      result = { period, account_id: ACCOUNT, ads, truncated };
+
     } else {
-      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','account_info'] });
+      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info'] });
     }
 
     // v442: метка страны в ответе — для отладки в DevTools Network видно какой кабинет ответил.

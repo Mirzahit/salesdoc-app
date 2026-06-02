@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v576</title>
+<title>SalesDoc — Финансовый Дашборд v577</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6172,6 +6172,21 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="mkt-channel-cta">Полный расчёт</div>
  </div>
 
+ <!-- v577: Рейтинг объявлений -->
+ <div class="mkt-channel" onclick="mktOpenAdsPage()">
+ <div class="mkt-channel-head">
+ <div class="mkt-channel-title">Рейтинг объявлений</div>
+ <div class="mkt-channel-arrow">→</div>
+ </div>
+ <div class="mkt-channel-sub">Какой баннер/видео приносит больше лидов</div>
+ <div class="mkt-channel-stats">
+ <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Объявлений</div><div class="mkt-channel-stat-val" id="mkt-preview-ads-count">—</div></div>
+ <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Лидов</div><div class="mkt-channel-stat-val" id="mkt-preview-ads-leads">—</div></div>
+ <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Ср. цена лида</div><div class="mkt-channel-stat-val" id="mkt-preview-ads-cpl">—</div></div>
+ </div>
+ <div class="mkt-channel-cta">Открыть рейтинг</div>
+ </div>
+
  </div>
 
 </div>
@@ -6701,6 +6716,37 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <!-- /FULLSCREEN LTV PAGE -->
 
  <!-- FULLSCREEN TARGET ADS PAGE -->
+ <!-- v577: РЕЙТИНГ ОБЪЯВЛЕНИЙ (Meta) -->
+ <div id="view-mkt-ads" class="sd-overlay-screen" style="display:none;position:fixed;inset:0;z-index:9999;background:#0B0B0D;overflow-y:auto">
+ <div class="kbc-header">
+ <button class="kbc-back" onclick="mktCloseAdsPage()">&#8592; Маркетинг</button>
+ <div class="kbc-title">Рейтинг объявлений</div>
+ </div>
+ <div style="padding:24px;max-width:1200px;margin:0 auto">
+ <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+ <div style="display:flex;gap:6px;flex-wrap:wrap">
+ <button class="meta-period-pill" data-adsperiod="last_7d" onclick="mktAdsSetPeriod('last_7d',this)">7 дней</button>
+ <button class="meta-period-pill active" data-adsperiod="last_30d" onclick="mktAdsSetPeriod('last_30d',this)">30 дней</button>
+ <button class="meta-period-pill" data-adsperiod="last_90d" onclick="mktAdsSetPeriod('last_90d',this)">90 дней</button>
+ <button class="meta-period-pill" data-adsperiod="this_month" onclick="mktAdsSetPeriod('this_month',this)">Этот месяц</button>
+ <button class="meta-period-pill" data-adsperiod="last_month" onclick="mktAdsSetPeriod('last_month',this)">Прошлый месяц</button>
+ </div>
+ <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+ <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);cursor:pointer"><input type="checkbox" id="mkt-ads-active-only" checked onchange="mktAdsRender()"><span>Только активные</span></label>
+ <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);cursor:pointer"><input type="checkbox" id="mkt-ads-group" checked onchange="mktAdsRender()"><span>Группировать по креативу</span></label>
+ <select id="mkt-ads-sort" onchange="mktAdsRender()" style="font-size:12px;padding:6px 10px;border-radius:8px;background:var(--surface,#15151a);color:var(--text);border:1px solid var(--border-faint,rgba(255,255,255,.12))">
+ <option value="leads">Сорт: по лидам</option>
+ <option value="cpl">Сорт: по цене лида</option>
+ <option value="spend">Сорт: по расходу</option>
+ </select>
+ <button onclick="mktAdsLoad()" style="padding:8px 18px;border-radius:8px;background:linear-gradient(135deg,#1877F2,#42A5F5);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.3px">Обновить</button>
+ </div>
+ </div>
+ <div id="mkt-ads-summary" style="margin-bottom:14px"></div>
+ <div id="mkt-ads-list"><div style="padding:40px;text-align:center;color:var(--text-muted)">Загрузка…</div></div>
+ </div>
+ </div>
+
  <div id="view-mkt-target" class="sd-overlay-screen" style="display:none;position:fixed;inset:0;z-index:9999;background:#0B0B0D;overflow-y:auto">
  <div class="kbc-header">
  <button class="kbc-back" onclick="mktCloseTargetPage()">&#8592; Маркетинг</button>
@@ -37458,6 +37504,122 @@ function mktOpenLtvPage() {
 function mktCloseLtvPage() {
  document.getElementById('view-mkt-ltv').style.display = 'none';
 }
+
+// v577: Рейтинг объявлений (Meta) =====================================
+var _mktAdsPeriod = 'last_30d';
+var _mktAdsData = null;
+function mktOpenAdsPage(){
+ var ov = document.getElementById('view-mkt-ads');
+ if(ov && ov.parentNode !== document.body) document.body.appendChild(ov);
+ var mkt = document.getElementById('view-marketing');
+ if(mkt) mkt.style.setProperty('display','none','important');
+ document.body.classList.add('has-overlay');
+ ov.style.display = 'block';
+ if(!_mktAdsData) mktAdsLoad();
+}
+function mktCloseAdsPage(){
+ document.getElementById('view-mkt-ads').style.display = 'none';
+ document.body.classList.remove('has-overlay');
+ var mkt = document.getElementById('view-marketing');
+ if(mkt) mkt.style.setProperty('display','block','important');
+}
+function mktAdsSetPeriod(p, btn){
+ _mktAdsPeriod = p;
+ document.querySelectorAll('#view-mkt-ads .meta-period-pill').forEach(function(b){ b.classList.remove('active'); });
+ if(btn) btn.classList.add('active');
+ mktAdsLoad();
+}
+function mktAdsFmtMoney(n){
+ n = Number(n)||0;
+ if(n>=1000000) return (n/1000000).toFixed(1).replace('.0','')+'М';
+ if(n>=1000) return Math.round(n/1000)+'К';
+ return String(Math.round(n));
+}
+async function mktAdsLoad(){
+ var listEl = document.getElementById('mkt-ads-list');
+ if(listEl) listEl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Загрузка объявлений из Meta…</div>';
+ try {
+  var r = await fetch('/api/meta-ads?endpoint=all_ads&period=' + encodeURIComponent(_mktAdsPeriod) + '&country=' + currentCountry);
+  var j = await r.json();
+  if(!r.ok || j.error){ throw new Error((j && (j.detail||j.error)) || ('HTTP '+r.status)); }
+  _mktAdsData = j;
+  mktAdsRender();
+ } catch(e){
+  if(listEl) listEl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Не удалось загрузить Meta: '+_planEsc(String(e.message||e))+'<br><span style="font-size:11px">Проверь токен Meta (META_ACCESS_TOKEN) в Vercel.</span></div>';
+ }
+}
+function mktAdsRender(){
+ var data = _mktAdsData; if(!data) return;
+ var ads = (data.ads||[]).slice();
+ var ao = document.getElementById('mkt-ads-active-only');
+ if(ao && ao.checked) ads = ads.filter(function(a){ return a.effective_status === 'ACTIVE'; });
+ var grp = document.getElementById('mkt-ads-group');
+ var rows;
+ if(grp && grp.checked){
+  var map = {};
+  ads.forEach(function(a){
+   var key = (a.creative && (a.creative.video_id || a.creative.image_hash || a.creative.thumbnail_url)) || a.id;
+   if(!map[key]) map[key] = { name:a.name, creative:a.creative, leads:0, spend:0, impressions:0, clicks:0, count:0, ids:[], effective_status:a.effective_status, campaign_name:a.campaign_name };
+   var g = map[key];
+   g.leads += a.leads||0; g.spend += a.spend||0; g.impressions += a.impressions||0; g.clicks += a.clicks||0; g.count++; g.ids.push(a.id);
+   if(a.effective_status==='ACTIVE') g.effective_status='ACTIVE';
+  });
+  rows = Object.keys(map).map(function(k){ var g=map[k]; g.cost_per_lead = g.leads>0 ? g.spend/g.leads : null; g.ctr = g.impressions>0 ? (g.clicks/g.impressions*100) : 0; return g; });
+ } else {
+  rows = ads.map(function(a){ return { name:a.name, creative:a.creative, leads:a.leads, spend:a.spend, impressions:a.impressions, clicks:a.clicks, count:1, ids:[a.id], effective_status:a.effective_status, campaign_name:a.campaign_name, cost_per_lead:a.cost_per_lead, ctr:a.ctr }; });
+ }
+ var sort = (document.getElementById('mkt-ads-sort')||{}).value || 'leads';
+ rows.sort(function(a,b){
+  if(sort==='spend') return (b.spend||0)-(a.spend||0);
+  if(sort==='cpl'){ var ca=a.cost_per_lead==null?Infinity:a.cost_per_lead, cb=b.cost_per_lead==null?Infinity:b.cost_per_lead; return ca-cb; }
+  return (b.leads||0)-(a.leads||0);
+ });
+ var totSpend = rows.reduce(function(s,r){return s+(r.spend||0);},0);
+ var totLeads = rows.reduce(function(s,r){return s+(r.leads||0);},0);
+ var avgCpl = totLeads>0 ? totSpend/totLeads : null;
+ var best = rows.filter(function(r){return r.leads>0;}).slice().sort(function(a,b){return b.leads-a.leads;})[0];
+ var worst = rows.filter(function(r){return r.spend>0 && (r.leads||0)===0;}).sort(function(a,b){return b.spend-a.spend;})[0];
+ var sEl = document.getElementById('mkt-ads-summary');
+ if(sEl){
+  sEl.innerHTML = '<div style="display:flex;gap:18px;flex-wrap:wrap;padding:14px 16px;background:var(--surface-2,rgba(255,255,255,.03));border:1px solid var(--border-faint,rgba(255,255,255,.06));border-radius:12px">'
+   + '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Расход</div><div style="font-size:18px;font-weight:700">'+mktAdsFmtMoney(totSpend)+'</div></div>'
+   + '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Лидов</div><div style="font-size:18px;font-weight:700">'+totLeads+'</div></div>'
+   + '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Ср. цена лида</div><div style="font-size:18px;font-weight:700">'+(avgCpl!=null?mktAdsFmtMoney(avgCpl):'—')+'</div></div>'
+   + (best?'<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Лучшее</div><div style="font-size:13px;font-weight:600;color:#7FB89E">'+_planEsc(best.name||'')+' · '+best.leads+' лид.</div></div>':'')
+   + (worst?'<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Кандидат убрать</div><div style="font-size:13px;font-weight:600;color:#D67373">'+_planEsc(worst.name||'')+' · 0 лид., '+mktAdsFmtMoney(worst.spend)+'</div></div>':'')
+   + '</div>'
+   + (data.truncated?'<div style="font-size:11px;color:var(--text-muted);margin-top:6px">Показаны первые 500 объявлений (есть ещё).</div>':'');
+ }
+ var listEl = document.getElementById('mkt-ads-list');
+ if(!listEl) return;
+ if(!rows.length){ listEl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Нет объявлений за период.</div>'; return; }
+ var acct = (data.account_id||'').replace(/^act_/,'');
+ listEl.innerHTML = rows.map(function(r){
+  var flag = '';
+  if(r.spend>0 && (r.leads||0)===0) flag = '<span style="color:#D67373;font-size:11px;font-weight:600">кандидат убрать</span>';
+  else if(avgCpl!=null && r.cost_per_lead!=null && r.cost_per_lead > avgCpl*1.8) flag = '<span style="color:#D6A372;font-size:11px;font-weight:600">дорогой лид</span>';
+  var thumb = (r.creative && r.creative.thumbnail_url) ? '<img src="'+_planEsc(r.creative.thumbnail_url)+'" referrerpolicy="no-referrer" style="width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0">' : '<div style="width:64px;height:64px;border-radius:8px;background:rgba(255,255,255,.05);flex-shrink:0"></div>';
+  var typeBadge = '<span style="font-size:10px;padding:1px 7px;border-radius:10px;background:rgba(84,137,187,.15);color:#7AA7D7">'+_planEsc((r.creative&&r.creative.type)||'')+'</span>';
+  var grpN = r.count>1 ? '<span style="font-size:10px;color:var(--text-muted)"> · в '+r.count+' объяв.</span>' : '';
+  var paused = r.effective_status!=='ACTIVE' ? '<span style="font-size:10px;color:var(--text-muted)"> · на паузе</span>' : '';
+  var metaLink = acct ? '<a href="https://www.facebook.com/adsmanager/manage/ads?act='+acct+'&selected_ad_ids='+r.ids[0]+'" target="_blank" rel="noopener" style="font-size:11px;color:#7AA7D7;text-decoration:none">Meta ↗</a>' : '';
+  return '<div style="display:flex;gap:14px;align-items:center;padding:12px 14px;border:1px solid var(--border-faint,rgba(255,255,255,.06));border-radius:12px;margin-bottom:8px;background:var(--surface-2,rgba(255,255,255,.02))">'
+   + thumb
+   + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_planEsc(r.name||'(без названия)')+'</div>'
+   + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+typeBadge+' '+_planEsc(r.campaign_name||'')+grpN+paused+'</div></div>'
+   + '<div style="text-align:right;min-width:64px"><div style="font-size:18px;font-weight:700;color:var(--text-primary)">'+(r.leads||0)+'</div><div style="font-size:10px;color:var(--text-muted)">лидов</div></div>'
+   + '<div style="text-align:right;min-width:78px"><div style="font-size:13px;font-weight:600">'+(r.cost_per_lead!=null?mktAdsFmtMoney(r.cost_per_lead):'—')+'</div><div style="font-size:10px;color:var(--text-muted)">цена лида</div></div>'
+   + '<div style="text-align:right;min-width:64px"><div style="font-size:13px">'+mktAdsFmtMoney(r.spend)+'</div><div style="font-size:10px;color:var(--text-muted)">расход</div></div>'
+   + '<div style="text-align:right;min-width:56px"><div style="font-size:13px">'+(Number(r.ctr||0).toFixed(1))+'%</div><div style="font-size:10px;color:var(--text-muted)">CTR</div></div>'
+   + '<div style="min-width:96px;text-align:right;line-height:1.5">'+flag+'<br>'+metaLink+'</div>'
+   + '</div>';
+ }).join('');
+}
+window.mktOpenAdsPage = mktOpenAdsPage;
+window.mktCloseAdsPage = mktCloseAdsPage;
+window.mktAdsSetPeriod = mktAdsSetPeriod;
+window.mktAdsLoad = mktAdsLoad;
+window.mktAdsRender = mktAdsRender;
 
 // v159+v162: инициализация дашборда Маркетинг при заходе на страницу
 window.mktInitDashboard = async function(){
