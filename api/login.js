@@ -21,8 +21,11 @@ export default async function handler(req, res) {
     const body = await readBody(req);
     const email = normEmail(body.email);
     if (!email) return res.status(200).json({ ok: false, error: 'Введите логин и пароль' });
+    // v587 SEC: запрещаем спецсимволы PostgREST/LIKE — иначе подстановкой %,*,( можно матчить чужую строку.
+    if (/[,*()%\s]/.test(email)) return res.status(200).json({ ok: false, error: 'Неверный логин или пароль' });
 
-    const rows = await sbSelect('employees', { email: 'ilike.' + email, limit: 1 });
+    // eq (точное равенство) вместо ilike — % и * трактуются буквально, инъекция шаблоном невозможна.
+    const rows = await sbSelect('employees', { email: 'eq.' + email, limit: 1 });
     const emp = rows && rows[0];
     // одинаковый ответ при отсутствии юзера и неверном пароле — не палим существование логина
     if (!emp) return res.status(200).json({ ok: false, error: 'Неверный логин или пароль' });
