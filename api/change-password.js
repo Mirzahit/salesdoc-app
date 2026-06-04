@@ -14,20 +14,25 @@ export default async function handler(req, res) {
   try {
     const body = await readBody(req);
     const email = normEmail(body.email);
-    if (/[,*()%\s]/.test(email) || !email) return res.status(200).json({ ok: false, error: 'Неверные данные' });
+    // единый generic-ответ — не палим существование/статус аккаунта (анти-энумерация)
+    const GENERIC = 'Неверный текущий пароль или учётная запись недоступна';
+    if (/[,*()%\s]/.test(email) || !email) return res.status(200).json({ ok: false, error: GENERIC });
     const oldP = String(body.old_password || '');
     const newP = String(body.new_password || '');
     if (!oldP || !newP) return res.status(200).json({ ok: false, error: 'Укажите старый и новый пароль' });
     if (newP.trim().length < 4) return res.status(200).json({ ok: false, error: 'Новый пароль слишком короткий' });
 
+    // менять можно ТОЛЬКО свой пароль: заявленная личность (x-user-email) должна совпадать с email.
+    const claimed = normEmail(req.headers['x-user-email']);
+    if (claimed && claimed !== email) return res.status(200).json({ ok: false, error: GENERIC });
+
     const rows = await sbSelect('employees', { email: 'eq.' + email, select: 'id,pass_hash,active', limit: 1 });
     const emp = rows && rows[0];
-    if (!emp) return res.status(200).json({ ok: false, error: 'Неверный текущий пароль' });
-    if (emp.active === false) return res.status(200).json({ ok: false, error: 'Учётная запись отключена' });
+    if (!emp || emp.active === false) return res.status(200).json({ ok: false, error: GENERIC });
 
     const stored = String(emp.pass_hash || '');
     const oldOk = stored && (stored === sha256(oldP.trim()) || stored === sha256(oldP));
-    if (!oldOk) return res.status(200).json({ ok: false, error: 'Неверный текущий пароль' });
+    if (!oldOk) return res.status(200).json({ ok: false, error: GENERIC });
 
     await sbUpdate('employees', { id: 'eq.' + emp.id }, {
       pass_hash: sha256(newP.trim()),

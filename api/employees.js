@@ -36,6 +36,7 @@ export default async function handler(req, res) {
     }
     const gate = checkAdminToken(req);
     if (!gate.ok) {
+      if (gate.unconfigured) return res.status(503).json({ ok: false, error: 'Управление сотрудниками недоступно: на сервере не настроен ADMIN_TOKEN (задайте env в Vercel).' });
       return res.status(403).json({ ok: false, error: 'Неверный или отсутствует админ-код', needAdminToken: true });
     }
     const body = await readBody(req);
