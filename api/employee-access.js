@@ -14,7 +14,7 @@
 // пер-юзер аутентификация (отдельная задача). updated_by берём из проверенного email, не из тела.
 
 import { sbSelect, sbUpsert } from './_supabase.js';
-import { checkAuth } from './_auth.js';
+import { checkAuth, checkAdminToken } from './_auth.js';
 import { resolveCaller } from './_caller.js'; // v587: роли из таблицы employees, не из GAS
 
 const ADMIN_ROLES = new Set(['admin', 'head']);
@@ -54,9 +54,13 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      // Менять права может только admin/head.
+      // Менять права может только admin/head + админ-код (v587).
       if (!isAdmin) {
         return res.status(403).json({ ok: false, error: 'Изменять права может только администратор/руководитель' });
+      }
+      const gate = checkAdminToken(req);
+      if (!gate.ok) {
+        return res.status(403).json({ ok: false, error: 'Неверный или отсутствует админ-код', needAdminToken: true });
       }
       const body = await readBody(req);
       const email = normEmail(body.email);

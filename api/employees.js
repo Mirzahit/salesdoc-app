@@ -8,7 +8,7 @@
 // АВТОРИЗАЦИЯ: checkAuth (общий x-app-token) + проверка роли вызывающего через _caller (таблица employees).
 import crypto from 'crypto';
 import { sbSelect, sbUpsert, sbUpdate, sbDelete } from './_supabase.js';
-import { checkAuth } from './_auth.js';
+import { checkAuth, checkAdminToken } from './_auth.js';
 import { resolveCaller } from './_caller.js';
 
 const ADMIN_ROLES = new Set(['admin', 'head']);
@@ -29,10 +29,14 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, employees: rows });
     }
 
-    // мутации — только admin/head
+    // мутации — только admin/head + админ-код (барьер против захвата через публичный app-token)
     const caller = await resolveCaller(req);
     if (!caller || !ADMIN_ROLES.has(caller.role)) {
       return res.status(403).json({ ok: false, error: 'Изменять сотрудников может только администратор' });
+    }
+    const gate = checkAdminToken(req);
+    if (!gate.ok) {
+      return res.status(403).json({ ok: false, error: 'Неверный или отсутствует админ-код', needAdminToken: true });
     }
     const body = await readBody(req);
 

@@ -20,3 +20,18 @@ export function checkAuth(req, res) {
   }
   return true;
 }
+
+// v587: отдельный секрет для ОПАСНЫХ мутаций (сотрудники, права). В отличие от APP_TOKEN он
+// НЕ лежит в клиентском бандле — CEO вводит его в UI, фронт шлёт в заголовке x-admin-token.
+// Это барьер против захвата аккаунта: публичный APP_TOKEN + подделанный x-user-email больше
+// не дают сбросить пароль / удалить / выдать роль. Полноценная защита — пер-юзер сессии (отдельно).
+// Возвращает { ok, soft }. soft=true → ADMIN_TOKEN не настроен в env (мягко пропускаем до настройки).
+export function checkAdminToken(req) {
+  const expected = (process.env.ADMIN_TOKEN || '').trim();
+  if (!expected) {
+    console.warn('[auth] ADMIN_TOKEN не настроен — мутации защищены только ролью (задайте env в Vercel!)');
+    return { ok: true, soft: true };
+  }
+  const got = (req.headers['x-admin-token'] || '').toString().trim();
+  return { ok: got === expected, soft: false };
+}

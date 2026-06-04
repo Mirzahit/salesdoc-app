@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v587</title>
+<title>SalesDoc — Финансовый Дашборд v588</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8658,6 +8658,8 @@ const START_PASSWORD = '123456';
 // v587: app-token нужен sbFetch на boot (initEmployees, автологин) — он раньше задавался ниже
 // по файлу (после вызовов), поэтому уходил пустым → 401. Поднимаем определение сюда.
 window._APP_TOKEN = window._APP_TOKEN || 'salesdoc-2026-route-secret-9k3xJ7';
+// v587: админ-код для мутаций сотрудников/прав. НЕ в коде — вводится CEO, кэш на сессию.
+try { window._ADMIN_TOKEN = window._ADMIN_TOKEN || sessionStorage.getItem('sd_admin_token') || ''; } catch(_){ window._ADMIN_TOKEN = window._ADMIN_TOKEN || ''; }
 // v152: Отдельный standalone Apps Script "SalesDoc — Users API (Reset/Disable Password) v152"
 // Экшены: resetPassword / updatePassword / disableUser / enableUser
 // v587: операции с паролями/статусом сотрудника теперь идут в Supabase (/api/employees),
@@ -8673,6 +8675,10 @@ function apiDisableUser(userId){
 }
 function apiEnableUser(userId){
  return sbFetch('/api/employees', { method:'POST', body: JSON.stringify({ id:userId, active:true }) });
+}
+// v587: самосмена СВОЕГО пароля — без админ-кода, сервер проверяет старый пароль.
+function apiChangeOwnPassword(oldPlain, newPlain){
+ return sbFetch('/api/change-password', { method:'POST', body: JSON.stringify({ email: (currentUser&&currentUser.email)||'', old_password: oldPlain, new_password: newPlain }) });
 }
 
 // ============================================================
@@ -15370,22 +15376,15 @@ async function changePassword() {
  const msg = document.getElementById('pass-msg');
 
  if (!oldP || !newP || !conf) { msg.style.color='#D67373'; msg.textContent=' Заполните все поля'; return; }
- // Проверяем старый пароль через хеш
- var oldHash = await sha256(oldP);
- if (currentUser.pass_hash !== oldHash && currentUser.pass !== oldP) { msg.style.color='#D67373'; msg.textContent=' Неверный текущий пароль'; return; }
- if (newP.length < 4) { msg.style.color='#D67373'; msg.textContent=' Пароль слишком короткий (мин. 4 символа)'; return; }
- if (newP !== conf) { msg.style.color='#D67373'; msg.textContent=' Пароли не совпадают'; return; }
-
- // Обновляем хеш пароля
+ if (newP.length < 4) { msg.style.color='#D67373'; msg.textContent='Пароль слишком короткий (мин. 4 символа)'; return; }
+ if (newP !== conf) { msg.style.color='#D67373'; msg.textContent='Пароли не совпадают'; return; }
+ // v587: старый пароль проверяет сервер (/api/change-password) — хэша на клиенте больше нет
+ var cpr = await apiChangeOwnPassword(oldP, newP);
+ if (!cpr || !cpr.ok) { msg.style.color='#D67373'; msg.textContent = (cpr && cpr.error) || 'Не удалось сменить пароль'; return; }
  var newHash = await sha256(newP);
- currentUser.pass_hash = newHash;
  currentUser.is_temp = false;
- delete currentUser.pass; // убираем открытый пароль если был
  const emp = employees.find(e => e.id === currentUser.id);
- if (emp) { emp.pass_hash = newHash; emp.is_temp = false; delete emp.pass; }
-
- // v152: пишем в Sheet — иначе при reload откатится
- try { await apiUpdateUserPassword(currentUser.id, newP); } catch(e){ console.warn('updatePassword failed:', e); }
+ if (emp) { emp.is_temp = false; }
 
  // Обновляем "Запомнить меня" с новым хешем
  try {
@@ -15429,12 +15428,13 @@ async function submitForcePassChange(){
  if (newP === START_PASSWORD) { msg.style.color='#D67373'; msg.textContent='Нельзя оставлять стартовый пароль'; return; }
  msg.style.color='#FBBF77'; msg.textContent='Сохраняем...';
  try {
+ // v587: temp-пароль = стартовый; самосмена через /api/change-password (без админ-кода)
+ var cpr = await apiChangeOwnPassword(START_PASSWORD, newP);
+ if (!cpr || !cpr.ok) { msg.style.color='#D67373'; msg.textContent=(cpr&&cpr.error)||'Ошибка сохранения. Попробуйте ещё раз.'; return; }
  var newHash = await sha256(newP);
- await apiUpdateUserPassword(currentUser.id, newP);
- currentUser.pass_hash = newHash;
  currentUser.is_temp = false;
  var emp = employees.find(function(e){ return e.id === currentUser.id; });
- if (emp) { emp.pass_hash = newHash; emp.is_temp = false; }
+ if (emp) { emp.is_temp = false; }
  try {
  if (localStorage.getItem('sd_saved_login')) {
  localStorage.setItem('sd_saved_pass_hash', newHash);
@@ -25776,6 +25776,8 @@ async function sbFetch(path, options){
  options.headers['x-app-token'] = window._APP_TOKEN;
  // v582: личность вызывающего для серверной проверки роли (например, /api/employee-access)
  if(typeof currentUser!=='undefined' && currentUser && currentUser.email){ options.headers['x-user-email'] = currentUser.email; }
+ // v587: админ-код для опасных мутаций (сотрудники/права) — не в бандле, вводит CEO
+ if(window._ADMIN_TOKEN){ options.headers['x-admin-token'] = window._ADMIN_TOKEN; }
  if(options.body && !options.headers['Content-Type']){
   options.headers['Content-Type'] = 'application/json';
  }
@@ -25788,6 +25790,17 @@ async function sbFetch(path, options){
  var d = await r.json().catch(function(){ return { ok:false, error:'invalid json' }; });
  if(r.status === 401){
   console.warn('[sb] 401 unauthorized — токен не совпадает с env');
+ }
+ // v587: сервер требует админ-код — спросим CEO и повторим запрос один раз
+ if(d && d.needAdminToken && !options._retriedAdmin){
+  var t = window.prompt('Введите админ-код (нужен для изменения сотрудников и прав доступа):', '');
+  if(t && t.trim()){
+   window._ADMIN_TOKEN = t.trim();
+   try { sessionStorage.setItem('sd_admin_token', window._ADMIN_TOKEN); } catch(_){}
+   options._retriedAdmin = true;
+   options.headers['x-admin-token'] = window._ADMIN_TOKEN;
+   return sbFetch(path, options);
+  }
  }
  return d;
 }
