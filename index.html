@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v588</title>
+<title>SalesDoc — Финансовый Дашборд v589</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8658,8 +8658,8 @@ const START_PASSWORD = '123456';
 // v587: app-token нужен sbFetch на boot (initEmployees, автологин) — он раньше задавался ниже
 // по файлу (после вызовов), поэтому уходил пустым → 401. Поднимаем определение сюда.
 window._APP_TOKEN = window._APP_TOKEN || 'salesdoc-2026-route-secret-9k3xJ7';
-// v587: админ-код для мутаций сотрудников/прав. НЕ в коде — вводится CEO, кэш на сессию.
-try { window._ADMIN_TOKEN = window._ADMIN_TOKEN || sessionStorage.getItem('sd_admin_token') || ''; } catch(_){ window._ADMIN_TOKEN = window._ADMIN_TOKEN || ''; }
+// v589: админ-код для мутаций сотрудников/прав. НЕ в коде — вводится CEO один раз на устройство (localStorage).
+try { window._ADMIN_TOKEN = window._ADMIN_TOKEN || localStorage.getItem('sd_admin_token') || ''; } catch(_){ window._ADMIN_TOKEN = window._ADMIN_TOKEN || ''; }
 // v152: Отдельный standalone Apps Script "SalesDoc — Users API (Reset/Disable Password) v152"
 // Экшены: resetPassword / updatePassword / disableUser / enableUser
 // v587: операции с паролями/статусом сотрудника теперь идут в Supabase (/api/employees),
@@ -25796,7 +25796,7 @@ async function sbFetch(path, options){
   var t = window.prompt('Введите админ-код (нужен для изменения сотрудников и прав доступа):', '');
   if(t && t.trim()){
    window._ADMIN_TOKEN = t.trim();
-   try { sessionStorage.setItem('sd_admin_token', window._ADMIN_TOKEN); } catch(_){}
+   try { localStorage.setItem('sd_admin_token', window._ADMIN_TOKEN); } catch(_){} // v589: помним на устройстве
    options._retriedAdmin = true;
    options.headers['x-admin-token'] = window._ADMIN_TOKEN;
    return sbFetch(path, options);
