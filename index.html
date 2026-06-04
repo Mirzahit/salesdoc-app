@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v585</title>
+<title>SalesDoc — Финансовый Дашборд v586</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8697,11 +8697,16 @@ async function sha256(str) {
  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
-function initEmployees(){
+function initEmployees(_attempt){
  // Загружаем из Google Sheet (лист "Users" в Academy Sheet)
+ _attempt = _attempt || 0;
  var url = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- fetch(url + '?action=getSheet&sheet=Users&spreadsheetId=' + ACADEMY_SHEET_ID)
- .then(function(r){return r.json();})
+ // v586: таймаут 25с (GAS холодный старт бывает 19с) + 1 ретрай, чтобы зависший/упавший
+ // запрос не сбрасывал всех на Admin-only fallback (тогда реальные юзеры не входят).
+ var _ac = (typeof AbortController!=='undefined') ? new AbortController() : null;
+ var _to = setTimeout(function(){ try{ if(_ac) _ac.abort(); }catch(_){} }, 25000);
+ fetch(url + '?action=getSheet&sheet=Users&spreadsheetId=' + ACADEMY_SHEET_ID, _ac?{signal:_ac.signal}:undefined)
+ .then(function(r){ clearTimeout(_to); return r.json();})
  .then(function(data){
  var rows = data.rows || data;
  if(!rows || rows.length < 2) { _initFallbackEmployees(); return; }
@@ -8735,7 +8740,10 @@ function initEmployees(){
  if(typeof _afterEmployeesLoaded==='function') _afterEmployeesLoaded();
  })
  .catch(function(e){
- console.error('Failed to load employees:', e);
+ clearTimeout(_to);
+ console.error('Failed to load employees (attempt '+(_attempt+1)+'):', e);
+ // v586: один ретрай перед fallback на Admin-only
+ if (_attempt < 1) { setTimeout(function(){ initEmployees(_attempt+1); }, 1500); return; }
  _initFallbackEmployees();
  });
 }
@@ -14093,7 +14101,17 @@ async function doLogin() {
  var sp2 = document.getElementById('sd-splash'); if(sp2) sp2.remove();
  }
  }, 200);
- setTimeout(function(){ clearInterval(waitForEmployees); }, 10000);
+ // v586: GAS (Apps Script) на холодном старте отвечает 11-19с — старый таймаут 10с
+ // бросал ожидание ДО загрузки сотрудников и оставлял splash висеть навсегда.
+ // Поднимаем до 30с и при срабатывании деградируем к форме входа, а не к вечному спиннеру.
+ setTimeout(function(){
+ clearInterval(waitForEmployees);
+ if (currentUser) return; // автологин уже прошёл
+ document.documentElement.removeAttribute('data-auto-login');
+ var spT = document.getElementById('sd-splash'); if(spT) spT.remove();
+ var errT = document.getElementById('login-err');
+ if (errT) { errT.style.color = '#D67373'; errT.textContent = 'Сервер медленно отвечает. Войдите вручную.'; }
+ }, 30000);
  } else if (savedLogin && savedPass) {
  // Старый формат — удаляем, пусть войдёт заново
  localStorage.removeItem('sd_saved_pass');
