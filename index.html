@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v586</title>
+<title>SalesDoc — Финансовый Дашборд v587</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8655,30 +8655,24 @@ function isWigEditorAllowed(user){
 // Стартовый пароль для новых сотрудников и при сбросе админом.
 // При успешном входе с этим паролем фронт форсирует смену (is_temp=TRUE).
 const START_PASSWORD = '123456';
+// v587: app-token нужен sbFetch на boot (initEmployees, автологин) — он раньше задавался ниже
+// по файлу (после вызовов), поэтому уходил пустым → 401. Поднимаем определение сюда.
+window._APP_TOKEN = window._APP_TOKEN || 'salesdoc-2026-route-secret-9k3xJ7';
 // v152: Отдельный standalone Apps Script "SalesDoc — Users API (Reset/Disable Password) v152"
 // Экшены: resetPassword / updatePassword / disableUser / enableUser
-const USERS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwLMv7nA0ymu9wP6CPnQRXo9kf2sGkPyllFPq-3tHQPRpGUccZdjhlvEBcAxKAmeCtLPQ/exec';
-function _apiUsers(payload){
- return fetch(USERS_SCRIPT_URL, {
- method:'POST',
- headers:{'Content-Type':'text/plain'},
- body:JSON.stringify(Object.assign({spreadsheetId:ACADEMY_SHEET_ID, sheet:'Users'}, payload))
- }).then(function(r){ return r.json(); });
-}
+// v587: операции с паролями/статусом сотрудника теперь идут в Supabase (/api/employees),
+// а не во второй GAS-скрипт. Сервер хеширует пароль сам. Сигнатуры сохранены — вызовы не меняются.
 async function apiResetUserPassword(userId){
- var hash = await sha256(START_PASSWORD);
- return _apiUsers({action:'resetPassword', userId:userId, passHash:hash});
+ return sbFetch('/api/employees', { method:'POST', body: JSON.stringify({ id:userId, password:START_PASSWORD, is_temp:true }) });
 }
 async function apiUpdateUserPassword(userId, plainPassword){
- var hash = await sha256(plainPassword);
- return _apiUsers({action:'updatePassword', userId:userId, passHash:hash});
+ return sbFetch('/api/employees', { method:'POST', body: JSON.stringify({ id:userId, password:plainPassword, is_temp:false }) });
 }
 function apiDisableUser(userId){
- var stamp = 'disabled-' + new Date().toISOString().slice(0,10);
- return _apiUsers({action:'disableUser', userId:userId, passHash:stamp});
+ return sbFetch('/api/employees', { method:'POST', body: JSON.stringify({ id:userId, active:false }) });
 }
 function apiEnableUser(userId){
- return _apiUsers({action:'enableUser', userId:userId});
+ return sbFetch('/api/employees', { method:'POST', body: JSON.stringify({ id:userId, active:true }) });
 }
 
 // ============================================================
@@ -8697,15 +8691,34 @@ async function sha256(str) {
  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
+// v587: сотрудники из Supabase (/api/employees) — быстро, без зависимости от медленного GAS.
+// pass_hash на клиент НЕ приходит (логин теперь серверный — /api/login). Возвращает Promise.
+// На ошибку: 1 ретрай, затем разовый fallback на лист Users (оставлен на один релиз).
 function initEmployees(_attempt){
- // Загружаем из Google Sheet (лист "Users" в Academy Sheet)
  _attempt = _attempt || 0;
+ return sbFetch('/api/employees').then(function(res){
+ if(!res || !res.ok || !Array.isArray(res.employees)) throw new Error((res && res.error) || 'no employees');
+ employees = res.employees.map(function(r){
+ return Object.assign({}, r, { access: Object.assign({}, ROLE_DEFAULTS[r.role] || ROLE_DEFAULTS.viewer) });
+ });
+ nextEmpId = employees.reduce(function(m,e){ return Math.max(m, e.id||0); }, 0) + 1;
+ _employeesLoaded = true;
+ console.log('Employees loaded from Supabase: ' + employees.length);
+ if(typeof _applyEmpAccessMap==='function') _applyEmpAccessMap();
+ }).catch(function(e){
+ console.error('initEmployees (Supabase) failed (attempt '+(_attempt+1)+'):', e);
+ if(_attempt < 1){ return new Promise(function(r){ setTimeout(r, 1200); }).then(function(){ return initEmployees(_attempt+1); }); }
+ console.warn('Fallback: читаем сотрудников из листа Users (GAS)');
+ return _initEmployeesFromSheet();
+ });
+}
+
+// v587 LEGACY: загрузка из GAS-листа Users. Оставлена как fallback на один релиз, если /api/employees недоступен.
+function _initEmployeesFromSheet(){
  var url = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- // v586: таймаут 25с (GAS холодный старт бывает 19с) + 1 ретрай, чтобы зависший/упавший
- // запрос не сбрасывал всех на Admin-only fallback (тогда реальные юзеры не входят).
  var _ac = (typeof AbortController!=='undefined') ? new AbortController() : null;
  var _to = setTimeout(function(){ try{ if(_ac) _ac.abort(); }catch(_){} }, 25000);
- fetch(url + '?action=getSheet&sheet=Users&spreadsheetId=' + ACADEMY_SHEET_ID, _ac?{signal:_ac.signal}:undefined)
+ return fetch(url + '?action=getSheet&sheet=Users&spreadsheetId=' + ACADEMY_SHEET_ID, _ac?{signal:_ac.signal}:undefined)
  .then(function(r){ clearTimeout(_to); return r.json();})
  .then(function(data){
  var rows = data.rows || data;
@@ -8723,27 +8736,21 @@ function initEmployees(_attempt){
  pass_hash: r[4]||'',
  role: role,
  bonus: parseInt(r[6])||0,
- // v154: безопасный парсер — уволен ТОЛЬКО при явном FALSE/0/нет/disabled.
- // Пустота, TRUE-чекбокс (boolean), любые опечатки — считаем активным.
  active: !['false','0','нет','no','disabled','уволен'].includes(String(r[7]==null?'':r[7]).trim().toLowerCase()),
  access: Object.assign({}, ROLE_DEFAULTS[role] || ROLE_DEFAULTS.viewer),
  country: r[8]||'',
- // v152: is_temp (колонка J) — если TRUE, фронт после логина форсирует смену пароля
- // v154: расширили — принимаем true (boolean), 'TRUE', '1', 'да', 'yes'
  is_temp: ['true','1','да','yes'].includes(String(r[9]==null?'':r[9]).trim().toLowerCase()),
- _row: i+1 // 1-based номер строки в Sheet (для write-операций)
+ _row: i+1
  });
  }
  nextEmpId = employees.length + 1;
  _employeesLoaded = true;
- console.log('Employees loaded from Sheet: ' + employees.length);
+ console.log('Employees loaded from Sheet (fallback): ' + employees.length);
  if(typeof _afterEmployeesLoaded==='function') _afterEmployeesLoaded();
  })
  .catch(function(e){
  clearTimeout(_to);
- console.error('Failed to load employees (attempt '+(_attempt+1)+'):', e);
- // v586: один ретрай перед fallback на Admin-only
- if (_attempt < 1) { setTimeout(function(){ initEmployees(_attempt+1); }, 1500); return; }
+ console.error('Sheet fallback failed:', e);
  _initFallbackEmployees();
  });
 }
@@ -12165,9 +12172,12 @@ function toggleEmpActive(id) {
  const emp = employees.find(function(e){return e.id===id;});
  if (!emp) return;
  emp.active = emp.active === false ? true : false;
- saveCustomEmployees();
  renderEmployees();
- showNotif(emp.active ? ' Сотрудник восстановлен' : ' Сотрудник помечен как уволенный', emp.name);
+ // v587: статус сохраняем в Supabase (раньше — только localStorage, слетал на других устройствах)
+ (emp.active ? apiEnableUser(id) : apiDisableUser(id))
+ .then(function(r){ if(!r||!r.ok){ showNotif('Ошибка', (r&&r.error)||'Статус не сохранился на сервере'); } })
+ .catch(function(){ showNotif('Ошибка','Статус не сохранился (сеть). Повторите.'); });
+ showNotif(emp.active ? 'Сотрудник восстановлен' : 'Сотрудник помечен как уволенный', emp.name);
 }
 
 function openEmpModal(id=null) {
@@ -12205,9 +12215,15 @@ async function resetPasswordFromModal(){
 function editEmployee(id){ openEmpModal(id); }
 function deleteEmployee(id) {
  if (!confirm('Удалить сотрудника?')) return;
+ // v587: удаляем в Supabase (источник правды), затем из локального массива
+ sbFetch('/api/employees', { method:'POST', body: JSON.stringify({ action:'delete', id:id }) })
+ .then(function(r){
+ if(!r||!r.ok){ showNotif('Ошибка', (r&&r.error)||'Не удалось удалить сотрудника'); return; }
  employees = employees.filter(e=>e.id!==id);
  renderEmployees(); buildQuickChips(); populateEmployeeSelects();
  showNotif('Сотрудник удалён','');
+ })
+ .catch(function(){ showNotif('Ошибка','Не удалось удалить (сеть). Повторите.'); });
 }
 
 function updateAccessChecks(existingAccess=null) {
@@ -12236,33 +12252,32 @@ async function saveEmployee() {
  ACCESS_KEYS.forEach(a=>{ access[a.key]=document.getElementById('acc-'+a.key)?.classList.contains('on')?1:0; });
  const editId=parseInt(document.getElementById('e-edit-id').value)||null;
  var newPass = document.getElementById('e-pass').value;
- var passHash = '';
- if (editId) {
- var existing = employees.find(e=>e.id===editId);
- passHash = existing ? (existing.pass_hash||'') : '';
- }
- if (newPass) { passHash = await sha256(newPass); }
- else if (!editId) { passHash = await sha256(START_PASSWORD); } // v152: стартовый пароль для нового
+ // v587: пароль больше не хешируем на клиенте — сервер /api/employees хеширует сам.
  var activeToggle = document.getElementById('e-active');
  var isActive = activeToggle ? activeToggle.checked : true;
  // v152: новый сотрудник — пароль временный (is_temp=TRUE), будет форсированная смена при первом входе
  var existingTemp = editId ? (employees.find(function(x){return x.id===editId;}) || {}).is_temp : false;
  var isTemp = !editId ? true : (newPass ? false : !!existingTemp);
- var data={id:editId||nextEmpId++,name:name,pos:document.getElementById('e-pos').value,email:email,pass_hash:passHash,role:document.getElementById('e-role').value,bonus:parseFloat(document.getElementById('e-bonus').value)||0,access:access,active:isActive,is_temp:isTemp};
- if(editId){ const i=employees.findIndex(e=>e.id===editId); if(i>=0){employees[i]=data;} }
- else { employees.push(data); }
- saveCustomEmployees();
- if(typeof saveEmpAccess === 'function') saveEmpAccess();
- if(typeof saveEmpAccessOne === 'function') saveEmpAccessOne(data); // v581: права на сервер по email
- // v154: если меняли пароль существующего сотрудника — пишем в Sheet, иначе после reload откатится
- if (editId && newPass) {
- try { await apiUpdateUserPassword(editId, newPass); }
- catch(e){ console.warn('updatePassword failed:', e); showNotif('Ошибка', 'Пароль не сохранился в Sheet. Попробуй ещё раз.'); }
- }
+ var role = document.getElementById('e-role').value;
+ var bonus = parseFloat(document.getElementById('e-bonus').value)||0;
+ var pos = document.getElementById('e-pos').value;
+ // v587: сохраняем в Supabase (источник правды). id для нового присваивает сервер.
+ var payload = { name:name, pos:pos, email:email, role:role, bonus:bonus, active:isActive, is_temp:isTemp };
+ if (editId) payload.id = editId;
+ if (newPass) payload.password = newPass;
+ var res;
+ try { res = await sbFetch('/api/employees', { method:'POST', body: JSON.stringify(payload) }); }
+ catch(e){ res = null; }
+ if (!res || !res.ok) { showNotif('Ошибка', (res && res.error) || 'Не удалось сохранить сотрудника'); return; }
+ var saved = res.employee; // с серверным id
+ var data = Object.assign({}, saved, { access: access });
+ var i = employees.findIndex(function(e){return e.id===saved.id;});
+ if(i>=0){ employees[i]=data; } else { employees.push(data); }
+ if(typeof saveEmpAccessOne === 'function') saveEmpAccessOne(data); // v581: права (employee_access по email)
  closeEmpModal(); renderEmployees(); buildQuickChips(); populateEmployeeSelects();
  if(document.getElementById('user-mgmt-body')) renderUserManagement();
  // Применить обновлённые права если редактируем текущего пользователя
- if(editId && currentUser && currentUser.id === editId) { currentUser.access = data.access; applyUserAccess(); }
+ if(currentUser && currentUser.id === saved.id) { currentUser.access = data.access; applyUserAccess(); }
  // v261: при СОЗДАНИИ нового / СБРОСЕ пароля — показываем CEO выданные creds для передачи сотруднику
  if(!editId || newPass){
  var passToShow = newPass || START_PASSWORD;
@@ -13947,6 +13962,44 @@ if(typeof _escHtml === 'undefined'){
 // ============================================================
 // AUTH & INIT
 // ============================================================
+// v587: гарантирует, что запись сотрудника есть в employees[] и у неё есть access (из роли).
+function _empWithAccess(rec){
+ if(!rec) return null;
+ var emp = employees.find(function(e){ return e.id === rec.id; });
+ if(emp){ Object.assign(emp, rec); if(!emp.access) emp.access = Object.assign({}, ROLE_DEFAULTS[rec.role] || ROLE_DEFAULTS.viewer); return emp; }
+ emp = Object.assign({}, rec, { access: Object.assign({}, ROLE_DEFAULTS[rec.role] || ROLE_DEFAULTS.viewer) });
+ employees.push(emp);
+ return emp;
+}
+
+// v587: общий вход в приложение под currentUser (используют и ручной логин, и автологин).
+function _enterAppAsCurrentUser(){
+ document.getElementById('login-screen').style.display = 'none';
+ document.getElementById('sidebar').style.display = 'flex';
+ document.getElementById('main-app').style.display = 'block';
+ document.documentElement.removeAttribute('data-auto-login');
+ var sp = document.getElementById('sd-splash'); if(sp) sp.remove();
+ applyUserAccess();
+ loadAvatar();
+ applyTheme(localStorage.getItem('sd-theme') || 'dark');
+ try { if (typeof planSyncFetch === 'function') planSyncFetch(true); } catch(_){}
+ if (currentUser.country) {
+ switchCountry(currentUser.country);
+ var cs=document.getElementById('country-switcher'); if(cs) cs.style.display='none';
+ var tc=document.getElementById('country-lamp'); if(tc) tc.style.display='none';
+ } else {
+ var cs2=document.getElementById('country-switcher'); if(cs2) cs2.style.display='none';
+ var tc2=document.getElementById('country-lamp'); if(tc2) tc2.style.display='';
+ }
+ updateCountrySwitcherUI();
+ initCalendar();
+ renderAll();
+ showView(_initialViewAfterLogin());
+ setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
+ syncFromSheets();
+ maybeForcePasswordChange();
+}
+
 async function doLogin() {
  // Нормализуем email: trim + lowercase (мобильные клавиатуры часто добавляют автокапс и пробелы)
  const emailRaw = document.getElementById('login-email').value;
@@ -13961,80 +14014,34 @@ async function doLogin() {
  return;
  }
 
- // Ждём загрузки сотрудников из Sheet (если ещё не загрузились)
- if (!_employeesLoaded) {
- document.getElementById('login-err').textContent = 'Загрузка данных... попробуйте через 2 сек';
+ var errEl = document.getElementById('login-err');
+ errEl.style.color = ''; errEl.textContent = 'Вход...';
+ // v587: логин теперь серверный — /api/login хеширует и сверяет; pass_hash на клиент не приходит.
+ // passRaw отправляем как есть — сервер пробует и trimmed, и raw (невидимые пробелы на мобиле).
+ var res;
+ try {
+ res = await sbFetch('/api/login', { method:'POST', body: JSON.stringify({ email: email, password: passRaw }) });
+ } catch(e) { errEl.style.color = '#D67373'; errEl.textContent = 'Сеть недоступна, попробуйте ещё раз'; return; }
+ if (!res || !res.ok) {
+ errEl.style.color = '#D67373';
+ errEl.textContent = (res && res.error) || 'Неверный логин или пароль';
+ if (res && res.disabled) { try { localStorage.removeItem('sd_saved_login'); localStorage.removeItem('sd_saved_pass_hash'); localStorage.removeItem('sd_saved_pass'); } catch(e) {} }
  return;
  }
+ // ростер мог ещё грузиться — дождёмся, чтобы имена/селекты были готовы
+ try { if (window._employeesReady) await window._employeesReady; } catch(_){}
+ currentUser = _empWithAccess(res.employee);
+ try { loadEmpAccess(); } catch(_){} // v581: подтянуть серверные права override
 
- // Хешируем введённый пароль для сравнения с pass_hash из таблицы
- const passHash = await sha256(pass);
- // Fallback: попробуем также неочищенный пароль на случай если в Sheet хеш старого формата
- const passHashRaw = passRaw !== pass ? await sha256(passRaw) : passHash;
-
- const emp = employees.find(function(e){
- var eEmail = String(e.email||'').trim().toLowerCase();
- var eName = String(e.name||'').trim().toLowerCase();
- var hashOk = e.pass_hash === passHash || e.pass_hash === passHashRaw;
- return (eEmail === email || eName === email) && hashOk;
- });
- if (!emp) {
- document.getElementById('login-err').textContent = 'Неверный логин или пароль';
- return;
- }
- // v151 SECURITY: блокируем уволенных
- if (emp.active === false) {
- document.getElementById('login-err').textContent = 'Учётная запись отключена. Обратитесь к администратору.';
- try { localStorage.removeItem('sd_saved_login'); localStorage.removeItem('sd_saved_pass_hash'); localStorage.removeItem('sd_saved_pass'); } catch(e) {}
- return;
- }
- currentUser = emp;
- try { loadEmpAccess(); } catch(_){} // v581: подтянуть серверные права и применить к currentUser
-
- // Запомнить меня (сохраняем хеш, не открытый пароль)
+ // Запомнить меня (сохраняем хеш своего пароля локально — как и раньше; на автологине шлём его серверу)
  const remember = document.getElementById('remember-me');
  if (remember && remember.checked) {
- try {
- localStorage.setItem('sd_saved_login', email);
- localStorage.setItem('sd_saved_pass_hash', passHash);
- localStorage.removeItem('sd_saved_pass'); // убрать старый открытый пароль
- } catch(e) {}
+ try { localStorage.setItem('sd_saved_login', email); localStorage.setItem('sd_saved_pass_hash', await sha256(pass)); localStorage.removeItem('sd_saved_pass'); } catch(e) {}
  } else {
- try {
- localStorage.removeItem('sd_saved_login');
- localStorage.removeItem('sd_saved_pass_hash');
- localStorage.removeItem('sd_saved_pass');
- } catch(e) {}
+ try { localStorage.removeItem('sd_saved_login'); localStorage.removeItem('sd_saved_pass_hash'); localStorage.removeItem('sd_saved_pass'); } catch(e) {}
  }
 
- document.getElementById('login-screen').style.display = 'none';
- document.getElementById('sidebar').style.display = 'flex';
- document.getElementById('main-app').style.display = 'block';
-
- applyUserAccess();
- loadAvatar();
- applyTheme(localStorage.getItem('sd-theme') || 'dark');
- // v184: автоподнятие облака Планёрок сразу после логина — если KV пустой,
- // а у тебя есть локальные данные, они уйдут наверх без ручного открытия страницы.
- try { if (typeof planSyncFetch === 'function') planSyncFetch(true); } catch(_){}
- // Привязка к стране: если у пользователя задана country — переключить и скрыть switcher
- if (currentUser.country) {
- switchCountry(currentUser.country);
- document.getElementById('country-switcher').style.display = 'none';
- document.getElementById('country-lamp').style.display = 'none';
- } else {
- document.getElementById('country-switcher').style.display = 'none';
- document.getElementById('country-lamp').style.display = '';
- }
- updateCountrySwitcherUI();
- initCalendar();
- renderAll();
- showView(_initialViewAfterLogin());
- // Автоматически загрузить свежие данные из Google Таблицы — сразу без задержки
- setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
- syncFromSheets();
- // v152: если временный пароль — форсируем смену
- maybeForcePasswordChange();
+ _enterAppAsCurrentUser();
 }
 
 // Автовход из localStorage при загрузке
@@ -14044,74 +14051,29 @@ async function doLogin() {
  var savedHash = localStorage.getItem('sd_saved_pass_hash');
  var savedPass = localStorage.getItem('sd_saved_pass'); // старый формат
  if (savedLogin && savedHash) {
- // Есть сохранённый вход — показываем "Вход..." и скрываем форму
+ // v587: автологин через сервер — шлём сохранённый хэш как токен, /api/login сверяет с БД.
+ // Больше НЕ ждём ростер и не зависим от медленного GAS (корень инцидента v586 устранён структурно).
  var errEl = document.getElementById('login-err');
  if (errEl) { errEl.style.color = '#7FB89E'; errEl.textContent = 'Автоматический вход...'; }
- var waitForEmployees = setInterval(function(){
- if (!_employeesLoaded) return;
- clearInterval(waitForEmployees);
- var emp = employees.find(function(e){ return (e.email === savedLogin || e.name === savedLogin) && e.pass_hash === savedHash; });
- // v151 SECURITY: автологин уволенных запрещён
- if (emp && emp.active === false) {
- if (errEl) { errEl.style.color = '#D67373'; errEl.textContent = 'Учётная запись отключена.'; }
- localStorage.removeItem('sd_saved_pass_hash');
- localStorage.removeItem('sd_saved_login');
- emp = null;
+ var _killSplash = function(){ document.documentElement.removeAttribute('data-auto-login'); var sp = document.getElementById('sd-splash'); if(sp) sp.remove(); };
+ sbFetch('/api/login', { method:'POST', body: JSON.stringify({ email: savedLogin, pass_hash: savedHash }) })
+ .then(async function(res){
+ if (!res || !res.ok) {
+ if (errEl) { errEl.style.color = '#D67373'; errEl.textContent = (res && res.disabled) ? 'Учётная запись отключена.' : 'Сессия истекла, войдите заново'; }
+ try { localStorage.removeItem('sd_saved_pass_hash'); localStorage.removeItem('sd_saved_login'); } catch(_){}
+ _killSplash();
+ return;
  }
- if (emp) {
- currentUser = emp;
- try { loadEmpAccess(); } catch(_){} // v581: подтянуть серверные права и применить к currentUser
- document.getElementById('login-screen').style.display = 'none';
- document.getElementById('sidebar').style.display = 'flex';
- document.getElementById('main-app').style.display = 'block';
- // v220: скрыть splash после успешного автологина
- document.documentElement.removeAttribute('data-auto-login');
- var sp = document.getElementById('sd-splash'); if(sp) sp.remove();
- applyUserAccess();
- loadAvatar();
- applyTheme(localStorage.getItem('sd-theme') || 'dark');
- try { if (typeof planSyncFetch === 'function') planSyncFetch(true); } catch(_){}
- if (currentUser.country) {
- switchCountry(currentUser.country);
- var cs = document.getElementById('country-switcher');
- if(cs) cs.style.display = 'none';
- var tc = document.getElementById('country-lamp');
- if(tc) tc.style.display = 'none';
- } else {
- var cs = document.getElementById('country-switcher');
- if(cs) cs.style.display = 'none';
- var tc = document.getElementById('country-lamp');
- if(tc) tc.style.display = '';
- }
- updateCountrySwitcherUI();
- initCalendar();
- renderAll();
- showView(_initialViewAfterLogin());
- setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
- syncFromSheets();
- // v152: если временный пароль — форсируем смену
- maybeForcePasswordChange();
- } else {
- // Хеш не совпал — показать форму, пусть вводит заново
- if (errEl) { errEl.style.color = '#D67373'; errEl.textContent = 'Сессия истекла, войдите заново'; }
- localStorage.removeItem('sd_saved_pass_hash');
- localStorage.removeItem('sd_saved_login');
- // v220: убрать splash и показать форму логина
- document.documentElement.removeAttribute('data-auto-login');
- var sp2 = document.getElementById('sd-splash'); if(sp2) sp2.remove();
- }
- }, 200);
- // v586: GAS (Apps Script) на холодном старте отвечает 11-19с — старый таймаут 10с
- // бросал ожидание ДО загрузки сотрудников и оставлял splash висеть навсегда.
- // Поднимаем до 30с и при срабатывании деградируем к форме входа, а не к вечному спиннеру.
- setTimeout(function(){
- clearInterval(waitForEmployees);
- if (currentUser) return; // автологин уже прошёл
- document.documentElement.removeAttribute('data-auto-login');
- var spT = document.getElementById('sd-splash'); if(spT) spT.remove();
- var errT = document.getElementById('login-err');
- if (errT) { errT.style.color = '#D67373'; errT.textContent = 'Сервер медленно отвечает. Войдите вручную.'; }
- }, 30000);
+ try { if (window._employeesReady) await window._employeesReady; } catch(_){}
+ currentUser = _empWithAccess(res.employee);
+ try { loadEmpAccess(); } catch(_){} // v581: серверные права override
+ _enterAppAsCurrentUser();
+ })
+ .catch(function(){
+ // сеть/сервер недоступны — creds НЕ сбрасываем, просто показываем форму
+ if (errEl) { errEl.style.color = '#D67373'; errEl.textContent = 'Сервер недоступен. Войдите вручную.'; }
+ _killSplash();
+ });
  } else if (savedLogin && savedPass) {
  // Старый формат — удаляем, пусть войдёт заново
  localStorage.removeItem('sd_saved_pass');
@@ -14958,7 +14920,7 @@ function buildQuickChips() {
 document.getElementById('sidebar').style.display = 'none';
 document.getElementById('main-app').style.display = 'none';
 
-initEmployees();
+window._employeesReady = initEmployees(); // v587: промис ростера — логин дожидается его перед рендером
 loadEmpAccess();
 // Восстановить сохранённых пользователей (добавленные/удалённые/изменённые)
 loadCustomEmployees();

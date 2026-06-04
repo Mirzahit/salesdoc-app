@@ -7,7 +7,7 @@
 // POST /api/employee-access            → ТОЛЬКО admin/head: upsert { email, access }
 //
 // АВТОРИЗАЦИЯ: checkAuth (общий x-app-token) — базовый слой. Поверх — проверка РОЛИ вызывающего
-// по листу Users (доверенный источник ролей, как при логине), email берём из заголовка x-user-email.
+// по таблице employees (доверенный источник ролей, как при логине), email берём из заголовка x-user-email.
 // ОГРАНИЧЕНИЕ: x-user-email не подписан (у приложения нет пер-юзер сессий/токенов), поэтому
 // знающий админский email теоретически может его подделать. Это закрывает реальный инсайдерский
 // сценарий (обычный сотрудник со своей сессией не повысит себе права), но полноценная защита —
@@ -15,57 +15,18 @@
 
 import { sbSelect, sbUpsert } from './_supabase.js';
 import { checkAuth } from './_auth.js';
+import { resolveCaller } from './_caller.js'; // v587: роли из таблицы employees, не из GAS
 
 const ADMIN_ROLES = new Set(['admin', 'head']);
-const GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
-const USERS_SHEET_ID = '1A5zZZi54Le3bUHkUng8L-Kbt2dkfMwwP48cpNFQ9ZMQ';
 
 function normEmail(s) {
   return String(s || '').trim().toLowerCase();
 }
 
-// Кэш листа Users (роли) на 5 минут — чтобы не дёргать Sheet на каждый запрос.
-let _usersCache = null;
-let _usersCacheTs = 0;
-const USERS_TTL_MS = 5 * 60 * 1000;
-
-async function fetchUsers(now) {
-  if (_usersCache && (now - _usersCacheTs) < USERS_TTL_MS) return _usersCache;
-  const url = GS_URL + '?action=getSheet&sheet=Users&spreadsheetId=' + USERS_SHEET_ID;
-  const r = await fetch(url);
-  const j = await r.json();
-  const rows = j.rows || j || [];
-  const map = {};
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || !row[3]) continue;
-    map[normEmail(row[3])] = { role: String(row[5] || 'viewer').toLowerCase(), active: row[7] };
-  }
-  _usersCache = map;
-  _usersCacheTs = now;
-  return map;
-}
-
-// Возвращает { email, role } вызывающего (по x-user-email, роль из листа Users) или null.
-async function resolveCaller(req, now) {
-  const email = normEmail(req.headers['x-user-email']);
-  if (!email) return null;
-  try {
-    const users = await fetchUsers(now);
-    const u = users[email];
-    if (!u) return null;
-    return { email, role: u.role };
-  } catch (e) {
-    console.error('[employee-access] fetchUsers failed:', e.message);
-    return null;
-  }
-}
-
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
-  const now = Date.now(); // для TTL-кэша листа Users (серверный рантайм)
   try {
-    const caller = await resolveCaller(req, now);
+    const caller = await resolveCaller(req);
     const isAdmin = !!(caller && ADMIN_ROLES.has(caller.role));
 
     if (req.method === 'GET') {
