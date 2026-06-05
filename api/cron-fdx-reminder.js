@@ -62,12 +62,11 @@ function _fmtNum(n) {
 }
 
 export default async function handler(req, res) {
-  // Защита от внешних curl. Vercel Cron шлёт этот заголовок автоматически если CRON_SECRET задан.
+  // v592 SEC: fail-closed (раньше при незаданном CRON_SECRET был открыт всем — спам в Telegram CEO).
   const expected = (process.env.CRON_SECRET || '').trim();
-  if (expected) {
-    const got = String(req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
-    if (got !== expected) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  }
+  if (!expected) return res.status(503).json({ ok: false, error: 'CRON_SECRET не настроен' });
+  const got = String(req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
+  if (got !== expected) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
   const botToken = (process.env.TG_BOT_TOKEN || '').trim();
   const ceoChatId = (process.env.CEO_TG_CHAT_ID || '').trim();

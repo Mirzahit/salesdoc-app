@@ -11,7 +11,7 @@
 // DELETE /api/payments?id=UUID                                  → удалить (только manual)
 
 import { sbSelect, sbInsert, sbUpdate, sbDelete } from './_supabase.js';
-import { checkAuth } from './_auth.js';
+import { checkAuth, checkAdminToken } from './_auth.js';
 
 const ALLOWED_COUNTRIES = ['KZ', 'KG'];
 const ALLOWED_CATEGORIES = ['implementation', 'integration', 'revision', 'subscription', 'license', 'other'];
@@ -320,6 +320,9 @@ export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
     if (req.method === 'POST' && req.query.action === 'import_sheets') {
+      // v592 SEC: массовая вставка платежей (финансы) — только с админ-кодом
+      const _g = checkAdminToken(req);
+      if (!_g.ok) return res.status(_g.unconfigured ? 503 : 403).json({ ok: false, error: _g.unconfigured ? 'Импорт недоступен: не настроен ADMIN_TOKEN' : 'Нужен админ-код', needAdminToken: !_g.unconfigured });
       return await handleImportSheets(req, res);
     }
     if (req.method === 'GET')    return await handleGet(req, res);

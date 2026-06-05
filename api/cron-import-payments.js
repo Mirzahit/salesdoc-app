@@ -12,12 +12,11 @@
 import { importSheetsForCountry } from './payments.js';
 
 export default async function handler(req, res) {
-  // Защита от внешних curl. Vercel Cron шлёт Authorization: Bearer <CRON_SECRET>.
+  // v592 SEC: fail-closed. Раньше при незаданном CRON_SECRET эндпоинт был открыт всем (импорт платежей).
   const expected = (process.env.CRON_SECRET || '').trim();
-  if (expected) {
-    const got = String(req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
-    if (got !== expected) return res.status(401).json({ ok: false, error: 'Unauthorized' });
-  }
+  if (!expected) return res.status(503).json({ ok: false, error: 'CRON_SECRET не настроен' });
+  const got = String(req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
+  if (got !== expected) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
   const ran = [];
   for (const country of ['KZ', 'KG']) {

@@ -2,6 +2,8 @@
 // Просто открой URL в браузере: https://salesdoc-app.vercel.app/api/planning-init
 // Если KV пустой — заполнит. Если уже есть данные — НЕ перетрёт (нужен ?force=1).
 
+import { checkAdminToken } from './_auth.js';
+
 const KV_KEY = 'planning_v1';
 
 function kvEnv() {
@@ -79,6 +81,12 @@ export default async function handler(req, res) {
 
   const force = req.query && (req.query.force === '1' || req.query.force === 'true');
   const clear = req.query && (req.query.clear === '1' || req.query.clear === 'true');
+
+  // v592 SEC: деструктивные clear/force (стирают общие планёрки) — только с админ-кодом.
+  if (force || clear) {
+    const g = checkAdminToken(req);
+    if (!g.ok) return res.status(g.unconfigured ? 503 : 403).send(html(g.unconfigured ? 503 : 403, '<div class="err">Нужен админ-код (заголовок x-admin-token) для clear/force.</div>'));
+  }
 
   try {
     const current = await kvGet(KV_KEY);

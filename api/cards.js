@@ -22,7 +22,7 @@
 // DELETE /api/cards?entity=ticket&id=UUID        → закрыть (status='closed')
 
 import { sbSelect, sbInsert, sbUpdate } from './_supabase.js';
-import { checkAuth } from './_auth.js';
+import { checkAuth, checkAdminToken } from './_auth.js';
 
 // v364: whitelist разрешённых стадий — иначе мусорный stage сохранится молча
 const ALLOWED_STAGES = ['Новый','Настройка','Обучение','Тестирование','Активация','Архив'];
@@ -676,6 +676,9 @@ const SHEET_STATUS_MAP = {
 const SHEET_ACTIVE_STATUSES = new Set(['Выполняется','Тестируют','В очереди','Очередь','Новая','В работе','На паузе']);
 
 async function handleSheetsImport(req, res) {
+  // v592 SEC: массовое создание клиентов/интеграций — только с админ-кодом
+  const _g = checkAdminToken(req);
+  if (!_g.ok) return res.status(_g.unconfigured ? 503 : 403).json({ ok: false, error: _g.unconfigured ? 'Импорт недоступен: не настроен ADMIN_TOKEN' : 'Нужен админ-код', needAdminToken: !_g.unconfigured });
   const dryRun = String(req.query.dry_run || '1') !== '0' && req.query.dry_run !== 'false';
   // v431: ?active_only=1 — переносим только незавершённые работы (не Готово/Отменено/Перенесено).
   // Архив остаётся в Sheets.
@@ -902,6 +905,8 @@ async function handleIntegrationsRoute(req, res) {
   // Проходит по интеграциям с непустым comment и client_id, проверяет нет ли
   // уже записи в card_history с attachment_url='integration:<id>', если нет — пишет.
   if (req.method === 'POST' && (req.query.action || '').toLowerCase() === 'backfill_integration_notes') {
+    const _gb = checkAdminToken(req); // v592 SEC: массовая запись в ленту — только админ-код
+    if (!_gb.ok) return res.status(_gb.unconfigured ? 503 : 403).json({ ok: false, error: _gb.unconfigured ? 'Недоступно: не настроен ADMIN_TOKEN' : 'Нужен админ-код', needAdminToken: !_gb.unconfigured });
     const integs = await sbSelect('integrations', {
       select: 'id,client_id,comment,operator'
     });

@@ -39,8 +39,8 @@ export default async function handler(req, res) {
 
     // мутации — только admin/head + админ-код (барьер против захвата через публичный app-token)
     const caller = await resolveCaller(req);
-    if (!caller || !ADMIN_ROLES.has(caller.role)) {
-      return res.status(403).json({ ok: false, error: 'Изменять сотрудников может только администратор' });
+    if (!caller || caller.active === false || !ADMIN_ROLES.has(caller.role)) {
+      return res.status(403).json({ ok: false, error: 'Изменять сотрудников может только активный администратор' });
     }
     const gate = checkAdminToken(req);
     if (!gate.ok) {

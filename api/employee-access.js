@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
     const caller = await resolveCaller(req);
-    const isAdmin = !!(caller && ADMIN_ROLES.has(caller.role));
+    const isAdmin = !!(caller && caller.active !== false && ADMIN_ROLES.has(caller.role)); // v592: уволенный admin не считается админом
 
     if (req.method === 'GET') {
       // Админ видит все права; обычный сотрудник — только свои.
