@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v591</title>
+<title>SalesDoc — Финансовый Дашборд v592</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8856,13 +8856,15 @@ function managerToEmpId(name) {
 }
 
 function mapCategoryFromSheet(cat) {
+ // v592 FIX: единый порядок правил с бэком (api/payments.js _mapCategory). Раньше фронт проверял
+ // 'внедрен' раньше 'доработ' → «доработка внедрения» классифицировалась иначе, чем в БД.
  const c = String(cat||'').toLowerCase().replace(/\./g,' ').replace(/\s+/g,' ').trim();
- if (c.includes('интеграц') || c.includes('нов интег')) return 'integration';
- if (c.includes('внедрен') || c.includes('внедре') || c.includes('нов внед')) return 'implementation';
+ if (c.includes('доработ')) return 'revision';
+ if (c.includes('интеграц')) return 'integration';
+ if (c.includes('внедрен')) return 'implementation';
  if (c.includes('абон') || c.includes('баланс')) return 'subscription';
  if (c.includes('доп') && c.includes('лиц')) return 'other';
  if (c.includes('лицен') || c.includes('новый клиент') || c.includes('нов клиент')) return 'license';
- if (c.includes('доработ')) return 'revision';
  return 'other';
 }
 
@@ -9711,14 +9713,15 @@ function getPeriodPayments(period) {
  return payments.filter(p => {
  const d = new Date(p.date + 'T00:00:00');
  if (period === 'week') {
- if (!selectedWeek) {
- // v447: было жёстко вшито '2026-03-04' — заглушка, из-за неё «Неделя» всегда показывала первую неделю марта.
- const now = new Date();
- const bounds = getWeekBounds(now.getFullYear(), getISOWeek(now).week);
- return d >= bounds.mon && d <= bounds.sun;
- }
- const b = getWeekBounds(selectedWeek.year, selectedWeek.weekNum);
- return d >= b.mon && d <= b.sun;
+ // v592 FIX: сравниваем ДАТЫ-СТРОКИ (YYYY-MM-DD), а не Date-объекты. Раньше d была локальной
+ // полночью, а bounds.mon — UTC-полночью (в KZ = Пн 05:00), из-за чего платёж за понедельник выпадал.
+ var ds = String(p.date).slice(0, 10);
+ var b = selectedWeek
+   ? getWeekBounds(selectedWeek.year, selectedWeek.weekNum)
+   : getWeekBounds(new Date().getFullYear(), getISOWeek(new Date()).week);
+ var monStr = b.mon.toISOString().slice(0, 10);
+ var sunStr = b.sun.toISOString().slice(0, 10);
+ return ds >= monStr && ds <= sunStr;
  }
  if (period === 'month') {
  return d.getMonth() === selectedMonth.month && d.getFullYear() === selectedMonth.year;
@@ -10587,6 +10590,8 @@ function cfInit(){
  var saved = localStorage.getItem(CF_BALANCE_KEY);
  var inp = document.getElementById('cf-balance');
  if(inp && saved) inp.value = saved;
+ // v592: валюта по стране в подписи остатка (был зашит ₸)
+ document.querySelectorAll('.cf-balance-unit').forEach(function(u){ u.textContent = _CUR; });
  // Подгружаем kbCards/AC если не загружены
  var promises = [];
  if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
@@ -11530,7 +11535,7 @@ function renderRecentPayments(ps) {
  if (el) el.textContent=ps.length+' записей';
  var tb = document.getElementById('recent-payments');
  if (!tb) return;
- const catNames={license:'Лицензии',subscription:'Абон.',implementation:'Внедрение',integration:'Интеграция',other:'Прочее'};
+ const catNames={license:'Лицензии',subscription:'Абон.',implementation:'Внедрение',integration:'Интеграция',revision:'Доработки',other:'Прочее'};
  tb.innerHTML=ps.map(p=>`<tr><td>${p.client.substring(0,16)}…</td><td style="color:var(--text-secondary)">${catNames[p.category]}</td><td style="color:var(--gold-bright);font-weight:600">${fmt(p.amount)} ${_CUR}</td><td><span class="status-badge ${p.seated?'status-paid':'status-pending'}">${p.seated?'ПОСАЖ.':'НЕТ'}</span></td></tr>`).join('');
 }
 
@@ -11541,8 +11546,9 @@ function renderRecognizedRevenue() {
  var el = document.getElementById('rev-breakdown');
  if (!el) return;
  var ps = getPeriodPayments(currentPeriod);
- // Текущий месяц: 0=Янв, 1=Фев, 2=Мар
- var curMonth = currentPeriod; // индекс 0-based
+ // v592 FIX: был баг — curMonth=currentPeriod (строка 'month'), все сравнения месяца ломались
+ // и вся выручка новых клиентов уходила в «Не освоено». Берём числовой индекс выбранного месяца.
+ var curMonth = selectedMonth.month; // 0-based индекс
  var monthNames = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
  var totalRecognized = 0;
  var totalDeferred = 0;
@@ -11857,7 +11863,7 @@ function renderActCounters() {
 }
 
 function renderAllPayments() {
- const catNames={license:' Лицензии',subscription:' Абон.',implementation:' Внедрение',integration:' Интеграция',other:' Прочее'};
+ const catNames={license:' Лицензии',subscription:' Абон.',implementation:' Внедрение',integration:' Интеграция',revision:' Доработки',other:' Прочее'};
  const methodNames={bank:'Банк',cash:'Наличные',card:'Карта'};
 
  const fEmp = document.getElementById('filter-employee')?.value || '';
@@ -12102,7 +12108,8 @@ function calcBonuses() {
  const emp = employees.find(e => e.name.trim() === techName.trim() && e.role === 'operator');
  if (!emp) return;
 
- const bonusPct = emp.bonus || 30;
+ // v592 FIX: было emp.bonus || 30 → честный бонус 0% превращался в 30%
+ const bonusPct = (emp.bonus != null && emp.bonus !== '') ? Number(emp.bonus) : 30;
  const bonusAmount = Math.round(act.amount * bonusPct / 100);
 
  results.push({ emp, act, baseAmount: act.amount, bonusPct, bonusAmount });
@@ -23065,9 +23072,13 @@ function renderPnL() {
  // Доходы — из payments
  var ps = getPeriodPayments(currentPeriod);
  var totalIncome = ps.reduce(function(s, p) { return s + p.amount; }, 0);
- 
- // Расходы — из expensesData
- var monthExpenses = expensesData.filter(function(e) { return e.month === curMonth; });
+
+ // v592 FIX: расход теперь за ТОТ ЖЕ период, что и доход (был баг — расход всегда за 1 месяц,
+ // из-за чего при «Квартал»/«Год» прибыль и маржа были завышены).
+ var _pmMonths = (currentPeriod === 'year') ? [0,1,2,3,4,5,6,7,8,9,10,11]
+   : (currentPeriod === 'quarter') ? (function(){ var q=Math.floor(curMonth/3); return [q*3,q*3+1,q*3+2]; })()
+   : [curMonth]; // month и week — помесячные расходы за выбранный месяц
+ var monthExpenses = expensesData.filter(function(e) { return _pmMonths.indexOf(e.month) >= 0 && (e.year == null || e.year === curYear); });
  var totalExpense = monthExpenses.reduce(function(s, e) { return s + e.amount; }, 0);
  
  var profit = Math.round(totalIncome - totalExpense);
@@ -23394,10 +23405,11 @@ function exportPaymentsCSV(){
  if(fSvc==='yes') ps=ps.filter(function(p){return p.serviceWritten===true;});
  if(fSvc==='no') ps=ps.filter(function(p){return !p.serviceWritten;});
  if(fBank) ps=ps.filter(function(p){return (p.bank||'')===fBank;});
- var catNames={license:'Лицензии',subscription:'Абон.',implementation:'Внедрение',integration:'Интеграция',other:'Прочее'};
+ var catNames={license:'Лицензии',subscription:'Абон.',implementation:'Внедрение',integration:'Интеграция',revision:'Доработки',other:'Прочее'};
  var rows=[['Дата','Клиент','Сотрудник','Статья','Сумма','Способ','Посажена','Услуга списана','Комментарий']];
  ps.forEach(function(p){
- rows.push([p.date,p.client,empName(p.employee),catNames[p.category]||p.category,p.amount,p.method||'',p.seated?'Да':'Нет',p.serviceWritten?'Да':'Нет',p.comment||'']);
+ // v592 FIX: имя как в таблице (managerName||empName), а не только empName — раньше CSV расходился с UI
+ rows.push([p.date,p.client,(p.managerName||empName(p.employee)),catNames[p.category]||p.category,p.amount,p.method||'',p.seated?'Да':'Нет',p.serviceWritten?'Да':'Нет',p.comment||'']);
  });
  var csv='\uFEFF'+rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(';');}).join('\n');
  var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
@@ -25879,7 +25891,7 @@ var ROUTE_STAGE_META = {
 };
 function _routeFmtSum(n){
  var v = Number(n) || 0;
- return '₸ ' + v.toLocaleString('ru-RU').replace(/,/g, ' ');
+ return v.toLocaleString('ru-RU').replace(/,/g, ' ') + ' ' + _CUR; // v592: валюта по стране, не зашитый ₸
 }
 function _routeUpdateStats(){
  var total = routeCards.length;
@@ -25925,7 +25937,7 @@ function routeRender(){
   var stageSum = stageCards.reduce(function(s, c){ return s + (Number(c.payment_amount) || 0); }, 0);
   var sumLabel = stageCards.length > 0
    ? (stageCards.length + ' сделк' + (stageCards.length === 1 ? 'а' : (stageCards.length < 5 ? 'и' : '')) + ': <b>' + _routeFmtSum(stageSum) + '</b>')
-   : 'Сумма: <b>₸ 0</b>';
+   : 'Сумма: <b>0 ' + _CUR + '</b>';
   // Колонка amo-style: без фона/рамки, цветная полоска сверху через класс s{idx}
   html += '<div class="route-col-amo route-col s' + meta.idx + '" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.background=\'rgba(120,120,128,.06)\'" ondragleave="this.style.background=\'transparent\'" ondrop="this.style.background=\'transparent\';routeDrop(event,\'' + stage + '\')">';
   html += '<div class="route-col-amo-head"' + (filterUnassigned ? ' style="outline:1px dashed rgba(214,115,115,.4);outline-offset:-2px;border-radius:8px"' : '') + '>';
@@ -29041,7 +29053,7 @@ async function _routeRenderAmo(){
  // Секция СДЕЛКА
  addSection('Сделка');
  addField('Ответственный', card.operator, { editable:true, entity:'card', field:'operator', type:'select', choices:['Айдос','Акбар','Самат','Нурай'], rawValue:card.operator });
- addField('Бюджет', card.payment_amount ? '₸ ' + Number(card.payment_amount).toLocaleString('ru-RU').replace(/,/g, ' ') : null, { price:true, editable:true, entity:'card', field:'payment_amount', type:'number', rawValue:card.payment_amount });
+ addField('Бюджет', card.payment_amount ? Number(card.payment_amount).toLocaleString('ru-RU').replace(/,/g, ' ') + ' ' + ((card.country==='KG')?'сом':'₸') : null, { price:true, editable:true, entity:'card', field:'payment_amount', type:'number', rawValue:card.payment_amount });
  addField('Менеджер продаж', card.sales_manager, { editable:true, entity:'card', field:'sales_manager', type:'select', choices:['Мирзахит','Юлия','Айдос Хапез'], rawValue:card.sales_manager });
  addField('Категория', _amoLabelCategory(card.payment_category), { editable:true, entity:'card', field:'payment_category', type:'select', choices:['Нов внедрение','Нов интеграция','абон. плата','доп. лицензии','новый клиент','доработка'], rawValue:card.payment_category });
  addField('Создана', card.created_at ? new Date(card.created_at).toLocaleDateString('ru-RU') : null);
@@ -30191,7 +30203,7 @@ function _routeAmoRender(container, data){
  if(lead.price){
   var budget = document.createElement('div');
   budget.style.cssText = 'font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.02em';
-  budget.textContent = '₸' + Number(lead.price).toLocaleString('ru-RU').replace(/,/g, ' ');
+  budget.textContent = Number(lead.price).toLocaleString('ru-RU').replace(/,/g, ' ') + ' ' + _CUR;
   topbar.appendChild(budget);
  }
  container.appendChild(topbar);
@@ -30328,7 +30340,7 @@ function _routeAmoRender(container, data){
   if(isWA){ icon.classList.add('amo-feed-icon-wa'); icon.textContent = 'W'; }
   else if(isCall){ icon.classList.add('amo-feed-icon-call'); icon.textContent = '☎'; }
   else if(isStage){ icon.classList.add('amo-feed-icon-stage'); icon.textContent = '⇄'; }
-  else if(isPaid){ icon.classList.add('amo-feed-icon-paid'); icon.textContent = '₸'; }
+  else if(isPaid){ icon.classList.add('amo-feed-icon-paid'); icon.textContent = _CUR; }
   else if(isAttach){ icon.classList.add('amo-feed-icon-attach'); icon.textContent = '📎'; }
   else {
    icon.classList.add('amo-feed-icon-note');
@@ -34306,7 +34318,7 @@ function ncRender(){
  + '<div class="mrr-card">'
  + ' <div class="mrr-lbl">Сумма первых платежей</div>'
  + ' <div class="mrr-val">' + fmtMoney(m.sum) + ' <span class="mrr-unit">'+_CUR+'</span></div>'
- + ' <div class="mrr-sub-muted">средний чек ' + fmtMoney(m.avgCheck) + ' ₸</div>'
+ + ' <div class="mrr-sub-muted">средний чек ' + fmtMoney(m.avgCheck) + ' ' + _CUR + '</div>'
  + '</div>'
  + '<div class="mrr-card">'
  + ' <div class="mrr-lbl">Время до активации</div>'
@@ -38518,7 +38530,8 @@ function kbCalcBonus(card, actData) {
  var bonusPct = 30; // по умолчанию 30%
  var emp = employees.find(function(e){ return e.name === card.operator; });
  if(emp && emp.bonus !== undefined) {
- bonusPct = parseFloat(emp.bonus) || 30;
+ // v592 FIX: 0% больше не превращается в 30%
+ bonusPct = (emp.bonus != null && emp.bonus !== '') ? Number(emp.bonus) : 30;
  }
 
  var amount = parseFloat(card.amount) || 0;

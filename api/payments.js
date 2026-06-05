@@ -94,11 +94,13 @@ function _parseDate(v, dateCorrection) {
 }
 
 function _mapCategory(cat) {
+  // v592: единый порядок с фронтом (mapCategoryFromSheet). доработ → интеграц → внедрен → абон → доп+лиц → лицен.
   const c = String(cat || '').toLowerCase().replace(/\./g, ' ').replace(/\s+/g, ' ').trim();
-  if (c.includes('интеграц')) return 'integration';
   if (c.includes('доработ')) return 'revision';
+  if (c.includes('интеграц')) return 'integration';
   if (c.includes('внедрен')) return 'implementation';
   if (c.includes('абон') || c.includes('баланс')) return 'subscription';
+  if (c.includes('доп') && c.includes('лиц')) return 'other';
   if (c.includes('лицен') || c.includes('новый клиент') || c.includes('нов клиент')) return 'license';
   return 'other';
 }
