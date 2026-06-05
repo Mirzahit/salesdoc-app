@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v592</title>
+<title>SalesDoc — Финансовый Дашборд v593</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8294,7 +8294,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
  <div id="form-payment">
  <div class="form-row"><div class="form-group"><label class="form-label">Клиент</label><input class="form-input" id="p-client" placeholder="ТОО Компания"></div><div class="form-group"><label class="form-label">Дата</label><input class="form-input" id="p-date" type="date"></div></div>
- <div class="form-row"><div class="form-group"><label class="form-label">Сотрудник</label><select class="form-select" id="p-employee"></select></div><div class="form-group"><label class="form-label">Статья</label><select class="form-select" id="p-category"><option value="license">Новые лицензии</option><option value="subscription">Абонентская плата</option><option value="implementation">Внедрение</option><option value="integration">Интеграция</option><option value="other">Прочее</option></select></div></div>
+ <div class="form-row"><div class="form-group"><label class="form-label">Сотрудник</label><select class="form-select" id="p-employee"></select></div><div class="form-group"><label class="form-label">Статья</label><select class="form-select" id="p-category"><option value="license">Новые лицензии</option><option value="subscription">Абонентская плата</option><option value="implementation">Внедрение</option><option value="integration">Интеграция</option><option value="revision">Доработки</option><option value="other">Прочее</option></select></div></div>
  <div class="form-row"><div class="form-group"><label class="form-label">Сумма</label><input class="form-input" id="p-amount" type="number" placeholder="500000"></div><div class="form-group"><label class="form-label">Способ оплаты</label><select class="form-select" id="p-method"><option value="bank">Банковский перевод</option><option value="cash">Наличные</option><option value="card">Карта</option></select></div></div>
  <div class="form-row"><div class="form-group"><label class="form-label">Статус</label><select class="form-select" id="p-status"><option value="paid">Оплачено</option><option value="pending">Ожидание</option></select></div><div class="form-group"><label class="form-label">Комментарий</label><input class="form-input" id="p-comment" placeholder="Примечание..."></div></div>
  </div>
@@ -13911,11 +13911,30 @@ function updatePeriodLabel() {
 function openModal(tab){ document.getElementById('modal').classList.add('open'); if(tab)switchTab(tab); const t=new Date().toISOString().split('T')[0]; document.getElementById('p-date').value=t; document.getElementById('a-date').value=t; document.getElementById('a-number').value='АКТ-2026-00'+nextActId; }
 function closeModal(){ document.getElementById('modal').classList.remove('open'); }
 function switchTab(t){ currentTab=t; document.getElementById('form-payment').style.display=t==='payment'?'block':'none'; document.getElementById('form-act').style.display=t==='act'?'block':'none'; document.getElementById('tab-payment').classList.toggle('active',t==='payment'); document.getElementById('tab-act').classList.toggle('active',t==='act'); }
-function saveRecord() {
+async function saveRecord() {
  if(currentTab==='payment'){
  const client=document.getElementById('p-client').value.trim(), amount=parseFloat(document.getElementById('p-amount').value);
  if(!client||!amount){alert('Заполните Клиент и Сумму');return;}
- payments.push({id:nextPayId++,client,date:document.getElementById('p-date').value,employee:parseInt(document.getElementById('p-employee').value)||1,category:document.getElementById('p-category').value,amount,method:document.getElementById('p-method').value,status:document.getElementById('p-status').value,comment:document.getElementById('p-comment').value,seated:false,serviceWritten:false});
+ // v592 FIX: раньше оплата писалась только в память (payments.push) и показывалось «Оплата добавлена» —
+ // при перезагрузке пропадала. Теперь пишем в Supabase (/api/payments), потом отражаем локально.
+ var empId = parseInt(document.getElementById('p-employee').value)||0;
+ var empObj = employees.find(function(e){ return e.id===empId; });
+ var cat = document.getElementById('p-category').value;
+ var paidAt = document.getElementById('p-date').value || new Date().toLocaleDateString('en-CA');
+ var method = document.getElementById('p-method').value;
+ var comment = document.getElementById('p-comment').value || null;
+ var payload = {
+  country: (typeof currentCountry!=='undefined'?currentCountry:'KZ'),
+  paid_at: paidAt, company_name: client, amount: amount, category: cat,
+  manager_name: empObj ? empObj.name : null, bank: method, comment: comment,
+  source: 'manual', created_by: (typeof currentUser!=='undefined'&&currentUser&&currentUser.name)||null
+ };
+ var res;
+ try { res = await sbFetch('/api/payments', { method:'POST', body: JSON.stringify(payload) }); }
+ catch(e){ res = null; }
+ if(!res || !res.ok){ showNotif('Ошибка', (res&&res.error)||'Оплата не сохранилась. Попробуйте ещё раз.'); return; }
+ // мгновенно показать в текущей сессии (источник правды — Supabase, подтянется при перезагрузке)
+ payments.push({id:(res.payment&&res.payment.id)||('m'+Date.now()),client:client,date:paidAt,employee:empId,category:cat,categoryRaw:cat,amount:amount,method:method,managerName:payload.manager_name,comment:comment,seated:false,serviceWritten:false});
  document.getElementById('p-client').value='';document.getElementById('p-amount').value='';document.getElementById('p-comment').value='';
  showNotif('Оплата добавлена',client+' — '+fmtFull(amount));
  } else {
@@ -22317,12 +22336,18 @@ function _intgToggleUnassigned(){
 
 // v448: «Мои/Все» для канбана Интеграций. По образцу _ticketsCurrentOperatorName.
 // «Мои» — карточки где operator === me. Состояние в localStorage.
+function _intgIsOperator(){ return !!(typeof currentUser!=='undefined' && currentUser && currentUser.role === 'operator'); }
 function _intgCurrentOperatorName(){
  if(typeof currentUser === 'undefined' || !currentUser || !currentUser.name) return null;
  var firstWord = String(currentUser.name).trim().split(/\s+/)[0];
- return INTG_OPERATORS.indexOf(firstWord) >= 0 ? firstWord : null;
+ if(INTG_OPERATORS.indexOf(firstWord) >= 0) return firstWord;
+ // v592: операторы вне списка тоже скоупятся по своему имени (не видят чужие карточки)
+ if(_intgIsOperator()) return firstWord;
+ return null;
 }
 function _intgGetScope(){
+ // v592: оператор всегда «Мои» — правило продукта «оператор видит только своё» (как в тикетах)
+ if(_intgIsOperator()) return 'mine';
  var saved = null;
  try { saved = localStorage.getItem('intg_scope'); } catch(_){}
  if(saved === 'mine' || saved === 'all') return saved;
@@ -22330,6 +22355,7 @@ function _intgGetScope(){
  return _intgCurrentOperatorName() ? 'mine' : 'all';
 }
 function _intgSetScope(scope){
+ if(_intgIsOperator()) scope = 'mine'; // v592: оператор не может переключиться на «Все»
  if(scope !== 'mine' && scope !== 'all') return;
  try { localStorage.setItem('intg_scope', scope); } catch(_){}
  if(typeof intgSbLoad === 'function') intgSbLoad();
@@ -22343,9 +22369,11 @@ function _intgRenderScopeToggle(items){
  var mineCount = me ? arr.filter(function(r){ return r.operator === me; }).length : 0;
  var allCount = arr.length;
  var btns = toggle.querySelectorAll('button[data-scope]');
+ var opOnly = _intgIsOperator(); // v592: оператору кнопку «Все» не показываем
  for(var i = 0; i < btns.length; i++){
   var btn = btns[i];
   var s = btn.getAttribute('data-scope');
+  if(opOnly && s === 'all'){ btn.style.display = 'none'; continue; }
   var isActive = s === scope;
   btn.style.background = isActive ? 'var(--accent, #5489BB)' : 'transparent';
   btn.style.color = isActive ? '#fff' : 'var(--text-soft)';
@@ -22372,7 +22400,7 @@ function intgSbRender(items){
   var empty = document.createElement('div');
   empty.style.cssText = 'font-size:13px;color:var(--text-muted);padding:24px 0;text-align:center;line-height:1.5';
   if(intgScope === 'mine' && intgMe){
-   empty.textContent = 'У вас нет активных интеграций. Переключите на «Все» — заберите новую из общей очереди.';
+   empty.textContent = _intgIsOperator() ? 'У вас пока нет назначенных интеграций.' : 'У вас нет активных интеграций. Переключите на «Все» — заберите новую из общей очереди.';
   } else if(!items.length){
    empty.textContent = 'Пока новых интеграций нет — появятся когда пройдёт первая оплата «Нов интеграция» через бота.';
   } else {

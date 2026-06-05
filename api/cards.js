@@ -948,8 +948,12 @@ async function handleIntegrationsRoute(req, res) {
 
   if (req.method === 'GET') {
     const { id, client_id, operator, status, country, type, package: pkg, include_archive } = req.query || {};
+    // v592 SEC: секреты (login_password, server) отдаём ТОЛЬКО в детальном запросе (по id/client_id),
+    // а в общем списке доски — нет, иначе любой с бандл-токеном выкачивает учётки клиентов.
+    const isDetail = !!(id || client_id);
+    const SAFE_COLS = 'id,client_id,company_name,country,status,type,package,db_type,operator,manager,date_paid,date_taken,deadline,date_done,contact_persons,comment,sheet_row,created_at,updated_at,sheet_month';
     const params = {
-      select: '*,clients(company_name,main_phone,curator_operator,status)',
+      select: (isDetail ? '*' : SAFE_COLS) + ',clients(company_name,main_phone,curator_operator,status)',
       order: 'created_at.desc'
     };
     if (id) params['id'] = 'eq.' + id;
