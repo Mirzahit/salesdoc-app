@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v589</title>
+<title>SalesDoc — Финансовый Дашборд v590</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8652,9 +8652,8 @@ function isWigEditorAllowed(user){
 // ============================================================
 // v152: USERS API — write-эндпоинты в Sheet "Users" через Apps Script
 // ============================================================
-// Стартовый пароль для новых сотрудников и при сбросе админом.
-// При успешном входе с этим паролем фронт форсирует смену (is_temp=TRUE).
-const START_PASSWORD = '123456';
+// v589: общий стартовый пароль '123456' убран. Временный пароль теперь генерит сервер
+// (одноразовый, на сотрудника) и возвращает его админу один раз. См. /api/employees.
 // v587: app-token нужен sbFetch на boot (initEmployees, автологин) — он раньше задавался ниже
 // по файлу (после вызовов), поэтому уходил пустым → 401. Поднимаем определение сюда.
 window._APP_TOKEN = window._APP_TOKEN || 'salesdoc-2026-route-secret-9k3xJ7';
@@ -8665,7 +8664,7 @@ try { window._ADMIN_TOKEN = window._ADMIN_TOKEN || localStorage.getItem('sd_admi
 // v587: операции с паролями/статусом сотрудника теперь идут в Supabase (/api/employees),
 // а не во второй GAS-скрипт. Сервер хеширует пароль сам. Сигнатуры сохранены — вызовы не меняются.
 async function apiResetUserPassword(userId){
- return sbFetch('/api/employees', { method:'POST', body: JSON.stringify({ id:userId, password:START_PASSWORD, is_temp:true }) });
+ return sbFetch('/api/employees', { method:'POST', body: JSON.stringify({ id:userId, reset:true }) }); // v589: сервер генерит одноразовый пароль, отдаёт в temp_password
 }
 async function apiUpdateUserPassword(userId, plainPassword){
  return sbFetch('/api/employees', { method:'POST', body: JSON.stringify({ id:userId, password:plainPassword, is_temp:false }) });
@@ -12284,9 +12283,10 @@ async function saveEmployee() {
  if(document.getElementById('user-mgmt-body')) renderUserManagement();
  // Применить обновлённые права если редактируем текущего пользователя
  if(currentUser && currentUser.id === saved.id) { currentUser.access = data.access; applyUserAccess(); }
- // v261: при СОЗДАНИИ нового / СБРОСЕ пароля — показываем CEO выданные creds для передачи сотруднику
- if(!editId || newPass){
- var passToShow = newPass || START_PASSWORD;
+ // v261/589: при СОЗДАНИИ нового или явном пароле — показываем creds для передачи сотруднику.
+ // Для нового без пароля показываем сгенерированный сервером одноразовый (res.temp_password).
+ var passToShow = newPass || res.temp_password;
+ if(passToShow){
  showCredentialsModal(name, email, passToShow, ROLE_LABELS[data.role] || data.role);
  } else {
  showNotif('Сотрудник сохранён', name);
@@ -14037,6 +14037,8 @@ async function doLogin() {
  // ростер мог ещё грузиться — дождёмся, чтобы имена/селекты были готовы
  try { if (window._employeesReady) await window._employeesReady; } catch(_){}
  currentUser = _empWithAccess(res.employee);
+ // v589: если пароль временный — запомним введённый (в памяти), чтобы форс-смена знала «старый»
+ window._tempLoginPass = currentUser.is_temp ? passRaw : '';
  try { loadEmpAccess(); } catch(_){} // v581: подтянуть серверные права override
 
  // Запомнить меня (сохраняем хеш своего пароля локально — как и раньше; на автологине шлём его серверу)
@@ -14090,6 +14092,7 @@ async function doLogin() {
 
 function doLogout() {
  currentUser = null;
+ window._tempLoginPass = ''; // v589: не держим введённый временный пароль
  // v220: при выходе чистим saved-credentials, чтобы при следующем заходе была форма
  try {
  localStorage.removeItem('sd_saved_login');
@@ -15425,14 +15428,15 @@ async function submitForcePassChange(){
  if (!newP || !conf) { msg.style.color='#D67373'; msg.textContent='Заполните оба поля'; return; }
  if (newP.length < 4) { msg.style.color='#D67373'; msg.textContent='Минимум 4 символа'; return; }
  if (newP !== conf) { msg.style.color='#D67373'; msg.textContent='Пароли не совпадают'; return; }
- if (newP === START_PASSWORD) { msg.style.color='#D67373'; msg.textContent='Нельзя оставлять стартовый пароль'; return; }
+ if (window._tempLoginPass && newP === window._tempLoginPass) { msg.style.color='#D67373'; msg.textContent='Нельзя оставлять выданный пароль'; return; }
  msg.style.color='#FBBF77'; msg.textContent='Сохраняем...';
  try {
- // v587: temp-пароль = стартовый; самосмена через /api/change-password (без админ-кода)
- var cpr = await apiChangeOwnPassword(START_PASSWORD, newP);
+ // v589: «старый» = временный пароль, введённый при входе (захвачен в doLogin)
+ var cpr = await apiChangeOwnPassword(window._tempLoginPass || '', newP);
  if (!cpr || !cpr.ok) { msg.style.color='#D67373'; msg.textContent=(cpr&&cpr.error)||'Ошибка сохранения. Попробуйте ещё раз.'; return; }
  var newHash = await sha256(newP);
  currentUser.is_temp = false;
+ window._tempLoginPass = '';
  var emp = employees.find(function(e){ return e.id === currentUser.id; });
  if (emp) { emp.is_temp = false; }
  try {
@@ -15462,24 +15466,25 @@ document.addEventListener('keydown', function(ev){
 async function resetEmpPassword(id){
  var emp = employees.find(function(e){ return e.id === id; });
  if (!emp) return;
- if (!confirm('Сбросить пароль ' + emp.name + ' на стартовый "' + START_PASSWORD + '"?\nПри следующем входе сотрудник придумает свой.')) return;
+ if (!confirm('Сбросить пароль ' + emp.name + '?\nБудет сгенерирован новый одноразовый пароль — сотрудник сменит его при входе.')) return;
  try {
- await apiResetUserPassword(emp.id);
- emp.pass_hash = await sha256(START_PASSWORD);
+ var r = await apiResetUserPassword(emp.id); // v589: возвращает temp_password
+ if (!r || !r.ok) { showNotif('Ошибка', (r&&r.error)||'Не удалось сбросить пароль'); return; }
  emp.is_temp = true;
- showResetPassInfo(emp);
+ showResetPassInfo(emp, r.temp_password);
  } catch(e){
- showNotif('Ошибка', 'Не удалось сбросить пароль. Проверь Apps Script.');
+ showNotif('Ошибка', 'Не удалось сбросить пароль.');
  }
 }
-function showResetPassInfo(emp){
- // v261: используем единую модалку credentials (с WhatsApp/Копировать)
+function showResetPassInfo(emp, tempPass){
+ var pass = tempPass || '';
+ // v261: единая модалка credentials (с WhatsApp/Копировать)
  if(typeof showCredentialsModal === 'function'){
  var roleLabel = (typeof ROLE_LABELS!=='undefined' && ROLE_LABELS[emp.role]) || emp.role || '';
- return showCredentialsModal(emp.name, emp.email, START_PASSWORD, roleLabel);
+ return showCredentialsModal(emp.name, emp.email, pass, roleLabel);
  }
  // Fallback на старую модалку
- var text = 'Логин: ' + (emp.email||'') + '\nПароль: ' + START_PASSWORD + '\n\nПри входе попросит сменить — придумаешь свой.';
+ var text = 'Логин: ' + (emp.email||'') + '\nПароль: ' + pass + '\n\nПри входе попросит сменить — придумает свой.';
  var el = document.getElementById('reset-pass-info-text');
  if (el) el.textContent = text;
  var m = document.getElementById('reset-pass-info-modal');
@@ -15519,16 +15524,15 @@ async function disableEmpFromCard(id){
 async function enableEmpFromCard(id){
  var emp = employees.find(function(e){ return e.id === id; });
  if (!emp) return;
- if (!confirm('Восстановить ' + emp.name + '?\nПароль также будет сброшен на стартовый.')) return;
+ if (!confirm('Восстановить ' + emp.name + '?\nПароль также будет сброшен — выдадим новый одноразовый.')) return;
  try {
- await apiEnableUser(emp.id);
- await apiResetUserPassword(emp.id);
+ // v589: одним запросом — активируем и сбрасываем пароль (сервер вернёт temp_password)
+ var r = await sbFetch('/api/employees', { method:'POST', body: JSON.stringify({ id: emp.id, active:true, reset:true }) });
+ if (!r || !r.ok) { showNotif('Ошибка', (r&&r.error)||'Не удалось восстановить'); return; }
  emp.active = true;
- emp.pass_hash = await sha256(START_PASSWORD);
  emp.is_temp = true;
- saveCustomEmployees();
  renderEmployees();
- showResetPassInfo(emp);
+ showResetPassInfo(emp, r.temp_password);
  } catch(e){
  showNotif('Ошибка', 'Не удалось обновить Sheet. Проверь Apps Script.');
  }
