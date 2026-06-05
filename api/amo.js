@@ -10,6 +10,8 @@
 //   ?action=pipelines        — список воронок и их этапов
 //   ?action=funnel&pipeline_id=N  — счётчики лидов по этапам выбранной воронки
 
+import { checkAuth, checkAdminToken } from './_auth.js';
+
 function bad(res, code, msg, extra){
   res.status(code).json({ error: msg, ...(extra || {}) });
 }
@@ -318,16 +320,10 @@ async function readBody(req){
 export default async function handler(req, res){
   // v376: разрешаем POST для двусторонней синхронизации SD→amo (update_status, add_note).
   if(req.method !== 'GET' && req.method !== 'POST'){ return bad(res, 405, 'Only GET/POST'); }
-  // v376: POST — защищены shared-secret APP_TOKEN. Иначе любой может менять статусы в amo.
-  if(req.method === 'POST'){
-    const expected = (process.env.APP_TOKEN || '').trim();
-    if(expected){
-      const got = (req.headers['x-app-token'] || '').toString().trim();
-      if(got !== expected){
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-    }
-  }
+  // v591 SEC: app-token обязателен для ВСЕХ методов. Раньше проверялся только для POST,
+  // из-за чего GET-действия (phone_lookup/lead_full/data_quality/apply_meta_tags) сливали
+  // PII клиентов из amo и позволяли GET-мутацию тегов сделок без токена.
+  if(!checkAuth(req, res)) return;
   // v361: поддержка двух amo-кабинетов (KZ + KG) через ?country=KG
   const country = String((req.query && req.query.country) || 'KZ').toUpperCase();
   const env = country === 'KG' ? {
@@ -608,6 +604,11 @@ export default async function handler(req, res){
       const tagName = String(req.query.tag || 'таргет таблица');
       const dryRun = req.query.dry_run !== 'false'; // по умолчанию true
       if(!sheetId) return bad(res, 400, 'Need ?sheet_id=...');
+      // v591 SEC: реальная запись тегов в amo (dry_run=false) — только с админ-кодом.
+      if(!dryRun){
+        const gate = checkAdminToken(req);
+        if(!gate.ok) return bad(res, gate.unconfigured ? 503 : 403, gate.unconfigured ? 'apply_meta_tags недоступен: не настроен ADMIN_TOKEN' : 'Нужен админ-код (x-admin-token) для записи тегов в amo');
+      }
 
       // 1. Читаем CSV из Sheets и извлекаем телефоны
       const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;

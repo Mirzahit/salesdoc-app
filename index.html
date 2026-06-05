@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v590</title>
+<title>SalesDoc — Финансовый Дашборд v591</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -28592,7 +28592,7 @@ async function _routeLoadAmoContact(cl, target){
  }
  try {
   var country = cl.country || window.currentCountry || 'KZ';
-  var r = await fetch('/api/amo?action=lead_full&id=' + leadId + '&country=' + country);
+  var r = await fetch('/api/amo?action=lead_full&id=' + leadId + '&country=' + country, { headers: { 'x-app-token': window._APP_TOKEN || '' } });
   var d = await r.json();
   if(!r.ok || !d.ok) throw new Error(d.error || 'amo ' + r.status);
   var contacts = d.contacts || [];
@@ -30130,7 +30130,7 @@ async function _routeAmoFetch(leadId){
 
  try {
   var country = window.currentCountry || 'KZ';
-  var r = await fetch('/api/amo?action=lead_full&id=' + leadId + '&country=' + country);
+  var r = await fetch('/api/amo?action=lead_full&id=' + leadId + '&country=' + country, { headers: { 'x-app-token': window._APP_TOKEN || '' } });
   var d = await r.json();
   if(!r.ok || !d.ok){
    throw new Error(d.error || ('amo ' + r.status));
@@ -37822,7 +37822,7 @@ window.amoLoadFunnel = async function(force){
  if(window._amoCurrentTag) amoQS += '&tag=' + encodeURIComponent(window._amoCurrentTag);
  // Meta API использует свои строковые периоды — последние 7/30/90 или this_month
  var metaPeriod = period === 'all' ? 'last_90d' : period;
- var amoP = fetch(amoQS).then(function(r){ return r.json(); });
+ var amoP = fetch(amoQS, { headers: { 'x-app-token': window._APP_TOKEN || '' } }).then(function(r){ return r.json(); });
  var metaP = fetch('/api/meta-ads?endpoint=account_summary&period=' + metaPeriod + '&country=' + currentCountry).then(function(r){ return r.json(); }).catch(function(){ return null; });
  var results = await Promise.all([amoP, metaP]);
  var amoData = results[0];
@@ -38106,7 +38106,7 @@ window.amoLoadDataQuality = async function(btn){
  try {
   var d = window._amoDQCache;
   if(!d || (Date.now() - d.ts > 5*60*1000)){
-   var r = await fetch('/api/amo?action=data_quality&country=' + currentCountry);
+   var r = await fetch('/api/amo?action=data_quality&country=' + currentCountry, { headers: { 'x-app-token': window._APP_TOKEN || '' } });
    var json = await r.json();
    if(json.error) throw new Error(json.error);
    d = { ts: Date.now(), data: json };
@@ -38254,7 +38254,7 @@ window.amoLoadHonestFunnel = async function(){
  var url = '/api/amo?action=honest_meta_funnel&country=' + currentCountry + '&sheet_id=' + encodeURIComponent(window._amoHonestSheetId);
  if(ts.from) url += '&from=' + ts.from;
  if(ts.to) url += '&to=' + ts.to;
- var r = await fetch(url);
+ var r = await fetch(url, { headers: { 'x-app-token': window._APP_TOKEN || '' } });
  var data = await r.json();
  if(data.error){ el.innerHTML = '<div style="font-size:11px;color:var(--danger);padding:10px">Ошибка: ' + data.error + '</div>'; return; }
  window._amoHonestCache[period] = { ts: Date.now(), data: data };
