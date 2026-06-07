@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v594</title>
+<title>SalesDoc — Финансовый Дашборд v595</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -34985,11 +34985,11 @@ function kbOpenCardPage(card) {
  var intgInfo = kbGetIntegrationInfo(card);
  infoFields.push({label:'Интеграция', val:intgInfo.text, color:intgInfo.color});
  infoFields.forEach(function(f){
- html += '<div class="kbc-field-row"><div class="kbc-field-label">'+f.label+'</div><div class="kbc-field-value"><span style="font-size:12px;font-weight:600;color:'+(f.color||'var(--text-primary)')+'">'+f.val+'</span></div></div>';
+ html += '<div class="kbc-field-row"><div class="kbc-field-label">'+f.label+'</div><div class="kbc-field-value"><span style="font-size:12px;font-weight:600;color:'+(f.color||'var(--text-primary)')+'">'+kbEsc(f.val)+'</span></div></div>';
  });
  // Лицензии и Тариф — автозаполнение из данных, но редактируемые
- html += '<div class="kbc-field-row"><div class="kbc-field-label">Лицензии</div><div class="kbc-field-value"><input data-field="_licenses" value="'+autoLic.toString().replace(/"/g,'&quot;')+'" placeholder="кол-во" onchange="kbFieldChanged(\''+card.id+'\',\'_licenses\',this.value)"></div></div>';
- html += '<div class="kbc-field-row"><div class="kbc-field-label">Тариф / Период</div><div class="kbc-field-value"><input data-field="_tariff" value="'+autoTariff.toString().replace(/"/g,'&quot;')+'" placeholder="тариф" onchange="kbFieldChanged(\''+card.id+'\',\'_tariff\',this.value)"></div></div>';
+ html += '<div class="kbc-field-row"><div class="kbc-field-label">Лицензии</div><div class="kbc-field-value"><input data-field="_licenses" value="'+kbEsc(autoLic)+'" placeholder="кол-во" onchange="kbFieldChanged(\''+card.id+'\',\'_licenses\',this.value)"></div></div>';
+ html += '<div class="kbc-field-row"><div class="kbc-field-label">Тариф / Период</div><div class="kbc-field-value"><input data-field="_tariff" value="'+kbEsc(autoTariff)+'" placeholder="тариф" onchange="kbFieldChanged(\''+card.id+'\',\'_tariff\',this.value)"></div></div>';
  // Editable CRM fields
  KB_CRM_FIELDS.forEach(function(f){
  var val = card.fields[f.key] || '';
@@ -35000,7 +35000,7 @@ function kbOpenCardPage(card) {
  f.options.forEach(function(o){ html += '<option value="'+o+'"'+(val===o?' selected':'')+'>'+o+'</option>'; });
  html += '</select>';
  } else {
- html += '<input data-field="'+f.key+'" value="'+val.replace(/"/g,'&quot;')+'" placeholder="..." onchange="kbFieldChanged(\''+card.id+'\',\''+f.key+'\',this.value)">';
+ html += '<input data-field="'+f.key+'" value="'+kbEsc(val)+'" placeholder="..." onchange="kbFieldChanged(\''+card.id+'\',\''+f.key+'\',this.value)">';
  }
  html += '</div></div>';
  });
@@ -36902,9 +36902,9 @@ function kbRenderCardFeed(card) {
  if(t.done) html += '<span style="color:#7FB89E;font-size:9px">OK</span>';
  html += '</div>';
  html += '<span style="font-size:12px">'+tt.icon+'</span>';
- html += '<span style="font-size:11px;font-weight:600;color:'+(overdue?'#D67373':'var(--text-primary)')+';'+(t.done?'text-decoration:line-through':'')+'">'+tt.label+'</span>';
- if(t.text) html += '<span style="font-size:10px;color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+t.text+'</span>';
- if(t.date) html += '<span style="font-size:9px;color:'+(overdue?'#D67373':'var(--text-muted)')+'">'+t.date+'</span>';
+ html += '<span style="font-size:11px;font-weight:600;color:'+(overdue?'#D67373':'var(--text-primary)')+';'+(t.done?'text-decoration:line-through':'')+'">'+kbEsc(tt.label)+'</span>';
+ if(t.text) html += '<span style="font-size:10px;color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+kbEsc(t.text)+'</span>';
+ if(t.date) html += '<span style="font-size:9px;color:'+(overdue?'#D67373':'var(--text-muted)')+'">'+kbEsc(t.date)+'</span>';
  html += '<span onclick="kbDeleteTask(\''+card.id+'\','+ti+')" style="cursor:pointer;font-size:12px;color:var(--text-muted);opacity:.3">&times;</span>';
  html += '</div>';
  });
@@ -36918,11 +36918,11 @@ function kbRenderCardFeed(card) {
  } else {
  cardLog.forEach(function(l){
  html += '<div class="kbc-feed-item">';
- html += '<span class="kbc-feed-who">'+l.who+'</span><span class="kbc-feed-date">'+l.date+'</span>';
+ html += '<span class="kbc-feed-who">'+kbEsc(l.who)+'</span><span class="kbc-feed-date">'+kbEsc(l.date)+'</span>';
  if(l.type === 'comment') {
- html += '<div class="kbc-feed-text">'+l.comment+'</div>';
+ html += '<div class="kbc-feed-text">'+kbEsc(l.comment)+'</div>';
  } else {
- html += '<div class="kbc-feed-move"><span class="from">'+l.from+'</span> &#8594; <span class="to">'+l.to+'</span></div>';
+ html += '<div class="kbc-feed-move"><span class="from">'+kbEsc(l.from)+'</span> &#8594; <span class="to">'+kbEsc(l.to)+'</span></div>';
  }
  html += '</div>';
  });
