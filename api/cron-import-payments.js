@@ -11,6 +11,10 @@
 
 import { importSheetsForCountry } from './payments.js';
 
+// Импорт тянет листы из медленного Apps Script — без этого функция обрывалась по
+// дефолтному таймауту, не дойдя до вставки новых строк (Supabase замерзал — v594).
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   // v592 SEC: fail-closed. Раньше при незаданном CRON_SECRET эндпоинт был открыт всем (импорт платежей).
   const expected = (process.env.CRON_SECRET || '').trim();
@@ -21,7 +25,9 @@ export default async function handler(req, res) {
   const ran = [];
   for (const country of ['KZ', 'KG']) {
     try {
-      const r = await importSheetsForCountry(country, false);
+      // monthsBack=2 — перечитываем только текущий + прошлый месяц (старые уже в базе
+      // и не меняются). Резко сокращает число запросов к Apps Script → не упираемся в таймаут.
+      const r = await importSheetsForCountry(country, false, 2);
       ran.push({ country, inserted: r.inserted_count, failed: r.failed_count });
     } catch (e) {
       ran.push({ country, error: String((e && e.message) || e) });

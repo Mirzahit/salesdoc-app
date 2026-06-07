@@ -13,6 +13,11 @@
 import { sbSelect, sbInsert, sbUpdate, sbDelete } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
 
+// Импорт из Sheets последовательно дёргает медленный Apps Script (cold-start 11-19с)
+// и делает много вставок — дефолтный таймаут Vercel обрывал его на полпути. Поднимаем
+// лимит (Hobby допускает до 60с).
+export const config = { maxDuration: 60 };
+
 const ALLOWED_COUNTRIES = ['KZ', 'KG'];
 const ALLOWED_CATEGORIES = ['implementation', 'integration', 'revision', 'subscription', 'license', 'other'];
 const ALLOWED_SOURCES = ['manual', 'payment_bot', 'sheets_import'];
@@ -185,7 +190,9 @@ async function _fetchSheet(sheetName, cfg) {
 // Ядро импорта Sheets→Supabase для одной страны. Переиспользуется ручным
 // эндпоинтом (handleImportSheets) и кроном (cron-import-payments.js), чтобы
 // логика не расходилась. dryRun=true → ничего не пишет, только сводка.
-export async function importSheetsForCountry(country, dryRun) {
+// monthsBack — сколько последних месяцев перечитывать (current-first). Не задан/0 →
+// все месяцы с января (полный backfill). Крон передаёт 2 (текущий + прошлый).
+export async function importSheetsForCountry(country, dryRun, monthsBack) {
   country = String(country || 'KZ').toUpperCase();
   if (!ALLOWED_COUNTRIES.includes(country)) {
     throw new Error('country должен быть KZ или KG');
@@ -207,15 +214,23 @@ export async function importSheetsForCountry(country, dryRun) {
 
   const now = new Date();
   const curMonthIdx = now.getMonth();
-  const months = cfg.months.slice(0, curMonthIdx + 1);
+
+  // Список индексов месяцев, current-first. Тянуть все 6+ листов из медленного
+  // Apps Script (cold-start 11-19с) упирало функцию в Vercel-таймаут — Supabase
+  // замерзал на полпути, новые строки текущего месяца не доходили (см. инцидент
+  // v594). Идём от текущего к старым: при нехватке времени важнейший месяц
+  // импортируется первым. monthsBack ограничивает глубину окна.
+  const earliestMi = (monthsBack && monthsBack > 0) ? Math.max(0, curMonthIdx - (monthsBack - 1)) : 0;
+  const monthIdxList = [];
+  for (let mi = curMonthIdx; mi >= earliestMi; mi--) monthIdxList.push(mi);
 
   const parsedRows = [];
   const skippedByMonth = {};
   const sumByMonth = {};
   let totalParsed = 0;
 
-  for (let mi = 0; mi < months.length; mi++) {
-    const monthName = months[mi];
+  for (const mi of monthIdxList) {
+    const monthName = cfg.months[mi];
     try {
       const data = await _fetchSheet(monthName, cfg);
       if (!data.rows || data.rows.length < 2) { sumByMonth[monthName] = 0; continue; }
@@ -312,7 +327,9 @@ async function handleImportSheets(req, res) {
     return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
   }
   const dryRun = String(req.query.dry_run || '1') !== '0' && req.query.dry_run !== 'false';
-  const result = await importSheetsForCountry(country, dryRun);
+  // months_back опционален: 0/не задан → полный backfill с января; N → последние N месяцев.
+  const monthsBack = req.query.months_back != null ? parseInt(req.query.months_back, 10) || 0 : 0;
+  const result = await importSheetsForCountry(country, dryRun, monthsBack);
   return res.status(200).json(result);
 }
 
