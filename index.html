@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v595</title>
+<title>SalesDoc — Финансовый Дашборд v596</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7232,8 +7232,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div style="flex:1"></div>
  <select id="acad-country-filter" onchange="acadRender()" style="padding:6px 12px;border-radius:8px;background:#1e293b;color:#f1f5f9;border:1px solid #334155;font-size:13px">
  <option value="ALL">Все страны</option>
- <option value="KZ">🇰🇿 Казахстан</option>
- <option value="KG">🇰🇬 Кыргызстан</option>
+ <option value="KZ">Казахстан</option>
+ <option value="KG">Кыргызстан</option>
  </select>
  </div>
  <div id="acad-tab-employees">
@@ -7244,8 +7244,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
  <div id="acad-tab-codes" style="display:none">
  <div style="margin-bottom:14px;display:flex;gap:10px">
- <button onclick="acadCreateCode('KZ')" style="padding:8px 18px;border-radius:8px;background:#2563eb;color:#fff;border:none;cursor:pointer;font-size:14px">🇰🇿 Создать код KZ</button>
- <button onclick="acadCreateCode('KG')" style="padding:8px 18px;border-radius:8px;background:#7c3aed;color:#fff;border:none;cursor:pointer;font-size:14px">🇰🇬 Создать код KG</button>
+ <button onclick="acadCreateCode('KZ')" style="padding:8px 18px;border-radius:8px;background:#2563eb;color:#fff;border:none;cursor:pointer;font-size:14px">Создать код KZ</button>
+ <button onclick="acadCreateCode('KG')" style="padding:8px 18px;border-radius:8px;background:#7c3aed;color:#fff;border:none;cursor:pointer;font-size:14px">Создать код KG</button>
  </div>
  <div id="acad-new-code-box" style="display:none;margin-bottom:16px;padding:14px 18px;background:#1e3a5f;border-radius:10px;border:1px solid #2563eb"></div>
  <table class="acad-table" id="acad-codes-table">
@@ -13094,6 +13094,19 @@ document.addEventListener('keydown', function(ev){
  if(modals.length){
   ev.stopPropagation();
   modals[modals.length - 1].remove();
+  return;
+ }
+ // Esc закрывает верхнюю открытую модалку (.modal-overlay). Раньше Esc их игнорировал —
+ // закрыть можно было только кликом по фону. Берём последнюю ВИДИМУЮ в DOM-порядке и
+ // снимаем .open + display:none (покрывает и class-, и style-управляемые модалки).
+ var ovs = Array.prototype.filter.call(document.querySelectorAll('.modal-overlay'), function(m){
+  return getComputedStyle(m).display !== 'none';
+ });
+ if(ovs.length){
+  ev.stopPropagation();
+  var topOv = ovs[ovs.length - 1];
+  topOv.classList.remove('open');
+  topOv.style.display = 'none';
   return;
  }
  // Также закрываем dropdown'ы (выбор типа, ассайна и т.д.)
@@ -25241,7 +25254,7 @@ function acadRender() {
  } else {
  var html = '';
  emps.forEach(function(e){
- var flag = e.country==='KG'?'🇰🇬':'🇰🇿';
+ var flag = e.country==='KG'?'KG':'KZ';
  var badgeClass = e.country==='KG'?'acad-badge-kg':'acad-badge-kz';
  var statusClass = e.status==='completed'?'acad-status-completed':'acad-status-onboarding';
  var statusText = e.status==='completed'?'Завершено':'В процессе';
@@ -25266,7 +25279,7 @@ function acadRender() {
  var ch = '';
  codes.sort(function(a,b){return (b.created_at||'').localeCompare(a.created_at||'');});
  codes.forEach(function(c){
- var flag = c.country==='KG'?'🇰🇬':'🇰🇿';
+ var flag = c.country==='KG'?'KG':'KZ';
  var badgeClass = c.country==='KG'?'acad-badge-kg':'acad-badge-kz';
  var used = c.used_by_name ? '' + c.used_by_name : '<span style="color:#64748b">Не использован</span>';
  var usedAt = c.used_at ? c.used_at.substring(0,10) : '';
@@ -25286,7 +25299,7 @@ function acadShowDetail(tgId) {
  var panel = document.getElementById('acad-detail-panel');
  try {
  var details = JSON.parse(emp.block_details);
- var flag = emp.country==='KG'?'🇰🇬':'🇰🇿';
+ var flag = emp.country==='KG'?'KG':'KZ';
  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
  '<h3 style="margin:0;color:#f1f5f9">' + flag + ' ' + emp.full_name + '</h3>' +
  '<button onclick="document.getElementById(\'acad-detail-panel\').style.display=\'none\'" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px">×</button></div>' +
@@ -25322,7 +25335,7 @@ function acadCreateCode(country) {
  var code = '';
  for(var i=0;i<6;i++) code += chars.charAt(Math.floor(Math.random()*chars.length));
  var now = new Date().toISOString().substring(0,19);
- var flag = country==='KG'?'🇰🇬':'🇰🇿';
+ var flag = country==='KG'?'KG':'KZ';
 
  // Show code to user
  var box = document.getElementById('acad-new-code-box');
@@ -25626,7 +25639,7 @@ function reportGenerate(type) {
  _acadEmployees.forEach(function(e){
  var pct = e.percent || 0;
  var barColor = pct>=100?'#7FB89E':pct>0?'#D6A372':'#334155';
- html3 += '<tr><td style="font-weight:600">'+e.name+'</td><td>'+(e.country==='KG'?'🇰🇬':'🇰🇿')+'</td>' +
+ html3 += '<tr><td style="font-weight:600">'+e.name+'</td><td>'+(e.country==='KG'?'KG':'KZ')+'</td>' +
  '<td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;background:#1e293b;border-radius:3px"><div style="width:'+pct+'%;height:100%;background:'+barColor+';border-radius:3px"></div></div><span style="font-size:11px;color:var(--text-muted)">'+pct+'%</span></div></td>' +
  '<td>'+(e.current_block||'')+'</td></tr>';
  });
