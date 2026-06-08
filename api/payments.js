@@ -10,7 +10,7 @@
 // PATCH  /api/payments?id=UUID                                  → редактировать (whitelist)
 // DELETE /api/payments?id=UUID                                  → удалить (только manual)
 
-import { sbSelect, sbInsert, sbUpdate, sbDelete } from './_supabase.js';
+import { sbSelect, sbInsert, sbUpdate, sbDelete, sbUpsert } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
 
 // Импорт из Sheets последовательно дёргает медленный Apps Script (cold-start 11-19с)
@@ -297,26 +297,38 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
     };
   }
 
-  // Реальный insert
-  const inserted = [];
+  // Реальный upsert: вставляем НОВЫЕ и ОБНОВЛЯЕМ изменённые строки — правки в таблице
+  // теперь подтягиваются (раньше insert-only оставлял старые значения навсегда).
+  // Конфликт по уникальному индексу payments_sheet_uniq (country,sheet_id,sheet_tab,sheet_row).
+  // Источник истины для sheets_import — сама таблица; comment/notes/created_by не в payload → сохраняются.
+  const ON_CONFLICT = 'country,sheet_id,sheet_tab,sheet_row';
+  const cleanRows = parsedRows.map(({ _key, _already_exists, ...row }) => row);
+  const upserted = [];
   const failed = [];
-  for (const p of willInsert) {
-    const { _key, _already_exists, ...row } = p;
+  const CHUNK = 200;
+  for (let i = 0; i < cleanRows.length; i += CHUNK) {
+    const batch = cleanRows.slice(i, i + CHUNK);
     try {
-      const r = await sbInsert('payments', row);
-      inserted.push(r[0]);
+      const r = await sbUpsert('payments', batch, ON_CONFLICT);
+      upserted.push(...r);
     } catch (e) {
-      failed.push({ company_name: p.company_name, paid_at: p.paid_at, amount: p.amount, error: e.message });
+      // батч не прошёл — построчно, чтобы одна плохая строка не валила весь импорт
+      for (const row of batch) {
+        try { const r = await sbUpsert('payments', row, ON_CONFLICT); upserted.push(...r); }
+        catch (e2) { failed.push({ company_name: row.company_name, paid_at: row.paid_at, amount: row.amount, error: e2.message }); }
+      }
     }
   }
   return {
     ok: true,
     mode: 'apply',
     country,
-    inserted_count: inserted.length,
+    inserted_count: willInsert.length,                              // новые строки (как раньше)
+    updated_count: Math.max(0, upserted.length - willInsert.length), // обновлённые
+    upserted_count: upserted.length,
     failed_count: failed.length,
     failed_sample: failed.slice(0, 10),
-    sum_inserted: inserted.reduce((s, p) => s + parseFloat(p.amount || 0), 0)
+    sum_upserted: upserted.reduce((s, p) => s + parseFloat(p.amount || 0), 0)
   };
 }
 
