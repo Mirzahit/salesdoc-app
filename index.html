@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v598</title>
+<title>SalesDoc — Финансовый Дашборд v599</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5790,7 +5790,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="panel-title" style="font-size:13px;margin-bottom:10px">Список <span id="churn-rows-count" style="color:var(--text-muted);font-weight:400"></span></div>
  <div style="overflow-x:auto">
  <table class="data-table"><thead><tr>
- <th>Месяц</th><th>Клиент</th><th>Тип</th><th>Было</th><th>Стало</th><th>Сумма была</th><th>Потеря</th><th>Причина</th>
+ <th>Месяц</th><th>Клиент</th><th>Тип</th><th>Лицензий ушло</th><th>По типам</th><th>Сумма была</th><th>Потеря</th><th>Причина</th>
  </tr></thead><tbody id="churn-rows"></tbody></table>
  </div>
  </div>
@@ -20290,23 +20290,44 @@ function churnRenderKPI(){
  }).join('');
 }
 
+// Карта потерянных лицензий по компании+месяцу (из Файла 1): company_key|period → {total, byType{}}
+function _churnLicByCompany(){
+ var map={};
+ _churnData.licenses.forEach(function(r){
+  var d=Number(r.diff)||0; if(d>=0) return; // только потери
+  var k=(String(r.company_key||'').toLowerCase())+'|'+(r.period_month||'');
+  if(!map[k]) map[k]={total:0,byType:{}};
+  map[k].total+=(-d);
+  map[k].byType[r.license_type]=(map[k].byType[r.license_type]||0)+(-d);
+ });
+ return map;
+}
+function _churnBreakdown(byType){
+ var keys=Object.keys(byType||{}).sort(function(a,b){return byType[b]-byType[a];});
+ return keys.map(function(t){ return _churnEsc(t)+' −'+byType[t]; }).join(', ');
+}
+
 function churnRenderTable(){
  var rows=churnGetFiltered().slice().sort(function(a,b){
   var loA=(Number(a.prev_amount)||0)-(Number(a.cur_amount)||0), loB=(Number(b.prev_amount)||0)-(Number(b.cur_amount)||0);
   return loB-loA;
  });
+ var licMap=_churnLicByCompany();
  var cc=document.getElementById('churn-rows-count'); if(cc) cc.textContent='('+rows.length+')';
  document.getElementById('churn-rows').innerHTML=rows.map(function(r){
   var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0);
   var kindColor=r.kind==='churn'?'#EF4444':(r.kind==='decline'?'#F59E0B':'var(--text-muted)');
+  var lic=licMap[(String(r.company_key||'').toLowerCase())+'|'+(r.period_month||'')];
+  var licTotal=lic?lic.total:0;
+  var breakdown=lic?_churnBreakdown(lic.byType):'';
   return '<tr>'+
    '<td>'+(r.period_month||'').slice(0,7)+'</td>'+
    '<td>'+_churnEsc(r.company_name||'')+'</td>'+
    '<td style="color:'+kindColor+';font-weight:600">'+_churnKindLabel(r.kind)+'</td>'+
-   '<td>'+(r.prev_count!=null?r.prev_count:'')+'</td>'+
-   '<td>'+(r.cur_count!=null?r.cur_count:'')+'</td>'+
+   '<td style="font-weight:700;color:'+(licTotal>0?'#EF4444':'var(--text-muted)')+'">'+(licTotal>0?('−'+licTotal):'—')+'</td>'+
+   '<td style="color:var(--text-muted);font-size:11px">'+(breakdown||'—')+'</td>'+
    '<td>'+(r.prev_amount!=null?_churnFmtMoney(r.prev_amount):'')+'</td>'+
-   '<td style="color:'+(loss>0?'#EF4444':'var(--text-muted)')+'">'+(loss>0?_churnFmtMoney(loss):'')+'</td>'+
+   '<td style="color:'+(loss>0?'#EF4444':'var(--text-muted)')+';font-weight:600">'+(loss>0?_churnFmtMoney(loss):'')+'</td>'+
    '<td style="color:var(--text-muted)">'+_churnEsc(r.reason||'')+'</td>'+
    '</tr>';
  }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px">Нет строк под фильтр</td></tr>';
@@ -20354,11 +20375,15 @@ function churnRenderCharts(){
 function churnExportCSV(){
  var rows=churnGetFiltered();
  if(!rows.length){ try{showNotif('Пусто','Нет данных для экспорта');}catch(_){} return; }
- var head=['Месяц','Клиент','Тип','Было','Стало','Сумма была','Потеря','Причина'];
+ var licMap=_churnLicByCompany();
+ var head=['Месяц','Клиент','Тип','Лицензий ушло','По типам','Сумма была','Потеря','Причина'];
  var lines=[head.join(';')];
  rows.forEach(function(r){
   var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0);
-  lines.push([(r.period_month||'').slice(0,7),'"'+(r.company_name||'').replace(/"/g,'""')+'"',_churnKindLabel(r.kind),(r.prev_count!=null?r.prev_count:''),(r.cur_count!=null?r.cur_count:''),(r.prev_amount!=null?r.prev_amount:''),(loss>0?Math.round(loss):''),'"'+String(r.reason||'').replace(/"/g,'""')+'"'].join(';'));
+  var lic=licMap[(String(r.company_key||'').toLowerCase())+'|'+(r.period_month||'')];
+  var licTotal=lic?lic.total:0;
+  var breakdown=lic?Object.keys(lic.byType).sort(function(a,b){return lic.byType[b]-lic.byType[a];}).map(function(t){return t+' -'+lic.byType[t];}).join(', '):'';
+  lines.push([(r.period_month||'').slice(0,7),'"'+(r.company_name||'').replace(/"/g,'""')+'"',_churnKindLabel(r.kind),(licTotal>0?licTotal:''),'"'+breakdown.replace(/"/g,'""')+'"',(r.prev_amount!=null?r.prev_amount:''),(loss>0?Math.round(loss):''),'"'+String(r.reason||'').replace(/"/g,'""')+'"'].join(';'));
  });
  var blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ottok_'+(currentCountry||'KZ')+'.csv'; a.click(); URL.revokeObjectURL(a.href);
