@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v608</title>
+<title>SalesDoc — Финансовый Дашборд v609</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7590,7 +7590,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="sd-sub">Активированные клиенты, риск отвала, абонплата, теги</div>
  </div>
  <div class="sd-filters">
- <input type="search" id="ac-filter-search" placeholder="Поиск по имени или хосту..." oninput="acSetSearch(this.value)" style="padding:7px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2);color:var(--text);font-size:13px;min-width:240px;flex:1 1 240px;font-family:inherit">
+ <input type="search" id="ac-filter-search" placeholder="Поиск по названию или имени сервера..." oninput="acSetSearch(this.value)" style="padding:7px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2);color:var(--text);font-size:13px;min-width:240px;flex:1 1 240px;font-family:inherit">
  <select class="sd-select" id="ac-filter-op" onchange="acSetOperator(this.value)">
  <option value="">Все операторы</option>
  </select>
@@ -7601,12 +7601,12 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <option value="low">Спокойно</option>
  </select>
  <select class="sd-select" id="ac-filter-segment" onchange="acSetSegment(this.value)">
- <option value="">Все сегменты</option>
- <option value="A+">A+ (50+ польз.)</option>
- <option value="A">A (21-50)</option>
- <option value="B">B (11-20)</option>
- <option value="C">C (5-10)</option>
- <option value="D">D (1-4)</option>
+ <option value="">Любой размер</option>
+ <option value="A+">Очень крупные (50+ польз.)</option>
+ <option value="A">Крупные (21-50)</option>
+ <option value="B">Средние (11-20)</option>
+ <option value="C">Небольшие (5-10)</option>
+ <option value="D">Мелкие (1-4)</option>
  </select>
  <select class="sd-select" id="ac-filter-tag" onchange="acSetTag(this.value)">
  <option value="">Все теги</option>
@@ -7615,11 +7615,12 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <option value="working">В работе</option>
  <option value="ok">Норма</option>
  </select>
- <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-churned" checked onchange="acSetShowChurned(this.checked)" style="margin:0"> Показать отвалившихся</label>
- <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-nosub" checked onchange="acSetShowNoSub(this.checked)" style="margin:0"> Показать без подписки</label>
+ <!-- v609: служебные галки/кнопки скрыты из основного ряда (по умолчанию показываем всех) — оператор включит при необходимости -->
+ <label style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-churned" checked onchange="acSetShowChurned(this.checked)" style="margin:0"> Показать отвалившихся</label>
+ <label style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-nosub" checked onchange="acSetShowNoSub(this.checked)" style="margin:0"> Показать без подписки</label>
  <!-- v549: кнопка «Сбросить фильтры» — появляется когда хоть один фильтр активен -->
  <button id="ac-filter-reset" onclick="acResetFilters()" style="display:none;padding:6px 12px;font-size:11px;font-weight:600;background:rgba(239,68,68,.10);color:#EF4444;border:1px solid rgba(239,68,68,.30);border-radius:6px;cursor:pointer">Сбросить фильтры</button>
- <button onclick="acReloadPrior()" id="ac-reload-prior-btn" title="Перечитать подписки из «Доходы 2025». Нужно только если в таблице 2025 что-то добавили вручную." style="padding:6px 10px;font-size:11px;background:rgba(120,120,128,.08);color:var(--text-soft);border:1px solid var(--border-faint);border-radius:6px;cursor:pointer">Обновить из 2025</button>
+ <button onclick="acReloadPrior()" id="ac-reload-prior-btn" title="Перечитать подписки из «Доходы 2025». Нужно только если в таблице 2025 что-то добавили вручную." style="display:none;padding:6px 10px;font-size:11px;background:rgba(120,120,128,.08);color:var(--text-soft);border:1px solid var(--border-faint);border-radius:6px;cursor:pointer">Обновить из 2025</button>
  </div>
  </div>
  <!-- v295: MRR / ARR / Churn / NRR — north-star метрики SaaS -->
@@ -7662,8 +7663,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="sd-card" style="padding:14px 16px;background:rgba(214,163,114,.04);border:1px solid rgba(214,163,114,.25)">
  <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="acTogglePrefixList()">
  <div>
- <div style="font-size:12px;color:#D6A372;font-weight:700;letter-spacing:1px;text-transform:uppercase">Сматчены через префикс <span id="ac-prefix-count">0</span></div>
- <div style="font-size:11px;color:var(--text-muted);margin-top:3px">host'ы привязаны к клиентам не по точному совпадению. Проверь — точно ли это те же клиенты, или это другие компании.</div>
+ <div style="font-size:12px;color:#D6A372;font-weight:700;letter-spacing:1px;text-transform:uppercase">Привязаны приблизительно <span id="ac-prefix-count">0</span></div>
+ <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Эти клиенты привязаны не по точному совпадению названия. Проверьте — это те же компании или разные.</div>
  </div>
  <div id="ac-prefix-toggle" style="color:var(--text-muted);font-size:18px">▾</div>
  </div>
@@ -29807,7 +29808,7 @@ async function _routeRenderAmo(){
  // Секция СДЕЛКА
  addSection('Сделка');
  addField('Ответственный', card.operator, { editable:true, entity:'card', field:'operator', type:'select', choices:_routeOpChoices(card.operator), rawValue:card.operator });
- addField('Бюджет', card.payment_amount ? Number(card.payment_amount).toLocaleString('ru-RU').replace(/,/g, ' ') + ' ' + ((card.country==='KG')?'сом':'₸') : null, { price:true, editable:true, entity:'card', field:'payment_amount', type:'number', rawValue:card.payment_amount });
+ addField('Сумма оплаты', card.payment_amount ? Number(card.payment_amount).toLocaleString('ru-RU').replace(/,/g, ' ') + ' ' + ((card.country==='KG')?'сом':'₸') : null, { price:true, editable:true, entity:'card', field:'payment_amount', type:'number', rawValue:card.payment_amount });
  addField('Менеджер продаж', card.sales_manager, { editable:true, entity:'card', field:'sales_manager', type:'select', choices:['Мирзахит','Юлия','Айдос Хапез'], rawValue:card.sales_manager });
  addField('Категория', _amoLabelCategory(card.payment_category), { editable:true, entity:'card', field:'payment_category', type:'select', choices:['Нов внедрение','Нов интеграция','абон. плата','доп. лицензии','новый клиент','доработка'], rawValue:card.payment_category });
  addField('Создана', card.created_at ? new Date(card.created_at).toLocaleDateString('ru-RU') : null);
@@ -29841,7 +29842,6 @@ async function _routeRenderAmo(){
  addSection('Продукт');
  addField('Модули', card.modules, { editable:true, entity:'card', field:'modules', type:'text', rawValue:card.modules });
  addField('Страна', card.country || cl.country || 'KZ');
- addField('ID клиента', card.client_id);
 
  // Параллельно рисуем ленту событий справа
  _routeRenderFeed();
@@ -34506,7 +34506,7 @@ function acRender(){
  // v253: таблица с группировкой по сегментам (заголовок-строка для каждого сегмента)
  var tbl = document.getElementById('ac-table');
  if(tbl){
-  var thead = '<thead><tr><th>Клиент</th><th>Код в биллинге</th><th class="num">Польз.</th><th class="num">Абонплата</th><th>Оператор</th><th>Доступ до</th><th>Риск</th><th>Теги</th><th>Действия</th></tr></thead><tbody>';
+  var thead = '<thead><tr><th>Клиент</th><th>Имя сервера</th><th class="num">Пользователей</th><th class="num">Абонплата</th><th>Ответственный</th><th>Доступ до</th><th>Риск</th><th>Теги</th><th>Действия</th></tr></thead><tbody>';
   if(!filtered.length){
    // v550: понятное сообщение вместо «Нет клиентов по фильтру».
    // Корень: данные платежей в коде статичны (январь-март 2026), апрель-май лежат в Supabase
@@ -34575,7 +34575,7 @@ function acRender(){
      var hostEscBtn = (c.host || '').replace(/'/g, "\\'");
      return '<tr>'
       + '<td><b style="color:var(--accent-text,#34C77A);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="acOpenClientCard(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" title="Открыть карту клиента">'+kbEsc(c.client)+'</b></td>'
-      + '<td style="font-size:12px;color:var(--text-soft)" title="Код клиента в биллинге — по нему находим оплаты">'+kbEsc(c.billing_host||c.host||'—')+'</td>'
+      + '<td style="font-size:12px;color:var(--text-soft)" title="Имя сервера (код в биллинге) — по нему находим оплаты">'+kbEsc(c.billing_host||c.host||'—')+'</td>'
       + '<td class="num">'+(c.monthlyQty||0)+'</td>'
       + '<td class="num">'+(c.monthlySum?fmtSum(c.monthlySum):'—')+'</td>'
       + '<td><div class="sd-op-cell"><span class="sd-op-dot" style="background:'+opColor+'"></span>'+kbEsc(c.operator || '—')+'</div></td>'
@@ -35911,15 +35911,15 @@ function kbOpenCardPage(card) {
  panesHtml += '<div class="crm-tab-pane" data-pane="checklists" id="crm-pane-checklists">'+html+'</div>';
  // Pane 2 — Контакты (empty-state)
  panesHtml += '<div class="crm-tab-pane" hidden data-pane="contacts" id="crm-pane-contacts">';
- panesHtml += '<div class="crm-empty"><div class="crm-empty-ico"></div><div class="crm-empty-msg">Контактов пока нет</div><div class="crm-empty-hint">Подключение в v226 — следующий релиз</div></div>';
+ panesHtml += '<div class="crm-empty"><div class="crm-empty-ico"></div><div class="crm-empty-msg">Контактов пока нет</div><div class="crm-empty-hint">Скоро добавим</div></div>';
  panesHtml += '</div>';
  // Pane 3 — Файлы (empty-state)
  panesHtml += '<div class="crm-tab-pane" hidden data-pane="files" id="crm-pane-files">';
- panesHtml += '<div class="crm-empty"><div class="crm-empty-ico"></div><div class="crm-empty-msg">Файлов пока нет</div><div class="crm-empty-hint">Подключение в v227</div></div>';
+ panesHtml += '<div class="crm-empty"><div class="crm-empty-ico"></div><div class="crm-empty-msg">Файлов пока нет</div><div class="crm-empty-hint">Скоро добавим</div></div>';
  panesHtml += '</div>';
  // Pane 4 — Календарь (empty-state)
  panesHtml += '<div class="crm-tab-pane" hidden data-pane="calendar" id="crm-pane-calendar">';
- panesHtml += '<div class="crm-empty"><div class="crm-empty-ico"></div><div class="crm-empty-msg">Событий пока нет</div><div class="crm-empty-hint">Подключение в v229</div></div>';
+ panesHtml += '<div class="crm-empty"><div class="crm-empty-ico"></div><div class="crm-empty-msg">Событий пока нет</div><div class="crm-empty-hint">Скоро добавим</div></div>';
  panesHtml += '</div>';
  // v452: Pane 5 — Задачи (модуль follow-up). Render через crmClientTasksRender() при активации.
  panesHtml += '<div class="crm-tab-pane" hidden data-pane="tasks" id="crm-pane-tasks">';
