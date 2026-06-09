@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v607</title>
+<title>SalesDoc — Финансовый Дашборд v608</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -26764,6 +26764,15 @@ function routeDragEnd(el){
  document.body.classList.remove('route-trash-visible');
 }
 
+// v607: при переходе карточки в стадию «Активация» — активируем клиента в реестре
+// (status=active; API сам проставит дату активации и следующую оплату). Идемпотентно.
+async function _routeMaybeActivate(card, newStage){
+ if(newStage !== 'Активация' || !card || !card.client_id) return;
+ try {
+  var r = await sbFetch('/api/clients?client_id=' + encodeURIComponent(card.client_id), { method:'PATCH', body: JSON.stringify({ status:'active' }) });
+  if(r && r.ok){ if(card.clients) card.clients.status = 'active'; if(typeof kbShowToast === 'function') kbShowToast('Клиент активирован'); }
+ } catch(e){ try{ showNotif('Активация','Этап изменён, но клиента активировать не удалось: '+(e&&e.message||e)); }catch(_){} }
+}
 async function routeDrop(ev, newStage){
  ev.preventDefault();
  ev.target.closest('.route-col').style.background = '';
@@ -26781,6 +26790,7 @@ async function routeDrop(ev, newStage){
    body: JSON.stringify({ stage: newStage })
   });
   if(!d.ok) throw new Error(d.error);
+  await _routeMaybeActivate(card, newStage);
  } catch(e) {
   alert('Не удалось сохранить: ' + e.message);
   routeLoad();
@@ -26811,6 +26821,7 @@ async function routePipeSetStage(newStage){
   // Обновим список карточек если открыт канбан
   var inList = routeCards.find(function(c){ return c.id === card.id; });
   if(inList){ inList.stage = newStage; inList.stage_entered_at = card.stage_entered_at; }
+  await _routeMaybeActivate(card, newStage);  // v607: «Активация» → активировать клиента
  } catch(e){
   card.stage = oldStage;
   if(typeof _routeRenderCardHead === 'function'){ try { _routeRenderCardHead(); } catch(_){} }
