@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v604</title>
+<title>SalesDoc — Финансовый Дашборд v605</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5757,6 +5757,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <button class="add-btn" title="Главный отчёт: клиенты, тип (отток/спад), суммы, причина" style="font-size:11px;padding:5px 12px" onclick="document.getElementById('churn-file-churn').click()">Загрузить: кто ушёл и почему</button>
  <button class="add-btn" title="Разбивка по видам лицензий (agent, admin, vansel и т.д.)" style="font-size:11px;padding:5px 12px" onclick="document.getElementById('churn-file-lic').click()">Загрузить: какие лицензии ушли</button>
  <button class="add-btn" title="Разовая привязка базы клиентов к биллингу по коду (хосту). Не создаёт новых, только дописывает код существующим." style="font-size:11px;padding:5px 12px" onclick="document.getElementById('ac-link-file').click()">Привязать базу по биллингу</button>
+ <button class="add-btn" title="Отправить отмеченных галочками клиентов в спринт возврата (Планёрки)" style="font-size:11px;padding:5px 12px" onclick="churnSendSelected()">В возврат: выбранных</button>
+ <button title="Отправить всех клиентов по текущему фильтру в спринт возврата" style="font-size:11px;padding:5px 12px;border-radius:20px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer" onclick="churnSendAll()">В возврат: всех</button>
  <button onclick="churnExportCSV()" style="font-size:9px;padding:2px 8px;border-radius:20px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer;font-family:Inter,sans-serif;letter-spacing:1px">ЭКСПОРТ</button>
  <input type="file" id="churn-file-churn" accept=".xlsx,.xls,.csv" style="display:none" onchange="churnUploadChurn(this)">
  <input type="file" id="churn-file-lic" accept=".xlsx,.xls,.csv" style="display:none" onchange="churnUploadLicenses(this)">
@@ -5792,6 +5794,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="panel-title" style="font-size:13px;margin-bottom:10px">Список <span id="churn-rows-count" style="color:var(--text-muted);font-weight:400"></span></div>
  <div style="overflow-x:auto">
  <table class="data-table"><thead><tr>
+ <th style="width:28px"><input type="checkbox" id="churn-check-all" onclick="churnToggleAll(this)" title="Выбрать всё"></th>
  <th>Месяц</th><th>Клиент</th><th>Тип</th><th>Лицензий ушло</th><th>Каких лицензий</th><th>Платил в месяц</th><th>Потеряли в месяц</th><th>Причина</th><th>Комментарий</th>
  </tr></thead><tbody id="churn-rows"></tbody></table>
  </div>
@@ -20144,6 +20147,7 @@ function metaDeltaHtml(cur, prev, key, invert) {
 //   licenses — разбивка по типам лицензий (pivot M1 vs M2)
 var _churnData = { churn: [], licenses: [], notes: [], notesMap: {} };
 var _churnKind = 'all';
+var _churnSelected = new Set(); // выбранные строки для отправки в спринт возврата (ключ company_key|YYYY-MM-DD)
 var _churnCharts = {};
 var CHURN_PALETTE = ['#5489BB','#8B5CF6','#EC4899','#F59E0B','#10B981','#EF4444','#06B6D4','#A855F7','#84CC16','#F97316','#3B82F6','#14B8A6'];
 
@@ -20393,7 +20397,9 @@ function churnRenderTable(){
   var kindColor=r.kind==='churn'?'#EF4444':(r.kind==='decline'?'#F59E0B':'var(--text-muted)');
   var licTotal=Number(r.licTotal)||0;
   var breakdown=_churnBreakdown(r.byType);
+  var selKey=(r.company_key||'')+'|'+String(r.period_month||'').slice(0,10);
   return '<tr>'+
+   '<td><input type="checkbox" class="churn-rowcheck" data-ck="'+_churnAttr(r.company_key)+'" data-pm="'+_churnAttr(r.period_month)+'" onclick="churnRowCheck(this)"'+(_churnSelected.has(selKey)?' checked':'')+'></td>'+
    '<td>'+(r.period_month||'').slice(0,7)+'</td>'+
    '<td class="churn-open" onclick="churnOpenCard(\''+_churnJs(r.company_key)+'\',\''+_churnJs(r.period_month)+'\')" title="Открыть карточку" style="cursor:pointer;color:#7AA7D7;font-weight:600">'+_churnEsc(r.company_name||'')+'</td>'+
    '<td style="color:'+kindColor+';font-weight:600">'+_churnKindLabel(r.kind)+'</td>'+
@@ -20404,7 +20410,7 @@ function churnRenderTable(){
    '<td class="churn-edit" data-field="reason" onclick="churnStartEdit(this)" data-ck="'+_churnAttr(r.company_key)+'" data-pm="'+_churnAttr(r.period_month)+'" data-prefill="'+_churnAttr(r.fileReason||'')+'" title="Нажмите, чтобы вписать причину" style="color:var(--text-muted);cursor:text;min-width:130px">'+_churnEsc(r.reason||'')+'</td>'+
    '<td class="churn-edit" data-field="comment" onclick="churnStartEdit(this)" data-ck="'+_churnAttr(r.company_key)+'" data-pm="'+_churnAttr(r.period_month)+'" title="Нажмите, чтобы добавить комментарий" style="color:var(--text-secondary);cursor:text;min-width:150px">'+_churnEsc(r.comment||'')+'</td>'+
    '</tr>';
- }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px">Нет строк под фильтр</td></tr>';
+ }).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:20px">Нет строк под фильтр</td></tr>';
 }
 function _churnAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
 
@@ -20671,11 +20677,71 @@ async function acLinkCommit(){
  }catch(e){ btn.disabled=false; btn.textContent='Привязать'; try{showNotif('Ошибка',e&&e.message||String(e));}catch(_){} }
 }
 
+// ===== ОТПРАВКА В СПРИНТ ВОЗВРАТА (v605) =====
+var CHURN_MONTHS_RU=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+function _churnMonthRu(ym){ var p=String(ym||'').split('-'); var mi=parseInt(p[1],10)-1; return (CHURN_MONTHS_RU[mi]||p[1]||'')+' '+(p[0]||''); }
+function _churnSelKey(ck,pm){ return (ck||'')+'|'+String(pm||'').slice(0,10); }
+
+function churnRowCheck(cb){ var k=_churnSelKey(cb.dataset.ck,cb.dataset.pm); if(cb.checked) _churnSelected.add(k); else _churnSelected.delete(k); }
+function churnToggleAll(master){ var on=master.checked; churnGetFiltered().forEach(function(r){ var k=_churnSelKey(r.company_key,r.period_month); if(on) _churnSelected.add(k); else _churnSelected.delete(k); }); churnRenderTable(); }
+
+async function churnSendToSprint(rowsList){
+ if(!rowsList || !rowsList.length){ try{showNotif('Возврат','Не выбрано ни одной строки');}catch(_){} return; }
+ // Гарантируем загрузку планёрок (при первом заходе _planCloud может быть пуст)
+ try{ if(typeof _planCloud==='undefined' || !_planCloud){ await planSyncFetch(true); } }catch(_){}
+ var today=new Date();
+ var month=rowsList[0].period_month || (document.getElementById('churn-month')||{}).value || _planYmd(today);
+ var ym=String(month).slice(0,7);
+ var sprintName='Возврат — '+_churnMonthRu(ym);
+ var sprints=planLoadSprints();
+ var sp=sprints.find(function(s){ return s.name===sprintName && !s.archived; });
+ if(!sp){
+  var end=new Date(today.getTime()+13*86400000);
+  var nextSid=(sprints.reduce(function(m,s){ return Math.max(m, s.id||0); },0)||0)+1;
+  sp={ id:nextSid, name:sprintName, goal:'Вернуть ушедших клиентов', start:_planYmd(today), end:_planYmd(end),
+       status:'ontrack', priority:'high', color:'orange', total:0, in_progress:0, done:0, team:[], teamNames:'', archived:false };
+  sprints.unshift(sp); planSaveSprints(sprints);
+ }
+ var tasks=planLoadTasks();
+ var existing=new Set(tasks.filter(function(t){ return t.sprint_id===sp.id && t.return_churn; }).map(function(t){ return String(t.company_key||'').toLowerCase(); }));
+ var nextTid=(tasks.reduce(function(m,t){ return Math.max(m, t.id||0); },100)||100)+1;
+ var added=0, skipped=0;
+ rowsList.forEach(function(r){
+  var ck=String(r.company_key||'').toLowerCase();
+  if(!ck){ return; }
+  if(existing.has(ck)){ skipped++; return; }
+  var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0); if(!(loss>0)) loss=Number(r.prev_amount)||0;
+  tasks.push({ id:nextTid++, sprint_id:sp.id, title:'Возврат: '+(r.company_name||r.company_key||''),
+    owners:[], owner_ids:[], owner:'', start_date:_planYmd(today), due_date:sp.end,
+    priority:'high', status:'todo', created_at:new Date().toISOString().slice(0,10),
+    company_key:ck, return_churn:true, churn_reason:(r.reason||r.fileReason||''), churn_amount:loss });
+  existing.add(ck); added++;
+ });
+ planSaveTasks(tasks);
+ try{ planRecountSprint(sp.id); }catch(_){}
+ try{ await planSyncPush(); }catch(_){}
+ _churnSelected.clear(); churnRenderTable();
+ try{showNotif('Возврат','Отправлено '+added+' в спринт «'+sprintName+'»'+(skipped?(' (пропущено дублей: '+skipped+')'):''));}catch(_){}
+ if(added && confirm('Перейти в спринт «'+sprintName+'»?')){ try{ showView('planning'); if(typeof planOpenSprint==='function') planOpenSprint(sp.id); }catch(_){} }
+}
+function churnSendSelected(){
+ var list=churnGetFiltered().filter(function(r){ return _churnSelected.has(_churnSelKey(r.company_key,r.period_month)); });
+ if(!list.length){ try{showNotif('Возврат','Отметьте галочками клиентов в таблице');}catch(_){} return; }
+ churnSendToSprint(list);
+}
+function churnSendAll(){
+ var list=churnGetFiltered();
+ if(!list.length){ try{showNotif('Возврат','Нет строк под текущим фильтром');}catch(_){} return; }
+ if(!confirm('Отправить в возврат всех ('+list.length+') по текущему фильтру?')) return;
+ churnSendToSprint(list);
+}
+
 // Этот блок внутри IIFE маркетинга — выставляем в window функции, вызываемые из HTML (onclick/onchange) и из showView.
 window.churnInit=churnInit; window.churnUploadChurn=churnUploadChurn; window.churnUploadLicenses=churnUploadLicenses;
 window.churnSetKind=churnSetKind; window.churnRender=churnRender; window.churnExportCSV=churnExportCSV; window.churnStartEdit=churnStartEdit;
 window.churnOpenCard=churnOpenCard; window.churnCloseCard=churnCloseCard; window.churnCardSave=churnCardSave; window.churnPickClient=churnPickClient; window.churnCardOpenClient=churnCardOpenClient; window.churnCardMarkLeft=churnCardMarkLeft;
 window.acLinkReadFile=acLinkReadFile; window.acLinkClose=acLinkClose; window.acLinkCommit=acLinkCommit;
+window.churnRowCheck=churnRowCheck; window.churnToggleAll=churnToggleAll; window.churnSendSelected=churnSendSelected; window.churnSendAll=churnSendAll;
 
 // ---- UPLOAD HANDLER ----
 window.metaCsvUpload = function(input) {
