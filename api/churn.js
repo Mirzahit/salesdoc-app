@@ -11,13 +11,13 @@
 // POST   /api/churn?action=import&dataset=licenses     → -//-
 // DELETE /api/churn?upload_batch_id=...&dataset=churn  → откат одной загрузки
 
-import { sbSelect, sbInsert, sbDelete } from './_supabase.js';
+import { sbSelect, sbInsert, sbDelete, sbUpsert } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 
 export const config = { maxDuration: 60 };
 
 const ALLOWED_COUNTRIES = ['KZ', 'KG'];
-const TABLE = { churn: 'churn_records', licenses: 'churn_license_changes' };
+const TABLE = { churn: 'churn_records', licenses: 'churn_license_changes', notes: 'churn_notes' };
 
 function _defaultCurrency(country) { return country === 'KG' ? 'KGS' : 'KZT'; }
 
@@ -48,6 +48,7 @@ export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
     if (req.method === 'POST' && req.query.action === 'import') return await handleImport(req, res);
+    if (req.method === 'POST' && req.query.action === 'note') return await handleNote(req, res);
     if (req.method === 'GET')    return await handleGet(req, res);
     if (req.method === 'DELETE') return await handleDelete(req, res);
     return res.status(405).json({ ok: false, error: 'method not allowed' });
@@ -59,7 +60,7 @@ export default async function handler(req, res) {
 
 async function handleGet(req, res) {
   const q = req.query || {};
-  const dataset = q.dataset === 'licenses' ? 'licenses' : 'churn';
+  const dataset = (q.dataset === 'licenses' || q.dataset === 'notes') ? q.dataset : 'churn';
   const table = TABLE[dataset];
   const params = { order: 'period_month.desc', limit: q.limit || '5000' };
   if (q.country) {
@@ -67,9 +68,11 @@ async function handleGet(req, res) {
     params['country'] = 'eq.' + q.country;
   }
   if (dataset === 'churn' && q.kind) params['kind'] = 'eq.' + q.kind;
-  if (q.from && q.to) params['and'] = `(period_month.gte.${q.from},period_month.lte.${q.to})`;
-  else if (q.from) params['period_month'] = 'gte.' + q.from;
-  else if (q.to) params['period_month'] = 'lte.' + q.to;
+  if (dataset !== 'notes') {
+    if (q.from && q.to) params['and'] = `(period_month.gte.${q.from},period_month.lte.${q.to})`;
+    else if (q.from) params['period_month'] = 'gte.' + q.from;
+    else if (q.to) params['period_month'] = 'lte.' + q.to;
+  }
   const data = await sbSelect(table, params);
   return res.status(200).json({ ok: true, dataset, count: data.length, records: data });
 }
@@ -154,6 +157,23 @@ async function handleImport(req, res) {
   }
 
   return res.status(200).json({ ok: true, dataset, country, period_month: periodMonth, upload_batch_id: batchId, total: rows.length, inserted, skipped, failed_count: failed.length, failed_sample: failed.slice(0, 10) });
+}
+
+// Ручная причина+комментарий по компании (оверлей). Upsert по (country, period_month, company_key).
+async function handleNote(req, res) {
+  const body = await readBody(req);
+  const country = String(body.country || 'KZ').toUpperCase();
+  if (!ALLOWED_COUNTRIES.includes(country)) return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+  const periodMonth = _periodMonth(body.period_month);
+  if (!periodMonth) return res.status(400).json({ ok: false, error: 'period_month обязателен' });
+  const companyKey = String(body.company_key || '').trim().toLowerCase();
+  if (!companyKey) return res.status(400).json({ ok: false, error: 'company_key обязателен' });
+  const updatedBy = (req.headers['x-user-name'] || req.headers['x-user-email'] || 'unknown').toString();
+  const reason = (body.reason != null && String(body.reason).trim()) ? String(body.reason).trim() : null;
+  const comment = (body.comment != null && String(body.comment).trim()) ? String(body.comment).trim() : null;
+  const row = { country, period_month: periodMonth, company_key: companyKey, reason, comment, updated_by: updatedBy, updated_at: new Date().toISOString() };
+  const r = await sbUpsert('churn_notes', row, 'country,period_month,company_key');
+  return res.status(200).json({ ok: true, note: Array.isArray(r) ? r[0] : r });
 }
 
 async function handleDelete(req, res) {

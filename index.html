@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v599</title>
+<title>SalesDoc — Финансовый Дашборд v601</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5754,8 +5754,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="panel-title" style="margin:0">Отток и спады клиентов</div>
  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
  <input type="month" id="churn-month" class="form-select" style="font-size:11px;padding:4px 10px" title="Месяц отчёта">
- <button class="add-btn" style="font-size:11px;padding:5px 12px" onclick="document.getElementById('churn-file-churn').click()">Загрузить отток (файл 2)</button>
- <button class="add-btn" style="font-size:11px;padding:5px 12px" onclick="document.getElementById('churn-file-lic').click()">Загрузить лицензии (файл 1)</button>
+ <button class="add-btn" title="Главный отчёт: клиенты, тип (отток/спад), суммы, причина" style="font-size:11px;padding:5px 12px" onclick="document.getElementById('churn-file-churn').click()">Загрузить: кто ушёл и почему</button>
+ <button class="add-btn" title="Разбивка по видам лицензий (agent, admin, vansel и т.д.)" style="font-size:11px;padding:5px 12px" onclick="document.getElementById('churn-file-lic').click()">Загрузить: какие лицензии ушли</button>
  <button onclick="churnExportCSV()" style="font-size:9px;padding:2px 8px;border-radius:20px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer;font-family:Inter,sans-serif;letter-spacing:1px">ЭКСПОРТ</button>
  <input type="file" id="churn-file-churn" accept=".xlsx,.xls,.csv" style="display:none" onchange="churnUploadChurn(this)">
  <input type="file" id="churn-file-lic" accept=".xlsx,.xls,.csv" style="display:none" onchange="churnUploadLicenses(this)">
@@ -5765,8 +5765,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
  <div id="churn-kind-seg" style="display:inline-flex;gap:2px;background:var(--dark-card);border:1px solid var(--dark-border);border-radius:8px;padding:2px">
  <button class="churn-seg" data-kind="all" onclick="churnSetKind('all')" style="font-size:11px;padding:5px 14px;border:none;background:var(--accent);color:#fff;border-radius:6px;cursor:pointer;font-weight:600">Все</button>
- <button class="churn-seg" data-kind="churn" onclick="churnSetKind('churn')" style="font-size:11px;padding:5px 14px;border:none;background:none;color:var(--text-muted);border-radius:6px;cursor:pointer;font-weight:600">Отток</button>
- <button class="churn-seg" data-kind="decline" onclick="churnSetKind('decline')" style="font-size:11px;padding:5px 14px;border:none;background:none;color:var(--text-muted);border-radius:6px;cursor:pointer;font-weight:600">Спад</button>
+ <button class="churn-seg" data-kind="churn" onclick="churnSetKind('churn')" title="Клиент ушёл полностью: лицензий стало 0" style="font-size:11px;padding:5px 14px;border:none;background:none;color:var(--text-muted);border-radius:6px;cursor:pointer;font-weight:600">Отток</button>
+ <button class="churn-seg" data-kind="decline" onclick="churnSetKind('decline')" title="Клиент остался, но лицензий/оплаты стало меньше" style="font-size:11px;padding:5px 14px;border:none;background:none;color:var(--text-muted);border-radius:6px;cursor:pointer;font-weight:600">Спад</button>
  </div>
  <select id="churn-filter-period" class="form-select" style="font-size:11px;padding:4px 10px" onchange="churnRender()"><option value="">Все месяцы</option></select>
  <select id="churn-filter-reason" class="form-select" style="font-size:11px;padding:4px 10px" onchange="churnRender()"><option value="">Все причины</option></select>
@@ -5774,8 +5774,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
 
  <div id="churn-empty" class="panel" style="display:none;text-align:center;padding:48px 20px;color:var(--text-muted)">
- <div style="font-size:14px;font-weight:600;margin-bottom:8px;color:var(--text-secondary)">Пока нет данных по оттоку</div>
- <div style="font-size:12px;line-height:1.6;max-width:520px;margin:0 auto">Выгрузите из биллинга два файла и загрузите их кнопками выше.<br>Файл 2 «Отток» — клиенты, тип (отток/спад), суммы и причины.<br>Файл 1 «pivot» — разбивка по типам лицензий.<br>Перед загрузкой выберите месяц отчёта.</div>
+ <div style="font-size:14px;font-weight:600;margin-bottom:8px;color:var(--text-secondary)">Здесь будет видно, кто из клиентов ушёл и сколько денег вы теряете</div>
+ <div style="font-size:12px;line-height:1.8;max-width:540px;margin:0 auto;text-align:left;display:inline-block">1. Выберите месяц отчёта вверху.<br>2. Загрузите файл «кто ушёл и почему» — клиенты, тип (отток/спад), суммы, причины.<br>3. Добавьте файл «какие лицензии ушли» — разбивка по видам лицензий.</div>
  </div>
 
  <div id="churn-content" style="display:none">
@@ -5790,7 +5790,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="panel-title" style="font-size:13px;margin-bottom:10px">Список <span id="churn-rows-count" style="color:var(--text-muted);font-weight:400"></span></div>
  <div style="overflow-x:auto">
  <table class="data-table"><thead><tr>
- <th>Месяц</th><th>Клиент</th><th>Тип</th><th>Лицензий ушло</th><th>По типам</th><th>Сумма была</th><th>Потеря</th><th>Причина</th>
+ <th>Месяц</th><th>Клиент</th><th>Тип</th><th>Лицензий ушло</th><th>Каких лицензий</th><th>Платил в месяц</th><th>Потеряли в месяц</th><th>Причина</th><th>Комментарий</th>
  </tr></thead><tbody id="churn-rows"></tbody></table>
  </div>
  </div>
@@ -20110,7 +20110,7 @@ function metaDeltaHtml(cur, prev, key, invert) {
 // Данные приходят двумя файлами из биллинга (см. /api/churn):
 //   churn    — основной отчёт (клиент, тип отток/спад, суммы, причина)
 //   licenses — разбивка по типам лицензий (pivot M1 vs M2)
-var _churnData = { churn: [], licenses: [] };
+var _churnData = { churn: [], licenses: [], notes: [], notesMap: {} };
 var _churnKind = 'all';
 var _churnCharts = {};
 var CHURN_PALETTE = ['#5489BB','#8B5CF6','#EC4899','#F59E0B','#10B981','#EF4444','#06B6D4','#A855F7','#84CC16','#F97316','#3B82F6','#14B8A6'];
@@ -20222,9 +20222,13 @@ async function churnLoad(){
  try{
   var a=await sbFetch('/api/churn?country='+currentCountry,{});
   var b=await sbFetch('/api/churn?dataset=licenses&country='+currentCountry,{});
+  var c=await sbFetch('/api/churn?dataset=notes&country='+currentCountry,{});
   _churnData.churn=(a&&a.records)||[];
   _churnData.licenses=(b&&b.records)||[];
- }catch(e){ _churnData.churn=_churnData.churn||[]; _churnData.licenses=_churnData.licenses||[]; }
+  _churnData.notes=(c&&c.records)||[];
+  _churnData.notesMap={};
+  _churnData.notes.forEach(function(n){ var k=(String(n.company_key||'').toLowerCase())+'|'+(String(n.period_month||'').slice(0,10)); _churnData.notesMap[k]={reason:n.reason||'', comment:n.comment||''}; });
+ }catch(e){ _churnData.churn=_churnData.churn||[]; _churnData.licenses=_churnData.licenses||[]; _churnData.notes=_churnData.notes||[]; }
  churnFillFilters();
  churnRender();
 }
@@ -20236,10 +20240,11 @@ function churnSetKind(k){
 }
 
 function churnFillFilters(){
- var months=Array.from(new Set(_churnData.churn.map(function(r){return r.period_month;}).filter(Boolean))).sort().reverse();
+ var all=_churnUnified();
+ var months=Array.from(new Set(all.map(function(r){return r.period_month;}).filter(Boolean))).sort().reverse();
  var sp=document.getElementById('churn-filter-period');
  if(sp){ var cur=sp.value; sp.innerHTML='<option value="">Все месяцы</option>'+months.map(function(m){return '<option value="'+m+'">'+m.slice(0,7)+'</option>';}).join(''); sp.value=cur; }
- var reasons=Array.from(new Set(_churnData.churn.map(function(r){return (r.reason||'').trim();}).filter(Boolean))).sort();
+ var reasons=Array.from(new Set(all.map(function(r){return (r.reason||'').trim();}).filter(Boolean))).sort();
  var sr=document.getElementById('churn-filter-reason');
  if(sr){ var curR=sr.value; sr.innerHTML='<option value="">Все причины</option>'+reasons.map(function(x){return '<option value="'+x.replace(/"/g,'&quot;')+'">'+x+'</option>';}).join(''); sr.value=curR; }
 }
@@ -20247,7 +20252,7 @@ function churnFillFilters(){
 function churnGetFiltered(){
  var period=(document.getElementById('churn-filter-period')||{}).value||'';
  var reason=(document.getElementById('churn-filter-reason')||{}).value||'';
- return _churnData.churn.filter(function(r){
+ return _churnUnified().filter(function(r){
   if(_churnKind!=='all' && r.kind!==_churnKind) return false;
   if(period && r.period_month!==period) return false;
   if(reason && (r.reason||'').trim()!==reason) return false;
@@ -20274,13 +20279,13 @@ function churnRenderKPI(){
  var churned=rows.filter(function(r){return r.kind==='churn';}).length;
  var declined=rows.filter(function(r){return r.kind==='decline';}).length;
  var lostMoney=rows.reduce(function(s,r){ var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0); return s+(loss>0?loss:0); },0);
- // лицензии: сумма потерянных мест (отрицательные diff) за выбранный период
- var lostLic=churnLicFiltered().reduce(function(s,r){ var d=Number(r.diff)||0; return s+(d<0?-d:0); },0);
+ // лицензии: сумма потерянных мест по отфильтрованным компаниям
+ var lostLic=rows.reduce(function(s,r){ return s+(Number(r.licTotal)||0); },0);
  var reasonCount={}; rows.forEach(function(r){ var x=(r.reason||'').trim(); if(x) reasonCount[x]=(reasonCount[x]||0)+1; });
  var topReason=Object.keys(reasonCount).sort(function(a,b){return reasonCount[b]-reasonCount[a];})[0]||'—';
  var cards=[
   {l:'Ушло клиентов (отток)',v:churned},
-  {l:'Спадов',v:declined},
+  {l:'Снизили оплату',v:declined},
   {l:'Потеряно в месяц',v:_churnFmtMoney(lostMoney)+' '+(currentCountry==='KG'?'сом':'₸')},
   {l:'Лицензий ушло',v:lostLic},
   {l:'Частая причина',v:topReason}
@@ -20290,18 +20295,55 @@ function churnRenderKPI(){
  }).join('');
 }
 
-// Карта потерянных лицензий по компании+месяцу (из Файла 1): company_key|period → {total, byType{}}
-function _churnLicByCompany(){
+// Агрегат лицензий по компании+месяцу из Файла 1 (pivot): company_key|period → {m1,m2,total(потеряно),byType{}}
+function _churnAggLic(){
  var map={};
  _churnData.licenses.forEach(function(r){
-  var d=Number(r.diff)||0; if(d>=0) return; // только потери
   var k=(String(r.company_key||'').toLowerCase())+'|'+(r.period_month||'');
-  if(!map[k]) map[k]={total:0,byType:{}};
-  map[k].total+=(-d);
-  map[k].byType[r.license_type]=(map[k].byType[r.license_type]||0)+(-d);
+  if(!map[k]) map[k]={m1:0,m2:0,total:0,byType:{}};
+  map[k].m1+=Number(r.m1_count)||0;
+  map[k].m2+=Number(r.m2_count)||0;
+  var d=Number(r.diff)||0; if(d<0){ map[k].total+=(-d); map[k].byType[r.license_type]=(map[k].byType[r.license_type]||0)+(-d); }
  });
  return map;
 }
+
+// Единый список оттока/спада. Классификация — из Файла 1 (pivot): лицензий стало 0 → отток,
+// меньше но не 0 → спад. Деньги/причина/имя — из Файла 2 по совпадению компании+месяца.
+// Если pivot не загружен — берём строки Файла 2 по их колонке «Тип».
+function _churnUnified(){
+ var lic=_churnAggLic();
+ var f2={};
+ _churnData.churn.forEach(function(r){ f2[(String(r.company_key||'').toLowerCase())+'|'+(r.period_month||'')]=r; });
+ var out=[], usedF2={};
+ Object.keys(lic).forEach(function(k){
+  var L=lic[k]; if(L.total<=0) return; // нет потерь лицензий — не отток и не спад
+  var parts=k.split('|'); var ck=parts[0], pm=parts[1];
+  var kind=(L.m2<=0)?'churn':'decline';
+  var rec=f2[k]; if(rec) usedF2[k]=true;
+  out.push({ period_month:pm, company_key:ck, company_name:(rec&&rec.company_name)?rec.company_name:ck,
+   kind:kind, licTotal:L.total, byType:L.byType,
+   prev_amount:rec?rec.prev_amount:null, cur_amount:rec?rec.cur_amount:null, reason:rec?rec.reason:null });
+ });
+ // строки Файла 2 без совпадения в pivot (например pivot ещё не загружен) — по их «Тип»
+ Object.keys(f2).forEach(function(k){
+  if(usedF2[k]) return; var r=f2[k];
+  out.push({ period_month:r.period_month, company_key:(String(r.company_key||'').toLowerCase()),
+   company_name:r.company_name, kind:r.kind, licTotal:0, byType:{},
+   prev_amount:r.prev_amount, cur_amount:r.cur_amount, reason:r.reason });
+ });
+ // Наложение ручных пометок (churn_notes): ручная причина перекрывает файловую; добавляем комментарий.
+ var nm=_churnData.notesMap||{};
+ out.forEach(function(o){
+  var k=(String(o.company_key||'').toLowerCase())+'|'+(String(o.period_month||'').slice(0,10));
+  var nt=nm[k];
+  o.fileReason=o.reason||null;            // файловая причина — как подсказка для префилла
+  o.comment=(nt&&nt.comment)||'';
+  if(nt&&nt.reason) o.reason=nt.reason;   // ручная перекрывает файловую
+ });
+ return out;
+}
+
 function _churnBreakdown(byType){
  var keys=Object.keys(byType||{}).sort(function(a,b){return byType[b]-byType[a];});
  return keys.map(function(t){ return _churnEsc(t)+' −'+byType[t]; }).join(', ');
@@ -20312,14 +20354,12 @@ function churnRenderTable(){
   var loA=(Number(a.prev_amount)||0)-(Number(a.cur_amount)||0), loB=(Number(b.prev_amount)||0)-(Number(b.cur_amount)||0);
   return loB-loA;
  });
- var licMap=_churnLicByCompany();
  var cc=document.getElementById('churn-rows-count'); if(cc) cc.textContent='('+rows.length+')';
  document.getElementById('churn-rows').innerHTML=rows.map(function(r){
   var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0);
   var kindColor=r.kind==='churn'?'#EF4444':(r.kind==='decline'?'#F59E0B':'var(--text-muted)');
-  var lic=licMap[(String(r.company_key||'').toLowerCase())+'|'+(r.period_month||'')];
-  var licTotal=lic?lic.total:0;
-  var breakdown=lic?_churnBreakdown(lic.byType):'';
+  var licTotal=Number(r.licTotal)||0;
+  var breakdown=_churnBreakdown(r.byType);
   return '<tr>'+
    '<td>'+(r.period_month||'').slice(0,7)+'</td>'+
    '<td>'+_churnEsc(r.company_name||'')+'</td>'+
@@ -20328,9 +20368,37 @@ function churnRenderTable(){
    '<td style="color:var(--text-muted);font-size:11px">'+(breakdown||'—')+'</td>'+
    '<td>'+(r.prev_amount!=null?_churnFmtMoney(r.prev_amount):'')+'</td>'+
    '<td style="color:'+(loss>0?'#EF4444':'var(--text-muted)')+';font-weight:600">'+(loss>0?_churnFmtMoney(loss):'')+'</td>'+
-   '<td style="color:var(--text-muted)">'+_churnEsc(r.reason||'')+'</td>'+
+   '<td class="churn-edit" data-field="reason" onclick="churnStartEdit(this)" data-ck="'+_churnAttr(r.company_key)+'" data-pm="'+_churnAttr(r.period_month)+'" data-prefill="'+_churnAttr(r.fileReason||'')+'" title="Нажмите, чтобы вписать причину" style="color:var(--text-muted);cursor:text;min-width:130px">'+_churnEsc(r.reason||'')+'</td>'+
+   '<td class="churn-edit" data-field="comment" onclick="churnStartEdit(this)" data-ck="'+_churnAttr(r.company_key)+'" data-pm="'+_churnAttr(r.period_month)+'" title="Нажмите, чтобы добавить комментарий" style="color:var(--text-secondary);cursor:text;min-width:150px">'+_churnEsc(r.comment||'')+'</td>'+
    '</tr>';
- }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px">Нет строк под фильтр</td></tr>';
+ }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px">Нет строк под фильтр</td></tr>';
+}
+function _churnAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+
+// Inline-редактирование причины/комментария (по образцу _feedStartEdit). Сохраняет по company_key+period_month.
+function churnStartEdit(td){
+ if(td.querySelector('textarea')) return;
+ var field=td.dataset.field, ck=td.dataset.ck, pm=td.dataset.pm;
+ var original=td.textContent;
+ var ta=document.createElement('textarea');
+ ta.value=original || (field==='reason'?(td.dataset.prefill||''):'');
+ ta.style.cssText='width:100%;min-height:30px;font-size:11px;background:var(--dark-card);color:var(--text-primary);border:1px solid var(--accent);border-radius:4px;padding:5px;font-family:inherit;resize:vertical';
+ td.textContent=''; td.appendChild(ta); ta.focus(); try{ta.setSelectionRange(ta.value.length,ta.value.length);}catch(_){}
+ var done=false;
+ var save=async function(){
+  if(done) return; done=true;
+  var val=ta.value.trim();
+  var key=ck+'|'+String(pm).slice(0,10);
+  var cur=_churnData.notesMap[key]||{reason:'',comment:''};
+  var next={reason:cur.reason||'',comment:cur.comment||''}; next[field]=val;
+  _churnData.notesMap[key]=next;
+  try{
+   await sbFetch('/api/churn?action=note',{method:'POST',body:JSON.stringify({country:currentCountry,company_key:ck,period_month:pm,reason:next.reason||null,comment:next.comment||null})});
+  }catch(e){ try{showNotif('Ошибка','Не удалось сохранить: '+(e&&e.message||e));}catch(_){} }
+  churnFillFilters(); churnRender();
+ };
+ ta.addEventListener('keydown',function(ev){ if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();save();} else if(ev.key==='Escape'){ev.preventDefault();done=true;churnRender();} });
+ ta.addEventListener('blur',function(){ setTimeout(save,100); });
 }
 function _churnEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -20343,9 +20411,9 @@ function churnRenderCharts(){
  var grid='rgba(148,163,184,.12)';
  var rows=churnGetFiltered();
 
- // 1) По месяцам — отток + спад
+ // 1) По месяцам — отток + спад (по всему единому списку, без фильтра типа)
  var byMonth={};
- _churnData.churn.forEach(function(r){ var m=(r.period_month||'').slice(0,7); if(!m) return; byMonth[m]=byMonth[m]||{churn:0,decline:0}; if(r.kind==='churn')byMonth[m].churn++; else if(r.kind==='decline')byMonth[m].decline++; });
+ _churnUnified().forEach(function(r){ var m=(r.period_month||'').slice(0,7); if(!m) return; byMonth[m]=byMonth[m]||{churn:0,decline:0}; if(r.kind==='churn')byMonth[m].churn++; else if(r.kind==='decline')byMonth[m].decline++; });
  var months=Object.keys(byMonth).sort();
  var c1=document.getElementById('churn-chart-months');
  if(c1) _churnCharts.months=new Chart(c1.getContext('2d'),{type:'line',data:{labels:months,datasets:[
@@ -20375,15 +20443,14 @@ function churnRenderCharts(){
 function churnExportCSV(){
  var rows=churnGetFiltered();
  if(!rows.length){ try{showNotif('Пусто','Нет данных для экспорта');}catch(_){} return; }
- var licMap=_churnLicByCompany();
- var head=['Месяц','Клиент','Тип','Лицензий ушло','По типам','Сумма была','Потеря','Причина'];
+ var head=['Месяц','Клиент','Тип','Лицензий ушло','Каких лицензий','Платил в месяц','Потеряли в месяц','Причина','Комментарий'];
  var lines=[head.join(';')];
  rows.forEach(function(r){
   var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0);
-  var lic=licMap[(String(r.company_key||'').toLowerCase())+'|'+(r.period_month||'')];
-  var licTotal=lic?lic.total:0;
-  var breakdown=lic?Object.keys(lic.byType).sort(function(a,b){return lic.byType[b]-lic.byType[a];}).map(function(t){return t+' -'+lic.byType[t];}).join(', '):'';
-  lines.push([(r.period_month||'').slice(0,7),'"'+(r.company_name||'').replace(/"/g,'""')+'"',_churnKindLabel(r.kind),(licTotal>0?licTotal:''),'"'+breakdown.replace(/"/g,'""')+'"',(r.prev_amount!=null?r.prev_amount:''),(loss>0?Math.round(loss):''),'"'+String(r.reason||'').replace(/"/g,'""')+'"'].join(';'));
+  var licTotal=Number(r.licTotal)||0;
+  var bt=r.byType||{};
+  var breakdown=Object.keys(bt).sort(function(a,b){return bt[b]-bt[a];}).map(function(t){return t+' -'+bt[t];}).join(', ');
+  lines.push([(r.period_month||'').slice(0,7),'"'+(r.company_name||'').replace(/"/g,'""')+'"',_churnKindLabel(r.kind),(licTotal>0?licTotal:''),'"'+breakdown.replace(/"/g,'""')+'"',(r.prev_amount!=null?r.prev_amount:''),(loss>0?Math.round(loss):''),'"'+String(r.reason||'').replace(/"/g,'""')+'"','"'+String(r.comment||'').replace(/"/g,'""')+'"'].join(';'));
  });
  var blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ottok_'+(currentCountry||'KZ')+'.csv'; a.click(); URL.revokeObjectURL(a.href);
@@ -20391,7 +20458,7 @@ function churnExportCSV(){
 
 // Этот блок внутри IIFE маркетинга — выставляем в window функции, вызываемые из HTML (onclick/onchange) и из showView.
 window.churnInit=churnInit; window.churnUploadChurn=churnUploadChurn; window.churnUploadLicenses=churnUploadLicenses;
-window.churnSetKind=churnSetKind; window.churnRender=churnRender; window.churnExportCSV=churnExportCSV;
+window.churnSetKind=churnSetKind; window.churnRender=churnRender; window.churnExportCSV=churnExportCSV; window.churnStartEdit=churnStartEdit;
 
 // ---- UPLOAD HANDLER ----
 window.metaCsvUpload = function(input) {
