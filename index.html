@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v612</title>
+<title>SalesDoc — Финансовый Дашборд v613</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -29916,19 +29916,8 @@ async function _routeRenderFeed(){
    }
   } catch(_){}
 
-  // v611: тикеты поддержки клиента → элементы ленты
+  // v612: тикеты в ленте НЕ дублируем — они уже есть как события «Заведён тикет» (с бейджем и ссылкой «Открыть тикет»).
   var ticketItems = [];
-  try {
-   if(_routeCurrentCard && _routeCurrentCard.client_id){
-    var tkResp = await sbFetch('/api/cards?entity=ticket&all=1&client_id=' + encodeURIComponent(_routeCurrentCard.client_id));
-    var tkList = (tkResp && tkResp.ok && Array.isArray(tkResp.tickets)) ? tkResp.tickets : [];
-    var tkLabel = { new:'Новое', in_progress:'В работе', waiting_client:'Ждём клиента', solved:'Решено', reopened:'Открыт повторно', closed:'Закрыто' };
-    ticketItems = tkList.map(function(t){
-     return { id:'tk:'+t.id, event_type:'note', created_at:t.created_at, author:(t.operator||'поддержка'),
-      text:'Обращение в поддержку: '+(t.title||'без темы')+' · '+(tkLabel[t.status]||t.status||'') };
-    });
-   }
-  } catch(_){}
 
   // v611: отток/спад клиента из биллинга → элементы ленты (связь по имени сервера billing_host)
   var churnFeedItems = [];
