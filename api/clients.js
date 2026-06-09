@@ -171,7 +171,15 @@ export default async function handler(req, res) {
         }
         if (!body.activation_date) body.activation_date = new Date().toISOString().slice(0, 10);
       }
-      const result = await sbUpdate('clients', { client_id: 'eq.' + client_id }, body);
+      let result;
+      try {
+        result = await sbUpdate('clients', { client_id: 'eq.' + client_id }, body);
+      } catch (e) {
+        if (/uq_clients_billing_host|billing_host|duplicate|unique/i.test(e.message || '')) {
+          return res.status(409).json({ ok: false, error: 'Это имя сервера уже занято другим клиентом' });
+        }
+        throw e;
+      }
       if (!result.length) return res.status(404).json({ ok: false, error: 'клиент не найден' });
 
       // v376 → v379: авто-синхронизация SD→amo при активации ОТМЕНЕНА.

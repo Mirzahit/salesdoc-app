@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v603</title>
+<title>SalesDoc — Финансовый Дашборд v604</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -29559,6 +29559,8 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
   if(opts.field === 'subscription_period_months' && newVal !== null) newVal = parseInt(newVal, 10);
   // v388: защита от NaN — если parseInt не справился, считаем что пусто (null)
   if(typeof newVal === 'number' && Number.isNaN(newVal)) newVal = null;
+  // v604: имя сервера (billing_host) нормализуем lower+trim; пусто → null.
+  if(opts.field === 'billing_host' && typeof newVal === 'string'){ newVal = newVal.trim().toLowerCase() || null; }
 
   // Если значение не изменилось — просто закрываем
   if(String(newVal) === String(opts.rawValue == null ? '' : opts.rawValue)){
@@ -29625,7 +29627,8 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
   } catch(e){
    // v388: при ошибке возвращаем поле в исходное состояние (cancel), а не оставляем
    // редактор. Иначе следующий blur вызовет save и второй alert.
-   alert('Не удалось сохранить: ' + e.message);
+   if(opts.field === 'billing_host' && /billing_host|unique|duplicate|занят/i.test(e.message||'')) alert('Это имя сервера уже занято другим клиентом');
+   else alert('Не удалось сохранить: ' + e.message);
    done = true; cancel();
   }
  }
@@ -29736,6 +29739,8 @@ async function _routeRenderAmo(){
  // в «Мои клиенты»). «Ответственный» (выше) — кто ведёт сейчас в Маршруте. Часто это один
  // человек, но могут отличаться (например брал Айдос, передаёт после внедрения Акбару).
  addField('Куратор после активации', cl.curator_operator, { editable:true, entity:'client', field:'curator_operator', type:'select', choices:['Айдос','Акбар','Самат','Нурай'], rawValue:cl.curator_operator });
+ // Имя сервера (логин в биллинге) — связь с оттоком/биллингом по постоянному коду (v604).
+ addField('Имя сервера', cl.billing_host, { editable:true, entity:'client', field:'billing_host', type:'text', rawValue:cl.billing_host });
 
  // Секция ПОДПИСКА
  addSection('Подписка');
@@ -33751,7 +33756,7 @@ async function acLoadKZClients(cb){
    .map(function(c){
     return {
      name: c.company_name || c.client_id,
-     host: c.company_name || c.client_id,
+     host: c.billing_host || '',   // v604: имя сервера из биллинга (пусто → пометка «нет имени сервера»)
      monthlySum: 0,    // нет данных в clients — заполнится из payments в acGetActiveClients
      monthlyQty: 0,
      operator: c.curator_operator || '',
@@ -34472,7 +34477,7 @@ function acRender(){
      var hostEscBtn = (c.host || '').replace(/'/g, "\\'");
      return '<tr>'
       + '<td><b style="color:var(--accent-text,#34C77A);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="acOpenClientCard(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" title="Открыть карту клиента">'+kbEsc(c.client)+'</b></td>'
-      + '<td style="color:var(--text-soft);font-size:12px">'+kbEsc(c.host||'—')+'</td>'
+      + '<td style="font-size:12px">'+(c.host?('<span style="color:var(--text-soft)">'+kbEsc(c.host)+'</span>'):'<span style="color:var(--text-muted);font-size:11px" title="Не заполнено имя сервера (биллинг)">нет имени сервера</span>')+'</td>'
       + '<td class="num">'+(c.monthlyQty||0)+'</td>'
       + '<td class="num">'+(c.monthlySum?fmtSum(c.monthlySum):'—')+'</td>'
       + '<td><div class="sd-op-cell"><span class="sd-op-dot" style="background:'+opColor+'"></span>'+kbEsc(c.operator || '—')+'</div></td>'
