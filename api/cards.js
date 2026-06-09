@@ -425,8 +425,9 @@ async function handleTicketsRoute(req, res) {
       params['sla_due_at'] = 'lt.' + new Date().toISOString();
       params['status'] = 'in.(new,in_progress,waiting_client,reopened)';
     }
-    // По умолчанию скрываем закрытые если нет явного фильтра по status
-    else if (!status) {
+    // По умолчанию скрываем закрытые если нет явного фильтра по status.
+    // all=1 — показать все, включая закрытые (для ленты карточки клиента — историческая хронология).
+    else if (!status && req.query.all !== '1' && req.query.all !== 'true') {
       params['status'] = 'neq.closed';
     }
     params['select'] = '*,clients(company_name,main_phone,curator_operator,country,billing_host)';
