@@ -95,14 +95,10 @@ async function handleImport(req, res) {
   const batchId = 'imp_' + Date.now();
   const currency = _defaultCurrency(country);
 
-  // Загружаем существующие row_hash за период (дедуп при повторной загрузке того же файла).
-  const existing = await sbSelect(table, { country: 'eq.' + country, period_month: 'eq.' + periodMonth, select: 'row_hash', limit: '20000' });
-  const existingHashes = new Set(existing.map(r => r.row_hash).filter(Boolean));
-
-  const toInsert = [];
-  const seen = new Set();
-  let skipped = 0;
-
+  // Дедуп ВНУТРИ файла по ключу (последняя строка побеждает). Загрузка ОБНОВЛЯЕТ существующие
+  // строки (upsert по row_hash), а не пропускает — чтобы дозагрузка файла с заполненными
+  // причинами перезаписывала ранее пустые. Повторная загрузка того же файла безопасна (те же значения).
+  const byHash = new Map();
   for (const r of rows) {
     let mapped, hash;
     if (dataset === 'churn') {
@@ -120,7 +116,7 @@ async function handleImport(req, res) {
         diff: _int(r.diff),
         reason: (r.reason != null && String(r.reason).trim()) ? String(r.reason).trim() : null,
         reason_raw: (r.reason_raw != null && String(r.reason_raw).trim()) ? String(r.reason_raw).trim() : (r.reason ? String(r.reason).trim() : null),
-        currency, source: 'file_import', upload_batch_id: batchId, uploaded_by: uploadedBy, row_hash: '' // ниже
+        currency, source: 'file_import', upload_batch_id: batchId, uploaded_by: uploadedBy, row_hash: hash
       };
     } else {
       const companyKey = String(r.company_key || '').trim().toLowerCase();
@@ -131,32 +127,30 @@ async function handleImport(req, res) {
         country, period_month: periodMonth,
         company_key: companyKey, license_type: licenseType,
         m1_count: _int(r.m1_count), m2_count: _int(r.m2_count), diff: _int(r.diff),
-        source: 'file_import', upload_batch_id: batchId, uploaded_by: uploadedBy, row_hash: ''
+        source: 'file_import', upload_batch_id: batchId, uploaded_by: uploadedBy, row_hash: hash
       };
     }
-    if (existingHashes.has(hash) || seen.has(hash)) { skipped++; continue; }
-    seen.add(hash);
-    mapped.row_hash = hash;
-    toInsert.push(mapped);
+    byHash.set(hash, mapped);
   }
+  const toSave = Array.from(byHash.values());
 
-  let inserted = 0; const failed = [];
-  // Вставляем пачками по 200 (PostgREST принимает массив).
-  for (let i = 0; i < toInsert.length; i += 200) {
-    const chunk = toInsert.slice(i, i + 200);
+  let saved = 0; const failed = [];
+  // Upsert пачками по 200 (merge-duplicates по row_hash → обновляет существующие).
+  for (let i = 0; i < toSave.length; i += 200) {
+    const chunk = toSave.slice(i, i + 200);
     try {
-      const r = await sbInsert(table, chunk);
-      inserted += Array.isArray(r) ? r.length : chunk.length;
+      const r = await sbUpsert(table, chunk, 'row_hash');
+      saved += Array.isArray(r) ? r.length : chunk.length;
     } catch (e) {
-      // Если пачка упала (например гонка по уникальному индексу) — пробуем построчно.
       for (const row of chunk) {
-        try { await sbInsert(table, row); inserted++; }
-        catch (e2) { if (/duplicate|unique/i.test(e2.message || '')) skipped++; else failed.push({ key: row.row_hash, error: e2.message }); }
+        try { await sbUpsert(table, row, 'row_hash'); saved++; }
+        catch (e2) { failed.push({ key: row.row_hash, error: e2.message }); }
       }
     }
   }
 
-  return res.status(200).json({ ok: true, dataset, country, period_month: periodMonth, upload_batch_id: batchId, total: rows.length, inserted, skipped, failed_count: failed.length, failed_sample: failed.slice(0, 10) });
+  // inserted/skipped оставлены для совместимости со старым фронтом (показывает «добавлено N»).
+  return res.status(200).json({ ok: true, dataset, country, period_month: periodMonth, upload_batch_id: batchId, total: rows.length, saved, inserted: saved, skipped: 0, failed_count: failed.length, failed_sample: failed.slice(0, 10) });
 }
 
 // Ручная причина+комментарий по компании (оверлей). Upsert по (country, period_month, company_key).
