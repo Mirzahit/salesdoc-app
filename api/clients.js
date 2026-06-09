@@ -18,6 +18,7 @@ const ALLOWED_PERIODS = [1, 3, 6, 12]; // месяцев подписки
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
+    if (req.method === 'POST' && req.query.action === 'link_hosts') return await handleLinkHosts(req, res);
     if (req.method === 'GET') {
       const { client_id, status, curator, search, country, renewal_within } = req.query || {};
       const params = { order: 'updated_at.desc' };
@@ -122,7 +123,7 @@ export default async function handler(req, res) {
       // и от опечаток имени поля (Supabase молча отказал бы или вернул 500 от PostgREST).
       // v420: добавлен implementation_contact (JSONB) — «Ответственный со стороны клиента
       // по внедрению». Структура: { name, position, phone, email }.
-      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months','implementation_contact'];
+      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months','implementation_contact','billing_host'];
       const body = {};
       Object.keys(rawBody).forEach(k => {
         if (ALLOWED_PATCH_FIELDS.includes(k)) body[k] = rawBody[k];
@@ -184,6 +185,47 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message || String(e) });
   }
+}
+
+// Разовая привязка биллинг-хостов к существующим клиентам. ТОЛЬКО UPDATE, новых не создаём.
+// body: { country, links: [{ client_id, billing_host }, ...] }. Дедуп/конфликты/идемпотентность.
+async function handleLinkHosts(req, res) {
+  const body = await readBody(req);
+  const country = (body.country || 'KZ').toUpperCase();
+  if (!ALLOWED_COUNTRIES.includes(country)) return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+  const links = Array.isArray(body.links) ? body.links : [];
+  if (!links.length) return res.status(400).json({ ok: false, error: 'links пуст — нечего привязывать' });
+
+  // Существующие хосты страны → кто владелец
+  const existing = await sbSelect('clients', { country: 'eq.' + country, select: 'client_id,billing_host', limit: '5000' });
+  const hostOwner = {};
+  existing.forEach(c => { if (c.billing_host) hostOwner[String(c.billing_host).toLowerCase()] = c.client_id; });
+
+  const seen = {};
+  const toApply = []; const conflicts = []; let skipped = 0;
+  for (const l of links) {
+    const cid = String((l && l.client_id) || '').trim();
+    const host = String((l && l.billing_host) || '').trim().toLowerCase();
+    if (!cid || !host) { conflicts.push({ client_id: cid, billing_host: host, reason: 'пустой client_id или хост' }); continue; }
+    if (seen[host] && seen[host] !== cid) { conflicts.push({ client_id: cid, billing_host: host, reason: 'один хост у нескольких клиентов в файле' }); continue; }
+    const owner = hostOwner[host];
+    if (owner && owner === cid) { skipped++; continue; }                 // уже привязан тому же — идемпотентно
+    if (owner && owner !== cid) { conflicts.push({ client_id: cid, billing_host: host, reason: 'хост уже у другого клиента (' + owner + ')' }); continue; }
+    seen[host] = cid;
+    toApply.push({ cid, host });
+  }
+
+  let linked = 0; const failed = [];
+  for (const a of toApply) {
+    try {
+      const r = await sbUpdate('clients', { client_id: 'eq.' + a.cid, country: 'eq.' + country }, { billing_host: a.host, updated_at: new Date().toISOString() });
+      if (r && r.length) linked++; else failed.push({ client_id: a.cid, billing_host: a.host, reason: 'клиент не найден' });
+    } catch (e) {
+      if (/duplicate|unique/i.test(e.message || '')) conflicts.push({ client_id: a.cid, billing_host: a.host, reason: 'конфликт уникальности хоста' });
+      else failed.push({ client_id: a.cid, billing_host: a.host, reason: e.message });
+    }
+  }
+  return res.status(200).json({ ok: true, linked, skipped, conflicts_count: conflicts.length, conflicts: conflicts.slice(0, 50), failed_count: failed.length, failed: failed.slice(0, 20) });
 }
 
 async function readBody(req) {

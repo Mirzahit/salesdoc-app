@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v602</title>
+<title>SalesDoc — Финансовый Дашборд v603</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5756,9 +5756,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <input type="month" id="churn-month" class="form-select" style="font-size:11px;padding:4px 10px" title="Месяц отчёта">
  <button class="add-btn" title="Главный отчёт: клиенты, тип (отток/спад), суммы, причина" style="font-size:11px;padding:5px 12px" onclick="document.getElementById('churn-file-churn').click()">Загрузить: кто ушёл и почему</button>
  <button class="add-btn" title="Разбивка по видам лицензий (agent, admin, vansel и т.д.)" style="font-size:11px;padding:5px 12px" onclick="document.getElementById('churn-file-lic').click()">Загрузить: какие лицензии ушли</button>
+ <button class="add-btn" title="Разовая привязка базы клиентов к биллингу по коду (хосту). Не создаёт новых, только дописывает код существующим." style="font-size:11px;padding:5px 12px" onclick="document.getElementById('ac-link-file').click()">Привязать базу по биллингу</button>
  <button onclick="churnExportCSV()" style="font-size:9px;padding:2px 8px;border-radius:20px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer;font-family:Inter,sans-serif;letter-spacing:1px">ЭКСПОРТ</button>
  <input type="file" id="churn-file-churn" accept=".xlsx,.xls,.csv" style="display:none" onchange="churnUploadChurn(this)">
  <input type="file" id="churn-file-lic" accept=".xlsx,.xls,.csv" style="display:none" onchange="churnUploadLicenses(this)">
+ <input type="file" id="ac-link-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="acLinkReadFile(this)">
  </div>
  </div>
  <div id="churn-upload-status" style="display:none;font-size:11px;color:var(--text-muted);margin-top:10px"></div>
@@ -5811,6 +5813,19 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div style="border-top:1px solid var(--dark-border);margin:16px 0 12px"></div>
  <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Клиент в базе «Действующие»</div>
  <div id="churn-card-client" style="font-size:12px;color:var(--text-secondary)">—</div>
+ </div>
+ </div>
+
+ <!-- ПРИВЯЗКА БАЗЫ ПО БИЛЛИНГУ -->
+ <div id="ac-link-modal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto" onclick="if(event.target===this)acLinkClose()">
+ <div class="panel" style="max-width:600px;width:100%;position:relative;margin:auto">
+ <button onclick="acLinkClose()" title="Закрыть" style="position:absolute;right:12px;top:10px;background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;line-height:1">×</button>
+ <div class="panel-title" style="margin:0 30px 6px 0">Привязка базы по биллингу</div>
+ <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6">Свяжем клиентов с биллингом по коду (хосту), чтобы отток цеплялся надёжно. Новые карточки не создаются — код дописывается только существующим клиентам.</div>
+ <div id="ac-link-preview" style="font-size:12px;color:var(--text-secondary)">Выберите файл «База активных клиентов».</div>
+ <div id="ac-link-actions" style="margin-top:14px;display:none">
+ <button class="add-btn" id="ac-link-commit-btn" style="font-size:12px;padding:7px 16px" onclick="acLinkCommit()">Привязать</button>
+ </div>
  </div>
  </div>
 
@@ -20526,7 +20541,10 @@ async function _churnMatchClient(rec){
  }
  var clean=String(rec.company_name||'').replace(/\s*\([^()]*\)\s*$/,'').trim();
  var target=_acNormForMerge(clean), hostTarget=_acNormForMerge(rec.company_key||'');
- var matches=(_churnClientsCache||[]).filter(function(c){ var n=_acNormForMerge(c.company_name); return n && (n===target || (hostTarget && n===hostTarget)); });
+ var hk=String(rec.company_key||'').toLowerCase();
+ // Сначала точный матч по биллинг-коду (хосту) — надёжно, название неважно. Потом fallback по имени.
+ var byHost=(_churnClientsCache||[]).filter(function(c){ return c.billing_host && String(c.billing_host).toLowerCase()===hk; });
+ var matches=byHost.length?byHost:(_churnClientsCache||[]).filter(function(c){ var n=_acNormForMerge(c.company_name); return n && (n===target || (hostTarget && n===hostTarget)); });
  if(!matches.length){ box.innerHTML='<span style="color:var(--text-muted)">Не найден в базе «Действующие»</span>'; return; }
  if(matches.length>1){
   box.innerHTML='<div style="color:var(--text-muted);margin-bottom:6px">Несколько совпадений — выберите нужного:</div>'+matches.map(function(c){ return '<div style="padding:3px 0"><a href="#" onclick="churnPickClient(\''+_churnJs(c.client_id)+'\');return false" style="color:#7AA7D7">'+_churnEsc(c.company_name)+'</a> <span style="color:var(--text-muted)">('+_churnStatusLabel(c.status)+(c.curator_operator?(', '+_churnEsc(c.curator_operator)):'')+')</span></div>'; }).join('');
@@ -20565,10 +20583,99 @@ async function churnCardMarkLeft(){
  }catch(e){ if(btn){btn.disabled=false;btn.textContent='Отметить ушедшим + в историю';} try{showNotif('Ошибка','Не удалось: '+(e&&e.message||e));}catch(_){} }
 }
 
+// ===== ПРИВЯЗКА БАЗЫ ПО БИЛЛИНГУ (v603) =====
+var _acLinkToApply=[];
+function _acHostFromName(name){ var m=String(name==null?'':name).match(/\(([^()]+)\)\s*$/); return m?m[1].trim().toLowerCase():null; }
+function acLinkClose(){ var m=document.getElementById('ac-link-modal'); if(m) m.style.display='none'; }
+function acLinkReadFile(input){
+ var f=input.files&&input.files[0]; if(!f) return;
+ document.getElementById('ac-link-modal').style.display='flex';
+ document.getElementById('ac-link-preview').innerHTML='<span style="color:var(--text-muted)">Читаю файл…</span>';
+ document.getElementById('ac-link-actions').style.display='none';
+ _churnEnsureXLSX(function(){
+  var reader=new FileReader();
+  reader.onload=function(e){
+   try{
+    var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+    var parsed=[], noHost=[];
+    for(var r=2;r<aoa.length;r++){
+     var row=aoa[r]; if(!row) continue;
+     var nm=String(row[0]==null?'':row[0]).trim(); if(!nm) continue; // подстроки лицензий — пропуск
+     if(/общий итог|итого|grand total/i.test(nm)) continue;
+     var host=_acHostFromName(nm);
+     if(!host){ noHost.push(nm); continue; }
+     parsed.push({name:nm.replace(/\s*\([^()]*\)\s*$/,'').trim(), host:host});
+    }
+    acLinkBuildPreview(parsed,noHost);
+   }catch(err){ document.getElementById('ac-link-preview').innerHTML='<span style="color:#EF4444">Ошибка чтения: '+_churnEsc(err.message||String(err))+'</span>'; }
+   input.value='';
+  };
+  reader.readAsArrayBuffer(f);
+ });
+}
+async function acLinkBuildPreview(parsed, noHost){
+ var box=document.getElementById('ac-link-preview');
+ box.innerHTML='<span style="color:var(--text-muted)">Сверяю с базой…</span>';
+ var clients=[];
+ try{ var d=await sbFetch('/api/clients?country='+currentCountry+'&limit=5000',{}); clients=(d&&d.clients)||[]; }
+ catch(e){ box.innerHTML='<span style="color:#EF4444">Не удалось загрузить базу клиентов</span>'; return; }
+ var byName={};
+ clients.forEach(function(c){ var n=_acNormForMerge(c.company_name); if(!n) return; (byName[n]=byName[n]||[]).push(c); });
+ var toLink=[], notFound=[], already=[], conflicts=[], hostSeen={};
+ parsed.forEach(function(p){
+  // В нашей базе company_name бывает и полным названием, и самим хостом — матчим по обоим.
+  var k1=_acNormForMerge(p.name), k2=_acNormForMerge(p.host);
+  var cands=(byName[k1]||[]).slice();
+  if(k2 && k2!==k1){ (byName[k2]||[]).forEach(function(c){ if(cands.indexOf(c)<0) cands.push(c); }); }
+  if(!cands.length){ notFound.push(p); return; }
+  if(cands.length>1){ conflicts.push({p:p, reason:'несколько клиентов с таким названием'}); return; }
+  var c=cands[0], ch=c.billing_host?String(c.billing_host).toLowerCase():'';
+  if(ch && ch===p.host){ already.push(p); return; }
+  if(ch && ch!==p.host){ conflicts.push({p:p, reason:'у клиента уже другой код ('+c.billing_host+')'}); return; }
+  if(hostSeen[p.host]){ conflicts.push({p:p, reason:'код повторяется в файле'}); return; }
+  hostSeen[p.host]=1;
+  toLink.push({client_id:c.client_id, billing_host:p.host, company_name:c.company_name});
+ });
+ _acLinkToApply=toLink;
+ acLinkRenderPreview({toLink:toLink, notFound:notFound, already:already, conflicts:conflicts, noHost:noHost});
+}
+function acLinkRenderPreview(b){
+ var box=document.getElementById('ac-link-preview');
+ function sample(arr,fn){ return arr.slice(0,12).map(fn).join(''); }
+ var html='';
+ html+='<div style="font-size:13px;font-weight:700;color:#10B981;margin-bottom:4px">Привяжется: '+b.toLink.length+'</div>';
+ if(b.toLink.length) html+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;max-height:120px;overflow:auto">'+sample(b.toLink,function(x){return '<div>'+_churnEsc(x.company_name)+' → '+_churnEsc(x.billing_host)+'</div>';})+(b.toLink.length>12?('<div>…ещё '+(b.toLink.length-12)+'</div>'):'')+'</div>';
+ html+='<div style="font-size:12px;color:var(--text-secondary);margin-bottom:3px">Уже привязано: '+b.already.length+'</div>';
+ html+='<div style="font-size:12px;color:#F59E0B;margin-bottom:3px">Не найдено в базе: '+b.notFound.length+'</div>';
+ if(b.notFound.length) html+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;max-height:100px;overflow:auto">'+sample(b.notFound,function(x){return '<div>'+_churnEsc(x.name)+' ('+_churnEsc(x.host)+')</div>';})+(b.notFound.length>12?('<div>…ещё '+(b.notFound.length-12)+'</div>'):'')+'</div>';
+ html+='<div style="font-size:12px;color:#EF4444;margin-bottom:3px">Конфликтов (пропустим): '+b.conflicts.length+'</div>';
+ if(b.conflicts.length) html+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;max-height:100px;overflow:auto">'+sample(b.conflicts,function(x){return '<div>'+_churnEsc(x.p.name)+' — '+_churnEsc(x.reason)+'</div>';})+'</div>';
+ html+='<div style="font-size:12px;color:var(--text-muted)">Без кода в файле (пропустим): '+b.noHost.length+'</div>';
+ box.innerHTML=html;
+ document.getElementById('ac-link-actions').style.display='block';
+ var btn=document.getElementById('ac-link-commit-btn'); btn.disabled=!b.toLink.length; btn.textContent=b.toLink.length?('Привязать '+b.toLink.length):'Нечего привязывать';
+}
+async function acLinkCommit(){
+ if(!_acLinkToApply.length) return;
+ var btn=document.getElementById('ac-link-commit-btn'); btn.disabled=true; btn.textContent='Привязываю…';
+ try{
+  var d=await sbFetch('/api/clients?action=link_hosts',{method:'POST',body:JSON.stringify({country:currentCountry,links:_acLinkToApply.map(function(x){return {client_id:x.client_id,billing_host:x.billing_host};})})});
+  if(d&&d.ok){
+   _churnClientsCache=null;
+   document.getElementById('ac-link-preview').innerHTML='<div style="font-size:13px;font-weight:700;color:#10B981">Готово</div><div style="font-size:12px;color:var(--text-secondary);margin-top:6px">Привязано: '+d.linked+'<br>Пропущено (уже было): '+d.skipped+'<br>Конфликтов: '+d.conflicts_count+(d.failed_count?('<br>Ошибок: '+d.failed_count):'')+'</div>';
+   document.getElementById('ac-link-actions').style.display='none';
+   try{showNotif('Привязка готова','Привязано: '+d.linked+', пропущено: '+d.skipped);}catch(_){}
+  } else { btn.disabled=false; btn.textContent='Привязать'; try{showNotif('Ошибка',(d&&d.error)||'не удалось');}catch(_){} }
+ }catch(e){ btn.disabled=false; btn.textContent='Привязать'; try{showNotif('Ошибка',e&&e.message||String(e));}catch(_){} }
+}
+
 // Этот блок внутри IIFE маркетинга — выставляем в window функции, вызываемые из HTML (onclick/onchange) и из showView.
 window.churnInit=churnInit; window.churnUploadChurn=churnUploadChurn; window.churnUploadLicenses=churnUploadLicenses;
 window.churnSetKind=churnSetKind; window.churnRender=churnRender; window.churnExportCSV=churnExportCSV; window.churnStartEdit=churnStartEdit;
 window.churnOpenCard=churnOpenCard; window.churnCloseCard=churnCloseCard; window.churnCardSave=churnCardSave; window.churnPickClient=churnPickClient; window.churnCardOpenClient=churnCardOpenClient; window.churnCardMarkLeft=churnCardMarkLeft;
+window.acLinkReadFile=acLinkReadFile; window.acLinkClose=acLinkClose; window.acLinkCommit=acLinkCommit;
 
 // ---- UPLOAD HANDLER ----
 window.metaCsvUpload = function(input) {
