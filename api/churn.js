@@ -68,6 +68,7 @@ async function handleGet(req, res) {
     params['country'] = 'eq.' + q.country;
   }
   if (dataset === 'churn' && q.kind) params['kind'] = 'eq.' + q.kind;
+  if (q.company_key) params['company_key'] = 'eq.' + String(q.company_key).toLowerCase();
   if (dataset !== 'notes') {
     if (q.from && q.to) params['and'] = `(period_month.gte.${q.from},period_month.lte.${q.to})`;
     else if (q.from) params['period_month'] = 'gte.' + q.from;

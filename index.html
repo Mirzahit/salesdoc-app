@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v610</title>
+<title>SalesDoc — Финансовый Дашборд v611</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -29916,6 +29916,39 @@ async function _routeRenderFeed(){
    }
   } catch(_){}
 
+  // v611: тикеты поддержки клиента → элементы ленты
+  var ticketItems = [];
+  try {
+   if(_routeCurrentCard && _routeCurrentCard.client_id){
+    var tkResp = await sbFetch('/api/cards?entity=ticket&client_id=' + encodeURIComponent(_routeCurrentCard.client_id));
+    var tkList = (tkResp && tkResp.ok && Array.isArray(tkResp.tickets)) ? tkResp.tickets : [];
+    var tkLabel = { new:'Новое', in_progress:'В работе', waiting_client:'Ждём клиента', solved:'Решено', reopened:'Открыт повторно', closed:'Закрыто' };
+    ticketItems = tkList.map(function(t){
+     return { id:'tk:'+t.id, event_type:'note', created_at:t.created_at, author:(t.operator||'поддержка'),
+      text:'Обращение в поддержку: '+(t.title||'без темы')+' · '+(tkLabel[t.status]||t.status||'') };
+    });
+   }
+  } catch(_){}
+
+  // v611: отток/спад клиента из биллинга → элементы ленты (связь по имени сервера billing_host)
+  var churnFeedItems = [];
+  try {
+   var _cl = _routeCurrentCard.clients || {};
+   var bh = _cl.billing_host;
+   var ctry = _cl.country || (typeof currentCountry!=='undefined'?currentCountry:'KZ');
+   if(bh){
+    var chResp = await sbFetch('/api/churn?country='+ctry+'&company_key='+encodeURIComponent(bh));
+    var chList = (chResp && chResp.records) || [];
+    var kindLbl = { churn:'Отток', decline:'Спад', growth:'Прирост', new:'Новый' };
+    churnFeedItems = chList.filter(function(r){ return r.kind==='churn'||r.kind==='decline'; }).map(function(r){
+     var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0);
+     var cur=(ctry==='KG')?'сом':'₸';
+     return { id:'churn:'+r.id, event_type:'note', created_at:r.period_month, author:'биллинг',
+      text:(kindLbl[r.kind]||r.kind)+' ('+String(r.period_month||'').slice(0,7)+')'+(loss>0?(' · −'+Math.round(loss).toLocaleString('ru-RU')+' '+cur):'')+(r.reason?(' · '+r.reason):'') };
+    });
+   }
+  } catch(_){}
+
   // v458: конвертируем задачи в feed-items с маркером _is_task
   var taskItems = tasks.map(function(t){
    return {
@@ -29932,7 +29965,7 @@ async function _routeRenderFeed(){
   // Склейка с дедупом по id. Сортировка по created_at desc. v558: payItems тоже добавляем.
   var seen = {};
   var merged = [];
-  byCard.concat(byClient).concat(byIntgCards).concat(taskItems).concat(payItems).forEach(function(it){
+  byCard.concat(byClient).concat(byIntgCards).concat(taskItems).concat(payItems).concat(ticketItems).concat(churnFeedItems).forEach(function(it){
    if(!it || !it.id || seen[it.id]) return;
    seen[it.id] = 1;
    merged.push(it);
