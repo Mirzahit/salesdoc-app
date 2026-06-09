@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v606</title>
+<title>SalesDoc — Финансовый Дашборд v607</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20690,39 +20690,44 @@ async function churnSendToSprint(rowsList){
  // Гарантируем загрузку планёрок (при первом заходе _planCloud может быть пуст)
  try{ if(typeof _planCloud==='undefined' || !_planCloud){ await planSyncFetch(true); } }catch(_){}
  var today=new Date();
- var month=rowsList[0].period_month || (document.getElementById('churn-month')||{}).value || _planYmd(today);
- var ym=String(month).slice(0,7);
- var sprintName='Возврат — '+_churnMonthRu(ym);
  var sprints=planLoadSprints();
- var sp=sprints.find(function(s){ return s.name===sprintName && !s.archived; });
- if(!sp){
-  var end=new Date(today.getTime()+13*86400000);
-  var nextSid=(sprints.reduce(function(m,s){ return Math.max(m, s.id||0); },0)||0)+1;
-  sp={ id:nextSid, name:sprintName, goal:'Вернуть ушедших клиентов', start:_planYmd(today), end:_planYmd(end),
-       status:'ontrack', priority:'high', color:'orange', total:0, in_progress:0, done:0, team:[], teamNames:'', archived:false };
-  sprints.unshift(sp); planSaveSprints(sprints);
- }
  var tasks=planLoadTasks();
- var existing=new Set(tasks.filter(function(t){ return t.sprint_id===sp.id && t.return_churn; }).map(function(t){ return String(t.company_key||'').toLowerCase(); }));
+ var nextSid=(sprints.reduce(function(m,s){ return Math.max(m, s.id||0); },0)||0)+1;
  var nextTid=(tasks.reduce(function(m,t){ return Math.max(m, t.id||0); },100)||100)+1;
- var added=0, skipped=0;
- rowsList.forEach(function(r){
-  var ck=String(r.company_key||'').toLowerCase();
-  if(!ck){ return; }
-  if(existing.has(ck)){ skipped++; return; }
-  var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0); if(!(loss>0)) loss=Number(r.prev_amount)||0;
-  tasks.push({ id:nextTid++, sprint_id:sp.id, title:'Возврат: '+(r.company_name||r.company_key||''),
-    owners:[], owner_ids:[], owner:'', start_date:_planYmd(today), due_date:sp.end,
-    priority:'high', status:'todo', created_at:new Date().toISOString().slice(0,10),
-    company_key:ck, return_churn:true, churn_reason:(r.reason||r.fileReason||''), churn_amount:loss });
-  existing.add(ck); added++;
+ // Группируем строки по месяцу — каждый месяц в свой спринт «Возврат — {месяц}».
+ var groups={};
+ rowsList.forEach(function(r){ var ym=String(r.period_month||(document.getElementById('churn-month')||{}).value||_planYmd(today)).slice(0,7); (groups[ym]=groups[ym]||[]).push(r); });
+ var totalAdded=0, totalSkipped=0, lastSprintId=null, sprintNames=[];
+ Object.keys(groups).sort().forEach(function(ym){
+  var sprintName='Возврат — '+_churnMonthRu(ym);
+  var sp=sprints.find(function(s){ return s.name===sprintName && !s.archived; });
+  if(!sp){
+   var end=new Date(today.getTime()+13*86400000);
+   sp={ id:nextSid++, name:sprintName, goal:'Вернуть ушедших клиентов', start:_planYmd(today), end:_planYmd(end),
+        status:'ontrack', priority:'high', color:'orange', total:0, in_progress:0, done:0, team:[], teamNames:'', archived:false };
+   sprints.unshift(sp);
+  }
+  var existing=new Set(tasks.filter(function(t){ return t.sprint_id===sp.id && t.return_churn; }).map(function(t){ return String(t.company_key||'').toLowerCase(); }));
+  groups[ym].forEach(function(r){
+   var ck=String(r.company_key||'').toLowerCase();
+   if(!ck){ return; }
+   if(existing.has(ck)){ totalSkipped++; return; }
+   var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0); if(!(loss>0)) loss=Number(r.prev_amount)||0;
+   tasks.push({ id:nextTid++, sprint_id:sp.id, title:'Возврат: '+(r.company_name||r.company_key||''),
+     owners:[], owner_ids:[], owner:'', start_date:_planYmd(today), due_date:sp.end,
+     priority:'high', status:'todo', created_at:new Date().toISOString().slice(0,10),
+     company_key:ck, return_churn:true, churn_reason:(r.reason||r.fileReason||''), churn_amount:loss });
+   existing.add(ck); totalAdded++;
+  });
+  lastSprintId=sp.id; sprintNames.push(sprintName);
  });
- planSaveTasks(tasks);
- try{ planRecountSprint(sp.id); }catch(_){}
+ planSaveSprints(sprints); planSaveTasks(tasks);
+ sprints.forEach(function(s){ if(sprintNames.indexOf(s.name)>=0){ try{ planRecountSprint(s.id); }catch(_){} } });
  try{ await planSyncPush(); }catch(_){}
  _churnSelected.clear(); churnRenderTable();
- try{showNotif('Возврат','Отправлено '+added+' в спринт «'+sprintName+'»'+(skipped?(' (пропущено дублей: '+skipped+')'):''));}catch(_){}
- if(added && confirm('Перейти в спринт «'+sprintName+'»?')){ try{ showView('planning'); if(typeof planOpenSprint==='function') planOpenSprint(sp.id); }catch(_){} }
+ var where=sprintNames.length===1 ? ('спринт «'+sprintNames[0]+'»') : (sprintNames.length+' спринта по месяцам');
+ try{showNotif('Возврат','Отправлено '+totalAdded+' в '+where+(totalSkipped?(' (пропущено дублей: '+totalSkipped+')'):''));}catch(_){}
+ if(totalAdded && sprintNames.length===1 && lastSprintId && confirm('Перейти в спринт «'+sprintNames[0]+'»?')){ try{ showView('planning'); if(typeof planOpenSprint==='function') planOpenSprint(lastSprintId); }catch(_){} }
 }
 function churnSendSelected(){
  var list=churnGetFiltered().filter(function(r){ return _churnSelected.has(_churnSelKey(r.company_key,r.period_month)); });
@@ -27543,6 +27548,7 @@ async function _ticketsDrop(ev, newStage){
   var idx = ticketsList.findIndex(function(x){ return x.id === t.id; });
   if(idx >= 0) ticketsList[idx] = d.ticket;
   ticketsUpdateStats();
+  _ticketsRenderBadge(); // v606: обновить кружок-счётчик на табе после переноса
   ticketsRender();
  } catch(e){
   // Откатываем оптимистичное обновление
@@ -28394,6 +28400,9 @@ function routeCloseCard(){
 var ROUTE_STAGES_ORDER = ['Новый','Настройка','Обучение','Тестирование','Активация'];
 // v445: единый список операторов Маршрута (раньше дублировался в 2 местах _routeRenderAmo)
 var ROUTE_OPERATORS = ['Айдос','Акбар','Самат','Нурай'];
+// v606: гарантируем, что текущее значение всегда в списке выбора — иначе select при открытии
+// молча перезапишет на первого по blur. base — операторы клиентов (НЕ интеграторы из routeOperators).
+function _routeOpChoices(cur){ var base=ROUTE_OPERATORS.slice(); if(cur && base.indexOf(cur)<0) base.push(cur); return base; }
 
 // v445: универсальная кнопка «Передать» с поповером. Используется в шапке карт Внедрения и Интеграции.
 // containerId — id <div> в шапке, currentOp — текущий оператор (или пусто), choices — массив строк,
@@ -29786,7 +29795,7 @@ async function _routeRenderAmo(){
 
  // Секция СДЕЛКА
  addSection('Сделка');
- addField('Ответственный', card.operator, { editable:true, entity:'card', field:'operator', type:'select', choices:['Айдос','Акбар','Самат','Нурай'], rawValue:card.operator });
+ addField('Ответственный', card.operator, { editable:true, entity:'card', field:'operator', type:'select', choices:_routeOpChoices(card.operator), rawValue:card.operator });
  addField('Бюджет', card.payment_amount ? Number(card.payment_amount).toLocaleString('ru-RU').replace(/,/g, ' ') + ' ' + ((card.country==='KG')?'сом':'₸') : null, { price:true, editable:true, entity:'card', field:'payment_amount', type:'number', rawValue:card.payment_amount });
  addField('Менеджер продаж', card.sales_manager, { editable:true, entity:'card', field:'sales_manager', type:'select', choices:['Мирзахит','Юлия','Айдос Хапез'], rawValue:card.sales_manager });
  addField('Категория', _amoLabelCategory(card.payment_category), { editable:true, entity:'card', field:'payment_category', type:'select', choices:['Нов внедрение','Нов интеграция','абон. плата','доп. лицензии','новый клиент','доработка'], rawValue:card.payment_category });
@@ -29804,7 +29813,7 @@ async function _routeRenderAmo(){
  // v391: «Куратор внедрения» — тот кто закреплён за клиентом ПОСЛЕ активации (для продлений
  // в «Мои клиенты»). «Ответственный» (выше) — кто ведёт сейчас в Маршруте. Часто это один
  // человек, но могут отличаться (например брал Айдос, передаёт после внедрения Акбару).
- addField('Куратор после активации', cl.curator_operator, { editable:true, entity:'client', field:'curator_operator', type:'select', choices:['Айдос','Акбар','Самат','Нурай'], rawValue:cl.curator_operator });
+ addField('Куратор после активации', cl.curator_operator, { editable:true, entity:'client', field:'curator_operator', type:'select', choices:_routeOpChoices(cl.curator_operator), rawValue:cl.curator_operator });
  // Имя сервера (логин в биллинге) — связь с оттоком/биллингом по постоянному коду (v604).
  addField('Имя сервера', cl.billing_host, { editable:true, entity:'client', field:'billing_host', type:'text', rawValue:cl.billing_host });
 
@@ -37257,7 +37266,10 @@ async function mytasksDropCol(ev){
  // соответствуют дальним бакетам — для них нет прямого move-команды, используем footer-зоны).
  var moveMap = { today:'today', tomorrow:'tomorrow' };
  var move = moveMap[target];
- if(!move) return;   // для this_week/next_week и т.д. drag из колонок не используется
+ if(!move){ // v606: для дальних колонок прямого переноса нет — подсказываем, а не молчим
+  try{ if(typeof kbShowToast==='function') kbShowToast('Перенос сюда недоступен — тяните в «Сегодня»/«Завтра» или в зоны внизу'); else showNotif('Перенос','Доступен перенос в «Сегодня»/«Завтра» или в зоны внизу'); }catch(_){}
+  return;
+ }
  await mytasksMove(taskId, move);
 }
 

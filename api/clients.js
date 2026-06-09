@@ -15,6 +15,9 @@ const ALLOWED_STATUS = ['lead','sale','onboarding','active','paused','churned'];
 const ALLOWED_COUNTRIES = ['KZ','KG'];
 const ALLOWED_PERIODS = [1, 3, 6, 12]; // месяцев подписки
 
+// v606: нормализация имени для анти-дубля (как _acNormForMerge на фронте / _normName в payments).
+function _normName(s) { return String(s || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, ''); }
+
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
@@ -60,6 +63,16 @@ export default async function handler(req, res) {
           return res.status(400).json({ ok: false, error: 'subscription_period_months должен быть 1, 3, 6 или 12' });
         }
         body.subscription_period_months = p;
+      }
+      // v606: анти-дубль — если клиента с тем же нормализованным именем в стране уже есть,
+      // возвращаем его, а не создаём второго (фронт откроет существующего).
+      if (!body.client_id && body.company_name) {
+        const _norm = _normName(body.company_name);
+        if (_norm) {
+          const _existing = await sbSelect('clients', { country: 'eq.' + country, select: 'client_id,company_name,status', limit: '2000' });
+          const _m = _existing.find(c => _normName(c.company_name) === _norm);
+          if (_m) return res.status(200).json({ ok: true, client: _m, existed: true });
+        }
       }
       if (!body.client_id) {
         // v364: авто-генерация с префиксом страны: SD-KZ-2026-NNNN / SD-KG-2026-NNNN
