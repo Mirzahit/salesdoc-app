@@ -70,7 +70,7 @@ export default async function handler(req, res) {
     }
     if (req.method === 'GET') {
       const { id, operator, stage, country } = req.query || {};
-      const params = { select: '*,clients(company_name,main_phone,curator_operator,country)', order: 'created_at.desc' };
+      const params = { select: '*,clients(company_name,main_phone,curator_operator,country,billing_host)', order: 'created_at.desc' };
       if (id) params['id'] = 'eq.' + id;
       if (operator) params['operator'] = 'eq.' + operator;
       if (country) params['country'] = 'eq.' + country;
@@ -429,7 +429,7 @@ async function handleTicketsRoute(req, res) {
     else if (!status) {
       params['status'] = 'neq.closed';
     }
-    params['select'] = '*,clients(company_name,main_phone,curator_operator,country)';
+    params['select'] = '*,clients(company_name,main_phone,curator_operator,country,billing_host)';
     const data = await sbSelect('tickets', params);
     return res.status(200).json({ ok: true, count: data.length, tickets: data });
   }
