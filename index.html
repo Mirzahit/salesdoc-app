@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v613</title>
+<title>SalesDoc — Финансовый Дашборд v614</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7826,7 +7826,10 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
 
  <!-- v393: Модалка «Новый тикет» -->
- <div id="tickets-modal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);align-items:center;justify-content:center" onclick="if(event.target===this)ticketsCloseNew()">
+ <!-- v614: z-index 10000 → 1000001. Модалку открывают из карточки клиента (.sd-overlay-screen,
+      z-index:999999) — на 10000 она открывалась ПОД оверлеем и кнопка «+ Тикет» казалась нерабочей.
+      То же, что фикс v575 для .modal-overlay, но #tickets-modal — отдельный div, его не покрыло. -->
+ <div id="tickets-modal" style="display:none;position:fixed;inset:0;z-index:1000001;background:rgba(0,0,0,.55);align-items:center;justify-content:center" onclick="if(event.target===this)ticketsCloseNew()">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:min(480px,92vw);box-shadow:0 24px 64px rgba(0,0,0,.5)">
    <div style="font-size:18px;font-weight:700;margin-bottom:18px;color:var(--text);letter-spacing:-0.02em">Новый тикет</div>
    <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Клиент *</label>
@@ -27094,6 +27097,32 @@ var ticketsList = [];
 // динамически из /api/sb-ping в ticketsLoad() и пишется в window._TICKETS_BADGE_OPERATORS.
 // Фолбэк для случая когда ticketsLoad ещё не выполнился (первая отрисовка).
 var _TICKETS_BADGE_OPERATORS = ['Айдос','Акбар','Самат','Нурай'];
+// v614: флаг — реальные операторы уже подтянуты из /api/sb-ping (а не дефолтная заглушка выше).
+var _ticketsOpsLoaded = false;
+
+// v614: гарантируем, что _TICKETS_BADGE_OPERATORS содержит РЕАЛЬНЫХ операторов поддержки.
+// Нужно, когда модалку «Новый тикет» или карточку тикета открывают из карточки клиента
+// (или по прямой ссылке) ДО того как отработал ticketsLoad() — иначе выпадашка
+// «Ответственный/Исполнитель» либо пуста, либо показывает устаревшие имена-заглушки.
+async function _ticketsEnsureOperators(){
+ if(_ticketsOpsLoaded) return;
+ try {
+  var r = await fetch('/api/sb-ping').then(function(x){ return x.json(); }).catch(function(){ return null; });
+  var ops = (r && r.operators ? r.operators : []).filter(function(o){ return o.role === 'integrator' && o.active; }).map(function(o){ return o.name; });
+  if(ops.length){ _TICKETS_BADGE_OPERATORS = ops; _ticketsOpsLoaded = true; }
+ } catch(_){}
+}
+
+// v614: заполнить <select> операторами поддержки (для модалки нового тикета). Идемпотентно.
+function _ticketsFillOperatorSelect(sel){
+ if(!sel) return;
+ // оставляем первый «— выберите —», переинициализируем остальное реальным списком
+ while(sel.options.length > 1) sel.remove(1);
+ (_TICKETS_BADGE_OPERATORS || []).forEach(function(name){
+  if(!name) return;
+  var opt = document.createElement('option'); opt.value = name; opt.textContent = name; sel.appendChild(opt);
+ });
+}
 
 // v418: вернуть имя оператора если текущий пользователь — оператор поддержки.
 // null если CEO/админ/не залогинен. Сверяем по первому слову currentUser.name
@@ -27241,6 +27270,7 @@ async function ticketsLoadBadgeOnly(){
   var opsList = ((opsRes && opsRes.operators) || []).filter(o=>o.role==='integrator' && o.active);
   if(opsList.length){
    _TICKETS_BADGE_OPERATORS = opsList.map(function(o){ return o.name; });
+   _ticketsOpsLoaded = true; // v614
   }
   if(d && d.ok){
    ticketsList = d.tickets || [];
@@ -27269,6 +27299,7 @@ async function ticketsLoad(){
   // Это позволяет любому добавленному в operators оператору сразу видеть счётчик «Мои».
   if(opsList.length){
    _TICKETS_BADGE_OPERATORS = opsList.map(function(o){ return o.name; });
+   _ticketsOpsLoaded = true; // v614
   }
   if(filt && filt.options.length <= 1){
    opsList.forEach(function(o){ var opt = document.createElement('option'); opt.value=o.name; opt.textContent=o.name; filt.appendChild(opt); });
@@ -27675,6 +27706,9 @@ async function ticketsOpen(ticketId){
  document.getElementById('view-ticket-card').style.display = 'block';
  document.body.style.overflow = 'hidden';
  _ticketRenderHead();
+ // v614: тикет можно открыть из ленты клиента / по прямой ссылке — до того как ticketsLoad()
+ // подтянул реальных операторов. Дотягиваем их, чтобы выпадашка «Исполнитель» была актуальной.
+ await _ticketsEnsureOperators();
  _ticketRenderFields();
  _ticketLoadComments();
 }
@@ -27768,9 +27802,15 @@ function _ticketRenderFields(){
  });
 
  // Исполнитель
+ // v614: список берём из реальных операторов поддержки (_TICKETS_BADGE_OPERATORS), а не из
+ // захардкоженных имён — иначе нельзя назначить актуального сотрудника. Уже назначенного
+ // исполнителя сохраняем в списке, даже если его больше нет среди активных операторов.
+ var _opChoices = [''];
+ (_TICKETS_BADGE_OPERATORS || []).forEach(function(name){ if(name && _opChoices.indexOf(name) < 0) _opChoices.push(name); });
+ if(t.operator && _opChoices.indexOf(t.operator) < 0) _opChoices.push(t.operator);
  addField('Исполнитель', {
   field:'operator', type:'select',
-  choices:['','Айдос','Акбар','Самат','Нурай'],
+  choices:_opChoices,
   choiceLabels:{ '':'— не назначен —' },
   rawValue: t.operator || '',
   displayValue: t.operator || 'не назначен',
@@ -28118,6 +28158,17 @@ function ticketsOpenNewForClient(clientId){
  var sel = document.getElementById('tickets-new-client');
  if(!sel) return;
  ticketsOpenNew();
+ // v614: модалку открывают из карточки клиента — вкладку «Поддержка» могли не открывать,
+ // тогда ticketsLoad() не отработал и выпадашка операторов пуста (а ответственный обязателен).
+ // Дотягиваем операторов и заполняем select, затем переустанавливаем дефолт (текущий оператор).
+ _ticketsEnsureOperators().then(function(){
+  var opSel = document.getElementById('tickets-new-operator');
+  _ticketsFillOperatorSelect(opSel);
+  if(opSel && typeof _ticketsCurrentOperatorName === 'function'){
+   var me = _ticketsCurrentOperatorName();
+   if(me){ for(var i = 0; i < opSel.options.length; i++){ if(opSel.options[i].value === me){ opSel.value = me; break; } } }
+  }
+ });
  sbFetch('/api/clients').then(function(r){
   if(r && r.ok){
    while(sel.options.length > 1) sel.remove(1);
