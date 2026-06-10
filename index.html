@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v615</title>
+<title>SalesDoc — Финансовый Дашборд v616</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -23948,10 +23948,42 @@ document.getElementById('search-input').addEventListener('input',function(){
  });
  res.innerHTML=html;
 });
+// v616: кэш клиентов для резолва имя→client_id из глобального поиска.
+var _searchClientsCache = null;
+// v616: результат «КЛИЕНТ» в поиске несёт только имя (company_name), а routeOpenClient
+// требует client_id. Резолвим по company_name/billing_host/client_id (как в коде оттока)
+// и открываем карточку. Если не нашли — мягкий фолбэк на раздел «Оплаты».
+async function _searchOpenClientByName(name){
+ var q = String(name||'').trim();
+ if(!q){ if(typeof showView==='function') showView('payments'); return; }
+ var lq = q.toLowerCase();
+ try {
+  if(!_searchClientsCache){
+   var ctry = (typeof currentCountry!=='undefined' && currentCountry) ? currentCountry : 'KZ';
+   var d = await sbFetch('/api/clients?country=' + ctry + '&limit=2000');
+   _searchClientsCache = (d && d.clients) || [];
+  }
+  var list = _searchClientsCache || [];
+  var hit = list.find(function(c){
+   return (c.company_name && String(c.company_name).toLowerCase() === lq)
+       || (c.billing_host && String(c.billing_host).toLowerCase() === lq)
+       || (c.client_id && String(c.client_id).toLowerCase() === lq);
+  });
+  // запасной вариант — частичное совпадение по имени
+  if(!hit) hit = list.find(function(c){ return c.company_name && String(c.company_name).toLowerCase().indexOf(lq) >= 0; });
+  if(hit && hit.client_id && typeof routeOpenClient === 'function'){ routeOpenClient(hit.client_id); return; }
+ } catch(_){}
+ // не нашли карточку — хотя бы покажем платежи и подскажем
+ if(typeof showView === 'function') showView('payments');
+ if(typeof showNotif === 'function') showNotif('Поиск', 'Карточка клиента «' + q + '» не найдена — открыт раздел «Оплаты»');
+}
 function searchClick(type,encodedTitle){
  closeSearch();
- if(type==='payment'||type==='client')showView('payments');
- else if(type==='expense')showView('expenses');
+ var title = '';
+ try { title = decodeURIComponent(encodedTitle || ''); } catch(_){ title = encodedTitle || ''; }
+ if(type==='client'){ _searchOpenClientByName(title); }
+ else if(type==='payment'){ showView('payments'); }
+ else if(type==='expense'){ showView('expenses'); }
 }
 
 // ============================================================
