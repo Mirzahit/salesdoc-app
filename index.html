@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v616</title>
+<title>SalesDoc — Финансовый Дашборд v617</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12027,7 +12027,7 @@ function renderAllPayments() {
  +(p.seated ? ' Посажена' : 'Нет')+'</button>';
  const svcBtn = '<button onclick="togglePayService('+JSON.stringify(p.id)+')" class="seated-badge '+(p.serviceWritten?'seated-yes':'seated-no')+'">'
  +(p.serviceWritten ? ' Списана' : 'Нет')+'</button>';
- return '<tr>'
+ return '<tr data-pay-id="'+String(p.id).replace(/"/g,'&quot;')+'">'
  +'<td style="color:var(--text-muted)">'+p.date+'</td>'
  +'<td>'+p.client+'</td>'
  +'<td style="color:var(--text-secondary);font-size:11px"><span style="display:inline-flex;align-items:center;gap:6px">'+renderAvatar(p.managerName||empName(p.employee),'avatar-sm')+'<span>'+(p.managerName||empName(p.employee))+'</span></span></td>'
@@ -23942,7 +23942,8 @@ document.getElementById('search-input').addEventListener('input',function(){
  var tag=it.type==='payment'?'<span class="search-tag search-tag-payment">ОПЛАТА</span>':
  it.type==='expense'?'<span class="search-tag search-tag-expense">РАСХОД</span>':
  '<span class="search-tag search-tag-client">КЛИЕНТ</span>';
- html+='<div class="search-item" onclick="searchClick(\''+it.type+'\',\''+encodeURIComponent(it.title)+'\')">';
+ var _sid=(it.data&&it.data.id!=null)?encodeURIComponent(String(it.data.id)):''; // v617: id оплаты для «провалиться» в строку
+ html+='<div class="search-item" onclick="searchClick(\''+it.type+'\',\''+encodeURIComponent(it.title)+'\',\''+_sid+'\')">';
  html+='<div><div class="search-item-title">'+it.title+tag+'</div><div class="search-item-sub">'+it.sub+'</div></div>';
  html+='<div class="search-item-amount">'+fmtNum(it.amount)+' '+_CUR+'</div></div>';
  });
@@ -23977,12 +23978,51 @@ async function _searchOpenClientByName(name){
  if(typeof showView === 'function') showView('payments');
  if(typeof showNotif === 'function') showNotif('Поиск', 'Карточка клиента «' + q + '» не найдена — открыт раздел «Оплаты»');
 }
-function searchClick(type,encodedTitle){
+// v617: «провалиться» в конкретную оплату из поиска — открыть раздел «Оплаты», при необходимости
+// переключить период на месяц оплаты, сбросить фильтры (иначе строка может быть скрыта),
+// проскроллить к строке и подсветить её. Строка ищется по data-pay-id (добавлен в renderAllPayments).
+function _searchOpenPayment(payId){
+ showView('payments');
+ var p = (typeof payments!=='undefined' && Array.isArray(payments)) ? payments.find(function(x){ return String(x.id) === String(payId); }) : null;
+ if(!p){ return; } // не нашли — остаёмся в общем списке
+ // переключаем период на месяц оплаты
+ var dt = p.date ? new Date(p.date) : null;
+ if(dt && !isNaN(dt.getTime()) && typeof calSelectMonth === 'function'){
+  try { if(typeof calSelectedYear !== 'undefined') calSelectedYear = dt.getFullYear(); calSelectMonth(dt.getMonth()); } catch(_){}
+ }
+ // сбрасываем фильтры, чтобы нужная строка точно отрисовалась
+ var fe=document.getElementById('filter-employee'); if(fe) fe.value='';
+ var fb=document.getElementById('filter-bank'); if(fb) fb.value='';
+ var fs=document.getElementById('filter-seated'); if(fs) fs.value='all';
+ var fv=document.getElementById('filter-service'); if(fv) fv.value='all';
+ if(typeof renderAllPayments === 'function') renderAllPayments();
+ _searchHighlightPayment(String(payId));
+}
+function _searchHighlightPayment(payId){
+ var want = String(payId), tries = 0;
+ (function attempt(){
+  tries++;
+  var rows = document.querySelectorAll('#all-payments tr[data-pay-id]');
+  var row = null;
+  for(var i=0;i<rows.length;i++){ if(rows[i].getAttribute('data-pay-id') === want){ row = rows[i]; break; } }
+  if(row){
+   try { row.scrollIntoView({behavior:'smooth', block:'center'}); } catch(_){ try{ row.scrollIntoView(); }catch(__){} }
+   row.style.transition = 'background-color .4s ease';
+   row.style.backgroundColor = 'rgba(122,167,215,.28)';
+   setTimeout(function(){ row.style.backgroundColor = ''; }, 2400);
+  } else if(tries < 25){
+   setTimeout(attempt, 100);
+  }
+ })();
+}
+function searchClick(type,encodedTitle,encodedId){
  closeSearch();
  var title = '';
  try { title = decodeURIComponent(encodedTitle || ''); } catch(_){ title = encodedTitle || ''; }
+ var id = '';
+ try { id = decodeURIComponent(encodedId || ''); } catch(_){ id = encodedId || ''; }
  if(type==='client'){ _searchOpenClientByName(title); }
- else if(type==='payment'){ showView('payments'); }
+ else if(type==='payment'){ _searchOpenPayment(id); }
  else if(type==='expense'){ showView('expenses'); }
 }
 
