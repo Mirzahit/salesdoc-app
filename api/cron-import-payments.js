@@ -25,9 +25,11 @@ export default async function handler(req, res) {
   const ran = [];
   for (const country of ['KZ', 'KG']) {
     try {
-      // monthsBack=2 — перечитываем только текущий + прошлый месяц (старые уже в базе
-      // и не меняются). Резко сокращает число запросов к Apps Script → не упираемся в таймаут.
-      const r = await importSheetsForCountry(country, false, 2);
+      // v618: monthsBack=0 — полный синк ВСЕХ месяцев. Раньше окно было 2 мес из-за таймаута
+      // последовательной загрузки, но правки в старых месяцах (флаг «посажено», суммы) тогда
+      // не доходили в Supabase. Теперь листы тянутся параллельно (см. importSheetsForCountry),
+      // так что полный синк укладывается в maxDuration и любые изменения подхватываются.
+      const r = await importSheetsForCountry(country, false, 0);
       ran.push({ country, inserted: r.inserted_count, failed: r.failed_count });
     } catch (e) {
       ran.push({ country, error: String((e && e.message) || e) });

@@ -229,43 +229,52 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
   const sumByMonth = {};
   let totalParsed = 0;
 
-  for (const mi of monthIdxList) {
+  // v618: тянем листы месяцев ПАРАЛЛЕЛЬНО. Apps Script cold-start 11-19с; последовательная
+  // загрузка упиралась в таймаут (инцидент v594), из-за чего окно резали до 2 мес — и правки в
+  // старых месяцах (флаг «посажено», суммы) больше не доходили в Supabase. Параллельно общий
+  // тайминг ≈ один cold-start, поэтому можно безопасно синкать все месяцы целиком.
+  const fetched = await Promise.all(monthIdxList.map(async (mi) => {
     const monthName = cfg.months[mi];
     try {
       const data = await _fetchSheet(monthName, cfg);
-      if (!data.rows || data.rows.length < 2) { sumByMonth[monthName] = 0; continue; }
-      // headerIdx
-      let headerIdx = -1;
-      for (let ri = 0; ri < data.rows.length; ri++) {
-        const r = data.rows[ri];
-        if (r && String(r[1] || '').trim() === 'Компания') { headerIdx = ri; break; }
-      }
-      const hdrRow = headerIdx >= 0 ? data.rows[headerIdx] : null;
-      const startIdx = headerIdx >= 0 ? headerIdx + 1 : 4;
-      let monthSum = 0;
-      let monthCount = 0;
-      data.rows.slice(startIdx).forEach((row, idx) => {
-        const sheetRowAbs = startIdx + idx + 1; // 1-based в Sheets
-        const parsed = _parseRow(row, headerIdx, hdrRow, cfg, monthName, mi, sheetRowAbs);
-        if (!parsed) return;
-        parsed.country = country;
-        parsed.currency = cfg.currency;
-        parsed.source = 'sheets_import';
-        parsed.sheet_id = cfg.sheet_id;
-        parsed.client_id = clientByNorm[_normName(parsed.company_name)] || null;
-        parsed._key = `${parsed.sheet_tab}::${parsed.sheet_row}`;
-        parsed._already_exists = existingKeys.has(parsed._key);
-        parsedRows.push(parsed);
-        monthSum += parsed.amount;
-        monthCount++;
-        totalParsed++;
-      });
-      sumByMonth[monthName] = monthSum;
-      skippedByMonth[monthName] = monthCount;
+      return { mi, monthName, data, error: null };
     } catch (e) {
       console.error('[import_sheets] month error:', monthName, e.message);
-      sumByMonth[monthName] = null;
+      return { mi, monthName, data: null, error: String((e && e.message) || e) };
     }
+  }));
+
+  for (const { mi, monthName, data, error } of fetched) {
+    if (error) { sumByMonth[monthName] = null; continue; }
+    if (!data.rows || data.rows.length < 2) { sumByMonth[monthName] = 0; continue; }
+    // headerIdx
+    let headerIdx = -1;
+    for (let ri = 0; ri < data.rows.length; ri++) {
+      const r = data.rows[ri];
+      if (r && String(r[1] || '').trim() === 'Компания') { headerIdx = ri; break; }
+    }
+    const hdrRow = headerIdx >= 0 ? data.rows[headerIdx] : null;
+    const startIdx = headerIdx >= 0 ? headerIdx + 1 : 4;
+    let monthSum = 0;
+    let monthCount = 0;
+    data.rows.slice(startIdx).forEach((row, idx) => {
+      const sheetRowAbs = startIdx + idx + 1; // 1-based в Sheets
+      const parsed = _parseRow(row, headerIdx, hdrRow, cfg, monthName, mi, sheetRowAbs);
+      if (!parsed) return;
+      parsed.country = country;
+      parsed.currency = cfg.currency;
+      parsed.source = 'sheets_import';
+      parsed.sheet_id = cfg.sheet_id;
+      parsed.client_id = clientByNorm[_normName(parsed.company_name)] || null;
+      parsed._key = `${parsed.sheet_tab}::${parsed.sheet_row}`;
+      parsed._already_exists = existingKeys.has(parsed._key);
+      parsedRows.push(parsed);
+      monthSum += parsed.amount;
+      monthCount++;
+      totalParsed++;
+    });
+    sumByMonth[monthName] = monthSum;
+    skippedByMonth[monthName] = monthCount;
   }
 
   const willInsert = parsedRows.filter(p => !p._already_exists);
