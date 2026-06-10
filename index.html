@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v614</title>
+<title>SalesDoc — Финансовый Дашборд v615</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -29905,17 +29905,24 @@ async function _routeRenderAmo(){
 // v417: грузим события и по card_id, и по client_id и склеиваем. Это нужно потому что
 // часть событий привязана только к клиенту (например тикеты Поддержки — у них нет card_id),
 // и раньше они в ленте карточки клиента не появлялись.
+var _routeFeedRenderSeq = 0; // v615: счётчик поколений рендера ленты (анти-гонка дублей)
 async function _routeRenderFeed(){
  var feedEl = document.getElementById('route-card-feed');
  if(!feedEl) return;
  if(!_routeCurrentCard){ feedEl.replaceChildren(); return; }
+ // v615: токен поколения — защита от гонки двойного рендера. Раньше feedEl.replaceChildren()
+ // стоял ЗДЕСЬ (до длинной цепочки await), а дозапись в DOM — после. Два параллельных вызова
+ // (deep-link + popstate, либо медленные v611-await'ы) оба чистили ленту в начале и оба потом
+ // дописывали свой блок → лента дублировалась целиком. Теперь чистим и заполняем АТОМАРНО
+ // после загрузки, и только самый свежий вызов пишет в DOM (last-write-wins).
+ var myseq = ++_routeFeedRenderSeq;
+ var myCardId = _routeCurrentCard.id;
  // v524: запоминаем была ли лента «у самого низа» — если да, после рендера тоже скроллим вниз
  // (свежая запись попадает в видимую область). Если пользователь читал историю выше — оставляем
  // его на той же записи, не выбрасываем вниз.
  var _prevScroll = feedEl.scrollTop;
  var _prevHeight = feedEl.scrollHeight;
  var _wasNearBottom = (feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight) < 80;
- feedEl.replaceChildren();
  try {
   var reqs = [sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50')];
   if(_routeCurrentCard.client_id){
@@ -30018,6 +30025,11 @@ async function _routeRenderFeed(){
    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
   var items = merged.slice(0, 80).reverse();
+  // v615: все await'ы позади — проверяем, что это всё ещё самый свежий рендер той же карты,
+  // и только теперь атомарно чистим + заполняем ленту. Устаревший/параллельный вызов выходит,
+  // не трогая DOM, — без этого блоки накладывались и лента дублировалась.
+  if(myseq !== _routeFeedRenderSeq || !_routeCurrentCard || _routeCurrentCard.id !== myCardId) return;
+  feedEl.replaceChildren();
   if(!items.length){
    var empty = document.createElement('div');
    empty.className = 'amocard-empty';
@@ -30064,6 +30076,9 @@ async function _routeRenderFeed(){
    });
   } catch(_){}
  } catch(e){
+  // v615: ошибку показываем только для актуального рендера и на чистой ленте (не поверх старого).
+  if(myseq !== _routeFeedRenderSeq || !_routeCurrentCard || _routeCurrentCard.id !== myCardId) return;
+  feedEl.replaceChildren();
   var err = document.createElement('div');
   err.className = 'amocard-empty';
   err.textContent = 'Не удалось загрузить ленту: ' + e.message;
