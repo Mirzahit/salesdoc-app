@@ -13,9 +13,9 @@ import { importSheetsForCountry } from './payments.js';
 
 // Импорт тянет листы из медленного Apps Script — без этого функция обрывалась по
 // дефолтному таймауту, не дойдя до вставки новых строк (Supabase замерзал — v594).
-// v620: полный синк ВСЕХ месяцев по двум странам (v618) перестал укладываться в 60с —
-// крон падал с 504 каждый час, свежие оплаты не доезжали в базу. Поднимаем лимит до 300с
-// (Vercel допускает на всех планах), чтобы синк гарантированно дорабатывал до конца.
+// v620: пробуем поднять лимит до 300с. ВАЖНО: на текущем плане Vercel этот потолок
+// клампится до 60с (проверено — крон с config:300 всё равно падал с 504), поэтому
+// реальное спасение — синк ПО ОДНОЙ стране за запуск (см. handler ниже), а не лимит.
 export const config = { maxDuration: 300 };
 
 export default async function handler(req, res) {
@@ -25,20 +25,23 @@ export default async function handler(req, res) {
   const got = String(req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
   if (got !== expected) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
+  // v620: ДВЕ страны за один запуск (полный синк всех месяцев, v618) не укладывались в
+  // 60с — крон падал с 504 каждый час, свежие оплаты вообще не доезжали (узкое место —
+  // загрузка 12 листов из медленного Apps Script параллельно). Один полный синк страны
+  // в лимит влезает (как ручной импорт, которым сеяли 2025). Поэтому синкаем ПО ОДНОЙ
+  // стране за запуск, чередуя по чётности часа: чётный час → KZ, нечётный → KG.
+  // Минус: каждая страна обновляется раз в 2 часа (приемлемо для BI-дашборда оплат).
+  const country = (new Date().getUTCHours() % 2 === 0) ? 'KZ' : 'KG';
   const ran = [];
-  for (const country of ['KZ', 'KG']) {
-    try {
-      // v618: monthsBack=0 — полный синк ВСЕХ месяцев. Раньше окно было 2 мес из-за таймаута
-      // последовательной загрузки, но правки в старых месяцах (флаг «посажено», суммы) тогда
-      // не доходили в Supabase. Теперь листы тянутся параллельно (см. importSheetsForCountry),
-      // так что полный синк укладывается в maxDuration и любые изменения подхватываются.
-      const r = await importSheetsForCountry(country, false, 0);
-      ran.push({ country, inserted: r.inserted_count, failed: r.failed_count });
-    } catch (e) {
-      ran.push({ country, error: String((e && e.message) || e) });
-    }
+  try {
+    // monthsBack=0 — полный синк всех месяцев одной страны (правки в старых месяцах —
+    // флаг «посажено», суммы — тоже подхватываются, цель v618 сохранена).
+    const r = await importSheetsForCountry(country, false, 0);
+    ran.push({ country, inserted: r.inserted_count, updated: r.updated_count, failed: r.failed_count });
+  } catch (e) {
+    ran.push({ country, error: String((e && e.message) || e) });
   }
 
   const totalInserted = ran.reduce((s, r) => s + (r.inserted || 0), 0);
-  return res.status(200).json({ ok: true, total_inserted: totalInserted, ran });
+  return res.status(200).json({ ok: true, country, total_inserted: totalInserted, ran });
 }
