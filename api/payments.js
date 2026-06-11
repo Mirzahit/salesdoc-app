@@ -16,7 +16,7 @@ import { checkAuth, checkAdminToken } from './_auth.js';
 // Импорт из Sheets последовательно дёргает медленный Apps Script (cold-start 11-19с)
 // и делает много вставок — дефолтный таймаут Vercel обрывал его на полпути. Поднимаем
 // лимит (Hobby допускает до 60с).
-export const config = { maxDuration: 60 };
+export const config = { maxDuration: 300 }; // v620: полный backfill всех месяцев не влезал в 60с (504)
 
 const ALLOWED_COUNTRIES = ['KZ', 'KG'];
 const ALLOWED_CATEGORIES = ['implementation', 'integration', 'revision', 'subscription', 'license', 'other'];
@@ -405,8 +405,35 @@ async function handleGet(req, res) {
   }
   if (q.limit) params['limit'] = q.limit;
 
-  const data = await sbSelect('payments', params);
+  // v620 FIX: PostgREST режет ответ на 1000 строк (db-max-rows). Без явного limit
+  // тянем ВСЕ строки постранично через offset — иначе дашборд видел только 1000
+  // свежих платежей, а старые месяцы и годовой итог занижались по обеим странам.
+  // Если limit задан явно (бот / служебный вызов) — поведение прежнее (одна страница).
+  let data;
+  if (params.limit) {
+    data = await sbSelect('payments', params);
+  } else {
+    data = await sbSelectAllPaged('payments', params);
+  }
   return res.status(200).json({ ok: true, count: data.length, payments: data });
+}
+
+// v620: постраничная выборка в обход лимита db-max-rows (=1000). Стабильный порядок
+// (id вторичным ключом) — чтобы offset не пропускал и не дублировал строки при
+// одинаковых датах. Каждая страница ≤1000; цикл до первой неполной страницы.
+async function sbSelectAllPaged(table, params) {
+  const PAGE = 1000;
+  const base = Object.assign({}, params);
+  base.order = (base.order ? base.order + ',' : '') + 'id.desc';
+  let offset = 0;
+  let all = [];
+  for (let guard = 0; guard < 200; guard++) {
+    const page = await sbSelect(table, Object.assign({}, base, { limit: String(PAGE), offset: String(offset) }));
+    all = all.concat(page);
+    if (page.length < PAGE) break;
+    offset += PAGE;
+  }
+  return all;
 }
 
 async function handlePost(req, res) {
