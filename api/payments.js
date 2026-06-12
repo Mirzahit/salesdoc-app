@@ -306,51 +306,34 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
     };
   }
 
-  // v622: пишем БЕЗ on-conflict upsert. Прежний sbUpsert с on_conflict=
-  // (country,sheet_id,sheet_tab,sheet_row) падал на КАЖDOM батче (в БД нет уникального
-  // индекса под эту спецификацию → PostgREST 42P10), посточечный фолбэк делал сотни
-  // падающих запросов: синк шёл >120с и возвращал 200 при НУЛЕ записанных строк — из-за
-  // этого свежие оплаты не доезжали (v618-v621). Теперь: новые строки → sbInsert (тот же
-  // путь, которым изначально сеяли базу — он работает), изменённые → sbUpdate по id.
-  // Карту существующих строк тянем С ПАГИНАЦИЕЙ (обход лимита 1000 PostgREST), иначе часть
-  // строк считалась бы новой и дублировалась при вставке.
-  const existingMap = {};
+  // v622-fix: записываем НОВЫЕ строки через sbInsert (рабочий путь). Ключ дедупа — ПОЛНЫЙ
+  // натуральный ключ sheet_id+sheet_tab+sheet_row: в KZ есть строки из ДВУХ исходных таблиц
+  // (старая 11ErpSR и текущая 1WJJRqPvQ) с одинаковыми tab/row — без sheet_id они путаются.
+  // Существующие ключи тянем С ПАГИНАЦИЕЙ (обход лимита 1000), иначе строки считались бы
+  // новыми и дублировались. Прежний on_conflict upsert вообще падал (нет индекса в БД).
+  // Обновление изменённых строк — отдельной задачей, чтобы не рисковать здесь.
+  const existingKeysFull = new Set();
   {
     const PAGE = 1000;
     let offset = 0;
-    for (let guard = 0; guard < 100; guard++) {
+    for (let guard = 0; guard < 200; guard++) {
       const pageRows = await sbSelect('payments', {
         country: 'eq.' + country,
         source: 'eq.sheets_import',
-        select: 'id,sheet_tab,sheet_row,amount,seated,category,category_raw,paid_at,manager_name,bank,activation_date,period_months,qty,price',
+        select: 'sheet_id,sheet_tab,sheet_row',
         order: 'id.desc',
         limit: String(PAGE),
         offset: String(offset)
       });
-      pageRows.forEach(r => { existingMap[`${r.sheet_tab}::${r.sheet_row}`] = r; });
+      pageRows.forEach(r => existingKeysFull.add(`${r.sheet_id}::${r.sheet_tab}::${r.sheet_row}`));
       if (pageRows.length < PAGE) break;
       offset += PAGE;
     }
   }
 
   const cleanRows = parsedRows.map(({ _key, _already_exists, ...row }) => row);
-  const CHANGE_FIELDS = ['amount', 'seated', 'category', 'category_raw', 'paid_at', 'manager_name', 'bank', 'activation_date', 'period_months', 'qty', 'price'];
-  const toInsert = [];
-  const toUpdate = []; // { id, patch }
-  for (const row of cleanRows) {
-    const ex = existingMap[`${row.sheet_tab}::${row.sheet_row}`];
-    if (!ex) { toInsert.push(row); continue; }
-    const patch = {};
-    for (const f of CHANGE_FIELDS) {
-      let a = row[f], b = ex[f];
-      if (f === 'amount' || f === 'price') { a = a == null ? null : Number(a); b = b == null ? null : Number(b); }
-      if (String(a == null ? '' : a) !== String(b == null ? '' : b)) patch[f] = row[f];
-    }
-    if (Object.keys(patch).length) toUpdate.push({ id: ex.id, patch });
-  }
-
+  const toInsert = cleanRows.filter(row => !existingKeysFull.has(`${row.sheet_id}::${row.sheet_tab}::${row.sheet_row}`));
   const inserted = [];
-  const updated = [];
   const failed = [];
   const CHUNK = 200;
   for (let i = 0; i < toInsert.length; i += CHUNK) {
@@ -364,18 +347,14 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
       }
     }
   }
-  for (const u of toUpdate) {
-    try { const r = await sbUpdate('payments', { id: 'eq.' + u.id }, u.patch); updated.push(...(r || [])); }
-    catch (e2) { failed.push({ id: u.id, error: e2.message }); }
-  }
 
   return {
     ok: true,
     mode: 'apply',
     country,
     inserted_count: inserted.length,
-    updated_count: updated.length,
-    upserted_count: inserted.length + updated.length,
+    updated_count: 0,
+    upserted_count: inserted.length,
     failed_count: failed.length,
     failed_sample: failed.slice(0, 10),
     sum_upserted: inserted.reduce((s, p) => s + parseFloat(p.amount || 0), 0)

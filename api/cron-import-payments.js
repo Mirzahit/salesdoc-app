@@ -19,20 +19,6 @@ import { importSheetsForCountry } from './payments.js';
 export const config = { maxDuration: 300 };
 
 export default async function handler(req, res) {
-  // v622 TEMP DEBUG (удалить после диагностики): ручной запуск одной страны с APP_TOKEN,
-  // возвращает полный результат importSheetsForCountry (inserted/updated/failed/ошибка),
-  // чтобы понять почему крон отвечает 200, но строки в Supabase не появляются.
-  if (req.query.debug_token && req.query.debug_token === (process.env.APP_TOKEN || '').trim()) {
-    const c = String(req.query.country || 'KZ').toUpperCase();
-    const dry = String(req.query.dry || '0') === '1';
-    try {
-      const r = await importSheetsForCountry(c, !dry ? false : true, 0);
-      return res.status(200).json({ debug: true, country: c, dry, result: r });
-    } catch (e) {
-      return res.status(200).json({ debug: true, country: c, error: String((e && e.message) || e), stack: (e && e.stack) || null });
-    }
-  }
-
   // v592 SEC: fail-closed. Раньше при незаданном CRON_SECRET эндпоинт был открыт всем (импорт платежей).
   const expected = (process.env.CRON_SECRET || '').trim();
   if (!expected) return res.status(503).json({ ok: false, error: 'CRON_SECRET не настроен' });
