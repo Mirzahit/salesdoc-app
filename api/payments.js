@@ -306,38 +306,79 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
     };
   }
 
-  // Реальный upsert: вставляем НОВЫЕ и ОБНОВЛЯЕМ изменённые строки — правки в таблице
-  // теперь подтягиваются (раньше insert-only оставлял старые значения навсегда).
-  // Конфликт по уникальному индексу payments_sheet_uniq (country,sheet_id,sheet_tab,sheet_row).
-  // Источник истины для sheets_import — сама таблица; comment/notes/created_by не в payload → сохраняются.
-  const ON_CONFLICT = 'country,sheet_id,sheet_tab,sheet_row';
+  // v622: пишем БЕЗ on-conflict upsert. Прежний sbUpsert с on_conflict=
+  // (country,sheet_id,sheet_tab,sheet_row) падал на КАЖDOM батче (в БД нет уникального
+  // индекса под эту спецификацию → PostgREST 42P10), посточечный фолбэк делал сотни
+  // падающих запросов: синк шёл >120с и возвращал 200 при НУЛЕ записанных строк — из-за
+  // этого свежие оплаты не доезжали (v618-v621). Теперь: новые строки → sbInsert (тот же
+  // путь, которым изначально сеяли базу — он работает), изменённые → sbUpdate по id.
+  // Карту существующих строк тянем С ПАГИНАЦИЕЙ (обход лимита 1000 PostgREST), иначе часть
+  // строк считалась бы новой и дублировалась при вставке.
+  const existingMap = {};
+  {
+    const PAGE = 1000;
+    let offset = 0;
+    for (let guard = 0; guard < 100; guard++) {
+      const pageRows = await sbSelect('payments', {
+        country: 'eq.' + country,
+        source: 'eq.sheets_import',
+        select: 'id,sheet_tab,sheet_row,amount,seated,category,category_raw,paid_at,manager_name,bank,activation_date,period_months,qty,price',
+        order: 'id.desc',
+        limit: String(PAGE),
+        offset: String(offset)
+      });
+      pageRows.forEach(r => { existingMap[`${r.sheet_tab}::${r.sheet_row}`] = r; });
+      if (pageRows.length < PAGE) break;
+      offset += PAGE;
+    }
+  }
+
   const cleanRows = parsedRows.map(({ _key, _already_exists, ...row }) => row);
-  const upserted = [];
+  const CHANGE_FIELDS = ['amount', 'seated', 'category', 'category_raw', 'paid_at', 'manager_name', 'bank', 'activation_date', 'period_months', 'qty', 'price'];
+  const toInsert = [];
+  const toUpdate = []; // { id, patch }
+  for (const row of cleanRows) {
+    const ex = existingMap[`${row.sheet_tab}::${row.sheet_row}`];
+    if (!ex) { toInsert.push(row); continue; }
+    const patch = {};
+    for (const f of CHANGE_FIELDS) {
+      let a = row[f], b = ex[f];
+      if (f === 'amount' || f === 'price') { a = a == null ? null : Number(a); b = b == null ? null : Number(b); }
+      if (String(a == null ? '' : a) !== String(b == null ? '' : b)) patch[f] = row[f];
+    }
+    if (Object.keys(patch).length) toUpdate.push({ id: ex.id, patch });
+  }
+
+  const inserted = [];
+  const updated = [];
   const failed = [];
   const CHUNK = 200;
-  for (let i = 0; i < cleanRows.length; i += CHUNK) {
-    const batch = cleanRows.slice(i, i + CHUNK);
-    try {
-      const r = await sbUpsert('payments', batch, ON_CONFLICT);
-      upserted.push(...r);
-    } catch (e) {
+  for (let i = 0; i < toInsert.length; i += CHUNK) {
+    const batch = toInsert.slice(i, i + CHUNK);
+    try { const r = await sbInsert('payments', batch); inserted.push(...r); }
+    catch (e) {
       // батч не прошёл — построчно, чтобы одна плохая строка не валила весь импорт
       for (const row of batch) {
-        try { const r = await sbUpsert('payments', row, ON_CONFLICT); upserted.push(...r); }
+        try { const r = await sbInsert('payments', row); inserted.push(...r); }
         catch (e2) { failed.push({ company_name: row.company_name, paid_at: row.paid_at, amount: row.amount, error: e2.message }); }
       }
     }
   }
+  for (const u of toUpdate) {
+    try { const r = await sbUpdate('payments', { id: 'eq.' + u.id }, u.patch); updated.push(...(r || [])); }
+    catch (e2) { failed.push({ id: u.id, error: e2.message }); }
+  }
+
   return {
     ok: true,
     mode: 'apply',
     country,
-    inserted_count: willInsert.length,                              // новые строки (как раньше)
-    updated_count: Math.max(0, upserted.length - willInsert.length), // обновлённые
-    upserted_count: upserted.length,
+    inserted_count: inserted.length,
+    updated_count: updated.length,
+    upserted_count: inserted.length + updated.length,
     failed_count: failed.length,
     failed_sample: failed.slice(0, 10),
-    sum_upserted: upserted.reduce((s, p) => s + parseFloat(p.amount || 0), 0)
+    sum_upserted: inserted.reduce((s, p) => s + parseFloat(p.amount || 0), 0)
   };
 }
 
