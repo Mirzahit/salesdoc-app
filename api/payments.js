@@ -312,7 +312,8 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
   // Существующие ключи тянем С ПАГИНАЦИЕЙ (обход лимита 1000), иначе строки считались бы
   // новыми и дублировались. Прежний on_conflict upsert вообще падал (нет индекса в БД).
   // Обновление изменённых строк — отдельной задачей, чтобы не рисковать здесь.
-  const existingKeysFull = new Set();
+  // v623: + обновление изменённых строк. Карта существующих с id и сравниваемыми полями.
+  const existingMap = new Map(); // key -> строка (id + поля для сравнения)
   {
     const PAGE = 1000;
     let offset = 0;
@@ -320,20 +321,42 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
       const pageRows = await sbSelect('payments', {
         country: 'eq.' + country,
         source: 'eq.sheets_import',
-        select: 'sheet_id,sheet_tab,sheet_row',
+        select: 'id,sheet_id,sheet_tab,sheet_row,amount,seated,category,category_raw,paid_at,manager_name,bank,activation_date,period_months,qty,price,tech_support',
         order: 'id.desc',
         limit: String(PAGE),
         offset: String(offset)
       });
-      pageRows.forEach(r => existingKeysFull.add(`${r.sheet_id}::${r.sheet_tab}::${r.sheet_row}`));
+      pageRows.forEach(r => existingMap.set(`${r.sheet_id}::${r.sheet_tab}::${r.sheet_row}`, r));
       if (pageRows.length < PAGE) break;
       offset += PAGE;
     }
   }
 
+  // Нормализованное сравнение полей — чтобы не плодить ложные апдейты каждый прогон.
+  const CMP = ['amount', 'seated', 'category', 'category_raw', 'paid_at', 'manager_name', 'bank', 'activation_date', 'period_months', 'qty', 'price', 'tech_support'];
+  function nrm(f, v) {
+    if (v == null) return '';
+    if (f === 'amount' || f === 'price' || f === 'qty' || f === 'period_months') return String(Number(v));
+    if (f === 'seated') return v ? '1' : '0';
+    if (f === 'paid_at' || f === 'activation_date') return String(v).slice(0, 10);
+    return String(v);
+  }
+
   const cleanRows = parsedRows.map(({ _key, _already_exists, ...row }) => row);
-  const toInsert = cleanRows.filter(row => !existingKeysFull.has(`${row.sheet_id}::${row.sheet_tab}::${row.sheet_row}`));
+  const toInsert = [];
+  const toUpdate = []; // { id, patch }
+  for (const row of cleanRows) {
+    const ex = existingMap.get(`${row.sheet_id}::${row.sheet_tab}::${row.sheet_row}`);
+    if (!ex) { toInsert.push(row); continue; }
+    const patch = {};
+    for (const f of CMP) {
+      if (nrm(f, row[f]) !== nrm(f, ex[f])) patch[f] = row[f];
+    }
+    if (Object.keys(patch).length) toUpdate.push({ id: ex.id, patch });
+  }
+
   const inserted = [];
+  const updated = [];
   const failed = [];
   const CHUNK = 200;
   for (let i = 0; i < toInsert.length; i += CHUNK) {
@@ -347,14 +370,18 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
       }
     }
   }
+  for (const u of toUpdate) {
+    try { const r = await sbUpdate('payments', { id: 'eq.' + u.id }, u.patch); updated.push(...(r || [])); }
+    catch (e2) { failed.push({ id: u.id, error: e2.message }); }
+  }
 
   return {
     ok: true,
     mode: 'apply',
     country,
     inserted_count: inserted.length,
-    updated_count: 0,
-    upserted_count: inserted.length,
+    updated_count: updated.length,
+    upserted_count: inserted.length + updated.length,
     failed_count: failed.length,
     failed_sample: failed.slice(0, 10),
     sum_upserted: inserted.reduce((s, p) => s + parseFloat(p.amount || 0), 0)
