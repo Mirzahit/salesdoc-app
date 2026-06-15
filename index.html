@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v620</title>
+<title>SalesDoc — Финансовый Дашборд v621</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5785,7 +5785,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div id="churn-content" style="display:none">
  <div id="churn-summary-row" style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap"></div>
  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:14px">
- <div class="panel"><div class="panel-title" style="font-size:13px;margin-bottom:10px">Отток и спады по месяцам</div><div style="position:relative;height:240px"><canvas id="churn-chart-months"></canvas></div></div>
+ <div class="panel"><div class="panel-title" style="font-size:13px;margin-bottom:10px">Отток и спады по месяцам (лицензии)</div><div style="position:relative;height:240px"><canvas id="churn-chart-months"></canvas></div></div>
  <div class="panel"><div class="panel-title" style="font-size:13px;margin-bottom:10px">Причины ухода</div><div style="position:relative;height:240px"><canvas id="churn-chart-reasons"></canvas></div></div>
  <div class="panel"><div class="panel-title" style="font-size:13px;margin-bottom:10px">Какие лицензии уходят</div><div style="position:relative;height:240px"><canvas id="churn-chart-licenses"></canvas></div></div>
  <div class="panel"><div class="panel-title" style="font-size:13px;margin-bottom:10px">Отток против спадов</div><div style="position:relative;height:240px"><canvas id="churn-chart-split"></canvas></div></div>
@@ -20170,6 +20170,8 @@ function _churnNum(v){ if(v==null||v==='')return null; if(typeof v==='number')re
 function _churnCurMonth(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function _churnKindLabel(k){ return {churn:'Отток',decline:'Спад',growth:'Прирост',new:'Новый'}[k]||'—'; }
 function _churnFmtMoney(n){ n=Number(n)||0; return Math.round(n).toLocaleString('ru-RU'); }
+var _CHURN_MONTHS_RU=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+function _churnMonthName(ym){ var p=String(ym||'').split('-'); var mi=parseInt(p[1],10)-1; var nm=_CHURN_MONTHS_RU[mi]||ym; return p[0]?(nm+' '+p[0]):nm; }
 
 function churnInit(){ var mi=document.getElementById('churn-month'); if(mi && !mi.value) mi.value=_churnCurMonth(); churnLoad(); }
 
@@ -20461,11 +20463,12 @@ function churnRenderCharts(){
  var grid='rgba(148,163,184,.12)';
  var rows=churnGetFiltered();
 
- // 1) По месяцам — отток + спад. Респектит фильтр причины (период не применяем, чтобы тренд был по всем месяцам).
+ // 1) По месяцам — отток + спад в КОЛИЧЕСТВЕ ЛИЦЕНЗИЙ (по компаниям уже есть «Отток против спадов»).
+ // Респектит фильтр причины (период не применяем, чтобы тренд был по всем месяцам).
  // При одном месяце рисуем группированные столбцы (линию из одной точки построить нельзя), при двух и более — линию с точками.
  var _reasonF=((document.getElementById('churn-filter-reason')||{}).value||'').trim();
  var byMonth={};
- _churnUnified().forEach(function(r){ if(_reasonF && (r.reason||'').trim()!==_reasonF) return; var m=(r.period_month||'').slice(0,7); if(!m) return; byMonth[m]=byMonth[m]||{churn:0,decline:0}; if(r.kind==='churn')byMonth[m].churn++; else if(r.kind==='decline')byMonth[m].decline++; });
+ _churnUnified().forEach(function(r){ if(_reasonF && (r.reason||'').trim()!==_reasonF) return; var m=(r.period_month||'').slice(0,7); if(!m) return; byMonth[m]=byMonth[m]||{churn:0,decline:0}; var _lic=Number(r.licTotal)||0; if(r.kind==='churn')byMonth[m].churn+=_lic; else if(r.kind==='decline')byMonth[m].decline+=_lic; });
  var months=Object.keys(byMonth).sort();
  var c1=document.getElementById('churn-chart-months');
  if(c1){
@@ -20479,7 +20482,7 @@ function churnRenderCharts(){
     {label:'Отток',data:_dChurn,borderColor:'#EF4444',backgroundColor:'rgba(239,68,68,.12)',tension:.3,fill:true,borderWidth:2,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:'#EF4444'},
     {label:'Спад',data:_dDecline,borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,.12)',tension:.3,fill:true,borderWidth:2,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:'#F59E0B'}
    ];
-  _churnCharts.months=new Chart(c1.getContext('2d'),{type:_asBars?'bar':'line',data:{labels:months,datasets:_ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:txt,font:{size:11}}}},scales:{x:{ticks:{color:txt},grid:{color:grid}},y:{ticks:{color:txt,precision:0},grid:{color:grid},beginAtZero:true}}}});
+  _churnCharts.months=new Chart(c1.getContext('2d'),{type:_asBars?'bar':'line',data:{labels:months.map(_churnMonthName),datasets:_ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:txt,font:{size:11}}}},scales:{x:{ticks:{color:txt},grid:{color:grid}},y:{ticks:{color:txt,precision:0},grid:{color:grid},beginAtZero:true}}}});
  }
 
  // 2) Причины (по фильтру)
