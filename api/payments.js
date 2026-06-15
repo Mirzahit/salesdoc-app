@@ -228,6 +228,10 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
   const skippedByMonth = {};
   const sumByMonth = {};
   let totalParsed = 0;
+  // v624: для удаления сирот — какие вкладки в этом прогоне реально прочитались (нельзя
+  // чистить вкладку, чей лист не загрузился) и какие позиции (sheet_row) в них присутствуют.
+  const fetchedTabsOk = new Set();
+  const presentKeysByTab = {};
 
   // v618: тянем листы месяцев ПАРАЛЛЕЛЬНО. Apps Script cold-start 11-19с; последовательная
   // загрузка упиралась в таймаут (инцидент v594), из-за чего окно резали до 2 мес — и правки в
@@ -246,7 +250,10 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
 
   for (const { mi, monthName, data, error } of fetched) {
     if (error) { sumByMonth[monthName] = null; continue; }
-    if (!data.rows || data.rows.length < 2) { sumByMonth[monthName] = 0; continue; }
+    if (!data.rows || data.rows.length < 2) { sumByMonth[monthName] = 0; fetchedTabsOk.add(monthName); presentKeysByTab[monthName] = new Set(); continue; }
+    // v624: вкладка прочиталась успешно — её сироты можно чистить.
+    fetchedTabsOk.add(monthName);
+    if (!presentKeysByTab[monthName]) presentKeysByTab[monthName] = new Set();
     // headerIdx
     let headerIdx = -1;
     for (let ri = 0; ri < data.rows.length; ri++) {
@@ -268,6 +275,7 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
       parsed.client_id = clientByNorm[_normName(parsed.company_name)] || null;
       parsed._key = `${parsed.sheet_tab}::${parsed.sheet_row}`;
       parsed._already_exists = existingKeys.has(parsed._key);
+      presentKeysByTab[monthName].add(parsed.sheet_row);
       parsedRows.push(parsed);
       monthSum += parsed.amount;
       monthCount++;
@@ -277,42 +285,12 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
     skippedByMonth[monthName] = monthCount;
   }
 
-  const willInsert = parsedRows.filter(p => !p._already_exists);
-  const willSkip = parsedRows.filter(p => p._already_exists);
   const totalSum = parsedRows.reduce((s, p) => s + (p.amount || 0), 0);
-  const insertSum = willInsert.reduce((s, p) => s + (p.amount || 0), 0);
-  const unmatched = willInsert.filter(p => !p.client_id);
-  const matchedClientsCount = willInsert.filter(p => p.client_id).length;
 
-  if (dryRun) {
-    return {
-      ok: true,
-      mode: 'dry_run',
-      country,
-      total_parsed: totalParsed,
-      already_in_supabase: willSkip.length,
-      will_insert: willInsert.length,
-      will_match_existing_client: matchedClientsCount,
-      will_be_unmatched: unmatched.length,
-      sum_by_month_sheets: sumByMonth,
-      total_sum_parsed: totalSum,
-      sum_to_insert: insertSum,
-      sample_unmatched: unmatched.slice(0, 10).map(p => ({
-        company_name: p.company_name, paid_at: p.paid_at, amount: p.amount, category_raw: p.category_raw
-      })),
-      sample_insert: willInsert.slice(0, 5).map(p => ({
-        company_name: p.company_name, paid_at: p.paid_at, amount: p.amount, client_id: p.client_id, sheet_tab: p.sheet_tab, sheet_row: p.sheet_row
-      }))
-    };
-  }
-
-  // v622-fix: записываем НОВЫЕ строки через sbInsert (рабочий путь). Ключ дедупа — ПОЛНЫЙ
-  // натуральный ключ sheet_id+sheet_tab+sheet_row: в KZ есть строки из ДВУХ исходных таблиц
-  // (старая 11ErpSR и текущая 1WJJRqPvQ) с одинаковыми tab/row — без sheet_id они путаются.
-  // Существующие ключи тянем С ПАГИНАЦИЕЙ (обход лимита 1000), иначе строки считались бы
-  // новыми и дублировались. Прежний on_conflict upsert вообще падал (нет индекса в БД).
-  // Обновление изменённых строк — отдельной задачей, чтобы не рисковать здесь.
-  // v623: + обновление изменённых строк. Карта существующих с id и сравниваемыми полями.
+  // v622-fix / v623 / v624: ключ дедупа — ПОЛНЫЙ натуральный ключ sheet_id+sheet_tab+sheet_row:
+  // в KZ есть строки из ДВУХ исходных таблиц (старая 11ErpSR и текущая 1WJJRqPvQ) с одинаковыми
+  // tab/row — без sheet_id они путаются. Существующие тянем С ПАГИНАЦИЕЙ (обход лимита 1000).
+  // Строим карту ДО dry-run, чтобы отчёт (вставка/обновление/удаление) был точным.
   const existingMap = new Map(); // key -> строка (id + поля для сравнения)
   {
     const PAGE = 1000;
@@ -321,7 +299,7 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
       const pageRows = await sbSelect('payments', {
         country: 'eq.' + country,
         source: 'eq.sheets_import',
-        select: 'id,sheet_id,sheet_tab,sheet_row,amount,seated,category,category_raw,paid_at,manager_name,bank,activation_date,period_months,qty,price,tech_support',
+        select: 'id,sheet_id,sheet_tab,sheet_row,company_name,client_id,amount,seated,category,category_raw,paid_at,manager_name,bank,activation_date,period_months,qty,price,tech_support',
         order: 'id.desc',
         limit: String(PAGE),
         offset: String(offset)
@@ -333,7 +311,9 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
   }
 
   // Нормализованное сравнение полей — чтобы не плодить ложные апдейты каждый прогон.
-  const CMP = ['amount', 'seated', 'category', 'category_raw', 'paid_at', 'manager_name', 'bank', 'activation_date', 'period_months', 'qty', 'price', 'tech_support'];
+  // v624: + company_name, client_id — без них при «переезде» позиции на другую компанию
+  //       имя клиента оставалось старым (строки-франкенштейны).
+  const CMP = ['company_name', 'client_id', 'amount', 'seated', 'category', 'category_raw', 'paid_at', 'manager_name', 'bank', 'activation_date', 'period_months', 'qty', 'price', 'tech_support'];
   function nrm(f, v) {
     if (v == null) return '';
     if (f === 'amount' || f === 'price' || f === 'qty' || f === 'period_months') return String(Number(v));
@@ -355,8 +335,61 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
     if (Object.keys(patch).length) toUpdate.push({ id: ex.id, patch });
   }
 
+  // v624: СИРОТЫ — строки базы той же таблицы (cfg.sheet_id), чьей позиции (sheet_row) в листе
+  // больше нет. Раньше импорт их не удалял → копились фантомы (удалили/сдвинули строку в листе,
+  // а в базе она висит). Удаляем только по вкладкам, реально прочитанным в этом прогоне
+  // (fetchedTabsOk), и только из текущей таблицы — архивную (старый sheet_id) не трогаем.
+  const existingByTab = {};
+  for (const ex of existingMap.values()) {
+    if (ex.sheet_id !== cfg.sheet_id) continue; // чужую/архивную таблицу не трогаем
+    (existingByTab[ex.sheet_tab] = existingByTab[ex.sheet_tab] || []).push(ex);
+  }
+  const toDelete = [];
+  const deleteGuardSkipped = [];
+  for (const tab of Object.keys(existingByTab)) {
+    if (!fetchedTabsOk.has(tab)) continue; // вкладка не загрузилась в этом прогоне — не трогаем
+    const present = presentKeysByTab[tab] || new Set();
+    const exRows = existingByTab[tab];
+    const orphans = exRows.filter(ex => !present.has(ex.sheet_row));
+    // Стоп-предохранитель: если вкладка вдруг хочет удалить >60% своих строк (и их заметно
+    // много) — это похоже на битую/частичную загрузку листа. Пропускаем и логируем.
+    if (exRows.length >= 20 && orphans.length > exRows.length * 0.6) {
+      deleteGuardSkipped.push({ tab, existing: exRows.length, would_delete: orphans.length });
+      continue;
+    }
+    orphans.forEach(o => toDelete.push(o));
+  }
+
+  const unmatched = toInsert.filter(p => !p.client_id);
+
+  if (dryRun) {
+    return {
+      ok: true,
+      mode: 'dry_run',
+      country,
+      total_parsed: totalParsed,
+      will_insert: toInsert.length,
+      will_update: toUpdate.length,
+      will_delete: toDelete.length,
+      will_be_unmatched: unmatched.length,
+      sum_by_month_sheets: sumByMonth,
+      total_sum_parsed: totalSum,
+      delete_guard_skipped: deleteGuardSkipped,
+      sample_delete: toDelete.slice(0, 25).map(o => ({
+        company_name: o.company_name, paid_at: o.paid_at, amount: o.amount, category_raw: o.category_raw, manager_name: o.manager_name, sheet_tab: o.sheet_tab, sheet_row: o.sheet_row
+      })),
+      sample_unmatched: unmatched.slice(0, 10).map(p => ({
+        company_name: p.company_name, paid_at: p.paid_at, amount: p.amount, category_raw: p.category_raw
+      })),
+      sample_insert: toInsert.slice(0, 5).map(p => ({
+        company_name: p.company_name, paid_at: p.paid_at, amount: p.amount, client_id: p.client_id, sheet_tab: p.sheet_tab, sheet_row: p.sheet_row
+      }))
+    };
+  }
+
   const inserted = [];
   const updated = [];
+  const deleted = [];
   const failed = [];
   const CHUNK = 200;
   for (let i = 0; i < toInsert.length; i += CHUNK) {
@@ -374,6 +407,17 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
     try { const r = await sbUpdate('payments', { id: 'eq.' + u.id }, u.patch); updated.push(...(r || [])); }
     catch (e2) { failed.push({ id: u.id, error: e2.message }); }
   }
+  // v624: удаляем сирот напрямую (sbDelete). Это sheets_import — управляется только синком,
+  // ручной DELETE-эндпоинт их и так не трогает.
+  // ВКЛ только при env SYNC_DELETE_ORPHANS=1 — чтобы после деплоя крон не начал чистить
+  // ДО проверки dry-run. Пока флаг выключен — считаем сирот, но не трогаем (would_delete).
+  const DELETE_ENABLED = String(process.env.SYNC_DELETE_ORPHANS || '') === '1';
+  if (DELETE_ENABLED) {
+    for (const o of toDelete) {
+      try { await sbDelete('payments', { id: 'eq.' + o.id }); deleted.push(o.id); }
+      catch (e2) { failed.push({ id: o.id, op: 'delete', error: e2.message }); }
+    }
+  }
 
   return {
     ok: true,
@@ -381,6 +425,10 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
     country,
     inserted_count: inserted.length,
     updated_count: updated.length,
+    delete_enabled: DELETE_ENABLED,
+    deleted_count: deleted.length,
+    would_delete_count: toDelete.length,
+    delete_guard_skipped: deleteGuardSkipped,
     upserted_count: inserted.length + updated.length,
     failed_count: failed.length,
     failed_sample: failed.slice(0, 10),

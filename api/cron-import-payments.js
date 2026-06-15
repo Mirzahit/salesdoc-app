@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     // monthsBack=0 — полный синк всех месяцев одной страны (правки в старых месяцах —
     // флаг «посажено», суммы — тоже подхватываются, цель v618 сохранена).
     const r = await importSheetsForCountry(country, false, 0);
-    ran.push({ country, inserted: r.inserted_count, updated: r.updated_count, failed: r.failed_count });
+    ran.push({ country, inserted: r.inserted_count, updated: r.updated_count, deleted: r.deleted_count, failed: r.failed_count, delete_guard_skipped: r.delete_guard_skipped });
   } catch (e) {
     ran.push({ country, error: String((e && e.message) || e) });
   }
