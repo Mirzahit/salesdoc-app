@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v619</title>
+<title>SalesDoc — Финансовый Дашборд v620</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20461,15 +20461,26 @@ function churnRenderCharts(){
  var grid='rgba(148,163,184,.12)';
  var rows=churnGetFiltered();
 
- // 1) По месяцам — отток + спад (по всему единому списку, без фильтра типа)
+ // 1) По месяцам — отток + спад. Респектит фильтр причины (период не применяем, чтобы тренд был по всем месяцам).
+ // При одном месяце рисуем группированные столбцы (линию из одной точки построить нельзя), при двух и более — линию с точками.
+ var _reasonF=((document.getElementById('churn-filter-reason')||{}).value||'').trim();
  var byMonth={};
- _churnUnified().forEach(function(r){ var m=(r.period_month||'').slice(0,7); if(!m) return; byMonth[m]=byMonth[m]||{churn:0,decline:0}; if(r.kind==='churn')byMonth[m].churn++; else if(r.kind==='decline')byMonth[m].decline++; });
+ _churnUnified().forEach(function(r){ if(_reasonF && (r.reason||'').trim()!==_reasonF) return; var m=(r.period_month||'').slice(0,7); if(!m) return; byMonth[m]=byMonth[m]||{churn:0,decline:0}; if(r.kind==='churn')byMonth[m].churn++; else if(r.kind==='decline')byMonth[m].decline++; });
  var months=Object.keys(byMonth).sort();
  var c1=document.getElementById('churn-chart-months');
- if(c1) _churnCharts.months=new Chart(c1.getContext('2d'),{type:'line',data:{labels:months,datasets:[
-   {label:'Отток',data:months.map(function(m){return byMonth[m].churn;}),borderColor:'#EF4444',backgroundColor:'rgba(239,68,68,.1)',tension:.3,fill:true},
-   {label:'Спад',data:months.map(function(m){return byMonth[m].decline;}),borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,.1)',tension:.3,fill:true}
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:txt,font:{size:11}}}},scales:{x:{ticks:{color:txt},grid:{color:grid}},y:{ticks:{color:txt,precision:0},grid:{color:grid},beginAtZero:true}}}});
+ if(c1){
+  var _dChurn=months.map(function(m){return byMonth[m].churn;});
+  var _dDecline=months.map(function(m){return byMonth[m].decline;});
+  var _asBars=months.length<2; // один месяц → столбцы, выглядят как нормальный график
+  var _ds=_asBars?[
+    {label:'Отток',data:_dChurn,backgroundColor:'#EF4444',borderRadius:4,maxBarThickness:54},
+    {label:'Спад',data:_dDecline,backgroundColor:'#F59E0B',borderRadius:4,maxBarThickness:54}
+   ]:[
+    {label:'Отток',data:_dChurn,borderColor:'#EF4444',backgroundColor:'rgba(239,68,68,.12)',tension:.3,fill:true,borderWidth:2,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:'#EF4444'},
+    {label:'Спад',data:_dDecline,borderColor:'#F59E0B',backgroundColor:'rgba(245,158,11,.12)',tension:.3,fill:true,borderWidth:2,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:'#F59E0B'}
+   ];
+  _churnCharts.months=new Chart(c1.getContext('2d'),{type:_asBars?'bar':'line',data:{labels:months,datasets:_ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:txt,font:{size:11}}}},scales:{x:{ticks:{color:txt},grid:{color:grid}},y:{ticks:{color:txt,precision:0},grid:{color:grid},beginAtZero:true}}}});
+ }
 
  // 2) Причины (по фильтру)
  var rc={}; rows.forEach(function(r){ var x=(r.reason||'').trim()||'Не указана'; rc[x]=(rc[x]||0)+1; });
