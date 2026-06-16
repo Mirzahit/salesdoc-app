@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v627</title>
+<title>SalesDoc — Финансовый Дашборд v628</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21280,8 +21280,9 @@ function parsePlanData(rows) {
 
  // KPI row
  if (curAgent && col0.indexOf('KPI') === 0) {
- var plan = parseFloat(col3) || 0;
- var fact = parseFloat(col4) || 0;
+ // v628: пробел как разделитель тысяч («7 800000») рвал parseFloat → план парсился как 7. Чистим пробелы.
+ var plan = parseFloat(String(col3).replace(/\s/g,'')) || 0;
+ var fact = parseFloat(String(col4).replace(/\s/g,'')) || 0;
  var pct = plan > 0 ? fact / plan : 0;
  var forecast = parseFloat(cv(6));
  if (!isFinite(forecast)) forecast = null; /* v208: пробельные строки выдавали NaN → "NaN%" в карточке */
@@ -21297,8 +21298,8 @@ function parsePlanData(rows) {
 
  // Курс section (different format - col0 has sub-agent names)
  if (curAgent && curAgent.name === 'Курс' && col0 !== '' && col0.indexOf('KPI') !== 0) {
- var plan2 = parseFloat(col3) || 0;
- var fact2 = parseFloat(col4) || 0;
+ var plan2 = parseFloat(String(col3).replace(/\s/g,'')) || 0; // v628: см. выше — чистим пробелы-разделители
+ var fact2 = parseFloat(String(col4).replace(/\s/g,'')) || 0;
  var pct2 = plan2 > 0 ? fact2 / plan2 : 0;
  var forecast2 = parseFloat(cv(6));
  if (!isFinite(forecast2)) forecast2 = null; /* v208: тот же гард для секции Курс */

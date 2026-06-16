@@ -232,6 +232,10 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
   // чистить вкладку, чей лист не загрузился) и какие позиции (sheet_row) в них присутствуют.
   const fetchedTabsOk = new Set();
   const presentKeysByTab = {};
+  // v628: физически присутствующие строки (по непустой колонке «Компания»), НЕЗАВИСИМО от успеха
+  // парсинга. Нужно чтобы НЕ удалять как «сироту» строку, которая в листе ЕСТЬ, но _parseRow вернул
+  // null (amount<=0, пустая сумма и т.п.). Раньше такие строки ошибочно попадали в удаление.
+  const physicalKeysByTab = {};
 
   // v618: тянем листы месяцев ПАРАЛЛЕЛЬНО. Apps Script cold-start 11-19с; последовательная
   // загрузка упиралась в таймаут (инцидент v594), из-за чего окно резали до 2 мес — и правки в
@@ -250,10 +254,11 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
 
   for (const { mi, monthName, data, error } of fetched) {
     if (error) { sumByMonth[monthName] = null; continue; }
-    if (!data.rows || data.rows.length < 2) { sumByMonth[monthName] = 0; fetchedTabsOk.add(monthName); presentKeysByTab[monthName] = new Set(); continue; }
+    if (!data.rows || data.rows.length < 2) { sumByMonth[monthName] = 0; fetchedTabsOk.add(monthName); presentKeysByTab[monthName] = new Set(); physicalKeysByTab[monthName] = new Set(); continue; }
     // v624: вкладка прочиталась успешно — её сироты можно чистить.
     fetchedTabsOk.add(monthName);
     if (!presentKeysByTab[monthName]) presentKeysByTab[monthName] = new Set();
+    if (!physicalKeysByTab[monthName]) physicalKeysByTab[monthName] = new Set();
     // headerIdx
     let headerIdx = -1;
     for (let ri = 0; ri < data.rows.length; ri++) {
@@ -266,6 +271,9 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
     let monthCount = 0;
     data.rows.slice(startIdx).forEach((row, idx) => {
       const sheetRowAbs = startIdx + idx + 1; // 1-based в Sheets
+      // v628: фиксируем физическое присутствие строки ДО парсинга (по непустой колонке «Компания»),
+      // чтобы нераспарсенная, но реально существующая строка не была удалена как сирота.
+      if (row && row[1] != null && String(row[1]).trim() !== '') physicalKeysByTab[monthName].add(sheetRowAbs);
       const parsed = _parseRow(row, headerIdx, hdrRow, cfg, monthName, mi, sheetRowAbs);
       if (!parsed) return;
       parsed.country = country;
@@ -349,8 +357,11 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
   for (const tab of Object.keys(existingByTab)) {
     if (!fetchedTabsOk.has(tab)) continue; // вкладка не загрузилась в этом прогоне — не трогаем
     const present = presentKeysByTab[tab] || new Set();
+    const physical = physicalKeysByTab[tab] || new Set();
     const exRows = existingByTab[tab];
-    const orphans = exRows.filter(ex => !present.has(ex.sheet_row));
+    // v628: сирота = строки нет в листе НИ как распарсенной, НИ как физически присутствующей.
+    // Если строка физически есть (непустая «Компания»), но не распарсилась — НЕ удаляем.
+    const orphans = exRows.filter(ex => !present.has(ex.sheet_row) && !physical.has(ex.sheet_row));
     // Стоп-предохранитель: если вкладка вдруг хочет удалить >60% своих строк (и их заметно
     // много) — это похоже на битую/частичную загрузку листа. Пропускаем и логируем.
     if (exRows.length >= 20 && orphans.length > exRows.length * 0.6) {
@@ -644,6 +655,27 @@ async function handlePatch(req, res) {
   }
   if (patch.category !== undefined && patch.category && !ALLOWED_CATEGORIES.includes(patch.category)) {
     return res.status(400).json({ ok: false, error: 'category должен быть один из: ' + ALLOWED_CATEGORIES.join(', ') });
+  }
+  // v628: валидация числовых полей — не пускаем NaN/мусор/отрицательные (на них завязаны суммы и бонусы).
+  // null допустим (очистка поля). undefined — поле не трогаем.
+  const _numField = (name, opts) => {
+    opts = opts || {};
+    if (patch[name] === undefined || patch[name] === null) return true;
+    let n = Number(patch[name]);
+    if (!Number.isFinite(n)) { res.status(400).json({ ok: false, error: name + ' должен быть числом' }); return false; }
+    if (opts.min != null && n < opts.min) { res.status(400).json({ ok: false, error: name + ' не может быть меньше ' + opts.min }); return false; }
+    if (opts.max != null && n > opts.max) n = opts.max;
+    patch[name] = opts.int ? Math.round(n) : n;
+    return true;
+  };
+  if (!_numField('amount_planned', { min: 0 })) return;
+  if (!_numField('qty', { min: 0 })) return;
+  if (!_numField('price', { min: 0 })) return;
+  if (!_numField('period_months', { min: 0, max: 60, int: true })) return;
+  // v628: держим category и category_raw согласованными (бонус читает category_raw, дашборды — category).
+  // Если меняют только сырую статью — пересчитываем category из единого маппинга.
+  if (patch.category_raw !== undefined && patch.category === undefined) {
+    patch.category = _mapCategory(patch.category_raw);
   }
   const updated = await sbUpdate('payments', { id: 'eq.' + id }, patch);
   if (!updated.length) return res.status(404).json({ ok: false, error: 'платёж не найден' });
