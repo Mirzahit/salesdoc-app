@@ -445,12 +445,20 @@ export default async function handler(req, res){
       const now = new Date();
       const yy = now.getFullYear(), mm = now.getMonth();
       const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-      let fromDate, label;
-      if(period === 'year'){ fromDate = new Date(yy,0,1); label = 'Год ' + yy; }
-      else if(period === 'quarter'){ const q = Math.floor(mm/3); fromDate = new Date(yy, q*3, 1); label = 'Квартал ' + (q+1) + ' · ' + yy; }
-      else { fromDate = new Date(yy, mm, 1); label = MONTHS_RU[mm] + ' ' + yy; }
+      let fromDate, toDate, label;
+      // v630: кастомный диапазон from/to (YYYY-MM-DD). Если валиден — приоритет над period.
+      const qFrom = String((req.query && req.query.from) || '').slice(0, 10);
+      const qTo = String((req.query && req.query.to) || '').slice(0, 10);
+      const _validDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+      if(_validDate(qFrom) && _validDate(qTo)){
+        fromDate = new Date(qFrom + 'T00:00:00');
+        toDate = new Date(qTo + 'T23:59:59');
+        label = qFrom + ' — ' + qTo;
+      } else if(period === 'year'){ fromDate = new Date(yy,0,1); toDate = now; label = 'Год ' + yy; }
+      else if(period === 'quarter'){ const q = Math.floor(mm/3); fromDate = new Date(yy, q*3, 1); toDate = now; label = 'Квартал ' + (q+1) + ' · ' + yy; }
+      else { fromDate = new Date(yy, mm, 1); toDate = now; label = MONTHS_RU[mm] + ' ' + yy; }
       const fromTs = Math.floor(fromDate.getTime()/1000);
-      const toTs = Math.floor(now.getTime()/1000);
+      const toTs = Math.floor(toDate.getTime()/1000);
 
       // воронка «Лиды» (как в getFunnel)
       const pls = await getPipelines(env);
