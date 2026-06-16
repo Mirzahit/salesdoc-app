@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v631</title>
+<title>SalesDoc — Финансовый Дашборд v632</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20468,7 +20468,7 @@ function churnStartEdit(td){
  ta.addEventListener('keydown',function(ev){ if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();save();} else if(ev.key==='Escape'){ev.preventDefault();done=true;churnRender();} });
  ta.addEventListener('blur',function(){ setTimeout(save,100); });
 }
-function _churnEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _churnEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); } // v632 SEC: + кавычки (безопасно и для атрибутного контекста)
 
 function _churnDestroy(){ Object.keys(_churnCharts).forEach(function(k){ try{ _churnCharts[k].destroy(); }catch(_){}}); _churnCharts={}; }
 
@@ -20538,7 +20538,10 @@ function churnExportCSV(){
 
 // ===== КАРТОЧКА КОМПАНИИ В ОТТОКЕ + СВЯЗЬ С КЛИЕНТОМ (v602) =====
 var _churnCardRec=null, _churnCardClient=null, _churnClientsCache=null;
-function _churnJs(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+// v632 SEC: значение идёт в onclick="...('+_churnJs(x)+'...)" — одинарная JS-строка внутри
+// двойных кавычек HTML-атрибута. Раньше экранировались только \ и ' → имя клиента из файла с " или
+// <обработчиком> ломало атрибут (хранимый XSS). Экранируем и кавычку, и &<>, и переводы строк.
+function _churnJs(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/[\r\n\t]/g,' '); }
 function _churnStatusLabel(s){ return {lead:'Лид',sale:'Продажа',onboarding:'Внедрение',active:'Действующий',paused:'Пауза',churned:'Отток'}[s]||s||'—'; }
 
 function churnOpenCard(ck, pm){

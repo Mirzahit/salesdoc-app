@@ -12,7 +12,7 @@
 // DELETE /api/churn?upload_batch_id=...&dataset=churn  → откат одной загрузки
 
 import { sbSelect, sbInsert, sbDelete, sbUpsert } from './_supabase.js';
-import { checkAuth } from './_auth.js';
+import { checkAuth, checkAdminToken } from './_auth.js';
 
 export const config = { maxDuration: 60 };
 
@@ -172,11 +172,22 @@ async function handleNote(req, res) {
 }
 
 async function handleDelete(req, res) {
+  // v632 SEC: откат загрузки — привилегированная мутация (безвозвратное удаление данных оттока).
+  // Раньше защищалась только публичным APP_TOKEN → любой мог откатить чужую загрузку (в т.ч. чужой
+  // страны), batchId предсказуем (imp_<timestamp>). Теперь — за админ-кодом + скоуп по стране.
+  const _g = checkAdminToken(req);
+  if (!_g.ok) return res.status(_g.unconfigured ? 503 : 403).json({ ok: false, error: _g.unconfigured ? 'Откат недоступен: не настроен ADMIN_TOKEN' : 'Нужен админ-код', needAdminToken: !_g.unconfigured });
   const q = req.query || {};
   const dataset = q.dataset === 'licenses' ? 'licenses' : 'churn';
   const table = TABLE[dataset];
   if (!q.upload_batch_id) return res.status(400).json({ ok: false, error: 'нужен upload_batch_id' });
-  await sbDelete(table, { upload_batch_id: 'eq.' + q.upload_batch_id });
+  const filter = { upload_batch_id: 'eq.' + q.upload_batch_id };
+  const country = String(q.country || '').toUpperCase();
+  if (country) {
+    if (country !== 'KZ' && country !== 'KG') return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+    filter.country = 'eq.' + country;
+  }
+  await sbDelete(table, filter);
   return res.status(200).json({ ok: true });
 }
 
