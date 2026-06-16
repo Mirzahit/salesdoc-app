@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v628</title>
+<title>SalesDoc — Финансовый Дашборд v629</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -7373,6 +7373,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="report-card-icon"></div>
  <div class="report-card-title">Топ клиенты</div>
  <div class="report-card-desc">Рейтинг клиентов по объёму оплат за период</div>
+ </div>
+ <div class="report-card" onclick="reportGenerate('loss_reasons')">
+ <div class="report-card-icon"></div>
+ <div class="report-card-title">Причины отказа</div>
+ <div class="report-card-desc">Почему и на какую сумму теряются сделки — из amoCRM, с разбивкой по менеджерам</div>
  </div>
  <div class="report-card report-card-add" onclick="showNotif('Скоро','Новые отчёты можно будет добавить здесь')">
  <div class="report-card-icon" style="opacity:.4"></div>
@@ -26384,6 +26389,81 @@ function ltvCalculate() {
  }
 }
 
+// v629: отчёт «Причины отказа» из amoCRM. Период — переключатель; данные одним запросом
+// (агрегат + сделки), все срезы строятся на клиенте. Строки из amo экранируются sanitize().
+function _lossReasonsSetPeriod(p){ window._lossReasonsPeriod = p; _renderLossReasons(); }
+function _lossReasonsToggle(idx){ var el = document.getElementById('lr-deals-' + idx); if(el) el.style.display = (el.style.display === 'none' ? 'table-row' : 'none'); }
+async function _renderLossReasons(){
+ var resultEl = document.getElementById('report-result');
+ var titleEl = document.getElementById('report-result-title');
+ var bodyEl = document.getElementById('report-result-body');
+ if(!bodyEl) return;
+ if(resultEl) resultEl.style.display = 'block';
+ if(titleEl) titleEl.textContent = 'Причины отказа';
+ var period = window._lossReasonsPeriod || 'this_month';
+ var tabs = [['this_month','Месяц'],['quarter','Квартал'],['year','Год']];
+ var tabsHtml = '<div style="display:flex;gap:8px;margin-bottom:16px">' + tabs.map(function(t){
+  var on = t[0] === period;
+  return '<button onclick="_lossReasonsSetPeriod(\'' + t[0] + '\')" style="padding:6px 16px;border-radius:8px;border:1px solid ' + (on?'var(--gold-deep)':'var(--dark-border)') + ';background:' + (on?'rgba(202,168,74,.12)':'transparent') + ';color:' + (on?'var(--gold-bright)':'var(--text-secondary)') + ';cursor:pointer;font-size:12px;font-weight:600">' + t[1] + '</button>';
+ }).join('') + '</div>';
+ bodyEl.innerHTML = tabsHtml + '<div style="padding:36px;text-align:center;color:var(--text-muted)">Загрузка из amoCRM…</div>';
+ var country = (typeof currentCountry !== 'undefined' ? currentCountry : 'KZ');
+ var data = null;
+ try { var r = await authFetch('/api/amo?action=loss_reasons&country=' + country + '&period=' + period); data = await r.json(); }
+ catch(e){ data = null; }
+ if(!data || data.error){
+  bodyEl.innerHTML = tabsHtml + '<div style="padding:24px;color:#D67373">Не удалось загрузить причины отказа: ' + sanitize((data && data.error) || 'нет связи с amoCRM') + '</div>';
+  return;
+ }
+ if(!data.total || !data.total.count){
+  bodyEl.innerHTML = tabsHtml + '<div style="padding:24px;color:var(--text-muted)">За период «' + sanitize((data.period && data.period.label) || '') + '» проигранных сделок нет.</div>';
+  return;
+ }
+ var cur = (typeof _CUR !== 'undefined' ? _CUR : '₸');
+ var totalSum = data.total.sum || 0;
+ var maxSum = data.reasons.reduce(function(m,x){ return Math.max(m, x.sum); }, 0) || 1;
+ var html = tabsHtml;
+ html += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Воронка: ' + sanitize((data.pipeline && data.pipeline.name) || '—') + ' · период: ' + sanitize((data.period && data.period.label) || '') + '</div>';
+ html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:18px">';
+ html += '<div style="padding:14px;background:rgba(214,115,115,.08);border-radius:10px;border:1px solid rgba(214,115,115,.2)"><div style="font-size:11px;color:var(--text-muted)">Потеряно сделок</div><div style="font-size:22px;font-weight:700;color:#D67373">' + data.total.count + '</div></div>';
+ html += '<div style="padding:14px;background:rgba(214,115,115,.08);border-radius:10px;border:1px solid rgba(214,115,115,.2)"><div style="font-size:11px;color:var(--text-muted)">На сумму</div><div style="font-size:22px;font-weight:700;color:#D67373">' + fmtFull(totalSum) + ' ' + cur + '</div></div>';
+ html += '</div>';
+ // горизонтальные бары топ-причин (по сумме)
+ html += '<div style="margin-bottom:20px">';
+ data.reasons.forEach(function(rs){
+  var pct = Math.round(rs.sum / maxSum * 100);
+  var share = totalSum > 0 ? Math.round(rs.sum / totalSum * 100) : 0;
+  html += '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>' + sanitize(rs.name) + '</span><span style="color:var(--text-muted)">' + rs.count + ' шт · ' + fmtFull(rs.sum) + ' ' + cur + ' · ' + share + '%</span></div><div style="height:8px;background:var(--dark-panel);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#D6737388,#D67373)"></div></div></div>';
+ });
+ html += '</div>';
+ // таблица причин с дрилл-дауном (клик по строке раскрывает сделки)
+ html += '<table class="data-table" style="width:100%"><thead><tr><th>Причина</th><th>Сделок</th><th>Сумма</th><th>Доля</th></tr></thead><tbody>';
+ data.reasons.forEach(function(rs, idx){
+  var share = totalSum > 0 ? (rs.sum / totalSum * 100).toFixed(1) : '0';
+  html += '<tr style="cursor:pointer" onclick="_lossReasonsToggle(' + idx + ')"><td style="font-weight:600">' + sanitize(rs.name) + '</td><td>' + rs.count + '</td><td style="font-weight:600">' + fmtFull(rs.sum) + ' ' + cur + '</td><td>' + share + '%</td></tr>';
+  var dealsFor = data.deals.filter(function(d){ return d.reason === rs.name; }).sort(function(a,b){ return b.amount - a.amount; });
+  var sub = '<tr id="lr-deals-' + idx + '" style="display:none"><td colspan="4" style="padding:0"><div style="padding:8px 12px;background:rgba(255,255,255,.02)"><table style="width:100%;font-size:12px"><thead><tr style="color:var(--text-muted)"><th style="text-align:left;padding:4px">Компания</th><th style="text-align:right;padding:4px">Сумма</th><th style="text-align:left;padding:4px">Менеджер</th><th style="text-align:left;padding:4px">Дата</th></tr></thead><tbody>';
+  dealsFor.forEach(function(d){
+   var url = data._subdomain ? ('https://' + data._subdomain + '.amocrm.ru/leads/detail/' + d.lead_id) : '';
+   var comp = url ? ('<a href="' + url + '" target="_blank" style="color:#7AA7D7">' + sanitize(d.company) + '</a>') : sanitize(d.company);
+   sub += '<tr><td style="padding:4px">' + comp + '</td><td style="text-align:right;padding:4px">' + fmtFull(d.amount) + ' ' + cur + '</td><td style="padding:4px">' + sanitize(d.manager) + '</td><td style="padding:4px">' + sanitize(d.date) + '</td></tr>';
+  });
+  sub += '</tbody></table></div></td></tr>';
+  html += sub;
+ });
+ html += '</tbody></table>';
+ // разбивка по менеджерам (из deals)
+ var byMgr = {};
+ data.deals.forEach(function(d){ var k = d.manager || '—'; if(!byMgr[k]) byMgr[k] = {name:k,count:0,sum:0}; byMgr[k].count++; byMgr[k].sum += d.amount; });
+ var mgrs = Object.keys(byMgr).map(function(k){ return byMgr[k]; }).sort(function(a,b){ return b.sum - a.sum; });
+ html += '<div style="font-size:13px;font-weight:700;margin:22px 0 10px">Потери по менеджерам</div>';
+ html += '<table class="data-table" style="width:100%"><thead><tr><th>Менеджер</th><th>Потеряно сделок</th><th>Сумма</th></tr></thead><tbody>';
+ mgrs.forEach(function(mg){ html += '<tr><td style="font-weight:600">' + sanitize(mg.name) + '</td><td>' + mg.count + '</td><td style="font-weight:600">' + fmtFull(mg.sum) + ' ' + cur + '</td></tr>'; });
+ html += '</tbody></table>';
+ if(data.truncated) html += '<div style="margin-top:12px;font-size:11px;color:#D6A372">Показаны первые сделки (упёрлись в лимит выгрузки) — за длинный период данные могут быть неполными.</div>';
+ bodyEl.innerHTML = html;
+}
+
 function reportGenerate(type) {
  var resultEl = document.getElementById('report-result');
  var titleEl = document.getElementById('report-result-title');
@@ -26394,6 +26474,9 @@ function reportGenerate(type) {
  var monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
  var curMonth = now.getMonth();
  var curYear = now.getFullYear();
+
+ // v629: причины отказа — асинхронный отчёт из amoCRM, рендер вынесен отдельно.
+ if (type === 'loss_reasons') { window._lossReasonsPeriod = window._lossReasonsPeriod || 'this_month'; _renderLossReasons(); return; }
 
  if (type === 'payments_month') {
  titleEl.textContent = 'Оплаты за ' + monthNames[curMonth] + ' ' + curYear;

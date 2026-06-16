@@ -436,6 +436,100 @@ export default async function handler(req, res){
         notes: notes
       });
     }
+    if(action === 'loss_reasons'){
+      // v629: агрегат причин отказа из amo (нативное поле loss_reason) за период.
+      // Возврат: { period, currency, pipeline, total{count,sum}, reasons[], deals[], truncated }.
+      const period = String(req.query.period || 'this_month').toLowerCase();
+      const pipelineId = req.query.pipeline_id ? Number(req.query.pipeline_id) : null;
+      // период → unix-границы (сек) для filter[closed_at]
+      const now = new Date();
+      const yy = now.getFullYear(), mm = now.getMonth();
+      const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+      let fromDate, label;
+      if(period === 'year'){ fromDate = new Date(yy,0,1); label = 'Год ' + yy; }
+      else if(period === 'quarter'){ const q = Math.floor(mm/3); fromDate = new Date(yy, q*3, 1); label = 'Квартал ' + (q+1) + ' · ' + yy; }
+      else { fromDate = new Date(yy, mm, 1); label = MONTHS_RU[mm] + ' ' + yy; }
+      const fromTs = Math.floor(fromDate.getTime()/1000);
+      const toTs = Math.floor(now.getTime()/1000);
+
+      // воронка «Лиды» (как в getFunnel)
+      const pls = await getPipelines(env);
+      const pl = (pipelineId && pls.find(x=>x.id===Number(pipelineId)))
+             || pls.find(x=>/^лид/i.test(x.name||''))
+             || pls.find(x=>x.is_main) || pls[0];
+      if(!pl) return res.status(200).json({ error:'no pipelines found' });
+      // статусы-потери: системный 143 или по названию
+      const _isLoss = (s)=>/закрыт.*не.*реализов|закрыт.*неуспех|закрытая база/i.test(s.name||'');
+      const lostStatusIds = pl.statuses.filter(s=> s.id===143 || _isLoss(s)).map(s=>s.id);
+      if(!lostStatusIds.length) lostStatusIds.push(143);
+
+      // каталог причин (id→имя) — резерв, если _embedded.loss_reason не придёт
+      const reasonNameById = {};
+      try {
+        for(let rp=1; rp<=5; rp++){
+          const rd = await amoFetch(`/leads/loss_reasons?limit=250&page=${rp}`, env);
+          const arr = (rd && rd._embedded && rd._embedded.loss_reasons) || [];
+          arr.forEach(r=>{ reasonNameById[r.id] = r.name; });
+          if(arr.length < 250) break;
+        }
+      } catch(_){}
+      // пользователи (id→имя менеджера)
+      const userNameById = {};
+      try {
+        for(let up=1; up<=5; up++){
+          const ud = await amoFetch(`/users?limit=250&page=${up}`, env);
+          const arr = (ud && ud._embedded && ud._embedded.users) || [];
+          arr.forEach(u=>{ userNameById[u.id] = u.name; });
+          if(arr.length < 250) break;
+        }
+      } catch(_){}
+
+      // фильтр по статусам-потерям + дате закрытия
+      let statusFilter = '';
+      lostStatusIds.forEach((sid,i)=>{ statusFilter += `&filter[statuses][${i}][pipeline_id]=${pl.id}&filter[statuses][${i}][status_id]=${sid}`; });
+      const dateFilter = `&filter[closed_at][from]=${fromTs}&filter[closed_at][to]=${toTs}`;
+
+      const deals = [];
+      let truncated = false;
+      const MAX_PAGES = 8;
+      for(let page=1; page<=MAX_PAGES; page++){
+        const data = await amoFetch(`/leads?limit=250&page=${page}&with=loss_reason${statusFilter}${dateFilter}`, env);
+        if(!data) break;
+        const batch = (data._embedded && data._embedded.leads) || [];
+        if(!batch.length) break;
+        batch.forEach(l=>{
+          let reason = '';
+          const lr = (l._embedded && l._embedded.loss_reason) || [];
+          if(lr.length && lr[0]) reason = lr[0].name || reasonNameById[lr[0].id] || '';
+          else if(l.loss_reason_id) reason = reasonNameById[l.loss_reason_id] || '';
+          if(!reason) reason = 'Причина не указана';
+          deals.push({
+            company: l.name || '(без названия)',
+            amount: Number(l.price)||0,
+            manager: userNameById[l.responsible_user_id] || '—',
+            reason: reason,
+            date: l.closed_at ? new Date(l.closed_at*1000).toISOString().slice(0,10) : '',
+            lead_id: l.id
+          });
+        });
+        if(batch.length < 250) break;
+        if(page === MAX_PAGES && batch.length === 250) truncated = true;
+      }
+
+      // агрегат по причинам
+      const byReason = {};
+      deals.forEach(d=>{ const k=d.reason; if(!byReason[k]) byReason[k]={name:k,count:0,sum:0}; byReason[k].count++; byReason[k].sum+=d.amount; });
+      const reasons = Object.keys(byReason).map(k=>byReason[k]).sort((a,b)=> b.sum - a.sum || b.count - a.count);
+      const total = { count: deals.length, sum: deals.reduce((s,d)=>s+d.amount,0) };
+
+      return res.status(200).json({
+        period: { label, from: fromTs, to: toTs },
+        currency: country === 'KG' ? 'KGS' : 'KZT',
+        pipeline: { id: pl.id, name: pl.name },
+        total, reasons, deals, truncated,
+        _subdomain: env.AMO_SUBDOMAIN
+      });
+    }
     if(action === 'funnel'){
       const pipelineId = req.query.pipeline_id ? Number(req.query.pipeline_id) : null;
       const fromTs = req.query.from ? Number(req.query.from) : null;
