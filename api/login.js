@@ -7,6 +7,7 @@
 import crypto from 'crypto';
 import { sbSelect } from './_supabase.js';
 import { checkAuth } from './_auth.js';
+import { issueSession } from './_session.js';
 
 function normEmail(s) { return String(s || '').trim().toLowerCase(); }
 function sha256(s) { return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex'); }
@@ -46,7 +47,11 @@ export default async function handler(req, res) {
     if (emp.active === false) {
       return res.status(200).json({ ok: false, disabled: true, error: 'Учётная запись отключена. Обратитесь к администратору.' });
     }
-    return res.status(200).json({ ok: true, employee: publicEmp(emp) });
+    // v626 SEC (фаза 1): выдаём подписанный сессионный токен. Обёрнуто в try — если что-то
+    // пойдёт не так (или SESSION_SECRET не задан), логин работает как раньше, без токена.
+    let session_token = null;
+    try { session_token = issueSession(emp); } catch (_) { session_token = null; }
+    return res.status(200).json({ ok: true, employee: publicEmp(emp), session_token });
   } catch (e) {
     console.error('[api/login] error:', e);
     return res.status(500).json({ ok: false, error: e.message || String(e) });

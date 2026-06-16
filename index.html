@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v626</title>
+<title>SalesDoc — Финансовый Дашборд v627</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -14183,6 +14183,7 @@ async function doLogin() {
  // ростер мог ещё грузиться — дождёмся, чтобы имена/селекты были готовы
  try { if (window._employeesReady) await window._employeesReady; } catch(_){}
  currentUser = _empWithAccess(res.employee);
+ _storeSession(res); // v626 SEC (фаза 1)
  // v589: если пароль временный — запомним введённый (в памяти), чтобы форс-смена знала «старый»
  window._tempLoginPass = currentUser.is_temp ? passRaw : '';
  try { loadEmpAccess(); } catch(_){} // v581: подтянуть серверные права override
@@ -14220,6 +14221,7 @@ async function doLogin() {
  }
  try { if (window._employeesReady) await window._employeesReady; } catch(_){}
  currentUser = _empWithAccess(res.employee);
+ _storeSession(res); // v626 SEC (фаза 1)
  try { loadEmpAccess(); } catch(_){} // v581: серверные права override
  _enterAppAsCurrentUser();
  })
@@ -14239,6 +14241,7 @@ async function doLogin() {
 function doLogout() {
  currentUser = null;
  window._tempLoginPass = ''; // v589: не держим введённый временный пароль
+ window._SESSION_TOKEN = ''; try { localStorage.removeItem('sd_session'); } catch(_){} // v626 SEC (фаза 1)
  // v220: при выходе чистим saved-credentials, чтобы при следующем заходе была форма
  try {
  localStorage.removeItem('sd_saved_login');
@@ -26625,12 +26628,19 @@ var kbLog = [];
 // v364: APP_TOKEN — должен совпадать с env APP_TOKEN в Vercel. Защита от случайных curl.
 // Если меняешь — меняй в обоих местах (тут + Vercel env) и Redeploy.
 window._APP_TOKEN = window._APP_TOKEN || 'salesdoc-2026-route-secret-9k3xJ7';
+// v626 SEC (фаза 1): восстанавливаем серверный сессионный токен из localStorage при загрузке.
+window._SESSION_TOKEN = window._SESSION_TOKEN || (function(){ try { return localStorage.getItem('sd_session') || ''; } catch(e){ return ''; } })();
+// Сохраняем токен из ответа /api/login (если сервер его выдал). Безопасно при отсутствии поля.
+function _storeSession(res){ try { if(res && res.session_token){ window._SESSION_TOKEN = res.session_token; localStorage.setItem('sd_session', res.session_token); } } catch(_){} }
 
 // Глобальный helper для API. Автоматом добавляет токен и country (для cards/clients).
 async function sbFetch(path, options){
  options = options || {};
  options.headers = options.headers || {};
  options.headers['x-app-token'] = window._APP_TOKEN;
+ // v626 SEC (фаза 1): не подделываемая личность через подписанный сессионный токен (если выдан).
+ // Сервер пока ничего не принуждает — заголовок аддитивный, безопасен.
+ if(window._SESSION_TOKEN){ options.headers['x-session-token'] = window._SESSION_TOKEN; }
  // v582: личность вызывающего для серверной проверки роли (например, /api/employee-access)
  if(typeof currentUser!=='undefined' && currentUser && currentUser.email){ options.headers['x-user-email'] = currentUser.email; }
  // v587: админ-код для опасных мутаций (сотрудники/права) — не в бандле, вводит CEO
