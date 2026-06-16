@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v632</title>
+<title>SalesDoc — Финансовый Дашборд v633</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5795,7 +5795,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div style="overflow-x:auto">
  <table class="data-table"><thead><tr>
  <th style="width:28px"><input type="checkbox" id="churn-check-all" onclick="churnToggleAll(this)" title="Выбрать всё"></th>
- <th>Месяц</th><th>Клиент</th><th>Тип</th><th>Лицензий ушло</th><th>Каких лицензий</th><th>Платил в месяц</th><th>Потеряли в месяц</th><th>Причина</th><th>Комментарий</th>
+ <th>Месяц</th><th>Клиент</th><th>Тип</th><th>Лицензий ушло</th><th>Каких лицензий</th><th>Причина</th><th>Комментарий</th>
  </tr></thead><tbody id="churn-rows"></tbody></table>
  </div>
  </div>
@@ -20344,7 +20344,7 @@ function churnRenderKPI(){
  var rows=churnGetFiltered();
  var churned=rows.filter(function(r){return r.kind==='churn';}).length;
  var declined=rows.filter(function(r){return r.kind==='decline';}).length;
- var lostMoney=rows.reduce(function(s,r){ var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0); return s+(loss>0?loss:0); },0);
+ // v633: деньги убраны из оттока — цену за лицензию нельзя достоверно вытащить (у клиентов разные цены).
  // лицензии: сумма потерянных мест по отфильтрованным компаниям
  var lostLic=rows.reduce(function(s,r){ return s+(Number(r.licTotal)||0); },0);
  var reasonCount={}; rows.forEach(function(r){ var x=(r.reason||'').trim(); if(x) reasonCount[x]=(reasonCount[x]||0)+1; });
@@ -20352,7 +20352,6 @@ function churnRenderKPI(){
  var cards=[
   {l:'Ушло клиентов (отток)',v:churned},
   {l:'Снизили оплату',v:declined},
-  {l:'Потеряно в месяц',v:_churnFmtMoney(lostMoney)+' '+(currentCountry==='KG'?'сом':'₸')},
   {l:'Лицензий ушло',v:lostLic},
   {l:'Частая причина',v:topReason}
  ];
@@ -20416,13 +20415,12 @@ function _churnBreakdown(byType){
 }
 
 function churnRenderTable(){
+ // v633: сортировка по числу ушедших лицензий (деньги убраны)
  var rows=churnGetFiltered().slice().sort(function(a,b){
-  var loA=(Number(a.prev_amount)||0)-(Number(a.cur_amount)||0), loB=(Number(b.prev_amount)||0)-(Number(b.cur_amount)||0);
-  return loB-loA;
+  return (Number(b.licTotal)||0)-(Number(a.licTotal)||0);
  });
  var cc=document.getElementById('churn-rows-count'); if(cc) cc.textContent='('+rows.length+')';
  document.getElementById('churn-rows').innerHTML=rows.map(function(r){
-  var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0);
   var kindColor=r.kind==='churn'?'#EF4444':(r.kind==='decline'?'#F59E0B':'var(--text-muted)');
   var licTotal=Number(r.licTotal)||0;
   var breakdown=_churnBreakdown(r.byType);
@@ -20434,12 +20432,10 @@ function churnRenderTable(){
    '<td style="color:'+kindColor+';font-weight:600">'+_churnKindLabel(r.kind)+'</td>'+
    '<td style="font-weight:700;color:'+(licTotal>0?'#EF4444':'var(--text-muted)')+'">'+(licTotal>0?('−'+licTotal):'—')+'</td>'+
    '<td style="color:var(--text-muted);font-size:11px">'+(breakdown||'—')+'</td>'+
-   '<td>'+(r.prev_amount!=null?_churnFmtMoney(r.prev_amount):'')+'</td>'+
-   '<td style="color:'+(loss>0?'#EF4444':'var(--text-muted)')+';font-weight:600">'+(loss>0?_churnFmtMoney(loss):'')+'</td>'+
    '<td class="churn-edit" data-field="reason" onclick="churnStartEdit(this)" data-ck="'+_churnAttr(r.company_key)+'" data-pm="'+_churnAttr(r.period_month)+'" data-prefill="'+_churnAttr(r.fileReason||'')+'" title="Нажмите, чтобы вписать причину" style="color:var(--text-muted);cursor:text;min-width:130px">'+_churnEsc(r.reason||'')+'</td>'+
    '<td class="churn-edit" data-field="comment" onclick="churnStartEdit(this)" data-ck="'+_churnAttr(r.company_key)+'" data-pm="'+_churnAttr(r.period_month)+'" title="Нажмите, чтобы добавить комментарий" style="color:var(--text-secondary);cursor:text;min-width:150px">'+_churnEsc(r.comment||'')+'</td>'+
    '</tr>';
- }).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:20px">Нет строк под фильтр</td></tr>';
+ }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px">Нет строк под фильтр</td></tr>';
 }
 function _churnAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
 
@@ -20523,14 +20519,13 @@ function churnRenderCharts(){
 function churnExportCSV(){
  var rows=churnGetFiltered();
  if(!rows.length){ try{showNotif('Пусто','Нет данных для экспорта');}catch(_){} return; }
- var head=['Месяц','Клиент','Тип','Лицензий ушло','Каких лицензий','Платил в месяц','Потеряли в месяц','Причина','Комментарий'];
+ var head=['Месяц','Клиент','Тип','Лицензий ушло','Каких лицензий','Причина','Комментарий'];
  var lines=[head.join(';')];
  rows.forEach(function(r){
-  var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0);
   var licTotal=Number(r.licTotal)||0;
   var bt=r.byType||{};
   var breakdown=Object.keys(bt).sort(function(a,b){return bt[b]-bt[a];}).map(function(t){return t+' -'+bt[t];}).join(', ');
-  lines.push([(r.period_month||'').slice(0,7),'"'+(r.company_name||'').replace(/"/g,'""')+'"',_churnKindLabel(r.kind),(licTotal>0?licTotal:''),'"'+breakdown.replace(/"/g,'""')+'"',(r.prev_amount!=null?r.prev_amount:''),(loss>0?Math.round(loss):''),'"'+String(r.reason||'').replace(/"/g,'""')+'"','"'+String(r.comment||'').replace(/"/g,'""')+'"'].join(';'));
+  lines.push([(r.period_month||'').slice(0,7),'"'+(r.company_name||'').replace(/"/g,'""')+'"',_churnKindLabel(r.kind),(licTotal>0?licTotal:''),'"'+breakdown.replace(/"/g,'""')+'"','"'+String(r.reason||'').replace(/"/g,'""')+'"','"'+String(r.comment||'').replace(/"/g,'""')+'"'].join(';'));
  });
  var blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ottok_'+(currentCountry||'KZ')+'.csv'; a.click(); URL.revokeObjectURL(a.href);
@@ -20549,14 +20544,11 @@ function churnOpenCard(ck, pm){
  if(!rec) return;
  _churnCardRec=rec; _churnCardClient=null;
  document.getElementById('churn-card-title').textContent=rec.company_name||ck;
- var loss=(Number(rec.prev_amount)||0)-(Number(rec.cur_amount)||0);
  var bt=_churnBreakdown(rec.byType);
  var det=[];
  det.push('Тип: <b style="color:'+(rec.kind==='churn'?'#EF4444':'#F59E0B')+'">'+_churnKindLabel(rec.kind)+'</b>');
  det.push('Месяц: '+(rec.period_month||'').slice(0,7));
  det.push('Лицензий ушло: <b>'+(rec.licTotal||0)+'</b>'+(bt?(' — '+bt):''));
- if(rec.prev_amount!=null) det.push('Платил в месяц: '+_churnFmtMoney(rec.prev_amount));
- if(loss>0) det.push('Потеря в месяц: <b style="color:#EF4444">'+_churnFmtMoney(loss)+'</b>');
  document.getElementById('churn-card-details').innerHTML=det.join('<br>');
  var ra=document.getElementById('churn-card-reason'); ra.value=rec.reason||''; ra.placeholder=rec.fileReason?('Из файла: '+rec.fileReason):'Почему ушёл / сократился';
  document.getElementById('churn-card-comment').value=rec.comment||'';
@@ -20756,11 +20748,10 @@ async function churnSendToSprint(rowsList){
    var ck=String(r.company_key||'').toLowerCase();
    if(!ck){ return; }
    if(existing.has(ck)){ totalSkipped++; return; }
-   var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0); if(!(loss>0)) loss=Number(r.prev_amount)||0;
    tasks.push({ id:nextTid++, sprint_id:sp.id, title:'Возврат: '+(r.company_name||r.company_key||''),
      owners:[], owner_ids:[], owner:'', start_date:_planYmd(today), due_date:sp.end,
      priority:'high', status:'todo', created_at:new Date().toISOString().slice(0,10),
-     company_key:ck, return_churn:true, churn_reason:(r.reason||r.fileReason||''), churn_amount:loss });
+     company_key:ck, return_churn:true, churn_reason:(r.reason||r.fileReason||'') });
    existing.add(ck); totalAdded++;
   });
   lastSprintId=sp.id; sprintNames.push(sprintName);
@@ -30239,10 +30230,9 @@ async function _routeRenderFeed(){
     var chList = (chResp && chResp.records) || [];
     var kindLbl = { churn:'Отток', decline:'Спад', growth:'Прирост', new:'Новый' };
     churnFeedItems = chList.filter(function(r){ return r.kind==='churn'||r.kind==='decline'; }).map(function(r){
-     var loss=(Number(r.prev_amount)||0)-(Number(r.cur_amount)||0);
-     var cur=(ctry==='KG')?'сом':'₸';
+     // v633: сумма убрана (цена за лицензию недостоверна)
      return { id:'churn:'+r.id, event_type:'note', created_at:r.period_month, author:'биллинг',
-      text:(kindLbl[r.kind]||r.kind)+' ('+String(r.period_month||'').slice(0,7)+')'+(loss>0?(' · −'+Math.round(loss).toLocaleString('ru-RU')+' '+cur):'')+(r.reason?(' · '+r.reason):'') };
+      text:(kindLbl[r.kind]||r.kind)+' ('+String(r.period_month||'').slice(0,7)+')'+(r.reason?(' · '+r.reason):'') };
     });
    }
   } catch(_){}
