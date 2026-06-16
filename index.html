@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v630</title>
+<title>SalesDoc — Финансовый Дашборд v631</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -26393,7 +26393,7 @@ function ltvCalculate() {
 // фильтр по менеджеру (клиентский, без новых запросов к amo), дрилл-даун в сделки (клик по
 // причине → её клиенты). Данные одним запросом (агрегат + сделки); срезы строятся на клиенте.
 // Строки из amo экранируются sanitize().
-window._lrState = window._lrState || { period:'this_month', from:'', to:'', mgr:'', data:null };
+window._lrState = window._lrState || { period:'this_month', from:'', to:'', mgr:'', sortBy:'sum', data:null };
 function _lossReasonsSetPeriod(p){ window._lrState.period = p; if(p === 'custom'){ _lrRenderControlsOnly(); } else { _lrFetch(); } }
 function _lossReasonsApplyCustom(){
  var f = (document.getElementById('lr-from')||{}).value || '';
@@ -26403,6 +26403,7 @@ function _lossReasonsApplyCustom(){
  var s = window._lrState; s.period = 'custom'; s.from = f; s.to = t; _lrFetch();
 }
 function _lossReasonsSetMgr(v){ window._lrState.mgr = v; _lrRender(); }
+function _lossReasonsSetSort(v){ window._lrState.sortBy = (v === 'count' ? 'count' : 'sum'); _lrRender(); }
 function _lossReasonsToggle(idx){ var el = document.getElementById('lr-deals-' + idx); if(el) el.style.display = (el.style.display === 'none' ? 'table-row' : 'none'); }
 function _lrControlsHtml(){
  var s = window._lrState;
@@ -26462,20 +26463,25 @@ function _lrRender(){
  if(!deals.length){ bodyEl.innerHTML = controls + '<div style="padding:24px;color:var(--text-muted)">За период «' + sanitize((data.period && data.period.label) || '') + '»' + (s.mgr ? (' у менеджера ' + sanitize(s.mgr)) : '') + ' проигранных сделок нет.</div>'; return; }
  var byReason = {};
  deals.forEach(function(d){ var k = d.reason || 'Причина не указана'; if(!byReason[k]) byReason[k] = {name:k,count:0,sum:0}; byReason[k].count++; byReason[k].sum += d.amount; });
- var reasons = Object.keys(byReason).map(function(k){ return byReason[k]; }).sort(function(a,b){ return b.sum - a.sum || b.count - a.count; });
+ var sortBy = (s.sortBy === 'count') ? 'count' : 'sum';
+ var _metric = function(rs){ return sortBy === 'count' ? rs.count : rs.sum; };
+ var reasons = Object.keys(byReason).map(function(k){ return byReason[k]; }).sort(function(a,b){ return sortBy === 'count' ? (b.count - a.count || b.sum - a.sum) : (b.sum - a.sum || b.count - a.count); });
  var totalCount = deals.length;
  var totalSum = deals.reduce(function(x,d){ return x + d.amount; }, 0);
- var maxSum = reasons.reduce(function(m,x){ return Math.max(m, x.sum); }, 0) || 1;
+ var maxMetric = reasons.reduce(function(m,x){ return Math.max(m, _metric(x)); }, 0) || 1;
  var html = controls;
  html += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Воронка: ' + sanitize((data.pipeline && data.pipeline.name) || '—') + ' · период: ' + sanitize((data.period && data.period.label) || '') + (s.mgr ? (' · менеджер: ' + sanitize(s.mgr)) : '') + '</div>';
  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:18px">';
  html += '<div style="padding:14px;background:rgba(214,115,115,.08);border-radius:10px;border:1px solid rgba(214,115,115,.2)"><div style="font-size:11px;color:var(--text-muted)">Потеряно сделок</div><div style="font-size:22px;font-weight:700;color:#D67373">' + totalCount + '</div></div>';
  html += '<div style="padding:14px;background:rgba(214,115,115,.08);border-radius:10px;border:1px solid rgba(214,115,115,.2)"><div style="font-size:11px;color:var(--text-muted)">На сумму</div><div style="font-size:22px;font-weight:700;color:#D67373">' + fmtFull(totalSum) + ' ' + cur + '</div></div>';
  html += '</div>';
- // горизонтальные бары топ-причин (по сумме)
+ // переключатель сортировки баров + сами бары
+ html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><span style="font-size:11px;color:var(--text-muted)">Бары по:</span>'
+   + '<button onclick="_lossReasonsSetSort(\'sum\')" style="padding:4px 12px;border-radius:7px;border:1px solid ' + (sortBy==='sum'?'var(--gold-deep)':'var(--dark-border)') + ';background:' + (sortBy==='sum'?'rgba(202,168,74,.12)':'transparent') + ';color:' + (sortBy==='sum'?'var(--gold-bright)':'var(--text-secondary)') + ';cursor:pointer;font-size:11px">сумме</button>'
+   + '<button onclick="_lossReasonsSetSort(\'count\')" style="padding:4px 12px;border-radius:7px;border:1px solid ' + (sortBy==='count'?'var(--gold-deep)':'var(--dark-border)') + ';background:' + (sortBy==='count'?'rgba(202,168,74,.12)':'transparent') + ';color:' + (sortBy==='count'?'var(--gold-bright)':'var(--text-secondary)') + ';cursor:pointer;font-size:11px">количеству</button></div>';
  html += '<div style="margin-bottom:20px">';
  reasons.forEach(function(rs){
-  var pct = Math.round(rs.sum / maxSum * 100);
+  var pct = Math.round(_metric(rs) / maxMetric * 100);
   var share = totalSum > 0 ? Math.round(rs.sum / totalSum * 100) : 0;
   html += '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>' + sanitize(rs.name) + '</span><span style="color:var(--text-muted)">' + rs.count + ' шт · ' + fmtFull(rs.sum) + ' ' + cur + ' · ' + share + '%</span></div><div style="height:8px;background:var(--dark-panel);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#D6737388,#D67373)"></div></div></div>';
  });
