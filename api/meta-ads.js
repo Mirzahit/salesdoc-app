@@ -10,6 +10,8 @@
 //   GET /api/meta-ads?endpoint=adsets&campaign_id=123&period=last_30d
 //   GET /api/meta-ads?endpoint=ads&adset_id=456&period=last_30d
 
+import { checkAuth } from './_auth.js';
+
 const META_API_VERSION = 'v21.0';
 const ALLOWED_PERIODS = new Set([
   'today','yesterday','this_month','last_month','this_quarter','maximum',
@@ -146,12 +148,11 @@ function previousRangeFor(p) {
 }
 
 export default async function handler(req, res) {
-  // CORS — на случай если фронт деплоится на другой домен
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // v626 SEC: эндпоинт same-origin. Убран wildcard CORS '*' (раньше любой сайт мог читать
+  // рекламные бюджеты/эффективность кампаний). Добавлена проверка x-app-token (checkAuth).
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  if (!checkAuth(req, res)) return;
 
   // v360: поддержка двух стран — KZ (по умолчанию) и KG (через ?country=KG).
   // .trim() убирает невидимые пробелы при копи-паст в Vercel UI.

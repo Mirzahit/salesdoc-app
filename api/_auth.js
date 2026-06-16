@@ -8,10 +8,11 @@
 export function checkAuth(req, res) {
   const expected = (process.env.APP_TOKEN || '').trim();
   if (!expected) {
-    // Если токен не настроен в env — пропускаем (для локальной разработки),
-    // но логируем чтоб не забыли в проде.
-    console.warn('[auth] APP_TOKEN не настроен — эндпоинт открыт всем');
-    return true;
+    // v626 SEC: FAIL-CLOSED. Раньше при незаданном APP_TOKEN эндпоинт открывался всем
+    // (fail-open) — дыра, если env слетит в проде. Теперь блокируем, как checkAdminToken.
+    console.warn('[auth] APP_TOKEN не настроен — эндпоинт заблокирован (fail-closed). Задайте env в Vercel.');
+    res.status(503).json({ ok: false, error: 'APP_TOKEN не настроен на сервере' });
+    return false;
   }
   const got = (req.headers['x-app-token'] || '').toString().trim();
   if (got !== expected) {

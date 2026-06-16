@@ -2,8 +2,11 @@
 // GET → возвращает список операторов из таблицы operators.
 
 import { sbSelect } from './_supabase.js';
+import { checkAuth } from './_auth.js';
 
 export default async function handler(req, res) {
+  // v626 SEC: раньше эндпоинт сливал таблицу operators без авторизации.
+  if (!checkAuth(req, res)) return;
   const env_url_set = !!process.env.SUPABASE_URL;
   const env_key_set = !!process.env.SUPABASE_SECRET_KEY;
 

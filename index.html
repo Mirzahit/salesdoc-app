@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v625</title>
+<title>SalesDoc — Финансовый Дашборд v626</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8564,6 +8564,14 @@ function sanitize(str){
  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// v626 SEC: fetch к защищённым GET-эндпоинтам (meta-ads, sb-ping) — прокидывает x-app-token,
+// который теперь требует checkAuth на сервере. Возвращает обычный Response (как fetch).
+function authFetch(url, opts){
+ opts = opts || {};
+ opts.headers = Object.assign({}, opts.headers, { 'x-app-token': (typeof window!=='undefined' && window._APP_TOKEN) || '' });
+ return fetch(url, opts);
+}
+
 // ============================================================
 // LOCAL STORAGE — сохранение ручных платежей
 // ============================================================
@@ -11626,7 +11634,7 @@ function renderRecentPayments(ps) {
  var tb = document.getElementById('recent-payments');
  if (!tb) return;
  const catNames={license:'Лицензии',subscription:'Абон.',implementation:'Внедрение',integration:'Интеграция',revision:'Доработки',other:'Прочее'};
- tb.innerHTML=ps.map(p=>`<tr><td>${p.client.substring(0,16)}…</td><td style="color:var(--text-secondary)">${catNames[p.category]}</td><td style="color:var(--gold-bright);font-weight:600">${fmt(p.amount)} ${_CUR}</td><td><span class="status-badge ${p.seated?'status-paid':'status-pending'}">${p.seated?'ПОСАЖ.':'НЕТ'}</span></td></tr>`).join('');
+ tb.innerHTML=ps.map(p=>`<tr><td>${sanitize(String(p.client).substring(0,16))}…</td><td style="color:var(--text-secondary)">${catNames[p.category]}</td><td style="color:var(--gold-bright);font-weight:600">${fmt(p.amount)} ${_CUR}</td><td><span class="status-badge ${p.seated?'status-paid':'status-pending'}">${p.seated?'ПОСАЖ.':'НЕТ'}</span></td></tr>`).join('');
 }
 
 // ═══════════════════════════════════════════════
@@ -16042,7 +16050,7 @@ window.mktLoadLeads = async function() {
  var fromMeta = false;
  try {
  var metaPeriod = _mktPeriod === 'week' ? 'last_7d' : 'this_month';
- var mr = await fetch('/api/meta-ads?endpoint=account_summary&period=' + metaPeriod + '&country=' + currentCountry);
+ var mr = await authFetch('/api/meta-ads?endpoint=account_summary&period=' + metaPeriod + '&country=' + currentCountry);
  var md = await mr.json();
  var metaLeads = md && md.summary ? Number(md.summary.leads_count || 0) : 0;
  if (metaLeads > 0) {
@@ -19680,10 +19688,10 @@ window.mktMetaApiLoad = async function(){
  try {
  // Параллельно: summary с предыдущим периодом, daily breakdown, account_info, campaigns
  var [sumResp, dailyResp, infoResp, campsResp] = await Promise.all([
- fetch('/api/meta-ads?endpoint=account_summary&period=' + encodeURIComponent(period) + '&country=' + currentCountry),
- fetch('/api/meta-ads?endpoint=daily&period=' + encodeURIComponent(period) + '&country=' + currentCountry),
- fetch('/api/meta-ads?endpoint=account_info&country=' + currentCountry),
- fetch('/api/meta-ads?endpoint=campaigns&period=' + encodeURIComponent(period) + '&country=' + currentCountry)
+ authFetch('/api/meta-ads?endpoint=account_summary&period=' + encodeURIComponent(period) + '&country=' + currentCountry),
+ authFetch('/api/meta-ads?endpoint=daily&period=' + encodeURIComponent(period) + '&country=' + currentCountry),
+ authFetch('/api/meta-ads?endpoint=account_info&country=' + currentCountry),
+ authFetch('/api/meta-ads?endpoint=campaigns&period=' + encodeURIComponent(period) + '&country=' + currentCountry)
  ]);
  var sumData = await sumResp.json();
  if (!sumResp.ok) throw new Error(sumData.error || ('HTTP '+sumResp.status));
@@ -19853,9 +19861,9 @@ function _metaRenderCampaigns(camps, info){
  var cpl = leads > 0 ? (spend/leads) : null;
  var statusBadge = c.status === 'ACTIVE'
  ? '<span style="font-size:9px;padding:2px 7px;border-radius:20px;background:rgba(127,184,158,.12);color:#7FB89E">Идёт</span>'
- : '<span style="font-size:9px;padding:2px 7px;border-radius:20px;background:var(--dark-panel);color:var(--text-muted)">'+(c.status||'?')+'</span>';
+ : '<span style="font-size:9px;padding:2px 7px;border-radius:20px;background:var(--dark-panel);color:var(--text-muted)">'+sanitize(c.status||'?')+'</span>';
  return '<tr style="opacity:'+(c.status==='ACTIVE'?'1':'.55')+'">'
- + '<td style="padding:8px 6px"><div style="font-size:12px;font-weight:600">'+(c.name||'—')+'</div><div style="margin-top:3px">'+statusBadge+'</div></td>'
+ + '<td style="padding:8px 6px"><div style="font-size:12px;font-weight:600">'+sanitize(c.name||'—')+'</div><div style="margin-top:3px">'+statusBadge+'</div></td>'
  + '<td style="text-align:right;padding:8px 6px"><b>'+_metaFmtMoney(ins.spend, cur)+'</b></td>'
  + '<td style="text-align:right;padding:8px 6px;color:'+(leads>0?'#7FB89E':'var(--text-muted)')+'"><b>'+(leads>0?_metaFmtNum(leads):'—')+'</b></td>'
  + '<td style="text-align:right;padding:8px 6px">'+(cpl!==null?_metaFmtMoney(cpl.toFixed(2), cur):'<span style="color:var(--text-muted)">—</span>')+'</td>'
@@ -22262,10 +22270,10 @@ function expRenderTable() {
  var color = expColor(e.category);
  return '<tr>' +
  '<td>'+e.date.split('-').reverse().join('.')+'</td>' +
- '<td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+color+';margin-right:6px"></span>'+e.category+'</td>' +
- '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+e.note+'">'+e.note+'</td>' +
+ '<td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+color+';margin-right:6px"></span>'+sanitize(e.category)+'</td>' +
+ '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+sanitize(e.note)+'">'+sanitize(e.note)+'</td>' +
  '<td style="font-weight:700;color:#D67373">'+fmtFull(e.amount)+'</td>' +
- '<td>'+e.bank+'</td>' +
+ '<td>'+sanitize(e.bank)+'</td>' +
  '</tr>';
  }).join('');
 }
@@ -23965,7 +23973,7 @@ document.getElementById('search-input').addEventListener('input',function(){
  '<span class="search-tag search-tag-client">КЛИЕНТ</span>';
  var _sid=(it.data&&it.data.id!=null)?encodeURIComponent(String(it.data.id)):''; // v617: id оплаты для «провалиться» в строку
  html+='<div class="search-item" onclick="searchClick(\''+it.type+'\',\''+encodeURIComponent(it.title)+'\',\''+_sid+'\')">';
- html+='<div><div class="search-item-title">'+it.title+tag+'</div><div class="search-item-sub">'+it.sub+'</div></div>';
+ html+='<div><div class="search-item-title">'+sanitize(it.title)+tag+'</div><div class="search-item-sub">'+sanitize(it.sub)+'</div></div>';
  html+='<div class="search-item-amount">'+fmtNum(it.amount)+' '+_CUR+'</div></div>';
  });
  res.innerHTML=html;
@@ -26052,10 +26060,10 @@ function acadRender() {
  var statusText = e.status==='completed'?'Завершено':'В процессе';
  var barColor = e.percent>=100?'#7FB89E':e.percent>=50?'#D6A372':'#7AA7D7';
  var lastAct = e.last_action ? e.last_action.substring(0,10) : '—';
- html += '<tr onclick="acadShowDetail(\'' + e.telegram_id + '\')">' +
- '<td><b>' + e.full_name + '</b></td>' +
- '<td><span class="acad-badge ' + badgeClass + '">' + flag + ' ' + e.country + '</span></td>' +
- '<td>' + e.current_block + '</td>' +
+ html += '<tr onclick="acadShowDetail(\'' + encodeURIComponent(e.telegram_id) + '\')">' +
+ '<td><b>' + sanitize(e.full_name) + '</b></td>' +
+ '<td><span class="acad-badge ' + badgeClass + '">' + flag + ' ' + sanitize(e.country) + '</span></td>' +
+ '<td>' + sanitize(e.current_block) + '</td>' +
  '<td><div class="acad-progress"><div class="acad-bar"><div class="acad-bar-fill" style="width:' + e.percent + '%;background:' + barColor + '"></div></div><span style="font-size:12px;min-width:32px">' + e.percent + '%</span></div></td>' +
  '<td><span class="' + statusClass + '">' + statusText + '</span></td>' +
  '<td style="color:#64748b;font-size:12px">' + lastAct + '</td></tr>';
@@ -26073,9 +26081,9 @@ function acadRender() {
  codes.forEach(function(c){
  var flag = c.country==='KG'?'KG':'KZ';
  var badgeClass = c.country==='KG'?'acad-badge-kg':'acad-badge-kz';
- var used = c.used_by_name ? '' + c.used_by_name : '<span style="color:#64748b">Не использован</span>';
+ var used = c.used_by_name ? sanitize(c.used_by_name) : '<span style="color:#64748b">Не использован</span>';
  var usedAt = c.used_at ? c.used_at.substring(0,10) : '';
- ch += '<tr><td><code style="background:#1e293b;padding:3px 8px;border-radius:4px">' + c.code + '</code></td>' +
+ ch += '<tr><td><code style="background:#1e293b;padding:3px 8px;border-radius:4px">' + sanitize(c.code) + '</code></td>' +
  '<td><span class="acad-badge ' + badgeClass + '">' + flag + ' ' + c.country + '</span></td>' +
  '<td style="color:#64748b;font-size:12px">' + (c.created_at||'').substring(0,10) + '</td>' +
  '<td>' + used + '</td>' +
@@ -26672,7 +26680,7 @@ async function routeLoad(){
  try {
   var [cardsRes, opsRes, clRes] = await Promise.all([
    sbFetch('/api/cards'),
-   fetch('/api/sb-ping').then(r=>r.json()),
+   authFetch('/api/sb-ping').then(r=>r.json()),
    sbFetch('/api/checklist?all=1')
   ]);
   if(!cardsRes.ok) throw new Error(cardsRes.error || 'cards load failed');
@@ -27200,7 +27208,7 @@ var _ticketsOpsLoaded = false;
 async function _ticketsEnsureOperators(){
  if(_ticketsOpsLoaded) return;
  try {
-  var r = await fetch('/api/sb-ping').then(function(x){ return x.json(); }).catch(function(){ return null; });
+  var r = await authFetch('/api/sb-ping').then(function(x){ return x.json(); }).catch(function(){ return null; });
   var ops = (r && r.operators ? r.operators : []).filter(function(o){ return o.role === 'integrator' && o.active; }).map(function(o){ return o.name; });
   if(ops.length){ _TICKETS_BADGE_OPERATORS = ops; _ticketsOpsLoaded = true; }
  } catch(_){}
@@ -27358,7 +27366,7 @@ async function ticketsLoadBadgeOnly(){
   // 0 для оператора, не попавшего в захардкоженный fallback.
   var [d, opsRes] = await Promise.all([
    sbFetch('/api/cards?entity=ticket'),
-   fetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators:[] }; })
+   authFetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators:[] }; })
   ]);
   var opsList = ((opsRes && opsRes.operators) || []).filter(o=>o.role==='integrator' && o.active);
   if(opsList.length){
@@ -27380,7 +27388,7 @@ async function ticketsLoad(){
   // создавать тикеты и на внедряющихся, не только на активных).
   var [tRes, opsRes, clRes] = await Promise.all([
    sbFetch('/api/cards?entity=ticket'),
-   fetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators:[] }; }),
+   authFetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators:[] }; }),
    sbFetch('/api/clients')
   ]);
   if(!tRes.ok) throw new Error(tRes.error || 'tickets load failed');
@@ -28290,7 +28298,7 @@ async function myClientsLoad(){
  try {
   var [clRes, opsRes] = await Promise.all([
    sbFetch('/api/clients?status=active'),
-   fetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators: [] }; })
+   authFetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators: [] }; })
   ]);
   if(!clRes.ok) throw new Error(clRes.error || 'clients load failed');
   myClients = clRes.clients || [];
@@ -38611,7 +38619,7 @@ async function mktAdsLoad(){
  var listEl = document.getElementById('mkt-ads-list');
  if(listEl) listEl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-muted)">Загрузка объявлений из Meta…</div>';
  try {
-  var r = await fetch('/api/meta-ads?endpoint=all_ads&period=' + encodeURIComponent(_mktAdsPeriod) + '&country=' + currentCountry);
+  var r = await authFetch('/api/meta-ads?endpoint=all_ads&period=' + encodeURIComponent(_mktAdsPeriod) + '&country=' + currentCountry);
   var j = await r.json();
   if(!r.ok || j.error){ throw new Error((j && (j.detail||j.error)) || ('HTTP '+r.status)); }
   _mktAdsData = j;
@@ -38787,7 +38795,7 @@ window.amoLoadFunnel = async function(force){
  // Meta API использует свои строковые периоды — последние 7/30/90 или this_month
  var metaPeriod = period === 'all' ? 'last_90d' : period;
  var amoP = fetch(amoQS, { headers: { 'x-app-token': window._APP_TOKEN || '' } }).then(function(r){ return r.json(); });
- var metaP = fetch('/api/meta-ads?endpoint=account_summary&period=' + metaPeriod + '&country=' + currentCountry).then(function(r){ return r.json(); }).catch(function(){ return null; });
+ var metaP = authFetch('/api/meta-ads?endpoint=account_summary&period=' + metaPeriod + '&country=' + currentCountry).then(function(r){ return r.json(); }).catch(function(){ return null; });
  var results = await Promise.all([amoP, metaP]);
  var amoData = results[0];
  var metaData = results[1];
@@ -39309,13 +39317,13 @@ function amoRenderHonest(d){
 }
 async function mktUpdateTargetPreview(){
  try {
- var resp = await fetch('/api/meta-ads?endpoint=account_summary&period=last_7d&country=' + currentCountry);
+ var resp = await authFetch('/api/meta-ads?endpoint=account_summary&period=last_7d&country=' + currentCountry);
  if (!resp.ok) throw new Error('http ' + resp.status);
  var data = await resp.json();
  if (data.error) throw new Error(data.error);
  var s = data.summary || {};
  var info = null;
- try { var ir = await fetch('/api/meta-ads?endpoint=account_info&country=' + currentCountry); if (ir.ok) info = await ir.json(); } catch(_){}
+ try { var ir = await authFetch('/api/meta-ads?endpoint=account_info&country=' + currentCountry); if (ir.ok) info = await ir.json(); } catch(_){}
  var cur = (info && info.currency) || 'USD';
  var sym = cur === 'USD' ? '$' : (cur === 'KZT' ? '₸' : '');
  var spend = parseFloat(s.spend||0);
