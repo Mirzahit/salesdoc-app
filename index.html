@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v635</title>
+<title>SalesDoc — Финансовый Дашборд v636</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -26480,7 +26480,7 @@ function _lrRender(){
  html += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Воронка: ' + sanitize((data.pipeline && data.pipeline.name) || '—') + ' · период: ' + sanitize((data.period && data.period.label) || '') + (s.mgr ? (' · менеджер: ' + sanitize(s.mgr)) : '') + '</div>';
  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:18px">';
  html += '<div style="padding:14px;background:rgba(214,115,115,.08);border-radius:10px;border:1px solid rgba(214,115,115,.2)"><div style="font-size:11px;color:var(--text-muted)">Потеряно сделок</div><div style="font-size:22px;font-weight:700;color:#D67373">' + totalCount + '</div></div>';
- html += '<div style="padding:14px;background:rgba(214,115,115,.08);border-radius:10px;border:1px solid rgba(214,115,115,.2)"><div style="font-size:11px;color:var(--text-muted)">На сумму</div><div style="font-size:22px;font-weight:700;color:#D67373">' + fmtFull(totalSum) + ' ' + cur + '</div></div>';
+ html += '<div style="padding:14px;background:rgba(214,115,115,.08);border-radius:10px;border:1px solid rgba(214,115,115,.2)"><div style="font-size:11px;color:var(--text-muted)">На сумму</div><div style="font-size:22px;font-weight:700;color:#D67373">' + fmtFull(totalSum) + '</div></div>';
  html += '</div>';
  // переключатель сортировки баров + сами бары
  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><span style="font-size:11px;color:var(--text-muted)">Бары по:</span>'
@@ -26490,7 +26490,7 @@ function _lrRender(){
  reasons.forEach(function(rs){
   var pct = Math.round(_metric(rs) / maxMetric * 100);
   var share = totalSum > 0 ? Math.round(rs.sum / totalSum * 100) : 0;
-  html += '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>' + sanitize(rs.name) + '</span><span style="color:var(--text-muted)">' + rs.count + ' шт · ' + fmtFull(rs.sum) + ' ' + cur + ' · ' + share + '%</span></div><div style="height:8px;background:var(--dark-panel);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#D6737388,#D67373)"></div></div></div>';
+  html += '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>' + sanitize(rs.name) + '</span><span style="color:var(--text-muted)">' + rs.count + ' шт · ' + fmtFull(rs.sum) + ' · ' + share + '%</span></div><div style="height:8px;background:var(--dark-panel);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#D6737388,#D67373)"></div></div></div>';
  });
  html += '</div>';
  // таблица причин с дрилл-дауном (клик по строке раскрывает сделки)
@@ -26498,13 +26498,13 @@ function _lrRender(){
  html += '<table class="data-table" style="width:100%"><thead><tr><th>Причина</th><th>Сделок</th><th>Сумма</th><th>Доля</th></tr></thead><tbody>';
  reasons.forEach(function(rs, idx){
   var share = totalSum > 0 ? (rs.sum / totalSum * 100).toFixed(1) : '0';
-  html += '<tr style="cursor:pointer" onclick="_lossReasonsToggle(' + idx + ')"><td style="font-weight:600">' + sanitize(rs.name) + '</td><td>' + rs.count + '</td><td style="font-weight:600">' + fmtFull(rs.sum) + ' ' + cur + '</td><td>' + share + '%</td></tr>';
+  html += '<tr style="cursor:pointer" onclick="_lossReasonsToggle(' + idx + ')"><td style="font-weight:600">' + sanitize(rs.name) + '</td><td>' + rs.count + '</td><td style="font-weight:600">' + fmtFull(rs.sum) + '</td><td>' + share + '%</td></tr>';
   var dealsFor = deals.filter(function(d){ return d.reason === rs.name; }).sort(function(a,b){ return b.amount - a.amount; });
   var sub = '<tr id="lr-deals-' + idx + '" style="display:none"><td colspan="4" style="padding:0"><div style="padding:8px 12px;background:rgba(255,255,255,.02)"><table style="width:100%;font-size:12px"><thead><tr style="color:var(--text-muted)"><th style="text-align:left;padding:4px">Клиент</th><th style="text-align:right;padding:4px">Сумма</th><th style="text-align:left;padding:4px">Менеджер</th><th style="text-align:left;padding:4px">Дата</th></tr></thead><tbody>';
   dealsFor.forEach(function(d){
    var url = data._subdomain ? ('https://' + data._subdomain + '.amocrm.ru/leads/detail/' + d.lead_id) : '';
    var comp = url ? ('<a href="' + url + '" target="_blank" style="color:#7AA7D7">' + sanitize(d.company) + '</a>') : sanitize(d.company);
-   sub += '<tr><td style="padding:4px">' + comp + '</td><td style="text-align:right;padding:4px">' + fmtFull(d.amount) + ' ' + cur + '</td><td style="padding:4px">' + sanitize(d.manager) + '</td><td style="padding:4px">' + sanitize(d.date) + '</td></tr>';
+   sub += '<tr><td style="padding:4px">' + comp + '</td><td style="text-align:right;padding:4px">' + fmtFull(d.amount) + '</td><td style="padding:4px">' + sanitize(d.manager) + '</td><td style="padding:4px">' + sanitize(d.date) + '</td></tr>';
   });
   sub += '</tbody></table></div></td></tr>';
   html += sub;
@@ -26517,7 +26517,7 @@ function _lrRender(){
   var mgrs = Object.keys(byMgr).map(function(k){ return byMgr[k]; }).sort(function(a,b){ return b.sum - a.sum; });
   html += '<div style="font-size:13px;font-weight:700;margin:22px 0 10px">Потери по менеджерам</div>';
   html += '<table class="data-table" style="width:100%"><thead><tr><th>Менеджер</th><th>Потеряно сделок</th><th>Сумма</th></tr></thead><tbody>';
-  mgrs.forEach(function(mg){ html += '<tr><td style="font-weight:600">' + sanitize(mg.name) + '</td><td>' + mg.count + '</td><td style="font-weight:600">' + fmtFull(mg.sum) + ' ' + cur + '</td></tr>'; });
+  mgrs.forEach(function(mg){ html += '<tr><td style="font-weight:600">' + sanitize(mg.name) + '</td><td>' + mg.count + '</td><td style="font-weight:600">' + fmtFull(mg.sum) + '</td></tr>'; });
   html += '</tbody></table>';
  }
  if(data.truncated) html += '<div style="margin-top:12px;font-size:11px;color:#D6A372">Показаны первые сделки (упёрлись в лимит выгрузки) — за длинный период данные могут быть неполными.</div>';

@@ -12,6 +12,7 @@
 
 import { sbSelect, sbInsert, sbUpdate, sbDelete, sbUpsert } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
+import { ensureBoardEntryForPayment } from './cards.js';
 
 // Импорт из Sheets последовательно дёргает медленный Apps Script (cold-start 11-19с)
 // и делает много вставок — дефолтный таймаут Vercel обрывал его на полпути. Поднимаем
@@ -34,6 +35,48 @@ function _normName(s) {
 
 function _defaultCurrency(country) {
   return country === 'KG' ? 'KGS' : 'KZT';
+}
+
+// v636: оплата какой категории должна заводить карту на доске. Возвращает kind для ядра
+// ensureBoardEntryForPayment ('impl' внедрение / 'integ' интеграция) либо null для прочих.
+function _boardKindForCategory(cat) {
+  if (cat === 'implementation') return 'impl';
+  if (cat === 'integration') return 'integ';
+  return null;
+}
+
+// v636: по свежевставленным оплатам внедрения/интеграции заводим карты в Маршруте и записи
+// в Очереди интеграции (то же делает оплатный бот, но он отложен — теперь работает на потоке
+// крон-синка Sheets→Supabase и ручного добавления). Side-effect: ошибки создания карт НЕ
+// роняют импорт оплат — оплата источник истины, карта производное.
+async function _createBoardEntriesForPayments(rows) {
+  let cards = 0, integs = 0, skipped = 0;
+  const errors = [];
+  for (const p of (rows || [])) {
+    const kind = _boardKindForCategory(p.category);
+    if (!kind) continue;
+    if (!p.company_name) continue;
+    try {
+      const r = await ensureBoardEntryForPayment({
+        company: p.company_name,
+        country: p.country,
+        kind: kind,
+        period_months: p.period_months,
+        manager: p.manager_name,
+        amount: p.amount,
+        category: kind === 'integ' ? 'Нов интеграция' : 'Нов внедрение',
+        date_paid: p.paid_at ? String(p.paid_at).slice(0, 10) : null,
+        sheet_row: p.sheet_row != null ? p.sheet_row : null,
+        sheet_month: p.paid_at ? parseInt(String(p.paid_at).slice(5, 7), 10) : null
+      });
+      if (r.action === 'card_created') cards++;
+      else if (r.action === 'integration_created') integs++;
+      else skipped++;
+    } catch (e) {
+      errors.push({ company_name: p.company_name, category: p.category, error: String((e && e.message) || e) });
+    }
+  }
+  return { cards_created: cards, integrations_created: integs, board_skipped: skipped, board_errors: errors };
 }
 
 // Резолв client_id по company_name (точное совпадение нормализованного имени).
@@ -430,6 +473,9 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
     }
   }
 
+  // v636: новые оплаты внедрения/интеграции → карты в Маршруте / записи в Очереди интеграции.
+  const board = await _createBoardEntriesForPayments(inserted);
+
   return {
     ok: true,
     mode: 'apply',
@@ -443,8 +489,103 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
     upserted_count: inserted.length + updated.length,
     failed_count: failed.length,
     failed_sample: failed.slice(0, 10),
+    cards_created: board.cards_created,
+    integrations_created: board.integrations_created,
+    board_skipped: board.board_skipped,
+    board_errors: board.board_errors.slice(0, 10),
     sum_upserted: inserted.reduce((s, p) => s + parseFloat(p.amount || 0), 0)
   };
+}
+
+// v636: РАЗОВЫЙ БЭКФИЛЛ — только ИНТЕГРАЦИЯ. Заводит записи в Очередь интеграции для уже
+// существующих в Supabase оплат категории integration, которые туда не попали (создавались до
+// v636, когда это делал только отложенный бот). Внедрение НАМЕРЕННО не бэкфиллим (по решению
+// команды): для внедрения работает только поток новых оплат (ensureBoardEntryForPayment при
+// импорте/ручном вводе) — это и закрывает жалобу «новые клиенты не попадают во внедрение».
+// Переиспользует то же ядро. dry_run=1 по умолчанию. Батчинг limit/offset; next_offset в ответе.
+// Дедуп против «каши»: НЕ тащим клиента, у кого уже есть ЛЮБАЯ запись в integrations — это
+// покрывает «Готово» (готовых не возвращаем) и заодно не плодит дубли по уже идущим. Один заход
+// на клиента за батч.
+async function handleBackfillBoards(req, res) {
+  const country = (req.query.country || '').toUpperCase();
+  if (country && !ALLOWED_COUNTRIES.includes(country)) {
+    return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG (или пусто = обе)' });
+  }
+  const dryRun = String(req.query.dry_run || '1') !== '0' && req.query.dry_run !== 'false';
+  const limit = Math.min(parseInt(req.query.limit, 10) || 100, 300);
+  const offset = parseInt(req.query.offset, 10) || 0;
+  const countries = country ? [country] : ALLOWED_COUNTRIES;
+
+  // Кандидаты — только оплаты интеграции, страницей (стабильный порядок по id).
+  const candParams = {
+    select: 'id,company_name,country,client_id,category,paid_at,manager_name,amount,period_months',
+    category: 'eq.integration',
+    order: 'id.asc',
+    limit: String(limit),
+    offset: String(offset)
+  };
+  if (country) candParams['country'] = 'eq.' + country;
+  const candidates = await sbSelect('payments', candParams);
+
+  // Предзагрузка для дедупа (свежая на каждый вызов → учитывает созданное прошлыми батчами).
+  // integClients = клиенты с ЛЮБОЙ записью integrations (Новая/В работе/На паузе/Готово/Отменено/
+  // Архив). Кто уже там — не тащим: это и есть «у кого Готово не тащи» + защита от дублей.
+  const compToClient = {}; // `${country}::${norm}` -> client_id
+  const integClients = new Set();
+  for (const c of countries) {
+    const cl = await sbSelect('clients', { country: 'eq.' + c, select: 'client_id,company_name', limit: '5000' });
+    cl.forEach(x => { compToClient[c + '::' + _normName(x.company_name)] = x.client_id; });
+    const integs = await sbSelect('integrations', { country: 'eq.' + c, select: 'client_id', limit: '5000' });
+    integs.forEach(r => { if (r.client_id) integClients.add(r.client_id); });
+  }
+
+  const plannedInteg = [];
+  const seenInteg = new Set();
+  let skippedExisting = 0;
+  for (const p of candidates) {
+    if (!p.company_name) continue;
+    const cid = p.client_id || compToClient[p.country + '::' + _normName(p.company_name)] || null;
+    const key = cid || ('NEW::' + p.country + '::' + _normName(p.company_name));
+    if (cid && integClients.has(cid)) { skippedExisting++; continue; }
+    if (seenInteg.has(key)) continue;
+    seenInteg.add(key); plannedInteg.push(p);
+  }
+
+  const nextOffset = candidates.length === limit ? offset + limit : null;
+  const sample = plannedInteg.slice(0, 20)
+    .map(p => ({ company: p.company_name, country: p.country, paid_at: p.paid_at }));
+
+  if (dryRun) {
+    return res.status(200).json({
+      ok: true, mode: 'dry_run', scope: 'integration_only', country: country || 'ALL',
+      scanned: candidates.length, batch_limit: limit, offset, next_offset: nextOffset,
+      would_create_integrations: plannedInteg.length,
+      skipped_already_in_queue: skippedExisting,
+      sample
+    });
+  }
+
+  let integs = 0;
+  const errors = [];
+  for (const p of plannedInteg) {
+    try {
+      const r = await ensureBoardEntryForPayment({
+        company: p.company_name, country: p.country, kind: 'integ',
+        period_months: p.period_months, manager: p.manager_name, amount: p.amount,
+        category: 'Нов интеграция',
+        date_paid: p.paid_at ? String(p.paid_at).slice(0, 10) : null,
+        sheet_row: null, sheet_month: null
+      });
+      if (r.action === 'integration_created') integs++;
+    } catch (e) { errors.push({ company: p.company_name, error: String((e && e.message) || e) }); }
+  }
+
+  return res.status(200).json({
+    ok: true, mode: 'apply', scope: 'integration_only', country: country || 'ALL',
+    scanned: candidates.length, batch_limit: limit, offset, next_offset: nextOffset,
+    integrations_created: integs,
+    errors: errors.slice(0, 20)
+  });
 }
 
 // Тонкая обёртка-эндпоинт над importSheetsForCountry (auth + парсинг query).
@@ -468,6 +609,12 @@ export default async function handler(req, res) {
       const _g = checkAdminToken(req);
       if (!_g.ok) return res.status(_g.unconfigured ? 503 : 403).json({ ok: false, error: _g.unconfigured ? 'Импорт недоступен: не настроен ADMIN_TOKEN' : 'Нужен админ-код', needAdminToken: !_g.unconfigured });
       return await handleImportSheets(req, res);
+    }
+    if (req.method === 'POST' && req.query.action === 'backfill_boards') {
+      // v636: разовый бэкфилл карт внедрения/интеграции — массовая запись, только с админ-кодом.
+      const _g = checkAdminToken(req);
+      if (!_g.ok) return res.status(_g.unconfigured ? 503 : 403).json({ ok: false, error: _g.unconfigured ? 'Бэкфилл недоступен: не настроен ADMIN_TOKEN' : 'Нужен админ-код', needAdminToken: !_g.unconfigured });
+      return await handleBackfillBoards(req, res);
     }
     if (req.method === 'GET')    return await handleGet(req, res);
     if (req.method === 'POST')   return await handlePost(req, res);
@@ -620,11 +767,34 @@ async function handlePost(req, res) {
 
   try {
     const result = await sbInsert('payments', row);
+    // v636: ручная оплата внедрения/интеграции → завести карту в Маршруте / Очереди интеграции.
+    // Side-effect, не роняем ответ если создание карты не удалось.
+    let board = null;
+    const _kind = _boardKindForCategory(category);
+    if (_kind && result[0]) {
+      try {
+        board = await ensureBoardEntryForPayment({
+          company: companyName,
+          country: country,
+          kind: _kind,
+          period_months: body.period_months,
+          manager: body.manager_name,
+          amount: amount,
+          category: _kind === 'integ' ? 'Нов интеграция' : 'Нов внедрение',
+          date_paid: body.paid_at ? String(body.paid_at).slice(0, 10) : null,
+          sheet_row: null,
+          sheet_month: null
+        });
+      } catch (e) {
+        board = { error: String((e && e.message) || e) };
+      }
+    }
     return res.status(201).json({
       ok: true,
       payment: result[0],
       client_linked: !!clientId,
-      client_id: clientId
+      client_id: clientId,
+      board: board
     });
   } catch (e) {
     // Уникальный индекс мог сработать (двойная попытка импорта/бота)

@@ -162,6 +162,110 @@ async function readBody(req) {
   });
 }
 
+// v636: ПЕРЕИСПОЛЬЗУЕМОЕ ЯДРО — заводит клиента (если ещё нет) и создаёт карту внедрения
+// (kanban_cards, стадия 'Новый') ИЛИ запись интеграции (integrations, статус 'Новая') по
+// новой оплате. Вызывается из двух мест:
+//   1) handlePaymentBotSync — оплатный бот (когда/если его включат);
+//   2) payments.js importSheetsForCountry / handlePost — крон-синк Sheets→Supabase и ручное
+//      добавление оплаты. Так новые клиенты попадают на доски БЕЗ бота.
+// kind: 'impl' | 'integ'. Возвращает { action, client_id, card_id?|integration_id? }.
+// Идемпотентность: дедуп по (country, sheet_row, sheet_month); fallback по client_id
+// (активная карта / интеграция «Новая» той же датой) — на случай отсутствия sheet-полей.
+export async function ensureBoardEntryForPayment(opts) {
+  const company = (opts.company || '').trim();
+  const country = (opts.country || 'KZ').toUpperCase();
+  const kind = opts.kind;
+  const period_months = parseInt(opts.period_months, 10) || 1;
+  const sheet_row = opts.sheet_row != null ? parseInt(opts.sheet_row, 10) : null;
+  const sheet_month = opts.sheet_month != null ? parseInt(opts.sheet_month, 10) : null;
+  if (!company) throw new Error('company обязателен');
+  if (!ALLOWED_COUNTRIES.includes(country)) throw new Error('country должен быть KZ или KG');
+  if (kind !== 'impl' && kind !== 'integ') throw new Error('kind должен быть impl|integ');
+
+  // Найти/создать клиента (точное имя + country; имя из колонки «Компания» стабильно).
+  const existing = await sbSelect('clients', {
+    country: 'eq.' + country, company_name: 'eq.' + company, select: '*', limit: '1'
+  });
+  let clientId;
+  if (existing.length) {
+    clientId = existing[0].client_id;
+    if (existing[0].subscription_period_months !== period_months) {
+      await sbUpdate('clients', { client_id: 'eq.' + clientId }, {
+        subscription_period_months: period_months, updated_at: new Date().toISOString()
+      });
+    }
+  } else {
+    // Авто-генерация client_id: SD-KZ-2026-NNNNN
+    const last = await sbSelect('clients', {
+      select: 'client_id', country: 'eq.' + country, order: 'created_at.desc', limit: '1'
+    });
+    const year = new Date().getFullYear();
+    const prefix = 'SD-' + country + '-' + year + '-';
+    let nextNum = 1;
+    if (last.length) {
+      const m = (last[0].client_id || '').match(/SD-[A-Z]{2}-\d{4}-(\d+)/);
+      if (m) nextNum = parseInt(m[1], 10) + 1;
+    }
+    clientId = prefix + String(nextNum).padStart(5, '0');
+    await sbInsert('clients', {
+      client_id: clientId, company_name: company, country: country,
+      status: 'onboarding', subscription_period_months: period_months
+    });
+  }
+
+  if (kind === 'integ') {
+    if (sheet_row && sheet_month) {
+      const existInteg = await sbSelect('integrations', {
+        country: 'eq.' + country, sheet_row: 'eq.' + sheet_row, sheet_month: 'eq.' + sheet_month,
+        select: 'id,client_id,status', limit: '1'
+      });
+      if (existInteg.length) {
+        return { action: 'already_synced_integration', integration_id: existInteg[0].id, client_id: existInteg[0].client_id };
+      }
+    }
+    const todayIso = opts.date_paid || new Date().toISOString().slice(0, 10);
+    const recentInteg = await sbSelect('integrations', {
+      client_id: 'eq.' + clientId, status: 'eq.Новая', date_paid: 'eq.' + todayIso,
+      select: 'id,client_id,status', limit: '1'
+    });
+    if (recentInteg.length) {
+      return { action: 'already_synced_integration_by_date', integration_id: recentInteg[0].id, client_id: recentInteg[0].client_id };
+    }
+    const inserted = await sbInsert('integrations', {
+      client_id: clientId, company_name: company, country: country, status: 'Новая',
+      manager: (opts.manager || '').trim() || null, date_paid: todayIso,
+      package: opts.tariff || null, sheet_row: sheet_row, sheet_month: sheet_month
+    });
+    return { action: 'integration_created', integration_id: inserted[0].id, client_id: clientId };
+  }
+
+  // kind === 'impl'
+  if (sheet_row && sheet_month) {
+    const existCard = await sbSelect('kanban_cards', {
+      country: 'eq.' + country, sheet_row: 'eq.' + sheet_row, sheet_month: 'eq.' + sheet_month,
+      select: 'id,client_id,stage', limit: '1'
+    });
+    if (existCard.length) {
+      return { action: 'already_synced', card_id: existCard[0].id, client_id: existCard[0].client_id };
+    }
+  }
+  // v636: fallback-дедуп без sheet-полей (ручная оплата) — активная карта того же клиента.
+  const activeCard = await sbSelect('kanban_cards', {
+    client_id: 'eq.' + clientId, stage: 'neq.Архив', select: 'id,client_id,stage', limit: '1'
+  });
+  if (activeCard.length) {
+    return { action: 'already_has_card', card_id: activeCard[0].id, client_id: activeCard[0].client_id };
+  }
+  const card = await sbInsert('kanban_cards', {
+    client_id: clientId, stage: 'Новый', country: country, tariff: opts.tariff || null,
+    payment_amount: opts.amount ? parseInt(opts.amount, 10) : null,
+    sales_manager: (opts.manager || '').trim() || null,
+    payment_category: opts.category || null, stage_entered_at: new Date().toISOString(),
+    sheet_row: sheet_row, sheet_month: sheet_month
+  });
+  return { action: 'card_created', card_id: card[0].id, client_id: clientId };
+}
+
 // v370: обработка синхронизации от оплатного бота.
 // Поведение по категории:
 //   - 'Нов внедрение' / 'Нов интеграция' → создать клиента (если ещё нет)
@@ -228,146 +332,22 @@ async function handlePaymentBotSync(body, res) {
     });
   }
 
-  // isImpl/isInteg: новое внедрение или интеграция → ищем/создаём клиента
-  let clientId;
-  if (existing.length) {
-    clientId = existing[0].client_id;
-    // Обновим период если пришёл — пригодится при активации (next_billing_at = act_date + period)
-    if (existing[0].subscription_period_months !== period_months) {
-      await sbUpdate('clients', { client_id: 'eq.' + clientId }, {
-        subscription_period_months: period_months,
-        updated_at: new Date().toISOString()
-      });
-    }
-  } else {
-    // Авто-генерация client_id: SD-KZ-2026-NNNNN
-    const last = await sbSelect('clients', {
-      select: 'client_id',
-      country: 'eq.' + country,
-      order: 'created_at.desc',
-      limit: '1'
-    });
-    const year = new Date().getFullYear();
-    const prefix = 'SD-' + country + '-' + year + '-';
-    let nextNum = 1;
-    if (last.length) {
-      const m = (last[0].client_id || '').match(/SD-[A-Z]{2}-\d{4}-(\d+)/);
-      if (m) nextNum = parseInt(m[1], 10) + 1;
-    }
-    clientId = prefix + String(nextNum).padStart(5, '0');
-    await sbInsert('clients', {
-      client_id: clientId,
-      company_name: company,
-      country: country,
-      status: 'onboarding',
-      subscription_period_months: period_months
-    });
-  }
-
-  // v430: ветка интеграции — создаём запись в integrations, не kanban_cards
-  if (isInteg) {
-    // Идемпотентность: если запись для этого sheet_row+sheet_month уже есть — возвращаем
-    if (sheet_row && sheet_month) {
-      const existInteg = await sbSelect('integrations', {
-        country: 'eq.' + country,
-        sheet_row: 'eq.' + sheet_row,
-        sheet_month: 'eq.' + sheet_month,
-        select: 'id,client_id,status',
-        limit: '1'
-      });
-      if (existInteg.length) {
-        return res.status(200).json({
-          ok: true,
-          action: 'already_synced_integration',
-          integration_id: existInteg[0].id,
-          client_id: existInteg[0].client_id
-        });
-      }
-    }
-    // v436 FIX: fallback-дедуп если бот не прислал sheet_row/sheet_month —
-    // ищем интеграцию того же клиента со статусом «Новая» и date_paid=сегодня.
-    // Защита от двойного нажатия / ретрая без sheet-полей.
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const recentInteg = await sbSelect('integrations', {
-      client_id: 'eq.' + clientId,
-      status: 'eq.Новая',
-      date_paid: 'eq.' + todayIso,
-      select: 'id,client_id,status',
-      limit: '1'
-    });
-    if (recentInteg.length) {
-      return res.status(200).json({
-        ok: true,
-        action: 'already_synced_integration_by_date',
-        integration_id: recentInteg[0].id,
-        client_id: recentInteg[0].client_id
-      });
-    }
-    const integRow = {
-      client_id: clientId,
-      company_name: company,
-      country: country,
-      status: 'Новая',
-      manager: (body.manager || '').trim() || null,
-      date_paid: new Date().toISOString().slice(0, 10),
-      package: body.tariff || null, // Если бот шлёт тариф — кладём как пакет интеграции
-      sheet_row: sheet_row,
-      sheet_month: sheet_month
-    };
-    const inserted = await sbInsert('integrations', integRow);
-    return res.status(201).json({
-      ok: true,
-      action: 'integration_created',
-      integration_id: inserted[0].id,
-      client_id: clientId,
-      company: company
-    });
-  }
-
-  // Идемпотентность: если карточка для этого sheet_row уже есть — возвращаем её.
-  // Защита от повторного вызова от бота (например при ретраях).
-  if (sheet_row && sheet_month) {
-    const existCard = await sbSelect('kanban_cards', {
-      country: 'eq.' + country,
-      sheet_row: 'eq.' + sheet_row,
-      sheet_month: 'eq.' + sheet_month,
-      select: 'id,client_id,stage',
-      limit: '1'
-    });
-    if (existCard.length) {
-      return res.status(200).json({
-        ok: true,
-        action: 'already_synced',
-        card_id: existCard[0].id,
-        client_id: existCard[0].client_id
-      });
-    }
-  }
-
-  // Создаём карточку. Оператора не назначаем — куратор сам возьмёт из «Новых».
-  // v377: сохраняем дополнительно сумму пакета, менеджера продаж и категорию оплаты —
-  // оператор сразу видит на карточке Канбана кто продал, за сколько и какой тип сделки.
-  const cardRow = {
-    client_id: clientId,
-    stage: 'Новый',
+  // isImpl/isInteg: делегируем в общее ядро (то же используется крон-импортом оплат).
+  // v636: дедуп клиента/карты/интеграции и создание клиента теперь внутри ядра.
+  const r = await ensureBoardEntryForPayment({
+    company: company,
     country: country,
-    tariff: body.tariff || null,
-    payment_amount: body.amount ? parseInt(body.amount, 10) : null,
-    sales_manager: (body.manager || '').trim() || null,
-    payment_category: category || null,
-    stage_entered_at: new Date().toISOString(),
+    kind: isInteg ? 'integ' : 'impl',
+    period_months: period_months,
+    manager: body.manager,
+    tariff: body.tariff,
+    amount: body.amount,
+    category: category,
     sheet_row: sheet_row,
     sheet_month: sheet_month
-  };
-  const card = await sbInsert('kanban_cards', cardRow);
-
-  return res.status(201).json({
-    ok: true,
-    action: 'card_created',
-    card_id: card[0].id,
-    client_id: clientId,
-    company: company
   });
+  const created = (r.action === 'card_created' || r.action === 'integration_created');
+  return res.status(created ? 201 : 200).json({ ok: true, company: company, ...r });
 }
 
 // v394: CRUD комментариев к тикетам. Таблица ticket_comments создана миграцией v378.
