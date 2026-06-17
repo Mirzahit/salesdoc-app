@@ -528,15 +528,21 @@ async function handleBackfillBoards(req, res) {
   const candidates = await sbSelect('payments', candParams);
 
   // Предзагрузка для дедупа (свежая на каждый вызов → учитывает созданное прошлыми батчами).
-  // integClients = клиенты с ЛЮБОЙ записью integrations (Новая/В работе/На паузе/Готово/Отменено/
-  // Архив). Кто уже там — не тащим: это и есть «у кого Готово не тащи» + защита от дублей.
+  // ВАЖНО: в integrations ~95% записей завершены («Готово») и у большинства НЕТ client_id (их
+  // завезли разовым импортом из Sheets). Поэтому дедуп ТОЛЬКО по client_id создаёт дубли поверх
+  // завершённых. Дедуп ведём по ОБА признакам: client_id И нормализованному имени компании
+  // (по стране) против ВСЕХ записей integrations — так «у кого Готово/любая запись не тащим».
   const compToClient = {}; // `${country}::${norm}` -> client_id
   const integClients = new Set();
+  const integNames = new Set(); // `${country}::${norm(company_name)}`
   for (const c of countries) {
     const cl = await sbSelect('clients', { country: 'eq.' + c, select: 'client_id,company_name', limit: '5000' });
     cl.forEach(x => { compToClient[c + '::' + _normName(x.company_name)] = x.client_id; });
-    const integs = await sbSelect('integrations', { country: 'eq.' + c, select: 'client_id', limit: '5000' });
-    integs.forEach(r => { if (r.client_id) integClients.add(r.client_id); });
+    const integs = await sbSelect('integrations', { country: 'eq.' + c, select: 'client_id,company_name', limit: '5000' });
+    integs.forEach(r => {
+      if (r.client_id) integClients.add(r.client_id);
+      integNames.add(c + '::' + _normName(r.company_name));
+    });
   }
 
   const plannedInteg = [];
@@ -545,8 +551,9 @@ async function handleBackfillBoards(req, res) {
   for (const p of candidates) {
     if (!p.company_name) continue;
     const cid = p.client_id || compToClient[p.country + '::' + _normName(p.company_name)] || null;
-    const key = cid || ('NEW::' + p.country + '::' + _normName(p.company_name));
-    if (cid && integClients.has(cid)) { skippedExisting++; continue; }
+    const nameKey = p.country + '::' + _normName(p.company_name);
+    const key = cid || ('NEW::' + nameKey);
+    if ((cid && integClients.has(cid)) || integNames.has(nameKey)) { skippedExisting++; continue; }
     if (seenInteg.has(key)) continue;
     seenInteg.add(key); plannedInteg.push(p);
   }
