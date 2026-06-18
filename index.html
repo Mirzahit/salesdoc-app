@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v656</title>
+<title>SalesDoc — Финансовый Дашборд v657</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5727,22 +5727,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="tables-row">
  <div class="panel"><div class="panel-title">Структура доходов</div><div id="income-structure"></div></div>
  <div class="panel">
- <div class="panel-title">Освоенная выручка</div>
- <div id="recognized-revenue">
- <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
- <div style="background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:10px;padding:12px;text-align:center">
- <div id="rev-recognized" style="font-family:'Inter',sans-serif;font-size:20px;color:var(--gold-bright)">—</div>
- <div style="font-size:9px;color:var(--text-muted);letter-spacing:1px;margin-top:4px">ОСВОЕНО</div>
- </div>
- <div style="background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:10px;padding:12px;text-align:center;cursor:pointer" onclick="openDeferredModal()">
- <div id="rev-deferred" style="font-family:'Inter',sans-serif;font-size:20px;color:#FBBF77">—</div>
- <div style="font-size:9px;color:var(--text-muted);letter-spacing:1px;margin-top:4px">НЕ ОСВОЕНО</div>
- <div style="font-size:8px;color:var(--text-muted);margin-top:2px">нажми для деталей</div>
- </div>
- </div>
- <div id="rev-breakdown"></div>
- <div id="rev-deferred-breakdown" style="margin-top:10px"></div>
- </div>
+ <div class="panel-title">Воронка продаж <span style="color:var(--text-muted);font-weight:500;font-size:11px">сколько клиентов на этапах · конверсии</span></div>
+ <div id="dash-funnel"></div>
  </div>
  </div>
  
@@ -7446,6 +7432,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="report-card-icon"></div>
  <div class="report-card-title">P&L (Доходы vs Расходы)</div>
  <div class="report-card-desc">Прибыль и убытки — доходы минус расходы за период</div>
+ </div>
+ <div class="report-card" onclick="reportGenerate('recognized')">
+ <div class="report-card-icon"></div>
+ <div class="report-card-title">Освоенная выручка</div>
+ <div class="report-card-desc">Признанная и непризнанная выручка за период: абонплата, новые клиенты, внедрение</div>
  </div>
  <div class="report-card" onclick="reportGenerate('team_progress')">
  <div class="report-card-icon"></div>
@@ -10043,7 +10034,7 @@ function renderAll() {
  })();
  renderBarChart(ps); renderIncomeStructure({license:license,subscription:sub,implementation:impl,integration:integ,revision:revision,other:other}); if(typeof renderPnL==='function') renderPnL();
  renderRecentPayments(ps.slice(-5).reverse());
- if(typeof renderRecognizedRevenue==='function') renderRecognizedRevenue();
+ if(typeof renderDashFunnel==='function') renderDashFunnel();
  renderActCounters(); renderAllPayments(); renderAllActs(); renderPlanView();
  renderKeyClients(); renderEmployees();
  // v524: Sheets-источник убран — рендерим Supabase. intgSbRender пересчитает kanban + аналитику.
@@ -11787,6 +11778,61 @@ function renderIncomeStructure(parts){
   + '</div>'
   + '<div style="flex:1;min-width:170px">'+legend+'</div>'
   + '</div>';
+}
+
+// v657: компактная Воронка продаж на Дашборде (этапы + кол-во клиентов + конверсии).
+// Переиспользует данные amo-воронки (/api/amo?action=funnel + amoBuildUnifiedFunnel), но рисует
+// компактно. Свой кэш по стране+периоду (5 мин), чтобы не дёргать API на каждый renderAll.
+window._dashFunnelCache = window._dashFunnelCache || {};
+async function renderDashFunnel(){
+ var el = document.getElementById('dash-funnel'); if(!el) return;
+ var country = (typeof currentCountry !== 'undefined') ? currentCountry : 'KZ';
+ var from = null, to = null;
+ try {
+  var rng = (typeof getPeriodRange === 'function') ? getPeriodRange(currentPeriod) : null;
+  if (rng && rng.start && rng.end) {
+   from = Math.floor(new Date(rng.start + 'T00:00:00').getTime() / 1000);
+   to = Math.floor(new Date(rng.end + 'T23:59:59').getTime() / 1000);
+  }
+ } catch(e){}
+ var ckey = country + '|' + from + '|' + to;
+ var cached = window._dashFunnelCache[ckey];
+ if (cached && (Date.now() - cached.ts < 5*60*1000)) { _dashFunnelHtml(el, cached.data); return; }
+ if (!el.innerHTML) el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:20px;text-align:center">Загрузка воронки…</div>';
+ try {
+  var qs = '/api/amo?action=funnel&country=' + country;
+  if (from) qs += '&from=' + from;
+  if (to) qs += '&to=' + to;
+  var r = await fetch(qs, { headers: { 'x-app-token': window._APP_TOKEN || '' } });
+  var amoData = await r.json();
+  if (!amoData || amoData.error) { el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:18px;text-align:center">Воронка недоступна'+(amoData&&amoData.error?(': '+amoData.error):'')+'</div>'; return; }
+  var combined = (typeof amoBuildUnifiedFunnel === 'function') ? amoBuildUnifiedFunnel(amoData, null, currentPeriod) : null;
+  if (!combined) { el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:18px">Нет данных воронки</div>'; return; }
+  window._dashFunnelCache[ckey] = { ts: Date.now(), data: combined };
+  _dashFunnelHtml(el, combined);
+ } catch(e){ el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:18px;text-align:center">Воронка недоступна</div>'; }
+}
+function _dashFunnelHtml(el, d){
+ if (!d || !d.flow || !d.flow.length){ el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:18px;text-align:center">Нет данных воронки</div>'; return; }
+ var flow = d.flow;
+ var first = flow[0].count || 1;
+ var bottom = flow[flow.length-1].count || 0;
+ var totalConv = first > 0 ? Math.round(bottom / first * 100) : 0;
+ var esc = (typeof amoEscXml === 'function') ? amoEscXml : function(s){ return String(s||''); };
+ var rows = flow.map(function(s, i){
+  var prev = i > 0 ? flow[i-1] : null;
+  var convPrev = prev && prev.count > 0 ? Math.round(s.count / prev.count * 100) : 100;
+  var widthPct = Math.max(6, Math.round((s.count || 0) / first * 100));
+  var fill = s.source === 'meta' ? '#8B5CF6' : (s.source === 'kanban' ? '#7FB89E' : '#5489BB');
+  return '<div style="margin-bottom:9px">'
+   + '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;margin-bottom:3px">'
+   +   '<span style="color:var(--text-secondary)">' + esc(s.label) + '</span>'
+   +   '<span style="color:var(--text)"><b style="font-family:Inter,sans-serif">' + (s.count||0).toLocaleString('ru-RU') + '</b>' + (prev ? ' <span style="color:var(--text-muted)">· ' + convPrev + '%</span>' : '') + '</span>'
+   + '</div>'
+   + '<div style="height:8px;background:var(--dark-panel);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + widthPct + '%;background:' + fill + ';border-radius:4px;transition:width .5s"></div></div>'
+   + '</div>';
+ }).join('');
+ el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">' + flow.length + ' этапов · сквозная конверсия <b style="color:var(--gold-bright)">' + totalConv + '%</b></div>' + rows;
 }
 
 function renderRecentPayments(ps) {
@@ -26847,6 +26893,21 @@ function reportGenerate(type) {
 
  // v629: причины отказа — асинхронный отчёт из amoCRM, рендер вынесен отдельно.
  if (type === 'loss_reasons') { _renderLossReasons(); return; }
+
+ // v657: Освоенная выручка — переехала с Дашборда сюда. Вставляем скелет и зовём существующий рендер.
+ if (type === 'recognized') {
+  titleEl.textContent = 'Освоенная выручка';
+  bodyEl.innerHTML = '<div id="recognized-revenue">'
+   + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;max-width:520px">'
+   +  '<div style="background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:10px;padding:14px;text-align:center"><div id="rev-recognized" style="font-family:Inter,sans-serif;font-size:22px;color:var(--gold-bright)">—</div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1px;margin-top:4px">ОСВОЕНО</div></div>'
+   +  '<div style="background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:10px;padding:14px;text-align:center;cursor:pointer" onclick="openDeferredModal()"><div id="rev-deferred" style="font-family:Inter,sans-serif;font-size:22px;color:#FBBF77">—</div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1px;margin-top:4px">НЕ ОСВОЕНО</div><div style="font-size:8px;color:var(--text-muted);margin-top:2px">нажми для деталей</div></div>'
+   + '</div>'
+   + '<div id="rev-breakdown"></div>'
+   + '<div id="rev-deferred-breakdown" style="margin-top:10px"></div>'
+   + '</div>';
+  if (typeof renderRecognizedRevenue === 'function') renderRecognizedRevenue();
+  return;
+ }
 
  if (type === 'payments_month') {
  titleEl.textContent = 'Оплаты за ' + monthNames[curMonth] + ' ' + curYear;
