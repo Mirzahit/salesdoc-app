@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v655</title>
+<title>SalesDoc — Финансовый Дашборд v656</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -5725,7 +5725,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
  </div>
  <div class="tables-row">
- <div class="panel"><div class="panel-title">Выполнение плана</div><div id="plan-bars"></div></div>
+ <div class="panel"><div class="panel-title">Структура доходов</div><div id="income-structure"></div></div>
  <div class="panel">
  <div class="panel-title">Освоенная выручка</div>
  <div id="recognized-revenue">
@@ -10041,7 +10041,7 @@ function renderAll() {
  el.style.display = '';
  });
  })();
- renderBarChart(ps); renderPlanBars(license,sub,impl,integ); if(typeof renderPnL==='function') renderPnL();
+ renderBarChart(ps); renderIncomeStructure({license:license,subscription:sub,implementation:impl,integration:integ,revision:revision,other:other}); if(typeof renderPnL==='function') renderPnL();
  renderRecentPayments(ps.slice(-5).reverse());
  if(typeof renderRecognizedRevenue==='function') renderRecognizedRevenue();
  renderActCounters(); renderAllPayments(); renderAllActs(); renderPlanView();
@@ -11743,6 +11743,50 @@ function renderPlanBars(l,s,i,integ) {
  return'<div class="plan-item"><div class="plan-item-header"><span class="plan-item-label">'+it.label+'</span><span class="plan-item-value">'+pct+'% — '+valStr+'</span></div><div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%;background:linear-gradient(90deg,'+it.color+'88,'+it.color+')"></div></div></div>';
  }).join('');
  } catch(e) { console.log('[renderPlanBars] error:', e.message); }
+}
+
+// v656: Структура доходов на Дашборде (кольцевая диаграмма по категориям за период).
+// Заменила виджет «Выполнение плана» (он есть отдельной страницей в меню).
+function renderIncomeStructure(parts){
+ var el = document.getElementById('income-structure'); if(!el) return;
+ var _cur = (typeof _CUR !== 'undefined') ? _CUR : (COUNTRY_CONFIG[currentCountry].currency || '');
+ var defs = [
+  {key:'license',        label:'Лицензии',   color:'#7AA7D7'},
+  {key:'subscription',   label:'Абон. платы',color:'#4A90D9'},
+  {key:'implementation', label:'Внедрение',  color:'#7FB89E'},
+  {key:'integration',    label:'Интеграция', color:'#CE93D8'},
+  {key:'revision',       label:'Доработки',  color:'#D6A372'},
+  {key:'other',          label:'Прочее',     color:'#90A4AE'}
+ ];
+ var items = defs.map(function(d){ return { label:d.label, color:d.color, val: (parts && parts[d.key]) || 0 }; }).filter(function(x){ return x.val > 0; });
+ var total = items.reduce(function(s,x){ return s + x.val; }, 0);
+ if(!total){ el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:24px;text-align:center">Нет доходов за период</div>'; return; }
+ var cx=64, cy=64, r=52, sw=18, c=2*Math.PI*r, off=0;
+ var segs = items.map(function(x){
+  var len = (x.val/total) * c;
+  var seg = '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+x.color+'" stroke-width="'+sw+'" stroke-dasharray="'+len.toFixed(2)+' '+(c-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
+  off += len; return seg;
+ }).join('');
+ var legend = items.map(function(x){
+  var pct = Math.round(x.val/total*100);
+  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">'
+   + '<span style="width:9px;height:9px;border-radius:2px;background:'+x.color+';flex-shrink:0"></span>'
+   + '<span style="font-size:11px;color:var(--text-secondary);flex:1">'+x.label+'</span>'
+   + '<span style="font-size:12px;color:var(--gold-bright);font-weight:600;font-family:Inter,sans-serif">'+fmt(x.val)+'</span>'
+   + '<span style="font-size:10px;color:var(--text-muted);width:34px;text-align:right">'+pct+'%</span>'
+   + '</div>';
+ }).join('');
+ el.innerHTML = '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">'
+  + '<div style="position:relative;width:128px;height:128px;flex-shrink:0">'
+  +  '<svg width="128" height="128" viewBox="0 0 128 128">'+segs+'</svg>'
+  +  '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">'
+  +   '<div style="font-size:9px;color:var(--text-muted);letter-spacing:1px">ВСЕГО</div>'
+  +   '<div style="font-size:14px;font-weight:700;color:var(--text-primary);font-family:Inter,sans-serif">'+fmt(total)+'</div>'
+  +   '<div style="font-size:9px;color:var(--text-muted)">'+_cur+'</div>'
+  +  '</div>'
+  + '</div>'
+  + '<div style="flex:1;min-width:170px">'+legend+'</div>'
+  + '</div>';
 }
 
 function renderRecentPayments(ps) {
