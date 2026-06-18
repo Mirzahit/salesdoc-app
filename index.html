@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v653</title>
+<title>SalesDoc — Финансовый Дашборд v654</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11551,6 +11551,35 @@ function buildKpiTooltip(type, ps) {
 }
 
 function renderBarChart(ps) {
+ // v654: если период охватывает НЕСКОЛЬКО месяцев (Год/Квартал/диапазон) — показываем
+ // ПОМЕСЯЧНЫЕ столбцы. Раньше всё схлопывалось в 5 «недель месяца» (бессмыслица для года).
+ var _msMonths = {};
+ (ps||[]).forEach(function(p){ var ym = String(p.date||'').slice(0,7); if(ym) _msMonths[ym] = 1; });
+ var _ymKeys = Object.keys(_msMonths);
+ if (_ymKeys.length > 1) {
+  var MONTHS_SH = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+  var mMap = {};
+  ps.forEach(function(p){ var ym = String(p.date||'').slice(0,7); if(!ym) return; if(!mMap[ym]) mMap[ym] = {ym:ym, total:0, count:0}; mMap[ym].total += p.amount; mMap[ym].count++; });
+  var months = _ymKeys.sort().map(function(k){ return mMap[k]; });
+  var maxM = Math.max.apply(null, months.map(function(m){ return m.total; })) || 1;
+  var hM = 120;
+  document.getElementById('bar-chart').innerHTML = months.map(function(m){
+   var barH = m.total > 0 ? Math.max(8, m.total / maxM * hM) : 4;
+   var barBg = m.total > 0 ? 'linear-gradient(180deg, var(--gold-bright), var(--gold-deep))' : 'var(--dark-border)';
+   var prt = m.ym.split('-'); var mi = (parseInt(prt[1],10)||1) - 1; var yy = (prt[0]||'').slice(2);
+   return '<div style="flex:1;min-width:0" title="'+(MONTHS_SH[mi]||'')+' '+(prt[0]||'')+': '+fmt(m.total)+' '+_CUR+' · '+m.count+' оплат">' +
+    '<div class="bar-group" style="justify-content:center"><div class="bar" style="height:'+barH+'px;background:'+barBg+';flex:none;width:80%;border-radius:4px 4px 0 0;min-height:4px"></div></div>' +
+    '<div class="bar-label">'+(MONTHS_SH[mi]||'')+'</div>' +
+    '<div style="font-size:9px;color:var(--text-muted);text-align:center;margin-top:1px">'+yy+'</div>' +
+   '</div>';
+  }).join('');
+  var totalAllM = ps.reduce(function(a,b){ return a + b.amount; }, 0);
+  document.getElementById('bar-chart-legend').innerHTML =
+   '<div class="legend-item"><div class="legend-dot" style="background:var(--gold-bright)"></div>'+months.length+' мес.</div>' +
+   '<div class="legend-item"><div class="legend-dot" style="background:#7FB89E"></div>'+ps.length+' оплат</div>' +
+   '<div class="legend-item"><div class="legend-dot" style="background:#4A90D9"></div>'+fmtFull(totalAllM)+'</div>';
+  return;
+ }
  // Группируем оплаты по неделям внутри месяца (1-я, 2-я, 3-я, 4-я, 5-я)
  var weekMap = {};
  // Определяем месяц и год для вычисления дат недель
@@ -11747,6 +11776,10 @@ function renderRecognizedRevenue() {
  var raw = String(p.categoryRaw||'').toLowerCase().trim();
  var amt = p.amount;
  var period = p.period || 1;
+ // v654: признание считаем относительно МЕСЯЦА САМОГО ПЛАТЕЖА, а не одного глобального
+ // curMonth. В режиме «Месяц» это идентично (все платежи одного месяца), а для Года/Квартала
+ // даёт корректную сумму освоения по периоду (раньше всё считалось относительно января).
+ var pMonth = (function(){ var _d = new Date(String(p.date||'')+'T00:00:00'); return isNaN(_d.getTime()) ? curMonth : _d.getMonth(); })();
 
  // --- Баланс: НЕ признаётся ---
  if (raw === 'баланс') {
@@ -11796,16 +11829,16 @@ function renderRecognizedRevenue() {
  else if (actDay >= 21) firstMonthPrice = 3000;
  var firstMonthAmt = firstMonthPrice * qty;
 
- // Текущий месяц совпадает с месяцем активации?
- if (actMonth === curMonth) {
+ // Месяц платежа совпадает с месяцем активации?
+ if (actMonth === pMonth) {
  var recognized = Math.min(firstMonthAmt, amt);
  totalRecognized += recognized;
  breakdown.newclient += recognized;
  if (amt > recognized) { totalDeferred += (amt - recognized); breakdownDeferred.newclient += (amt - recognized); }
- } else if (actMonth < curMonth) {
- // Активация в предыдущем месяце — в текущем месяце полная цена
+ } else if (actMonth < pMonth) {
+ // Активация в предыдущем месяце — в месяце платежа полная цена
  var monthlyAmt = pricePerLic * qty;
- var monthsFromAct = curMonth - actMonth;
+ var monthsFromAct = pMonth - actMonth;
  // Уже признано: первый мес + полные месяцы до текущего
  var alreadyRecognized = firstMonthAmt + (monthsFromAct - 1) * monthlyAmt;
  var curMonthRec = Math.min(monthlyAmt, Math.max(0, amt - alreadyRecognized));
@@ -11830,7 +11863,7 @@ function renderRecognizedRevenue() {
  breakdown.abon += amt;
  } else {
  // Определяем начальный месяц
- var startMonth = curMonth; // по умолчанию = месяц оплаты
+ var startMonth = pMonth; // по умолчанию = месяц оплаты
  if (p.periodStart) {
  // Столбец T заполнен — парсим название месяца
  var psLow = p.periodStart.toLowerCase();
@@ -11839,8 +11872,8 @@ function renderRecognizedRevenue() {
  }
  }
  var monthlyAmt = Math.round(amt / period);
- // Сколько месяцев от начала до текущего включительно
- if (curMonth >= startMonth) {
+ // Сколько месяцев от начала до месяца платежа включительно
+ if (pMonth >= startMonth) {
  totalRecognized += monthlyAmt;
  breakdown.abon += monthlyAmt;
  var deferred = amt - monthlyAmt;
