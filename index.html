@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v658</title>
+<title>SalesDoc — Финансовый Дашборд v659</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11813,11 +11813,13 @@ async function renderDashFunnel(){
  } catch(e){ el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:18px;text-align:center">Воронка недоступна</div>'; }
 }
 function _dashFunnelHtml(el, d){
- if (!d || !d.flow || !d.flow.length){ el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:18px;text-align:center">Нет данных воронки</div>'; return; }
- var flow = d.flow;
+ // v659: убираем этап из канбана внедрения (kanban) — данные по нему недостоверны.
+ // Сквозную конверсию считаем от заявки до ПОСЛЕДНЕГО реального этапа amo.
+ var flow = (d && d.flow ? d.flow : []).filter(function(s){ return s && s.source !== 'kanban'; });
+ if (!flow.length){ el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:18px;text-align:center">Нет данных воронки</div>'; return; }
  var first = flow[0].count || 1;
  var bottom = flow[flow.length-1].count || 0;
- var totalConv = first > 0 ? Math.round(bottom / first * 100) : 0;
+ var totalConv = first > 0 ? Math.round(bottom / first * 1000) / 10 : 0;
  var esc = (typeof amoEscXml === 'function') ? amoEscXml : function(s){ return String(s||''); };
  var rows = flow.map(function(s, i){
   var prev = i > 0 ? flow[i-1] : null;
@@ -11832,7 +11834,8 @@ function _dashFunnelHtml(el, d){
    + '<div style="height:8px;background:var(--dark-panel);border-radius:4px;overflow:hidden"><div style="height:100%;width:' + widthPct + '%;background:' + fill + ';border-radius:4px;transition:width .5s"></div></div>'
    + '</div>';
  }).join('');
- el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">' + flow.length + ' этапов · сквозная конверсия <b style="color:var(--gold-bright)">' + totalConv + '%</b></div>' + rows;
+ var lastLabel = esc(flow[flow.length-1].label || '');
+ el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">' + flow.length + ' этапов · конверсия заявка → «' + lastLabel + '»: <b style="color:var(--gold-bright)">' + totalConv + '%</b></div>' + rows;
 }
 
 function renderRecentPayments(ps) {
