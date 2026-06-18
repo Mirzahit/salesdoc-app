@@ -97,12 +97,17 @@ export default async function handler(req, res) {
       if (body.status && !ALLOWED_STATUS.includes(body.status)) {
         return res.status(400).json({ ok: false, error: 'status должен быть один из: ' + ALLOWED_STATUS.join(', ') });
       }
+      // v638 FIX: skip_auto_task — служебный флаг, НЕ колонка таблицы. Раньше он попадал в
+      // sbInsert(body) и Supabase падал с PGRST204 «column skip_auto_task not found» → флаг
+      // никогда не работал. Снимаем перед вставкой, значение запоминаем для логики ниже.
+      const skipAutoTask = body.skip_auto_task === true;
+      delete body.skip_auto_task;
       const result = await sbInsert('clients', body);
 
       // v452: авто-задача «Связаться» при создании клиента (spec §8 п.2).
       // Запускается всегда, кроме случая когда явно отключено body.skip_auto_task=true.
       // Errors here are логируются но не валят создание клиента.
-      if (result[0] && !body.skip_auto_task) {
+      if (result[0] && !skipAutoTask) {
         try {
           const userName = (req.headers['x-user-name'] || '').toString().trim()
             || body.curator_operator
