@@ -516,31 +516,44 @@ async function handleTicketsRoute(req, res) {
     //  → moving INTO waiting_client: сохраняем момент начала ожидания
     //  → moving OUT of waiting_client: считаем сколько ждали, пушим sla_due_at вперёд на это время,
     //    добавляем к waiting_total_seconds, обнуляем waiting_started_at
+    // v643: graceful degradation — колонки waiting_started_at/waiting_total_seconds могут
+    // отсутствовать в проде (миграция 2026-05-25-tickets-waiting-pause.sql не применена).
+    // Тогда SELECT/UPDATE с ними падает (42703) и тикет вообще нельзя переместить. Оборачиваем
+    // паузу SLA в try/catch: нет колонок → просто пропускаем паузу, перемещение работает.
+    // Применят миграцию — фича включится сама без правок кода.
     if (body.status && body.status !== undefined) {
-      const cur = await sbSelect('tickets', { id: 'eq.' + id, select: 'status,sla_due_at,waiting_started_at,waiting_total_seconds' });
-      if (cur.length) {
-        const oldStatus = cur[0].status;
-        const newStatus = body.status;
-        if (newStatus === 'waiting_client' && oldStatus !== 'waiting_client') {
-          // Вход в ожидание — фиксируем момент
-          patch.waiting_started_at = new Date().toISOString();
-        } else if (oldStatus === 'waiting_client' && newStatus !== 'waiting_client') {
-          // Выход из ожидания — пушим SLA вперёд на длительность паузы
-          if (cur[0].waiting_started_at) {
-            const pauseStart = new Date(cur[0].waiting_started_at).getTime();
-            const pauseMs = Date.now() - pauseStart;
-            if (pauseMs > 0) {
-              // Пушим sla_due_at вперёд на pauseMs миллисекунд
-              if (cur[0].sla_due_at) {
-                const newDue = new Date(new Date(cur[0].sla_due_at).getTime() + pauseMs);
-                patch.sla_due_at = newDue.toISOString();
+      try {
+        const cur = await sbSelect('tickets', { id: 'eq.' + id, select: 'status,sla_due_at,waiting_started_at,waiting_total_seconds' });
+        if (cur.length) {
+          const oldStatus = cur[0].status;
+          const newStatus = body.status;
+          if (newStatus === 'waiting_client' && oldStatus !== 'waiting_client') {
+            // Вход в ожидание — фиксируем момент
+            patch.waiting_started_at = new Date().toISOString();
+          } else if (oldStatus === 'waiting_client' && newStatus !== 'waiting_client') {
+            // Выход из ожидания — пушим SLA вперёд на длительность паузы
+            if (cur[0].waiting_started_at) {
+              const pauseStart = new Date(cur[0].waiting_started_at).getTime();
+              const pauseMs = Date.now() - pauseStart;
+              if (pauseMs > 0) {
+                // Пушим sla_due_at вперёд на pauseMs миллисекунд
+                if (cur[0].sla_due_at) {
+                  const newDue = new Date(new Date(cur[0].sla_due_at).getTime() + pauseMs);
+                  patch.sla_due_at = newDue.toISOString();
+                }
+                // Накопленный счётчик пауз
+                patch.waiting_total_seconds = (cur[0].waiting_total_seconds || 0) + Math.round(pauseMs / 1000);
               }
-              // Накопленный счётчик пауз
-              patch.waiting_total_seconds = (cur[0].waiting_total_seconds || 0) + Math.round(pauseMs / 1000);
+              patch.waiting_started_at = null;
             }
-            patch.waiting_started_at = null;
           }
         }
+      } catch (e) {
+        // Нет колонок паузы SLA — не блокируем перемещение тикета. На всякий случай чистим patch.
+        if (/waiting_started_at|waiting_total_seconds|42703/i.test(String((e && e.message) || ''))) {
+          delete patch.waiting_started_at;
+          delete patch.waiting_total_seconds;
+        } else { throw e; }
       }
     }
     // Смена приоритета пересчитывает SLA (от текущего момента).
