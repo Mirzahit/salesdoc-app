@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v639</title>
+<title>SalesDoc — Финансовый Дашборд v640</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18212,6 +18212,15 @@ var PLAN_SPRINT_TYPES = {
  retention:  { label:'Возврат (отток)',      hasPlan:true,  valueField:false, factMode:'count', money:false, unit:'кл.',  planLabel:'План возвратов (шт)' }
 };
 function planTypeCfg(sp){ return PLAN_SPRINT_TYPES[(sp && sp.type) || 'normal'] || PLAN_SPRINT_TYPES.normal; }
+// v639.1: значение метрики задачи. Если поле metric_value заполнено — берём его; иначе
+// fallback — число в КОНЦЕ названия задачи (старая привычка «seamed 14» = 14 лицензий),
+// чтобы задачи, закрытые до появления поля, тоже считались в Факт без ручного ввода.
+function planTaskMetric(t){
+ if (t && t.metric_value != null && t.metric_value !== '' && isFinite(parseFloat(t.metric_value))) return parseFloat(t.metric_value);
+ var m = String((t && t.title) || '').match(/(\d[\d\s]*)\s*(?:шт|лиц[а-яё.]*)?\.?\s*$/i);
+ if (m) { var n = parseInt(String(m[1]).replace(/\s/g, ''), 10); if (isFinite(n)) return n; }
+ return 0;
+}
 // Переключение типа в модалке — показать/скрыть поле «План» и подставить подпись.
 window.planTypeOnChange = function(){
  var sel = document.getElementById('psm-type'); if (!sel) return;
@@ -18485,7 +18494,7 @@ function planRenderTypeDashboard(sp, tasks){
  var plan = parseFloat(sp.plan_target) || 0;
  var doneTasks = (tasks || []).filter(function(t){ return t.status === 'done'; });
  var fact = (cfg.factMode === 'sum')
- ? doneTasks.reduce(function(s,t){ return s + (parseFloat(t.metric_value) || 0); }, 0)
+ ? doneTasks.reduce(function(s,t){ return s + planTaskMetric(t); }, 0)
  : doneTasks.length;
  var left = Math.max(0, plan - fact);
  var pct = plan > 0 ? Math.round(fact / plan * 100) : 0;
@@ -18811,7 +18820,7 @@ window.planOpenTaskDetail = function(taskId){
  if (mCfg.valueField) {
  mWrap.style.display = '';
  var mLbl = document.getElementById('ptd-metric-label'); if (mLbl) mLbl.textContent = mCfg.taskLabel || 'Значение';
- var mInp = document.getElementById('ptd-metric'); if (mInp) mInp.value = (t.metric_value != null ? t.metric_value : '');
+ var mInp = document.getElementById('ptd-metric'); if (mInp) mInp.value = (t.metric_value != null && t.metric_value !== '') ? t.metric_value : (planTaskMetric(t) || '');
  } else { mWrap.style.display = 'none'; }
  }
  var ownerSel = document.getElementById('ptd-owner-select');
