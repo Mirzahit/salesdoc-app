@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v646</title>
+<title>SalesDoc — Финансовый Дашборд v647</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -2738,6 +2738,9 @@ body.light .plan-kb-count{background:rgba(15,23,42,.06);border-color:rgba(15,23,
 body.light .plan-kb-card{background:rgba(255,255,255,.7);border-color:rgba(15,23,42,.06)}
 body.light .plan-kb-card:hover{background:rgba(255,255,255,.92);border-color:rgba(15,23,42,.10)}
 .plan-kb-card.s-done{opacity:.7}
+/* v646: подсветка карточки при переходе из «Рейтинга команды» */
+.plan-kb-card.kb-jump-highlight{opacity:1!important;border-color:#7AA7D7!important;animation:kbJumpPulse 1.1s ease-out 0s 2}
+@keyframes kbJumpPulse{0%{box-shadow:0 0 0 2px rgba(122,167,215,.75),0 0 22px rgba(122,167,215,.85)}50%{box-shadow:0 0 0 2px rgba(122,167,215,.2),0 0 6px rgba(122,167,215,.25)}100%{box-shadow:0 0 0 2px rgba(122,167,215,.75),0 0 22px rgba(122,167,215,.85)}}
 .plan-kb-title{font-size:12px;font-weight:600;color:var(--text-primary);line-height:1.35;margin-bottom:6px}
 .plan-kb-meta{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--text-muted)}
 .plan-kb-points{background:rgba(255,255,255,.06);color:var(--text-secondary);padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;border:1px solid rgba(255,255,255,.05)}
@@ -6733,7 +6736,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="modal" style="max-width:560px">
  <button class="modal-close" onclick="planCloseRatingTasks()"></button>
  <div class="modal-title" id="prt-title">Задачи</div>
- <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Клик по задаче — откроется карточка.</div>
+ <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Клик по задаче — перейти к ней на доске спринта.</div>
  <div id="prt-list" style="max-height:60vh;overflow-y:auto"></div>
  </div>
  </div>
@@ -18134,7 +18137,7 @@ window.planShowRatingTasks = function(ownerIdx, cat){
     var sp = spById[t.sprint_id] || {};
     var due = t.due_date || sp.end || '';
     var overdue = (t.status !== 'done') && due && todayStr > due;
-    return '<div onclick="planCloseRatingTasks();planOpenTaskDetail('+t.id+')" style="cursor:pointer;padding:10px 12px;border:1px solid var(--dark-border);border-radius:10px;margin-bottom:8px;background:rgba(255,255,255,.02)" onmouseover="this.style.background=\'rgba(255,255,255,.05)\'" onmouseout="this.style.background=\'rgba(255,255,255,.02)\'">'
+    return '<div onclick="planJumpToTask('+t.id+')" style="cursor:pointer;padding:10px 12px;border:1px solid var(--dark-border);border-radius:10px;margin-bottom:8px;background:rgba(255,255,255,.02)" onmouseover="this.style.background=\'rgba(255,255,255,.05)\'" onmouseout="this.style.background=\'rgba(255,255,255,.02)\'">'
      + '<div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px">'+sanitize(t.title||'(без названия)')+'</div>'
      + '<div style="font-size:11px;color:var(--text-muted);display:flex;gap:10px;flex-wrap:wrap">'
        + '<span>'+sanitize(sp.name||'')+'</span>'
@@ -18145,6 +18148,20 @@ window.planShowRatingTasks = function(ownerIdx, cat){
   }
  }
  var m = document.getElementById('plan-rating-tasks-modal'); if (m) m.classList.add('open');
+};
+// v646: переход к задаче на канбане её спринта + подсветка карточки
+window.planJumpToTask = function(taskId){
+ var t = planLoadTasks().find(function(x){return x.id===taskId;});
+ if (!t) return;
+ planCloseRatingTasks();
+ if (typeof planOpenSprint === 'function') planOpenSprint(t.sprint_id);
+ setTimeout(function(){
+  var card = document.querySelector('.plan-kb-card[data-task-id="'+taskId+'"]');
+  if (!card) return;
+  try { card.scrollIntoView({ behavior:'smooth', block:'center', inline:'center' }); } catch(_){ try { card.scrollIntoView(); } catch(e){} }
+  card.classList.add('kb-jump-highlight');
+  setTimeout(function(){ if (card) card.classList.remove('kb-jump-highlight'); }, 2600);
+ }, 180);
 };
 
 // v170: общая статистика по выбранной вкладке (активные/архив)
@@ -18753,7 +18770,7 @@ function planRenderKanban(){
  return '<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:8px;background:'+c.bg+';border:1px solid '+c.border+';color:'+c.fg+';letter-spacing:.2px">#'+_planEsc(tag)+'</span>';
  }).join('') + '</div>';
  }
- return '<div class="plan-kb-card s-'+t.status+'" draggable="true" ondragstart="planDragStart(event,'+t.id+')" ondragend="planDragEnd(this)" onclick="planOpenTaskDetail('+t.id+')" title="Клик — открыть. Перетащи — сменить статус.">'
+ return '<div class="plan-kb-card s-'+t.status+'" data-task-id="'+t.id+'" draggable="true" ondragstart="planDragStart(event,'+t.id+')" ondragend="planDragEnd(this)" onclick="planOpenTaskDetail('+t.id+')" title="Клик — открыть. Перетащи — сменить статус.">'
  + '<div class="plan-kb-title" style="display:flex;align-items:flex-start">'+prDot+'<span style="flex:1">'+(t.title||'').replace(/</g,'&lt;')+'</span></div>'
  + tagsHtml
  + '<div class="plan-kb-meta" style="align-items:center"><span style="display:inline-flex;align-items:center">'+avatars+subBadge+'</span>'+dueHtml+'</div>'
