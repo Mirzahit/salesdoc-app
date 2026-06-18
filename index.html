@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v638</title>
+<title>SalesDoc — Финансовый Дашборд v639</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6453,6 +6453,9 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <!-- Stats row -->
  <div id="plan-sprint-stats-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px"></div>
 
+ <!-- v639: контекстный дашборд по типу планёрки (план/факт/осталось) -->
+ <div id="plan-sprint-type-dashboard" style="display:none;margin-bottom:20px"></div>
+
  <!-- v169: Burndown + Скорость -->
  <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:20px" id="plan-burndown-row">
  <div class="plan-glass-card">
@@ -6587,6 +6590,24 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <option value="high">Высокий — важный, под наблюдением</option>
  <option value="low">Низкий — может подождать</option>
  </select>
+ </div></div>
+
+ <!-- v639: тип планёрки + план — для контекстного дашборда в спринте -->
+ <div class="form-row"><div class="form-group" style="flex:1">
+ <label class="form-label">Тип планёрки</label>
+ <select class="form-input" id="psm-type" onchange="planTypeOnChange()">
+ <option value="normal" selected>Обычный — просто задачи</option>
+ <option value="activation">Активация / Лицензии</option>
+ <option value="sales">Продажи</option>
+ <option value="impl">Внедрение / Запуски</option>
+ <option value="retention">Возврат (отток)</option>
+ </select>
+ <div style="font-size:11px;color:var(--text-muted);margin-top:5px" id="psm-type-hint">Тип определяет дашборд план/факт в шапке спринта.</div>
+ </div></div>
+
+ <div class="form-row" id="psm-plan-row" style="display:none"><div class="form-group" style="flex:1">
+ <label class="form-label" id="psm-plan-label">План</label>
+ <input class="form-input" type="number" id="psm-plan" placeholder="Например: 180" autocomplete="off" min="0" step="1">
  </div></div>
 
  <div class="form-row"><div class="form-group" style="flex:1">
@@ -6743,6 +6764,13 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <option value="done">Готово</option>
  </select>
  </div>
+ </div>
+
+ <!-- v639: метрика задачи (кол-во лицензий / сумма) — показывается для типов спринта с числовым полем -->
+ <div id="ptd-metric-wrap" style="display:none;margin-bottom:14px">
+ <label class="form-label" style="font-size:10px;color:var(--text-muted);margin-bottom:4px;display:block" id="ptd-metric-label">Кол-во лицензий</label>
+ <input type="number" id="ptd-metric" class="form-input" min="0" step="1" placeholder="0" onchange="planUpdateTaskMetric(this.value)" style="width:100%">
+ <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Засчитывается в «Факт», когда задача в статусе «Готово».</div>
  </div>
 
  <!-- v576: Ответственные (редактируемые) -->
@@ -18172,6 +18200,28 @@ window.planCloseAllMenus = function(){
 };
 
 function _planYmd(d){ return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+// v639: типы планёрок — пресеты контекстного дашборда.
+//  hasPlan   — есть ли у спринта число-план (и блок дашборда).
+//  valueField— есть ли числовое поле в КАРТОЧКЕ задачи (лицензии/сумма).
+//  factMode  — 'sum' (сложить поле по «Готово») | 'count' (кол-во задач «Готово»).
+var PLAN_SPRINT_TYPES = {
+ normal:     { label:'Обычный',              hasPlan:false, valueField:false, factMode:'count', money:false, unit:'',     planLabel:'План' },
+ activation: { label:'Активация / Лицензии', hasPlan:true,  valueField:true,  factMode:'sum',   money:false, unit:'лиц.', planLabel:'План активаций (шт лицензий)', taskLabel:'Кол-во лицензий' },
+ sales:      { label:'Продажи',              hasPlan:true,  valueField:true,  factMode:'sum',   money:true,  unit:'',     planLabel:'План продаж (сумма)',        taskLabel:'Сумма сделки' },
+ impl:       { label:'Внедрение / Запуски',  hasPlan:true,  valueField:false, factMode:'count', money:false, unit:'зап.', planLabel:'План запусков (шт)' },
+ retention:  { label:'Возврат (отток)',      hasPlan:true,  valueField:false, factMode:'count', money:false, unit:'кл.',  planLabel:'План возвратов (шт)' }
+};
+function planTypeCfg(sp){ return PLAN_SPRINT_TYPES[(sp && sp.type) || 'normal'] || PLAN_SPRINT_TYPES.normal; }
+// Переключение типа в модалке — показать/скрыть поле «План» и подставить подпись.
+window.planTypeOnChange = function(){
+ var sel = document.getElementById('psm-type'); if (!sel) return;
+ var cfg = PLAN_SPRINT_TYPES[sel.value] || PLAN_SPRINT_TYPES.normal;
+ var row = document.getElementById('psm-plan-row');
+ var lbl = document.getElementById('psm-plan-label');
+ if (row) row.style.display = cfg.hasPlan ? '' : 'none';
+ if (lbl) lbl.textContent = cfg.planLabel || 'План';
+};
+
 window.planCreateSprint = function(){
  _planEditingSprintId = null;
  // Сброс полей
@@ -18195,6 +18245,10 @@ window.planCreateSprint = function(){
  _planRenderTeamChips();
  _planSetActiveQuick(14);
  var prEl = document.getElementById('psm-priority'); if (prEl) prEl.value = 'mid';
+ // v639: сброс типа/плана
+ var tyEl = document.getElementById('psm-type'); if (tyEl) tyEl.value = 'normal';
+ var plEl = document.getElementById('psm-plan'); if (plEl) plEl.value = '';
+ if (typeof planTypeOnChange === 'function') planTypeOnChange();
  // Заголовок и кнопка под create-режим
  var ttl = document.getElementById('psm-modal-title'); if (ttl) ttl.textContent = 'Новый спринт';
  var sub = document.getElementById('psm-modal-sub'); if (sub) sub.textContent = 'Спринт — это период (обычно 1-2 недели), на который команда планирует задачи. В конце спринта смотрим что сделали, и заводим следующий.';
@@ -18268,13 +18322,18 @@ window.planSubmitCreateModal = function(){
  var teamIds = _planTeamChips.map(function(c){return c.id;});
  var teamNames = _planTeamChips.map(function(c){return c.name;}).join(', ');
  var priority = (document.getElementById('psm-priority').value || 'mid');
+ // v639: тип планёрки + план
+ var sprintType = (document.getElementById('psm-type') ? document.getElementById('psm-type').value : 'normal') || 'normal';
+ var typeCfg = PLAN_SPRINT_TYPES[sprintType] || PLAN_SPRINT_TYPES.normal;
+ var planTarget = typeCfg.hasPlan ? (parseFloat(document.getElementById('psm-plan') && document.getElementById('psm-plan').value) || 0) : 0;
  // v177: режим редактирования
  if (_planEditingSprintId) {
  var idx = all.findIndex(function(s){return s.id===_planEditingSprintId;});
  if (idx >= 0) {
  all[idx] = Object.assign({}, all[idx], {
  name: name, goal: goal, start: startStr, end: endStr, priority: priority,
- team: teamIds, teamNames: teamNames
+ team: teamIds, teamNames: teamNames,
+ type: sprintType, plan_target: planTarget
  });
  planSaveSprints(all);
  planningRender();
@@ -18288,7 +18347,7 @@ window.planSubmitCreateModal = function(){
  }
  return;
  }
- var sp = { id: nextId, name: name, goal: goal, start: startStr, end: endStr, status:'ontrack', priority: priority, color: colors[(nextId-1) % colors.length], total:0, in_progress:0, done:0, team: teamIds, teamNames: teamNames, archived:false };
+ var sp = { id: nextId, name: name, goal: goal, start: startStr, end: endStr, status:'ontrack', priority: priority, color: colors[(nextId-1) % colors.length], total:0, in_progress:0, done:0, team: teamIds, teamNames: teamNames, archived:false, type: sprintType, plan_target: planTarget };
  all.unshift(sp);
  planSaveSprints(all);
  planningRender();
@@ -18327,6 +18386,10 @@ window.planEditSprint = function(id){
  document.getElementById('psm-start').value = sp.start || '';
  document.getElementById('psm-end').value = sp.end || '';
  document.getElementById('psm-priority').value = sp.priority || 'mid';
+ // v639: тип/план
+ var tyEl2 = document.getElementById('psm-type'); if (tyEl2) tyEl2.value = sp.type || 'normal';
+ var plEl2 = document.getElementById('psm-plan'); if (plEl2) plEl2.value = (sp.plan_target != null && sp.plan_target !== 0) ? sp.plan_target : '';
+ if (typeof planTypeOnChange === 'function') planTypeOnChange();
  document.getElementById('psm-msg').textContent = '';
  // Подсветить пилюлю длительности по факту дней
  try { _planSetActiveQuick(planDaysBetween(sp.start, sp.end)); } catch(_){}
@@ -18409,6 +18472,41 @@ function planRecountSprint(sprintId){
  var all = planLoadSprints();
  var i = all.findIndex(function(s){return s.id===sprintId;});
  if (i >= 0) { all[i].total = total; all[i].done = done; all[i].in_progress = progress; planSaveSprints(all); }
+}
+
+// v639: контекстный дашборд по типу планёрки — План / Факт / Осталось / Прогресс.
+// Факт: для числовых типов (активация/продажи) = сумма поля «metric_value» по задачам
+// «Готово»; для счётных (внедрение/возврат) = число задач «Готово».
+function planRenderTypeDashboard(sp, tasks){
+ var el = document.getElementById('plan-sprint-type-dashboard');
+ if (!el) return;
+ var cfg = planTypeCfg(sp);
+ if (!sp || !cfg.hasPlan || (sp.type || 'normal') === 'normal') { el.style.display = 'none'; el.innerHTML = ''; return; }
+ var plan = parseFloat(sp.plan_target) || 0;
+ var doneTasks = (tasks || []).filter(function(t){ return t.status === 'done'; });
+ var fact = (cfg.factMode === 'sum')
+ ? doneTasks.reduce(function(s,t){ return s + (parseFloat(t.metric_value) || 0); }, 0)
+ : doneTasks.length;
+ var left = Math.max(0, plan - fact);
+ var pct = plan > 0 ? Math.round(fact / plan * 100) : 0;
+ var money = !!cfg.money;
+ var f = function(n){ n = Math.round(n * 100) / 100; return money ? (fmt(n) + ' ' + (typeof _CUR !== 'undefined' ? _CUR : '')) : (n + (cfg.unit ? (' ' + cfg.unit) : '')); };
+ var pctColor = pct >= 100 ? '#7FB89E' : (pct >= 60 ? '#5489BB' : (pct >= 30 ? '#D6A372' : '#D67373'));
+ var statCard = function(l, v, c){ return '<div class="sprint-stat" style="padding:16px 12px"><div class="sprint-stat-v" style="color:' + c + ';font-size:20px">' + v + '</div><div class="sprint-stat-l" style="margin-top:4px">' + l + '</div></div>'; };
+ var cardsHtml = statCard('План', f(plan), 'var(--text-primary)')
+ + statCard('Факт', f(fact), '#7FB89E')
+ + statCard('Осталось', f(left), left > 0 ? '#D6A372' : '#7FB89E')
+ + statCard('Прогресс', pct + '%', pctColor);
+ var caption = (cfg.factMode === 'sum')
+ ? ('Сумма по закрытым задачам · компаний: ' + doneTasks.length)
+ : 'Закрытые задачи';
+ el.style.display = '';
+ el.innerHTML = '<div class="plan-glass-card" style="border-color:rgba(122,167,215,.22)">'
+ + '<div class="plan-card-title" style="margin-bottom:2px">' + cfg.label + '</div>'
+ + '<div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">' + caption + '. Факт растёт, когда задачу переводят в «Готово».</div>'
+ + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px">' + cardsHtml + '</div>'
+ + '<div class="sprint-progress-bar"><div class="sprint-progress-fill" style="width:' + Math.min(100, pct) + '%"></div></div>'
+ + '</div>';
 }
 
 window.planOpenSprint = function(id){
@@ -18531,6 +18629,8 @@ function planRenderKanban(){
  return '<div class="sprint-stat" style="padding:14px 12px"><div class="sprint-stat-v" '+(s.c?('style="color:'+s.c+'"'):'')+'>'+s.v+'</div><div class="sprint-stat-l" style="margin-top:4px">'+s.l+'</div></div>';
  }).join('');
  }
+ // v639: контекстный дашборд по типу планёрки
+ if (sp && typeof planRenderTypeDashboard === 'function') planRenderTypeDashboard(sp, tasks);
  STATUSES.forEach(function(st){
  var box = document.getElementById('plan-kb-'+st);
  var cnt = document.getElementById('plan-kb-count-'+st);
@@ -18704,6 +18804,16 @@ window.planOpenTaskDetail = function(taskId){
  var stEl = document.getElementById('ptd-status'); if (stEl) stEl.value = t.status || 'todo';
  // v576: ответственные — наполняем выпадающий список (команда спринта + остальные) и чипы
  var spD = planLoadSprints().find(function(s){return s.id===t.sprint_id;}) || {};
+ // v639: поле метрики (лицензии/сумма) — только для типов с числовым полем
+ var mWrap = document.getElementById('ptd-metric-wrap');
+ if (mWrap) {
+ var mCfg = planTypeCfg(spD);
+ if (mCfg.valueField) {
+ mWrap.style.display = '';
+ var mLbl = document.getElementById('ptd-metric-label'); if (mLbl) mLbl.textContent = mCfg.taskLabel || 'Значение';
+ var mInp = document.getElementById('ptd-metric'); if (mInp) mInp.value = (t.metric_value != null ? t.metric_value : '');
+ } else { mWrap.style.display = 'none'; }
+ }
  var ownerSel = document.getElementById('ptd-owner-select');
  if (ownerSel && typeof employees !== 'undefined') {
  var teamIds = (spD.team || []);
@@ -19092,6 +19202,11 @@ window.planUpdateTaskPriority = function(val){
 window.planUpdateTaskStatus = function(val){
  var lbl = { todo:'Бэклог', progress:'В работе', review:'На проверке', done:'Готово' };
  _planEditOpenTask(function(t){ if (t.status === val) return false; t.status = val; }, 'status', 'статус → ' + (lbl[val] || val));
+};
+// v639: число в задаче (лицензии/сумма) — для контекстного дашборда спринта
+window.planUpdateTaskMetric = function(val){
+ var n = parseFloat(val); if (!isFinite(n) || n < 0) n = 0;
+ _planEditOpenTask(function(t){ if ((parseFloat(t.metric_value)||0) === n) return false; t.metric_value = n; }, 'edit', 'кол-во → ' + n);
 };
 window.planDetailAddOwner = function(value){
  if (!value) return;
