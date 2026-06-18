@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v660</title>
+<title>SalesDoc — Финансовый Дашборд v661</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8689,9 +8689,8 @@ document.querySelectorAll('.nav-group').forEach(function(g){
  clearTimeout(_navHoverTimer);
  // Закрыть другие
  document.querySelectorAll('.nav-group.hover-open').forEach(function(o){ if(o!==g) o.classList.remove('hover-open'); });
- var rect = g.getBoundingClientRect();
- popup.style.top = rect.top + 'px';
  g.classList.add('hover-open');
+ _navPlacePopup(popup, g.getBoundingClientRect());
  });
 
  g.addEventListener('mouseleave',function(){
@@ -8706,6 +8705,21 @@ document.querySelectorAll('.nav-group').forEach(function(g){
  _navHoverTimer = setTimeout(function(){ g.classList.remove('hover-open'); }, 150);
  });
 });
+// v661: позиционируем popup группы так, чтобы он НЕ уезжал за низ экрана (раньше нижние
+// группы — «Инструменты» — резали последние пункты). Если выше экрана — внутренний скролл.
+function _navPlacePopup(popup, rect){
+ if(!popup) return;
+ popup.style.maxHeight = '';
+ popup.style.overflowY = '';
+ popup.style.top = rect.top + 'px';
+ var margin = 8;
+ var vh = window.innerHeight;
+ var ph = popup.offsetHeight;
+ var top = rect.top;
+ if(ph + margin*2 > vh){ top = margin; popup.style.maxHeight = (vh - margin*2) + 'px'; popup.style.overflowY = 'auto'; }
+ else if(top + ph + margin > vh){ top = Math.max(margin, vh - ph - margin); }
+ popup.style.top = top + 'px';
+}
 // Touch support for nav hover popups (mobile)
 function navGroupTouch(group){
  if('ontouchstart' in window){
@@ -8714,7 +8728,7 @@ function navGroupTouch(group){
  if(!wasOpen){
  group.classList.add('touch-open');
  var popup = group.querySelector('.nav-group-popup');
- if(popup){ var rect = group.getBoundingClientRect(); popup.style.top = rect.top + 'px'; }
+ if(popup){ _navPlacePopup(popup, group.getBoundingClientRect()); }
  event.stopPropagation();
  }
  }
