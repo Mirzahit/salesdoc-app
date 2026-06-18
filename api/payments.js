@@ -497,6 +497,84 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
   };
 }
 
+// v648: Vercel KV (Upstash) — общий стор ручных привязок платежей (overrides/skip/approved/
+// additional). Тот же KV, что у Планёрок. Нужен, потому что раньше привязки жили в localStorage
+// и были видны только тому, кто привязывал. Ключ — pay_links_<COUNTRY>.
+function _kvEnv() {
+  return { url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL, token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN };
+}
+async function _kvGet(key) {
+  const { url, token } = _kvEnv();
+  if (!url || !token) throw new Error('KV not configured');
+  const r = await fetch(url + '/get/' + encodeURIComponent(key), { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) throw new Error('KV GET ' + r.status);
+  const j = await r.json();
+  return j && j.result ? j.result : null;
+}
+async function _kvSet(key, value) {
+  const { url, token } = _kvEnv();
+  if (!url || !token) throw new Error('KV not configured');
+  const body = typeof value === 'string' ? value : JSON.stringify(value);
+  const r = await fetch(url + '/set/' + encodeURIComponent(key), { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body });
+  if (!r.ok) throw new Error('KV SET ' + r.status);
+  return true;
+}
+function _payLinksNorm(st) {
+  if (!st || typeof st !== 'object') st = {};
+  if (!st.overrides || typeof st.overrides !== 'object') st.overrides = {};
+  if (!st.skip || typeof st.skip !== 'object') st.skip = {};
+  if (!st.approved || typeof st.approved !== 'object') st.approved = {};
+  if (!Array.isArray(st.additional)) st.additional = [];
+  if (typeof st.updated_at !== 'number') st.updated_at = 0;
+  return st;
+}
+// GET  /api/payments?action=pay_links&country=KZ  → весь стор привязок страны
+// POST /api/payments?action=pay_links&country=KZ  → дельта-мердж (last-write-wins по ключу;
+//        overrides: null/'' = удалить; skip/approved: false = удалить; additional: union по host;
+//        additional_remove: [host,...]). Возвращает слитый стор. Слияние на сервере → не теряем
+//        чужие правки при параллельной работе.
+async function handlePayLinks(req, res) {
+  const country = String((req.query.country || 'KZ')).toUpperCase();
+  if (!ALLOWED_COUNTRIES.includes(country)) return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+  const { url, token } = _kvEnv();
+  if (!url || !token) return res.status(503).json({ ok: false, error: 'KV не настроен' });
+  const KEY = 'pay_links_' + country;
+  if (req.method === 'GET') {
+    let st = _payLinksNorm({});
+    try { const raw = await _kvGet(KEY); if (raw) st = _payLinksNorm(typeof raw === 'string' ? JSON.parse(raw) : raw); }
+    catch (e) { return res.status(500).json({ ok: false, error: String((e && e.message) || e) }); }
+    return res.status(200).json(Object.assign({ ok: true }, st));
+  }
+  if (req.method === 'POST') {
+    const body = await readBody(req);
+    if (!body || typeof body !== 'object') return res.status(400).json({ ok: false, error: 'нет тела' });
+    let cur = _payLinksNorm({});
+    try { const raw = await _kvGet(KEY); if (raw) cur = _payLinksNorm(typeof raw === 'string' ? JSON.parse(raw) : raw); } catch (e) { /* старт с пустого */ }
+    if (body.overrides && typeof body.overrides === 'object') {
+      for (const h of Object.keys(body.overrides)) { const v = body.overrides[h]; if (v === null || v === '') delete cur.overrides[h]; else cur.overrides[h] = String(v); }
+    }
+    if (body.skip && typeof body.skip === 'object') {
+      for (const h of Object.keys(body.skip)) { if (body.skip[h]) cur.skip[h] = true; else delete cur.skip[h]; }
+    }
+    if (body.approved && typeof body.approved === 'object') {
+      for (const h of Object.keys(body.approved)) { if (body.approved[h]) cur.approved[h] = true; else delete cur.approved[h]; }
+    }
+    if (Array.isArray(body.additional)) {
+      const byHost = {}; cur.additional.forEach(c => { if (c && c.host) byHost[String(c.host).toLowerCase()] = c; });
+      body.additional.forEach(c => { if (c && c.host) byHost[String(c.host).toLowerCase()] = c; });
+      cur.additional = Object.keys(byHost).map(k => byHost[k]);
+    }
+    if (Array.isArray(body.additional_remove)) {
+      const rm = new Set(body.additional_remove.map(h => String(h).toLowerCase()));
+      cur.additional = cur.additional.filter(c => !(c && c.host && rm.has(String(c.host).toLowerCase())));
+    }
+    cur.updated_at = Date.now();
+    try { await _kvSet(KEY, JSON.stringify(cur)); } catch (e) { return res.status(500).json({ ok: false, error: String((e && e.message) || e) }); }
+    return res.status(200).json(Object.assign({ ok: true }, cur));
+  }
+  return res.status(405).json({ ok: false, error: 'method not allowed' });
+}
+
 // v636: РАЗОВЫЙ БЭКФИЛЛ — только ИНТЕГРАЦИЯ. Заводит записи в Очередь интеграции для уже
 // существующих в Supabase оплат категории integration, которые туда не попали (создавались до
 // v636, когда это делал только отложенный бот). Внедрение НАМЕРЕННО не бэкфиллим (по решению
@@ -611,6 +689,8 @@ async function handleImportSheets(req, res) {
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
+    // v648: общий стор ручных привязок платежей к клиентам (видны всем, не только локально).
+    if (req.query.action === 'pay_links') return await handlePayLinks(req, res);
     if (req.method === 'POST' && req.query.action === 'import_sheets') {
       // v592 SEC: массовая вставка платежей (финансы) — только с админ-кодом
       const _g = checkAdminToken(req);

@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v647</title>
+<title>SalesDoc — Финансовый Дашборд v648</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -34381,6 +34381,7 @@ async function acLoadKZClients(cb){
  if(AC_COUNTRY_CACHE[country]){
   AC_KZ_CACHE = AC_COUNTRY_CACHE[country];
   cb(AC_KZ_CACHE);
+  if(typeof _acTriggerPayLinksSync === 'function') _acTriggerPayLinksSync(country);
   return;
  }
  // Загружаем оба источника параллельно
@@ -34417,6 +34418,7 @@ async function acLoadKZClients(cb){
   AC_KZ_CACHE = merged;
   console.log('[acLoadKZClients]', country, ': static=' + staticItems.length, '+ supabase-extra=' + extras.length, '= total=' + merged.length);
   cb(merged);
+  if(typeof _acTriggerPayLinksSync === 'function') _acTriggerPayLinksSync(country);
  } catch(e){ AC_COUNTRY_CACHE[country] = []; AC_KZ_CACHE = []; cb([]); }
 }
 
@@ -34494,6 +34496,8 @@ function acSetOverride(payHost, clientName){
  var ov = acGetOverrides();
  if(clientName) ov[payHost] = clientName; else delete ov[payHost];
  localStorage.setItem(AC_OVERRIDE_KEY, JSON.stringify(ov));
+ var _d = {}; _d[payHost] = clientName || null; // null = удалить на сервере
+ if(typeof acPayLinksPush === 'function') acPayLinksPush({ overrides: _d });
 }
 
 // v303: «не сматчивать» override — для случаев когда префикс-матч склеивает разных клиентов
@@ -34505,6 +34509,8 @@ function acToggleSkipMatch(payHost){
  var sk = acGetSkipMatch();
  if(sk[payHost]) delete sk[payHost]; else sk[payHost] = true;
  localStorage.setItem(AC_SKIP_MATCH_KEY, JSON.stringify(sk));
+ var _ds = {}; _ds[payHost] = sk[payHost] ? true : false; // false = снять на сервере
+ if(typeof acPayLinksPush === 'function') acPayLinksPush({ skip: _ds });
  if(typeof acRender === 'function') acRender();
 }
 
@@ -34516,6 +34522,8 @@ function acApprovePrefix(payHost){
  var ap = acGetApprovedPrefixes();
  ap[payHost] = true;
  localStorage.setItem(AC_PREFIX_APPROVED_KEY, JSON.stringify(ap));
+ var _da = {}; _da[payHost] = true;
+ if(typeof acPayLinksPush === 'function') acPayLinksPush({ approved: _da });
  if(typeof acRenderPrefixMerged === 'function') acRenderPrefixMerged();
 }
 
@@ -34534,15 +34542,73 @@ function acAddClientAsSeparate(payHost, name){
  alert('Клиент с host «'+payHost+'» уже создан');
  return;
  }
- list.push({ name: nm, host: payHost, qty: 0, sum: 0, _added: true });
+ var _nc = { name: nm, host: payHost, qty: 0, sum: 0, _added: true };
+ list.push(_nc);
  localStorage.setItem(AC_ADD_CLIENTS_KEY, JSON.stringify(list));
+ if(typeof acPayLinksPush === 'function') acPayLinksPush({ additional: [_nc] });
  if(typeof showNotif === 'function') showNotif('Клиент создан', nm + ' добавлен как отдельный клиент');
  if(typeof acRender === 'function') acRender();
 }
 function acRemoveAdditionalClient(host){
  var list = acGetAdditionalClients().filter(function(c){ return (c.host||'').toLowerCase() !== host.toLowerCase(); });
  localStorage.setItem(AC_ADD_CLIENTS_KEY, JSON.stringify(list));
+ acPayLinksPush({ additional_remove: [host] });
  if(typeof acRender === 'function') acRender();
+}
+
+// v648: серверная синхронизация ручных привязок (overrides/skip/approved/additional), чтобы они
+// были видны ВСЕМ, а не только локально. ПРИНЦИП БЕЗОПАСНОСТИ: localStorage остаётся источником
+// для мгновенного UX и офлайна; сервер — общий слой поверх. Все вызовы best-effort: сетевые
+// ошибки молча игнорируются, существующая локальная логика не ломается ни при каких условиях.
+var _acPayLinksSynced = {};
+function acPayLinksPush(delta){
+ try {
+  if (typeof sbFetch !== 'function') return;
+  var country = (typeof currentCountry !== 'undefined') ? currentCountry : 'KZ';
+  var p = sbFetch('/api/payments?action=pay_links&country=' + country, { method: 'POST', body: JSON.stringify(delta) });
+  if (p && typeof p.then === 'function') p.then(function(){}, function(){});
+ } catch(e){}
+}
+async function acPayLinksSync(){
+ var country = (typeof currentCountry !== 'undefined') ? currentCountry : 'KZ';
+ try {
+  var d = await sbFetch('/api/payments?action=pay_links&country=' + country, { method: 'GET' });
+  if (!d || d.ok === false) return false;
+  var sOv = d.overrides || {}, sSk = d.skip || {}, sAp = d.approved || {}, sAdd = Array.isArray(d.additional) ? d.additional : [];
+  var lOv = acGetOverrides(), lSk = acGetSkipMatch(), lAp = acGetApprovedPrefixes(), lAdd = acGetAdditionalClients();
+  // union; при конфликте одного ключа приоритет у сервера (общая истина)
+  var mOv = Object.assign({}, lOv, sOv);
+  var mSk = Object.assign({}, lSk, sSk);
+  var mAp = Object.assign({}, lAp, sAp);
+  var addByHost = {}; lAdd.concat(sAdd).forEach(function(c){ if(c && c.host) addByHost[String(c.host).toLowerCase()] = c; });
+  var mAdd = Object.keys(addByHost).map(function(k){ return addByHost[k]; });
+  localStorage.setItem(AC_OVERRIDE_KEY, JSON.stringify(mOv));
+  localStorage.setItem(AC_SKIP_MATCH_KEY, JSON.stringify(mSk));
+  localStorage.setItem(AC_PREFIX_APPROVED_KEY, JSON.stringify(mAp));
+  localStorage.setItem(AC_ADD_CLIENTS_KEY, JSON.stringify(mAdd));
+  // миграция локальных-only записей на сервер (которых там ещё нет) — ничего не теряем
+  var pOv = {}; Object.keys(lOv).forEach(function(h){ if(sOv[h] === undefined) pOv[h] = lOv[h]; });
+  var pSk = {}; Object.keys(lSk).forEach(function(h){ if(sSk[h] === undefined) pSk[h] = true; });
+  var pAp = {}; Object.keys(lAp).forEach(function(h){ if(sAp[h] === undefined) pAp[h] = true; });
+  var sHosts = {}; sAdd.forEach(function(c){ if(c && c.host) sHosts[String(c.host).toLowerCase()] = 1; });
+  var pAdd = lAdd.filter(function(c){ return c && c.host && !sHosts[String(c.host).toLowerCase()]; });
+  if (Object.keys(pOv).length || Object.keys(pSk).length || Object.keys(pAp).length || pAdd.length) {
+   acPayLinksPush({ overrides: pOv, skip: pSk, approved: pAp, additional: pAdd });
+  }
+  _acPayLinksSynced[country] = true;
+  return true;
+ } catch(e){ return false; }
+}
+function _acTriggerPayLinksSync(country){
+ if (_acPayLinksSynced[country]) return;
+ try {
+  acPayLinksSync().then(function(ok){
+   if (!ok) return;
+   if (typeof acRender === 'function') acRender();
+   if (typeof acRenderUnmatched === 'function') acRenderUnmatched();
+   if (typeof acRenderPrefixMerged === 'function') acRenderPrefixMerged();
+  });
+ } catch(e){}
 }
 
 // v303: загрузка подписочных платежей 2025 для корректного расчёта «Доступ до»
