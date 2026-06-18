@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v645</title>
+<title>SalesDoc — Финансовый Дашборд v646</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6727,6 +6727,17 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
  </div>
  <!-- /del confirm modal -->
+
+ <!-- v646: список задач за числом в «Рейтинге команды» -->
+ <div class="modal-overlay" id="plan-rating-tasks-modal" onclick="if(event.target.id==='plan-rating-tasks-modal')planCloseRatingTasks()" style="z-index:10004">
+ <div class="modal" style="max-width:560px">
+ <button class="modal-close" onclick="planCloseRatingTasks()"></button>
+ <div class="modal-title" id="prt-title">Задачи</div>
+ <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Клик по задаче — откроется карточка.</div>
+ <div id="prt-list" style="max-height:60vh;overflow-y:auto"></div>
+ </div>
+ </div>
+ <!-- /rating tasks modal -->
 
  <!-- v179: МОДАЛКА ДЕТАЛИ ЗАДАЧИ + ПОДЗАДАЧИ -->
  <div class="modal-overlay" id="plan-task-detail-modal" onclick="if(event.target.id==='plan-task-detail-modal')planCloseTaskDetail()" style="z-index:10003">
@@ -18016,6 +18027,8 @@ window.planRuName = function(n){
  return m[n] || m[n.trim()] || n;
 };
 // v174: рейтинг команды — кто сколько закрыл, у кого просрочки
+// v646: контекст для кликабельных ячеек (показать задачи за числом)
+var _planRatingCtx = null;
 function planRenderTeamRating(sprints){
  var box = document.getElementById('plan-team-rating');
  if (!box) return;
@@ -18057,6 +18070,8 @@ function planRenderTeamRating(sprints){
  .sort(function(a,b){ return b.score - a.score; });
  if (!rows.length) { box.style.display='none'; box.innerHTML=''; return; }
  box.style.display='block';
+ // v646: сохраняем контекст, чтобы по клику на число показать конкретные задачи
+ _planRatingCtx = { sprintIds: sprintIds, sprintEndById: sprintEndById, owners: rows.map(function(o){return o.name;}) };
  var medal = ['','',''];
  var html = '<div class="plan-glass-card">'
  + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
@@ -18069,13 +18084,15 @@ function planRenderTeamRating(sprints){
  var pctColor = o.pct >= 80 ? '#7FB89E' : o.pct >= 50 ? '#D6A372' : '#D67373';
  var scoreColor = o.score >= 80 ? '#7FB89E' : o.score >= 40 ? '#D6A372' : '#D67373';
  var rank = i < 3 ? medal[i] : (i+1)+'.';
+ // v646: число-ссылка → открыть список конкретных задач за этим числом
+ var clk = function(val, cat){ if(!val) return '<span style="color:var(--text-muted)">'+val+'</span>'; return '<span style="cursor:pointer;border-bottom:1px dashed currentColor" onclick="planShowRatingTasks('+i+',\''+cat+'\')" title="Показать задачи">'+val+'</span>'; };
  return '<tr>'
  + '<td style="font-size:14px">'+rank+'</td>'
  + '<td><strong style="color:var(--text-primary)">'+(typeof planRuName==='function'?planRuName(o.name):o.name)+'</strong></td>'
- + '<td>'+o.total+'</td>'
- + '<td style="color:#7FB89E"><strong>'+o.done+'</strong></td>'
- + '<td>'+(o.progress + o.review)+'</td>'
- + '<td>'+(o.overdue > 0 ? '<span style="color:#D67373;font-weight:700">'+o.overdue+'</span>' : '<span style="color:var(--text-muted)">—</span>')+'</td>'
+ + '<td>'+clk(o.total,'total')+'</td>'
+ + '<td style="color:#7FB89E"><strong>'+clk(o.done,'done')+'</strong></td>'
+ + '<td>'+clk(o.progress + o.review,'inwork')+'</td>'
+ + '<td>'+(o.overdue > 0 ? '<span style="color:#D67373;font-weight:700;cursor:pointer;border-bottom:1px dashed currentColor" onclick="planShowRatingTasks('+i+',\'overdue\')" title="Показать просроченные">'+o.overdue+'</span>' : '<span style="color:var(--text-muted)">—</span>')+'</td>'
  + '<td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;max-width:80px;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden"><div style="width:'+o.pct+'%;height:100%;background:'+pctColor+';transition:width .4s"></div></div><span style="color:'+pctColor+';font-weight:700;min-width:36px">'+o.pct+'%</span></div></td>'
  + '<td><span style="color:'+scoreColor+';font-weight:700">'+Math.max(0, o.score)+'</span></td>'
  + '</tr>';
@@ -18083,6 +18100,52 @@ function planRenderTeamRating(sprints){
  + '</tbody></table></div></div>';
  box.innerHTML = html;
 }
+
+// v646: клик по числу в «Рейтинге команды» → список конкретных задач этого сотрудника.
+window.planCloseRatingTasks = function(){ var m=document.getElementById('plan-rating-tasks-modal'); if(m) m.classList.remove('open'); };
+window.planShowRatingTasks = function(ownerIdx, cat){
+ if (!_planRatingCtx || !_planRatingCtx.owners) return;
+ var ownerName = _planRatingCtx.owners[ownerIdx];
+ if (ownerName == null) return;
+ var todayStr = (new Date()).toISOString().slice(0,10);
+ var spById = {}; (planLoadSprints()||[]).forEach(function(s){ spById[s.id]=s; });
+ var catLabel = ({ total:'все задачи', done:'готовые', inwork:'в работе', overdue:'просроченные' })[cat] || 'задачи';
+ var tasks = planLoadTasks().filter(function(t){
+  if (_planRatingCtx.sprintIds.indexOf(t.sprint_id) === -1) return false;
+  var owners = (Array.isArray(t.owners) && t.owners.length) ? t.owners : (t.owner ? String(t.owner).split(',').map(function(s){return s.trim();}).filter(Boolean) : []);
+  if (!owners.length) owners = ['Без отв.'];
+  if (owners.map(function(o){return (o||'').trim();}).indexOf(ownerName) === -1) return false;
+  var dueRef = t.due_date || _planRatingCtx.sprintEndById[t.sprint_id] || null;
+  var isOverdue = (t.status !== 'done') && dueRef && todayStr > dueRef;
+  if (cat === 'total') return true;
+  if (cat === 'done') return t.status === 'done';
+  if (cat === 'inwork') return t.status === 'progress' || t.status === 'review';
+  if (cat === 'overdue') return isOverdue;
+  return false;
+ });
+ var stLabel = { todo:'Бэклог', progress:'В работе', review:'На проверке', done:'Готово', postponed:'Перенесена', not_done:'Не выполнено', cancelled:'Отменена' };
+ var titleEl = document.getElementById('prt-title');
+ if (titleEl) titleEl.textContent = (typeof planRuName==='function'?planRuName(ownerName):ownerName) + ' — ' + catLabel + ' (' + tasks.length + ')';
+ var listEl = document.getElementById('prt-list');
+ if (listEl) {
+  if (!tasks.length) { listEl.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:13px">Нет задач</div>'; }
+  else {
+   listEl.innerHTML = tasks.map(function(t){
+    var sp = spById[t.sprint_id] || {};
+    var due = t.due_date || sp.end || '';
+    var overdue = (t.status !== 'done') && due && todayStr > due;
+    return '<div onclick="planCloseRatingTasks();planOpenTaskDetail('+t.id+')" style="cursor:pointer;padding:10px 12px;border:1px solid var(--dark-border);border-radius:10px;margin-bottom:8px;background:rgba(255,255,255,.02)" onmouseover="this.style.background=\'rgba(255,255,255,.05)\'" onmouseout="this.style.background=\'rgba(255,255,255,.02)\'">'
+     + '<div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px">'+sanitize(t.title||'(без названия)')+'</div>'
+     + '<div style="font-size:11px;color:var(--text-muted);display:flex;gap:10px;flex-wrap:wrap">'
+       + '<span>'+sanitize(sp.name||'')+'</span>'
+       + '<span>'+(stLabel[t.status]||t.status)+'</span>'
+       + (due ? '<span style="'+(overdue?'color:#D67373;font-weight:600':'')+'">до '+planFmtDate(due)+(overdue?' · просрочена':'')+'</span>' : '')
+     + '</div></div>';
+   }).join('');
+  }
+ }
+ var m = document.getElementById('plan-rating-tasks-modal'); if (m) m.classList.add('open');
+};
 
 // v170: общая статистика по выбранной вкладке (активные/архив)
 function planRenderOverallStats(sprints){
