@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v640</title>
+<title>SalesDoc — Финансовый Дашборд v641</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18638,8 +18638,9 @@ function planRenderKanban(){
  return '<div class="sprint-stat" style="padding:14px 12px"><div class="sprint-stat-v" '+(s.c?('style="color:'+s.c+'"'):'')+'>'+s.v+'</div><div class="sprint-stat-l" style="margin-top:4px">'+s.l+'</div></div>';
  }).join('');
  }
- // v639: контекстный дашборд по типу планёрки
- if (sp && typeof planRenderTypeDashboard === 'function') planRenderTypeDashboard(sp, tasks);
+ // v639: контекстный дашборд по типу планёрки. v641: в try — ошибка рендера дашборда
+ // НЕ должна обрывать отрисовку колонок канбана (иначе задачи «пропадают» с доски).
+ if (sp && typeof planRenderTypeDashboard === 'function') { try { planRenderTypeDashboard(sp, tasks); } catch(e){ console.error('[plan] dashboard render error:', e); } }
  STATUSES.forEach(function(st){
  var box = document.getElementById('plan-kb-'+st);
  var cnt = document.getElementById('plan-kb-count-'+st);
