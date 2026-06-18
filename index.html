@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v661</title>
+<title>SalesDoc — Финансовый Дашборд v662</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19993,7 +19993,8 @@ var _metaApiDailyChart = null;
 function _metaFmtMoney(v, currency){
  var n = parseFloat(v||0);
  if (isNaN(n) || !isFinite(n)) return '—';
- var sym = currency === 'USD' ? '$' : (currency === 'KZT' ? '₸ ' : '');
+ // v662: добавлен сом для KG (раньше валюта KGS давала пустой символ) + фолбэк на код валюты
+ var sym = currency === 'USD' ? '$ ' : (currency === 'KZT' ? '₸ ' : (currency === 'KGS' ? 'сом ' : (currency ? currency + ' ' : '')));
  return sym + n.toLocaleString('ru-RU', {maximumFractionDigits: 2});
 }
 function _metaFmtNum(v){
@@ -32976,7 +32977,7 @@ function crmCalTypeChips(){
 // v339: пустое состояние с иллюстрацией
 function crmCalEmptyState(extraHint){
  return '<div class="tt-empty-state">'
- + '<div class="tt-empty-illu">📅</div>'
+ + '<div class="tt-empty-illu"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg></div>'
  + '<div class="tt-empty-title">Здесь пока пусто</div>'
  + '<div class="tt-empty-sub">' + (extraHint || 'Создай первую задачу — она появится в выбранный день') + '</div>'
  + '<button class="tt-add-btn" style="margin-top:14px" onclick="crmEventOpenModal()"><span style="font-size:18px;line-height:1">+</span> Задача</button>'
@@ -39540,7 +39541,7 @@ function amoRenderAttribution(d){
  + '<td style="padding:10px 8px;font-size:11px;color:var(--text-muted)">Часть в «Без тега» через ручной перенос; часть реально потеряна. Точно скажет только Sheets-аудит.</td>'
  + '</tr>'
  + '</tbody></table>'
- + (amoDirectTarget === 0 ? '<div style="font-size:11px;color:var(--text-muted);margin-top:10px;padding:8px 10px;background:rgba(255,179,64,.10);border-radius:6px">⚠ Тег «таргет таблица» пока не проставлен. Интеграция Meta→amo только включена — новые лиды получат тег в ближайшие часы/дни. Тогда атрибуция станет точной.</div>' : '')
+ + (amoDirectTarget === 0 ? '<div style="font-size:11px;color:var(--text-muted);margin-top:10px;padding:8px 10px;background:rgba(255,179,64,.10);border-radius:6px">Тег «таргет таблица» пока не проставлен. Интеграция Meta→amo только включена — новые лиды получат тег в ближайшие часы/дни. Тогда атрибуция станет точной.</div>' : '')
  + '<div style="font-size:11px;color:var(--text-muted);margin-top:8px">Чтобы увидеть <b>где именно отваливаются</b> Marquiz-лиды на воронке — выбери «Только Marquiz» в фильтре сверху. Аналогично для Meta когда появятся.</div>'
  + '</div>';
  el.innerHTML = html;
@@ -39920,7 +39921,7 @@ function amoRenderHonest(d){
  html += '</tbody></table>'
  + '<div style="font-size:11px;color:var(--text-muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border-faint)">'
  + 'Это <b>конкретные люди</b> которых я нашёл по телефонам или тегу marquiz. Без обмана: каждая строка — про этих самых людей.'
- + (d.sheet_phones_truncated ? ' ⚠️ Часть Sheets-телефонов не проверена (ограничение скорости).' : '')
+ + (d.sheet_phones_truncated ? ' Часть Sheets-телефонов не проверена (ограничение скорости).' : '')
  + '</div>'
  + '</div>';
  el.innerHTML = html;

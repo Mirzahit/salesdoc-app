@@ -23,6 +23,12 @@ for (const country of ['KZ', 'KG']) {
   const cj = await getj('/api/clients?country=' + country);
   const clients = cj.clients || [];
   const clByName = new Map(); clients.forEach(c => clByName.set(norm(c.company_name), c));
+  // множество всех существующих client_id (для генерации гарантированно свободного id) +
+  // текущий максимум числового суффикса (авто-ген сервера ненадёжен — коллизит).
+  const allIds = new Set(clients.map(c => c.client_id));
+  let maxNum = 0;
+  clients.forEach(c => { const m = String(c.client_id || '').match(/SD-[A-Z]{2}-\d{4}-(\d+)/); if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10)); });
+  const nextFreeId = () => { do { maxNum++; var id = 'SD-' + country + '-2026-' + String(maxNum).padStart(5, '0'); } while (allIds.has(id)); allIds.add(id); return id; };
   // оплаты внедрения с FROM
   const pj = await getj('/api/payments?country=' + country + '&category=implementation&limit=5000');
   const impl = (pj.payments || []).filter(p => String(p.paid_at) >= FROM);
@@ -40,9 +46,11 @@ for (const country of ['KZ', 'KG']) {
     if (!APPLY) { results.created.push(p.company_name + ' (' + country + ')' + (cid ? ' [есть клиент ' + cid + ']' : ' [новый клиент]')); continue; }
 
     try {
-      // 1) клиент (идемпотентно по имени; новому ставим onboarding, без авто-задачи)
+      // 1) клиент (новому присваиваем СВОЙ свободный client_id — авто-ген сервера коллизит;
+      //    onboarding, без авто-задачи)
       if (!cid) {
-        const cr = await post('/api/clients', { company_name: p.company_name, country, status: 'onboarding', skip_auto_task: true });
+        const newId = nextFreeId();
+        const cr = await post('/api/clients', { client_id: newId, company_name: p.company_name, country, status: 'onboarding', skip_auto_task: true });
         cid = cr.json && cr.json.client && cr.json.client.client_id;
         if (!cid) throw new Error('client create failed: ' + JSON.stringify(cr.json));
       }
