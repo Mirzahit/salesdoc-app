@@ -255,14 +255,16 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
   allLeads.forEach(l => {
     const tags = (l._embedded && l._embedded.tags) || [];
     if(tags.length === 0){ tagCounts['__without_tag__']++; return; }
-    let matched = false;
-    tags.forEach(t => {
+    // v663: лид с несколькими тегами считался в нескольких источниках —
+    // теперь определяем ОДИН источник по приоритету (таблица > ТАРГЕТ > marquiz) и считаем один раз
+    let source = null;
+    for(const t of tags){
       const tn = String(t.name||'').toLowerCase();
-      if(tn.includes('таргет таблица')) { tagCounts['таргет таблица']++; matched = true; }
-      else if(tn === 'таргет' || tn.includes('таргет') && !tn.includes('таблица')) { tagCounts['ТАРГЕТ']++; matched = true; }
-      else if(tn.includes('marquiz')) { tagCounts['marquiz']++; matched = true; }
-    });
-    if(matched) _accountedByTag++;
+      if(tn.includes('таргет таблица')){ source = 'таргет таблица'; break; }
+      else if(tn === 'таргет' || (tn.includes('таргет') && !tn.includes('таблица'))){ if(!source) source = 'ТАРГЕТ'; }
+      else if(tn.includes('marquiz')){ if(!source) source = 'marquiz'; }
+    }
+    if(source){ tagCounts[source]++; _accountedByTag++; }
   });
 
   return {
@@ -955,10 +957,9 @@ export default async function handler(req, res){
         const t = String(line||'').toLowerCase();
         if(/номер не полн|плох.*номер|без номер/.test(t)) return 'broken';
         if(/не квал|сигарет|табак|алкогол|свинин/.test(t)) return 'not_qualified';
-        if(/^|.*срм|crm|created/.test(t) && /срм|crm|created/.test(t)) {
-          // 'srm' mentioned → в СРМ
-          if(/срм|crm|created/.test(t)) return 'in_amo_marked';
-        }
+        // v663: упрощён избыточный regex /^|.../ (пустая альтернатива ^ матчила всё, но был
+        // AND с реальной проверкой — поведение не менялось); оставлена осмысленная проверка
+        if(/срм|crm|created/.test(t)) return 'in_amo_marked';
         if(/ндз|не дозв/.test(t)) return 'no_answer';
         return 'unprocessed';
       }

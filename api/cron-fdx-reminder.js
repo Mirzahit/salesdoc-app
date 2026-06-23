@@ -29,13 +29,16 @@ async function kvGet(key) {
 }
 
 function periodBoundsForMetric(period, now) {
+  // v663: границы дня/недели считаем в UTC — entry.date хранится как UTC-дата (toISOString),
+  // Date.parse(e.date) тоже UTC. Раньше границы строились в локальном времени сервера →
+  // на non-UTC сервере записи попадали не в тот день/неделю (зеркально с api/4dx.js).
   const d = new Date(now);
   if (period === 'day') {
-    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
     return { start, end: start + 86400000 - 1 };
   }
-  const dow = (d.getDay() + 6) % 7;
-  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow).getTime();
+  const dow = (d.getUTCDay() + 6) % 7;
+  const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow);
   return { start, end: start + 7 * 86400000 - 1 };
 }
 

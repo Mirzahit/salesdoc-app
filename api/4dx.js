@@ -107,14 +107,17 @@ async function readBody(req) {
 
 // Светофор для опережающего: factPct vs timePct в текущем периоде.
 function periodBoundsForMetric(period, now) {
+  // v663: границы дня/недели считаем в UTC — entry.date хранится как toISOString().slice(0,10)
+  // (UTC-полночь), а Date.parse(e.date) тоже парсит как UTC. Раньше границы строились в
+  // локальном времени сервера → на non-UTC сервере записи попадали не в тот день/неделю.
   const d = new Date(now);
   if (period === 'day') {
-    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
     return { start, end: start + 86400000 - 1 };
   }
-  // week — понедельник 00:00 → воскресенье 23:59 локально
-  const dow = (d.getDay() + 6) % 7; // 0 = понедельник
-  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow).getTime();
+  // week — понедельник 00:00 → воскресенье 23:59 в UTC
+  const dow = (d.getUTCDay() + 6) % 7; // 0 = понедельник
+  const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow);
   return { start, end: start + 7 * 86400000 - 1 };
 }
 

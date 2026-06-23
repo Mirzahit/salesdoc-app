@@ -214,7 +214,7 @@ export async function ensureBoardEntryForPayment(opts) {
   }
 
   if (kind === 'integ') {
-    if (sheet_row && sheet_month) {
+    if (sheet_row != null && sheet_month != null) { // v663: sheet_month=0 (Sheets-импорт) — реальное значение, не falsy-пропуск дедупа
       const existInteg = await sbSelect('integrations', {
         country: 'eq.' + country, sheet_row: 'eq.' + sheet_row, sheet_month: 'eq.' + sheet_month,
         select: 'id,client_id,status', limit: '1'
@@ -240,7 +240,7 @@ export async function ensureBoardEntryForPayment(opts) {
   }
 
   // kind === 'impl'
-  if (sheet_row && sheet_month) {
+  if (sheet_row != null && sheet_month != null) { // v663: sheet_month=0 (Sheets-импорт) — реальное значение, не falsy-пропуск дедупа
     const existCard = await sbSelect('kanban_cards', {
       country: 'eq.' + country, sheet_row: 'eq.' + sheet_row, sheet_month: 'eq.' + sheet_month,
       select: 'id,client_id,stage', limit: '1'
@@ -403,7 +403,8 @@ async function handleTicketsRoute(req, res) {
     // sla_overdue=1 → просроченные тикеты в работе (sla_due_at < now AND status НЕ закрыт)
     if (sla_overdue === '1' || sla_overdue === 'true') {
       params['sla_due_at'] = 'lt.' + new Date().toISOString();
-      params['status'] = 'in.(new,in_progress,waiting_client,reopened)';
+      // v663: явный фильтр по status имеет приоритет; SLA-дефолт только если status не задан
+      if (!status) params['status'] = 'in.(new,in_progress,waiting_client,reopened)';
     }
     // По умолчанию скрываем закрытые если нет явного фильтра по status.
     // all=1 — показать все, включая закрытые (для ленты карточки клиента — историческая хронология).

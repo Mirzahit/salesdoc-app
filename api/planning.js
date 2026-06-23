@@ -87,7 +87,10 @@ export default async function handler(req, res) {
       let serverState = null;
       try { serverState = current ? (typeof current === 'string' ? JSON.parse(current) : current) : null; } catch {}
       const serverTs = (serverState && typeof serverState.updated_at === 'number') ? serverState.updated_at : 0;
-      if (clientUpdatedAt && serverTs && serverTs > clientUpdatedAt) {
+      // v663: убран guard `clientUpdatedAt &&` — при client_updated_at=0 (первый синк/сброс) проверка
+      // конфликта раньше отключалась (0 — falsy), и пустой/устаревший клиент мог затереть свежие данные.
+      // Теперь 0 не глушит детект: если на сервере уже есть данные (serverTs>0) — отдаём 409.
+      if (serverTs && serverTs > clientUpdatedAt) {
         return res.status(409).json({ error: 'CONFLICT', server_updated_at: serverTs });
       }
 

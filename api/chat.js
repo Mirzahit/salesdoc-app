@@ -22,21 +22,29 @@ function fmtKZT(n) {
 }
 
 // v163: собираем контекст таргета для Маркетолога — дёргаем наш же /api/meta-ads
-async function buildMarketingContext(req) {
+// v663: принимаем country и передаём в /api/meta-ads — иначе KG-кабинет падал на KZ
+async function buildMarketingContext(req, country) {
   // Определяем base URL — на Vercel это req.headers.host + https://
   const host = (req && req.headers && req.headers.host) || 'salesdoc-app.vercel.app';
   const proto = host.includes('localhost') ? 'http' : 'https';
   const base = `${proto}://${host}`;
 
+  // v663: страна (KZ/KG) — у каждой свой Meta-кабинет; meta-ads без country дефолтит на KZ
+  const cParam = (String(country || '').toUpperCase() === 'KG') ? '&country=KG' : '';
+
+  // v663: meta-ads закрыт checkAuth (x-app-token) — пробрасываем токен из env, иначе
+  // серверный self-fetch получал 401 и контекст таргета был пустым.
+  const opts = { headers: { 'x-app-token': (process.env.APP_TOKEN || '').trim() } };
+
   // Параллельно тянем сводку 7 дней, 30 дней, ТЕКУЩИЙ календарный месяц,
   // динамику по дням за last_30d, инфо аккаунта и активные кампании.
   const [sum7, sum30, sumThisMonth, daily30, info, camps30] = await Promise.all([
-    fetch(`${base}/api/meta-ads?endpoint=account_summary&period=last_7d`).then(r => r.json()).catch(e => ({ error: e.message })),
-    fetch(`${base}/api/meta-ads?endpoint=account_summary&period=last_30d`).then(r => r.json()).catch(e => ({ error: e.message })),
-    fetch(`${base}/api/meta-ads?endpoint=account_summary&period=this_month`).then(r => r.json()).catch(e => ({ error: e.message })),
-    fetch(`${base}/api/meta-ads?endpoint=daily&period=last_30d`).then(r => r.json()).catch(e => ({ error: e.message })),
-    fetch(`${base}/api/meta-ads?endpoint=account_info`).then(r => r.json()).catch(e => ({ error: e.message })),
-    fetch(`${base}/api/meta-ads?endpoint=campaigns&period=last_30d`).then(r => r.json()).catch(e => ({ error: e.message }))
+    fetch(`${base}/api/meta-ads?endpoint=account_summary&period=last_7d${cParam}`, opts).then(r => r.json()).catch(e => ({ error: e.message })),
+    fetch(`${base}/api/meta-ads?endpoint=account_summary&period=last_30d${cParam}`, opts).then(r => r.json()).catch(e => ({ error: e.message })),
+    fetch(`${base}/api/meta-ads?endpoint=account_summary&period=this_month${cParam}`, opts).then(r => r.json()).catch(e => ({ error: e.message })),
+    fetch(`${base}/api/meta-ads?endpoint=daily&period=last_30d${cParam}`, opts).then(r => r.json()).catch(e => ({ error: e.message })),
+    fetch(`${base}/api/meta-ads?endpoint=account_info${cParam}`, opts).then(r => r.json()).catch(e => ({ error: e.message })),
+    fetch(`${base}/api/meta-ads?endpoint=campaigns&period=last_30d${cParam}`, opts).then(r => r.json()).catch(e => ({ error: e.message }))
   ]);
 
   if (sum7.error) throw new Error('Meta Ads API: ' + sum7.error);
@@ -237,7 +245,7 @@ export default async function handler(req, res) {
     // в контекст. Это серверный fetch, токен в env.
     if (agentId === 'marketing') {
       try {
-        const marketingCtx = await buildMarketingContext(req);
+        const marketingCtx = await buildMarketingContext(req, context && context.country); // v663: прокидываем страну в Meta Ads
         ctxBlock = (ctxBlock ? ctxBlock + '\n\n' : '') + marketingCtx;
       } catch (mErr) {
         console.warn('marketing context build failed:', mErr.message);

@@ -116,7 +116,7 @@ function _parseDate(v, dateCorrection) {
   if (typeof v === 'number') {
     if (v === 0) return null;
     const d = new Date(Math.round((v - 25569) * 86400 * 1000));
-    if (isNaN(d)) return null;
+    if (isNaN(d.getTime())) return null; // v663: проверка валидности даты через getTime() (как на строке ниже), isNaN(Date) ненадёжен
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   let s = String(v).trim();
@@ -134,7 +134,7 @@ function _parseDate(v, dateCorrection) {
   if (s.match(/^\d{4}-\d{2}-\d{2}/)) return s.substring(0, 10);
   try {
     const d = new Date(s);
-    if (!isNaN(d) && d.getFullYear() > 2000) {
+    if (!isNaN(d.getTime()) && d.getFullYear() > 2000) { // v663: проверка валидности через getTime(), isNaN(Date) ненадёжен
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
   } catch (e) {}
