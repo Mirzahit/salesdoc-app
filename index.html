@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v670</title>
+<title>SalesDoc — Финансовый Дашборд v671</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4422,7 +4422,8 @@ body{font-feature-settings:"tnum" 1}
 #view-dashboard .kpi-card .kpi-card-inner{ display:flex !important; align-items:center !important; gap:16px !important; padding:0 !important; }
 #view-dashboard .kpi-left{ display:flex !important; align-items:baseline; gap:14px; width:100%; }
 #view-dashboard .kpi-label{ flex:1; font-size:14px !important; color:var(--text-2) !important; margin:0 !important; }
-#view-dashboard .kpi-value{ font-size:16px; text-align:right; white-space:nowrap; }
+#view-dashboard .kpi-value{ font-size:18px !important; line-height:1.1 !important; letter-spacing:-.2px !important; text-align:right; white-space:nowrap; }
+#view-dashboard .kpi-value span{ font-size:12px !important; letter-spacing:0 !important; }
 #view-dashboard .kpi-value span{ color:var(--text-2); }
 #view-dashboard .kpi-delta{ min-width:60px; text-align:right; }
 /* лишние сравнительные чипы прячем — чистый леджер */
@@ -4439,7 +4440,7 @@ body{font-feature-settings:"tnum" 1}
 @media (max-width:640px){
   #view-dashboard #kpi-total{ font-size:32px !important; letter-spacing:-1px; }
   #view-dashboard #kpi-total span{ font-size:18px; }
-  #view-dashboard .kpi-value{ font-size:14px; }
+  #view-dashboard .kpi-value{ font-size:15px !important; }
 }
 
 /* v668 — Дашборд: дельта героя в строку с числом + спарклайн-тренд + шапка колонок */
@@ -10402,7 +10403,7 @@ function renderPlanFactStrip(ps, factTotal){
  + '<div style="padding:6px 2px 2px">'
  +   '<div style="font-size:13px;color:var(--text-2);font-weight:500;margin-bottom:12px">Доход за '+monthNames[sel.month].toLowerCase()+' '+sel.year+'</div>'
  +   '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">'
- +     '<div class="num" style="font-size:48px;font-weight:600;letter-spacing:-1.8px;line-height:1;color:var(--text)">'+fmt(factTotal)+'<span style="font-size:24px;color:var(--text-2)"> '+cur+'</span></div>'
+ +     '<div class="num" style="font-size:54px;font-weight:600;letter-spacing:-2.2px;line-height:1;color:var(--text)">'+fmt(factTotal)+'<span style="font-size:26px;color:var(--text-2)"> '+cur+'</span></div>'
  +     '<span style="font-size:13px;font-weight:500;padding:4px 10px;border-radius:8px;color:'+statusColor+';background:'+statusBg+'">'+pctOfPlan+'% от плана</span>'
  +     hsvg
  +   '</div>'
@@ -40652,11 +40653,18 @@ function kbRender() {
     try{
       var vd=document.getElementById('view-dashboard'); if(!vd) return;
       var grid=vd.querySelector('.kpi-grid'); if(!grid) return;
-      if(!vd.querySelector('.kpi-ledger-head')){
-        var h=document.createElement('div'); h.className='kpi-ledger-head';
-        h.innerHTML='<span class="h-src">Источник дохода</span><span class="h-trend">Тренд</span><span class="h-val">Сумма</span><span class="h-delta">&#916;</span>';
-        grid.parentNode.insertBefore(h, grid);
+      var lhead=vd.querySelector('.kpi-ledger-head');
+      if(!lhead){
+        lhead=document.createElement('div'); lhead.className='kpi-ledger-head';
+        lhead.innerHTML='<span class="h-src">Источник дохода</span><span class="h-trend">Тренд</span><span class="h-val"></span><span class="h-delta">&#916;</span>';
+        grid.parentNode.insertBefore(lhead, grid);
       }
+      try{
+        var _mn=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+        var _per='Сумма';
+        if(typeof selectedMonth!=='undefined' && selectedMonth && _mn[selectedMonth.month]) _per=_mn[selectedMonth.month]+' '+selectedMonth.year;
+        var _hv=lhead.querySelector('.h-val'); if(_hv) _hv.textContent=_per;
+      }catch(e){}
       // прячем дублирующую строку «Итого за период», когда сверху показан герой-план
       try{
         var ps=document.getElementById('plan-fact-strip');
