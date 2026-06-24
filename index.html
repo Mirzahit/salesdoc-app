@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v677</title>
+<title>SalesDoc — Финансовый Дашборд v678</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -28505,25 +28505,24 @@ function ticketsRender(){
     var ageAlert = (t.status === 'new' && ageMin > 30);
     ageHtml = '<span style="font-size:10.5px;color:' + (ageAlert ? '#EF4444' : 'var(--rk-text-faint)') + ';font-weight:' + (ageAlert ? '700' : '400') + '">' + ageStr + '</span>';
    }
-   html += '<div class="tk-card" draggable="true" ondragstart="_ticketsDragStart(event,\'' + t.id + '\')" ondragend="this.style.opacity=1" onclick="ticketsOpen(\'' + t.id + '\')" style="border-left:3px solid ' + prioStripeColor + '">';
-   html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-size:14px;font-weight:700;color:var(--rk-text);letter-spacing:-0.01em;line-height:1.3;flex:1">' + _escHtml(t.title || '(без темы)') + '</div>' + ageHtml + '</div>';
-   html += '<div style="font-size:12px;color:var(--rk-text-soft)">' + _escHtml(clientName) + '</div>';
-   // v460: для тикетов в waiting_client показываем когда перевели в ожидание
+   // v678: тикет в единый вид .rc (заголовок+аватар, клиент, возраст + приоритет/SLA). Без border-left и эмодзи.
+   var _tini = t.operator ? t.operator.trim().split(/\s+/).map(function(w){return w.charAt(0);}).join('').slice(0,2).toUpperCase() : '';
+   var _tav = t.operator ? '<span class="av" title="' + _escHtml(t.operator) + '">' + _escHtml(_tini) + '</span>' : '<span class="av none" title="не назначен">+</span>';
+   var _tover = (slaInfo && /просроч/i.test(slaInfo.label || '')) ? ' over' : '';
+   html += '<div class="rc' + _tover + '" draggable="true" ondragstart="_ticketsDragStart(event,\'' + _escHtml(String(t.id)) + '\')" ondragend="this.style.opacity=1" onclick="ticketsOpen(\'' + _escHtml(String(t.id)) + '\')" style="cursor:grab">';
+   html += '<div class="r1"><span class="cl" title="' + _escHtml(t.title || '') + '">' + _escHtml(t.title || '(без темы)') + '</span>' + _tav + '</div>';
+   html += '<div class="r2">' + _escHtml(clientName) + '</div>';
    if(t.status === 'waiting_client' && t.waiting_started_at){
     var ws = new Date(t.waiting_started_at);
     var wsLabel = String(ws.getDate()).padStart(2,'0') + '.' + String(ws.getMonth()+1).padStart(2,'0') + ' ' + String(ws.getHours()).padStart(2,'0') + ':' + String(ws.getMinutes()).padStart(2,'0');
-    html += '<div style="font-size:10.5px;color:#C2410C;background:rgba(251,146,60,.10);padding:3px 7px;border-radius:5px;margin-top:4px;display:inline-block">⏸ Передано клиенту: ' + wsLabel + '</div>';
+    html += '<div style="font-size:10px;color:#E0A458;margin-top:4px">Передано клиенту: ' + wsLabel + '</div>';
    }
-   html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">';
-   // v540: аватар-кружок + имя — быстрее сканировать чем длинное имя
-   html += '<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--rk-text-2)">' + _ticketsAvatarHtml(t.operator) + (t.operator ? '<span>' + _escHtml(t.operator) + '</span>' : '<span style="color:var(--text-faint)">не назначен</span>') + '</span>';
-   html += '<div style="display:flex;gap:4px">';
-   // v524: pill приоритета показываем только для high/critical — для normal/low он лишний шум
-   if(t.priority === 'critical' || t.priority === 'high'){
-    html += '<span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:' + prioInfo.bg + ';color:' + prioInfo.color + ';letter-spacing:.2px">' + prioInfo.label + '</span>';
-   }
-   if(slaInfo) html += '<span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:' + slaInfo.bg + ';color:' + slaInfo.color + '">' + slaInfo.label + '</span>';
-   html += '</div></div>';
+   html += '<div class="r3">' + (ageHtml || '<span class="age"></span>');
+   var _tbadges = '';
+   if(t.priority === 'critical' || t.priority === 'high') _tbadges += '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:' + prioInfo.bg + ';color:' + prioInfo.color + '">' + prioInfo.label + '</span>';
+   if(slaInfo) _tbadges += '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:' + slaInfo.bg + ';color:' + slaInfo.color + ';margin-left:4px">' + slaInfo.label + '</span>';
+   if(_tbadges) html += '<span style="margin-left:auto;display:flex;gap:4px;align-items:center">' + _tbadges + '</span>';
+   html += '</div>';
    html += '</div>';
   });
   html += '</div>'; // /col-body
