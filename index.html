@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v680</title>
+<title>SalesDoc — Финансовый Дашборд v681</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4662,6 +4662,39 @@ body.light .route-col-amo .rc .act.go{color:#4651B5}
 #view-expenses .exp-table td:nth-child(3){color:var(--text-soft);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #view-expenses .exp-table td.exp-am{text-align:right;font-family:var(--mono);font-feature-settings:"tnum" 1;color:var(--text);font-weight:500}
 #view-expenses .exp-table td.exp-bk{text-align:right;color:var(--text-soft);font-size:12.5px}
+
+/* v681 — Маркетинг «Пульт кампаний»: вердикт-леджер кампаний */
+#meta-camps-summary{font-size:13px;color:var(--text-soft)}
+#meta-camps-summary b{color:var(--text);font-weight:600;font-family:var(--mono)}
+#meta-camps-summary .mc-warn{color:#E0A458;font-weight:600}
+.mc-table{border-collapse:collapse;width:100%}
+.mc-table .mc-th{font-size:11px!important;color:var(--text-faint,#5A5E66)!important;font-weight:400!important;text-transform:none!important;letter-spacing:0!important;text-align:left;padding:10px 8px!important;border-bottom:1px solid var(--border,rgba(255,255,255,.07))!important;background:transparent!important}
+.mc-table .mc-th.mc-r{text-align:right}
+.mc-table td{padding:14px 8px!important;border-bottom:1px solid var(--border,rgba(255,255,255,.07))!important;font-size:13.5px;background:transparent!important}
+.mc-table .mc-r{text-align:right}
+.mc-table .mc-row:hover td{background:var(--hover,rgba(255,255,255,.03))!important}
+.mc-table .mc-row.off{opacity:.55}
+.mc-table .mc-cmp{display:inline-flex;align-items:center;gap:10px;min-width:0;max-width:100%}
+.mc-table .mc-st{width:7px;height:7px;border-radius:50%;background:#5E6AD2;flex:0 0 auto}
+.mc-table .mc-st.pause{background:transparent;border:1.5px solid var(--text-faint,#5A5E66)}
+.mc-table .mc-nm{font-size:14px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mc-table .mc-v{font-family:var(--mono);font-size:13px;color:var(--text-soft)}
+.mc-table .mc-cpl{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--text)}
+.mc-table .mc-cpl.ok{color:#4CB782} .mc-table .mc-cpl.warn{color:#E0A458} .mc-table .mc-cpl.bad{color:#E5604D}
+.mc-table .mc-vlab{font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:7px;display:inline-block;white-space:nowrap}
+.mc-table .mc-vlab.add{color:#4CB782;background:rgba(76,183,130,.13)}
+.mc-table .mc-vlab.hold{color:var(--text-soft);background:rgba(128,135,160,.12)}
+.mc-table .mc-vlab.warn{color:#E0A458;background:rgba(224,164,88,.13)}
+.mc-table .mc-vlab.bad{color:#E5604D;background:rgba(229,96,77,.13)}
+body.light .mc-table .mc-th{color:#717680!important;border-bottom-color:rgba(15,18,25,.10)!important}
+body.light .mc-table td{border-bottom-color:rgba(15,18,25,.09)!important}
+body.light .mc-table .mc-row:hover td{background:rgba(15,18,25,.03)!important}
+body.light .mc-table .mc-nm{color:#16181D}
+body.light .mc-table .mc-cpl{color:#16181D}
+body.light .mc-table .mc-v{color:#5C616B}
+body.light .mc-table .mc-st.pause{border-color:#C7CBD6}
+body.light #meta-camps-summary{color:#5C616B}
+body.light #meta-camps-summary b{color:#16181D}
 </style>
 
 <script>
@@ -7405,10 +7438,10 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
  <div>
  <div style="font-size:13px;font-weight:700;color:var(--text-primary);font-family:'Inter',sans-serif">Кампании</div>
- <div style="font-size:11px;color:var(--text-muted)">Сравни какая работает лучше — по цене лида и расходу</div>
+ <div id="meta-camps-summary" style="font-size:12px;color:var(--text-muted);margin-top:3px">Решение по каждой кампании — докинуть или выключить</div>
  </div>
  </div>
- <div style="overflow-x:auto"><table id="meta-api-camps" class="data-table" style="font-size:12px;width:100%"></table></div>
+ <div style="overflow-x:auto"><table id="meta-api-camps" class="data-table mc-table" style="font-size:12px;width:100%"></table></div>
  </div>
 
  <!-- Подсказка если лидов нет -->
@@ -20661,53 +20694,71 @@ function _metaDrawDailyChart(canvas, days, info){
 }
 
 function _metaRenderCampaigns(camps, info){
+ // v681: «Пульт кампаний» — вердикт по каждой кампании (докинуть/держать/дорогой/убрать)
+ // на основе цены лида относительно средней по кабинету. Проблемные — сверху.
  var t = document.getElementById('meta-api-camps');
  if (!t) return;
  var cur = (info && info.currency) || 'USD';
+ var sEl = document.getElementById('meta-camps-summary');
  var activeOnly = (document.getElementById('meta-api-active-only')||{}).checked;
- // v160: фильтр — только активные кампании если флажок включён
  var filtered = activeOnly ? camps.filter(function(c){ return c.status === 'ACTIVE'; }) : camps.slice();
  if (!filtered.length) {
- t.innerHTML = '<tbody><tr><td style="padding:20px;text-align:center;color:var(--text-muted)" colspan="11">'
- + (activeOnly ? 'Активных кампаний за этот период нет. Сними галочку «Только активные» чтобы увидеть paused-кампании.' : 'Нет данных по кампаниям за этот период.')
- + '</td></tr></tbody>';
- return;
+  t.innerHTML = '<tbody><tr><td style="padding:20px;text-align:center;color:var(--text-muted)" colspan="5">'
+  + (activeOnly ? 'Активных кампаний за период нет. Сними галочку «Только активные».' : 'Нет данных по кампаниям за период.')
+  + '</td></tr></tbody>';
+  if (sEl) sEl.textContent = '';
+  return;
  }
- // Сортируем — активные сверху, потом по расходу
- filtered.sort(function(a,b){
- var sa = a.status === 'ACTIVE' ? 1 : 0, sb = b.status === 'ACTIVE' ? 1 : 0;
- if (sa !== sb) return sb - sa;
- var spA = a.insights ? parseFloat(a.insights.spend||0) : 0;
- var spB = b.insights ? parseFloat(b.insights.spend||0) : 0;
- return spB - spA;
+ // Средняя цена лида (база вердикта) — по ВСЕМ кампаниям, не по отфильтрованным:
+ // иначе галочка «только активные» меняла бы вердикты у оставшихся.
+ var allSpend = 0, allLeads = 0;
+ camps.forEach(function(c){ var i=c.insights||{}; allSpend += parseFloat(i.spend||0); allLeads += parseFloat(i.leads_count||0); });
+ var avgCpl = allLeads > 0 ? allSpend/allLeads : 0;
+ // Суммы для строки-сводки — по показанным (filtered).
+ var totSpend = 0, totLeads = 0;
+ filtered.forEach(function(c){ var i=c.insights||{}; totSpend += parseFloat(i.spend||0); totLeads += parseFloat(i.leads_count||0); });
+ // Вердикт по соотношению цены лида к средней.
+ function verdict(spend, leads){
+  var r = (avgCpl > 0 && leads > 0) ? (spend/leads)/avgCpl : 0;
+  if (leads === 0) return spend > 0 ? { rank: 4, cls: 'bad', label: 'убрать' } : { rank: 1.5, cls: 'hold', label: '' };
+  if (leads < 10) {
+   // мало лидов — обычно рано судить; НО если лид уже сильно дороже среднего, это явный слив, не прячем
+   if (r > 1.6) return { rank: 4, cls: 'bad', label: 'убрать' };
+   return { rank: 1.5, cls: 'hold', label: 'мало данных' };
+  }
+  if (r > 1.6)  return { rank: 4, cls: 'bad',  label: 'убрать' };
+  if (r > 1.15) return { rank: 3, cls: 'warn', label: 'дорогой лид' };
+  if (r < 0.85) return { rank: 0, cls: 'add',  label: 'докинуть' };
+  return { rank: 1, cls: 'hold', label: 'держать' };
+ }
+ var rowsData = filtered.map(function(c){
+  var i = c.insights || {};
+  var sp = parseFloat(i.spend||0), ld = parseFloat(i.leads_count||0);
+  return { c:c, sp:sp, ld:ld, cpl: ld>0 ? sp/ld : null, v: verdict(sp, ld) };
  });
- var rows = filtered.map(function(c){
- var ins = c.insights || {};
- var leads = parseFloat(ins.leads_count||0);
- var spend = parseFloat(ins.spend||0);
- var cpl = leads > 0 ? (spend/leads) : null;
- var statusBadge = c.status === 'ACTIVE'
- ? '<span style="font-size:9px;padding:2px 7px;border-radius:20px;background:rgba(127,184,158,.12);color:#4CB782">Идёт</span>'
- : '<span style="font-size:9px;padding:2px 7px;border-radius:20px;background:var(--dark-panel);color:var(--text-muted)">'+sanitize(c.status||'?')+'</span>';
- return '<tr style="opacity:'+(c.status==='ACTIVE'?'1':'.55')+'">'
- + '<td style="padding:8px 6px"><div style="font-size:12px;font-weight:600">'+sanitize(c.name||'—')+'</div><div style="margin-top:3px">'+statusBadge+'</div></td>'
- + '<td style="text-align:right;padding:8px 6px"><b>'+_metaFmtMoney(ins.spend, cur)+'</b></td>'
- + '<td style="text-align:right;padding:8px 6px;color:'+(leads>0?'#4CB782':'var(--text-muted)')+'"><b>'+(leads>0?_metaFmtNum(leads):'—')+'</b></td>'
- + '<td style="text-align:right;padding:8px 6px">'+(cpl!==null?_metaFmtMoney(cpl.toFixed(2), cur):'<span style="color:var(--text-muted)">—</span>')+'</td>'
- + '<td style="text-align:right;padding:8px 6px">'+_metaFmtNum(ins.reach)+'</td>'
- + '<td style="text-align:right;padding:8px 6px">'+_metaFmtNum(ins.impressions)+'</td>'
- + '<td style="text-align:right;padding:8px 6px">'+(parseFloat(ins.frequency||0)).toFixed(2)+'</td>'
- + '<td style="text-align:right;padding:8px 6px">'+_metaFmtNum(ins.clicks)+'</td>'
- + '<td style="text-align:right;padding:8px 6px">'+_metaFmtPct(ins.ctr)+'</td>'
- + '<td style="text-align:right;padding:8px 6px">'+_metaFmtMoney(ins.cpc, cur)+'</td>'
- + '<td style="text-align:right;padding:8px 6px">'+_metaFmtMoney(ins.cpm, cur)+'</td>'
- + '</tr>';
+ // Проблемные сверху: по «тяжести» вердикта убыв., затем по расходу убыв.
+ rowsData.sort(function(a,b){ if (b.v.rank !== a.v.rank) return b.v.rank - a.v.rank; return b.sp - a.sp; });
+ var dear = rowsData.filter(function(e){ return e.v.cls==='warn' || e.v.cls==='bad'; }).length;
+ if (sEl) {
+  var dearTxt = dear>0 ? ' · <span class="mc-warn">' + dear + ' ' + (dear===1?'кампания дорожает':(dear<5?'кампании дорожают':'кампаний дорожают')) + '</span>' : '';
+  sEl.innerHTML = 'Потрачено <b>'+_metaFmtMoney(totSpend, cur)+'</b> · лидов <b>'+_metaFmtNum(totLeads)+'</b> · средняя цена лида <b>'+(avgCpl>0?_metaFmtMoney(avgCpl.toFixed(2), cur):'—')+'</b>' + dearTxt;
+ }
+ var cplClass = function(e){ var b='mc-cpl'; if(e.cpl===null) return b; if(e.v.cls==='bad') return b+' bad'; if(e.v.cls==='warn') return b+' warn'; if(e.v.cls==='add') return b+' ok'; return b; };
+ var rows = rowsData.map(function(e){
+  var act = e.c.status === 'ACTIVE';
+  var vlab = e.v.label ? '<span class="mc-vlab '+e.v.cls+'">'+e.v.label+'</span>' : '';
+  return '<tr class="mc-row'+(act?'':' off')+'">'
+   + '<td><span class="mc-cmp"><span class="mc-st'+(act?'':' pause')+'"></span><span class="mc-nm">'+sanitize(e.c.name||'—')+'</span></span></td>'
+   + '<td class="mc-r mc-v">'+_metaFmtMoney(e.sp, cur)+'</td>'
+   + '<td class="mc-r mc-v">'+(e.ld>0?_metaFmtNum(e.ld):'—')+'</td>'
+   + '<td class="mc-r '+cplClass(e)+'">'+(e.cpl!==null?_metaFmtMoney(e.cpl.toFixed(2), cur):'—')+'</td>'
+   + '<td class="mc-r">'+vlab+'</td>'
+   + '</tr>';
  }).join('');
- var th = function(label){ return '<th style="text-align:right;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">'+label+'</th>'; };
  t.innerHTML = '<thead><tr>'
- + '<th style="text-align:left;padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Кампания</th>'
- + th('Расход') + th('Лиды') + th('Цена лида') + th('Охват') + th('Показы') + th('Частота') + th('Клики') + th('CTR') + th('CPC') + th('CPM')
- + '</tr></thead><tbody>' + rows + '</tbody>';
+  + '<th class="mc-th">Кампания · сначала проблемные</th>'
+  + '<th class="mc-th mc-r">Расход</th><th class="mc-th mc-r">Лиды</th><th class="mc-th mc-r">Цена лида</th><th class="mc-th mc-r">Решение</th>'
+  + '</tr></thead><tbody>' + rows + '</tbody>';
 }
 // /v158
 
