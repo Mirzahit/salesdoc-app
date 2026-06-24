@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v664</title>
+<title>SalesDoc — Финансовый Дашборд v665</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4377,6 +4377,34 @@ body.light{
 body{font-feature-settings:"tnum" 1}
 /* старый PNG-логотип скрыт, показываем векторный знак */
 .logo-area .logo-mark{display:block;border-radius:10px}
+
+/* ============================================================
+   v665 — Дашборд (фаза 2): снятие капса, моно-цифры, тише
+   поверхности, фирменное свечение. Без структурной перестройки
+   (data-привязка по id сохранена). Откат = удалить этот блок.
+   ============================================================ */
+/* спокойные подписи вместо КАПСА (везде, где были микро-лейблы) */
+.kpi-label,.sd-kpi-label,.panel-title,.plan-mini-kpi-label,.meta-kpi-label,
+.mkt-main-kpi-label,.kbr-kpi .kpi-label{
+  text-transform:none !important; letter-spacing:.1px !important; font-weight:500 !important;
+}
+/* инлайн-капс внутри дашборда (планка плана, P&L, лидеры) — тоже снять */
+#view-dashboard [style*="uppercase"]{
+  text-transform:none !important; letter-spacing:.2px !important;
+}
+/* крупные суммы — моноширинные табличные */
+.kpi-value,.kpi-chip-val,.plan-sum-val,
+#pnl-income,#pnl-expense,#pnl-profit,#pnl-margin{
+  font-family:var(--mono) !important; font-feature-settings:"tnum" 1; letter-spacing:-.3px;
+}
+/* KPI-карточки тише: ровная тонкая граница, без жирной заливки/тени */
+#view-dashboard .kpi-card{ background:var(--surface); border:1px solid var(--border); box-shadow:none; }
+#view-dashboard .kpi-card:hover{ border-color:var(--border-strong); }
+/* фирменное индиго-свечение сверху дашборда (фон, без сдвига раскладки) */
+#view-dashboard{
+  background-image:radial-gradient(ellipse 900px 360px at 50% -30px, var(--accent-bg), transparent 70%);
+  background-repeat:no-repeat;
+}
 </style>
 
 <script>
@@ -24345,9 +24373,9 @@ function renderPnL() {
  cats.sort(function(a, b) { return b.val - a.val; });
  
  var catColors = {
- 'ЗП': '#4A90D9', 'Аренда': '#7AA7D7', 'Услуги': '#AB47BC',
- 'Налоги': '#D67373', 'бонус': '#7FB89E', 'Банк': '#78909C',
- 'Маркетинг': '#FF7043', 'Транспорт': '#26A69A'
+ 'ЗП': '#5E6AD2', 'Аренда': '#7C89F4', 'Услуги': '#4F5BC4',
+ 'Налоги': '#8E97D9', 'бонус': '#A6ADEA', 'Банк': '#6B7280',
+ 'Маркетинг': '#3D47A0', 'Транспорт': '#9AA0AA'
  };
  
  var topEl = document.getElementById('pnl-top-expenses');
@@ -24678,7 +24706,7 @@ if('serviceWorker' in navigator){
  msg.textContent = 'Доступна новая версия';
  var btn = document.createElement('button');
  btn.textContent = 'Обновить';
- btn.style.cssText = 'background:#34C77A;color:#FFF;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif';
+ btn.style.cssText = 'background:#5E6AD2;color:#FFF;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif';
  btn.onclick = function(){
  try{ nw.postMessage({type:'SKIP_WAITING'}); }catch(e){}
  setTimeout(function(){ try{ location.reload(); }catch(e){} }, 200);
