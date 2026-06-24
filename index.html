@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v669</title>
+<title>SalesDoc — Финансовый Дашборд v670</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10391,37 +10391,29 @@ function renderPlanFactStrip(ps, factTotal){
  (paceMultiplier <= 1 ? 'текущий темп достаточен' :
  ('нужно ускориться × ' + paceMultiplier.toFixed(1)))
  );
+ // v670: герой как в утверждённом превью — «Доход за месяц» + чип + контекст + тонкая
+ // полоска + мини-тренд справа (вместо большого 5-колоночного блока «План месяца»).
+ // Дублирующая строка «Итого за период» в леджере прячется в dashTrend (там же hero-spark не нужен).
+ var hdown = forecastPct < 100;
+ var hp=[]; for(var hi=0;hi<7;hi++){ var hf=hi/6; var hb=(hdown?0.30:0.72)+hf*((hdown?0.72:0.28)-(hdown?0.30:0.72)); var hw=Math.sin(hf*3.2+1.1)*0.10+Math.sin(hf*6.5+0.5)*0.05; var hy=Math.max(0.1,Math.min(0.9,hb+hw)); hp.push([+(2+hf*172).toFixed(1),+(3+hy*34).toFixed(1)]); }
+ var hl='M'+hp[0][0]+' '+hp[0][1]; for(var hj=1;hj<7;hj++) hl+=' L'+hp[hj][0]+' '+hp[hj][1];
+ var hsvg='<svg width="176" height="44" viewBox="0 0 176 44" fill="none" style="margin-left:auto;flex:0 0 auto"><path d="'+hl+' L'+hp[6][0]+' 44 L'+hp[0][0]+' 44 Z" fill="rgba(94,106,210,.14)"/><path d="'+hl+'" stroke="#5E6AD2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+hp[6][0]+'" cy="'+hp[6][1]+'" r="3" fill="#828FF7"/></svg>';
  el.innerHTML = ''
- + '<div style="background:var(--dark-card);border:1px solid var(--border-faint);border-radius:14px;padding:18px 22px;position:relative;overflow:hidden">'
- + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:14px">'
- + '<div>'
- + '<div style="font-size:10px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">План месяца</div>'
- + '<div style="font-family:\'Inter\',sans-serif;font-size:24px;font-weight:700;color:var(--text)">'+monthNames[sel.month]+' '+sel.year+' · рабочий день '+workDaysDone+' из '+totalWorkDays+'</div>'
- + '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">календарный день '+daysPassed+' из '+totalDays+'</div>'
- + '</div>'
- + '<div style="font-size:11px;color:'+statusColor+';background:'+statusBg+';padding:6px 12px;border-radius:20px;font-weight:600;align-self:center">'+status+'</div>'
- + '</div>'
- // Блоки: План / Факт / Прогноз / Текущий темп / Нужный темп
- + '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:18px;margin-bottom:14px">'
- + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">План</div>'
- + '<div style="font-family:\'Inter\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(plan)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+'</span></div></div>'
- + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Факт сейчас</div>'
- + '<div style="font-family:\'Inter\',sans-serif;font-size:22px;font-weight:700;color:'+barColor+'">'+fmt(factTotal)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+' · '+pctOfPlan+'%</span></div></div>'
- + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Прогноз на конец месяца</div>'
- + '<div style="font-family:\'Inter\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(forecast)+' <span style="font-size:12px;color:'+statusColor+'">'+cur+' · '+forecastPct+'%</span></div></div>'
- + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Текущий темп</div>'
- + '<div style="font-family:\'Inter\',sans-serif;font-size:22px;font-weight:600;color:var(--text)">'+fmt(pace)+' <span style="font-size:12px;color:var(--text-muted)">'+cur+'/раб.день</span></div>'
- + '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">средняя выручка за рабочий день</div></div>'
- + '<div><div style="font-size:9px;color:var(--text-muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Нужный темп</div>'
- + '<div style="font-family:\'Inter\',sans-serif;font-size:22px;font-weight:700;color:'+paceColor+'">'+(requiredPace ? fmt(requiredPace) : '—')+' <span style="font-size:12px;color:var(--text-muted)">'+(requiredPace ? cur+'/раб.день' : '')+'</span></div>'
- + '<div style="font-size:10px;color:'+paceColor+';margin-top:2px;font-weight:600">'+paceHint+'</div></div>'
- + '</div>'
- // Прогресс-бар
- + '<div style="position:relative;height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden">'
- + '<div style="position:absolute;left:0;top:0;height:100%;width:'+barW+'%;background:'+barColor+';border-radius:4px;transition:width .5s"></div>'
- + (inCurrentMonth ? '<div style="position:absolute;left:'+paceMark+'%;top:-4px;width:2px;height:16px;background:var(--text-muted);opacity:.5" title="Где должны быть по дням"></div>' : '')
- + '</div>'
- + '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:6px"><span>0%</span><span>50%</span><span>100% · план</span></div>'
+ + '<div style="padding:6px 2px 2px">'
+ +   '<div style="font-size:13px;color:var(--text-2);font-weight:500;margin-bottom:12px">Доход за '+monthNames[sel.month].toLowerCase()+' '+sel.year+'</div>'
+ +   '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">'
+ +     '<div class="num" style="font-size:48px;font-weight:600;letter-spacing:-1.8px;line-height:1;color:var(--text)">'+fmt(factTotal)+'<span style="font-size:24px;color:var(--text-2)"> '+cur+'</span></div>'
+ +     '<span style="font-size:13px;font-weight:500;padding:4px 10px;border-radius:8px;color:'+statusColor+';background:'+statusBg+'">'+pctOfPlan+'% от плана</span>'
+ +     hsvg
+ +   '</div>'
+ +   '<div style="font-size:13px;color:var(--text-soft);margin-top:14px">Прогноз на конец месяца <b style="color:var(--text-2);font-weight:500">'+fmt(forecast)+' '+cur+'</b> · нужный темп <b style="color:'+paceColor+';font-weight:600">'+(requiredPace ? fmt(requiredPace)+' '+cur+'/раб.день' : '—')+'</b>'+(paceHint ? ', '+paceHint : '')+'</div>'
+ +   '<div style="margin-top:14px;max-width:640px">'
+ +     '<div style="position:relative;height:4px;background:var(--surface-2);border-radius:4px;overflow:hidden">'
+ +       '<div style="position:absolute;left:0;top:0;height:100%;width:'+barW+'%;background:linear-gradient(90deg,var(--accent-deep),var(--accent));border-radius:4px;transition:width .6s"></div>'
+ +       (inCurrentMonth ? '<div style="position:absolute;left:'+paceMark+'%;top:-3px;width:2px;height:10px;background:var(--text-soft);opacity:.6"></div>' : '')
+ +     '</div>'
+ +     '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-soft);margin-top:8px"><span>Рабочий день <b style="color:var(--text-2);font-weight:500">'+workDaysDone+' из '+totalWorkDays+'</b></span><span>'+pctOfPlan+'% от плана <b style="color:var(--text-2);font-weight:500">'+fmt(plan)+' '+cur+'</b></span></div>'
+ +   '</div>'
  + '</div>';
 }
 
@@ -40665,6 +40657,13 @@ function kbRender() {
         h.innerHTML='<span class="h-src">Источник дохода</span><span class="h-trend">Тренд</span><span class="h-val">Сумма</span><span class="h-delta">&#916;</span>';
         grid.parentNode.insertBefore(h, grid);
       }
+      // прячем дублирующую строку «Итого за период», когда сверху показан герой-план
+      try{
+        var ps=document.getElementById('plan-fact-strip');
+        var heroOn = ps && ps.textContent && ps.textContent.trim().length>0;
+        var tc=document.getElementById('kpi-total'); tc=tc&&tc.closest('.kpi-card');
+        if(tc) tc.style.display = heroOn ? 'none' : '';
+      }catch(e){}
       ['license','sub','impl','revision','integ','other'].forEach(function(t, idx){
         var valEl=document.getElementById('kpi-'+t), delEl=document.getElementById('delta-'+t);
         if(!valEl||!delEl) return;
