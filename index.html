@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v668</title>
+<title>SalesDoc — Финансовый Дашборд v669</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -40635,15 +40635,26 @@ function kbRender() {
 /* v668 — спарклайны тренда + шапка колонок на Дашборде. Только дорисовка поверх
    существующего рендера: данные не трогаются, привязки по id целы. */
 (function(){
-  function spark(pct){
-    var now=1, prev=1/(1+pct/100); if(!isFinite(prev)||prev<=0) prev=now;
-    var arr=[prev, prev+(now-prev)*0.5, now];
-    var mn=Math.min.apply(null,arr), mx=Math.max.apply(null,arr), rng=(mx-mn)||1;
-    function Y(v){ return (20 - ((v-mn)/rng)*15 - 2).toFixed(1); }
-    var X=[2,32,62];
-    var line='M'+X[0]+' '+Y(arr[0])+' L'+X[1]+' '+Y(arr[1])+' L'+X[2]+' '+Y(arr[2]);
-    var area=line+' L'+X[2]+' 24 L'+X[0]+' 24 Z';
-    return '<svg class="kpi-spark" viewBox="0 0 64 24" fill="none"><path d="'+area+'" fill="rgba(94,106,210,.14)"/><path d="'+line+'" stroke="#5E6AD2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+X[2]+'" cy="'+Y(arr[2])+'" r="2" fill="#5E6AD2"/></svg>';
+  function spark(pct, seed){
+    // многоточечный волнистый тренд: общий наклон по знаку дельты + лёгкие изгибы,
+    // у каждой строки своя форма (seed). Конечная точка отражает направление дельты.
+    var n=6, W=64, H=24, pad=3; seed=(seed||0)+1;
+    var down = pct < 0;
+    var amp = Math.max(0.10, Math.min(Math.abs(pct)/120, 0.42));
+    var sY = down ? 0.30 : 0.74, eY = down ? 0.74 : 0.26;   // y-доля сверху (0=верх)
+    var pts=[];
+    for(var i=0;i<n;i++){
+      var f=i/(n-1);
+      var base = sY + f*(eY-sY);
+      var wig = Math.sin(f*3.3 + seed*1.7)*0.11 + Math.sin(f*7.1 + seed*0.9)*0.06;
+      var yf = Math.max(0.10, Math.min(0.90, base + wig*(0.6+amp)));
+      pts.push([ +(pad + f*(W-2*pad)).toFixed(1), +(pad + yf*(H-2*pad)).toFixed(1) ]);
+    }
+    var line='M'+pts[0][0]+' '+pts[0][1];
+    for(var j=1;j<n;j++) line+=' L'+pts[j][0]+' '+pts[j][1];
+    var ex=pts[n-1];
+    var area=line+' L'+ex[0]+' '+H+' L'+pts[0][0]+' '+H+' Z';
+    return '<svg class="kpi-spark" viewBox="0 0 64 24" fill="none"><path d="'+area+'" fill="rgba(94,106,210,.15)"/><path d="'+line+'" stroke="#5E6AD2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+ex[0]+'" cy="'+ex[1]+'" r="2" fill="#828FF7"/></svg>';
   }
   function dashTrend(){
     try{
@@ -40654,7 +40665,7 @@ function kbRender() {
         h.innerHTML='<span class="h-src">Источник дохода</span><span class="h-trend">Тренд</span><span class="h-val">Сумма</span><span class="h-delta">&#916;</span>';
         grid.parentNode.insertBefore(h, grid);
       }
-      ['license','sub','impl','revision','integ','other'].forEach(function(t){
+      ['license','sub','impl','revision','integ','other'].forEach(function(t, idx){
         var valEl=document.getElementById('kpi-'+t), delEl=document.getElementById('delta-'+t);
         if(!valEl||!delEl) return;
         var left=valEl.parentElement; if(!left||!left.classList||!left.classList.contains('kpi-left')) return;
@@ -40663,7 +40674,7 @@ function kbRender() {
         if(!/-?\d+(\.\d+)?\s*%/.test(txt)) return;
         var m=txt.match(/-?\d+(\.\d+)?/); if(!m) return;
         var pct=parseFloat(m[0]); if(!isFinite(pct)) return;
-        var w=document.createElement('span'); w.className='kpi-spark-wrap'; w.innerHTML=spark(pct);
+        var w=document.createElement('span'); w.className='kpi-spark-wrap'; w.innerHTML=spark(pct, idx);
         left.insertBefore(w, valEl);
       });
     }catch(e){}
