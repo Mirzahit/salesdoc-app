@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v679</title>
+<title>SalesDoc — Финансовый Дашборд v680</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -7586,7 +7586,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
   </div>
   <div class="exp-col">
    <h4>По неделям <span class="exp-tot" id="exp-chart-period" style="color:var(--text-soft)"></span></h4>
-   <div id="exp-bar-chart" style="display:flex;align-items:flex-end;gap:6px;height:140px;padding:10px 0"></div>
+   <div id="exp-bar-chart" style="display:flex;align-items:flex-end;gap:6px;height:150px;padding:0;margin-top:6px"></div>
    <div id="exp-bar-legend" style="display:none"></div>
   </div>
  </div>
@@ -11935,7 +11935,7 @@ function renderBarChart(ps) {
   ps.forEach(function(p){ var ym = String(p.date||'').slice(0,7); if(!ym) return; if(!mMap[ym]) mMap[ym] = {ym:ym, total:0, count:0}; mMap[ym].total += p.amount; mMap[ym].count++; });
   var months = _ymKeys.sort().map(function(k){ return mMap[k]; });
   var maxM = Math.max.apply(null, months.map(function(m){ return m.total; })) || 1;
-  var hM = 120;
+  var hM = 100; // v680: запас сверху, чтобы столбцы не подпирали заголовок
   document.getElementById('bar-chart').innerHTML = months.map(function(m){
    var barH = m.total > 0 ? Math.max(8, m.total / maxM * hM) : 4;
    var barBg = m.total > 0 ? 'linear-gradient(180deg, var(--gold-bright), var(--gold-deep))' : 'var(--dark-border)';
@@ -11988,7 +11988,7 @@ function renderBarChart(ps) {
  if(!weeks.length) { document.getElementById('bar-chart').innerHTML='<div style="text-align:center;color:var(--text-muted);padding:40px">Нет данных</div>'; return; }
 
  var max = Math.max.apply(null, weeks.map(function(w){ return w.total; })) || 1;
- var h = 120;
+ var h = 100; // v680: запас сверху, чтобы столбцы не подпирали заголовок
 
  document.getElementById('bar-chart').innerHTML = weeks.map(function(w){
  var barH = w.total > 0 ? Math.max(8, w.total / max * h) : 4;
@@ -22988,7 +22988,7 @@ function expRenderBarChart() {
  weeks.push(w);
  }
  var max = Math.max.apply(null, weeks.map(function(w){return w.total;})) || 1;
- var h = 120;
+ var h = 92; // v680: ниже, чтобы столбец+подписи влезали в контейнер и не налезали на заголовок
  var chartEl = document.getElementById('exp-bar-chart');
  chartEl.innerHTML = weeks.map(function(w) {
  var barH = w.total > 0 ? Math.max(8, w.total/max*h) : 4;
