@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v667</title>
+<title>SalesDoc — Финансовый Дашборд v668</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4441,6 +4441,22 @@ body{font-feature-settings:"tnum" 1}
   #view-dashboard #kpi-total span{ font-size:18px; }
   #view-dashboard .kpi-value{ font-size:14px; }
 }
+
+/* v668 — Дашборд: дельта героя в строку с числом + спарклайн-тренд + шапка колонок */
+#view-dashboard .kpi-card:has(#kpi-total) .kpi-left{ display:flex !important; flex-wrap:wrap; align-items:baseline; gap:0 16px; }
+#view-dashboard .kpi-card:has(#kpi-total) .kpi-label{ flex:0 0 100%; margin-bottom:10px !important; }
+#view-dashboard .kpi-card:has(#kpi-total) #kpi-total{ flex:0 0 auto; }
+#view-dashboard .kpi-card:has(#kpi-total) .kpi-delta{ margin-top:0 !important; align-self:center; }
+/* спарклайн тренда в строке (перед суммой) */
+#view-dashboard .kpi-spark-wrap{ display:inline-flex; align-items:center; margin:0 14px 0 auto; flex:0 0 auto; }
+#view-dashboard .kpi-spark{ width:64px; height:22px; display:block; opacity:.9; }
+#view-dashboard .kpi-card:has(#kpi-total) .kpi-spark-wrap{ display:none; }
+/* шапка колонок леджера */
+#view-dashboard .kpi-ledger-head{ display:flex; align-items:center; gap:16px; padding:6px 6px 8px; font-size:10.5px; letter-spacing:.4px; text-transform:uppercase; color:var(--text-soft); }
+#view-dashboard .kpi-ledger-head .h-src{ flex:1; }
+#view-dashboard .kpi-ledger-head .h-trend{ width:64px; text-align:center; margin-right:14px; }
+#view-dashboard .kpi-ledger-head .h-val{ width:150px; text-align:right; }
+#view-dashboard .kpi-ledger-head .h-delta{ width:60px; text-align:right; }
 </style>
 
 <script>
@@ -40614,6 +40630,52 @@ function kbRender() {
  setInterval(ensureFab, 3000); // на случай если currentUser появился позже
 })();
 
+</script>
+<script>
+/* v668 — спарклайны тренда + шапка колонок на Дашборде. Только дорисовка поверх
+   существующего рендера: данные не трогаются, привязки по id целы. */
+(function(){
+  function spark(pct){
+    var now=1, prev=1/(1+pct/100); if(!isFinite(prev)||prev<=0) prev=now;
+    var arr=[prev, prev+(now-prev)*0.5, now];
+    var mn=Math.min.apply(null,arr), mx=Math.max.apply(null,arr), rng=(mx-mn)||1;
+    function Y(v){ return (20 - ((v-mn)/rng)*15 - 2).toFixed(1); }
+    var X=[2,32,62];
+    var line='M'+X[0]+' '+Y(arr[0])+' L'+X[1]+' '+Y(arr[1])+' L'+X[2]+' '+Y(arr[2]);
+    var area=line+' L'+X[2]+' 24 L'+X[0]+' 24 Z';
+    return '<svg class="kpi-spark" viewBox="0 0 64 24" fill="none"><path d="'+area+'" fill="rgba(94,106,210,.14)"/><path d="'+line+'" stroke="#5E6AD2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+X[2]+'" cy="'+Y(arr[2])+'" r="2" fill="#5E6AD2"/></svg>';
+  }
+  function dashTrend(){
+    try{
+      var vd=document.getElementById('view-dashboard'); if(!vd) return;
+      var grid=vd.querySelector('.kpi-grid'); if(!grid) return;
+      if(!vd.querySelector('.kpi-ledger-head')){
+        var h=document.createElement('div'); h.className='kpi-ledger-head';
+        h.innerHTML='<span class="h-src">Источник дохода</span><span class="h-trend">Тренд</span><span class="h-val">Сумма</span><span class="h-delta">&#916;</span>';
+        grid.parentNode.insertBefore(h, grid);
+      }
+      ['license','sub','impl','revision','integ','other'].forEach(function(t){
+        var valEl=document.getElementById('kpi-'+t), delEl=document.getElementById('delta-'+t);
+        if(!valEl||!delEl) return;
+        var left=valEl.parentElement; if(!left||!left.classList||!left.classList.contains('kpi-left')) return;
+        var old=left.querySelector('.kpi-spark-wrap'); if(old) old.remove();
+        var txt=(delEl.textContent||'').replace(/−/g,'-').replace(',','.');
+        if(!/-?\d+(\.\d+)?\s*%/.test(txt)) return;
+        var m=txt.match(/-?\d+(\.\d+)?/); if(!m) return;
+        var pct=parseFloat(m[0]); if(!isFinite(pct)) return;
+        var w=document.createElement('span'); w.className='kpi-spark-wrap'; w.innerHTML=spark(pct);
+        left.insertBefore(w, valEl);
+      });
+    }catch(e){}
+  }
+  function hook(){
+    var t=document.getElementById('kpi-total');
+    if(t && !t._trendHooked){ t._trendHooked=true; try{ new MutationObserver(function(){ dashTrend(); }).observe(t,{childList:true,characterData:true,subtree:true}); }catch(e){} }
+    dashTrend();
+  }
+  if(document.readyState!=='loading') setTimeout(hook,400); else document.addEventListener('DOMContentLoaded',function(){ setTimeout(hook,400); });
+  setInterval(dashTrend, 4000);
+})();
 </script>
 </body>
 </html>
