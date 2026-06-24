@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v675</title>
+<title>SalesDoc — Финансовый Дашборд v676</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4611,6 +4611,13 @@ body.light #view-route .rc:hover{background:#F2F3F7}
 body.light #view-route .rc .av{background:rgba(94,106,210,.16);color:#4651B5}
 body.light #view-route .rc .ckbar{background:rgba(15,18,25,.10)}
 body.light #view-route .rc .av.none{border-color:#C7CBD6}
+/* строка действий — выезжает на наведение (чистый CSS) */
+#view-route .rc .acts{display:flex;gap:6px;max-height:0;opacity:0;overflow:hidden;transition:max-height .15s,opacity .15s,margin-top .15s;margin-top:0}
+#view-route .rc:hover .acts{max-height:42px;opacity:1;margin-top:9px}
+#view-route .rc .act{font-size:10.5px;padding:4px 9px;border-radius:6px;border:1px solid var(--border-strong,rgba(255,255,255,.13));background:transparent;color:var(--text-2);cursor:pointer;white-space:nowrap;font-family:inherit}
+#view-route .rc .act.go{border-color:rgba(94,106,210,.45);color:#828FF7}
+#view-route .rc .act.go:hover{background:rgba(94,106,210,.14)}
+body.light #view-route .rc .act.go{color:#4651B5}
 </style>
 
 <script>
@@ -27707,6 +27714,8 @@ function routeRender(){
   });
   // v445: счётчик «без оператора» для бейджа в шапке (считаем по всей колонке, не только видимым)
   var unassignedInStage = routeCards.filter(function(c){ return c.stage === stage && !c.operator; }).length;
+  // v676: «в риске» — карточки залежавшиеся 5+ дней (те же пороги, что цвет возраста на карточке)
+  var riskInStage = stageCards.reduce(function(n, c){ var d = c.stage_entered_at ? Math.floor((Date.now() - new Date(c.stage_entered_at).getTime())/86400000) : 0; return n + (d >= 5 ? 1 : 0); }, 0);
   var meta = ROUTE_STAGE_META[stage] || { idx:0, desc:'' };
   var stageSum = stageCards.reduce(function(s, c){ return s + (Number(c.payment_amount) || 0); }, 0);
   var sumLabel = stageCards.length > 0
@@ -27716,10 +27725,11 @@ function routeRender(){
   html += '<div class="route-col-amo route-col s' + meta.idx + '" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.background=\'rgba(120,120,128,.06)\'" ondragleave="this.style.background=\'transparent\'" ondrop="this.style.background=\'transparent\';routeDrop(event,\'' + stage + '\')">';
   html += '<div class="route-col-amo-head"' + (filterUnassigned ? ' style="outline:1px dashed rgba(214,115,115,.4);outline-offset:-2px;border-radius:8px"' : '') + '>';
   html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage + '</div><div class="route-col-amo-count">' + stageCards.length + '</div></div>';
-  // v445: кликабельный бейдж-фильтр «без оператора» — toggle общий на канбан
-  if(unassignedInStage > 0){
-   html += '<div style="margin-top:4px"><span onclick="event.stopPropagation();_routeToggleUnassigned()" title="Показать только без оператора" style="font-size:10.5px;color:#E5604D;cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-weight:600">' + unassignedInStage + ' без оператора</span></div>';
-  }
+  // v676: сводка «N в риске · M без оператора» (одной строкой; «без оператора» — кликабельный фильтр)
+  var _sumParts = [];
+  if(riskInStage > 0) _sumParts.push('<span style="color:#E0A458;font-weight:600">' + riskInStage + ' в риске</span>');
+  if(unassignedInStage > 0) _sumParts.push('<span onclick="event.stopPropagation();_routeToggleUnassigned()" title="Показать только без оператора" style="color:#E0A458;cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-weight:600">' + unassignedInStage + ' без оператора</span>');
+  if(_sumParts.length) html += '<div style="margin-top:4px;font-size:10.5px;color:var(--rk-text-soft,#8A8F98)">' + _sumParts.join(' · ') + '</div>';
   // v391: для стадии «Новый» — счётчик «появилось сегодня» чтобы оператор сразу видел свежие
   if(stage === 'Новый'){
    var todayStart = new Date(); todayStart.setHours(0,0,0,0);
@@ -27761,6 +27771,8 @@ function routeRender(){
    html += '<div class="r1"><span class="cl" title="' + _escHtml(name) + '">' + _escHtml(name) + '</span>' + _avatar + '</div>';
    if(card.tariff) html += '<div class="r2">' + _escHtml(card.tariff) + '</div>';
    html += '<div class="r3"><span class="' + _ageCls + '"><svg class="clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg>' + days + ' дн</span>' + _ck + _sum + '</div>';
+   var _next = ROUTE_STAGES[ROUTE_STAGES.indexOf(stage) + 1] || '';
+   if(_next) html += '<div class="acts"><button class="act go" draggable="false" onclick="event.stopPropagation();routeAdvanceStage(\'' + _cid + '\')">→ ' + _escHtml(_next) + '</button></div>';
    html += '</div>';
   });
   html += '</div>'; // /route-col-amo-body
@@ -27821,6 +27833,26 @@ async function routeDrop(ev, newStage){
   routeLoad();
  }
  routeDragCardId = null;
+}
+
+// v676: кнопка «→ след. этап» на карточке — тот же PATCH, что и drag (оптимистично + откат).
+async function routeAdvanceStage(cardId){
+ var card = routeCards.find(function(c){ return c.id === cardId; });
+ if(!card) return;
+ var idx = ROUTE_STAGES_ORDER.indexOf(card.stage);
+ if(idx < 0 || idx >= ROUTE_STAGES_ORDER.length - 1) return; // последний этап — двигать некуда
+ var newStage = ROUTE_STAGES_ORDER[idx + 1];
+ card.stage = newStage;
+ card.stage_entered_at = new Date().toISOString();
+ routeRender();
+ try {
+  var d = await sbFetch('/api/cards?id=' + cardId, { method: 'PATCH', body: JSON.stringify({ stage: newStage }) });
+  if(!d.ok) throw new Error(d.error);
+  await _routeMaybeActivate(card, newStage);
+ } catch(e) {
+  alert('Не удалось сохранить: ' + e.message);
+  routeLoad();
+ }
 }
 
 // v482: переключение этапа по клику в pipeline карточки клиента (как в amoCRM).
