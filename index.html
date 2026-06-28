@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v681</title>
+<title>SalesDoc — Финансовый Дашборд v682</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4695,6 +4695,21 @@ body.light .mc-table .mc-v{color:#5C616B}
 body.light .mc-table .mc-st.pause{border-color:#C7CBD6}
 body.light #meta-camps-summary{color:#5C616B}
 body.light #meta-camps-summary b{color:#16181D}
+/* v682 — фильтр-кнопки по вердиктам + «утекает в дорогие» */
+.mc-filters{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.mc-segs{display:flex;gap:2px;background:var(--surface,#101116);border:1px solid var(--border-strong,rgba(255,255,255,.13));border-radius:9px;padding:3px;flex-wrap:wrap}
+.mc-seg{font:600 12.5px/1 'Inter',sans-serif;color:var(--text-soft);background:none;border:none;padding:7px 11px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.mc-seg:hover{color:var(--text)}
+.mc-seg.on{background:rgba(94,106,210,.18);color:#828FF7}
+.mc-segn{font-family:var(--mono);font-size:11px;color:var(--text-faint,#5A5E66)}
+.mc-seg.on .mc-segn{color:#828FF7}
+.mc-leak{margin-left:auto;font-size:12.5px;color:var(--text-soft)}
+.mc-leak b{color:#E5604D;font-family:var(--mono);font-weight:600}
+.mc-leak a{color:#828FF7;cursor:pointer;margin-left:6px}
+body.light .mc-segs{background:#FFFFFF;border-color:rgba(15,18,25,.14)}
+body.light .mc-seg.on{background:rgba(94,106,210,.12);color:#4651B5}
+body.light .mc-seg.on .mc-segn{color:#4651B5}
+body.light .mc-leak a{color:#4651B5}
 </style>
 
 <script>
@@ -7441,6 +7456,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div id="meta-camps-summary" style="font-size:12px;color:var(--text-muted);margin-top:3px">Решение по каждой кампании — докинуть или выключить</div>
  </div>
  </div>
+ <div id="meta-camps-filters" class="mc-filters"></div>
  <div style="overflow-x:auto"><table id="meta-api-camps" class="data-table mc-table" style="font-size:12px;width:100%"></table></div>
  </div>
 
@@ -20738,13 +20754,28 @@ function _metaRenderCampaigns(camps, info){
  });
  // Проблемные сверху: по «тяжести» вердикта убыв., затем по расходу убыв.
  rowsData.sort(function(a,b){ if (b.v.rank !== a.v.rank) return b.v.rank - a.v.rank; return b.sp - a.sp; });
- var dear = rowsData.filter(function(e){ return e.v.cls==='warn' || e.v.cls==='bad'; }).length;
+ var dearList = rowsData.filter(function(e){ return e.v.cls==='warn' || e.v.cls==='bad'; });
+ var dear = dearList.length;
  if (sEl) {
   var dearTxt = dear>0 ? ' · <span class="mc-warn">' + dear + ' ' + (dear===1?'кампания дорожает':(dear<5?'кампании дорожают':'кампаний дорожают')) + '</span>' : '';
   sEl.innerHTML = 'Потрачено <b>'+_metaFmtMoney(totSpend, cur)+'</b> · лидов <b>'+_metaFmtNum(totLeads)+'</b> · средняя цена лида <b>'+(avgCpl>0?_metaFmtMoney(avgCpl.toFixed(2), cur):'—')+'</b>' + dearTxt;
  }
+ // v682: кнопки-фильтры по вердиктам + «утекает в дорогие»
+ var vf = window._mktVerdictFilter || 'all';
+ var counts = { all: rowsData.length, add:0, hold:0, warn:0, bad:0 };
+ rowsData.forEach(function(e){ counts[e.v.cls] = (counts[e.v.cls]||0) + 1; });
+ var leak = dearList.reduce(function(s,e){ return s + e.sp; }, 0);
+ var fEl = document.getElementById('meta-camps-filters');
+ if (fEl) {
+  var segDefs = [['all','Все'],['add','Докинуть'],['hold','Держать'],['warn','Дорогой лид'],['bad','Убрать']];
+  var segHtml = segDefs.map(function(s){ var n = counts[s[0]]||0; if (s[0]!=='all' && n===0) return ''; var on = (vf===s[0]); return '<button type="button" class="mc-seg'+(on?' on':'')+'" onclick="_mktSetVerdictFilter(\''+s[0]+'\')">'+s[1]+' <span class="mc-segn">'+n+'</span></button>'; }).join('');
+  var leakHtml = leak>0 ? '<span class="mc-leak">утекает в дорогие: <b>'+_metaFmtMoney(leak, cur)+'</b>' + (vf!=='dear' ? ' <a onclick="_mktSetVerdictFilter(\'dear\')">показать</a>' : ' <a onclick="_mktSetVerdictFilter(\'all\')">сбросить</a>') + '</span>' : '';
+  fEl.innerHTML = '<div class="mc-segs">'+segHtml+'</div>'+leakHtml;
+ }
+ var shown = rowsData.filter(function(e){ if (vf==='all') return true; if (vf==='dear') return e.v.cls==='warn'||e.v.cls==='bad'; return e.v.cls===vf; });
  var cplClass = function(e){ var b='mc-cpl'; if(e.cpl===null) return b; if(e.v.cls==='bad') return b+' bad'; if(e.v.cls==='warn') return b+' warn'; if(e.v.cls==='add') return b+' ok'; return b; };
- var rows = rowsData.map(function(e){
+ if (!shown.length) { t.innerHTML = '<thead><tr><th class="mc-th">Кампания</th><th class="mc-th mc-r">Расход</th><th class="mc-th mc-r">Лиды</th><th class="mc-th mc-r">Цена лида</th><th class="mc-th mc-r">Решение</th></tr></thead><tbody><tr><td colspan="5" style="padding:18px;text-align:center;color:var(--text-muted)">Под этот фильтр кампаний нет.</td></tr></tbody>'; return; }
+ var rows = shown.map(function(e){
   var act = e.c.status === 'ACTIVE';
   var vlab = e.v.label ? '<span class="mc-vlab '+e.v.cls+'">'+e.v.label+'</span>' : '';
   return '<tr class="mc-row'+(act?'':' off')+'">'
@@ -20759,6 +20790,15 @@ function _metaRenderCampaigns(camps, info){
   + '<th class="mc-th">Кампания · сначала проблемные</th>'
   + '<th class="mc-th mc-r">Расход</th><th class="mc-th mc-r">Лиды</th><th class="mc-th mc-r">Цена лида</th><th class="mc-th mc-r">Решение</th>'
   + '</tr></thead><tbody>' + rows + '</tbody>';
+}
+// v682: переключение фильтра по вердикту — перерисовка из кэша кампаний
+function _mktSetVerdictFilter(v){
+ window._mktVerdictFilter = v;
+ try {
+  if (typeof _metaApiCache !== 'undefined' && _metaApiCache && _metaApiCache.camps) {
+   _metaRenderCampaigns(_metaApiCache.camps.campaigns || [], _metaApiCache.info || {});
+  }
+ } catch(e){}
 }
 // /v158
 
