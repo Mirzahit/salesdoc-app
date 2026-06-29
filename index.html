@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v693</title>
+<title>SalesDoc — Финансовый Дашборд v694</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4839,6 +4839,19 @@ body.light #view-payments .fs-big{color:#16181D}
 #view-payments .brow .bp{text-align:right;font-size:11.5px;color:#646A80;font-family:var(--mono)}
 body.light #view-payments .fin-cuts2 .fcut{background:#FFFFFF;border-color:rgba(15,18,25,.09)}
 body.light #view-payments .mrow2 .mn,body.light #view-payments .brow .bn{color:#16181D}
+/* v694 — донат «По банкам» (был только список) */
+#view-payments .bank-wrap{display:flex;align-items:center;gap:16px;padding:6px 18px 14px}
+#view-payments .bank-donut{position:relative;width:124px;height:124px;flex:0 0 auto}
+#view-payments .bank-donut .bdc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#view-payments .bank-donut .bdc .n{font-family:var(--mono);font-size:19px;font-weight:700;color:#F4F6FB}
+#view-payments .bank-donut .bdc .t{font-size:10px;color:#646A80;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#view-payments .bleg{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
+#view-payments .bleg .brow{display:flex;align-items:center;gap:9px;padding:0;font-size:12.5px}
+#view-payments .bleg .brow .bdot{flex:0 0 auto}
+#view-payments .bleg .brow .bn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#F4F6FB}
+#view-payments .bleg .brow .bv{font-family:var(--mono);color:#9BA1B4;font-size:12px}
+#view-payments .bleg .brow .bp{font-family:var(--mono);color:#646A80;font-size:11px;width:36px;text-align:right}
+body.light #view-payments .bank-donut .bdc .n,body.light #view-payments .bleg .brow .bn{color:#16181D}
 </style>
 
 <script>
@@ -12872,11 +12885,23 @@ function renderAllPayments() {
  allPs.forEach(function(p){ var b=(p.bank||'').trim()||'—'; bankSum3[b] = (bankSum3[b]||0) + (p.amount||0); });
  var bankKeys2 = Object.keys(bankSum3).sort(function(a,b){ return bankSum3[b]-bankSum3[a]; });
  var bankCols = ['#7C89F4','#4FB8E0','#46D49A','#F0B34E','#9AA0AA','#646A80'];
- var bankHtml = bankKeys2.slice(0,6).map(function(b,i){
+ var topBanks = bankKeys2.slice(0,6);
+ var bankTotal = bankKeys2.reduce(function(s,b){ return s+bankSum3[b]; }, 0) || 1;
+ // донат-сегменты по банкам
+ var _C=301.6, _acc=0;
+ var bankSegs = topBanks.map(function(b,i){
+ var f = bankSum3[b]/bankTotal;
+ var segLen = f*_C;
+ var rot = (_acc*360 - 90); _acc += f;
+ return '<circle cx="62" cy="62" r="48" fill="none" stroke="'+bankCols[i%6]+'" stroke-width="12" stroke-dasharray="'+segLen.toFixed(1)+' '+(_C-segLen).toFixed(1)+'" transform="rotate('+rot.toFixed(1)+' 62 62)"/>';
+ }).join('');
+ var topPct = allTotal>0 ? Math.round(bankSum3[topBanks[0]]/allTotal*100) : 0;
+ var bankLeg = topBanks.map(function(b,i){
  var pct = allTotal>0 ? Math.round(bankSum3[b]/allTotal*100) : 0;
  return '<div class="brow"><span class="bdot" style="background:'+bankCols[i%6]+'"></span><span class="bn">'+sanitize(b)+'</span><span class="bv">'+fmtNum(bankSum3[b])+'</span><span class="bp">'+pct+'%</span></div>';
  }).join('');
- cutsEl.innerHTML = '<div class="fcut"><div class="fch">Кто собрал · по менеджерам</div>'+mgrHtml+'</div><div class="fcut"><div class="fch">По банкам</div>'+bankHtml+'</div>';
+ var bankInner = '<div class="bank-wrap"><div class="bank-donut"><svg width="124" height="124" viewBox="0 0 124 124"><circle cx="62" cy="62" r="48" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="12"/>'+bankSegs+'</svg><div class="bdc"><div class="n">'+topPct+'%</div><div class="t">'+sanitize(topBanks[0]||'')+'</div></div></div><div class="bleg">'+bankLeg+'</div></div>';
+ cutsEl.innerHTML = '<div class="fcut"><div class="fch">Кто собрал · по менеджерам</div>'+mgrHtml+'</div><div class="fcut"><div class="fch">По банкам</div>'+bankInner+'</div>';
  }
 
  // Populate employee filter
