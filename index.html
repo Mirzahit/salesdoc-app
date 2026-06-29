@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v690</title>
+<title>SalesDoc — Финансовый Дашборд v691</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4791,6 +4791,33 @@ body.light #view-dashboard #kpi-total .kpi-value{background:linear-gradient(180d
 body.light #view-dashboard #plan-fact-strip .dash-hero,body.light #view-dashboard .dash-pnl .pcard{background:#FFFFFF;border-color:rgba(15,18,25,.09);box-shadow:0 1px 2px rgba(15,18,25,.04),0 10px 30px rgba(15,18,25,.05)}
 body.light #view-dashboard .dh-num{background:linear-gradient(180deg,#16181D,#3A4152)}
 body.light #view-dashboard .dash-pnl .pv{color:#16181D}
+
+/* v691 — ФИНАНСЫ премиум: герой посадки (кольцо) + слой панелей/таблицы */
+#view-payments{background-image:radial-gradient(900px 440px at 22% -6%,rgba(110,121,224,.14),transparent 60%),radial-gradient(720px 400px at 97% 2%,rgba(70,212,154,.06),transparent 55%)!important}
+#view-payments #payments-summary-row{display:grid!important;grid-template-columns:1.3fr 1fr;gap:16px!important;margin-bottom:16px!important}
+#view-payments .fin-seat{display:grid;grid-template-columns:1fr 120px;align-items:center;gap:16px;background:linear-gradient(180deg,#181A24,#10121A);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:20px 24px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 34px rgba(0,0,0,.42);position:relative;overflow:hidden}
+#view-payments .fin-seat::before{content:"";position:absolute;inset:0;background:radial-gradient(360px 160px at 8% 0%,rgba(110,121,224,.14),transparent 70%);pointer-events:none}
+#view-payments .fs-l{position:relative;z-index:1}
+#view-payments .fs-cap{font-size:12.5px;color:#9BA1B4}
+#view-payments .fs-big{font-family:var(--mono);font-weight:700;font-size:42px;line-height:1;margin:8px 0 2px;letter-spacing:-1.5px;color:#F4F6FB}
+#view-payments .fs-big .of{color:#646A80;font-size:24px}
+#view-payments .fs-miss{margin-top:12px;display:inline-flex;align-items:center;font-size:13px;font-weight:600;color:#FAD79A;background:linear-gradient(180deg,rgba(240,179,78,.16),rgba(240,179,78,.06));border:1px solid rgba(240,179,78,.3);padding:7px 12px;border-radius:10px;cursor:pointer}
+#view-payments .fs-okrow{margin-top:12px;font-size:13px;color:#9BF0CC}
+#view-payments .fs-ring{position:relative;width:120px;height:120px;justify-self:center;z-index:1}
+#view-payments .fs-rl{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#view-payments .fs-rl .n{font-family:var(--mono);font-weight:700;font-size:24px;color:#46D49A}
+#view-payments .fs-rl .t{font-size:10px;color:#646A80}
+#view-payments .fin-qs{display:flex;flex-direction:column;gap:14px}
+#view-payments .fq{flex:1;display:flex;align-items:center;gap:14px;background:linear-gradient(180deg,#181A24,#10121A);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px 20px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 24px rgba(0,0,0,.4)}
+#view-payments .fq .l{font-size:12px;color:#9BA1B4;flex:1}
+#view-payments .fq .v{font-family:var(--mono);font-size:20px;font-weight:700;color:#F4F6FB}
+#view-payments .fq .v.g{color:#9BF0CC}
+#view-payments .panel{background:linear-gradient(180deg,#181A24,#10121A)!important;border:1px solid rgba(255,255,255,.08)!important;border-radius:18px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 34px rgba(0,0,0,.42)!important}
+#view-payments .data-table thead th{text-transform:none!important;letter-spacing:0!important;font-weight:400!important;color:#646A80!important}
+#view-payments .data-table tbody tr:hover td{background:rgba(255,255,255,.03)!important}
+#view-payments .seated-badge{padding:5px 11px!important;border-radius:999px!important;font-size:11.5px!important;letter-spacing:0!important;font-weight:600!important}
+body.light #view-payments .fin-seat,body.light #view-payments .fq,body.light #view-payments .panel{background:#FFFFFF!important;border-color:rgba(15,18,25,.09)!important;box-shadow:0 1px 2px rgba(15,18,25,.04),0 10px 30px rgba(15,18,25,.05)!important}
+body.light #view-payments .fs-big{color:#16181D}
 </style>
 
 <script>
@@ -12783,22 +12810,28 @@ function renderAllPayments() {
  const allPs = getPeriodPayments(currentPeriod);
  const seatedCount = allPs.filter(function(p){ return p.seated; }).length;
  const unseatedCount = allPs.length - seatedCount;
- const writtenCount = allPs.filter(function(p){ return p.serviceWritten; }).length;
- const unwrittenCount= allPs.length - writtenCount;
+ const unseatedSum = allPs.filter(function(p){ return !p.seated; }).reduce(function(s,p){return s+(p.amount||0);},0);
+ const allTotal = allPs.reduce(function(s,p){return s+(p.amount||0);},0);
+ const seatPct = allPs.length ? Math.round(seatedCount/allPs.length*100) : 0;
+ const avgChk = allPs.length ? Math.round(allTotal/allPs.length) : 0;
  const summaryEl = document.getElementById('payments-summary-row');
  if (summaryEl) {
- summaryEl.innerHTML = [
- {icon:'',label:'Всего оплат',val:allPs.length,col:'#828FF7'},
- {icon:'',label:'Посажено',val:seatedCount,col:'#4CB782'},
- {icon:'',label:'Не посажено',val:unseatedCount,col:'#FFCC02'},
- {icon:'',label:'Услуга списана',val:writtenCount,col:'#5E6AD2'},
- {icon:'',label:'Не списана',val:unwrittenCount,col:'#D89595'},
- ].map(function(s){
- return '<div style="background:var(--dark-panel);border:1px solid var(--dark-border);border-radius:10px;padding:8px 14px;display:flex;align-items:center;gap:8px;cursor:pointer" onclick="quickFilterPayments(\''+s.label+'\')">'
- +'<span style="font-size:16px">'+s.icon+'</span>'
- +'<div><div style="font-family:Bebas Neue,sans-serif;font-size:18px;color:'+s.col+';letter-spacing:1px">'+s.val+'</div>'
- +'<div style="font-size:9px;color:var(--text-muted);letter-spacing:1px;font-family:Inter,sans-serif">'+s.label.toUpperCase()+'</div></div></div>';
- }).join('');
+ // v691: премиум-сводка с кольцом посадки (главное Финансов — кто посажен/не посажен)
+ var _rc=314, _ro=Math.round(_rc*(1-seatPct/100));
+ summaryEl.innerHTML = ''
+ + '<div class="fin-seat">'
+ +   '<div class="fs-l"><div class="fs-cap">Посажено оплат за период</div>'
+ +     '<div class="fs-big">'+seatedCount+'<span class="of"> / '+allPs.length+'</span></div>'
+ +     (unseatedCount>0
+        ? '<div class="fs-miss" onclick="quickFilterPayments(\'Не посажено\')">'+unseatedCount+' не посажено · на '+fmtNum(unseatedSum)+' '+_CUR+' — нужно посадить</div>'
+        : '<div class="fs-okrow">всё посажено</div>')
+ +   '</div>'
+ +   '<div class="fs-ring"><svg width="120" height="120" viewBox="0 0 120 120"><defs><linearGradient id="finsr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7BE6B8"/><stop offset="1" stop-color="#34B07E"/></linearGradient></defs><circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="12"/><circle cx="60" cy="60" r="50" fill="none" stroke="url(#finsr)" stroke-width="12" stroke-linecap="round" stroke-dasharray="'+_rc+'" stroke-dashoffset="'+_ro+'" transform="rotate(-90 60 60)"/></svg><div class="fs-rl"><div class="n">'+seatPct+'%</div><div class="t">посажено</div></div></div>'
+ + '</div>'
+ + '<div class="fin-qs">'
+ +   '<div class="fq"><div class="l">Оплат за период</div><div class="v g">'+fmtNum(allTotal)+' '+_CUR+'</div></div>'
+ +   '<div class="fq"><div class="l">Платежей · средний</div><div class="v">'+allPs.length+' · '+fmtNum(avgChk)+'</div></div>'
+ + '</div>';
  }
 
  // Populate employee filter
