@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v691</title>
+<title>SalesDoc — Финансовый Дашборд v692</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4818,6 +4818,27 @@ body.light #view-dashboard .dash-pnl .pv{color:#16181D}
 #view-payments .seated-badge{padding:5px 11px!important;border-radius:999px!important;font-size:11.5px!important;letter-spacing:0!important;font-weight:600!important}
 body.light #view-payments .fin-seat,body.light #view-payments .fq,body.light #view-payments .panel{background:#FFFFFF!important;border-color:rgba(15,18,25,.09)!important;box-shadow:0 1px 2px rgba(15,18,25,.04),0 10px 30px rgba(15,18,25,.05)!important}
 body.light #view-payments .fs-big{color:#16181D}
+
+/* v692 — спрятать дубль-P&L (его не было в превью) + разрезы по менеджерам/банкам */
+#view-payments .fin-hero,#view-payments .fin-pnl,#view-payments .fin-ratio,#view-payments>.fin-rule:first-of-type{display:none!important}
+#view-payments .fin-cuts2{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin:0 0 16px}
+#view-payments .fin-cuts2 .fcut{background:linear-gradient(180deg,#181A24,#10121A);border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 24px rgba(0,0,0,.4);overflow:hidden;padding-bottom:6px}
+#view-payments .fin-cuts2 .fch{padding:14px 18px 8px;font-size:13.5px;font-weight:700;color:#F4F6FB}
+#view-payments .mrow2{display:grid;grid-template-columns:26px 1fr 116px 44px;gap:12px;align-items:center;padding:9px 18px}
+#view-payments .mrow2 .ini{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:9px;font-weight:700;color:#fff;background:linear-gradient(180deg,#4FB8E0,#2E86B8);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+#view-payments .mrow2 .mb{min-width:0}
+#view-payments .mrow2 .mn{font-size:13px;font-weight:600;color:#F4F6FB;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#view-payments .mrow2 .mbar{height:6px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}
+#view-payments .mrow2 .mbar>i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#9AA4FF,#6E79E0)}
+#view-payments .mrow2 .mv{text-align:right;font-family:var(--mono);font-size:13px;color:#F4F6FB}
+#view-payments .mrow2 .mp{text-align:right;font-size:11.5px;color:#646A80;font-family:var(--mono)}
+#view-payments .brow{display:grid;grid-template-columns:14px 1fr 130px 44px;gap:10px;align-items:center;padding:11px 18px}
+#view-payments .brow .bdot{width:9px;height:9px;border-radius:3px}
+#view-payments .brow .bn{font-size:13px;color:#F4F6FB}
+#view-payments .brow .bv{text-align:right;font-family:var(--mono);font-size:13px;color:#9BA1B4}
+#view-payments .brow .bp{text-align:right;font-size:11.5px;color:#646A80;font-family:var(--mono)}
+body.light #view-payments .fin-cuts2 .fcut{background:#FFFFFF;border-color:rgba(15,18,25,.09)}
+body.light #view-payments .mrow2 .mn,body.light #view-payments .brow .bn{color:#16181D}
 </style>
 
 <script>
@@ -6309,6 +6330,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
  </div>
  <div id="payments-summary-row" style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap"></div>
+ <div id="fin-cuts" class="fin-cuts2"></div>
  <div style="overflow-x:auto">
  <table class="data-table"><thead><tr>
  <th>Дата</th><th>Клиент</th><th>Сотрудник</th><th>Статья</th><th>Сумма</th><th>Способ</th>
@@ -12832,6 +12854,29 @@ function renderAllPayments() {
  +   '<div class="fq"><div class="l">Оплат за период</div><div class="v g">'+fmtNum(allTotal)+' '+_CUR+'</div></div>'
  +   '<div class="fq"><div class="l">Платежей · средний</div><div class="v">'+allPs.length+' · '+fmtNum(avgChk)+'</div></div>'
  + '</div>';
+ }
+ // v692: разрезы по менеджерам (суммы) и по банкам — как в превью
+ var cutsEl = document.getElementById('fin-cuts');
+ if (cutsEl) {
+ var mgrSum2 = {};
+ allPs.forEach(function(p){ var nm = p.managerName || empName(p.employee); if(nm && nm!=='-'){ mgrSum2[nm] = (mgrSum2[nm]||0) + (p.amount||0); } });
+ var mgrKeys = Object.keys(mgrSum2).sort(function(a,b){ return mgrSum2[b]-mgrSum2[a]; });
+ var maxMgr = mgrKeys.length ? mgrSum2[mgrKeys[0]] : 1;
+ var mgrHtml = mgrKeys.slice(0,5).map(function(nm){
+ var pct = allTotal>0 ? Math.round(mgrSum2[nm]/allTotal*100) : 0;
+ var w = maxMgr>0 ? Math.round(mgrSum2[nm]/maxMgr*100) : 0;
+ var ini = nm.trim().split(/\s+/).map(function(x){return x.charAt(0);}).join('').slice(0,2);
+ return '<div class="mrow2"><span class="ini">'+sanitize(ini)+'</span><div class="mb"><div class="mn">'+sanitize(nm)+'</div><div class="mbar"><i style="width:'+w+'%"></i></div></div><span class="mv">'+fmtNum(mgrSum2[nm])+'</span><span class="mp">'+pct+'%</span></div>';
+ }).join('');
+ var bankSum3 = {};
+ allPs.forEach(function(p){ var b=(p.bank||'').trim()||'—'; bankSum3[b] = (bankSum3[b]||0) + (p.amount||0); });
+ var bankKeys2 = Object.keys(bankSum3).sort(function(a,b){ return bankSum3[b]-bankSum3[a]; });
+ var bankCols = ['#7C89F4','#4FB8E0','#46D49A','#F0B34E','#9AA0AA','#646A80'];
+ var bankHtml = bankKeys2.slice(0,6).map(function(b,i){
+ var pct = allTotal>0 ? Math.round(bankSum3[b]/allTotal*100) : 0;
+ return '<div class="brow"><span class="bdot" style="background:'+bankCols[i%6]+'"></span><span class="bn">'+sanitize(b)+'</span><span class="bv">'+fmtNum(bankSum3[b])+'</span><span class="bp">'+pct+'%</span></div>';
+ }).join('');
+ cutsEl.innerHTML = '<div class="fcut"><div class="fch">Кто собрал · по менеджерам</div>'+mgrHtml+'</div><div class="fcut"><div class="fch">По банкам</div>'+bankHtml+'</div>';
  }
 
  // Populate employee filter
