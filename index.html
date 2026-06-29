@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v689</title>
+<title>SalesDoc — Финансовый Дашборд v690</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4753,6 +4753,12 @@ body.light #view-dashboard .panel,body.light #view-dashboard .kpi-grid{backgroun
 body.light #view-dashboard #kpi-total .kpi-value{background:linear-gradient(180deg,#16181D,#3A4152)!important;-webkit-background-clip:text!important;background-clip:text!important;-webkit-text-fill-color:transparent!important}
 
 /* v688 — без боковой пустоты: заполняем ширину (узкое ограничение убрано) */
+/* v690 — источники + столбцы-недели в 2 колонки (как в эталоне), чтобы убрать дыру по центру строк */
+#view-dashboard .dash-2col{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;align-items:start;margin:16px 0}
+#view-dashboard .dash-2col>*{margin:0!important;min-width:0}
+#view-dashboard .dash-2col .kpi-grid{grid-column:1!important}
+#view-dashboard .dash-2col>.panel{grid-column:2!important}
+#view-dashboard .dash-2col .kpi-spark-wrap{margin:0 12px 0 auto!important}
 /* v685 — премиум-герой с кольцом плана + 3 P&L-карточки (раскладка макета) */
 #view-dashboard #plan-fact-strip .dash-hero{display:grid;grid-template-columns:1fr 190px;gap:24px;align-items:center;background:linear-gradient(180deg,#181A24,#10121A);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:26px 30px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 12px 36px rgba(0,0,0,.44);position:relative;overflow:hidden}
 #view-dashboard #plan-fact-strip .dash-hero::before{content:"";position:absolute;inset:0;background:radial-gradient(440px 200px at 10% 0%,rgba(110,121,224,.18),transparent 70%);pointer-events:none}
@@ -41203,6 +41209,25 @@ function kbRender() {
   }
   if(document.readyState!=='loading') setTimeout(hook,400); else document.addEventListener('DOMContentLoaded',function(){ setTimeout(hook,400); });
   setInterval(dashTrend, 4000);
+})();
+// v690: Источники дохода + столбцы-недели в 2 колонки (как в эталоне). Переносим существующие
+// блоки (id/рендеры целы), старую панель P&L прячем (её дублируют 3 карточки наверху).
+(function(){
+  function build(){
+    try{
+      var vd=document.getElementById('view-dashboard'); if(!vd) return false;
+      if(vd.querySelector('.dash-2col')) return true;
+      var grid=vd.querySelector('.kpi-grid'); if(!grid) return false;
+      var bc=vd.querySelector('#bar-chart'); var bars=bc?bc.closest('.panel'):null; if(!bars) return false;
+      var w=document.createElement('div'); w.className='dash-2col';
+      grid.parentNode.insertBefore(w, grid);
+      w.appendChild(grid); w.appendChild(bars);
+      var pnl=document.getElementById('pnl-panel'); if(pnl) pnl.style.display='none';
+      return true;
+    }catch(e){ return false; }
+  }
+  var n=0, iv=setInterval(function(){ if(build()||++n>40) clearInterval(iv); }, 600);
+  if(document.readyState!=='loading') build(); else document.addEventListener('DOMContentLoaded', build);
 })();
 </script>
 </body>
