@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v706</title>
+<title>SalesDoc — Финансовый Дашборд v707</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5002,6 +5002,38 @@ body.light #view-marketing .mkt-ctry-head,body.light #view-marketing .cc-flag,bo
 #view-marketing .mkt-tab.mkt-tab-active{background:linear-gradient(180deg,rgba(110,121,224,.28),rgba(110,121,224,.12));color:#9AA4FF;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
 body.light #view-marketing .mkt-tabbar{background:#F4F5F8;border-color:rgba(15,18,25,.08)}
 body.light #view-marketing .mkt-tab.mkt-tab-active{color:#4651B5}
+/* v707 — Планёрки: карточки спринтов 1:1 с макетом preview-sprints-list, на всю ширину */
+#view-planning #plan-sprints-grid{grid-template-columns:repeat(auto-fill,minmax(360px,1fr))!important;gap:18px!important}
+#view-planning .spr{background:linear-gradient(180deg,#181A24,#10121A);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:20px 22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 34px rgba(0,0,0,.46);position:relative;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
+#view-planning .spr:hover{transform:translateY(-2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 16px 40px rgba(0,0,0,.55)}
+#view-planning .spr::before{content:"";position:absolute;inset:0;background:radial-gradient(340px 150px at 8% 0%,rgba(110,121,224,.13),transparent 70%);pointer-events:none}
+#view-planning .spr.risk::before{background:radial-gradient(340px 150px at 8% 0%,rgba(255,107,94,.14),transparent 70%)}
+#view-planning .sp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;position:relative;z-index:1}
+#view-planning .sp-goal{font-size:18px;font-weight:800;letter-spacing:-.4px;line-height:1.2;color:#F4F6FB}
+#view-planning .sp-st{font-size:11px;font-weight:700;padding:4px 11px;border-radius:999px;white-space:nowrap;flex:0 0 auto}
+#view-planning .sp-st.ok{color:#9BF0CC;background:rgba(70,212,154,.12);border:1px solid rgba(70,212,154,.28)}
+#view-planning .sp-st.risk{color:#FFD79A;background:linear-gradient(180deg,rgba(255,107,94,.18),rgba(255,107,94,.07));border:1px solid rgba(255,107,94,.35)}
+#view-planning .sp-st.soon{color:#FAD79A;background:rgba(240,179,78,.13);border:1px solid rgba(240,179,78,.3)}
+#view-planning .sp-meta{font-size:12px;color:#646A80;margin-top:5px;position:relative;z-index:1}
+#view-planning .sp-nums{display:flex;align-items:flex-end;gap:14px;margin-top:16px;position:relative;z-index:1}
+#view-planning .sp-big{font-family:var(--mono,'IBM Plex Mono',monospace);font-weight:700;font-size:34px;line-height:.9;letter-spacing:-1.5px;color:#F4F6FB}
+#view-planning .sp-big .of{color:#646A80;font-size:19px}
+#view-planning .sp-unit{font-size:12px;color:#646A80;padding-bottom:4px}
+#view-planning .sp-bar{height:8px;border-radius:5px;background:rgba(255,255,255,.07);overflow:hidden;margin-top:14px;position:relative;z-index:1}
+#view-planning .sp-bar>i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#6E79E0,#9AA4FF)}
+#view-planning .sp-bar>i.risk{background:linear-gradient(90deg,#F0B34E,#E0913E)}
+#view-planning .sp-foot{display:flex;align-items:center;justify-content:space-between;margin-top:13px;position:relative;z-index:1}
+#view-planning .sp-foot .pct{font-family:var(--mono,'IBM Plex Mono',monospace);font-size:12px;color:#9BA1B4}
+#view-planning .sp-foot .hyp{font-size:11.5px;color:#646A80}
+#view-planning .sp-foot .hyp .hot{color:#FF9C92;font-weight:600}
+#view-planning .avs{display:flex}
+#view-planning .avs .sp-av{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:9px;font-weight:700;color:#fff;border:2px solid #12141c;margin-left:-6px}
+#view-planning .avs .sp-av:first-child{margin-left:0}
+#view-planning .spr-menu{position:absolute;top:12px;right:14px;z-index:4;opacity:0;transition:opacity .15s}
+#view-planning .spr:hover .spr-menu{opacity:1}
+#view-planning .spr-menu-btn{width:24px;height:24px;border-radius:7px;border:1px solid rgba(255,255,255,.12);background:rgba(20,22,30,.9);color:#9BA1B4;cursor:pointer;font-size:14px;line-height:1}
+body.light #view-planning .spr{background:#FFFFFF;border-color:rgba(15,18,25,.09)}
+body.light #view-planning .sp-goal,body.light #view-planning .sp-big{color:#16181D}
 </style>
 
 <script>
@@ -19177,16 +19209,27 @@ function planDaysBetween(a,b){ return Math.max(1, Math.round((new Date(b)-new Da
 function planDayOf(start){ return Math.max(1, Math.min(planDaysBetween(start, (new Date()).toISOString().slice(0,10)), 99)); }
 function planStatusLabel(s){ return {ontrack:'На треке', atrisk:'Риск', delayed:'Просрочен'}[s] || s; }
 function planRenderSprintCard(sp){
+ // v707: карточка спринта 1:1 с макетом preview-sprints-list (.spr): цель + факт/цель + статус + период + гипотезы + аватары
+ var cfg = planTypeCfg(sp);
  var totalDays = planDaysBetween(sp.start, sp.end);
  var dayN = planDayOf(sp.start);
- var pct = sp.total > 0 ? Math.round((sp.done / sp.total) * 100) : 0;
  var daysLeft = totalDays - dayN;
- var leftLabel = daysLeft > 0 ? ('Осталось ' + daysLeft + ' дн.') : (daysLeft === 0 ? 'Последний день' : 'Просрочен');
- var leftColor = daysLeft > 3 ? '#4CB782' : (daysLeft >= 0 ? '#E0A458' : '#E5604D');
- var fillStyle = sp.color === 'purple' ? 'background:#5E6AD2' : sp.color === 'blue' ? 'background:#5E6AD2' : sp.color === 'green' ? 'background:#4CB782' : 'background:#E0A458';
- // v175: совместимость старого формата [{n,c}] и нового [id, ...]
- var _avColors = ['#E0A458','#5E6AD2','#5E6AD2','#4CB782','#E5604D','#828FF7','#06B6D4','#EC4899'];
- var avatars = (sp.team||[]).slice(0,4).map(function(t, i){
+ var tasks = (typeof planTasksOfSprint === 'function') ? (planTasksOfSprint(sp.id) || []) : [];
+ var doneTasks = tasks.filter(function(t){ return t.status === 'done'; });
+ var hasPlan = cfg.hasPlan && (sp.type || 'normal') !== 'normal';
+ var plan = parseFloat(sp.plan_target) || 0;
+ var fact = hasPlan ? (cfg.factMode === 'sum' ? doneTasks.reduce(function(s,t){ return s + planTaskMetric(t); }, 0) : doneTasks.length) : (sp.done || 0);
+ var target = hasPlan ? plan : (sp.total || 0);
+ var pct = target > 0 ? Math.round(fact / target * 100) : 0;
+ var unit = hasPlan ? (cfg.money ? (typeof _CUR!=='undefined'?_CUR:'') : (cfg.unit || '')) : 'задач';
+ var fmtN = function(n){ n = Math.round(n); return (cfg.money && typeof fmt==='function') ? fmt(n) : String(n); };
+ var today = _planYmd(new Date());
+ var hot = tasks.filter(function(t){ return t.status !== 'done' && t.deadline && String(t.deadline).slice(0,10) < today; }).length;
+ var stCls = sp.status === 'ontrack' ? 'ok' : (sp.status === 'delayed' ? 'risk' : 'soon');
+ var perLab = totalDays <= 31 ? 'месяц' : (totalDays <= 92 ? 'квартал' : totalDays + ' дн');
+ var _avColors = ['#6E79E0','#4FB8E0','#46D49A','#F0B34E','#FF6B5E','#9AA4FF'];
+ var teamArr = sp.team || [];
+ var avatars = teamArr.slice(0,4).map(function(t, i){
  var n, c;
  if (t && typeof t === 'object') { n = t.n; c = t.c; }
  else {
@@ -19194,46 +19237,24 @@ function planRenderSprintCard(sp){
  n = emp ? ((emp.name||'').split(' ').map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('')) : '?';
  c = _avColors[((t||0) + i) % _avColors.length];
  }
- return '<div class="sp-avatar" style="background:'+c+'">'+(n||'?')+'</div>';
+ return '<span class="sp-av" style="background:'+c+'">'+(n||'?')+'</span>';
  }).join('');
- var todoCount = sp.total - sp.in_progress - sp.done;
- // v176: бейдж приоритета спринта
- var pr = sp.priority || 'mid';
- var prMap = { high:{l:'Высокий приоритет', c:'#E5604D', bg:'rgba(214,115,115,.12)'}, mid:{l:'Средний', c:'#E0A458', bg:'rgba(214,163,114,.12)'}, low:{l:'Низкий', c:'#4CB782', bg:'rgba(127,184,158,.12)'} };
- var prInfo = prMap[pr] || prMap.mid;
- var prBadge = '<span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+prInfo.bg+';color:'+prInfo.c+';margin-right:6px;letter-spacing:.3px">'+prInfo.l.toUpperCase()+'</span>';
- // v177: меню-троеточие — редактировать / удалить
+ var extra = teamArr.length > 4 ? ('+'+(teamArr.length-4)) : '';
  var menuId = 'plan-menu-sp-' + sp.id;
- var menuHtml = '<div class="plan-menu-wrap" onclick="event.stopPropagation()">'
- + '<button class="plan-menu-btn" onclick="planToggleMenu(\''+menuId+'\')" title="Меню">⋯</button>'
+ var menuHtml = '<div class="spr-menu" onclick="event.stopPropagation()">'
+ + '<button class="spr-menu-btn" onclick="planToggleMenu(\''+menuId+'\')" title="Меню">⋯</button>'
  + '<div class="plan-menu-popup" id="'+menuId+'">'
- + '<button class="plan-menu-item" onclick="planEditSprint('+sp.id+');planCloseAllMenus()"> Редактировать</button>'
- + '<button class="plan-menu-item danger" onclick="planDeleteSprint('+sp.id+');planCloseAllMenus()"> Удалить спринт</button>'
- + '</div>'
- + '</div>';
- return '<div class="sprint-card color-'+sp.color+'" onclick="planOpenSprint('+sp.id+')">'
- + '<div class="sprint-head">'
- + '<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px">'+prBadge+'</div><div class="sprint-name">'+sp.name+'</div><div class="sprint-goal">'+sp.goal+'</div></div>'
- + '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'
- + '<span class="sprint-status '+sp.status+'">'+planStatusLabel(sp.status)+'</span>'
+ + '<button class="plan-menu-item" onclick="planEditSprint('+sp.id+');planCloseAllMenus()">Редактировать</button>'
+ + '<button class="plan-menu-item danger" onclick="planDeleteSprint('+sp.id+');planCloseAllMenus()">Удалить спринт</button>'
+ + '</div></div>';
+ return '<div class="spr'+(sp.status==='delayed'?' risk':'')+'" onclick="planOpenSprint('+sp.id+')">'
  + menuHtml
- + '</div>'
- + '</div>'
- + '<div class="sprint-dates">'
- + '<span>'+planFmtDate(sp.start)+' — '+planFmtDate(sp.end)+'</span>'
- + '<span>День '+dayN+' из '+totalDays+'</span>'
- + '<span style="color:'+leftColor+'">'+leftLabel+'</span>'
- + '</div>'
- + '<div class="sprint-progress">'
- + '<div class="sprint-progress-label"><span>Прогресс</span><span style="color:var(--text-primary);font-weight:600">'+sp.done+' / '+sp.total+' задач</span></div>'
- + '<div class="sprint-progress-bar"><div class="sprint-progress-fill" style="width:'+pct+'%;'+fillStyle+'"></div></div>'
- + '</div>'
- + '<div class="sprint-stats">'
- + '<div class="sprint-stat"><div class="sprint-stat-v">'+todoCount+'</div><div class="sprint-stat-l">Бэклог</div></div>'
- + '<div class="sprint-stat"><div class="sprint-stat-v" style="color:#5E6AD2">'+sp.in_progress+'</div><div class="sprint-stat-l">В работе</div></div>'
- + '<div class="sprint-stat"><div class="sprint-stat-v" style="color:#4CB782">'+sp.done+'</div><div class="sprint-stat-l">Готово</div></div>'
- + '</div>'
- + '<div class="sprint-team">'+avatars+'<span style="margin-left:6px">'+(sp.teamNames||'—')+'</span></div>'
+ + '<div class="sp-head"><div class="sp-goal">'+_planEsc(sp.goal || sp.name || 'Спринт')+'</div><span class="sp-st '+stCls+'">'+planStatusLabel(sp.status)+'</span></div>'
+ + '<div class="sp-meta">'+planFmtDate(sp.start)+' — '+planFmtDate(sp.end)+' · '+perLab+(sp.teamNames?(' · '+_planEsc(sp.teamNames)):'')+'</div>'
+ + '<div class="sp-nums"><div class="sp-big">'+fmtN(fact)+'<span class="of"> / '+fmtN(target)+'</span></div><div class="sp-unit">'+_planEsc(unit)+'</div></div>'
+ + '<div class="sp-bar"><i'+(sp.status==='delayed'?' class="risk"':'')+' style="width:'+Math.min(100,pct)+'%"></i></div>'
+ + '<div class="sp-foot"><span class="pct">'+pct+'% · '+(daysLeft>0?('осталось '+daysLeft+' дн'):(daysLeft===0?'последний день':'просрочен'))+'</span><span class="hyp">'+tasks.length+' гипотез'+(hot>0?(' · <span class="hot">'+hot+' горит</span>'):'')+'</span></div>'
+ + '<div class="sp-foot"><div class="avs">'+avatars+'</div><span class="hyp">'+extra+'</span></div>'
  + '</div>';
 }
 window.planSetTab = function(tab, btn){
