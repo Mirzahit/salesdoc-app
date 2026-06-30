@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v703</title>
+<title>SalesDoc — Финансовый Дашборд v704</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4975,6 +4975,24 @@ body.light .fsy-card{background:#F7F8FA}
 #view-marketing .mkc-cpl.bad{color:#FF9C92}
 body.light #view-marketing .mkt-camps-card{background:#FFFFFF;border-color:rgba(15,18,25,.09)}
 body.light #view-marketing .mkt-camps-head,body.light #view-marketing .mkc-n,body.light #view-marketing .mkc-lds{color:#16181D}
+/* v704 — блок «По странам KZ/KG» на Обзоре */
+#view-marketing .mkt-countries-block{margin-bottom:22px}
+#view-marketing .mkt-ctry-head{font-size:15px;font-weight:700;color:#F4F6FB;margin:6px 0 12px;display:flex;align-items:baseline;gap:10px}
+#view-marketing .mkt-ctry-head span{font-size:12px;font-weight:400;color:#646A80}
+#view-marketing .mkt-ctry-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+#view-marketing .mkt-ctry-card{background:linear-gradient(180deg,#181A24,#10121A);border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 24px rgba(0,0,0,.4);padding:18px 22px}
+#view-marketing .mkt-ctry-card.cc-load{color:#646A80}
+#view-marketing .cc-flag{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;color:#F4F6FB}
+#view-marketing .cc-fl{width:26px;height:18px;border-radius:4px;display:grid;place-items:center;font-size:10px;font-weight:800;color:#fff}
+#view-marketing .cc-m3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+#view-marketing .cc-m3 .l{font-size:11px;color:#646A80}
+#view-marketing .cc-m3 .v{font-family:var(--mono);font-size:19px;font-weight:700;margin-top:5px;letter-spacing:-.5px;color:#F4F6FB}
+#view-marketing .cc-m3 .v.cpl{color:#9BF0CC}
+#view-marketing .cc-d{font-size:11px;margin-top:4px;font-weight:600}
+#view-marketing .cc-d.good{color:#9BF0CC}#view-marketing .cc-d.bad{color:#FF9C92}
+#view-marketing .cc-err{color:#646A80;font-size:12px;margin-top:14px}
+body.light #view-marketing .mkt-ctry-card{background:#FFFFFF;border-color:rgba(15,18,25,.09)}
+body.light #view-marketing .mkt-ctry-head,body.light #view-marketing .cc-flag,body.light #view-marketing .cc-m3 .v{color:#16181D}
 </style>
 
 <script>
@@ -6955,6 +6973,9 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="mkt-mini"><div class="l">ROAS</div><div class="v" id="mkt-hero-roas">—</div></div>
  </div>
  </div>
+
+ <!-- v704: По странам KZ/KG (рекламные кабинеты Meta) -->
+ <div id="mkt-countries-block" class="mkt-countries-block"></div>
 
  <!-- v159: Главные KPI — стройная сетка из 6 (ввод расхода/продаж) -->
  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:22px">
@@ -17307,6 +17328,38 @@ window.mktLoadLeads = async function() {
  leadsEl.textContent = totalLeads > 0 ? totalLeads : '—';
  if (totalLeads > 0) leadsEl.style.color = fromMeta ? '#8B5CF6' : '#5E6AD2';
  mktAutoCalc();
+};
+
+// v704: блок «По странам KZ/KG» — расход/лиды/цена лида по каждому кабинету Meta (USD)
+window.mktRenderCountries = async function(){
+ var el=document.getElementById('mkt-countries-block'); if(!el) return;
+ var period = _mktPeriod==='week'?'last_7d':'this_month';
+ var flags = {KZ:{n:'Казахстан',bg:'linear-gradient(180deg,#27AAE1,#1B7FB5)'}, KG:{n:'Кыргызстан',bg:'linear-gradient(180deg,#E23A3A,#B22222)'}};
+ el.innerHTML = '<div class="mkt-ctry-head">По странам · кабинеты Meta <span>в долларах (валюта кабинета) · '+(period==='last_7d'?'неделя':'месяц')+'</span></div><div class="mkt-ctry-grid"><div class="mkt-ctry-card cc-load">KZ…</div><div class="mkt-ctry-card cc-load">KG…</div></div>';
+ async function one(c){
+  try {
+   var r = await authFetch('/api/meta-ads?endpoint=account_summary&period='+period+'&country='+c);
+   var d = await r.json(); var s=d.summary||{}; var pv=d.previous||{};
+   var spend=parseFloat(s.spend||0), leads=parseFloat(s.leads_count||0);
+   var pSpend=parseFloat(pv.spend||0), pLeads=parseFloat(pv.leads_count||0);
+   return {country:c, spend:spend, leads:leads, cpl:(leads>0?spend/leads:null),
+     dSpend:(pSpend>0?Math.round((spend-pSpend)/pSpend*100):null), dLeads:(pLeads>0?Math.round((leads-pLeads)/pLeads*100):null)};
+  } catch(e){ return {country:c, err:true}; }
+ }
+ var res = await Promise.all([one('KZ'), one('KG')]);
+ function dl(d, upIsGood){ if(d==null) return ''; var up=d>=0; var good = upIsGood ? up : !up; return '<div class="cc-d '+(good?'good':'bad')+'">'+(up?'↑':'↓')+' '+Math.abs(d)+'%</div>'; }
+ function card(x){
+  var f=flags[x.country]||{n:x.country,bg:'#444'};
+  var head='<div class="cc-flag"><span class="cc-fl" style="background:'+f.bg+'">'+x.country+'</span>'+f.n+'</div>';
+  if(x.err) return '<div class="mkt-ctry-card">'+head+'<div class="cc-err">нет данных Meta за период</div></div>';
+  return '<div class="mkt-ctry-card">'+head
+   + '<div class="cc-m3">'
+   +  '<div><div class="l">Расход</div><div class="v">'+_metaFmtMoney(x.spend.toFixed(2),"USD")+'</div>'+dl(x.dSpend,false)+'</div>'
+   +  '<div><div class="l">Лиды</div><div class="v">'+x.leads+'</div>'+dl(x.dLeads,true)+'</div>'
+   +  '<div><div class="l">Цена лида</div><div class="v cpl">'+(x.cpl!=null?_metaFmtMoney(x.cpl.toFixed(2),"USD"):'—')+'</div></div>'
+   + '</div></div>';
+ }
+ el.innerHTML = '<div class="mkt-ctry-head">По странам · кабинеты Meta <span>в долларах (валюта кабинета) · '+(period==='last_7d'?'неделя':'месяц')+'</span></div><div class="mkt-ctry-grid">'+res.map(card).join('')+'</div>';
 };
 
 // v703: блок «Откуда лиды · по кампаниям» на Обзоре — топ Meta-кампаний по цене лида
@@ -40438,7 +40491,8 @@ window.mktInitDashboard = async function(){
  mktUpdateTargetPreview();
  mktUpdateChannelsPreview();
  mktUpdateLtvPreview();
- // v703: блок «Откуда лиды · по кампаниям»
+ // v703/704: блоки «По странам» + «Откуда лиды · по кампаниям»
+ if(typeof mktRenderCountries === 'function') mktRenderCountries();
  if(typeof mktRenderCamps === 'function') mktRenderCamps();
  // v308: воронка amoCRM «Лиды»
  if(typeof amoLoadFunnel === 'function') amoLoadFunnel(false);
