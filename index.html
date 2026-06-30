@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v701</title>
+<title>SalesDoc — Финансовый Дашборд v702</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6425,6 +6425,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <button onclick="exportPaymentsCSV()" class="fin-ghost-btn">Экспорт</button>
  <button onclick="finFindDuplicates()" class="fin-ghost-btn fin-dup-btn">Найти дубли</button>
  <button onclick="finSyncCheck()" class="fin-ghost-btn fin-sync-btn">Сверить с таблицей</button>
+ <button onclick="finRebuildMonth()" class="fin-ghost-btn fin-rebuild-btn">Пересобрать месяц</button>
  </div>
  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
  <div class="fsearch"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--text-muted)"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg><input id="fin-search" oninput="renderAllPayments()" placeholder="Поиск по клиенту…"></div>
@@ -13188,6 +13189,58 @@ async function finSyncApply(country){
  } catch(e){ showNotif('Ошибка', e.message||'сбой'); }
 }
 window.finSyncApply = finSyncApply;
+
+// v702: пересобрать месяц из таблицы — удалить записи месяца в базе и залить заново (без позиционного матчинга)
+async function finRebuildMonth(){
+ var country = (typeof currentCountry!=='undefined' ? currentCountry : 'KZ');
+ async function call(){ return await fetch('/api/payments?action=import_sheets&country='+country+'&dry_run=1&months_back=1&rebuild=1',{method:'POST',headers:_finSyncHeaders()}); }
+ try {
+  showNotif('Пересборка месяца','читаю таблицу, подожди 5–15 сек…');
+  var r = await call();
+  if(r.status===403){
+   var t = window.prompt('Введите админ-код (для пересборки месяца):','');
+   if(!t || !t.trim()) return;
+   window._ADMIN_TOKEN = t.trim();
+   try { localStorage.setItem('sd_admin_token', window._ADMIN_TOKEN); } catch(_){}
+   r = await call();
+  }
+  var data = await r.json().catch(function(){ return {ok:false,error:'не разобрать ответ ('+r.status+')'}; });
+  if(!data.ok){ showNotif('Не вышло', data.error || ('код '+r.status)); return; }
+  finRebuildShow(data, country);
+ } catch(e){ showNotif('Ошибка', e.message||'сбой запроса'); }
+}
+window.finRebuildMonth = finRebuildMonth;
+function finRebuildShow(d, country){
+ var del=d.will_delete||0, ins=d.will_insert||0, tabs=(d.tabs||[]).join(', ');
+ var warn = (del>0 && Math.abs(ins-del) > Math.max(5, del*0.3));
+ var html = '<div class="findup-sum">Пересборка месяца · '+sanitize(country)+' · вкладки: '+sanitize(tabs||'—')
+   + '<div class="findup-hint">Сухой прогон. Заменит записи этого месяца в базе данными из таблицы — база станет 1-в-1 как лист, без позиционной путаницы.</div></div>'
+   + '<div class="fsy-cards">'
+   +  '<div class="fsy-card del"><div class="fsy-n">'+del+'</div><div class="fsy-l">удалить из базы<br><span>текущие записи месяца</span></div></div>'
+   +  '<div class="fsy-card add"><div class="fsy-n">'+ins+'</div><div class="fsy-l">залить из таблицы<br><span>свежие строки листа</span></div></div>'
+   + '</div>'
+   + '<div class="fsy-sum">Сумма в таблице за месяц: <b>'+fmtFull(Math.round(d.total_sum_parsed||0))+'</b></div>'
+   + (warn ? '<div class="fsy-note">Разница «удалить/залить» великовата — убедись, что таблица прочиталась полностью, прежде чем применять.</div>' : '')
+   + '<div class="fsy-apply-wrap"><button class="fsy-apply" onclick="finRebuildApply(\''+sanitize(country)+'\')">Пересобрать — заменить месяц в базе</button><div class="fsy-applynote">Безопасно: сначала читается лист, и только если прочитался — заменяет. После — страница обновится.</div></div>';
+ var ov=document.createElement('div'); ov.id='findup-overlay'; ov.className='findup-ov';
+ ov.innerHTML='<div class="findup-card"><div class="findup-h"><div class="findup-title">Пересобрать месяц из таблицы</div><button class="findup-x" onclick="document.getElementById(\'findup-overlay\').remove()">×</button></div><div class="findup-body">'+html+'</div></div>';
+ ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+ document.body.appendChild(ov);
+}
+window.finRebuildShow = finRebuildShow;
+async function finRebuildApply(country){
+ if(!confirm('Пересобрать месяц?\n\nБаза за этот месяц будет заменена данными из таблицы (удалит текущие записи месяца и зальёт заново). Делается безопасно. Продолжить?')) return;
+ try {
+  showNotif('Пересобираю месяц','подожди 5–25 сек…');
+  var r = await fetch('/api/payments?action=import_sheets&country='+country+'&dry_run=0&months_back=1&rebuild=1',{method:'POST',headers:_finSyncHeaders()});
+  var data = await r.json().catch(function(){return {ok:false,error:'код '+r.status};});
+  if(!data.ok){ showNotif('Не вышло', data.error||('код '+r.status)); return; }
+  showNotif('Готово','залито '+(data.inserted_count||0)+', удалено старых '+(data.deleted_count||0)+(data.failed_count?(' · ошибок '+data.failed_count):'')+'. Обновляю…');
+  var ov=document.getElementById('findup-overlay'); if(ov) ov.remove();
+  setTimeout(function(){ location.reload(); }, 1600);
+ } catch(e){ showNotif('Ошибка', e.message||'сбой'); }
+}
+window.finRebuildApply = finRebuildApply;
 
 function showSheetColumns() {
  // Структура подтверждена из Google Sheets "Доходы KZ 2026"
