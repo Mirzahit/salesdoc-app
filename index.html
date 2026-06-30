@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v709</title>
+<title>SalesDoc — Финансовый Дашборд v710</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -7492,14 +7492,27 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="form-group"><label class="form-label">Дедлайн</label><input class="form-input" type="date" id="ptm-due"></div>
  </div>
 
- <div class="form-row"><div class="form-group" style="flex:1">
+ <div class="form-row">
+ <div class="form-group" style="flex:1">
  <label class="form-label">Приоритет</label>
  <select class="form-input" id="ptm-priority">
  <option value="mid" selected>Средний</option>
  <option value="high">Высокий — срочно</option>
  <option value="low">Низкий — может подождать</option>
  </select>
- </div></div>
+ </div>
+ <div class="form-group" style="flex:1">
+ <label class="form-label">Отдел</label>
+ <select class="form-input" id="ptm-department">
+ <option value="">— не указан —</option>
+ <option value="Продажи">Продажи</option>
+ <option value="Внедрение">Внедрение</option>
+ <option value="Интеграция">Интеграция</option>
+ <option value="Маркетинг">Маркетинг</option>
+ <option value="Поддержка">Поддержка</option>
+ </select>
+ </div>
+ </div>
  <div id="ptm-due-hint" style="font-size:11px;color:var(--text-muted);margin-top:-6px;margin-bottom:14px"></div>
 
  <div id="ptm-msg" style="font-size:12px;color:#E5604D;margin-bottom:10px;min-height:18px"></div>
@@ -7626,6 +7639,25 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <label class="form-label" style="font-size:10px;color:var(--text-muted);margin-bottom:4px;display:block" id="ptd-metric-label">Кол-во лицензий</label>
  <input type="number" id="ptd-metric" class="form-input" min="0" step="1" placeholder="0" onchange="planUpdateTaskMetric(this.value)" style="width:100%">
  <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Засчитывается в «Факт», когда задача в статусе «Готово».</div>
+ </div>
+
+ <!-- v710: отдел + % выполнения гипотезы -->
+ <div style="display:flex;gap:10px;margin-bottom:14px">
+ <div style="flex:1">
+ <label class="form-label" style="font-size:10px;color:var(--text-muted);margin-bottom:4px;display:block">Отдел</label>
+ <select id="ptd-department" class="form-input" onchange="planUpdateTaskDept(this.value)" style="width:100%">
+ <option value="">— не указан —</option>
+ <option value="Продажи">Продажи</option>
+ <option value="Внедрение">Внедрение</option>
+ <option value="Интеграция">Интеграция</option>
+ <option value="Маркетинг">Маркетинг</option>
+ <option value="Поддержка">Поддержка</option>
+ </select>
+ </div>
+ <div style="flex:1">
+ <label class="form-label" style="font-size:10px;color:var(--text-muted);margin-bottom:4px;display:block">% выполнения</label>
+ <input type="number" id="ptd-progress" class="form-input" min="0" max="100" step="5" placeholder="0" onchange="planUpdateTaskProgress(this.value)" style="width:100%">
+ </div>
  </div>
 
  <!-- v576: Ответственные (редактируемые) -->
@@ -20037,7 +20069,8 @@ function planRenderHypRows(sp, tasks){
   } else { who = '<span class="av none">+</span><span class="nm" style="color:#FAD79A">не назначен</span>'; }
   var contrib = parseFloat(planTaskMetric(t))||0; var contribTxt = contrib>0 ? ('даёт +'+Math.round(contrib)+(unit?(' '+unit):'')) : '';
   var dep = t.department || ''; var depHtml = dep ? ('<span class="dep '+(depMap[dep]||'sale')+'">'+_planEsc(dep)+'</span>') : '';
-  var dl = t.deadline ? String(t.deadline).slice(0,10) : '';
+  var _dlRaw = t.deadline || t.due_date || '';
+  var dl = _dlRaw ? String(_dlRaw).slice(0,10) : '';
   var overdue = t.status!=='done' && dl && dl < today;
   var dueCls = overdue ? 'over' : (dl && dl <= soonStr ? 'soon' : '');
   var dueTxt = dl ? (overdue ? ('просрочено '+Math.round((new Date(today)-new Date(dl))/86400000)+' дн') : ('до '+planFmtDate(t.deadline))) : 'без срока';
@@ -20231,12 +20264,16 @@ window.planSubmitTaskModal = function(){
  var all = planLoadTasks();
  var nextId = (all.reduce(function(m,t){return Math.max(m,t.id||0);},0) || 100) + 1;
  var priority = (document.getElementById('ptm-priority').value || 'mid');
+ var department = (document.getElementById('ptm-department') || {}).value || '';
  all.push({
  id:nextId, sprint_id:_planCurrentSprintId, title:title,
  owners: owners, owner_ids: ownerIds,
  owner: owners.join(', '), // для обратной совместимости с рейтингом
  start_date: startStr || null,
  due_date: dueStr || null,
+ deadline: dueStr || null, // v710: алиас для строк гипотез
+ department: department,    // v710: отдел гипотезы
+ progress_pct: 0,           // v710: % выполнения
  priority: priority,
  status:'todo',
  created_at: (new Date()).toISOString().slice(0,10)
@@ -20260,6 +20297,9 @@ window.planOpenTaskDetail = function(taskId){
  // v576: приоритет / статус — редактируемые селекты
  var prEl = document.getElementById('ptd-priority'); if (prEl) prEl.value = t.priority || 'mid';
  var stEl = document.getElementById('ptd-status'); if (stEl) stEl.value = t.status || 'todo';
+ // v710: отдел + % выполнения
+ var depEl = document.getElementById('ptd-department'); if (depEl) depEl.value = t.department || '';
+ var prgEl = document.getElementById('ptd-progress'); if (prgEl) prgEl.value = (t.progress_pct != null && t.progress_pct !== '') ? t.progress_pct : '';
  // v576: ответственные — наполняем выпадающий список (команда спринта + остальные) и чипы
  var spD = planLoadSprints().find(function(s){return s.id===t.sprint_id;}) || {};
  // v639: поле метрики (лицензии/сумма) — только для типов с числовым полем
@@ -20665,6 +20705,15 @@ window.planUpdateTaskStatus = function(val){
 window.planUpdateTaskMetric = function(val){
  var n = parseFloat(val); if (!isFinite(n) || n < 0) n = 0;
  _planEditOpenTask(function(t){ if ((parseFloat(t.metric_value)||0) === n) return false; t.metric_value = n; }, 'edit', 'кол-во → ' + n);
+};
+// v710: отдел гипотезы
+window.planUpdateTaskDept = function(val){
+ _planEditOpenTask(function(t){ if ((t.department||'') === (val||'')) return false; t.department = val || ''; }, 'edit', 'отдел → ' + (val||'—'));
+};
+// v710: % выполнения гипотезы
+window.planUpdateTaskProgress = function(val){
+ var n = parseInt(val, 10); if (!isFinite(n) || n < 0) n = 0; if (n > 100) n = 100;
+ _planEditOpenTask(function(t){ if ((parseInt(t.progress_pct,10)||0) === n) return false; t.progress_pct = n; }, 'edit', '% → ' + n);
 };
 window.planDetailAddOwner = function(value){
  if (!value) return;
