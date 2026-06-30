@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v702</title>
+<title>SalesDoc — Финансовый Дашборд v703</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4957,6 +4957,24 @@ body.light .findup-title,body.light .findup-sum,body.light .fd-ghead,body.light 
 .fsy-apply:hover{background:rgba(70,212,154,.28)}
 .fsy-applynote{font-size:11.5px;color:#9BA1B4;margin-top:8px;line-height:1.5}
 body.light .fsy-card{background:#F7F8FA}
+/* v703 — блок «Откуда лиды · по кампаниям» на Обзоре Маркетинга */
+#view-marketing .mkt-camps-block{margin-bottom:22px}
+#view-marketing .mkt-camps-head{font-size:15px;font-weight:700;color:#F4F6FB;margin:6px 0 12px;display:flex;align-items:baseline;gap:10px}
+#view-marketing .mkt-camps-head span{font-size:12px;font-weight:400;color:#646A80}
+#view-marketing .mkt-camps-card{background:linear-gradient(180deg,#181A24,#10121A);border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 24px rgba(0,0,0,.4);padding:6px 4px}
+#view-marketing .mkt-camps-empty,#view-marketing .mkt-camps-load{color:#646A80;font-size:13px;padding:14px 18px}
+#view-marketing .mkc-row{display:grid;grid-template-columns:1fr 120px 56px 100px;gap:14px;align-items:center;padding:11px 18px;border-top:1px solid rgba(255,255,255,.05)}
+#view-marketing .mkc-row:first-child{border-top:none}
+#view-marketing .mkc-n{font-size:13.5px;font-weight:600;color:#F4F6FB;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#view-marketing .mkc-paused{font-size:10px;color:#646A80;font-weight:500}
+#view-marketing .mkc-bar{height:7px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}
+#view-marketing .mkc-bar>i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#9AA4FF,#6E79E0)}
+#view-marketing .mkc-lds{text-align:right;font-family:var(--mono);font-size:13px;color:#F4F6FB}
+#view-marketing .mkc-cpl{text-align:right;font-family:var(--mono);font-size:13px;color:#9BA1B4}
+#view-marketing .mkc-cpl.good{color:#9BF0CC}
+#view-marketing .mkc-cpl.bad{color:#FF9C92}
+body.light #view-marketing .mkt-camps-card{background:#FFFFFF;border-color:rgba(15,18,25,.09)}
+body.light #view-marketing .mkt-camps-head,body.light #view-marketing .mkc-n,body.light #view-marketing .mkc-lds{color:#16181D}
 </style>
 
 <script>
@@ -6981,6 +6999,9 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <style>
  .amo-pbtn.amo-pactive{background:var(--accent-bg)!important;color:var(--accent-text)!important;font-weight:700;border-color:var(--accent-text)!important}
  </style>
+
+ <!-- v703: Откуда лиды · по кампаниям (Meta) -->
+ <div id="mkt-camps-block" class="mkt-camps-block"></div>
 
  <!-- v159: Модули каналов — современная сетка с превью -->
  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
@@ -17286,6 +17307,41 @@ window.mktLoadLeads = async function() {
  leadsEl.textContent = totalLeads > 0 ? totalLeads : '—';
  if (totalLeads > 0) leadsEl.style.color = fromMeta ? '#8B5CF6' : '#5E6AD2';
  mktAutoCalc();
+};
+
+// v703: блок «Откуда лиды · по кампаниям» на Обзоре — топ Meta-кампаний по цене лида
+window.mktRenderCamps = async function(){
+ var el = document.getElementById('mkt-camps-block'); if(!el) return;
+ var country = currentCountry;
+ var period = _mktPeriod === 'week' ? 'last_7d' : 'this_month';
+ el.innerHTML = '<div class="mkt-camps-head">Откуда лиды · по кампаниям <span>загрузка…</span></div>';
+ try {
+  var r = await authFetch('/api/meta-ads?endpoint=campaigns&period='+period+'&country='+country);
+  var d = await r.json();
+  var camps = (d && d.campaigns) || [];
+  var cur = 'USD';
+  var list = camps.map(function(c){
+   var i=c.insights||{};
+   var spend=parseFloat(i.spend||0), leads=parseFloat(i.leads_count||0);
+   var cpl = (i.cost_per_lead!=null) ? parseFloat(i.cost_per_lead) : (leads>0?spend/leads:null);
+   return {name:c.name||'(без названия)', spend:spend, leads:leads, cpl:cpl, active:((c.effective_status||c.status)==='ACTIVE')};
+  }).filter(function(x){ return x.leads>0; }).sort(function(a,b){ return (a.cpl==null?1e9:a.cpl) - (b.cpl==null?1e9:b.cpl); });
+  if(!list.length){ el.innerHTML = '<div class="mkt-camps-head">Откуда лиды · по кампаниям</div><div class="mkt-camps-empty">Нет кампаний с лидами за период.</div>'; return; }
+  var maxLeads = Math.max.apply(null, list.map(function(x){return x.leads;}));
+  var withCpl = list.filter(function(x){return x.cpl!=null;});
+  var avgCpl = withCpl.length ? withCpl.reduce(function(s,x){return s+x.cpl;},0)/withCpl.length : 0;
+  var rows = list.slice(0,6).map(function(x){
+   var w = maxLeads>0 ? Math.round(x.leads/maxLeads*100) : 0;
+   var cls = (x.cpl!=null && avgCpl>0) ? (x.cpl <= avgCpl*0.85 ? 'good' : (x.cpl >= avgCpl*1.6 ? 'bad' : '')) : '';
+   return '<div class="mkc-row"><span class="mkc-n">'+sanitize(x.name)+(x.active?'':' <span class="mkc-paused">пауза</span>')+'</span>'
+    + '<span class="mkc-bar"><i style="width:'+w+'%"></i></span>'
+    + '<span class="mkc-lds">'+x.leads+'</span>'
+    + '<span class="mkc-cpl '+cls+'">'+(x.cpl!=null?_metaFmtMoney(x.cpl.toFixed(2),cur):'—')+'</span></div>';
+  }).join('');
+  el.innerHTML = '<div class="mkt-camps-head">Откуда лиды · по кампаниям <span>дешевле — лучше · цена лида, '+cur+'</span></div><div class="mkt-camps-card">'+rows+'</div>';
+ } catch(e){
+  el.innerHTML = '<div class="mkt-camps-head">Откуда лиды · по кампаниям</div><div class="mkt-camps-empty">Не удалось загрузить кампании.</div>';
+ }
 };
 
 // v161: автоматический подсчёт расхода на маркетинг из раздела Расходы.
@@ -40382,6 +40438,8 @@ window.mktInitDashboard = async function(){
  mktUpdateTargetPreview();
  mktUpdateChannelsPreview();
  mktUpdateLtvPreview();
+ // v703: блок «Откуда лиды · по кампаниям»
+ if(typeof mktRenderCamps === 'function') mktRenderCamps();
  // v308: воронка amoCRM «Лиды»
  if(typeof amoLoadFunnel === 'function') amoLoadFunnel(false);
  // v162: если расходы ещё не загружены — подтянуть их, чтобы автоматически
