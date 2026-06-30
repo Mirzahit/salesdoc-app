@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v707</title>
+<title>SalesDoc — Финансовый Дашборд v708</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5034,6 +5034,29 @@ body.light #view-marketing .mkt-tab.mkt-tab-active{color:#4651B5}
 #view-planning .spr-menu-btn{width:24px;height:24px;border-radius:7px;border:1px solid rgba(255,255,255,.12);background:rgba(20,22,30,.9);color:#9BA1B4;cursor:pointer;font-size:14px;line-height:1}
 body.light #view-planning .spr{background:#FFFFFF;border-color:rgba(15,18,25,.09)}
 body.light #view-planning .sp-goal,body.light #view-planning .sp-big{color:#16181D}
+/* v708 — герой спринта (доска) 1:1 с макетом preview-sprint-rich + полная ширина */
+#view-plan-sprint>div[style*="max-width"]{max-width:none!important}
+#view-plan-sprint .spr-hero{display:grid;grid-template-columns:1fr 200px;gap:26px;align-items:center;background:linear-gradient(180deg,#181A24,#10121A);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:24px 30px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 34px rgba(0,0,0,.46);position:relative;overflow:hidden}
+#view-plan-sprint .spr-hero::before{content:"";position:absolute;inset:0;background:radial-gradient(560px 220px at 8% 0%,rgba(110,121,224,.16),transparent 70%);pointer-events:none}
+#view-plan-sprint .sh-l{position:relative;z-index:1;min-width:0}
+#view-plan-sprint .sh-cap{font-size:13px;color:#9BA1B4}
+#view-plan-sprint .sh-goal{font-size:26px;font-weight:800;letter-spacing:-.5px;margin:6px 0 14px;color:#F4F6FB;line-height:1.15}
+#view-plan-sprint .sh-nums{display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap}
+#view-plan-sprint .sh-big{font-family:var(--mono,'IBM Plex Mono',monospace);font-weight:700;font-size:52px;line-height:.9;letter-spacing:-2px;background:linear-gradient(180deg,#FFFFFF 30%,#9AA4FF 120%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+#view-plan-sprint .sh-big .of{-webkit-text-fill-color:#646A80;font-size:28px}
+#view-plan-sprint .sh-sm .l{font-size:11px;color:#646A80}
+#view-plan-sprint .sh-sm .v{font-family:var(--mono,'IBM Plex Mono',monospace);font-size:20px;font-weight:700;color:#F4F6FB}
+#view-plan-sprint .sh-sm .v.warn{color:#FAD79A}
+#view-plan-sprint .sh-bar-wrap{margin-top:16px}
+#view-plan-sprint .sh-bar{height:10px;border-radius:6px;background:rgba(255,255,255,.07);overflow:hidden}
+#view-plan-sprint .sh-bar>i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#6E79E0,#9AA4FF)}
+#view-plan-sprint .sh-bar-lab{display:flex;justify-content:space-between;font-size:11.5px;color:#646A80;margin-top:6px}
+#view-plan-sprint .sh-ring{position:relative;width:160px;height:160px;justify-self:center;z-index:1}
+#view-plan-sprint .sh-rl{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#view-plan-sprint .sh-rl .n{font-family:var(--mono,'IBM Plex Mono',monospace);font-weight:700;font-size:32px;color:#9AA4FF}
+#view-plan-sprint .sh-rl .t{font-size:10px;color:#646A80}
+body.light #view-plan-sprint .spr-hero{background:#FFFFFF;border-color:rgba(15,18,25,.09)}
+body.light #view-plan-sprint .sh-goal{color:#16181D}
 </style>
 
 <script>
@@ -19827,23 +19850,29 @@ function planRenderTypeDashboard(sp, tasks){
  : doneTasks.length;
  var left = Math.max(0, plan - fact);
  var pct = plan > 0 ? Math.round(fact / plan * 100) : 0;
+ // v708: герой спринта 1:1 с макетом preview-sprint-rich — цель + факт/цель + полоска + кольцо + нужный темп
  var money = !!cfg.money;
- var f = function(n){ n = Math.round(n * 100) / 100; return money ? (fmt(n) + ' ' + (typeof _CUR !== 'undefined' ? _CUR : '')) : (n + (cfg.unit ? (' ' + cfg.unit) : '')); };
- var pctColor = pct >= 100 ? '#4CB782' : (pct >= 60 ? '#5E6AD2' : (pct >= 30 ? '#E0A458' : '#E5604D'));
- var statCard = function(l, v, c){ return '<div class="sprint-stat" style="padding:16px 12px"><div class="sprint-stat-v" style="color:' + c + ';font-size:20px">' + v + '</div><div class="sprint-stat-l" style="margin-top:4px">' + l + '</div></div>'; };
- var cardsHtml = statCard('План', f(plan), 'var(--text-primary)')
- + statCard('Факт', f(fact), '#4CB782')
- + statCard('Осталось', f(left), left > 0 ? '#E0A458' : '#4CB782')
- + statCard('Прогресс', pct + '%', pctColor);
- var caption = (cfg.factMode === 'sum')
- ? ('Сумма по закрытым задачам · компаний: ' + doneTasks.length)
- : 'Закрытые задачи';
+ var unit = money ? (typeof _CUR!=='undefined'?_CUR:'') : (cfg.unit || '');
+ var fmtN = function(n){ n = Math.round(n); return (money && typeof fmt==='function') ? fmt(n) : String(n); };
+ var totalDays = planDaysBetween(sp.start, sp.end);
+ var dayN = planDayOf(sp.start);
+ var daysLeft = Math.max(0, totalDays - dayN);
+ var pace = daysLeft > 0 ? Math.ceil(left / daysLeft) : left;
+ var _rc = 402, _ro = Math.round(_rc * (1 - Math.min(100, pct) / 100));
  el.style.display = '';
- el.innerHTML = '<div class="plan-glass-card" style="border-color:rgba(122,167,215,.22)">'
- + '<div class="plan-card-title" style="margin-bottom:2px">' + cfg.label + '</div>'
- + '<div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">' + caption + '. Факт растёт, когда задачу переводят в «Готово».</div>'
- + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px">' + cardsHtml + '</div>'
- + '<div class="sprint-progress-bar"><div class="sprint-progress-fill" style="width:' + Math.min(100, pct) + '%"></div></div>'
+ el.innerHTML = '<div class="spr-hero">'
+ + '<div class="sh-l">'
+ +   '<div class="sh-cap">Спринт · '+planFmtDate(sp.start)+' — '+planFmtDate(sp.end)+(sp.teamNames?(' · '+_planEsc(sp.teamNames)):'')+'</div>'
+ +   '<div class="sh-goal">'+_planEsc(sp.goal || sp.name || '')+'</div>'
+ +   '<div class="sh-nums">'
+ +     '<div class="sh-big">'+fmtN(fact)+'<span class="of"> / '+fmtN(plan)+'</span></div>'
+ +     '<div class="sh-sm"><div class="l">Осталось</div><div class="v warn">'+fmtN(left)+' '+_planEsc(unit)+'</div></div>'
+ +     '<div class="sh-sm"><div class="l">Дней до конца</div><div class="v">'+daysLeft+'</div></div>'
+ +     '<div class="sh-sm"><div class="l">Нужный темп</div><div class="v">'+fmtN(pace)+' '+_planEsc(unit)+'/день</div></div>'
+ +   '</div>'
+ +   '<div class="sh-bar-wrap"><div class="sh-bar"><i style="width:'+Math.min(100,pct)+'%"></i></div><div class="sh-bar-lab"><span>'+pct+'% цели</span><span>'+fmtN(fact)+' из '+fmtN(plan)+'</span></div></div>'
+ + '</div>'
+ + '<div class="sh-ring"><svg width="160" height="160" viewBox="0 0 160 160"><defs><linearGradient id="shg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9AA4FF"/><stop offset="1" stop-color="#5A64C8"/></linearGradient></defs><circle cx="80" cy="80" r="64" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="14"/><circle cx="80" cy="80" r="64" fill="none" stroke="url(#shg)" stroke-width="14" stroke-linecap="round" stroke-dasharray="'+_rc+'" stroke-dashoffset="'+_ro+'" transform="rotate(-90 80 80)"/></svg><div class="sh-rl"><div class="n">'+pct+'%</div><div class="t">цели</div></div></div>'
  + '</div>';
 }
 
