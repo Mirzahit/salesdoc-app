@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v710</title>
+<title>SalesDoc — Финансовый Дашборд v711</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5057,8 +5057,13 @@ body.light #view-planning .sp-goal,body.light #view-planning .sp-big{color:#1618
 #view-plan-sprint .sh-rl .t{font-size:10px;color:#646A80}
 body.light #view-plan-sprint .spr-hero{background:#FFFFFF;border-color:rgba(15,18,25,.09)}
 body.light #view-plan-sprint .sh-goal{color:#16181D}
-/* v709 — гипотезы строками 1:1 с макетом + убраны графики/статы/канбан с главного */
-#view-plan-sprint #plan-sprint-stats-row,#view-plan-sprint #plan-burndown-row,#view-plan-sprint .plan-kanban-wrap{display:none!important}
+/* v709/711 — гипотезы строками 1:1; графики/статы убраны; канбан вернулся переключателем */
+#view-plan-sprint #plan-sprint-stats-row,#view-plan-sprint #plan-burndown-row{display:none!important}
+#view-plan-sprint .hyp-view-seg{display:inline-flex;gap:4px;padding:4px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;margin:14px 0 4px}
+#view-plan-sprint .hvs{border:none;padding:7px 16px;background:transparent;color:#9BA1B4;font-size:13px;font-weight:600;border-radius:7px;cursor:pointer}
+#view-plan-sprint .hvs.hvs-on{background:linear-gradient(180deg,rgba(110,121,224,.28),rgba(110,121,224,.12));color:#9AA4FF}
+#view-plan-sprint:not(.kb-mode) .plan-kanban-wrap{display:none!important}
+#view-plan-sprint.kb-mode #plan-hyp-section{display:none!important}
 #view-plan-sprint .hyp-sec-h{display:flex;align-items:baseline;justify-content:space-between;margin:6px 2px 12px;gap:12px;flex-wrap:wrap}
 #view-plan-sprint .hyp-sec-h h3{font-size:15px;font-weight:700;color:#F4F6FB}
 #view-plan-sprint .hyp-sec-m{font-size:12px;color:#646A80}
@@ -7294,8 +7299,14 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <!-- v639: контекстный дашборд по типу планёрки (план/факт/осталось) -->
  <div id="plan-sprint-type-dashboard" style="display:none;margin-bottom:20px"></div>
 
+ <!-- v711: переключатель Строки / Канбан -->
+ <div class="hyp-view-seg" id="plan-view-seg">
+ <button class="hvs hvs-on" data-hv="rows" onclick="planSetSprintView('rows')">Строки</button>
+ <button class="hvs" data-hv="kanban" onclick="planSetSprintView('kanban')">Канбан</button>
+ </div>
+
  <!-- v709: гипотезы строками (как макет preview-sprint-rich) -->
- <div id="plan-hyp-section" style="margin:18px 0 20px">
+ <div id="plan-hyp-section" style="margin:8px 0 20px">
  <div class="hyp-sec-h"><h3>Гипотезы — что делаем, чтобы добить цель</h3><div id="plan-hyp-meta" class="hyp-sec-m"></div></div>
  <div class="hyp" id="plan-hyp-rows"></div>
  </div>
@@ -19969,6 +19980,8 @@ window.planOpenSprint = function(id){
  document.body.classList.add('has-overlay');
  ov.style.display = 'block';
  planRenderKanban();
+ // v711: применить сохранённый вид (строки/канбан)
+ try { planSetSprintView(localStorage.getItem('plan_sprint_view') || 'rows'); } catch(_){}
  // v169: Burndown + Velocity + Ретро (если архив)
  var tasks = planTasksOfSprint(id);
  planRenderBurndown(sp, tasks);
@@ -20090,6 +20103,15 @@ function planRenderHypRows(sp, tasks){
    + '<div class="stat '+statCls+'">'+stat+'</div></div>';
  }).join('');
 }
+
+// v711: переключатель вид доски — строки (как макет) / канбан (вернули по просьбе CEO)
+window.planSetSprintView = function(mode){
+ mode = (mode==='kanban') ? 'kanban' : 'rows';
+ try { localStorage.setItem('plan_sprint_view', mode); } catch(_){}
+ var ov = document.getElementById('view-plan-sprint');
+ if(ov) ov.classList.toggle('kb-mode', mode==='kanban');
+ document.querySelectorAll('#plan-view-seg .hvs').forEach(function(b){ b.classList.toggle('hvs-on', b.getAttribute('data-hv')===mode); });
+};
 
 function planRenderKanban(){
  if (!_planCurrentSprintId) return;
