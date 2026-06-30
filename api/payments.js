@@ -235,7 +235,7 @@ async function _fetchSheet(sheetName, cfg) {
 // логика не расходилась. dryRun=true → ничего не пишет, только сводка.
 // monthsBack — сколько последних месяцев перечитывать (current-first). Не задан/0 →
 // все месяцы с января (полный backfill). Крон передаёт 2 (текущий + прошлый).
-export async function importSheetsForCountry(country, dryRun, monthsBack) {
+export async function importSheetsForCountry(country, dryRun, monthsBack, rebuild) {
   country = String(country || 'KZ').toUpperCase();
   if (!ALLOWED_COUNTRIES.includes(country)) {
     throw new Error('country должен быть KZ или KG');
@@ -374,6 +374,60 @@ export async function importSheetsForCountry(country, dryRun, monthsBack) {
   }
 
   const cleanRows = parsedRows.map(({ _key, _already_exists, ...row }) => row);
+
+  // v702: РЕЖИМ ПЕРЕСБОРКИ МЕСЯЦА. Для вкладок, реально прочитанных в этом прогоне (fetchedTabsOk),
+  // удаляем ВСЕ строки базы (текущего sheet_id) и заливаем parsedRows заново. Это надёжно при
+  // вставке/правке строк в листе — без позиционного сопоставления (sheet_row), которое путалось.
+  // Безопасно: трогаем только успешно прочитанные вкладки; если лист не загрузился — ничего не удаляем.
+  if (rebuild) {
+    const rebuildDelete = [];
+    for (const ex of existingMap.values()) {
+      if (ex.sheet_id !== cfg.sheet_id) continue;
+      if (!fetchedTabsOk.has(ex.sheet_tab)) continue;
+      rebuildDelete.push(ex);
+    }
+    if (dryRun) {
+      return {
+        ok: true, mode: 'dry_run', rebuild: true, country,
+        tabs: Array.from(fetchedTabsOk),
+        will_delete: rebuildDelete.length,
+        will_insert: cleanRows.length,
+        total_sum_parsed: totalSum,
+        sum_by_month_sheets: sumByMonth
+      };
+    }
+    // Защита: не пересобирать, если парсить нечего (лист пуст/не прочитался) — иначе снесём данные впустую.
+    if (!cleanRows.length || !fetchedTabsOk.size) {
+      return { ok: false, error: 'нечего заливать (лист пуст или не прочитался) — пересборка отменена для безопасности' };
+    }
+    const rbDeleted = [], rbInserted = [], rbFailed = [];
+    for (const o of rebuildDelete) {
+      try { await sbDelete('payments', { id: 'eq.' + o.id }); rbDeleted.push(o.id); }
+      catch (e) { rbFailed.push({ id: o.id, op: 'delete', error: e.message }); }
+    }
+    const RB_CHUNK = 200;
+    for (let i = 0; i < cleanRows.length; i += RB_CHUNK) {
+      const batch = cleanRows.slice(i, i + RB_CHUNK);
+      try { const r = await sbInsert('payments', batch); rbInserted.push(...r); }
+      catch (e) {
+        for (const row of batch) {
+          try { const r = await sbInsert('payments', row); rbInserted.push(...r); }
+          catch (e2) { rbFailed.push({ company_name: row.company_name, paid_at: row.paid_at, error: e2.message }); }
+        }
+      }
+    }
+    // карты внедрения/интеграции для новых оплат — как в обычном импорте
+    try { await _createBoardEntriesForPayments(rbInserted); } catch (e) {}
+    return {
+      ok: true, mode: 'apply', rebuild: true, country,
+      tabs: Array.from(fetchedTabsOk),
+      deleted_count: rbDeleted.length,
+      inserted_count: rbInserted.length,
+      failed_count: rbFailed.length,
+      failed: rbFailed.slice(0, 20)
+    };
+  }
+
   const toInsert = [];
   const toUpdate = []; // { id, patch }
   for (const row of cleanRows) {
@@ -682,7 +736,9 @@ async function handleImportSheets(req, res) {
   const dryRun = String(req.query.dry_run || '1') !== '0' && req.query.dry_run !== 'false';
   // months_back опционален: 0/не задан → полный backfill с января; N → последние N месяцев.
   const monthsBack = req.query.months_back != null ? parseInt(req.query.months_back, 10) || 0 : 0;
-  const result = await importSheetsForCountry(country, dryRun, monthsBack);
+  // v702: rebuild=1 — пересобрать прочитанные вкладки начисто (удалить+залить), без позиционного матчинга.
+  const rebuild = String(req.query.rebuild || '') === '1';
+  const result = await importSheetsForCountry(country, dryRun, monthsBack, rebuild);
   return res.status(200).json(result);
 }
 
