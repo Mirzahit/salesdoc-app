@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v705</title>
+<title>SalesDoc — Финансовый Дашборд v706</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4995,6 +4995,13 @@ body.light #view-marketing .mkt-ctry-card{background:#FFFFFF;border-color:rgba(1
 body.light #view-marketing .mkt-ctry-head,body.light #view-marketing .cc-flag,body.light #view-marketing .cc-m3 .v{color:#16181D}
 /* v705 — воронка убрана с Маркетинга (дубль; оставлена только на Дашборде, по решению CEO) */
 #view-marketing #amo-funnel-section{display:none!important}
+/* v706 — вкладки Маркетинга */
+#view-marketing .mkt-tabbar{display:flex;gap:6px;padding:5px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;margin-bottom:20px;flex-wrap:wrap}
+#view-marketing .mkt-tab{border:none;padding:9px 18px;background:transparent;color:#9BA1B4;font-size:13.5px;font-weight:600;border-radius:9px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+#view-marketing .mkt-tab:hover{color:#F4F6FB;background:rgba(255,255,255,.04)}
+#view-marketing .mkt-tab.mkt-tab-active{background:linear-gradient(180deg,rgba(110,121,224,.28),rgba(110,121,224,.12));color:#9AA4FF;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+body.light #view-marketing .mkt-tabbar{background:#F4F5F8;border-color:rgba(15,18,25,.08)}
+body.light #view-marketing .mkt-tab.mkt-tab-active{color:#4651B5}
 </style>
 
 <script>
@@ -6957,6 +6964,15 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
  </div>
 
+ <!-- v706: вкладки Маркетинга -->
+ <div id="mkt-tabbar" class="mkt-tabbar">
+ <button class="mkt-tab mkt-tab-active" data-mkttab="overview" onclick="mktSwitchTab('overview')">Обзор</button>
+ <button class="mkt-tab" data-mkttab="campaigns" onclick="mktSwitchTab('campaigns')">Кампании</button>
+ <button class="mkt-tab" data-mkttab="ads" onclick="mktSwitchTab('ads')">Объявления</button>
+ <button class="mkt-tab" data-mkttab="social" onclick="mktSwitchTab('social')">Соцсети</button>
+ </div>
+
+ <div id="mkt-panel-overview" class="mkt-panel">
  <!-- v696: премиум-герой Расход → Лиды → Цена лида (зеркало значений из KPI-ввода ниже) -->
  <div class="mkt-hero" id="mkt-hero">
  <div class="mkt-hero-l">
@@ -7025,24 +7041,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 
  <!-- v703: Откуда лиды · по кампаниям (Meta) -->
  <div id="mkt-camps-block" class="mkt-camps-block"></div>
+ </div><!-- /#mkt-panel-overview -->
 
- <!-- v159: Модули каналов — современная сетка с превью -->
+ <!-- v706: панель «Соцсети» (Instagram + Telegram) -->
+ <div id="mkt-panel-social" class="mkt-panel" style="display:none">
  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
-
- <!-- Таргет — живые данные из Meta API -->
- <div class="mkt-channel" onclick="mktOpenTargetPage()">
- <div class="mkt-channel-head">
- <div class="mkt-channel-title">Таргет</div>
- <div class="mkt-channel-arrow">→</div>
- </div>
- <div class="mkt-channel-sub">Meta Ads · подключено по API</div>
- <div class="mkt-channel-stats" id="mkt-preview-target">
- <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Расход</div><div class="mkt-channel-stat-val">—</div></div>
- <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Клики</div><div class="mkt-channel-stat-val">—</div></div>
- <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Лиды</div><div class="mkt-channel-stat-val">—</div></div>
- </div>
- <div class="mkt-channel-cta">Открыть аналитику</div>
- </div>
 
  <!-- Instagram -->
  <div class="mkt-channel" onclick="mktOpenInstagram()">
@@ -7074,37 +7077,8 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div class="mkt-channel-cta" id="mkt-tg-cta">Не подключено · нажми чтобы настроить</div>
  </div>
 
- <!-- LTV -->
- <div class="mkt-channel" onclick="mktOpenLtvPage()">
- <div class="mkt-channel-head">
- <div class="mkt-channel-title">LTV клиентов</div>
- <div class="mkt-channel-arrow">→</div>
- </div>
- <div class="mkt-channel-sub">Lifetime Value — сколько клиент приносит за всё время</div>
- <div class="mkt-channel-stats">
- <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Средний LTV</div><div class="mkt-channel-stat-val" id="mkt-preview-ltv">—</div></div>
- <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Ср. срок</div><div class="mkt-channel-stat-val" id="mkt-preview-ltv-months">—</div></div>
- <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Клиентов</div><div class="mkt-channel-stat-val" id="mkt-preview-ltv-count">—</div></div>
- </div>
- <div class="mkt-channel-cta">Полный расчёт</div>
- </div>
-
- <!-- v577: Рейтинг объявлений -->
- <div class="mkt-channel" onclick="mktOpenAdsPage()">
- <div class="mkt-channel-head">
- <div class="mkt-channel-title">Рейтинг объявлений</div>
- <div class="mkt-channel-arrow">→</div>
- </div>
- <div class="mkt-channel-sub">Какой баннер/видео приносит больше лидов</div>
- <div class="mkt-channel-stats">
- <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Объявлений</div><div class="mkt-channel-stat-val" id="mkt-preview-ads-count">—</div></div>
- <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Лидов</div><div class="mkt-channel-stat-val" id="mkt-preview-ads-leads">—</div></div>
- <div class="mkt-channel-stat"><div class="mkt-channel-stat-label">Ср. цена лида</div><div class="mkt-channel-stat-val" id="mkt-preview-ads-cpl">—</div></div>
- </div>
- <div class="mkt-channel-cta">Открыть рейтинг</div>
- </div>
-
- </div>
+ </div><!-- /grid -->
+ </div><!-- /#mkt-panel-social -->
 
 </div>
  <!-- /MARKETING VIEW -->
@@ -40489,10 +40463,35 @@ window.mktAdsLoad = mktAdsLoad;
 window.mktAdsRender = mktAdsRender;
 
 // v159+v162: инициализация дашборда Маркетинг при заходе на страницу
+// v706: вкладки Маркетинга. Обзор/Соцсети = панели внутри #view-marketing; Кампании/Объявления
+// открываются полноэкранно (оверлеи Таргет/Рейтинг), панель Обзора остаётся под ними.
+function _mktHighlightTab(tab){
+ document.querySelectorAll('#mkt-tabbar .mkt-tab').forEach(function(b){
+  b.classList.toggle('mkt-tab-active', b.getAttribute('data-mkttab')===tab);
+ });
+}
+window.mktSwitchTab = function(tab){
+ if(tab==='campaigns'){ if(typeof mktOpenTargetPage==='function') mktOpenTargetPage(); _mktHighlightTab('overview'); return; }
+ if(tab==='ads'){ if(typeof mktOpenAdsPage==='function') mktOpenAdsPage(); _mktHighlightTab('overview'); return; }
+ try { localStorage.setItem('mkt_active_tab', tab); } catch(_){}
+ _mktHighlightTab(tab);
+ // период-кнопки (Неделя/Месяц/Обновить) — только на Обзоре
+ var seg = document.querySelector('#view-marketing .mkt-ptab');
+ var segWrap = seg ? seg.parentElement : null;
+ if(segWrap) segWrap.style.display = (tab==='overview') ? '' : 'none';
+ var ov = document.getElementById('mkt-panel-overview');
+ var soc = document.getElementById('mkt-panel-social');
+ if(tab==='social'){
+  if(ov) ov.style.display='none'; if(soc) soc.style.display='';
+  if(!window._mktSocialInited){ window._mktSocialInited=true; try{ if(typeof mktUpdateChannelsPreview==='function') mktUpdateChannelsPreview(); }catch(_){} }
+ } else {
+  if(ov) ov.style.display=''; if(soc) soc.style.display='none';
+ }
+};
+
 window.mktInitDashboard = async function(){
- mktUpdateTargetPreview();
- mktUpdateChannelsPreview();
- mktUpdateLtvPreview();
+ // v706: плитки Таргет/LTV убраны (теперь вкладки); IG/TG — лениво на вкладке «Соцсети»
+ if(typeof mktSwitchTab === 'function') mktSwitchTab('overview');
  // v703/704: блоки «По странам» + «Откуда лиды · по кампаниям»
  if(typeof mktRenderCountries === 'function') mktRenderCountries();
  if(typeof mktRenderCamps === 'function') mktRenderCamps();
