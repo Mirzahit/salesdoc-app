@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v700</title>
+<title>SalesDoc — Финансовый Дашборд v701</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4939,6 +4939,24 @@ body.light #view-mkt-target div[style*="dark-card"]{background:#FFFFFF!important
 .fd-del:hover{background:rgba(255,107,94,.22)}
 body.light .findup-card{background:#FFFFFF;border-color:rgba(15,18,25,.1)}
 body.light .findup-title,body.light .findup-sum,body.light .fd-ghead,body.light .fd-mgr{color:#16181D}
+/* v701 — отчёт «Сверить с таблицей» */
+.fsy-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.fsy-card{border-radius:12px;padding:14px;text-align:center;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02)}
+.fsy-card .fsy-n{font-family:var(--mono);font-size:30px;font-weight:700;letter-spacing:-1px}
+.fsy-card .fsy-l{font-size:11px;color:#9BA1B4;margin-top:5px;line-height:1.35}
+.fsy-card .fsy-l span{color:#646A80}
+.fsy-card.add .fsy-n{color:#9BF0CC}
+.fsy-card.upd .fsy-n{color:#FAD79A}
+.fsy-card.del .fsy-n{color:#FF9C92}
+.fsy-sum{font-size:13px;color:#9BA1B4;margin-bottom:14px}.fsy-sum b{color:#F4F6FB;font-family:var(--mono)}
+.fsy-sec{font-size:12px;color:#646A80;font-weight:600;margin:12px 0 6px}
+.fsy-row{font-size:12.5px;color:#C7CCDA;padding:4px 0;border-top:1px solid rgba(255,255,255,.04)}
+.fsy-note{font-size:12px;color:#FAD79A;margin-top:10px}
+.fsy-apply-wrap{margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08)}
+.fsy-apply{width:100%;padding:11px;border-radius:10px;border:1px solid rgba(70,212,154,.35);background:linear-gradient(180deg,rgba(70,212,154,.2),rgba(70,212,154,.08));color:#9BF0CC;font-size:14px;font-weight:700;cursor:pointer}
+.fsy-apply:hover{background:rgba(70,212,154,.28)}
+.fsy-applynote{font-size:11.5px;color:#9BA1B4;margin-top:8px;line-height:1.5}
+body.light .fsy-card{background:#F7F8FA}
 </style>
 
 <script>
@@ -6406,6 +6424,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <button onclick="showSheetColumns()" class="fin-ghost-btn">Колонки</button>
  <button onclick="exportPaymentsCSV()" class="fin-ghost-btn">Экспорт</button>
  <button onclick="finFindDuplicates()" class="fin-ghost-btn fin-dup-btn">Найти дубли</button>
+ <button onclick="finSyncCheck()" class="fin-ghost-btn fin-sync-btn">Сверить с таблицей</button>
  </div>
  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
  <div class="fsearch"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--text-muted)"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg><input id="fin-search" oninput="renderAllPayments()" placeholder="Поиск по клиенту…"></div>
@@ -13109,6 +13128,66 @@ function finDeleteDup(sbId){
  }).catch(function(e){ showNotif('Ошибка', e.message||'сбой запроса'); });
 }
 window.finDeleteDup = finDeleteDup;
+
+// v701: сверка базы (дашборд) с Google-таблицей — сухой прогон синка, ничего не меняет
+function _finSyncHeaders(){ var h={'x-app-token': window._APP_TOKEN||''}; if(window._ADMIN_TOKEN) h['x-admin-token']=window._ADMIN_TOKEN; return h; }
+async function finSyncCheck(){
+ var country = (typeof currentCountry!=='undefined' ? currentCountry : 'KZ');
+ async function call(){ return await fetch('/api/payments?action=import_sheets&country='+country+'&dry_run=1&months_back=2',{method:'POST',headers:_finSyncHeaders()}); }
+ try {
+  showNotif('Сверка с таблицей','читаю таблицу, подожди 5–15 сек…');
+  var r = await call();
+  if(r.status===403){
+   var t = window.prompt('Введите админ-код (нужен один раз для сверки с таблицей):','');
+   if(!t || !t.trim()) return;
+   window._ADMIN_TOKEN = t.trim();
+   try { localStorage.setItem('sd_admin_token', window._ADMIN_TOKEN); } catch(_){}
+   r = await call();
+  }
+  var data = await r.json().catch(function(){ return {ok:false,error:'не удалось разобрать ответ ('+r.status+')'}; });
+  if(!data.ok){ showNotif('Не вышло', data.error || ('код '+r.status)); return; }
+  finSyncShowReport(data, country);
+ } catch(e){ showNotif('Ошибка', e.message||'сбой запроса'); }
+}
+window.finSyncCheck = finSyncCheck;
+function finSyncShowReport(d, country){
+ var ins=d.will_insert||0, upd=d.will_update||0, del=d.will_delete||0, unm=d.will_be_unmatched||0;
+ var tableSum = d.total_sum_parsed||0;
+ function smp(arr,fmt){ arr=arr||[]; if(!arr.length) return ''; return arr.slice(0,8).map(fmt).join(''); }
+ var insHtml = smp(d.sample_insert, function(p){ return '<div class="fsy-row">'+sanitize(p.company_name)+' · '+fmtFull(p.amount)+' · '+sanitize(String(p.paid_at).slice(0,10))+'</div>'; });
+ var delHtml = smp(d.sample_delete, function(p){ return '<div class="fsy-row">'+sanitize(p.company_name)+' · '+fmtFull(p.amount)+' · '+sanitize(String(p.paid_at).slice(0,10))+' · '+sanitize(p.category_raw||'')+'</div>'; });
+ var html =
+   '<div class="findup-sum">Сверка базы (дашборд) с Google-таблицей · '+sanitize(country)+' · последние 2 месяца'
+   + '<div class="findup-hint">Сухой прогон — база не тронута. Цифры показывают, что синк хочет поправить, чтобы база стала как твоя таблица.</div></div>'
+   + '<div class="fsy-cards">'
+   +  '<div class="fsy-card add"><div class="fsy-n">'+ins+'</div><div class="fsy-l">добавить<br><span>есть в таблице, нет в базе</span></div></div>'
+   +  '<div class="fsy-card upd"><div class="fsy-n">'+upd+'</div><div class="fsy-l">исправить<br><span>сумма/данные разошлись</span></div></div>'
+   +  '<div class="fsy-card del"><div class="fsy-n">'+del+'</div><div class="fsy-l">убрать<br><span>лишние/осиротевшие копии</span></div></div>'
+   + '</div>'
+   + '<div class="fsy-sum">Сумма в таблице за период: <b>'+fmtFull(Math.round(tableSum))+'</b></div>'
+   + (ins? '<div class="fsy-sec">Примеры «добавить»:</div>'+insHtml : '')
+   + (del? '<div class="fsy-sec">Примеры «убрать»:</div>'+delHtml : '')
+   + (unm? '<div class="fsy-note">Без привязки к клиенту: '+unm+' — их синк пока не вставит, разберём отдельно.</div>' : '')
+   + '<div class="fsy-apply-wrap"><button class="fsy-apply" onclick="finSyncApply(\''+sanitize(country)+'\')">Применить — обновить базу из таблицы</button><div class="fsy-applynote">Исправит суммы и добавит пропущенное. Удаление лишних копий («убрать») пока не выполняется — для него нужен отдельный флаг, сделаем следующим шагом.</div></div>';
+ var ov=document.createElement('div'); ov.id='findup-overlay'; ov.className='findup-ov';
+ ov.innerHTML='<div class="findup-card"><div class="findup-h"><div class="findup-title">Сверка с таблицей</div><button class="findup-x" onclick="document.getElementById(\'findup-overlay\').remove()">×</button></div><div class="findup-body">'+html+'</div></div>';
+ ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+ document.body.appendChild(ov);
+}
+window.finSyncShowReport = finSyncShowReport;
+async function finSyncApply(country){
+ if(!confirm('Обновить базу из таблицы?\n\nИсправит суммы и добавит пропущенные платежи. Лишние копии при этом не удаляются (это отдельным шагом). Продолжить?')) return;
+ try {
+  showNotif('Обновляю базу','подожди 5–20 сек…');
+  var r = await fetch('/api/payments?action=import_sheets&country='+country+'&dry_run=0&months_back=2',{method:'POST',headers:_finSyncHeaders()});
+  var data = await r.json().catch(function(){return {ok:false,error:'код '+r.status};});
+  if(!data.ok){ showNotif('Не вышло', data.error||('код '+r.status)); return; }
+  showNotif('Готово','добавлено '+(data.inserted_count||0)+', исправлено '+(data.updated_count||0)+', убрано '+(data.deleted_count||0)+'. Обновляю страницу…');
+  var ov=document.getElementById('findup-overlay'); if(ov) ov.remove();
+  setTimeout(function(){ location.reload(); }, 1500);
+ } catch(e){ showNotif('Ошибка', e.message||'сбой'); }
+}
+window.finSyncApply = finSyncApply;
 
 function showSheetColumns() {
  // Структура подтверждена из Google Sheets "Доходы KZ 2026"
