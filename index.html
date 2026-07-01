@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v727</title>
+<title>SalesDoc — Финансовый Дашборд v728</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -25562,7 +25562,8 @@ async function routeOpenClient(clientId){
    stage: null,
    stage_entered_at: null,
    created_at: cl.created_at,
-   tariff: null
+   tariff: null,
+   operator: cl.curator_operator || null // v728: у синтетической карты «Ответственный» = куратор клиента
   };
   document.getElementById('view-route-card').style.display = 'block';
   document.body.style.overflow = 'hidden';
@@ -32303,18 +32304,29 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
    var body = {}; body[opts.field] = newVal;
    var url, method = 'PATCH';
    if(opts.entity === 'card'){
-    // v727: раньше для синтетической карты (id='client:...') кидали ошибку — оператора/поля некуда сохранять
-    // («не получается вставить оператора в некоторых»). Теперь создаём реальную карточку Внедрения на лету
-    // (сразу с этим полем), чтобы назначение оператора «просто работало».
+    // v728: синтетическая карта (id='client:...') — реальной карты Внедрения нет (активированный клиент
+    // или клиент без карты). Тут «Ответственный/оператор» = КУРАТОР клиента (curator_operator), а НЕ поле карточки:
+    // раньше (v727) создавали карту → после F5 оператор «слетал», т.к. карта висела ничья, а активированный
+    // клиент снова открывался синтетически. Теперь оператор пишем в клиента — сохраняется навсегда.
     if(_routeCurrentCard && String(_routeCurrentCard.id||'').indexOf('client:') === 0){
      var _cid = _routeCurrentCard.client_id || String(_routeCurrentCard.id).slice('client:'.length);
-     var _cbody = { client_id: _cid, stage: (_routeCurrentCard.stage && _routeCurrentCard.stage !== '—') ? _routeCurrentCard.stage : 'Новый' };
-     _cbody[opts.field] = newVal;
-     var _cr = await sbFetch('/api/cards', { method:'POST', body: JSON.stringify(_cbody) });
-     if(!_cr.ok) throw new Error(_cr.error || 'не удалось создать карточку Внедрения');
-     _routeCurrentCard.id = (_cr.card && _cr.card.id) || _cr.id || _routeCurrentCard.id;
-     if(_cr.card && typeof routeCards !== 'undefined' && Array.isArray(routeCards)) routeCards.push(_cr.card);
-     url = null; // карточка создана уже с этим полем — обычный PATCH не нужен
+     if(opts.field === 'operator'){
+      var _cr = await sbFetch('/api/clients?client_id=' + encodeURIComponent(_cid), { method:'PATCH', body: JSON.stringify({ curator_operator: newVal }) });
+      if(!_cr.ok) throw new Error(_cr.error || 'не удалось сохранить куратора');
+      if(!_routeCurrentCard.clients) _routeCurrentCard.clients = {};
+      _routeCurrentCard.clients.curator_operator = newVal;
+      _routeCurrentCard.operator = newVal;
+      url = null;
+     } else {
+      // прочие поля сделки: реальной карты нет — создаём карточку Внедрения на лету
+      var _cbody = { client_id: _cid, stage: (_routeCurrentCard.stage && _routeCurrentCard.stage !== '—') ? _routeCurrentCard.stage : 'Новый' };
+      _cbody[opts.field] = newVal;
+      var _cr2 = await sbFetch('/api/cards', { method:'POST', body: JSON.stringify(_cbody) });
+      if(!_cr2.ok) throw new Error(_cr2.error || 'не удалось создать карточку Внедрения');
+      _routeCurrentCard.id = (_cr2.card && _cr2.card.id) || _cr2.id || _routeCurrentCard.id;
+      if(_cr2.card && typeof routeCards !== 'undefined' && Array.isArray(routeCards)) routeCards.push(_cr2.card);
+      url = null;
+     }
     } else {
      url = '/api/cards?id=' + encodeURIComponent(_routeCurrentCard.id);
     }
