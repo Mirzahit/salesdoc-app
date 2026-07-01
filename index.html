@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v720</title>
+<title>SalesDoc — Финансовый Дашборд v721</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5191,6 +5191,11 @@ body.light #view-plan-sprint #plan-quick-add{color:#16181D}
 #view-task-card .tc-selwrap select{appearance:none!important;-webkit-appearance:none!important;-moz-appearance:none!important;background:transparent!important;background-image:none!important;border:none!important;box-shadow:none!important;color:#E7EAF0!important;font-size:13px;font-family:inherit;cursor:pointer;padding:0!important;width:auto;height:auto!important}
 #view-task-card .tc-selwrap select option{background:#232833;color:#E7EAF0}
 #view-task-card .tc-cv{color:#8A909C;pointer-events:none;flex:0 0 auto}
+/* v721 — свой дропдаун (в body, не scoped) */
+.tc-dd-menu{position:fixed;z-index:10030;background:#232833;border:1px solid #3a4152;border-radius:9px;box-shadow:0 14px 34px rgba(0,0,0,.55);padding:5px;max-height:340px;overflow-y:auto;font-family:'Inter',system-ui,sans-serif}
+.tc-dd-item{padding:8px 12px;font-size:13px;color:#E7EAF0;border-radius:6px;cursor:pointer;white-space:nowrap}
+.tc-dd-item:hover{background:#2f3644}
+.tc-dd-item.tc-dd-sel{color:#9AA4FF;background:rgba(110,121,224,.14)}
 #view-task-card .tc-custx{margin-left:auto;color:#5a6270;font-size:10px;cursor:pointer;padding-left:8px}
 #view-task-card .tc-frow:hover .tc-custx{color:#FF8AA8}
 #view-task-card .tc-ownerchip{display:inline-flex;align-items:center;gap:5px;background:#232833;border:1px solid #313743;border-radius:999px;padding:2px 9px;font-size:12px;margin-right:5px;margin-bottom:3px}
@@ -20749,9 +20754,9 @@ function planRenderTaskCard(){
  var subs = Array.isArray(t.subtasks)?t.subtasks:[];
  var subDone = subs.filter(function(s){return s&&s.done;}).length;
  // плоский select (без коробки) — значение текстом + ▾
- var selP = function(cur, opts, handler, emptyLabel){
-  var options = opts.map(function(o){return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('');
-  return '<span class="tc-selwrap"><select onchange="'+handler+'(this.value)">'+options+'</select><svg class="tc-cv" width="10" height="10" viewBox="0 0 12 12"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+ var selP = function(cur, key){
+  var f = TC_FIELDS[key]; var lbl = (f.opts.filter(function(o){return o[0]===cur;})[0]||['',''])[1] || 'Выбрать';
+  return '<span class="tc-editable" onclick="planTcOpenDD(this,\''+key+'\','+JSON.stringify(cur)+')">'+esc(lbl)+' <svg class="tc-cv" width="10" height="10" viewBox="0 0 12 12"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
  };
  var dateV = function(val, handler, redCls){ var d=String(val||'').slice(0,10); return '<span class="tc-editable'+(redCls?(' '+redCls):'')+'" onclick="planTcEditInline(this,\'date\',\''+handler+'\','+JSON.stringify(d)+')">'+(d?_tcFmtDate(d):'<span style="color:#5a6270">указать</span>')+'</span>'; };
  var numV = function(val, handler, suffix){ var v=(val!=null&&val!=='')?String(val):''; return '<span class="tc-editable" onclick="planTcEditInline(this,\'number\',\''+handler+'\','+JSON.stringify(v)+')">'+(v!==''?(esc(v)+(suffix||'')):'<span style="color:#5a6270">указать</span>')+'</span>'; };
@@ -20770,9 +20775,9 @@ function planRenderTaskCard(){
    + _tcFrow('Соисполнители', owners.slice(1).map(function(n,i){ return '<span class="tc-ownerchip">'+esc((typeof planRuName==='function')?planRuName(n):n)+'<span class="tc-ownerx" onclick="planTcRemoveOwner('+(i+1)+')">×</span></span>'; }).join('') + '<span class="tc-editable" style="color:#5a6270" onclick="planTcPickOwner(this,\'add\')">+ добавить</span>')
    + _tcFrow('Начало', dateV(t.start_date, 'planUpdateTaskStart'))
    + _tcFrow('Дедлайн', dateV(dl, 'planUpdateTaskDeadline', overdue?'over':''))
-   + _tcFrow('Приоритет', selP(t.priority||'mid', [['mid','Средний'],['high','Высокий'],['low','Низкий']], 'planUpdateTaskPriority'))
-   + _tcFrow('Статус', selP(t.status||'todo', [['todo','Не начато'],['progress','В работе'],['review','На проверке'],['done','Готово']], 'planUpdateTaskStatus'))
-   + _tcFrow('Отдел', selP(t.department||'', [['','—'],['Продажи','Продажи'],['Внедрение','Внедрение'],['Интеграция','Интеграция'],['Маркетинг','Маркетинг'],['Поддержка','Поддержка']], 'planUpdateTaskDept'))
+   + _tcFrow('Приоритет', selP(t.priority||'mid', 'priority'))
+   + _tcFrow('Статус', selP(t.status||'todo', 'status'))
+   + _tcFrow('Отдел', selP(t.department||'', 'dept'))
    + _tcFrow('% выполнения', numV(pct, 'planUpdateTaskProgress', '%'))
    + (cfg.valueField ? _tcFrow('Лицензии', numV((t.metric_value!=null&&t.metric_value!==''?t.metric_value:''), 'planUpdateTaskMetric')) : '');
   var cfs = Array.isArray(t.custom_fields)?t.custom_fields:[];
@@ -20856,13 +20861,11 @@ function _tcEmpOptions(){
  return opts;
 }
 window.planTcPickOwner = function(el, mode){
- var s = document.createElement('select'); s.innerHTML=_tcEmpOptions();
- s.style.cssText='width:100%;max-width:190px;box-sizing:border-box;background:#242A36;color:#E7EAF0;border:1px solid #3f6bd6;border-radius:6px;padding:5px 6px;font-size:13px;font-family:inherit;outline:none';
- el.replaceWith(s); try{s.focus();}catch(_){}
- var done=false;
- s.addEventListener('change', function(){
-  done=true; var v=s.value; if(!v){ planRenderTaskCard(); return; }
-  var parts=v.split('|'); var id=parseInt(parts[0],10); var name=parts[1]||'';
+ var list = (typeof employees!=='undefined'&&Array.isArray(employees))?employees.filter(function(e){return e&&e.active!==false;}):[];
+ var opts = list.map(function(e){ return [e.id+'|'+(e.name||''), (e.name||'')+((e.pos||e.role)?(' · '+(e.pos||e.role)):'')]; });
+ if(!opts.length) return;
+ planTcDropdown(el, opts, '', function(v){
+  var parts=String(v).split('|'); var id=parseInt(parts[0],10); var name=parts[1]||'';
   _planEditOpenTask(function(t){
    if(!Array.isArray(t.owners)) t.owners=[]; if(!Array.isArray(t.owner_ids)) t.owner_ids=[];
    if(mode==='set'){ if(t.owner_ids.indexOf(id)===-1){ t.owners[0]=name; t.owner_ids[0]=id; } }
@@ -20870,7 +20873,6 @@ window.planTcPickOwner = function(el, mode){
    t.owner=t.owners.join(', ');
   }, 'edit', 'назначил(а): '+name);
  });
- s.addEventListener('blur', function(){ setTimeout(function(){ if(!done) planRenderTaskCard(); }, 140); });
 };
 window.planTcRemoveOwner = function(idx){
  _planEditOpenTask(function(t){ if(Array.isArray(t.owners)) t.owners.splice(idx,1); if(Array.isArray(t.owner_ids)) t.owner_ids.splice(idx,1); t.owner=(t.owners||[]).join(', '); }, 'edit', 'убрал(а) ответственного');
@@ -20884,6 +20886,28 @@ window.planTcResizeStart = function(e){
  function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); if(rz&&rz.classList) rz.classList.remove('tc-drag'); try{ if(wrap) localStorage.setItem('tc_lw', wrap.style.getPropertyValue('--tc-lw')); }catch(_){} }
  document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
 };
+// v721: свой стилизованный дропдаун (вместо нативного <select> с системным списком)
+var TC_FIELDS = {
+ priority: { opts:[['mid','Средний'],['high','Высокий'],['low','Низкий']], handler:'planUpdateTaskPriority' },
+ status: { opts:[['todo','Не начато'],['progress','В работе'],['review','На проверке'],['done','Готово']], handler:'planUpdateTaskStatus' },
+ dept: { opts:[['','— не указан —'],['Продажи','Продажи'],['Внедрение','Внедрение'],['Интеграция','Интеграция'],['Маркетинг','Маркетинг'],['Поддержка','Поддержка']], handler:'planUpdateTaskDept' }
+};
+window.planTcDropdown = function(anchorEl, opts, current, onPick){
+ var old = document.querySelector('.tc-dd-menu'); if(old) old.remove();
+ var menu = document.createElement('div'); menu.className='tc-dd-menu';
+ function close(e){ if(!menu.contains(e.target)){ menu.remove(); document.removeEventListener('mousedown',close,true); } }
+ opts.forEach(function(o){ var it=document.createElement('div'); it.className='tc-dd-item'+(o[0]===current?' tc-dd-sel':''); it.textContent=o[1]; it.addEventListener('mousedown', function(ev){ ev.preventDefault(); ev.stopPropagation(); menu.remove(); document.removeEventListener('mousedown',close,true); onPick(o[0]); }); menu.appendChild(it); });
+ document.body.appendChild(menu);
+ var r = anchorEl.getBoundingClientRect();
+ menu.style.left = Math.round(r.left)+'px';
+ menu.style.top = Math.round(r.bottom+4)+'px';
+ menu.style.minWidth = Math.max(150, Math.round(r.width)+40)+'px';
+ var mr = menu.getBoundingClientRect();
+ if(mr.bottom > window.innerHeight-8){ menu.style.top = Math.round(r.top-mr.height-4)+'px'; }
+ if(mr.right > window.innerWidth-8){ menu.style.left = Math.round(window.innerWidth-mr.width-8)+'px'; }
+ setTimeout(function(){ document.addEventListener('mousedown',close,true); },0);
+};
+window.planTcOpenDD = function(el, key, cur){ var f=TC_FIELDS[key]; if(!f) return; planTcDropdown(el, f.opts, cur, function(v){ if(typeof window[f.handler]==='function') window[f.handler](v); }); };
 function _planRenderSubtasks(t){
  var box = document.getElementById('ptd-sub-list'); if (!box) return;
  var subs = Array.isArray(t.subtasks) ? t.subtasks : [];
