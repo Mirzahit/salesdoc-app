@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v719</title>
+<title>SalesDoc — Финансовый Дашборд v720</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5166,9 +5166,11 @@ body.light #view-plan-sprint #plan-quick-add{color:#16181D}
 #view-task-card .tc-top{display:flex;align-items:center;gap:14px;height:54px;background:#1E222B;padding:0 18px;border-bottom:1px solid #12151b}
 #view-task-card .tc-back{display:flex;align-items:center;gap:7px;font-size:13px;color:#9AA1AE;background:#232833;border:1px solid #2E3440;border-radius:8px;padding:7px 13px;cursor:pointer}
 #view-task-card .tc-crumb{font-size:14px;font-weight:600;color:#9AA1AE}
-#view-task-card .tc-wrap{display:grid;grid-template-columns:340px 1fr;height:calc(100vh - 54px)}
-#view-task-card .tc-fields{background:#1B1E26;border-right:1px solid #12151b;overflow-y:auto;padding:20px}
-#view-task-card .tc-feed{display:flex;flex-direction:column;min-height:0}
+#view-task-card .tc-wrap{display:flex;height:calc(100vh - 54px)}
+#view-task-card .tc-fields{width:var(--tc-lw,340px);flex:0 0 auto;background:#1B1E26;overflow-y:auto;overflow-x:hidden;padding:20px}
+#view-task-card .tc-resizer{width:5px;flex:0 0 auto;cursor:col-resize;background:#12151b;transition:background .15s}
+#view-task-card .tc-resizer:hover,#view-task-card .tc-resizer.tc-drag{background:#3f6bd6}
+#view-task-card .tc-feed{flex:1;min-width:0;display:flex;flex-direction:column}
 #view-task-card .tc-hd{display:flex;align-items:flex-start;gap:8px;margin-bottom:12px}
 #view-task-card .tc-title{flex:1;font-size:17px;font-weight:800;line-height:1.25;letter-spacing:-.2px;color:#E7EAF0;background:transparent!important;border:none!important;box-shadow:none!important;outline:none;font-family:inherit;resize:none;padding:0!important}
 #view-task-card .tc-tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:16px}
@@ -5188,7 +5190,7 @@ body.light #view-plan-sprint #plan-quick-add{color:#16181D}
 #view-task-card .tc-selwrap{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
 #view-task-card .tc-selwrap select{appearance:none!important;-webkit-appearance:none!important;-moz-appearance:none!important;background:transparent!important;background-image:none!important;border:none!important;box-shadow:none!important;color:#E7EAF0!important;font-size:13px;font-family:inherit;cursor:pointer;padding:0!important;width:auto;height:auto!important}
 #view-task-card .tc-selwrap select option{background:#232833;color:#E7EAF0}
-#view-task-card .tc-cv{color:#5a6270;font-size:10px;pointer-events:none}
+#view-task-card .tc-cv{color:#8A909C;pointer-events:none;flex:0 0 auto}
 #view-task-card .tc-custx{margin-left:auto;color:#5a6270;font-size:10px;cursor:pointer;padding-left:8px}
 #view-task-card .tc-frow:hover .tc-custx{color:#FF8AA8}
 #view-task-card .tc-ownerchip{display:inline-flex;align-items:center;gap:5px;background:#232833;border:1px solid #313743;border-radius:999px;padding:2px 9px;font-size:12px;margin-right:5px;margin-bottom:3px}
@@ -7765,6 +7767,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  </div>
  <div class="tc-wrap">
  <div class="tc-fields" id="tc-fields"></div>
+ <div class="tc-resizer" onmousedown="planTcResizeStart(event)" title="Потяни, чтобы изменить ширину"></div>
  <div class="tc-feed">
  <div class="tc-feed-tabs"><span class="tc-ftab tc-on" data-ft="all" onclick="planTcFeedTab('all',this)">Лента</span><span class="tc-ftab" data-ft="hist" onclick="planTcFeedTab('hist',this)">Только история</span></div>
  <div class="tc-feed-body" id="tc-feed-body"></div>
@@ -20702,6 +20705,7 @@ window.planOpenTaskCard = function(taskId){
  var sv = document.getElementById('view-plan-sprint'); if(sv) sv.style.setProperty('display','none','important');
  document.body.classList.add('has-overlay');
  ov.style.display='block';
+ try{ var _w=localStorage.getItem('tc_lw'); if(_w){ var _wr=ov.querySelector('.tc-wrap'); if(_wr) _wr.style.setProperty('--tc-lw', _w); } }catch(_){}
  planRenderTaskCard();
 };
 window.planCloseTaskCard = function(){
@@ -20747,7 +20751,7 @@ function planRenderTaskCard(){
  // плоский select (без коробки) — значение текстом + ▾
  var selP = function(cur, opts, handler, emptyLabel){
   var options = opts.map(function(o){return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('');
-  return '<span class="tc-selwrap"><select onchange="'+handler+'(this.value)">'+options+'</select><span class="tc-cv">▾</span></span>';
+  return '<span class="tc-selwrap"><select onchange="'+handler+'(this.value)">'+options+'</select><svg class="tc-cv" width="10" height="10" viewBox="0 0 12 12"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
  };
  var dateV = function(val, handler, redCls){ var d=String(val||'').slice(0,10); return '<span class="tc-editable'+(redCls?(' '+redCls):'')+'" onclick="planTcEditInline(this,\'date\',\''+handler+'\','+JSON.stringify(d)+')">'+(d?_tcFmtDate(d):'<span style="color:#5a6270">указать</span>')+'</span>'; };
  var numV = function(val, handler, suffix){ var v=(val!=null&&val!=='')?String(val):''; return '<span class="tc-editable" onclick="planTcEditInline(this,\'number\',\''+handler+'\','+JSON.stringify(v)+')">'+(v!==''?(esc(v)+(suffix||'')):'<span style="color:#5a6270">указать</span>')+'</span>'; };
@@ -20852,7 +20856,8 @@ function _tcEmpOptions(){
  return opts;
 }
 window.planTcPickOwner = function(el, mode){
- var s = document.createElement('select'); s.className='tc-inline-input'; s.style.maxWidth='200px'; s.innerHTML=_tcEmpOptions();
+ var s = document.createElement('select'); s.innerHTML=_tcEmpOptions();
+ s.style.cssText='width:100%;max-width:190px;box-sizing:border-box;background:#242A36;color:#E7EAF0;border:1px solid #3f6bd6;border-radius:6px;padding:5px 6px;font-size:13px;font-family:inherit;outline:none';
  el.replaceWith(s); try{s.focus();}catch(_){}
  var done=false;
  s.addEventListener('change', function(){
@@ -20869,6 +20874,15 @@ window.planTcPickOwner = function(el, mode){
 };
 window.planTcRemoveOwner = function(idx){
  _planEditOpenTask(function(t){ if(Array.isArray(t.owners)) t.owners.splice(idx,1); if(Array.isArray(t.owner_ids)) t.owner_ids.splice(idx,1); t.owner=(t.owners||[]).join(', '); }, 'edit', 'убрал(а) ответственного');
+};
+// v720: тянуть границу — менять ширину левого столбца
+window.planTcResizeStart = function(e){
+ e.preventDefault();
+ var wrap = document.querySelector('#view-task-card .tc-wrap');
+ var rz = e.currentTarget; if(rz&&rz.classList) rz.classList.add('tc-drag');
+ function mv(ev){ var x = ev.clientX; if(x<250)x=250; if(x>760)x=760; if(wrap) wrap.style.setProperty('--tc-lw', x+'px'); }
+ function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); if(rz&&rz.classList) rz.classList.remove('tc-drag'); try{ if(wrap) localStorage.setItem('tc_lw', wrap.style.getPropertyValue('--tc-lw')); }catch(_){} }
+ document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
 };
 function _planRenderSubtasks(t){
  var box = document.getElementById('ptd-sub-list'); if (!box) return;
