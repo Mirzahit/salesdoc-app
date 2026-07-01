@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v730</title>
+<title>SalesDoc — Финансовый Дашборд v731</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -31840,6 +31840,21 @@ async function _routeToggleCheck(itemId, title, stage, checked){
     text: (checked?'+ ':'- ') + title
    })
   });
+  // v731: пункт «Передать в Действующие клиенты» отмечен → реально ПЕРЕНОСИМ:
+  // активируем клиента (status=active) + архивируем карточку (soft-delete → уходит с маршрута в Действующие).
+  // Раньше галочка просто отмечалась, карточка висела в «Активация» вечно.
+  if(checked && title === 'Передать в Действующие клиенты' && _routeCurrentCard && String(_routeCurrentCard.id||'').indexOf('client:') !== 0){
+   if(_routeCurrentCard.client_id){
+    try { await sbFetch('/api/clients?client_id=' + encodeURIComponent(_routeCurrentCard.client_id), { method:'PATCH', body: JSON.stringify({ status:'active' }) }); } catch(_){}
+   }
+   var _del = await sbFetch('/api/cards?id=' + _routeCurrentCard.id, { method:'DELETE' });
+   if(!_del.ok) throw new Error(_del.error || 'не удалось передать в Действующие');
+   if(typeof kbShowToast === 'function') kbShowToast('Клиент передан в Действующие');
+   var _cv = document.getElementById('view-route-card'); if(_cv) _cv.style.display = 'none';
+   document.body.style.overflow = '';
+   if(typeof routeLoad === 'function') routeLoad();
+   return;
+  }
   _routeRenderChecklist();
  } catch(e){
   alert('Не удалось сохранить: ' + e.message);
