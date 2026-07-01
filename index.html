@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v722</title>
+<title>SalesDoc — Финансовый Дашборд v723</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5134,6 +5134,9 @@ body.light #view-plan-sprint #plan-quick-add{color:#16181D}
 #view-plan-sprint .ak-col.ak-addcol:hover .ak-col-nm{color:#5AA7F0!important}
 #view-plan-sprint .ak-col-h{padding:12px 15px 10px;border-top:3px solid var(--top,#8A909C)}
 #view-plan-sprint .ak-col-nm{font-size:11.5px;font-weight:700;letter-spacing:.4px;color:#9AA1AE;text-transform:uppercase}
+#view-plan-sprint .ak-col-menu{color:#6B7280;cursor:pointer;font-size:14px;margin-left:6px;opacity:0;transition:opacity .15s}
+#view-plan-sprint .ak-col:hover .ak-col-menu{opacity:.85}
+#view-plan-sprint .ak-col-menu:hover{color:#E7EAF0}
 #view-plan-sprint .ak-col-sub{font-size:12px;color:#6B7280;margin-top:4px}
 #view-plan-sprint .ak-col-desc{font-size:11.5px;color:#6B7280;line-height:1.45;padding:0 15px 10px;border-bottom:1px solid #1d2129}
 #view-plan-sprint .ak-col-body{flex:1;min-height:120px;padding:10px 11px;display:flex;flex-direction:column;gap:9px}
@@ -20306,15 +20309,17 @@ function planRenderAmoKanban(sp, tasks){
  var today = _planYmd(new Date());
  tasks = tasks || [];
  function dlOf(t){ var r=t.deadline||t.due_date||''; return r?String(r).slice(0,10):''; }
+ var STAGE_PAL = ['#4FB8E0','#E0913E','#9AA4FF','#7FD0EE','#C98AE0','#5AC8A0'];
  var COLS = [
   { st:'todo',     name:'Не начато',   top:'#8A909C', desc:'Заведены, но в работу ещё не взяты' },
   { st:'progress', name:'В работе',    top:'#B463E0', desc:'Ответственный активно ведёт задачу' },
-  { st:'review',   name:'На проверке', top:'#E6B94E', desc:'Сделано, ждёт проверки руководителя' },
-  { st:'done',     name:'Готово',      top:'#3FD08A', desc:'Закрыто, засчитано в цель' }
+  { st:'review',   name:'На проверке', top:'#E6B94E', desc:'Сделано, ждёт проверки руководителя' }
  ];
- function colOf(t){ if(t.status==='done')return 'done'; if(t.status==='review')return 'review'; if(t.status==='progress')return 'progress'; return 'todo'; }
- var buckets = { todo:[], progress:[], review:[], done:[] };
- tasks.forEach(function(t){ buckets[colOf(t)].push(t); });
+ (Array.isArray(sp.custom_stages)?sp.custom_stages:[]).forEach(function(cs,i){ COLS.push({ st:'stage_'+cs.id, name:cs.name||'Этап', top:STAGE_PAL[i%STAGE_PAL.length], desc:'Свой этап', custom:true, csid:cs.id }); });
+ COLS.push({ st:'done', name:'Готово', top:'#3FD08A', desc:'Закрыто, засчитано в цель' });
+ function colOf(t){ if(t.status==='done')return 'done'; if(t.status==='review')return 'review'; if(t.status && String(t.status).indexOf('stage_')===0) return t.status; if(t.status==='progress')return 'progress'; return 'todo'; }
+ var buckets = {}; COLS.forEach(function(c){ buckets[c.st]=[]; });
+ tasks.forEach(function(t){ var k=colOf(t); if(!buckets[k]) k='todo'; buckets[k].push(t); });
  var overdueN = tasks.filter(function(t){ return t.status!=='done' && dlOf(t) && dlOf(t) < today; }).length;
  var todayN = tasks.filter(function(t){ return t.status!=='done' && dlOf(t)===today; }).length;
  var cfg = planTypeCfg(sp);
@@ -20357,16 +20362,17 @@ function planRenderAmoKanban(sp, tasks){
    + '</div></div></div>';
  }
  var colsHtml = COLS.map(function(c, i){
-  var arr = buckets[c.st];
+  var arr = buckets[c.st]||[];
   var addRow = '<div class="ak-add" onclick="planColAddStart(this,\''+c.st+'\')">+ Добавить</div>';
+  var menu = c.custom ? '<span class="ak-col-menu" onclick="event.stopPropagation();planStageMenu('+c.csid+')" title="Переименовать / убрать этап">⋯</span>' : '';
   return '<div class="ak-col" style="--top:'+c.top+'">'
-   + '<div class="ak-col-h"><div class="ak-col-nm">'+c.name+'</div><div class="ak-col-sub">'+arr.length+' задач</div></div>'
-   + '<div class="ak-col-desc">'+c.desc+'</div>'
+   + '<div class="ak-col-h"><div class="ak-col-nm">'+_planEsc(c.name)+menu+'</div><div class="ak-col-sub">'+arr.length+' задач</div></div>'
+   + '<div class="ak-col-desc">'+_planEsc(c.desc||'')+'</div>'
    + '<div class="ak-col-body" data-status="'+c.st+'" ondragover="if(typeof planDragOver===\'function\')planDragOver(event,this)" ondragleave="if(typeof planDragLeave===\'function\')planDragLeave(this)" ondrop="planDropTask(event,\''+c.st+'\',this)">'
    + arr.map(cardHtml).join('') + addRow
    + '</div></div>';
  }).join('');
- var addCol = '<div class="ak-col ak-addcol"><div class="ak-col-h"><div class="ak-col-nm" style="color:#6B7280">+ Добавить этап</div></div></div>';
+ var addCol = '<div class="ak-col ak-addcol" onclick="planAddStage()"><div class="ak-col-h"><div class="ak-col-nm" style="color:#6B7280">+ Добавить этап</div></div></div>';
  el.innerHTML = statsHtml + '<div class="ak-kb">' + colsHtml + addCol + '</div>';
 }
 
@@ -20415,6 +20421,29 @@ window.planColAddStart = function(el, status){
   else if(e.key==='Escape'){ done=true; planRenderKanban(); }
  });
  inp.addEventListener('blur', function(){ setTimeout(function(){ if(!done) planRenderKanban(); }, 120); });
+};
+// v723: свои этапы канбана (колонки) — хранятся у спринта (sp.custom_stages)
+window.planAddStage = function(){
+ if(!_planCurrentSprintId) return;
+ var name = prompt('Название этапа (напр. «Ждёт клиента», «Передано внедрению»):'); if(!name||!name.trim()) return;
+ var all = planLoadSprints(); var sp = all.find(function(s){return s.id===_planCurrentSprintId;}); if(!sp) return;
+ if(!Array.isArray(sp.custom_stages)) sp.custom_stages=[];
+ var nid = (sp.custom_stages.reduce(function(m,s){return Math.max(m,s.id||0);},0)||0)+1;
+ sp.custom_stages.push({id:nid, name:name.trim()});
+ planSaveSprints(all);
+ planRenderKanban();
+};
+window.planStageMenu = function(csid){
+ var all = planLoadSprints(); var sp = all.find(function(s){return s.id===_planCurrentSprintId;}); if(!sp||!Array.isArray(sp.custom_stages)) return;
+ var st = sp.custom_stages.filter(function(s){return s.id===csid;})[0]; if(!st) return;
+ var name = prompt('Название этапа (очистить и ОК = удалить этап):', st.name||''); if(name===null) return;
+ if(!name.trim()){
+  if(!confirm('Удалить этап «'+(st.name||'')+'»? Задачи из него вернутся в «Не начато».')) return;
+  sp.custom_stages = sp.custom_stages.filter(function(s){return s.id!==csid;});
+  var allT = planLoadTasks(); var changed=false; allT.forEach(function(t){ if(t.status==='stage_'+csid){ t.status='todo'; changed=true; } }); if(changed) planSaveTasks(allT);
+ } else { st.name = name.trim(); }
+ planSaveSprints(all);
+ planRenderKanban();
 };
 window.planCreateTaskInStatus = function(title, status){
  if(!title || !_planCurrentSprintId) return;
