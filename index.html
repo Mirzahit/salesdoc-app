@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v718</title>
+<title>SalesDoc — Финансовый Дашборд v719</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5191,6 +5191,9 @@ body.light #view-plan-sprint #plan-quick-add{color:#16181D}
 #view-task-card .tc-cv{color:#5a6270;font-size:10px;pointer-events:none}
 #view-task-card .tc-custx{margin-left:auto;color:#5a6270;font-size:10px;cursor:pointer;padding-left:8px}
 #view-task-card .tc-frow:hover .tc-custx{color:#FF8AA8}
+#view-task-card .tc-ownerchip{display:inline-flex;align-items:center;gap:5px;background:#232833;border:1px solid #313743;border-radius:999px;padding:2px 9px;font-size:12px;margin-right:5px;margin-bottom:3px}
+#view-task-card .tc-ownerx{color:#6B7280;cursor:pointer;font-size:13px}
+#view-task-card .tc-ownerchip:hover .tc-ownerx{color:#FF8AA8}
 #view-task-card .tc-inline-input{background:#232833;border:1px solid #3d4557;border-radius:6px;color:#E7EAF0;font-size:13px;font-family:inherit;padding:4px 8px;outline:none;max-width:180px}
 #view-task-card .tc-ltabs{display:flex;gap:18px;border-bottom:1px solid #1e222b;margin:4px 0 10px}
 #view-task-card .tc-lt{font-size:13px;font-weight:600;color:#6B7280;padding:9px 0;cursor:pointer;border-bottom:2px solid transparent}
@@ -20715,6 +20718,15 @@ window.planTcFeedTab = function(tab, el){
 var _tcLeftTab = 'main';
 window.planTcLeftTab = function(tab){ _tcLeftTab = tab; planRenderTaskCard(); };
 function _tcFmtDate(d){ d=String(d||'').slice(0,10); return d?d.split('-').reverse().join('.'):''; }
+function _tcFmtTs(ts){
+ if(ts===0||ts==null||ts==='') return '';
+ var d;
+ if(typeof ts==='number' || /^\d{10,}$/.test(String(ts))){ d=new Date(Number(ts)); }
+ else { return String(ts).replace('T',' ').slice(0,16); }
+ if(isNaN(d.getTime())) return '';
+ var p=function(n){return ('0'+n).slice(-2);};
+ return p(d.getDate())+'.'+p(d.getMonth()+1)+'.'+d.getFullYear()+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
 function planRenderTaskCard(){
  var t = planLoadTasks().find(function(x){return x.id===_planOpenTaskId;}); if(!t) return;
  var sp = planLoadSprints().find(function(s){return s.id===t.sprint_id;}) || {};
@@ -20750,8 +20762,8 @@ function planRenderTaskCard(){
   + '</div>';
  if(_tcLeftTab==='main'){
   html += '<div class="tc-flist">'
-   + _tcFrow('Ответственный', respTxt ? esc(respTxt) : '<span style="color:#5a6270">не назначен</span>')
-   + _tcFrow('Соисполнители', '<span style="color:#5a6270">Выбрать</span>')
+   + _tcFrow('Ответственный', '<span class="tc-editable"'+(owners.length?'':' style="color:#5a6270"')+' onclick="planTcPickOwner(this,\'set\')">'+(owners.length?esc((typeof planRuName==='function')?planRuName(owners[0]):owners[0]):'назначить')+'</span>')
+   + _tcFrow('Соисполнители', owners.slice(1).map(function(n,i){ return '<span class="tc-ownerchip">'+esc((typeof planRuName==='function')?planRuName(n):n)+'<span class="tc-ownerx" onclick="planTcRemoveOwner('+(i+1)+')">×</span></span>'; }).join('') + '<span class="tc-editable" style="color:#5a6270" onclick="planTcPickOwner(this,\'add\')">+ добавить</span>')
    + _tcFrow('Начало', dateV(t.start_date, 'planUpdateTaskStart'))
    + _tcFrow('Дедлайн', dateV(dl, 'planUpdateTaskDeadline', overdue?'over':''))
    + _tcFrow('Приоритет', selP(t.priority||'mid', [['mid','Средний'],['high','Высокий'],['low','Низкий']], 'planUpdateTaskPriority'))
@@ -20768,7 +20780,7 @@ function planRenderTaskCard(){
   html += '<div style="margin-top:6px">' + (subs.length?subs.map(function(s){ return '<div style="display:flex;align-items:center;gap:9px;padding:9px 2px;font-size:13px;border-bottom:1px solid #1a1d24"><input type="checkbox" '+(s.done?'checked':'')+' onchange="planToggleSubtask('+s.id+',this.checked)" style="width:15px;height:15px;accent-color:#3FD08A;cursor:pointer"><span'+(s.done?' style="color:#6B7280;text-decoration:line-through"':'')+'>'+esc(s.text||s.title||'')+'</span></div>'; }).join(''):'<div style="color:#5a6270;padding:16px 2px">Пока нет подзадач.</div>') + '</div><div class="tc-addfield" onclick="planTcAddSubtask()">+ Добавить подзадачу</div>';
  } else {
   var acts = Array.isArray(t.activity)?t.activity.slice().reverse():[];
-  html += '<div style="margin-top:6px">' + (acts.length?acts.map(function(a){ return '<div style="padding:9px 2px;font-size:12.5px;color:#9AA1AE;border-bottom:1px solid #1a1d24"><b style="color:#E7EAF0">'+esc(a.who||a.author||a.by||'')+'</b> '+esc(a.text||a.msg||'')+' <span style="color:#5a6270">'+String(a.ts||a.at||'').replace('T',' ').slice(0,16)+'</span></div>'; }).join(''):'<div style="color:#5a6270;padding:16px 2px">История пуста.</div>') + '</div>';
+  html += '<div style="margin-top:6px">' + (acts.length?acts.map(function(a){ return '<div style="padding:9px 2px;font-size:12.5px;color:#9AA1AE;border-bottom:1px solid #1a1d24"><b style="color:#E7EAF0">'+esc(a.who||a.author||a.by||'')+'</b> '+esc(a.text||a.msg||'')+' <span style="color:#5a6270">'+_tcFmtTs(a.ts||a.at)+'</span></div>'; }).join(''):'<div style="color:#5a6270;padding:16px 2px">История пуста.</div>') + '</div>';
  }
  document.getElementById('tc-fields').innerHTML = html;
  planRenderTaskCardFeed();
@@ -20785,7 +20797,7 @@ function planRenderTaskCardFeed(){
  if(_tcFeedTab==='hist') items = items.filter(function(i){return i.type==='sys';});
  if(!items.length){ body.innerHTML='<div class="tc-empty">Пока пусто. Напишите первый комментарий команде ниже.</div>'; return; }
  body.innerHTML = items.map(function(i){
-  var tm = i.ts ? String(i.ts).replace('T',' ').slice(0,16) : '';
+  var tm = _tcFmtTs(i.ts);
   if(i.type==='comment'){
    var nm = (typeof planRuName==='function'&&i.author)?planRuName(i.author):(i.author||'—');
    var txt = esc(i.text||'').replace(/@([\wА-Яа-яЁё]+)/g,'<span style="color:#5AA7F0;font-weight:600">@$1</span>');
@@ -20832,6 +20844,32 @@ window.planTcEditCustom = function(el, idx, cur){
  inp.addEventListener('blur', function(){ setTimeout(function(){ if(!done){ done=true; planRenderTaskCard(); } }, 130); });
 };
 window.planTcRemoveField = function(idx){ _planEditOpenTask(function(t){ if(Array.isArray(t.custom_fields)) t.custom_fields.splice(idx,1); }, 'edit', 'убрал(а) поле'); };
+// v719: назначение ответственных из карточки
+function _tcEmpOptions(){
+ var opts = '<option value="">— выбрать —</option>';
+ var list = (typeof employees!=='undefined'&&Array.isArray(employees)) ? employees.filter(function(e){return e && e.active!==false;}) : [];
+ list.forEach(function(e){ opts += '<option value="'+e.id+'|'+String(e.name||'').replace(/"/g,'&quot;')+'">'+_planEsc(e.name||'')+((e.pos||e.role)?(' · '+_planEsc(e.pos||e.role)):'')+'</option>'; });
+ return opts;
+}
+window.planTcPickOwner = function(el, mode){
+ var s = document.createElement('select'); s.className='tc-inline-input'; s.style.maxWidth='200px'; s.innerHTML=_tcEmpOptions();
+ el.replaceWith(s); try{s.focus();}catch(_){}
+ var done=false;
+ s.addEventListener('change', function(){
+  done=true; var v=s.value; if(!v){ planRenderTaskCard(); return; }
+  var parts=v.split('|'); var id=parseInt(parts[0],10); var name=parts[1]||'';
+  _planEditOpenTask(function(t){
+   if(!Array.isArray(t.owners)) t.owners=[]; if(!Array.isArray(t.owner_ids)) t.owner_ids=[];
+   if(mode==='set'){ if(t.owner_ids.indexOf(id)===-1){ t.owners[0]=name; t.owner_ids[0]=id; } }
+   else { if(t.owner_ids.indexOf(id)===-1){ t.owner_ids.push(id); t.owners.push(name); } }
+   t.owner=t.owners.join(', ');
+  }, 'edit', 'назначил(а): '+name);
+ });
+ s.addEventListener('blur', function(){ setTimeout(function(){ if(!done) planRenderTaskCard(); }, 140); });
+};
+window.planTcRemoveOwner = function(idx){
+ _planEditOpenTask(function(t){ if(Array.isArray(t.owners)) t.owners.splice(idx,1); if(Array.isArray(t.owner_ids)) t.owner_ids.splice(idx,1); t.owner=(t.owners||[]).join(', '); }, 'edit', 'убрал(а) ответственного');
+};
 function _planRenderSubtasks(t){
  var box = document.getElementById('ptd-sub-list'); if (!box) return;
  var subs = Array.isArray(t.subtasks) ? t.subtasks : [];
