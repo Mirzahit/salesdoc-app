@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v714</title>
+<title>SalesDoc — Финансовый Дашборд v715</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5002,6 +5002,8 @@ body.light #view-marketing .mkt-ctry-head,body.light #view-marketing .cc-flag,bo
 #view-marketing .mkt-tab.mkt-tab-active{background:linear-gradient(180deg,rgba(110,121,224,.28),rgba(110,121,224,.12));color:#9AA4FF;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
 body.light #view-marketing .mkt-tabbar{background:#F4F5F8;border-color:rgba(15,18,25,.08)}
 body.light #view-marketing .mkt-tab.mkt-tab-active{color:#4651B5}
+/* v715 — чистый главный: убраны статы/рейтинг/сводка (по просьбе CEO) */
+#view-planning #plan-overall-stats,#view-planning #plan-team-rating,#view-planning #plan-summary-title,#view-planning #plan-summary-meta{display:none!important}
 /* v707 — Планёрки: карточки спринтов 1:1 с макетом preview-sprints-list, на всю ширину */
 #view-planning #plan-sprints-grid{grid-template-columns:repeat(auto-fill,minmax(360px,1fr))!important;gap:18px!important}
 #view-planning .spr{background:linear-gradient(180deg,#181A24,#10121A);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:20px 22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 34px rgba(0,0,0,.46);position:relative;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
@@ -5154,6 +5156,11 @@ body.light #view-plan-sprint #plan-quick-add{color:#16181D}
 #view-plan-sprint .ak-st{font-size:11px;color:#6B7280}
 #view-plan-sprint .ak-st.hot{color:#FF5C8A;font-weight:600}
 #view-plan-sprint .ak-st.today{color:#3FD08A;font-weight:600}
+#view-plan-sprint .ak-add{color:#6B7280;font-size:12.5px;cursor:pointer;padding:6px 4px;border-radius:6px}
+#view-plan-sprint .ak-add:hover{color:#5AA7F0;background:rgba(90,167,240,.06)}
+#view-plan-sprint .ak-addbox{padding:1px 0}
+#view-plan-sprint .ak-addinput{width:100%;background:#232833;border:1px solid #3d4557;border-radius:7px;padding:9px 11px;color:#E7EAF0;font-size:13px;font-family:inherit;outline:none}
+#view-plan-sprint .ak-addinput:focus{border-color:#3f6bd6}
 #view-plan-sprint .hyp-sec-h{display:flex;align-items:baseline;justify-content:space-between;margin:6px 2px 12px;gap:12px;flex-wrap:wrap}
 #view-plan-sprint .hyp-sec-h h3{font-size:15px;font-weight:700;color:#F4F6FB}
 #view-plan-sprint .hyp-sec-m{font-size:12px;color:#646A80}
@@ -7320,7 +7327,6 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <div>
  <div style="font-size:22px;font-weight:700;color:var(--text-primary);letter-spacing:-0.3px">Планёрки</div>
  <div style="display:flex;align-items:center;gap:10px;margin-top:3px;flex-wrap:wrap">
- <div style="font-size:12px;color:var(--text-muted)">Спринты по проектам — план, прогресс, факт</div>
  <div id="plan-sync-badge" data-state="loading" onclick="planForcePush()" title="Кликни чтобы принудительно залить локальные данные в облако" style="font-size:10px;font-weight:600;color:#E0A458;letter-spacing:.3px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);cursor:pointer">Синхронизация…</div>
  </div>
  </div>
@@ -7389,9 +7395,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <!-- v639: контекстный дашборд по типу планёрки (план/факт/осталось) -->
  <div id="plan-sprint-type-dashboard" style="display:none;margin-bottom:20px"></div>
 
- <!-- v713: быстрое добавление задачи -->
- <div class="tl-add"><span class="pl">+</span><input id="plan-quick-add" placeholder="Новая задача — напиши и нажми Enter…" onkeydown="if(event.key==='Enter'){planQuickAddTask();}" autocomplete="off"><span class="hint">Enter</span></div>
- <!-- v713: сгруппированный список задач (вариант C — секции по статусу) -->
+ <!-- v714: amo-канбан задач (добавление — в колонках) -->
  <div id="plan-task-list" style="margin-bottom:20px"></div>
 
  <!-- v169: Burndown + Скорость -->
@@ -20259,12 +20263,12 @@ function planRenderAmoKanban(sp, tasks){
  }
  var colsHtml = COLS.map(function(c, i){
   var arr = buckets[c.st];
-  var quick = i===0 ? '<div class="ak-quick" onclick="var q=document.getElementById(\'plan-quick-add\');if(q)q.focus()">Быстрое добавление</div>' : '';
+  var addRow = '<div class="ak-add" onclick="planColAddStart(this,\''+c.st+'\')">+ Добавить</div>';
   return '<div class="ak-col" style="--top:'+c.top+'">'
    + '<div class="ak-col-h"><div class="ak-col-nm">'+c.name+'</div><div class="ak-col-sub">'+arr.length+' задач</div></div>'
    + '<div class="ak-col-desc">'+c.desc+'</div>'
    + '<div class="ak-col-body" data-status="'+c.st+'" ondragover="if(typeof planDragOver===\'function\')planDragOver(event,this)" ondragleave="if(typeof planDragLeave===\'function\')planDragLeave(this)" ondrop="planDropTask(event,\''+c.st+'\',this)">'
-   + quick + arr.map(cardHtml).join('')
+   + arr.map(cardHtml).join('') + addRow
    + '</div></div>';
  }).join('');
  var addCol = '<div class="ak-col ak-addcol"><div class="ak-col-h"><div class="ak-col-nm" style="color:#6B7280">+ Добавить этап</div></div></div>';
@@ -20299,6 +20303,34 @@ window.planQuickAddTask = function(){
  planRenderKanban();
  inp.focus();
 }
+
+// v715: добавить задачу прямо в колонку-этап канбана (инлайн-поле)
+window.planColAddStart = function(el, status){
+ if(!el || !el.parentNode) return;
+ var body = el.parentNode;
+ el.style.display = 'none';
+ var wrap = document.createElement('div'); wrap.className = 'ak-addbox';
+ var inp = document.createElement('input'); inp.className = 'ak-addinput'; inp.placeholder = 'Название задачи…'; inp.setAttribute('autocomplete','off');
+ wrap.appendChild(inp);
+ body.insertBefore(wrap, el);
+ inp.focus();
+ var done = false;
+ inp.addEventListener('keydown', function(e){
+  if(e.key==='Enter'){ done=true; var v=inp.value.trim(); if(v){ planCreateTaskInStatus(v, status); } else { planRenderKanban(); } }
+  else if(e.key==='Escape'){ done=true; planRenderKanban(); }
+ });
+ inp.addEventListener('blur', function(){ setTimeout(function(){ if(!done) planRenderKanban(); }, 120); });
+};
+window.planCreateTaskInStatus = function(title, status){
+ if(!title || !_planCurrentSprintId) return;
+ var all = planLoadTasks();
+ var nextId = (all.reduce(function(m,t){return Math.max(m,t.id||0);},0) || 100) + 1;
+ all.push({ id:nextId, sprint_id:_planCurrentSprintId, title:title, status:status||'todo', progress_pct:(status==='done'?100:0), created_at:_planYmd(new Date()) });
+ if(typeof _planLogActivity==='function'){ try{ _planLogActivity(all, all.length-1, 'created', 'создал(а) задачу'); }catch(_){} }
+ planSaveTasks(all);
+ if(typeof planRecountSprint==='function') planRecountSprint(_planCurrentSprintId);
+ planRenderKanban();
+};
 
 // v711: переключатель вид доски — строки (как макет) / канбан (вернули по просьбе CEO)
 window.planSetSprintView = function(mode){
