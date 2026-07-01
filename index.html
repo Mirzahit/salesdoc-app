@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v724</title>
+<title>SalesDoc — Финансовый Дашборд v725</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -34000,6 +34000,17 @@ function kbLoad() {
  if(cat.indexOf('нов') < 0 && cat.indexOf('лицен') < 0 && cat.indexOf('внедрен') < 0) return;
  var ck = p.client.toLowerCase();
  if(!clientActivMap[ck]) clientActivMap[ck] = p.activationDate;
+ });
+ // v725: клиент, который ПЛАТИТ абонплату / баланс / продление — точно работает (активирован),
+ // даже если дату активации в таблице не заполнили. Иначе такие висят в «Новом» месяцами/годами
+ // (было 62 из 138 живых, ошибочно показанных зависшими). Дата активации — по самой ранней такой оплате.
+ payments.forEach(function(p) {
+ var cat = (p.categoryRaw||'').toLowerCase();
+ var live = (p.category === 'subscription') || cat.indexOf('абон') >= 0 || cat.indexOf('баланс') >= 0 || cat.indexOf('продлен') >= 0;
+ if(!live) return;
+ var ck = p.client.toLowerCase();
+ var when = p.date || p.activationDate || true;
+ if(!clientActivMap[ck] || (when !== true && clientActivMap[ck] !== true && String(when) < String(clientActivMap[ck]))) clientActivMap[ck] = when;
  });
  }
 
