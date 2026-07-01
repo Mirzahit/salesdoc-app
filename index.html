@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v725</title>
+<title>SalesDoc — Финансовый Дашборд v726</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -29209,9 +29209,12 @@ function _routeFmtSum(n){
  return v.toLocaleString('ru-RU').replace(/,/g, ' ') + ' ' + _CUR; // v592: валюта по стране, не зашитый ₸
 }
 function _routeUpdateStats(){
- var total = routeCards.length;
+ // v726: «Активация» = готова/активирован (финальный этап) — НЕ считать в «в работе» (по просьбе CEO:
+ // «если готова стоит, значит активирован — не должен их считать»). Считаем только активную часть маршрута.
+ var active = routeCards.filter(function(c){ return c.stage !== 'Активация' && c.stage !== 'Архив'; });
+ var total = active.length;
  var overdue = 0, forecast = 0;
- routeCards.forEach(function(c){
+ active.forEach(function(c){
   var d = c.stage_entered_at ? Math.floor((Date.now() - new Date(c.stage_entered_at).getTime())/86400000) : 0;
   if(d > 7) overdue++;
   if(c.payment_amount) forecast += Number(c.payment_amount) || 0;
