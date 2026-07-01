@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v726</title>
+<title>SalesDoc — Финансовый Дашборд v727</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -32303,12 +32303,21 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
    var body = {}; body[opts.field] = newVal;
    var url, method = 'PATCH';
    if(opts.entity === 'card'){
-    // v437: синтетическая карта клиента (id='client:SD-KZ-...') не существует в kanban_cards.
-    // Поля сделки нельзя сохранять — нужно сначала создать карточку Внедрения.
+    // v727: раньше для синтетической карты (id='client:...') кидали ошибку — оператора/поля некуда сохранять
+    // («не получается вставить оператора в некоторых»). Теперь создаём реальную карточку Внедрения на лету
+    // (сразу с этим полем), чтобы назначение оператора «просто работало».
     if(_routeCurrentCard && String(_routeCurrentCard.id||'').indexOf('client:') === 0){
-     throw new Error('У клиента нет активной карточки Внедрения — поля сделки сохранять некуда. Создайте карточку или редактируйте контактные данные.');
+     var _cid = _routeCurrentCard.client_id || String(_routeCurrentCard.id).slice('client:'.length);
+     var _cbody = { client_id: _cid, stage: (_routeCurrentCard.stage && _routeCurrentCard.stage !== '—') ? _routeCurrentCard.stage : 'Новый' };
+     _cbody[opts.field] = newVal;
+     var _cr = await sbFetch('/api/cards', { method:'POST', body: JSON.stringify(_cbody) });
+     if(!_cr.ok) throw new Error(_cr.error || 'не удалось создать карточку Внедрения');
+     _routeCurrentCard.id = (_cr.card && _cr.card.id) || _cr.id || _routeCurrentCard.id;
+     if(_cr.card && typeof routeCards !== 'undefined' && Array.isArray(routeCards)) routeCards.push(_cr.card);
+     url = null; // карточка создана уже с этим полем — обычный PATCH не нужен
+    } else {
+     url = '/api/cards?id=' + encodeURIComponent(_routeCurrentCard.id);
     }
-    url = '/api/cards?id=' + encodeURIComponent(_routeCurrentCard.id);
    } else if(opts.entity === 'client'){
     url = '/api/clients?client_id=' + encodeURIComponent(_routeCurrentCard.client_id);
    } else if(opts.entity === 'integration'){
@@ -32318,8 +32327,7 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
    } else {
     throw new Error('entity не задан');
    }
-   var d = await sbFetch(url, { method:method, body:JSON.stringify(body) });
-   if(!d.ok) throw new Error(d.error || 'save failed');
+   if(url){ var d = await sbFetch(url, { method:method, body:JSON.stringify(body) }); if(!d.ok) throw new Error(d.error || 'save failed'); }
 
    // Обновляем in-memory state
    if(opts.entity === 'card'){
