@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v732</title>
+<title>SalesDoc — Финансовый Дашборд v733</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -37211,6 +37211,18 @@ function acRender(){
   resetBtn.style.display = anyActive ? 'inline-block' : 'none';
  }
  var all = acGetActiveClients();
+ // v733: роль «оператор» видит в «Действующие» ТОЛЬКО своих клиентов (по оператору/куратору).
+ // CEO/руководитель/бухгалтер и т.д. — видят всех. Матч имени гибкий (регистр + первое слово,
+ // т.к. в базе оператор может быть «Акбар» или «Акбар Хапез»). Скоуп на весь `all` — тогда и
+ // счётчик, и KPI-сегменты, и список показывают только его клиентов.
+ var _acMe = (typeof currentUser !== 'undefined' && currentUser && String(currentUser.role||'').toLowerCase() === 'operator') ? String(currentUser.name||'').trim().toLowerCase() : null;
+ if(_acMe){
+  var _acMeFirst = _acMe.split(/\s+/)[0];
+  all = all.filter(function(c){
+   var op = String(c.operator||'').trim().toLowerCase();
+   return op && (op === _acMe || op.split(/\s+/)[0] === _acMeFirst);
+  });
+ }
  var filtered = all.filter(function(c){
  if(acState.operator && c.operator !== acState.operator) return false;
  if(acState.risk && c.risk !== acState.risk) return false;
