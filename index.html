@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v713</title>
+<title>SalesDoc — Финансовый Дашборд v714</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5117,6 +5117,43 @@ body.light #view-plan-sprint .plan-kb-title{color:#16181D!important}
 body.light #view-plan-sprint .tl-add,body.light #view-plan-sprint .tl-box,body.light #view-plan-sprint .tl-empty{background:#FFFFFF;border-color:rgba(15,18,25,.08)}
 body.light #view-plan-sprint .tl-t,body.light #view-plan-sprint .tl-nm{color:#16181D}
 body.light #view-plan-sprint #plan-quick-add{color:#16181D}
+/* v714 — amo-канбан спринта (по референсу CEO): колонки-этапы, карточки задач, перетаскивание */
+#view-plan-sprint .ak-stats{display:flex;align-items:center;gap:0;padding:14px 4px 16px;flex-wrap:wrap}
+#view-plan-sprint .ak-stat{padding-right:40px}
+#view-plan-sprint .ak-stat .l{font-size:11px;color:#6B7280;margin-bottom:5px}
+#view-plan-sprint .ak-stat .v{font-size:19px;font-weight:700;color:#E7EAF0}
+#view-plan-sprint .ak-stat .v.pink{color:#FF5C8A}
+#view-plan-sprint .ak-stat .v.green{color:#3FD08A}
+#view-plan-sprint .ak-stat.right{margin-left:auto;text-align:right;padding-right:0}
+#view-plan-sprint .ak-stat.right .v{font-size:16px}
+#view-plan-sprint .ak-kb{display:flex;gap:0;overflow-x:auto;border:1px solid #23272f;border-radius:12px;background:#16181d}
+#view-plan-sprint .ak-col{flex:0 0 290px;min-width:290px;border-right:1px solid #14171d;display:flex;flex-direction:column}
+#view-plan-sprint .ak-col.ak-addcol{flex:0 0 180px;min-width:180px;border-right:none;cursor:pointer}
+#view-plan-sprint .ak-col.ak-addcol:hover .ak-col-nm{color:#5AA7F0!important}
+#view-plan-sprint .ak-col-h{padding:12px 15px 10px;border-top:3px solid var(--top,#8A909C)}
+#view-plan-sprint .ak-col-nm{font-size:11.5px;font-weight:700;letter-spacing:.4px;color:#9AA1AE;text-transform:uppercase}
+#view-plan-sprint .ak-col-sub{font-size:12px;color:#6B7280;margin-top:4px}
+#view-plan-sprint .ak-col-desc{font-size:11.5px;color:#6B7280;line-height:1.45;padding:0 15px 10px;border-bottom:1px solid #1d2129}
+#view-plan-sprint .ak-col-body{flex:1;min-height:120px;padding:10px 11px;display:flex;flex-direction:column;gap:9px}
+#view-plan-sprint .ak-col-body.kb-drop-hl{background:rgba(90,167,240,.07)}
+#view-plan-sprint .ak-quick{border:1px dashed #333a47;border-radius:8px;padding:11px;text-align:center;color:#6B7280;font-size:12.5px;cursor:pointer}
+#view-plan-sprint .ak-quick:hover{border-color:#3f6bd6;color:#5AA7F0}
+#view-plan-sprint .ak-c{background:#232833;border:1px solid #2E3440;border-radius:8px;padding:11px 12px;cursor:pointer;transition:border-color .15s}
+#view-plan-sprint .ak-c:hover{border-color:#3d4557}
+#view-plan-sprint .ak-c-top{display:flex;gap:9px}
+#view-plan-sprint .ak-av{width:32px;height:32px;border-radius:50%;flex:0 0 auto;background:#333a48;display:grid;place-items:center;font-size:11px;font-weight:700;color:#cfd6e4}
+#view-plan-sprint .ak-c-main{flex:1;min-width:0}
+#view-plan-sprint .ak-r1{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+#view-plan-sprint .ak-name{font-size:13px;font-weight:600;color:#E7EAF0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#view-plan-sprint .ak-date{font-size:11px;color:#6B7280;flex:0 0 auto}
+#view-plan-sprint .ak-sub{font-size:11.5px;color:#6B7280;margin-top:3px}
+#view-plan-sprint .ak-tags{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+#view-plan-sprint .ak-tg{font-size:10.5px;color:#9AA1AE;background:#1a1e26;border:1px solid #2c313c;border-radius:5px;padding:2px 7px}
+#view-plan-sprint .ak-foot{display:flex;align-items:center;gap:7px;margin-top:8px}
+#view-plan-sprint .ak-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+#view-plan-sprint .ak-st{font-size:11px;color:#6B7280}
+#view-plan-sprint .ak-st.hot{color:#FF5C8A;font-weight:600}
+#view-plan-sprint .ak-st.today{color:#3FD08A;font-weight:600}
 #view-plan-sprint .hyp-sec-h{display:flex;align-items:baseline;justify-content:space-between;margin:6px 2px 12px;gap:12px;flex-wrap:wrap}
 #view-plan-sprint .hyp-sec-h h3{font-size:15px;font-weight:700;color:#F4F6FB}
 #view-plan-sprint .hyp-sec-m{font-size:12px;color:#646A80}
@@ -20163,6 +20200,77 @@ function planRenderTaskList(sp, tasks){
  el.innerHTML = html;
 }
 
+// v714: канбан спринта в стиле amoCRM (по референсу CEO) — колонки-этапы с цветной полоской,
+// карточки задач (аватар/дата/теги/статус), перетаскивание между этапами (переиспользует planDropTask).
+function planRenderAmoKanban(sp, tasks){
+ var el = document.getElementById('plan-task-list'); if(!el) return;
+ var today = _planYmd(new Date());
+ tasks = tasks || [];
+ function dlOf(t){ var r=t.deadline||t.due_date||''; return r?String(r).slice(0,10):''; }
+ var COLS = [
+  { st:'todo',     name:'Не начато',   top:'#8A909C', desc:'Заведены, но в работу ещё не взяты' },
+  { st:'progress', name:'В работе',    top:'#B463E0', desc:'Ответственный активно ведёт задачу' },
+  { st:'review',   name:'На проверке', top:'#E6B94E', desc:'Сделано, ждёт проверки руководителя' },
+  { st:'done',     name:'Готово',      top:'#3FD08A', desc:'Закрыто, засчитано в цель' }
+ ];
+ function colOf(t){ if(t.status==='done')return 'done'; if(t.status==='review')return 'review'; if(t.status==='progress')return 'progress'; return 'todo'; }
+ var buckets = { todo:[], progress:[], review:[], done:[] };
+ tasks.forEach(function(t){ buckets[colOf(t)].push(t); });
+ var overdueN = tasks.filter(function(t){ return t.status!=='done' && dlOf(t) && dlOf(t) < today; }).length;
+ var todayN = tasks.filter(function(t){ return t.status!=='done' && dlOf(t)===today; }).length;
+ var cfg = planTypeCfg(sp);
+ var plan = parseFloat(sp.plan_target)||0;
+ var doneTasks = buckets.done;
+ var fact = (cfg.factMode==='sum') ? doneTasks.reduce(function(s,t){return s+planTaskMetric(t);},0) : doneTasks.length;
+ var pct = plan>0 ? Math.round(fact/plan*100) : 0;
+ var statsHtml = '<div class="ak-stats">'
+  + '<div class="ak-stat"><div class="l">Задач на сегодня</div><div class="v">'+todayN+'</div></div>'
+  + '<div class="ak-stat"><div class="l">Не начато</div><div class="v">'+buckets.todo.length+'</div></div>'
+  + '<div class="ak-stat"><div class="l">Просрочено</div><div class="v pink">'+overdueN+'</div></div>'
+  + '<div class="ak-stat"><div class="l">Готово</div><div class="v green">'+buckets.done.length+'</div></div>'
+  + (plan>0 ? ('<div class="ak-stat right"><div class="l">Выполнение цели</div><div class="v">'+fact+' из '+plan+' · '+pct+'%</div></div>') : '')
+  + '</div>';
+ function cardHtml(t){
+  var owners = Array.isArray(t.owners)&&t.owners.length ? t.owners : (t.owner?String(t.owner).split(',').map(function(s){return s.trim();}):(t.assignee?[t.assignee]:[]));
+  var nm = owners.length ? ((typeof planRuName==='function')?planRuName(owners[0]):owners[0]) : '';
+  var ini = nm ? String(nm).split(' ').map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('') : '?';
+  var dep = t.department || '';
+  var _dlRaw = t.deadline||t.due_date||''; var dl = dlOf(t);
+  var overdue = t.status!=='done' && dl && dl < today;
+  var dateTxt = dl ? (t.status==='done'?planFmtDate(_dlRaw):('до '+planFmtDate(_dlRaw))) : '';
+  var ppct = (t.progress_pct!=null&&t.progress_pct!=='')?parseInt(t.progress_pct,10):(t.status==='done'?100:0); if(!isFinite(ppct))ppct=0;
+  var contrib = parseFloat(planTaskMetric(t))||0;
+  var tags = '';
+  if(dep) tags += '<span class="ak-tg">'+_planEsc(dep)+'</span>';
+  if(t.status==='progress'&&ppct>0) tags += '<span class="ak-tg">'+ppct+'%</span>';
+  if(contrib>0) tags += '<span class="ak-tg">+'+Math.round(contrib)+' лиц.</span>';
+  var statusHtml;
+  if(overdue) statusHtml='<span class="ak-dot" style="background:#FF5C8A"></span><span class="ak-st hot">−'+Math.round((new Date(today)-new Date(dl))/86400000)+' дн · горит</span>';
+  else if(dl===today) statusHtml='<span class="ak-dot" style="background:#3FD08A"></span><span class="ak-st today">сегодня</span>';
+  else statusHtml='<span class="ak-dot" style="background:#6B7280"></span><span class="ak-st">нет задач</span>';
+  var sub = nm ? (_planEsc(nm)+(dep?(' · '+_planEsc(dep)):'')) : 'не назначен';
+  return '<div class="ak-c" draggable="true" ondragstart="planDragStart(event,'+JSON.stringify(t.id)+')" ondragend="if(typeof planDragEnd===\'function\')planDragEnd(this)" onclick="planOpenTaskDetail('+JSON.stringify(t.id)+')">'
+   + '<div class="ak-c-top"><span class="ak-av">'+_planEsc(ini)+'</span><div class="ak-c-main">'
+   + '<div class="ak-r1"><span class="ak-name">'+_planEsc(t.title||'(без названия)')+'</span><span class="ak-date">'+dateTxt+'</span></div>'
+   + '<div class="ak-sub">'+sub+'</div>'
+   + (tags?('<div class="ak-tags">'+tags+'</div>'):'')
+   + '<div class="ak-foot">'+statusHtml+'</div>'
+   + '</div></div></div>';
+ }
+ var colsHtml = COLS.map(function(c, i){
+  var arr = buckets[c.st];
+  var quick = i===0 ? '<div class="ak-quick" onclick="var q=document.getElementById(\'plan-quick-add\');if(q)q.focus()">Быстрое добавление</div>' : '';
+  return '<div class="ak-col" style="--top:'+c.top+'">'
+   + '<div class="ak-col-h"><div class="ak-col-nm">'+c.name+'</div><div class="ak-col-sub">'+arr.length+' задач</div></div>'
+   + '<div class="ak-col-desc">'+c.desc+'</div>'
+   + '<div class="ak-col-body" data-status="'+c.st+'" ondragover="if(typeof planDragOver===\'function\')planDragOver(event,this)" ondragleave="if(typeof planDragLeave===\'function\')planDragLeave(this)" ondrop="planDropTask(event,\''+c.st+'\',this)">'
+   + quick + arr.map(cardHtml).join('')
+   + '</div></div>';
+ }).join('');
+ var addCol = '<div class="ak-col ak-addcol"><div class="ak-col-h"><div class="ak-col-nm" style="color:#6B7280">+ Добавить этап</div></div></div>';
+ el.innerHTML = statsHtml + '<div class="ak-kb">' + colsHtml + addCol + '</div>';
+}
+
 // v713: быстро отметить задачу готово / снять
 window.planToggleTaskDone = function(taskId){
  var all = planLoadTasks();
@@ -20209,8 +20317,8 @@ function planRenderKanban(){
  // v169: перерисовать burndown и velocity на каждое изменение задач
  var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;});
  if (sp) { try { planRenderBurndown(sp, tasks); planRenderVelocity(sp, tasks); } catch(_){} }
- // v713: сгруппированный список задач (вариант C)
- if (sp) { try { planRenderTaskList(sp, tasks); } catch(_){} }
+ // v714: канбан спринта в стиле amoCRM
+ if (sp) { try { planRenderAmoKanban(sp, tasks); } catch(_){} }
  // v329: + 3 статуса закрытия как в Битриксе (postponed/not_done/cancelled)
  var STATUSES = ['todo','progress','review','done','postponed','not_done','cancelled'];
  var statsRow = document.getElementById('plan-sprint-stats-row');
