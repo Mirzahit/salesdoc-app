@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v735</title>
+<title>SalesDoc — Финансовый Дашборд v736</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4673,8 +4673,9 @@ body.light .route-col-amo .rc .act.go{color:#4651B5}
 #view-route .rt-days.warn{color:#F0A35A;font-weight:600}
 #view-route .rt-days.red{color:#FF5C8A;font-weight:600}
 #view-route .rt-sub{font-size:11.5px;color:var(--text-soft,#6B7280);margin-top:3px}
-#view-route .rt-tags{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
-#view-route .rt-tg{font-size:10.5px;color:var(--text-2,#9AA1AE);background:var(--bg,#1a1e26);border:1px solid var(--border,#2c313c);border-radius:5px;padding:2px 7px}
+/* v736: ярлыки без коробок — простой текст, как цена в амо (CEO: «чёрные коробки какие-то») */
+#view-route .rt-tags{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}
+#view-route .rt-tg{font-size:11.5px;color:var(--text-2,#9AA1AE)}
 #view-route .rt-foot{display:flex;align-items:center;gap:7px;margin-top:8px}
 #view-route .rt-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
 #view-route .rt-st{font-size:11px;color:var(--text-soft,#6B7280)}
@@ -29271,6 +29272,16 @@ async function routeLoad(){
  }
 }
 
+// v736: доска тянется ровно до низа экрана (CEO: «снизу какая-то пустота»).
+// Отступ сверху у всех экранов разный, поэтому не константа в CSS, а живой замер.
+function _rtFitBoard(){
+ var kb = document.querySelector('#view-route .rt-kb');
+ if(!kb || !kb.offsetParent) return; // вид скрыт — не трогаем
+ var top = kb.getBoundingClientRect().top;
+ kb.style.height = Math.max(420, window.innerHeight - top - 16) + 'px';
+}
+window.addEventListener('resize', _rtFitBoard);
+
 // v734: чип-фильтр оператора — свой стилизованный дропдаун вместо системного select
 // (переиспользуем общий crmTasksOpenDropdown). Скрытый select#route-filter-op остаётся
 // источником правды: routeLoad наполняет его options, routeRender читает value.
@@ -29418,6 +29429,7 @@ function routeRender(){
   html += '</div>'; // /rt-col
  });
  board.innerHTML = html;
+ _rtFitBoard(); // v736: подогнать высоту доски под экран
 }
 
 // v445: toggle фильтра «только без оператора» для канбана Маршрута
