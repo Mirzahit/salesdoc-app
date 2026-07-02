@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v751</title>
+<title>SalesDoc — Финансовый Дашборд v752</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1284,7 +1284,7 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-csearch input::placeholder{color:#5F6674}
 /* тулбар */
 #view-calendar .cal2-main{flex:1;min-width:0;display:flex;flex-direction:column}
-#view-calendar .cal2-toolbar{display:flex;align-items:center;gap:12px;padding:14px 20px;flex:none}
+#view-calendar .cal2-toolbar{display:flex;align-items:center;gap:12px;padding:14px 20px;flex:none;flex-wrap:wrap;row-gap:8px} /* v752: на узких экранах переносится, а не ломается */
 #view-calendar .cal2-tbtn{background:#1D2029;border:1px solid rgba(255,255,255,.10);border-radius:9px;color:#F2F4F8;font-family:inherit;font-size:12.5px;font-weight:600;padding:7px 15px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
 #view-calendar .cal2-tbtn:hover{border-color:rgba(255,255,255,.16)}
 #view-calendar .cal2-nav{display:flex;gap:2px}
@@ -36473,6 +36473,7 @@ function cal2RenderTimeGrid(days){
  html += '</div></div></div>';
  listEl.innerHTML = html;
  cal2NowTick(minH, SLOT);
+ cal2SyncHeadPad(); // v752: выровнять шапку под скроллбар сетки
  var grid = document.getElementById('cal2-wgrid');
  if(grid){
   var nl = document.getElementById('cal2-nowline');
@@ -36615,6 +36616,24 @@ window.cal2ResizeStart = function(ev, id){
  document.addEventListener('mousemove', onMove);
  document.addEventListener('mouseup', onUp);
 };
+
+// v752: ФИКС СЪЕЗДА КОЛОНОК — вертикальный скроллбар сетки отъедает ширину у колонок,
+// а шапка дней и строка «Весь день» живут снаружи и рисуются на полную ширину → к правому
+// краю набегало до 10px рассинхрона («всё сбивается» при изменении размера окна/масштаба).
+// Компенсируем: padding-right шапок = ширине скроллбара; пересчёт на каждый resize.
+function cal2SyncHeadPad(){
+ var g = document.getElementById('cal2-wgrid');
+ if(!g) return;
+ var sb = g.offsetWidth - g.clientWidth;
+ var wh = document.querySelector('#view-calendar .cal2-whead');
+ var ad = document.querySelector('#view-calendar .cal2-allday');
+ if(wh) wh.style.paddingRight = sb + 'px';
+ if(ad) ad.style.paddingRight = sb + 'px';
+}
+window.addEventListener('resize', function(){
+ clearTimeout(window._cal2RszT);
+ window._cal2RszT = setTimeout(cal2SyncHeadPad, 120);
+});
 
 // линия «сейчас»: singleton-таймер, обновление раз в минуту, только когда календарь виден
 function cal2NowTick(minH, SLOT){
