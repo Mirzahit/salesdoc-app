@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v750</title>
+<title>SalesDoc — Финансовый Дашборд v751</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -35340,8 +35340,12 @@ function _calApplyFilters(events){
 function cal2AllEvents(){
  return crmEventsAll().concat(window._cal2PayEvents || []);
 }
+// v751: слой оплат ВРЕМЕННО СКРЫТ по просьбе CEO — сначала проверить цепочку продления
+// (сдвигается ли next_billing_at при оплате автоматически). Код цел, вернуть = поставить true.
+var CAL2_PAY_ENABLED = false;
 // v750: загрузка дат следующих оплат действующих клиентов → синтетические all-day события
 async function cal2LoadPayments(){
+ if(!CAL2_PAY_ENABLED){ window._cal2PayEvents = []; return; }
  try {
   var d = await sbFetch('/api/clients?status=active');
   if(!d || !d.ok) return;
@@ -35476,7 +35480,8 @@ function cal2RenderSide(){
  html += '<div class="cal2-sec"><div class="h">Показывать</div>'
   + '<div class="cal2-person" onclick="cal2ToggleLayer(\'task\')"><span class="cal2-av av-gray">✓</span><span class="nm">Задачи по клиентам</span>' + cal2Chk(s.layers.task, null) + '</div>'
   + '<div class="cal2-person" onclick="cal2ToggleLayer(\'team\')"><span class="cal2-av av-ind">S</span><span class="nm">События команды</span>' + cal2Chk(s.layers.team, 'ind') + '</div>'
-  + '<div class="cal2-person" onclick="cal2ToggleLayer(\'pay\')"><span class="cal2-av av-green">₸</span><span class="nm">Оплаты клиентов</span>' + cal2Chk(s.layers.pay, 'green') + '</div></div>';
+  + (typeof CAL2_PAY_ENABLED !== 'undefined' && CAL2_PAY_ENABLED ? '<div class="cal2-person" onclick="cal2ToggleLayer(\'pay\')"><span class="cal2-av av-green">₸</span><span class="nm">Оплаты клиентов</span>' + cal2Chk(s.layers.pay, 'green') + '</div>' : '')
+  + '</div>';
  var T = [['call','Звонки'],['meeting','Встречи и демо'],['training','Обучения'],['deadline','Дедлайны и работы']];
  html += '<div class="cal2-sec"><div class="h">Тип</div>';
  T.forEach(function(t){ html += '<div class="cal2-trow" onclick="cal2ToggleType(\'' + t[0] + '\')">' + cal2Chk(s.types[t[0]], null) + '<span class="nm">' + t[1] + '</span></div>'; });
