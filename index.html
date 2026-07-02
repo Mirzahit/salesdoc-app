@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v745</title>
+<title>SalesDoc — Финансовый Дашборд v746</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1374,6 +1374,22 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-detail .dt-actions{display:flex;gap:6px;margin-top:12px;justify-content:flex-end;flex-wrap:wrap}
 #view-calendar .cal2-detail .dt-actions button{background:#1D2029;border:1px solid rgba(255,255,255,.10);border-radius:8px;color:#9AA3B2;font-family:inherit;font-size:11.5px;font-weight:600;padding:6px 11px;cursor:pointer}
 #view-calendar .cal2-detail .dt-actions button:hover{border-color:rgba(255,255,255,.2);color:#F2F4F8}
+/* v746: Список */
+#view-calendar .cal2-lh{display:flex;align-items:baseline;gap:10px;padding:16px 4px 8px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:6px}
+#view-calendar .cal2-lh .dnum{font-size:20px;font-weight:800;color:#F2F4F8;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+#view-calendar .cal2-lh .dmon{font-size:12px;font-weight:600;color:#9AA3B2}
+#view-calendar .cal2-lh .tag{font-size:9.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#9AA4FF;background:rgba(110,121,224,.14);border-radius:5px;padding:2px 7px}
+#view-calendar .cal2-lh .tag.late{color:#FF5C8A;background:rgba(255,92,138,.12)}
+#view-calendar .cal2-li{display:flex;align-items:center;gap:11px;padding:8px;border-radius:10px;cursor:pointer;transition:background .1s}
+#view-calendar .cal2-li:hover{background:rgba(255,255,255,.03)}
+#view-calendar .cal2-cb{width:17px;height:17px;border-radius:6px;border:1.5px solid rgba(255,255,255,.2);flex:none;display:grid;place-items:center;color:#0B0C10;font-size:10px;font-weight:800;cursor:pointer;background:none}
+#view-calendar .cal2-cb:hover{border-color:#3FD68F}
+#view-calendar .cal2-cb.done{background:#2BB577;border-color:#2BB577}
+#view-calendar .cal2-li .ti{flex:1;min-width:0}
+#view-calendar .cal2-li .ti .t{font-size:13px;font-weight:600;color:#F2F4F8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-calendar .cal2-li.done .ti .t{color:#5F6674;text-decoration:line-through}
+#view-calendar .cal2-li .ti .m{font-size:11px;color:#9AA3B2;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-calendar .cal2-li .tm{font-family:ui-monospace,monospace;font-size:11.5px;color:#9AA3B2;flex:none;min-width:88px;text-align:right}
 
 /* DESIGN SYSTEM v217 — переопределение legacy токенов на Emerald Depth + Navy Mirage.
  Старые компоненты которые ссылаются на --gold-* / --dark-* / --info / --success
@@ -35328,16 +35344,37 @@ function cal2Stats(){
  });
  return st;
 }
+// v746: фильтры переживают перезагрузку (операторы жаловались бы «галочки сбросились»)
+function cal2SaveFilters(){
+ try {
+  var s = crmCalState;
+  localStorage.setItem('cal2_filters', JSON.stringify({ operators: s.operators, layers: s.layers, types: s.types, hideDone: s.hideDone, onlyLate: s.onlyLate }));
+ } catch(e){}
+}
+function cal2LoadFilters(){
+ try {
+  var f = JSON.parse(localStorage.getItem('cal2_filters') || 'null');
+  if(!f) return;
+  var s = crmCalState;
+  // v746: types/layers МЕРЖИМ с дефолтами — иначе при добавлении нового типа в будущем
+  // у старых пользователей ключа не будет в localStorage и события молча пропадут
+  if(f.operators) s.operators = f.operators;
+  if(f.layers) s.layers = Object.assign({}, s.layers, f.layers);
+  if(f.types) s.types = Object.assign({}, s.types, f.types);
+  s.hideDone = !!f.hideDone;
+  s.onlyLate = !!f.onlyLate;
+ } catch(e){}
+}
 // тогглеры панели
 window.cal2ToggleOp = function(el){
  var name = el.dataset.op;
  crmCalState.operators[name] = crmCalState.operators[name] === false;
- crmCalRender();
+ cal2SaveFilters(); crmCalRender();
 };
-window.cal2ToggleLayer = function(key){ crmCalState.layers[key] = !crmCalState.layers[key]; crmCalRender(); };
-window.cal2ToggleType = function(key){ crmCalState.types[key] = !crmCalState.types[key]; crmCalRender(); };
-window.cal2ToggleDone = function(){ crmCalState.hideDone = !crmCalState.hideDone; crmCalRender(); };
-window.cal2ToggleLate = function(){ crmCalState.onlyLate = !crmCalState.onlyLate; crmCalRender(); };
+window.cal2ToggleLayer = function(key){ crmCalState.layers[key] = !crmCalState.layers[key]; cal2SaveFilters(); crmCalRender(); };
+window.cal2ToggleType = function(key){ crmCalState.types[key] = !crmCalState.types[key]; cal2SaveFilters(); crmCalRender(); };
+window.cal2ToggleDone = function(){ crmCalState.hideDone = !crmCalState.hideDone; cal2SaveFilters(); crmCalRender(); };
+window.cal2ToggleLate = function(){ crmCalState.onlyLate = !crmCalState.onlyLate; cal2SaveFilters(); crmCalRender(); };
 window.cal2SetClientQ = function(v){
  crmCalState.clientQ = (v || '').trim();
  clearTimeout(window._cal2QT);
@@ -35550,7 +35587,7 @@ function crmCalRenderMonth(){
    if(date.getMonth() !== m) cls.push('dim');
    if(ds === today) cls.push('today');
    if(col >= 5) cls.push('wknd');
-   var evs = byDay[ds] || [];
+   var evs = (byDay[ds] || []).slice().sort(function(a,b){ return (a.time_start||'99').localeCompare(b.time_start||'99'); }); // v746: топ-3 по времени
    html += '<div class="cal2-mo-cell ' + cls.join(' ') + '" ondragover="event.preventDefault()" ondrop="event.preventDefault();crmCalDropOnDate(\'' + ds + '\',event)" onclick="crmCalSetViewDate(\'' + ds + '\');crmCalSetViewMode(\'day\')"><div class="dn">' + date.getDate() + '</div>';
    evs.slice(0, 3).forEach(function(e){
     var color = e._sync_task ? cal2OpColor(e.operator) : 'ind';
@@ -35567,64 +35604,7 @@ function crmCalRenderMonth(){
  listEl.innerHTML = html;
 }
 
-// v333: рендер дневного экрана с почасовкой
-function crmCalRenderDay(){
- var listEl = document.getElementById('tt-list');
- if(!listEl) return;
- var date = crmCalState.viewDate || crmDateStr(new Date());
- // v745: воскресенье возвращено; фильтры панели действуют и тут
- var dayTasks = _calApplyFilters(crmEventsAll()).filter(function(e){ return e.date === date; }).sort(function(a,b){ return (a.time_start||'').localeCompare(b.time_start||''); });
- var byHour = {};
- var allDayTasks = [];
- dayTasks.forEach(function(e){
- if(e.time_start){
- var h = parseInt(e.time_start.slice(0,2), 10) || 0;
- (byHour[h] = byHour[h] || []).push(e);
- } else {
- allDayTasks.push(e);
- }
- });
- var html = '<div class="tt-day-nav">'
- + '<button class="tt-mini-arrow" onclick="crmCalNavDay(-1)" title="Предыдущий день">&lsaquo;</button>'
- + '<button class="tt-today-btn" onclick="crmCalSetViewDate(\''+crmDateStr(new Date())+'\')">Сегодня</button>'
- + '<button class="tt-mini-arrow" onclick="crmCalNavDay(1)" title="Следующий день">&rsaquo;</button>'
- + '</div>';
- if(allDayTasks.length){
- html += '<div class="tt-allday"><div class="tt-allday-label">Без времени</div>';
- allDayTasks.forEach(function(e){
- html += '<div class="tt-allday-task" onclick="crmCalSelect(\''+e.id+'\')">'+kbEsc(e.title||'')+'</div>';
- });
- html += '</div>';
- }
- html += '<table class="tt-day-grid"><tbody>';
- for(var h = 6; h <= 22; h++){
- html += '<tr><td class="tt-hour">'+String(h).padStart(2,'0')+':00</td>'
- + '<td class="tt-hour-slot" onclick="crmCalAddTaskAt(\''+date+'\','+h+', event)">';
- (byHour[h] || []).forEach(function(e){
- var pCls = e.priority === 1 || e.priority === 'high' ? ' p-high' :
- e.priority === 2 || e.priority === 'med' ? ' p-med' :
- e.priority === 3 || e.priority === 'low' ? ' p-low' : '';
- var dblAttrD = e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\''+e.client_id+'\')"' : '';
- // v517: расширенная подпись — время · название (клиент · тип · ответственный)
- var typeLabelD = ({call:'Звонок',training:'Обучение',meeting:'Встреча',deadline:'Дедлайн',other:'Задача'})[e.type] || 'Задача'; // v745: +call
- var metaPartsD = [];
- if(e.client && e.client !== '—') metaPartsD.push(kbEsc(e.client));
- metaPartsD.push(typeLabelD);
- if(e.operator && e.operator !== '—') metaPartsD.push(kbEsc(e.operator));
- if(e.created_by && e.created_by !== e.operator) metaPartsD.push('от ' + kbEsc(e.created_by));
- var metaD = metaPartsD.length ? '<div style="font-size:11px;opacity:.75;margin-top:2px">' + metaPartsD.join(' · ') + '</div>' : '';
- var fullTitleD = (e.time_start||'') + (e.client && e.client !== '—' ? ' · ' + e.client : '') + ' · ' + (e.title||'') + (e.operator && e.operator !== '—' ? ' · ' + e.operator : '');
- html += '<div class="tt-day-task'+pCls+'" title="'+kbEsc(fullTitleD)+'" onclick="event.stopPropagation();crmCalSelect(\''+e.id+'\')"'+dblAttrD+'>'
- + '<b>'+(e.time_start||'')+(e.time_end?' — '+e.time_end:'')+'</b> '
- + kbEsc(e.title||'')
- + metaD
- + '</div>';
- });
- html += '</td></tr>';
- }
- html += '</tbody></table>';
- listEl.innerHTML = html;
-}
+// v746: старый табличный «День» удалён — День теперь та же cal2-сетка (одна колонка), см. crmCalRenderDay ниже
 
 // Drag-and-drop tasks
 window.crmCalDragStartTask = function(ev, taskId){
@@ -36223,46 +36203,40 @@ window.ttDpPreset = ttDpPreset;
 window.ttDpClear = ttDpClear;
 window.ttDpApply = ttDpApply;
 
-function crmCalTaskHtml(e, today){
- var pcls = 'p'+(e.priority || 4);
- var done = e.status === 'done' ? ' done' : '';
- var cb = done ? '<div class="tt-cb done">&#10003;</div>' : '<div class="tt-cb '+pcls+'" onclick="event.stopPropagation();crmEventToggleDone(\''+e.id+'\')"></div>';
- var time = e.time_start ? (e.time_start + (e.time_end ? ' &mdash; '+e.time_end : '')) : '';
- var overdue = e.date && e.date < today && e.status !== 'done';
- var typeLabel = ({call:'Звонок',training:'Обучение',meeting:'Встреча',deadline:'Дедлайн',other:'Прочее'})[e.type] || e.type || 'Задача'; /* v745: +call */
- var opColor = (e.operator && typeof KB_OP_COLORS !== 'undefined' && KB_OP_COLORS[e.operator]) || '#888';
- return '<div class="tt-task'+done+'" onclick="crmCalSelect(\''+e.id+'\')">'
- + cb
- + '<div class="tt-task-info">'
- + '<div class="tt-task-title">'+kbEsc(e.title || '')+'</div>'
- + '<div class="tt-task-meta">'
- + (time ? '<span class="m-time'+(overdue?' m-overdue':'')+'">'+kbEsc(time)+'</span>' : '')
- + '<span class="m-tag '+(e.type||'other')+'">'+kbEsc(typeLabel)+'</span>'
- + (e.client ? '<span class="m-client">&#128206; '+kbEsc(e.client)+'</span>' : '')
- + (e.operator ? '<span class="m-op"><span class="tt-op-dot" style="background:'+opColor+'"></span>'+kbEsc(e.operator)+'</span>' : '')
- + '</div></div></div>';
-}
-
+// v746: Список — cal2-вид: день-заголовки + строки с чекбоксом, аватаром и временем справа
 function crmCalRenderList(){
  var list = crmCalFilter();
  var byDay = {};
  list.forEach(function(e){ var k = e.date || 'nodate'; (byDay[k] = byDay[k] || []).push(e); });
  var keys = Object.keys(byDay).sort();
  var today = crmDateStr(new Date());
- var html = '';
+ var html = '<div style="max-width:860px;margin:0 auto">';
  keys.forEach(function(k){
- var d = k === 'nodate' ? null : new Date(k+'T00:00:00');
- var dnum = d ? d.getDate() : '&#8709;';
- var dmon = d ? d.toLocaleDateString('ru-RU',{weekday:'long',month:'long'}) : 'Без даты';
- var rel = '';
- if(k === today) rel = '<span class="d-rel">Сегодня</span>';
- else if(d && k < today) rel = '<span class="d-rel d-overdue">Просрочено</span>';
- html += '<div class="tt-day-head"><span class="d-num">'+dnum+'</span><span class="d-mon">'+kbEsc(dmon)+'</span>'+rel+'</div>';
- byDay[k].sort(function(a,b){ return (a.priority||9)-(b.priority||9) || (a.time_start||'').localeCompare(b.time_start||''); });
- byDay[k].forEach(function(e){ html += crmCalTaskHtml(e, today); });
+  var d = k === 'nodate' ? null : new Date(k + 'T00:00:00');
+  var tag = '';
+  if(k === today) tag = '<span class="tag">Сегодня</span>';
+  else if(d && k < today) tag = '<span class="tag late">Просрочено</span>';
+  html += '<div class="cal2-lh"><span class="dnum">' + (d ? d.getDate() : '—') + '</span><span class="dmon">' + kbEsc(d ? d.toLocaleDateString('ru-RU',{weekday:'long',month:'long'}) : 'Без даты') + '</span>' + tag + '</div>';
+  byDay[k].sort(function(a,b){ return (a.time_start||'99').localeCompare(b.time_start||'99'); });
+  byDay[k].forEach(function(e){
+   var done = e.status === 'done';
+   var typeLabel = ({call:'Звонок',training:'Обучение',meeting:'Встреча',deadline:'Дедлайн',other:'Прочее'})[e.type] || 'Задача';
+   var meta = [typeLabel];
+   if(e.client && e.client !== '—') meta.push(kbEsc(e.client));
+   if(e.operator) meta.push(kbEsc(e.operator));
+   var av = e.operator
+    ? '<span class="cal2-av av-' + cal2OpColor(e.operator) + '" style="width:24px;height:24px;font-size:9px">' + kbEsc(cal2Initials(e.operator)) + '</span>'
+    : '<span class="cal2-av av-ind" style="width:24px;height:24px;font-size:9px">S</span>';
+   html += '<div class="cal2-li' + (done ? ' done' : '') + '" onclick="cal2ShowDetail(\'' + e.id + '\', event)">'
+    + '<span class="cal2-cb' + (done ? ' done' : '') + '" onclick="event.stopPropagation();crmEventToggleDone(\'' + e.id + '\')">' + (done ? '✓' : '') + '</span>'
+    + av
+    + '<div class="ti"><div class="t">' + kbEsc(e.title || '') + '</div><div class="m">' + meta.join(' · ') + '</div></div>'
+    + '<span class="tm">' + (e.time_start ? kbEsc(e.time_start + (e.time_end ? '–' + e.time_end : '')) : '') + '</span>'
+    + '</div>';
+  });
  });
- // v338: пустое состояние с кнопкой создания (раньше просил «жми на + Задача» вверху — много искать)
- if(!html) html = '<div class="crm-empty"><div class="crm-empty-ico">&#128197;</div><div class="crm-empty-msg">Нет задач</div><div class="crm-empty-hint">Добавьте первую задачу — она появится в выбранном списке.</div><button class="tt-add-btn" style="margin-top:14px" onclick="crmEventOpenModal()">+ Создать задачу</button></div>';
+ html += '</div>';
+ if(!keys.length) html = '<div style="padding:60px;text-align:center;color:#5F6674;font-size:13px">Пусто — задач в этом списке нет.<br>Создать: кнопка «+ Задача или событие» слева.</div>';
  document.getElementById('tt-list').innerHTML = html;
 }
 
@@ -36287,6 +36261,7 @@ window.cal2ShowDetail = function(id, ev){
   + '<button onclick="crmEventDelete(\'' + sel.id + '\')">Удалить</button>'
   + '<button onclick="crmEventOpenModal(\'' + sel.id + '\')">Редактировать</button>'
   + (sel.client_id ? '<button onclick="crmCalOpenClient(\'' + sel.client_id + '\')">Карточка клиента</button>' : '')
+  + (sel.status !== 'done' ? '<button onclick="crmEventToggleDone(\'' + sel.id + '\')" style="background:#2BB577;border-color:#2BB577;color:#0B0C10;font-weight:700">Выполнить</button>' : '')
   + '</div>';
  var host = document.getElementById('view-calendar') || document.body;
  host.appendChild(d);
@@ -36306,8 +36281,8 @@ function cal2RenderGrid(){
  var mode = crmCalState.viewMode || 'week';
  var listEl = document.getElementById('tt-list');
  if(!listEl) return;
- // старые виды (День/Список, Фаза 2) живут на .tt-* стилях — им нужны паддинги и скролл
- listEl.classList.toggle('cal2-body-legacy', mode === 'day' || mode === 'list');
+ // v746: на .tt-* стилях остался только Список — ему нужны паддинги и скролл
+ listEl.classList.toggle('cal2-body-legacy', mode === 'list');
  if(mode === 'month') crmCalRenderMonth();
  else if(mode === 'day') crmCalRenderDay();
  else if(mode === 'week') crmCalRenderWeek();
@@ -36319,35 +36294,64 @@ function crmCalRender(){
  cal2RenderGrid();
 }
 
-// v745: Неделя — часовая сетка 7 дней (как Google Calendar), линия «сейчас», квик-эдд кликом
-function crmCalRenderWeek(){
+// v746: развод пересекающихся событий — дорожки внутри кластера (как Google Calendar)
+function cal2Lanes(items){ // items: [{startMin,endMin,...}] — мутирует, добавляя lane/laneCount
+ items.sort(function(a, b){ return a.startMin - b.startMin || b.endMin - a.endMin; });
+ var lanes = [], cluster = [], clusterEnd = -1;
+ function closeCluster(){
+  var n = 1;
+  cluster.forEach(function(x){ if(x.lane + 1 > n) n = x.lane + 1; });
+  cluster.forEach(function(x){ x.laneCount = n; });
+ }
+ items.forEach(function(x){
+  if(cluster.length && x.startMin >= clusterEnd){ closeCluster(); cluster = []; lanes = []; clusterEnd = -1; }
+  var li = -1;
+  for(var i = 0; i < lanes.length; i++){ if(lanes[i] <= x.startMin){ li = i; break; } }
+  if(li < 0) li = lanes.length;
+  lanes[li] = x.endMin;
+  x.lane = li;
+  cluster.push(x);
+  if(x.endMin > clusterEnd) clusterEnd = x.endMin;
+ });
+ if(cluster.length) closeCluster();
+}
+
+// v745/v746: часовая сетка — ОБЩАЯ для Недели (7 дней) и Дня (1 день)
+function cal2RenderTimeGrid(days){
  var listEl = document.getElementById('tt-list');
  if(!listEl) return;
- var w = cal2WeekBounds();
  var today = crmDateStr(new Date());
- var days = [];
- for(var i = 0; i < 7; i++){ var dd = new Date(w.mon); dd.setDate(w.mon.getDate() + i); days.push(dd); }
- var evs = _calApplyFilters(crmEventsAll()).filter(function(e){ return e.date && e.date >= w.monStr && e.date <= w.sunStr; });
+ var firstStr = crmDateStr(days[0]), lastStr = crmDateStr(days[days.length - 1]);
+ var evs = _calApplyFilters(crmEventsAll()).filter(function(e){ return e.date && e.date >= firstStr && e.date <= lastStr; });
  var byDay = {}, allDay = {};
  var minH = 8, maxH = 19;
  evs.forEach(function(e){
   if(!e.time_start || e.is_all_day){ (allDay[e.date] = allDay[e.date] || []).push(e); return; }
-  (byDay[e.date] = byDay[e.date] || []).push(e);
-  var sh = parseInt(e.time_start.slice(0,2), 10) || 0;
+  var sh = parseInt(e.time_start.slice(0,2), 10) || 0, sm = parseInt(e.time_start.slice(3,5), 10) || 0;
+  var startMin = sh * 60 + sm;
+  var endMin = startMin + 43;
+  if(e.time_end){
+   var teH = parseInt(e.time_end.slice(0,2), 10) || 0, teM = parseInt(e.time_end.slice(3,5), 10) || 0;
+   endMin = Math.max(startMin + 28, teH * 60 + teM);
+  }
+  (byDay[e.date] = byDay[e.date] || []).push({ e: e, startMin: startMin, endMin: endMin });
   if(sh < minH) minH = sh;
-  var eh = e.time_end ? (parseInt(e.time_end.slice(0,2), 10) + 1) : sh + 1;
+  var eh = Math.ceil(endMin / 60);
   if(eh > maxH) maxH = Math.min(23, eh);
  });
  var SLOT = 56;
- var dayNames = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
- var html = '<div class="cal2-week"><div class="cal2-whead"><div></div>';
- days.forEach(function(d, i){
+ var N = days.length;
+ var gridCols = ' style="grid-template-columns:56px repeat(' + N + ',1fr)"';
+ var dayNames = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+ var html = '<div class="cal2-week"><div class="cal2-whead"' + gridCols + '><div></div>';
+ days.forEach(function(d){
   var ds = crmDateStr(d);
-  var cls = (ds === today ? ' today' : '') + (i >= 5 ? ' wknd' : '');
-  html += '<div class="cell' + cls + '"><span class="dow">' + dayNames[i] + '</span><span class="dnum">' + d.getDate() + '</span>' + (ds === today ? '<span class="today-tag">Сегодня</span>' : '') + '</div>';
+  var gd = d.getDay();
+  var cls = (ds === today ? ' today' : '') + ((gd === 0 || gd === 6) ? ' wknd' : '');
+  html += '<div class="cell' + cls + '"><span class="dow">' + dayNames[gd] + '</span><span class="dnum">' + d.getDate() + '</span>' + (ds === today ? '<span class="today-tag">Сегодня</span>' : '') + '</div>';
  });
  html += '</div>';
- html += '<div class="cal2-allday"><div class="lbl">Весь день</div>';
+ html += '<div class="cal2-allday"' + gridCols + '><div class="lbl">Весь день</div>';
  days.forEach(function(d){
   var ds = crmDateStr(d);
   html += '<div class="cell" ondragover="event.preventDefault()" ondrop="event.preventDefault();crmCalDropOnDate(\'' + ds + '\',event)">';
@@ -36357,37 +36361,39 @@ function crmCalRenderWeek(){
   html += '</div>';
  });
  html += '</div>';
- html += '<div class="cal2-wgrid" id="cal2-wgrid"><div class="cal2-wgrid-in"><div>';
+ html += '<div class="cal2-wgrid" id="cal2-wgrid"><div class="cal2-wgrid-in"' + gridCols + '><div>';
  for(var h = minH; h <= maxH; h++){
   html += '<div class="cal2-hcell">' + (h > minH ? '<span>' + String(h).padStart(2,'0') + ':00</span>' : '') + '</div>';
  }
  html += '</div>';
- days.forEach(function(d, di){
+ days.forEach(function(d){
   var ds = crmDateStr(d);
+  var gd = d.getDay();
   var isToday = ds === today;
-  html += '<div class="cal2-dcol' + (isToday ? ' today' : '') + (di >= 5 ? ' wknd' : '') + '" data-date="' + ds + '" data-minh="' + minH + '"'
+  html += '<div class="cal2-dcol' + (isToday ? ' today' : '') + ((gd === 0 || gd === 6) ? ' wknd' : '') + '" data-date="' + ds + '" data-minh="' + minH + '"'
    + ' onclick="cal2SlotClick(event, this)"'
    + ' ondragover="event.preventDefault()" ondrop="event.preventDefault();crmCalDropOnDate(\'' + ds + '\',event)">';
   for(var hh = minH; hh <= maxH; hh++) html += '<div class="hline"></div>';
-  (byDay[ds] || []).forEach(function(e){
-   var sh = parseInt(e.time_start.slice(0,2), 10) || 0, sm = parseInt(e.time_start.slice(3,5), 10) || 0;
-   var startMin = sh * 60 + sm;
-   var endMin = startMin + 43;
-   if(e.time_end){
-    var teH = parseInt(e.time_end.slice(0,2), 10) || 0, teM = parseInt(e.time_end.slice(3,5), 10) || 0;
-    endMin = Math.max(startMin + 28, teH * 60 + teM);
-   }
-   var top = (startMin - minH * 60) / 60 * SLOT;
-   var height = Math.max(26, (endMin - startMin) / 60 * SLOT);
+  var items = byDay[ds] || [];
+  cal2Lanes(items); // v746: пересекающиеся события делят колонку на дорожки
+  items.forEach(function(it){
+   var e = it.e;
+   var top = (it.startMin - minH * 60) / 60 * SLOT;
+   var height = Math.max(26, (it.endMin - it.startMin) / 60 * SLOT);
    var color = e._sync_task ? cal2OpColor(e.operator) : 'ind';
    var isLate = e.date < today && e.status !== 'done';
    var meta = [];
    if(e.time_start) meta.push(e.time_start + (e.time_end ? '–' + e.time_end : ''));
    if(e.client && e.client !== '—') meta.push(e.client);
    var who = e.operator ? '<span class="who av-' + cal2OpColor(e.operator) + '">' + kbEsc(cal2Initials(e.operator)) + '</span>' : '';
+   var laneStyle = '';
+   if(it.laneCount > 1){
+    var lw = 100 / it.laneCount;
+    laneStyle = ';left:calc(' + (it.lane * lw).toFixed(2) + '% + 4px);width:calc(' + lw.toFixed(2) + '% - 8px)';
+   }
    html += '<div class="cal2-ev c-' + color + (e.status === 'done' ? ' done' : '') + (isLate ? ' late' : '') + '"'
     + ' draggable="true" ondragstart="crmCalDragStartTask(event,\'' + e.id + '\')"'
-    + ' style="top:' + top.toFixed(0) + 'px;height:' + height.toFixed(0) + 'px"'
+    + ' style="top:' + top.toFixed(0) + 'px;height:' + height.toFixed(0) + 'px' + laneStyle + '"'
     + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
     + (e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\'' + e.client_id + '\')"' : '') + '>'
     + who + '<div class="t">' + kbEsc(e.title || '') + '</div>'
@@ -36406,6 +36412,18 @@ function crmCalRenderWeek(){
   grid.scrollTop = (nl && nl.style.display !== 'none') ? Math.max(0, parseInt(nl.style.top || '0', 10) - 180) : Math.max(0, (9 - minH) * SLOT);
  }
 }
+// v745: Неделя = сетка 7 дней от понедельника
+function crmCalRenderWeek(){
+ var w = cal2WeekBounds();
+ var days = [];
+ for(var i = 0; i < 7; i++){ var dd = new Date(w.mon); dd.setDate(w.mon.getDate() + i); days.push(dd); }
+ cal2RenderTimeGrid(days);
+}
+// v746: День = та же сетка, одна колонка (старый табличный вид удалён)
+function crmCalRenderDay(){
+ var ds = crmCalState.viewDate || crmDateStr(new Date());
+ cal2RenderTimeGrid([new Date(ds + 'T00:00:00')]);
+}
 // клик по пустому слоту недели → quick-add с датой и часом
 window.cal2SlotClick = function(ev, col){
  if(ev.target.closest('.cal2-ev') || ev.target.closest('.cal2-nowline')) return;
@@ -36418,7 +36436,7 @@ window.cal2SlotClick = function(ev, col){
 function cal2NowTick(minH, SLOT){
  function upd(){
   var view = document.getElementById('view-calendar');
-  if(!view || view.style.display === 'none' || crmCalState.viewMode !== 'week') return;
+  if(!view || view.style.display === 'none' || (crmCalState.viewMode !== 'week' && crmCalState.viewMode !== 'day')) return; // v746: линия «сейчас» и в Дне
   var nl = document.getElementById('cal2-nowline');
   if(!nl) return;
   var n = new Date();
@@ -36529,6 +36547,7 @@ async function crmCalSyncTasksToLocal(){
 
 function crmCalendarInit(){
  crmCalState.selectedId = null;
+ cal2LoadFilters(); // v746: восстановить галочки панели
  // v458: подтягиваем задачи перед рендером (асинхронно — рендер сразу перерисует после загрузки)
  if(typeof crmCalSyncTasksToLocal === 'function'){
   crmCalSyncTasksToLocal().then(function(){ if(typeof crmCalRender === 'function') crmCalRender(); });
@@ -38523,10 +38542,63 @@ function crmEventToggleDone(id){
  var all = crmEventsAll();
  var e = all.find(function(x){ return x.id === id; });
  if(!e) return;
+ // v746: синк-задача закрывается ЧЕРЕЗ БАЗУ с результатом (правило API: close=1 + result ≥3 символа).
+ // Раньше галочка меняла только localStorage и откатывалась при следующем синке (тот же класс бага, что v605 у переноса).
+ if(e._sync_task && e._task_id){
+  if(e.status === 'done'){
+   if(typeof kbShowToast === 'function') kbShowToast('Закрытую задачу можно вернуть в работу только из модуля Задачи');
+   return;
+  }
+  cal2DoneAsk(id, window.event);
+  return;
+ }
  e.status = e.status === 'done' ? 'planned' : 'done';
  crmEventsSaveAll(all);
  crmCalRender();
 }
+// v746: окошко «Что сделано?» — закрытие синк-задачи с результатом (без нативного prompt)
+window.cal2DoneAsk = function(id, ev){
+ var e = crmEventsAll().find(function(x){ return x.id === id; });
+ if(!e) return;
+ var old = document.getElementById('cal2-detail'); if(old) old.remove();
+ var d = document.createElement('div');
+ d.className = 'cal2-detail'; d.id = 'cal2-detail';
+ d.innerHTML = '<span class="dt-x" onclick="this.parentNode.remove()">×</span>'
+  + '<div class="dt-title">Закрыть задачу</div>'
+  + '<div class="dt-row" style="display:block;margin-bottom:8px">' + kbEsc((e.title || '').slice(0, 70)) + '</div>'
+  + '<input id="cal2-done-result" placeholder="Что сделано? — короткий результат" style="width:100%;background:#14161e;border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#F2F4F8;font-family:inherit;font-size:12.5px;padding:8px 10px;outline:none;box-sizing:border-box">'
+  + '<div class="dt-actions"><button onclick="cal2DoneSave(\'' + kbEsc(String(id)) + '\')" style="background:#2BB577;border-color:#2BB577;color:#0B0C10;font-weight:700">Закрыть задачу</button></div>';
+ (document.getElementById('view-calendar') || document.body).appendChild(d);
+ var x = (ev && ev.clientX) ? ev.clientX + 10 : window.innerWidth / 2 - 160;
+ var y = (ev && ev.clientY) ? ev.clientY - 20 : 200;
+ d.style.left = Math.min(x, window.innerWidth - 340) + 'px';
+ d.style.top = Math.min(Math.max(10, y), window.innerHeight - 220) + 'px';
+ setTimeout(function(){
+  var i = document.getElementById('cal2-done-result');
+  if(i){ i.focus(); i.onkeydown = function(ke){ if(ke.key === 'Enter') cal2DoneSave(id); }; }
+ }, 40);
+};
+window.cal2DoneSave = async function(id){
+ var input = document.getElementById('cal2-done-result');
+ var result = ((input && input.value) || '').trim();
+ if(result.length < 3){ if(typeof kbShowToast === 'function') kbShowToast('Результат обязателен — минимум 3 символа'); return; }
+ var all = crmEventsAll();
+ var e = all.find(function(x){ return x.id === id; });
+ if(!e) return;
+ try {
+  var r = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(e._task_id) + '&close=1', { method:'PATCH', body: JSON.stringify({ result: result }) });
+  if(!r || !r.ok) throw new Error((r && r.error) || 'close failed');
+  e.status = 'done';
+  crmEventsSaveAll(all);
+  if(typeof kbShowToast === 'function') kbShowToast('Задача закрыта');
+ } catch(err){
+  console.error('[cal] close task:', err);
+  if(typeof kbShowToast === 'function') kbShowToast('Не получилось закрыть задачу — проверьте интернет');
+  return; // v746: окошко НЕ закрываем — текст результата не должен пропасть, можно повторить
+ }
+ var d = document.getElementById('cal2-detail'); if(d) d.remove();
+ crmCalRender();
+};
 
 async function crmEventDelete(id){
  var ok = await confirmAction({ title:'Удалить задачу?', body:'Задача будет удалена. Это нельзя отменить.', danger:true, confirmLabel:'Удалить' });
