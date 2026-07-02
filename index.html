@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v737</title>
+<title>SalesDoc — Финансовый Дашборд v738</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -4637,8 +4637,11 @@ body.light .route-col-amo .rc .act.go{color:#4651B5}
 #view-route .rt-btn.primary{background:#3f6bd6;border-color:#3f6bd6;color:#fff;font-weight:600}
 #view-route .rt-btn.primary:hover{filter:brightness(1.12)}
 #view-route .rt-frow{display:flex;gap:8px;align-items:center;padding:0 2px 12px}
-#view-route .rt-count{font-size:12.5px;color:var(--text-soft,#6B7280);margin-right:4px}
-#view-route .rt-count b{color:var(--text,#E7EAF0);font-weight:600}
+/* v738: поле поиска клиента */
+#view-route .rt-search{display:flex;align-items:center;gap:8px;background:var(--surface,#232833);border:1px solid var(--border,#2E3440);border-radius:8px;padding:7px 11px;width:230px;color:var(--text-faint,#6B7280)}
+#view-route .rt-search input{background:none;border:none;outline:none;color:var(--text,#E7EAF0);font:inherit;font-size:12.5px;width:100%}
+#view-route .rt-search input::placeholder{color:var(--text-faint,#6B7280)}
+#view-route .rt-search:focus-within{border-color:#3f6bd6}
 #view-route .rt-chip{display:flex;align-items:center;gap:6px;background:var(--surface,#232833);border:1px solid var(--border,#2E3440);border-radius:8px;padding:7px 12px;font-size:12.5px;color:var(--text-2,#9AA1AE);cursor:pointer;white-space:nowrap;user-select:none}
 #view-route .rt-chip:hover{border-color:var(--border-strong,#3d4557);color:var(--text,#E7EAF0)}
 #view-route .rt-chip b{color:var(--text,#E7EAF0);font-weight:600}
@@ -4665,7 +4668,8 @@ body.light .route-col-amo .rc .act.go{color:#4651B5}
 #view-route .rt-c:hover{border-color:var(--border-strong,#3d4557)}
 #view-route .rt-c-top{display:flex;gap:9px}
 #view-route .rt-av{width:32px;height:32px;border-radius:50%;flex:0 0 auto;background:var(--surface-3,#333a48);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--text-2,#cfd6e4)}
-#view-route .rt-av.none{background:none;border:1px dashed var(--border-strong,#3d4557);color:var(--text-faint,#6B7280)}
+#view-route .rt-av.none{background:none;border:1px dashed var(--border-strong,#3d4557);color:var(--text-faint,#6B7280);cursor:pointer}
+#view-route .rt-av.none:hover{border-color:#3f6bd6;color:#5AA7F0}
 #view-route .rt-c-main{flex:1;min-width:0}
 #view-route .rt-r1{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 #view-route .rt-name{font-size:13px;font-weight:600;color:var(--text,#E7EAF0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -4703,6 +4707,8 @@ body.light .route-col-amo .rc .act.go{color:#4651B5}
 body.light #view-route .rt-stat .v.red,body.light #view-route .rt-days.red,body.light #view-route .rt-st.hot{color:#D2325A}
 body.light #view-route .rt-stat .v.green,body.light #view-route .rt-st.today{color:#1F8A5A}
 body.light #view-route .rt-days.warn{color:#B57E2C}
+/* v738: фикс — глобальный light-стиль кнопок делал «+ Новая карточка» белой с белым текстом */
+body.light #view-route .rt-btn.primary{background:#3f6bd6!important;border-color:#3f6bd6!important;color:#fff!important}
 
 /* v679 — Расходы в Linear-виде */
 #view-expenses .exp-hero{padding:22px 0 16px}
@@ -8916,7 +8922,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
    </div>
   </div>
   <div class="rt-frow">
-   <span class="rt-count">Карточек: <b id="route-status">&mdash;</b></span>
+   <!-- v738: поиск по имени клиента (был в утверждённом превью, не перенесли); дубль счётчика карточек убран -->
+   <div class="rt-search">
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <input id="route-search" type="text" placeholder="Поиск клиента..." oninput="routeRender()">
+   </div>
    <div class="rt-chip" id="route-op-chip" onclick="routeOpFilterChip(this)">Оператор: <b id="route-op-chip-val">Все</b> <span class="car">&#9662;</span></div>
    <div class="rt-chip" id="route-unassigned-chip" onclick="_routeToggleUnassigned()">Без оператора</div>
    <!-- скрытый select: routeLoad наполняет options, routeRender читает value — логика не менялась, чип лишь управляет им -->
@@ -9226,10 +9236,12 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
  <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Тариф</label>
  <input id="route-new-tariff" type="text" placeholder="Бизнес 5 лицензий" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2,#1A1A1C);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:14px">
  <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Оператор</label>
- <select id="route-new-operator" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2,#1A1A1C);color:var(--text);margin-bottom:22px;box-sizing:border-box;font-size:14px"></select>
+ <!-- v738: свой дропдаун вместо системного select (правило проекта); скрытый select — источник правды -->
+ <select id="route-new-operator" style="display:none"></select>
+ <div id="route-new-operator-chip" onclick="routeNewOpChip(this)" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2,#1A1A1C);color:var(--text);margin-bottom:22px;box-sizing:border-box;font-size:14px;cursor:pointer;user-select:none"><span id="route-new-operator-val">&mdash; выбрать &mdash;</span><span style="color:var(--text-soft);font-size:10px">&#9662;</span></div>
  <div style="display:flex;gap:10px;justify-content:flex-end">
  <button onclick="routeCloseNew()" style="padding:10px 18px;border-radius:10px;border:1px solid var(--ds-glass-border);background:var(--ds-glass-card);color:var(--text);cursor:pointer;font-weight:500">Отмена</button>
- <button id="route-new-submit" onclick="routeCreate()" style="padding:10px 22px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;letter-spacing:-0.01em;box-shadow:0 2px 8px rgba(52,199,122,.35)">Создать</button>
+ <button id="route-new-submit" onclick="routeCreate()" style="padding:10px 22px;border-radius:10px;border:none;background:#3f6bd6;color:#fff;font-weight:600;cursor:pointer;letter-spacing:-0.01em;box-shadow:0 2px 8px rgba(63,107,214,.35)">Создать</button>
  </div>
  </div>
  </div>
@@ -9239,7 +9251,7 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
       Бросаешь сюда → карточка архивируется (stage='Архив', soft delete). -->
  <div id="route-trash" ondragover="event.preventDefault();this.classList.add('route-trash-active')" ondragleave="this.classList.remove('route-trash-active')" ondrop="event.preventDefault();this.classList.remove('route-trash-active');routeTrashDrop(event)" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9998;align-items:center;gap:10px;padding:14px 22px;border-radius:14px;background:rgba(255,69,58,.10);border:2px dashed rgba(255,69,58,.55);color:#FF453A;font-weight:600;font-size:14px;box-shadow:0 8px 32px rgba(0,0,0,.30);pointer-events:auto;user-select:none;transition:transform .15s,background .15s,border-color .15s">
   <span style="font-size:22px;line-height:1">×</span>
-  <span>Бросьте сюда чтобы удалить</span>
+  <span>Бросьте сюда &mdash; карточка уйдёт в архив</span>
  </div>
  <!-- /ROUTE VIEW -->
 
@@ -29233,12 +29245,16 @@ async function routeLoad(){
   _b.innerHTML = _skc + _skc + _skc + _skc + _skc;
  }
  try {
-  var [cardsRes, opsRes, clRes] = await Promise.all([
+  // v738: allSettled — операторы и чек-листы вторичны, их падение не должно валить всю доску
+  var _rs = await Promise.allSettled([
    sbFetch('/api/cards'),
    authFetch('/api/sb-ping').then(r=>r.json()),
    sbFetch('/api/checklist?all=1')
   ]);
-  if(!cardsRes.ok) throw new Error(cardsRes.error || 'cards load failed');
+  var cardsRes = _rs[0].status === 'fulfilled' ? _rs[0].value : null;
+  var opsRes = _rs[1].status === 'fulfilled' ? _rs[1].value : {};
+  var clRes = _rs[2].status === 'fulfilled' ? _rs[2].value : {};
+  if(!cardsRes || !cardsRes.ok) throw new Error((cardsRes && cardsRes.error) || 'cards load failed');
   routeCards = cardsRes.cards || [];
   routeOperators = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
   // v365: посчитать прогресс чек-листа на каждую карточку (для бейджа 3/6 на главной)
@@ -29271,7 +29287,12 @@ async function routeLoad(){
   if(st) st.textContent = 'Карточек: ' + routeCards.length;
   routeRender();
  } catch(e) {
-  if(st) st.textContent = 'Ошибка: ' + e.message;
+  console.error('routeLoad:', e);
+  if(st) st.textContent = 'Ошибка загрузки';
+  // v738: если на доске скелетоны — заменить на человеческое сообщение, а не мигать вечно
+  if(_b && !_b.querySelector('.rt-c')){
+   _b.innerHTML = '<div style="grid-column:1/-1;align-self:center;margin:auto;text-align:center;color:var(--text-soft,#6B7280);font-size:13px;padding:40px">Не получилось загрузить доску.<br>Проверьте интернет и нажмите «Обновить».</div>';
+  }
  }
 }
 
@@ -29284,6 +29305,21 @@ function _rtFitBoard(){
  kb.style.height = Math.max(420, window.innerHeight - top - 24) + 'px'; // v737: 24 = нижний отступ 16 + хвост 8
 }
 window.addEventListener('resize', _rtFitBoard);
+
+// v738: дни на этапе с защитой от битой даты (раньше на карточке рисовалось «NaN дн»,
+// и такая карточка выпадала из «просрочено»). null = дата битая/нет.
+function _rtDays(c){
+ if(!c || !c.stage_entered_at) return 0;
+ var t = new Date(c.stage_entered_at).getTime();
+ if(!isFinite(t)) return null;
+ return Math.floor((Date.now() - t)/86400000);
+}
+// v738: подпись дней: 0 → «сегодня», битая дата → «—»
+function _rtDaysLabel(days){
+ if(days === null) return '—';
+ if(days === 0) return 'сегодня';
+ return days + ' дн';
+}
 
 // v734: чип-фильтр оператора — свой стилизованный дропдаун вместо системного select
 // (переиспользуем общий crmTasksOpenDropdown). Скрытый select#route-filter-op остаётся
@@ -29309,6 +29345,48 @@ function routeOpFilterChip(anchor){
  });
 }
 
+// v738: клик по пустому аватару на карточке — назначить оператора прямо с доски
+function routeAssignChip(anchor, cardId){
+ var card = routeCards.find(function(c){ return c.id === cardId; });
+ if(!card || typeof crmTasksOpenDropdown !== 'function') return;
+ if(!routeOperators.length){ // v738: список не загрузился — говорим, а не молчим
+  if(typeof kbShowToast === 'function') kbShowToast('Список операторов не загрузился — нажмите «Обновить»');
+  return;
+ }
+ var items = routeOperators.map(function(o){ return { label: o.name, value: o.name, selected: card.operator === o.name }; });
+ crmTasksOpenDropdown(anchor, items, async function(v){
+  var prev = card.operator || null;
+  card.operator = v;
+  routeRender();
+  try {
+   var d = await sbFetch('/api/cards?id=' + encodeURIComponent(card.id), { method:'PATCH', body: JSON.stringify({ operator: v }) });
+   if(!d.ok) throw new Error(d.error || 'PATCH failed');
+   if(typeof kbShowToast === 'function') kbShowToast('Оператор: ' + v);
+  } catch(e){
+   console.error('routeAssignChip:', e);
+   card.operator = prev;
+   routeRender();
+   if(typeof kbShowToast === 'function') kbShowToast('Не получилось назначить оператора');
+  }
+ });
+}
+
+// v738: оператор в окне «Новая карточка» — свой дропдаун вместо системного select
+// (скрытый select#route-new-operator остаётся источником правды: routeOpenNew наполняет, routeCreate читает)
+function routeNewOpChip(anchor){
+ var sel = document.getElementById('route-new-operator');
+ if(!sel || typeof crmTasksOpenDropdown !== 'function') return;
+ var items = [];
+ for(var i = 0; i < sel.options.length; i++){
+  items.push({ label: sel.options[i].textContent, value: sel.options[i].value, selected: sel.value === sel.options[i].value });
+ }
+ crmTasksOpenDropdown(anchor, items, function(v){
+  sel.value = v;
+  var lbl = document.getElementById('route-new-operator-val');
+  if(lbl) lbl.textContent = v || '— выбрать —';
+ });
+}
+
 // v390: Канбан amo-стиль — колонки без фона/рамки, цветная полоска сверху,
 // описание этапа, сумма по этапу. Карточки внутри остаются как раньше (пользователь
 // явно сказал не трогать). Стадии маппятся на классы s1..s5 для цвета полоски.
@@ -29330,8 +29408,8 @@ function _routeUpdateStats(){
  var total = active.length;
  var overdue = 0, forecast = 0;
  active.forEach(function(c){
-  var d = c.stage_entered_at ? Math.floor((Date.now() - new Date(c.stage_entered_at).getTime())/86400000) : 0;
-  if(d > 7) overdue++;
+  var d = _rtDays(c); // v738: битая дата → null, не NaN
+  if(d !== null && d > 7) overdue++;
   if(c.payment_amount) forecast += Number(c.payment_amount) || 0;
  });
  var el;
@@ -29353,6 +29431,7 @@ function routeRender(){
  var board = document.getElementById('route-board');
  if(!board) return;
  var filterOp = (document.getElementById('route-filter-op')||{}).value || '';
+ var filterQ = ((document.getElementById('route-search')||{}).value || '').trim().toLowerCase(); // v738: поиск по имени клиента
  // v445: «без оператора» — toggle-фильтр (кликом по бейджу в шапке колонки)
  var filterUnassigned = window._routeFilterUnassigned === true;
  // v734: синхронизация чипа с фильтром (его тогглят и из шапки колонки)
@@ -29365,26 +29444,29 @@ function routeRender(){
    if(c.stage !== stage) return false;
    if(filterOp && c.operator !== filterOp) return false;
    if(filterUnassigned && c.operator) return false; // v445
+   if(filterQ && (((c.clients || {}).company_name) || '').toLowerCase().indexOf(filterQ) < 0) return false; // v738
    return true;
   });
-  // v445: счётчик «без оператора» для бейджа в шапке (считаем по всей колонке, не только видимым)
+  // v738: сводка шапки колонки считается по ВСЕЙ колонке независимо от фильтров — одна реальность,
+  // а не смесь (раньше «в риске» шло по отфильтрованным, «без оператора» — по всем)
   var unassignedInStage = routeCards.filter(function(c){ return c.stage === stage && !c.operator; }).length;
-  // v676: «в риске» — карточки залежавшиеся 5+ дней (те же пороги, что цвет возраста на карточке)
-  var riskInStage = stageCards.reduce(function(n, c){ var d = c.stage_entered_at ? Math.floor((Date.now() - new Date(c.stage_entered_at).getTime())/86400000) : 0; return n + (d >= 5 ? 1 : 0); }, 0);
+  // v738: «просрочено» вместо жаргонного «в риске»; порог 8+ дн — тот же, что красные дни
+  // на карточке и стата «Просрочено» сверху (было 5+, из-за чего числа не сходились)
+  var overdueInStage = routeCards.filter(function(c){ if(c.stage !== stage) return false; var d = _rtDays(c); return d !== null && d >= 8; }).length;
   var meta = ROUTE_STAGE_META[stage] || { idx:0, desc:'' };
   var stageSum = stageCards.reduce(function(s, c){ return s + (Number(c.payment_amount) || 0); }, 0);
   // v734: амо-шапка колонки — «N карточек · сумма», цветная линия сверху (класс s{idx}).
   // КРИТИЧНО: класс route-col обязан остаться — routeDrop ищет ev.target.closest('.route-col').
   var _n = stageCards.length;
   var _word = (_n % 10 === 1 && _n % 100 !== 11) ? 'карточка' : ((_n % 10 >= 2 && _n % 10 <= 4 && (_n % 100 < 10 || _n % 100 >= 20)) ? 'карточки' : 'карточек');
-  var sumLabel = _n + ' ' + _word + ' · ' + _routeFmtSum(stageSum);
+  var sumLabel = _n + ' ' + _word + (stageSum > 0 ? ' · ' + _routeFmtSum(stageSum) : ''); // v738: «0 ₸» — шум, прячем
   html += '<div class="rt-col route-col s' + meta.idx + '" data-stage="' + stage + '" ondragover="event.preventDefault();this.style.background=\'rgba(90,167,240,.05)\'" ondragleave="this.style.background=\'transparent\'" ondrop="this.style.background=\'transparent\';routeDrop(event,\'' + stage + '\')">';
   html += '<div class="rt-col-h"' + (filterUnassigned ? ' style="outline:1px dashed rgba(214,115,115,.4);outline-offset:-2px;border-radius:8px"' : '') + '>';
   html += '<span class="rt-col-nm">' + stage + '</span>';
   html += '<div class="rt-col-sub">' + sumLabel + '</div>';
   // сводка «в риске / без оператора / +N сегодня» одной строкой («без оператора» — кликабельный фильтр, v676)
   var _sumParts = [];
-  if(riskInStage > 0) _sumParts.push('<span style="color:#E0A458;font-weight:600">' + riskInStage + ' в риске</span>');
+  if(overdueInStage > 0) _sumParts.push('<span style="color:#FF5C8A;font-weight:600">' + overdueInStage + ' просрочено</span>');
   if(unassignedInStage > 0) _sumParts.push('<span onclick="event.stopPropagation();_routeToggleUnassigned()" title="Показать только без оператора" style="color:#E0A458;cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-weight:600">' + unassignedInStage + ' без оператора</span>');
   if(stage === 'Новый'){
    var todayStart = new Date(); todayStart.setHours(0,0,0,0);
@@ -29395,31 +29477,35 @@ function routeRender(){
   html += '</div>';
   html += '<div class="rt-col-body">';
   if(stageCards.length === 0){
-   html += '<div class="rt-empty">Нет карточек</div>';
+   // v738: при активном фильтре пустота — от фильтра, а не «доска пустая»; говорим честно
+   html += '<div class="rt-empty">' + ((filterQ || filterOp || filterUnassigned) ? 'Ничего не нашлось по фильтру' : 'Нет карточек') + '</div>';
   }
   stageCards.forEach(function(card){
    var cl = card.clients || {};
    var name = cl.company_name || '(без имени)';
-   var days = card.stage_entered_at ? Math.floor((Date.now() - new Date(card.stage_entered_at).getTime())/86400000) : 0;
+   var days = _rtDays(card); // v738: null = битая дата (покажем «—», не NaN)
    // v734: амо-карточка — аватар 32px, имя + дни справа, тариф, ярлык суммы,
    // нижняя строка с точкой = состояние чек-листа (амо-паттерн «есть ли следующий шаг»).
    var _ini = card.operator ? card.operator.trim().split(/\s+/).map(function(w){return w.charAt(0);}).join('').slice(0,2).toUpperCase() : '';
-   var _dCls = days >= 8 ? 'rt-days red' : (days >= 5 ? 'rt-days warn' : 'rt-days');
+   var _cid = _escHtml(String(card.id));
+   var _dCls = days !== null && days >= 8 ? 'rt-days red' : (days !== null && days >= 5 ? 'rt-days warn' : 'rt-days');
+   // v738: пустой аватар кликабелен — назначить оператора прямо с доски, не заходя в карту
    var _av = card.operator
     ? '<span class="rt-av" title="' + _escHtml(card.operator) + '">' + _escHtml(_ini) + '</span>'
-    : '<span class="rt-av none" title="не назначен">—</span>';
-   var _cid = _escHtml(String(card.id));
+    : '<span class="rt-av none" title="Назначить оператора" onclick="event.stopPropagation();routeAssignChip(this,\'' + _cid + '\')">+</span>';
    var _ckTxt, _dotColor, _stCls = 'rt-st';
    if(card._checkTotal > 0 && card._checkDone >= card._checkTotal){ _ckTxt = 'Чек-лист готов'; _dotColor = '#3FD08A'; _stCls += ' today'; }
    else if(card._checkDone > 0){ _ckTxt = 'Чек-лист в работе'; _dotColor = '#8A909C'; }
-   else { _ckTxt = 'Чек-лист не начат'; _dotColor = '#FF5C8A'; _stCls += ' hot'; }
+   // v738: красный «не начат» только когда карточка стоит 2+ дня — свежая не должна кричать
+   else if(days !== null && days >= 2){ _ckTxt = 'Чек-лист не начат'; _dotColor = '#FF5C8A'; _stCls += ' hot'; }
+   else { _ckTxt = 'Чек-лист не начат'; _dotColor = '#8A909C'; }
    var _ckNum = card._checkTotal > 0 ? '<span class="rt-cksum">' + card._checkDone + '/' + card._checkTotal + '</span>' : '';
    var _tags = '';
    if(card.payment_amount) _tags += '<span class="rt-tg">' + _routeFmtSum(Number(card.payment_amount)) + '</span>';
    if(!card.operator) _tags += '<span class="rt-tg">без оператора</span>';
    html += '<div class="rt-c" draggable="true" ondragstart="routeDragStart(\'' + _cid + '\')" ondragend="routeDragEnd(this)" onclick="routeOpenCard(\'' + _cid + '\')">';
    html += '<div class="rt-c-top">' + _av + '<div class="rt-c-main">';
-   html += '<div class="rt-r1"><span class="rt-name" title="' + _escHtml(name) + '">' + _escHtml(name) + '</span><span class="' + _dCls + '">' + days + ' дн</span></div>';
+   html += '<div class="rt-r1"><span class="rt-name" title="' + _escHtml(name) + '">' + _escHtml(name) + '</span><span class="' + _dCls + '">' + _rtDaysLabel(days) + '</span></div>';
    if(card.tariff) html += '<div class="rt-sub">' + _escHtml(card.tariff) + '</div>';
    html += '</div></div>';
    if(_tags) html += '<div class="rt-tags">' + _tags + '</div>';
@@ -29474,6 +29560,9 @@ async function routeDrop(ev, newStage){
  // Оптимистично обновляем UI
  card.stage = newStage;
  card.stage_entered_at = new Date().toISOString();
+ // v738: бейдж чек-листа пересчитать под НОВЫЙ этап (раньше оставался от старого и врал)
+ card._checkDone = 0;
+ card._checkTotal = (ROUTE_DEFAULT_CHECKLIST[newStage] || []).length;
  routeRender();
  try {
   var d = await sbFetch('/api/cards?id=' + routeDragCardId, {
@@ -29483,7 +29572,8 @@ async function routeDrop(ev, newStage){
   if(!d.ok) throw new Error(d.error);
   await _routeMaybeActivate(card, newStage);
  } catch(e) {
-  alert('Не удалось сохранить: ' + e.message);
+  console.error('routeDrop:', e);
+  if(typeof kbShowToast === 'function') kbShowToast('Не получилось сохранить перенос — проверьте интернет'); else alert('Не получилось сохранить перенос');
   routeLoad();
  }
  routeDragCardId = null;
@@ -29498,13 +29588,17 @@ async function routeAdvanceStage(cardId){
  var newStage = ROUTE_STAGES_ORDER[idx + 1];
  card.stage = newStage;
  card.stage_entered_at = new Date().toISOString();
+ // v738: бейдж чек-листа пересчитать под НОВЫЙ этап (раньше оставался от старого и врал)
+ card._checkDone = 0;
+ card._checkTotal = (ROUTE_DEFAULT_CHECKLIST[newStage] || []).length;
  routeRender();
  try {
   var d = await sbFetch('/api/cards?id=' + cardId, { method: 'PATCH', body: JSON.stringify({ stage: newStage }) });
   if(!d.ok) throw new Error(d.error);
   await _routeMaybeActivate(card, newStage);
  } catch(e) {
-  alert('Не удалось сохранить: ' + e.message);
+  console.error('routeAdvanceStage:', e);
+  if(typeof kbShowToast === 'function') kbShowToast('Не получилось сохранить перенос — проверьте интернет'); else alert('Не получилось сохранить перенос');
   routeLoad();
  }
 }
@@ -29582,6 +29676,8 @@ function routeOpenNew(){
   opt.value = o.name; opt.textContent = o.name;
   sel.appendChild(opt);
  });
+ var _opLbl = document.getElementById('route-new-operator-val');
+ if(_opLbl) _opLbl.textContent = '— выбрать —'; // v738: сброс подписи чипа оператора
  document.getElementById('route-new-name').value = '';
  document.getElementById('route-new-phone').value = '';
  document.getElementById('route-new-tariff').value = '';
@@ -29695,6 +29791,10 @@ function routeClearExisting(){
 async function routeCreate(){
  var tariff = document.getElementById('route-new-tariff').value.trim();
  var operator = document.getElementById('route-new-operator').value;
+ // v738: защита от двойного клика — два быстрых «Создать» задваивали клиента и карточку
+ var _btn = document.getElementById('route-new-submit');
+ if(_btn && _btn.disabled) return;
+ if(_btn){ _btn.disabled = true; _btn.style.opacity = '.6'; }
  try {
   var clientId;
   if(_routeSelectedClient){
@@ -29745,7 +29845,10 @@ async function routeCreate(){
   routeCloseNew();
   routeLoad();
  } catch(e) {
-  alert('Ошибка: ' + e.message);
+  console.error('routeCreate:', e);
+  alert('Не получилось создать карточку. Проверьте интернет и попробуйте ещё раз.');
+ } finally {
+  if(_btn){ _btn.disabled = false; _btn.style.opacity = ''; } // v738
  }
 }
 
@@ -31324,10 +31427,8 @@ function _routeRenderCardHead(){
  // Дни на этапе
  var daysEl = document.getElementById('route-card-stage-days');
  if(daysEl){
-  if(card.stage_entered_at){
-   var d = Math.floor((Date.now() - new Date(card.stage_entered_at).getTime()) / 86400000);
-   daysEl.textContent = '(' + d + ' ' + _pluralDays(d) + ')';
-  } else { daysEl.textContent = ''; }
+  var d = _rtDays(card); // v738: защита от битой даты (было «NaN дн»)
+  daysEl.textContent = (d !== null && card.stage_entered_at) ? '(' + d + ' ' + _pluralDays(d) + ')' : '';
  }
  // Имя в подписи чата
  var chatNameEl = document.getElementById('route-chat-name');
@@ -31832,12 +31933,12 @@ async function routeActivateClient(){
    })
   });
   if(!d1.ok) throw new Error('client update: ' + d1.error);
-  // Идемпотентность: если клиент УЖЕ был активирован — карточку всё равно архивируем но историю не пишем повторно
+  // 2) Карточка → архив ВСЕГДА (v738 фикс: раньше DELETE стоял внутри if(!already_active),
+  //    и если клиента уже активировал бросок в колонку «Активация» (v607) — карточка зависала на доске навечно)
+  var d2 = await sbFetch('/api/cards?id=' + card.id, { method: 'DELETE' });
+  if(!d2.ok) throw new Error('card archive: ' + d2.error);
+  // 3) История — только при первой активации (идемпотентность)
   if(!d1.already_active){
-   // 2) Карточка → архив
-   var d2 = await sbFetch('/api/cards?id=' + card.id, { method: 'DELETE' });
-   if(!d2.ok) throw new Error('card archive: ' + d2.error);
-   // 3) История — запись активации
    sbFetch('/api/history', {
     method: 'POST',
     body: JSON.stringify({
@@ -31846,9 +31947,10 @@ async function routeActivateClient(){
      event_type: 'system',
      text: 'Клиент активирован. Куратор: ' + (card.operator || '—')
     })
-   });
+   }).catch(function(e){ console.error('history:', e); });
   }
   alert('Готово! ' + clName + ' переведён в Действующие. Куратор: ' + (card.operator || '—'));
+  if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; } // v738: разблокировать и на успехе
   routeCloseCard();
   routeLoad();
  } catch(e){
@@ -31912,7 +32014,7 @@ async function _routeRenderChecklist(){
   if(isDone) done++;
   var id = existing ? existing.id : '';
   return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-faint)">'
-   + '<input type="checkbox" ' + (isDone?'checked':'') + ' onchange="_routeToggleCheck(\'' + (id||'') + '\',\'' + _escHtml(title).replace(/'/g,"\\'") + '\',\'' + stage + '\',this.checked)" style="width:18px;height:18px;cursor:pointer">'
+   + '<input type="checkbox" ' + (isDone?'checked':'') + ' onchange="_routeToggleCheck(\'' + (id||'') + '\',\'' + _escHtml(String(title).replace(/\\/g,'\\\\').replace(/'/g,"\\'")) + '\',\'' + stage + '\',this.checked)" style="width:18px;height:18px;cursor:pointer">'
    + '<div style="flex:1;font-size:13px;color:var(--text);' + (isDone?'text-decoration:line-through;opacity:.6':'') + '">' + _escHtml(title) + '</div>'
    + (existing && existing.done_at ? '<div style="font-size:11px;color:var(--text-soft)">' + new Date(existing.done_at).toLocaleDateString('ru-RU') + '</div>' : '')
    + '</div>';
@@ -31927,6 +32029,9 @@ async function _routeRenderChecklist(){
 }
 
 async function _routeToggleCheck(itemId, title, stage, checked){
+ // v738: защита от двойного клика — второй быстрый клик по пункту без id создавал дубль в БД
+ if(_routeToggleCheck._busy) return;
+ _routeToggleCheck._busy = true;
  try {
   if(itemId){
    var d = await sbFetch('/api/checklist?id=' + itemId, {
@@ -31946,7 +32051,7 @@ async function _routeToggleCheck(itemId, title, stage, checked){
    });
    if(!d2.ok) throw new Error(d2.error);
   }
-  // Запись в историю
+  // Запись в историю (v738: с .catch — иначе потеря молча роняла unhandled rejection)
   sbFetch('/api/history', {
    method: 'POST',
    body: JSON.stringify({
@@ -31954,7 +32059,7 @@ async function _routeToggleCheck(itemId, title, stage, checked){
     event_type: 'note',
     text: (checked?'+ ':'- ') + title
    })
-  });
+  }).catch(function(e){ console.error('history:', e); });
   // v731: пункт «Передать в Действующие клиенты» отмечен → реально ПЕРЕНОСИМ:
   // активируем клиента (status=active) + архивируем карточку (soft-delete → уходит с маршрута в Действующие).
   // Раньше галочка просто отмечалась, карточка висела в «Активация» вечно.
@@ -31972,7 +32077,11 @@ async function _routeToggleCheck(itemId, title, stage, checked){
   }
   _routeRenderChecklist();
  } catch(e){
-  alert('Не удалось сохранить: ' + e.message);
+  console.error('_routeToggleCheck:', e);
+  alert('Не получилось сохранить пункт. Проверьте интернет и попробуйте ещё раз.');
+  _routeRenderChecklist(); // v738: перерисовать реальное состояние — иначе галка визуально врёт
+ } finally {
+  _routeToggleCheck._busy = false; // v738
  }
 }
 
@@ -33671,8 +33780,8 @@ function _routeAmoRenderSupabaseFallback(container){
  stagePill.style.cssText = 'background:#EB93FF;color:#1A1A1C;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600';
  stagePill.textContent = card.stage || 'Новый';
  pipeLine.appendChild(stagePill);
- if(card.stage_entered_at){
-  var daysOn = Math.floor((Date.now() - new Date(card.stage_entered_at).getTime()) / 86400000);
+ var daysOn = _rtDays(card); // v738: защита от битой даты (было «NaN дн»)
+ if(card.stage_entered_at && daysOn !== null){
   var daysSpan = document.createElement('span');
   daysSpan.style.cssText = 'font-size:11px;color:#7C8389';
   daysSpan.textContent = '(' + daysOn + ' дн)';
