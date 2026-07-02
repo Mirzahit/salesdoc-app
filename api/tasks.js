@@ -154,12 +154,31 @@ async function handleKanban(req, res) {
 async function handlePost(req, res) {
   const body = await readBody(req);
   const userName = (req.headers['x-user-name'] || '').toString().trim();
+
+  // v759: POST /api/tasks?add_type=1 body {name} — создать новый тип задачи.
+  // id в task_types НЕ автоинкремент (smallint PK) — выдаём max+1 сами.
+  if ((req.query || {}).add_type) {
+    const name = (body.name || '').toString().trim();
+    if (name.length < 2 || name.length > 40) {
+      return res.status(400).json({ ok: false, error: 'название типа: 2-40 символов' });
+    }
+    const all = await sbSelect('task_types', { order: 'id.asc' });
+    if (all.some(t => (t.name || '').toLowerCase() === name.toLowerCase())) {
+      return res.status(409).json({ ok: false, error: 'такой тип уже есть' });
+    }
+    const nextId = all.reduce((m, t) => Math.max(m, t.id || 0), 0) + 1;
+    const nextSort = all.reduce((m, t) => Math.max(m, t.sort || 0), 0) + 1;
+    const inserted = await sbInsert('task_types', { id: nextId, name, icon: '', color: '#6E79E0', sort: nextSort });
+    return res.status(200).json({ ok: true, type: inserted[0] || { id: nextId, name } });
+  }
+
   if (!userName) {
     return res.status(400).json({ ok: false, error: 'header x-user-name обязателен' });
   }
 
-  // Валидация обязательных полей
-  if (!body.type_id || !Number.isInteger(body.type_id) || body.type_id < 1 || body.type_id > 19) {
+  // Валидация обязательных полей.
+  // v759: тип проверяем по справочнику task_types (раньше зашитый диапазон 1..19 отклонял новые типы)
+  if (!body.type_id || !Number.isInteger(body.type_id) || body.type_id < 1) {
     return res.status(400).json({ ok: false, error: 'type_id обязателен (1..19)' });
   }
   if (!body.deadline_at) {
@@ -194,6 +213,19 @@ async function handlePost(req, res) {
 // ============================================================================
 async function handlePatch(req, res) {
   const q = req.query || {};
+
+  // v759: PATCH /api/tasks?rename_type=ID body {name} — переименовать тип задачи
+  if (q.rename_type) {
+    const body = await readBody(req);
+    const name = (body.name || '').toString().trim();
+    if (name.length < 2 || name.length > 40) {
+      return res.status(400).json({ ok: false, error: 'название типа: 2-40 символов' });
+    }
+    const updated = await sbUpdate('task_types', { id: 'eq.' + q.rename_type }, { name });
+    if (!updated.length) return res.status(404).json({ ok: false, error: 'тип не найден' });
+    return res.status(200).json({ ok: true, type: updated[0] });
+  }
+
   const id = q.id;
   if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
 

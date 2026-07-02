@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v758</title>
+<title>SalesDoc — Финансовый Дашборд v759</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -35772,6 +35772,106 @@ function ttQaIcon(name){
  return icons[name] || '';
 }
 
+// v759: справочник типов задач (task_types) — для чипа «Тип» в окне создания
+async function cal2LoadTypes(){
+ try {
+  var d = await crmTasksFetch('/api/tasks?types=1');
+  if(d && d.ok) window._cal2Types = d.types || [];
+ } catch(e){ console.warn('[cal] types load failed:', e); }
+}
+function ttQaTypeLabel(id){
+ var t = (window._cal2Types || []).find(function(x){ return x.id === id; });
+ return t ? t.name : 'Связаться';
+}
+function ttQaTypeRefresh(){
+ var el = document.querySelector('#tt-qa-pop .tt-qa-type span');
+ if(el && window._ttQa) el.textContent = ttQaTypeLabel(window._ttQa.state.type_id || 1);
+}
+window.ttQaTypeOpen = function(ev){
+ ev.stopPropagation();
+ var s = window._ttQa && window._ttQa.state;
+ if(!s || typeof crmTasksOpenDropdown !== 'function') return;
+ var items = (window._cal2Types || []).map(function(t){
+  return { label: t.name, value: String(t.id), selected: (s.type_id || 1) === t.id };
+ });
+ items.push({ label: '+ Добавить тип…', value: '__add' });
+ items.push({ label: 'Переименовать типы…', value: '__edit' });
+ crmTasksOpenDropdown(ev.currentTarget, items, function(v){
+  if(v === '__add'){ ttQaTypeAdd(); return; }
+  if(v === '__edit'){ ttQaTypesManage(); return; }
+  s.type_id = parseInt(v, 10) || 1;
+  ttQaTypeRefresh();
+ });
+};
+// маленькое окошко «Новый тип» (без нативного prompt)
+window.ttQaTypeAdd = function(){
+ var old = document.getElementById('cal2-detail'); if(old) old.remove();
+ var d = document.createElement('div');
+ d.className = 'cal2-detail'; d.id = 'cal2-detail';
+ d.innerHTML = '<span class="dt-x" onclick="this.parentNode.remove()">×</span>'
+  + '<div class="dt-title">Новый тип задачи</div>'
+  + '<input id="cal2-newtype-name" placeholder="Например: Замер или Доставка" style="width:100%;background:#14161e;border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#F2F4F8;font-family:inherit;font-size:12.5px;padding:8px 10px;outline:none;box-sizing:border-box">'
+  + '<div class="dt-actions"><button onclick="ttQaTypeAddSave()" style="background:#2BB577;border-color:#2BB577;color:#0B0C10;font-weight:700">Добавить</button></div>';
+ (document.getElementById('view-calendar') || document.body).appendChild(d);
+ d.style.left = Math.max(12, window.innerWidth / 2 - 160) + 'px';
+ d.style.top = '160px';
+ setTimeout(function(){
+  var i = document.getElementById('cal2-newtype-name');
+  if(i){ i.focus(); i.onkeydown = function(ke){ if(ke.key === 'Enter') ttQaTypeAddSave(); }; }
+ }, 40);
+};
+window.ttQaTypeAddSave = async function(){
+ var input = document.getElementById('cal2-newtype-name');
+ var name = ((input && input.value) || '').trim();
+ if(name.length < 2){ if(typeof kbShowToast === 'function') kbShowToast('Название типа — минимум 2 символа'); return; }
+ try {
+  var r = await crmTasksFetch('/api/tasks?add_type=1', { method:'POST', body: JSON.stringify({ name: name }) });
+  if(!r || !r.ok) throw new Error((r && r.error) || 'не получилось добавить');
+  await cal2LoadTypes();
+  if(window._ttQa && r.type) window._ttQa.state.type_id = r.type.id;
+  ttQaTypeRefresh();
+  if(typeof kbShowToast === 'function') kbShowToast('Тип «' + name + '» добавлен');
+  var d = document.getElementById('cal2-detail'); if(d) d.remove();
+ } catch(e){
+  console.error('[cal] add type:', e);
+  if(typeof kbShowToast === 'function') kbShowToast(e.message || 'Не получилось добавить тип', 'err');
+ }
+};
+// панелька «Типы задач» — переименование по месту
+window.ttQaTypesManage = function(){
+ var old = document.getElementById('cal2-detail'); if(old) old.remove();
+ var d = document.createElement('div');
+ d.className = 'cal2-detail'; d.id = 'cal2-detail';
+ var rows = (window._cal2Types || []).map(function(t){
+  return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0">'
+   + '<input value="' + kbEsc(t.name) + '" data-tid="' + t.id + '" style="flex:1;background:#14161e;border:1px solid rgba(255,255,255,.12);border-radius:7px;color:#F2F4F8;font-family:inherit;font-size:12px;padding:6px 9px;outline:none;min-width:0">'
+   + '<button onclick="ttQaTypeRename(this)" style="background:#1D2029;border:1px solid rgba(255,255,255,.12);border-radius:7px;color:#9AA3B2;font-family:inherit;font-size:11px;padding:6px 10px;cursor:pointer;flex:none">Сохранить</button>'
+   + '</div>';
+ }).join('');
+ d.innerHTML = '<span class="dt-x" onclick="this.parentNode.remove()">×</span>'
+  + '<div class="dt-title">Типы задач</div>'
+  + '<div style="max-height:320px;overflow-y:auto;margin-top:4px">' + rows + '</div>';
+ (document.getElementById('view-calendar') || document.body).appendChild(d);
+ d.style.left = Math.max(12, window.innerWidth / 2 - 160) + 'px';
+ d.style.top = '120px';
+};
+window.ttQaTypeRename = async function(btn){
+ var input = btn.parentNode.querySelector('input');
+ var id = input.dataset.tid;
+ var name = (input.value || '').trim();
+ if(name.length < 2){ if(typeof kbShowToast === 'function') kbShowToast('Минимум 2 символа'); return; }
+ try {
+  var r = await crmTasksFetch('/api/tasks?rename_type=' + encodeURIComponent(id), { method:'PATCH', body: JSON.stringify({ name: name }) });
+  if(!r || !r.ok) throw new Error((r && r.error) || 'не получилось');
+  await cal2LoadTypes();
+  ttQaTypeRefresh();
+  if(typeof kbShowToast === 'function') kbShowToast('Тип переименован');
+ } catch(e){
+  console.error('[cal] rename type:', e);
+  if(typeof kbShowToast === 'function') kbShowToast(e.message || 'Не получилось переименовать', 'err');
+ }
+};
+
 function ttQuickAddOpen(date, hour, anchorEv, times){
  ttQaCloseAll();
  var startStr = String(hour).padStart(2,'0') + ':00';
@@ -35787,7 +35887,8 @@ function ttQuickAddOpen(date, hour, anchorEv, times){
   date: date,
   time_start: startStr,
   time_end: endStr,
-  is_all_day: false
+  is_all_day: false,
+  type_id: 1 // v759: тип задачи, меняется чипом «Тип»
  };
  window._ttQa = { state: state };
 
@@ -35824,7 +35925,8 @@ function ttQuickAddOpen(date, hour, anchorEv, times){
 
  // Outside click — закрыть
  window._ttQaOutsideHandler = function(e){
-  var inPop = e.target.closest('.tt-qa-pop, .tt-dp');
+  // v759: дропдаун типов (.ct-dd) и окошки типов (.cal2-detail) — часть сценария, не закрывать
+  var inPop = e.target.closest('.tt-qa-pop, .tt-dp, .ct-dd, .cal2-detail');
   if(!inPop) ttQaCloseAll();
  };
  document.addEventListener('mousedown', window._ttQaOutsideHandler, true);
@@ -35847,9 +35949,15 @@ function ttQuickAddOpen(date, hour, anchorEv, times){
 function ttQaRender(pop, state){
  var chipLabel = kbEsc(ttQaFmtChip(state));
  pop.innerHTML =
-  '<div class="tt-qa-chip" onclick="ttDpOpen(event)" title="Изменить дату и время">'
-   + ttQaIcon('clock')
-   + '<span>'+chipLabel+'</span>'
+  '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+   + '<div class="tt-qa-chip" onclick="ttDpOpen(event)" title="Изменить дату и время">'
+    + ttQaIcon('clock')
+    + '<span>'+chipLabel+'</span>'
+   + '</div>'
+   // v759: чип типа задачи — выбор из справочника, там же «+ Добавить тип» и переименование
+   + '<div class="tt-qa-chip tt-qa-type" onclick="ttQaTypeOpen(event)" title="Тип задачи">'
+    + '<span>'+kbEsc(ttQaTypeLabel(state.type_id || 1))+'</span><span style="font-size:9px;opacity:.7">&#9662;</span>'
+   + '</div>'
   + '</div>'
   + '<textarea class="tt-qa-input" placeholder="Что бы вы хотели сделать?"></textarea>'
   + '<div style="font-size:10.5px;color:var(--text-faint);padding:0 2px;margin-top:-4px">Enter — сохранить · Shift+Enter — новая строка · Esc — отмена</div>'
@@ -35898,7 +36006,7 @@ async function ttQaSave(){
 
  var body = {
   client_id: null,
-  type_id: 1,
+  type_id: (s.type_id || 1), // v759: тип из чипа
   text: text,
   deadline_at: startISO,
   deadline_end_at: endISO,
@@ -36819,6 +36927,8 @@ function crmCalendarInit(){
  }
  // v750: даты следующих оплат действующих клиентов (слой «Оплаты клиентов»)
  cal2LoadPayments().then(function(){ if(typeof crmCalRender === 'function') crmCalRender(); });
+ // v759: справочник типов задач для чипа «Тип»
+ if(!window._cal2Types) cal2LoadTypes();
  // v745: автофильтр «на себя» убран — календарь командный, все включены по умолчанию;
  // «только я» достигается двумя кликами по галочкам в панели
  if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
