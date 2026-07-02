@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v747</title>
+<title>SalesDoc — Финансовый Дашборд v748</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1323,9 +1323,10 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-dcol .hline{height:56px;border-bottom:1px solid rgba(255,255,255,.06)}
 #view-calendar .cal2-dcol.today{background:linear-gradient(180deg, rgba(110,121,224,.09) 0%, rgba(110,121,224,.03) 30%, rgba(110,121,224,.05) 100%);box-shadow:inset 1px 0 0 rgba(110,121,224,.25), inset -1px 0 0 rgba(110,121,224,.25)}
 #view-calendar .cal2-dcol.wknd{background:rgba(0,0,0,.18)}
-/* v747: призрак выделения периода протяжкой */
+/* v747: призрак выделения периода протяжкой; v748: .hold — след живёт, пока открыто окно создания */
 #view-calendar .cal2-ghost{position:absolute;left:4px;right:6px;background:rgba(110,121,224,.22);border:1.5px dashed #6E79E0;border-radius:8px;z-index:4;pointer-events:none;display:flex;align-items:flex-start;padding:4px 8px}
 #view-calendar .cal2-ghost span{font-size:10px;font-weight:700;font-family:ui-monospace,monospace;color:#C0C6FF}
+#view-calendar .cal2-ghost.hold{background:rgba(110,121,224,.32);border-style:solid;box-shadow:0 4px 14px rgba(110,121,224,.25), inset 0 1px 0 rgba(255,255,255,.15)}
 #view-calendar .cal2-nowline{position:absolute;left:0;right:0;height:2px;z-index:6;pointer-events:none;background:linear-gradient(90deg,#FF5C8A,rgba(255,92,138,.35))}
 #view-calendar .cal2-nowline .pill{position:absolute;left:6px;top:-9px;background:#FF5C8A;color:#16060c;font-size:9.5px;font-weight:800;font-family:ui-monospace,monospace;border-radius:5px;padding:2px 6px;box-shadow:0 3px 10px rgba(255,92,138,.45)}
 #view-calendar .cal2-ev{position:absolute;left:5px;right:7px;border-radius:9px;padding:6px 9px;font-size:11px;line-height:1.32;cursor:pointer;overflow:hidden;z-index:2;border:1px solid transparent;box-shadow:0 4px 12px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.12);transition:transform .1s, box-shadow .1s}
@@ -35662,6 +35663,9 @@ window._ttQa = window._ttQa || null;
 function ttQaCloseAll(){
  var pops = document.querySelectorAll('.tt-qa-pop, .tt-dp');
  pops.forEach(function(p){ p.remove(); });
+ // v748: след выделения живёт ровно столько, сколько окно создания; при открытии окна (первый вызов) — не трогаем
+ if(window._cal2KeepGhost){ window._cal2KeepGhost = false; }
+ else { document.querySelectorAll('.cal2-ghost').forEach(function(g){ g.remove(); }); }
  if(window._ttQaOutsideHandler){
   document.removeEventListener('mousedown', window._ttQaOutsideHandler, true);
   window._ttQaOutsideHandler = null;
@@ -36429,13 +36433,28 @@ function crmCalRenderDay(){
  var ds = crmCalState.viewDate || crmDateStr(new Date());
  cal2RenderTimeGrid([new Date(ds + 'T00:00:00')]);
 }
-// клик по пустому слоту недели → quick-add с датой и часом
+// v748: след-заготовка — держится на сетке, пока открыто окно создания (убирает ttQaCloseAll)
+function cal2HoldGhost(col, aMin, bMin, label){
+ document.querySelectorAll('.cal2-ghost').forEach(function(g){ g.remove(); });
+ var g = document.createElement('div');
+ g.className = 'cal2-ghost hold';
+ g.innerHTML = '<span></span>';
+ g.style.top = (aMin / 60 * 56).toFixed(0) + 'px';
+ g.style.height = ((bMin - aMin) / 60 * 56).toFixed(0) + 'px';
+ g.firstChild.textContent = label;
+ col.appendChild(g);
+ window._cal2KeepGhost = true; // первый ttQaCloseAll (при открытии окна) след не тронет
+ return g;
+}
+// клик по пустому слоту недели → quick-add с датой и часом (+ след на месте будущей задачи)
 window.cal2SlotClick = function(ev, col){
  if(window._cal2Dragged) return; // v747: только что была протяжка — это не клик
  if(ev.target.closest('.cal2-ev') || ev.target.closest('.cal2-nowline')) return;
  var rect = col.getBoundingClientRect();
  var minH = parseInt(col.dataset.minh, 10) || 8;
  var hour = Math.max(0, Math.min(23, minH + Math.floor((ev.clientY - rect.top) / 56)));
+ var aMin = (hour - minH) * 60;
+ cal2HoldGhost(col, aMin, aMin + 45, String(hour).padStart(2,'0') + ':00 – ' + (hour >= 23 ? '23:59' : String(hour).padStart(2,'0') + ':45'));
  ttQuickAddOpen(col.dataset.date, hour, ev);
 };
 // v747: протяжка мышкой по сетке — выделить период (шаг 15 мин) → quick-add с точным «с … до …»
@@ -36479,9 +36498,10 @@ window.cal2DragStart = function(ev, col){
    // подавить click, который браузер выстрелит следом за mouseup
    window._cal2Dragged = true;
    setTimeout(function(){ window._cal2Dragged = false; }, 250);
-   var a = ghost._a, b = ghost._b;
-   ghost.remove();
-   ttQuickAddOpen(col.dataset.date, 0, e3, { start: fmt(a), end: fmt(b) });
+   // v748: след НЕ убираем — он держится, пока открыто окно создания (CEO: «неудобно, тут же исчезает»)
+   ghost.classList.add('hold');
+   window._cal2KeepGhost = true;
+   ttQuickAddOpen(col.dataset.date, 0, e3, { start: fmt(ghost._a), end: fmt(ghost._b) });
   } else if(ghost){ ghost.remove(); }
  }
  document.addEventListener('mousemove', onMove);
