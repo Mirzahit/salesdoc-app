@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v764</title>
+<title>SalesDoc — Финансовый Дашборд v765</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -33230,6 +33230,9 @@ async function _routeRenderFeed(){
  var _prevHeight = feedEl.scrollHeight;
  var _wasNearBottom = (feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight) < 80;
  try {
+  // v765: справочник типов задач нужен ленте и плашке «Следующий шаг» (иначе на первом
+  // открытии карты мелькает «Тип 1» вместо «Связаться»). Кэшируется — грузится один раз.
+  var typesReady = (typeof crmTasksLoadTypes === 'function') ? crmTasksLoadTypes().catch(function(){}) : null;
   var reqs = [sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50')];
   if(_routeCurrentCard.client_id){
    reqs.push(sbFetch('/api/history?client_id=' + encodeURIComponent(_routeCurrentCard.client_id) + '&limit=50'));
@@ -33243,6 +33246,7 @@ async function _routeRenderFeed(){
    reqs.push(sbFetch('/api/payments?client_id=' + encodeURIComponent(_routeCurrentCard.client_id) + '&limit=200'));
   }
   var results = await Promise.all(reqs);
+  if(typesReady) await typesReady; // v765: к моменту рендера типы задач уже в кэше
   var byCard = (results[0] && results[0].items) || [];
   var byClient = (results[1] && results[1].items) || [];
   // v458: tasksRes — третий элемент массива, если client_id был
