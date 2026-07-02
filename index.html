@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v755</title>
+<title>SalesDoc — Финансовый Дашборд v756</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -971,8 +971,10 @@ body.light .kb-card:hover{border-color:var(--amo-blue)!important}
    Topbar и все паддинги — убираем, чтобы календарь занимал всю доступную ширину
    (100vw - sidebar) и всю высоту (100vh). */
 body.cal-fullscreen .topbar{display:none !important}
-/* v754: в календаре прячем и колонку программы — календарь на весь монитор (выход — крестик) */
+/* v754: в календаре прячем и колонку программы — календарь на весь монитор.
+   v756: кнопка «Меню» в тулбаре возвращает её поверх календаря (класс cal2-nav-open на body) */
 body.cal-fullscreen .sidebar{display:none !important}
+body.cal-fullscreen.cal2-nav-open .sidebar{display:flex !important;box-shadow:8px 0 32px rgba(0,0,0,.5)}
 body.cal-fullscreen .sidebar-overlay{display:none !important}
 body.cal-fullscreen .main{margin-left:0 !important;width:100% !important}
 body.cal-fullscreen .content{padding:0 !important;margin:0 !important}
@@ -1330,12 +1332,12 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-adev.pay{background:linear-gradient(135deg,rgba(43,181,119,.85),rgba(26,130,84,.85));box-shadow:0 3px 10px rgba(43,181,119,.3), inset 0 1px 0 rgba(255,255,255,.2)}
 #view-calendar .cal2-wgrid{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.10) transparent}
 #view-calendar .cal2-wgrid-in{display:grid;grid-template-columns:56px repeat(7,1fr);position:relative}
-#view-calendar .cal2-hcell{height:56px;position:relative}
-#view-calendar .cal2-hcell span{position:absolute;top:-7px;right:8px;font-size:11.5px;font-weight:600;color:#9AA3B2;font-family:ui-monospace,monospace;background:#14161e;padding:0 3px} /* v755: часы крупнее и ярче (CEO: «не видно») */
+#view-calendar .cal2-hcell{height:72px;position:relative} /* v756: = CAL2_SLOT */
+#view-calendar .cal2-hcell span{position:absolute;top:-8px;right:8px;font-size:13px;font-weight:600;color:#B6BEC9;font-family:ui-monospace,monospace;background:#14161e;padding:0 3px} /* v756: часы ещё крупнее */
 /* v755: крестик выхода убран — налезал на переключатель видов; выход = кнопка «В программу» в тулбаре */
 #view-calendar .cal-exit-fs{display:none!important}
 #view-calendar .cal2-dcol{border-left:1px solid rgba(255,255,255,.06);position:relative;min-width:0}
-#view-calendar .cal2-dcol .hline{height:56px;border-bottom:1px solid rgba(255,255,255,.06)}
+#view-calendar .cal2-dcol .hline{height:72px;border-bottom:1px solid rgba(255,255,255,.06)} /* v756: = CAL2_SLOT */
 #view-calendar .cal2-dcol.today{background:linear-gradient(180deg, rgba(110,121,224,.09) 0%, rgba(110,121,224,.03) 30%, rgba(110,121,224,.05) 100%);box-shadow:inset 1px 0 0 rgba(110,121,224,.25), inset -1px 0 0 rgba(110,121,224,.25)}
 #view-calendar .cal2-dcol.wknd{background:rgba(0,0,0,.18)}
 /* v747: призрак выделения периода протяжкой; v748: .hold — след живёт, пока открыто окно создания */
@@ -35313,6 +35315,7 @@ function crmCalCount(){
 
 // ═══ v745: cal2-* — единые фильтры и палитра операторов ═══
 var CAL2_COLORS = ['blue','purple','green','orange','pink','teal'];
+var CAL2_SLOT = 72; // v756: высота часа в сетке (CEO: «сетка больше и часы больше»); менять СИНХРОННО с CSS .cal2-hcell/.hline
 // Цвет оператора — детерминированный хеш имени (команда растёт — календарь не ломается)
 function cal2OpColor(name){
  if(!name) return 'ind';
@@ -35579,7 +35582,7 @@ function cal2RenderToolbar(){
    return '<button class="' + (crmCalState.list === x[0] ? 'on' : '') + '" onclick="crmCalSetList(\'' + x[0] + '\')">' + x[1] + '</button>';
   }).join('') + '</div>';
  }
- el.innerHTML = '<button class="cal2-tbtn" onclick="showView(\'dashboard\')" title="Вернуться в программу">&larr; В программу</button>'
+ el.innerHTML = '<button class="cal2-tbtn" onclick="cal2ToggleNav()" title="Показать/скрыть меню программы">Меню</button>'
   + '<button class="cal2-tbtn" onclick="cal2ToggleSide()" title="Свернуть/развернуть панель фильтров" style="padding:7px 11px;font-size:14px;line-height:1">&#8801;</button>'
   + '<button class="cal2-tbtn" onclick="crmCalSetViewDate(\'' + today + '\')">Сегодня</button>'
   + nav + '<div class="cal2-title">' + title + '</div>' + listChips + '<div class="cal2-sp"></div>'
@@ -36370,6 +36373,10 @@ function crmCalRender(){
  cal2RenderToolbar();
  cal2RenderGrid();
 }
+// v756: кнопка «Меню» — показать/скрыть боковую колонку программы поверх календаря
+window.cal2ToggleNav = function(){
+ document.body.classList.toggle('cal2-nav-open');
+};
 // v754: свернуть/развернуть панель фильтров кнопкой ≡ в тулбаре
 window.cal2ToggleSide = function(){
  var hidden = localStorage.getItem('cal2_side_hidden') === '1';
@@ -36424,7 +36431,7 @@ function cal2RenderTimeGrid(days){
   var eh = Math.ceil(endMin / 60);
   if(eh > maxH) maxH = Math.min(23, eh);
  });
- var SLOT = 56;
+ var SLOT = CAL2_SLOT;
  var N = days.length;
  var gridCols = ' style="grid-template-columns:56px repeat(' + N + ',1fr)"';
  var dayNames = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
@@ -36520,8 +36527,8 @@ function cal2HoldGhost(col, aMin, bMin, label){
  var g = document.createElement('div');
  g.className = 'cal2-ghost hold';
  g.innerHTML = '<span></span>';
- g.style.top = (aMin / 60 * 56).toFixed(0) + 'px';
- g.style.height = ((bMin - aMin) / 60 * 56).toFixed(0) + 'px';
+ g.style.top = (aMin / 60 * CAL2_SLOT).toFixed(0) + 'px';
+ g.style.height = ((bMin - aMin) / 60 * CAL2_SLOT).toFixed(0) + 'px';
  g.firstChild.textContent = label;
  col.appendChild(g);
  window._cal2KeepGhost = true; // первый ttQaCloseAll (при открытии окна) след не тронет
@@ -36533,7 +36540,7 @@ window.cal2SlotClick = function(ev, col){
  if(ev.target.closest('.cal2-ev') || ev.target.closest('.cal2-nowline')) return;
  var rect = col.getBoundingClientRect();
  var minH = parseInt(col.dataset.minh, 10) || 8;
- var hour = Math.max(0, Math.min(23, minH + Math.floor((ev.clientY - rect.top) / 56)));
+ var hour = Math.max(0, Math.min(23, minH + Math.floor((ev.clientY - rect.top) / CAL2_SLOT)));
  var aMin = (hour - minH) * 60;
  cal2HoldGhost(col, aMin, aMin + 45, String(hour).padStart(2,'0') + ':00 – ' + (hour >= 23 ? '23:59' : String(hour).padStart(2,'0') + ':45'));
  ttQuickAddOpen(col.dataset.date, hour, ev);
@@ -36545,7 +36552,7 @@ window.cal2DragStart = function(ev, col){
  ev.preventDefault(); // не выделять текст (плашки не задеты — для них выше ранний return, их drag жив)
  var rect = col.getBoundingClientRect();
  var minH = parseInt(col.dataset.minh, 10) || 8;
- var SLOT = 56;
+ var SLOT = CAL2_SLOT;
  var snap = function(y){ return Math.max(0, Math.round((y / SLOT) * 60 / 15) * 15); };
  var fmt = function(mins){
   var t = minH * 60 + mins;
@@ -36596,7 +36603,7 @@ window.cal2ResizeStart = function(ev, id){
  var all = crmEventsAll();
  var e = all.find(function(x){ return x.id === id; });
  if(!block || !e || !e.time_start) return;
- var SLOT = 56;
+ var SLOT = CAL2_SLOT;
  var startTop = parseInt(block.style.top, 10) || 0;
  var startH = parseInt(block.style.height, 10) || 40;
  var y0 = ev.clientY;
@@ -36796,6 +36803,7 @@ function cal2Keys(e){
 
 function crmCalendarInit(){
  crmCalState.selectedId = null;
+ document.body.classList.remove('cal2-nav-open'); // v756: меню программы стартует скрытым
  cal2LoadFilters(); // v746: восстановить галочки панели
  if(!window._cal2KeysOn){ document.addEventListener('keydown', cal2Keys); window._cal2KeysOn = true; } // v749
  // v458: подтягиваем задачи перед рендером (асинхронно — рендер сразу перерисует после загрузки)
