@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v766</title>
+<title>SalesDoc — Финансовый Дашборд v767</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6191,7 +6191,9 @@ body.light .amocard-mode-popup-item:hover { background:rgba(0,0,0,.05); }
 .amocard-chat-task-fields .ct-chip-op-dot { width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:4px; vertical-align:middle; }
 
 /* v457: тайм-поповер (заменяет нативный prompt) */
-.ct-time-popover { position:absolute; z-index:1000005; background:#0e1626; border:1px solid #2a3a52; border-radius:8px; padding:10px; min-width:240px; box-shadow:0 8px 24px rgba(0,0,0,.5); font-family:'PT Sans', Arial, sans-serif; } /* v766: выше полноэкранных карт — см. .ct-dd */
+.ct-time-popover { position:fixed; z-index:1000005; background:#0e1626; border:1px solid #2a3a52; border-radius:8px; padding:10px; min-width:240px; box-shadow:0 8px 24px rgba(0,0,0,.5); font-family:'PT Sans', Arial, sans-serif; } /* v766: выше полноэкранных карт — см. .ct-dd; v767: fixed + auto-flip в crmTasksTimePicker */
+.ct-time-scroll { max-height:150px; overflow-y:auto; margin-bottom:8px; scrollbar-width:thin; scrollbar-color:#2a3a52 transparent; } /* v767: сетка часов с шагом 30 мин в прокрутке */
+.ct-time-scroll .ct-time-grid { margin-bottom:0; }
 .ct-time-popover .ct-time-section-title { font-size:10px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:.3px; margin-bottom:5px; }
 .ct-time-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:4px; margin-bottom:8px; }
 .ct-time-grid button { padding:6px; font-size:11px; background:#15233a; border:1px solid #1e2837; color:#e5e7eb; border-radius:5px; cursor:pointer; font-family:inherit; transition:background .15s; }
@@ -31971,17 +31973,19 @@ function crmTasksTimePicker(anchor, current, onPick){
  var rect = anchor.getBoundingClientRect();
  var pop = document.createElement('div');
  pop.className = 'ct-time-popover';
- pop.style.left = rect.left + 'px';
- pop.style.top = (rect.bottom + 4) + 'px';
 
  var curTime = current && current.time_start ? current.time_start : '';
- // Топ-сетка: популярные часы рабочего дня
- var presets = ['09:00','10:00','11:00','12:00','14:00','15:00','17:00','18:00'];
- var inner = '<div class="ct-time-section-title">Время</div><div class="ct-time-grid">';
+ // v767: рабочие часы 08:00–20:00 с шагом 30 минут в прокрутке (было 8 пресетов только по часу)
+ var presets = [];
+ for(var hh = 8; hh <= 20; hh++){
+  presets.push(String(hh).padStart(2,'0') + ':00');
+  if(hh < 20) presets.push(String(hh).padStart(2,'0') + ':30');
+ }
+ var inner = '<div class="ct-time-section-title">Время</div><div class="ct-time-scroll"><div class="ct-time-grid">';
  presets.forEach(function(t){
   inner += '<button data-time="'+t+'"'+(t===curTime?' class="is-current"':'')+'>'+t+'</button>';
  });
- inner += '</div>';
+ inner += '</div></div>';
  // Относительные («через час», «через 3 часа»)
  inner += '<div class="ct-time-section-title">Через…</div><div class="ct-time-grid">';
  [['+30','30 мин',30], ['+1','1 час',60], ['+2','2 часа',120], ['+4','4 часа',240]].forEach(function(p){
@@ -31995,6 +31999,20 @@ function crmTasksTimePicker(anchor, current, onPick){
 
  pop.insertAdjacentHTML('beforeend', inner);
  document.body.appendChild(pop);
+ // v767: позиционирование с auto-flip (как у .ct-dd, v522) — раньше окно ставилось строго вниз
+ // и у composer-а внизу экрана обрезалось за краем (видна была только первая строка часов).
+ var pr = pop.getBoundingClientRect();
+ var pw = pr.width || 240, ph = pr.height || 300;
+ var px = rect.left, py = rect.bottom + 4;
+ if(px + pw > window.innerWidth - 12) px = Math.max(12, window.innerWidth - pw - 12);
+ if(py + ph > window.innerHeight - 12) py = Math.max(12, rect.top - ph - 4);
+ if(py < 12) py = 12;
+ if(px < 12) px = 12;
+ pop.style.left = px + 'px';
+ pop.style.top = py + 'px';
+ // текущее время видно сразу (сетка в прокрутке)
+ var curBtn = pop.querySelector('.ct-time-grid .is-current');
+ if(curBtn) curBtn.scrollIntoView({ block:'nearest' });
 
  var close = function(){ pop.remove(); document.removeEventListener('click', clickOutside); };
  var pick = function(payload){ onPick(payload); close(); };
