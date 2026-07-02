@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v760</title>
+<title>SalesDoc — Финансовый Дашборд v761</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -35887,7 +35887,7 @@ function ttQuickAddOpen(date, hour, anchorEv, times){
   date: date,
   time_start: startStr,
   time_end: endStr,
-  is_all_day: false,
+  is_all_day: !!(times && times.all_day), // v761: клик по строке «Весь день»
   type_id: 1 // v759: тип задачи, меняется чипом «Тип»
  };
  window._ttQa = { state: state };
@@ -36561,7 +36561,8 @@ function cal2RenderTimeGrid(days){
  html += '<div class="cal2-allday"' + gridCols + '><div class="lbl">Весь день</div>';
  days.forEach(function(d){
   var ds = crmDateStr(d);
-  html += '<div class="cell" ondragover="event.preventDefault()" ondrop="event.preventDefault();crmCalDropOnDate(\'' + ds + '\',event)">';
+  // v761: клик по пустому месту строки «Весь день» → создание задачи сразу на весь день
+  html += '<div class="cell" style="cursor:pointer" title="Задача на весь день" onclick="cal2AllDayClick(event, \'' + ds + '\')" ondragover="event.preventDefault()" ondrop="event.preventDefault();crmCalDropOnDate(\'' + ds + '\',event)">';
   (allDay[ds] || []).forEach(function(e){
    // v750: оплаты — зелёные, не перетаскиваются (дата продления живёт в реестре клиентов)
    var payCls = e._pay_layer ? ' pay' : '';
@@ -36649,6 +36650,11 @@ function cal2HoldGhost(col, aMin, bMin, label){
  window._cal2KeepGhost = true; // первый ttQaCloseAll (при открытии окна) след не тронет
  return g;
 }
+// v761: клик по строке «Весь день» → quick-add сразу с «весь день» (без времени)
+window.cal2AllDayClick = function(ev, ds){
+ if(ev.target.closest('.cal2-adev')) return; // клик по существующей плашке — её карточка
+ ttQuickAddOpen(ds, 9, ev, { all_day: true });
+};
 // клик по пустому слоту недели → quick-add с датой и часом (+ след на месте будущей задачи)
 window.cal2SlotClick = function(ev, col){
  if(window._cal2Dragged) return; // v747: только что была протяжка — это не клик
