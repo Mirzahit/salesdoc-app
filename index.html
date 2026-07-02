@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v753</title>
+<title>SalesDoc — Финансовый Дашборд v754</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -971,6 +971,10 @@ body.light .kb-card:hover{border-color:var(--amo-blue)!important}
    Topbar и все паддинги — убираем, чтобы календарь занимал всю доступную ширину
    (100vw - sidebar) и всю высоту (100vh). */
 body.cal-fullscreen .topbar{display:none !important}
+/* v754: в календаре прячем и колонку программы — календарь на весь монитор (выход — крестик) */
+body.cal-fullscreen .sidebar{display:none !important}
+body.cal-fullscreen .sidebar-overlay{display:none !important}
+body.cal-fullscreen .main{margin-left:0 !important;width:100% !important}
 body.cal-fullscreen .content{padding:0 !important;margin:0 !important}
 body.cal-fullscreen .main{min-height:100vh}
 body.cal-fullscreen #view-calendar{min-height:100vh;margin:0;padding:0;width:100%}
@@ -1221,6 +1225,8 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-app{display:flex;height:100vh;color:#F2F4F8;font-size:13px;
  background:radial-gradient(1000px 500px at 55% -10%, rgba(110,121,224,.14) 0%, transparent 60%),radial-gradient(700px 400px at 90% 110%, rgba(86,168,255,.05) 0%, transparent 60%),#0B0C10}
 #view-calendar .cal2-side{width:250px;flex:none;display:flex;flex-direction:column;gap:16px;background:linear-gradient(180deg,#181A24 0%,#10121A 100%);border-right:1px solid rgba(255,255,255,.06);padding:18px 16px;overflow-y:auto;scrollbar-width:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+/* v754: панель фильтров сворачивается кнопкой ≡ (состояние запоминается) */
+#view-calendar .cal2-app.noside .cal2-side{display:none}
 #view-calendar .cal2-brand{display:flex;align-items:center;gap:10px;padding:0 2px}
 #view-calendar .cal2-brand .lg{width:30px;height:30px;border-radius:9px;flex:none;background:linear-gradient(135deg,#7A85F2 0%,#4D57C8 100%);box-shadow:0 4px 14px rgba(110,121,224,.4), inset 0 1px 0 rgba(255,255,255,.25);display:grid;place-items:center;font-size:14px;font-weight:800;color:#fff}
 #view-calendar .cal2-brand h1{font-size:15.5px;font-weight:700;letter-spacing:-.3px;margin:0}
@@ -35571,7 +35577,8 @@ function cal2RenderToolbar(){
    return '<button class="' + (crmCalState.list === x[0] ? 'on' : '') + '" onclick="crmCalSetList(\'' + x[0] + '\')">' + x[1] + '</button>';
   }).join('') + '</div>';
  }
- el.innerHTML = '<button class="cal2-tbtn" onclick="crmCalSetViewDate(\'' + today + '\')">Сегодня</button>'
+ el.innerHTML = '<button class="cal2-tbtn" onclick="cal2ToggleSide()" title="Свернуть/развернуть панель фильтров" style="padding:7px 11px;font-size:14px;line-height:1">&#8801;</button>'
+  + '<button class="cal2-tbtn" onclick="crmCalSetViewDate(\'' + today + '\')">Сегодня</button>'
   + nav + '<div class="cal2-title">' + title + '</div>' + listChips + '<div class="cal2-sp"></div>'
   + '<span class="cal2-tchip">На неделе <b>' + st.week + '</b></span>'
   + (st.late ? '<span class="cal2-tchip alert">Просрочено <b>' + st.late + '</b></span>' : '')
@@ -36353,10 +36360,21 @@ function cal2RenderGrid(){
  else crmCalRenderList();
 }
 function crmCalRender(){
+ // v754: применить свёрнутость панели фильтров (запомнена в localStorage)
+ var app = document.querySelector('#view-calendar .cal2-app');
+ if(app) app.classList.toggle('noside', localStorage.getItem('cal2_side_hidden') === '1');
  cal2RenderSide();
  cal2RenderToolbar();
  cal2RenderGrid();
 }
+// v754: свернуть/развернуть панель фильтров кнопкой ≡ в тулбаре
+window.cal2ToggleSide = function(){
+ var hidden = localStorage.getItem('cal2_side_hidden') === '1';
+ try { localStorage.setItem('cal2_side_hidden', hidden ? '0' : '1'); } catch(e){}
+ var app = document.querySelector('#view-calendar .cal2-app');
+ if(app) app.classList.toggle('noside', !hidden);
+ cal2SyncHeadPad(); // ширина сетки изменилась — выровнять шапку под скроллбар
+};
 
 // v746: развод пересекающихся событий — дорожки внутри кластера (как Google Calendar)
 function cal2Lanes(items){ // items: [{startMin,endMin,...}] — мутирует, добавляя lane/laneCount
