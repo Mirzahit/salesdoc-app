@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v746</title>
+<title>SalesDoc — Финансовый Дашборд v747</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1323,6 +1323,9 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-dcol .hline{height:56px;border-bottom:1px solid rgba(255,255,255,.06)}
 #view-calendar .cal2-dcol.today{background:linear-gradient(180deg, rgba(110,121,224,.09) 0%, rgba(110,121,224,.03) 30%, rgba(110,121,224,.05) 100%);box-shadow:inset 1px 0 0 rgba(110,121,224,.25), inset -1px 0 0 rgba(110,121,224,.25)}
 #view-calendar .cal2-dcol.wknd{background:rgba(0,0,0,.18)}
+/* v747: призрак выделения периода протяжкой */
+#view-calendar .cal2-ghost{position:absolute;left:4px;right:6px;background:rgba(110,121,224,.22);border:1.5px dashed #6E79E0;border-radius:8px;z-index:4;pointer-events:none;display:flex;align-items:flex-start;padding:4px 8px}
+#view-calendar .cal2-ghost span{font-size:10px;font-weight:700;font-family:ui-monospace,monospace;color:#C0C6FF}
 #view-calendar .cal2-nowline{position:absolute;left:0;right:0;height:2px;z-index:6;pointer-events:none;background:linear-gradient(90deg,#FF5C8A,rgba(255,92,138,.35))}
 #view-calendar .cal2-nowline .pill{position:absolute;left:6px;top:-9px;background:#FF5C8A;color:#16060c;font-size:9.5px;font-weight:800;font-family:ui-monospace,monospace;border-radius:5px;padding:2px 6px;box-shadow:0 3px 10px rgba(255,92,138,.45)}
 #view-calendar .cal2-ev{position:absolute;left:5px;right:7px;border-radius:9px;padding:6px 9px;font-size:11px;line-height:1.32;cursor:pointer;overflow:hidden;z-index:2;border:1px solid transparent;box-shadow:0 4px 12px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.12);transition:transform .1s, box-shadow .1s}
@@ -35701,7 +35704,7 @@ function ttQaIcon(name){
  return icons[name] || '';
 }
 
-function ttQuickAddOpen(date, hour, anchorEv){
+function ttQuickAddOpen(date, hour, anchorEv, times){
  ttQaCloseAll();
  var startStr = String(hour).padStart(2,'0') + ':00';
  var endH = (hour + 1) > 23 ? 23 : (hour + 1);
@@ -35710,6 +35713,8 @@ function ttQuickAddOpen(date, hour, anchorEv){
  var endStr;
  if(hour >= 23){ endStr = '23:59'; }
  else { endStr = String(hour).padStart(2,'0') + ':' + String(endMin).padStart(2,'0'); }
+ // v747: точное время из протяжки мышкой по сетке (выделил период — получил «14:00 – 15:30»)
+ if(times && times.start){ startStr = times.start; endStr = times.end || endStr; }
  var state = {
   date: date,
   time_start: startStr,
@@ -36371,7 +36376,7 @@ function cal2RenderTimeGrid(days){
   var gd = d.getDay();
   var isToday = ds === today;
   html += '<div class="cal2-dcol' + (isToday ? ' today' : '') + ((gd === 0 || gd === 6) ? ' wknd' : '') + '" data-date="' + ds + '" data-minh="' + minH + '"'
-   + ' onclick="cal2SlotClick(event, this)"'
+   + ' onclick="cal2SlotClick(event, this)" onmousedown="cal2DragStart(event, this)"'
    + ' ondragover="event.preventDefault()" ondrop="event.preventDefault();crmCalDropOnDate(\'' + ds + '\',event)">';
   for(var hh = minH; hh <= maxH; hh++) html += '<div class="hline"></div>';
   var items = byDay[ds] || [];
@@ -36426,11 +36431,61 @@ function crmCalRenderDay(){
 }
 // клик по пустому слоту недели → quick-add с датой и часом
 window.cal2SlotClick = function(ev, col){
+ if(window._cal2Dragged) return; // v747: только что была протяжка — это не клик
  if(ev.target.closest('.cal2-ev') || ev.target.closest('.cal2-nowline')) return;
  var rect = col.getBoundingClientRect();
  var minH = parseInt(col.dataset.minh, 10) || 8;
  var hour = Math.max(0, Math.min(23, minH + Math.floor((ev.clientY - rect.top) / 56)));
  ttQuickAddOpen(col.dataset.date, hour, ev);
+};
+// v747: протяжка мышкой по сетке — выделить период (шаг 15 мин) → quick-add с точным «с … до …»
+window.cal2DragStart = function(ev, col){
+ if(ev.button !== 0) return;
+ if(ev.target.closest('.cal2-ev') || ev.target.closest('.cal2-adev') || ev.target.closest('.cal2-nowline')) return;
+ ev.preventDefault(); // не выделять текст (плашки не задеты — для них выше ранний return, их drag жив)
+ var rect = col.getBoundingClientRect();
+ var minH = parseInt(col.dataset.minh, 10) || 8;
+ var SLOT = 56;
+ var snap = function(y){ return Math.max(0, Math.round((y / SLOT) * 60 / 15) * 15); };
+ var fmt = function(mins){
+  var t = minH * 60 + mins;
+  var hh = Math.min(23, Math.floor(t / 60));
+  var mm = (t >= 24 * 60) ? 59 : t % 60;
+  return String(hh).padStart(2, '0') + ':' + String(Math.min(59, mm)).padStart(2, '0');
+ };
+ var m0 = snap(ev.clientY - rect.top);
+ var ghost = null, moved = false;
+ function onMove(e2){
+  if(!moved && Math.abs(e2.clientY - ev.clientY) < 7) return;
+  moved = true;
+  if(!ghost){
+   ghost = document.createElement('div');
+   ghost.className = 'cal2-ghost';
+   ghost.innerHTML = '<span></span>';
+   col.appendChild(ghost);
+  }
+  var m1 = snap(e2.clientY - rect.top);
+  var a = Math.min(m0, m1), b = Math.max(m0, m1);
+  if(b - a < 15) b = a + 15;
+  ghost.style.top = (a / 60 * SLOT).toFixed(0) + 'px';
+  ghost.style.height = ((b - a) / 60 * SLOT).toFixed(0) + 'px';
+  ghost.firstChild.textContent = fmt(a) + ' – ' + fmt(b);
+  ghost._a = a; ghost._b = b;
+ }
+ function onUp(e3){
+  document.removeEventListener('mousemove', onMove);
+  document.removeEventListener('mouseup', onUp);
+  if(moved && ghost){
+   // подавить click, который браузер выстрелит следом за mouseup
+   window._cal2Dragged = true;
+   setTimeout(function(){ window._cal2Dragged = false; }, 250);
+   var a = ghost._a, b = ghost._b;
+   ghost.remove();
+   ttQuickAddOpen(col.dataset.date, 0, e3, { start: fmt(a), end: fmt(b) });
+  } else if(ghost){ ghost.remove(); }
+ }
+ document.addEventListener('mousemove', onMove);
+ document.addEventListener('mouseup', onUp);
 };
 // линия «сейчас»: singleton-таймер, обновление раз в минуту, только когда календарь виден
 function cal2NowTick(minH, SLOT){
