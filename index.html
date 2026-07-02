@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v749</title>
+<title>SalesDoc — Финансовый Дашборд v750</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1319,6 +1319,8 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-allday .cell{border-left:1px solid rgba(255,255,255,.06);padding:4px 5px;min-width:0}
 #view-calendar .cal2-adev{display:inline-flex;align-items:center;gap:7px;border-radius:7px;padding:4px 10px;margin:1px 2px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;max-width:100%;background:linear-gradient(135deg,rgba(110,121,224,.85),rgba(77,87,200,.85));box-shadow:0 3px 10px rgba(110,121,224,.3), inset 0 1px 0 rgba(255,255,255,.2)}
 #view-calendar .cal2-adev span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* v750: плашка оплаты клиента — зелёная */
+#view-calendar .cal2-adev.pay{background:linear-gradient(135deg,rgba(43,181,119,.85),rgba(26,130,84,.85));box-shadow:0 3px 10px rgba(43,181,119,.3), inset 0 1px 0 rgba(255,255,255,.2)}
 #view-calendar .cal2-wgrid{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.10) transparent}
 #view-calendar .cal2-wgrid-in{display:grid;grid-template-columns:56px repeat(7,1fr);position:relative}
 #view-calendar .cal2-hcell{height:56px;position:relative}
@@ -35261,7 +35263,7 @@ var CRM_EVENTS_KEY = 'crm_events';
 var crmCalState = {
  list: 'today', selectedId: null, viewMode: 'week', viewDate: null, miniYM: null,
  operators: {},                       // {имя:false} = скрыт; отсутствие ключа = показан
- layers: { task: true, team: true },  // task = синк из /api/tasks, team = нативные события
+ layers: { task: true, team: true, pay: true },  // task = синк из /api/tasks, team = нативные, pay = оплаты клиентов (v750)
  types: { call: true, meeting: true, training: true, deadline: true },
  hideDone: false, onlyLate: false, clientQ: ''
 };
@@ -35324,19 +35326,47 @@ function _calApplyFilters(events){
  var s = crmCalState, today = crmDateStr(new Date()), q = (s.clientQ || '').toLowerCase();
  return events.filter(function(e){
   if(e.operator && s.operators[e.operator] === false) return false;
-  if(e._sync_task ? !s.layers.task : !s.layers.team) return false;
-  if(!s.types[_calUiType(e)]) return false;
+  // v750: три слоя — оплаты клиентов / задачи из базы / нативные события команды
+  var layerOk = e._pay_layer ? s.layers.pay : (e._sync_task ? s.layers.task : s.layers.team);
+  if(!layerOk) return false;
+  if(!e._pay_layer && !s.types[_calUiType(e)]) return false; // оплатами управляет только их слой
   if(s.hideDone && e.status === 'done') return false;
   if(s.onlyLate && !(e.date && e.date < today && e.status !== 'done')) return false;
   if(q && ((e.client || '') + ' ' + (e.title || '')).toLowerCase().indexOf(q) < 0) return false;
   return true;
  });
 }
+// v750: все события календаря = локальные+синк (crm_events) + синтетические оплаты клиентов
+function cal2AllEvents(){
+ return crmEventsAll().concat(window._cal2PayEvents || []);
+}
+// v750: загрузка дат следующих оплат действующих клиентов → синтетические all-day события
+async function cal2LoadPayments(){
+ try {
+  var d = await sbFetch('/api/clients?status=active');
+  if(!d || !d.ok) return;
+  window._cal2PayEvents = (d.clients || []).filter(function(c){ return c.next_billing_at; }).map(function(c){
+   return {
+    id: 'pay_' + c.client_id,
+    _pay_layer: true,
+    title: c.company_name || c.client_id,
+    date: String(c.next_billing_at).slice(0, 10),
+    time_start: '', time_end: '', is_all_day: true,
+    type: 'deadline',
+    client: c.company_name || '',
+    client_id: c.client_id,
+    operator: c.curator_operator || '',
+    status: 'planned',
+    notes: 'Следующая оплата подписки' + (c.subscription_period_months ? ' · период ' + c.subscription_period_months + ' мес' : '')
+   };
+  });
+ } catch(e){ console.warn('[cal] payments load failed:', e); }
+}
 // Команда = известные операторы канбана + все встреченные в событиях
 function cal2Ops(){
  var set = {};
  if(typeof KB_OP_COLORS !== 'undefined') Object.keys(KB_OP_COLORS).forEach(function(n){ set[n] = 1; });
- crmEventsAll().forEach(function(e){ if(e.operator) set[e.operator] = 1; });
+ cal2AllEvents().forEach(function(e){ if(e.operator) set[e.operator] = 1; });
  return Object.keys(set).sort();
 }
 function cal2WeekBounds(){
@@ -35349,7 +35379,7 @@ function cal2Stats(){
  var today = crmDateStr(new Date());
  var w = cal2WeekBounds();
  var st = { today: 0, done: 0, late: 0, week: 0 };
- _calApplyFilters(crmEventsAll()).forEach(function(e){
+ _calApplyFilters(cal2AllEvents()).forEach(function(e){
   if(e.date === today){ st.today++; if(e.status === 'done') st.done++; }
   if(e.date && e.date < today && e.status !== 'done') st.late++;
   if(e.date && e.date >= w.monStr && e.date <= w.sunStr && e.status !== 'done') st.week++;
@@ -35398,7 +35428,7 @@ function crmCalFilter(){
  var today = crmDateStr(new Date());
  var tomorrow = crmDateStr(crmAddDays(new Date(), 1));
  var weekEnd = crmDateStr(crmAddDays(new Date(), 7));
- return _calApplyFilters(crmEventsAll()).filter(function(e){
+ return _calApplyFilters(cal2AllEvents()).filter(function(e){
  switch(crmCalState.list){
  case 'today': return e.date === today && e.status !== 'done';
  case 'tomorrow': return e.date === tomorrow && e.status !== 'done';
@@ -35430,7 +35460,7 @@ function cal2RenderSide(){
   + '<div class="row' + (st.late ? ' alert' : '') + '"><span>Просрочено</span><b>' + st.late + '</b></div></div>';
  // команда (нагрузка = открытые события на видимой неделе)
  var weekCount = {};
- crmEventsAll().forEach(function(e){
+ cal2AllEvents().forEach(function(e){
   if(e.operator && e.date && e.date >= w.monStr && e.date <= w.sunStr && e.status !== 'done') weekCount[e.operator] = (weekCount[e.operator] || 0) + 1;
  });
  html += '<div class="cal2-sec"><div class="h">Команда</div>';
@@ -35445,7 +35475,8 @@ function cal2RenderSide(){
  html += '</div>';
  html += '<div class="cal2-sec"><div class="h">Показывать</div>'
   + '<div class="cal2-person" onclick="cal2ToggleLayer(\'task\')"><span class="cal2-av av-gray">✓</span><span class="nm">Задачи по клиентам</span>' + cal2Chk(s.layers.task, null) + '</div>'
-  + '<div class="cal2-person" onclick="cal2ToggleLayer(\'team\')"><span class="cal2-av av-ind">S</span><span class="nm">События команды</span>' + cal2Chk(s.layers.team, 'ind') + '</div></div>';
+  + '<div class="cal2-person" onclick="cal2ToggleLayer(\'team\')"><span class="cal2-av av-ind">S</span><span class="nm">События команды</span>' + cal2Chk(s.layers.team, 'ind') + '</div>'
+  + '<div class="cal2-person" onclick="cal2ToggleLayer(\'pay\')"><span class="cal2-av av-green">₸</span><span class="nm">Оплаты клиентов</span>' + cal2Chk(s.layers.pay, 'green') + '</div></div>';
  var T = [['call','Звонки'],['meeting','Встречи и демо'],['training','Обучения'],['deadline','Дедлайны и работы']];
  html += '<div class="cal2-sec"><div class="h">Тип</div>';
  T.forEach(function(t){ html += '<div class="cal2-trow" onclick="cal2ToggleType(\'' + t[0] + '\')">' + cal2Chk(s.types[t[0]], null) + '<span class="nm">' + t[1] + '</span></div>'; });
@@ -35472,7 +35503,7 @@ function cal2RenderMini(){
  var w = cal2WeekBounds();
  // v749: точки под днями с открытыми задачами (после фильтров)
  var hasDates = {};
- _calApplyFilters(crmEventsAll()).forEach(function(e){ if(e.date && e.status !== 'done') hasDates[e.date] = true; });
+ _calApplyFilters(cal2AllEvents()).forEach(function(e){ if(e.date && e.status !== 'done') hasDates[e.date] = true; });
  var html = '<div class="mhead"><span class="mnav" onclick="cal2MiniNav(-1)">&lsaquo;</span><span>' + kbEsc(first.toLocaleDateString('ru-RU',{month:'long',year:'numeric'}).replace(' г.','')) + '</span><span class="mnav" onclick="cal2MiniNav(1)">&rsaquo;</span></div>';
  html += '<table><tr><th>П</th><th>В</th><th>С</th><th>Ч</th><th>П</th><th>С</th><th>В</th></tr>';
  var d = 1 - startDay;
@@ -35589,7 +35620,7 @@ function crmCalRenderMonth(){
  var startDay = (first.getDay() + 6) % 7;
  var today = crmDateStr(new Date());
  var byDay = {};
- _calApplyFilters(crmEventsAll()).forEach(function(e){
+ _calApplyFilters(cal2AllEvents()).forEach(function(e){
   if(!e.date) return;
   (byDay[e.date] = byDay[e.date] || []).push(e);
  });
@@ -35606,10 +35637,11 @@ function crmCalRenderMonth(){
    var evs = (byDay[ds] || []).slice().sort(function(a,b){ return (a.time_start||'99').localeCompare(b.time_start||'99'); }); // v746: топ-3 по времени
    html += '<div class="cal2-mo-cell ' + cls.join(' ') + '" ondragover="event.preventDefault()" ondrop="event.preventDefault();crmCalDropOnDate(\'' + ds + '\',event)" onclick="crmCalSetViewDate(\'' + ds + '\');crmCalSetViewMode(\'day\')"><div class="dn">' + date.getDate() + '</div>';
    evs.slice(0, 3).forEach(function(e){
-    var color = e._sync_task ? cal2OpColor(e.operator) : 'ind';
-    html += '<div class="cal2-mo-ev c-' + color + (e.status === 'done' ? ' done' : '') + '" draggable="true" ondragstart="event.stopPropagation();crmCalDragStartTask(event,\'' + e.id + '\')" onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
+    var color = e._pay_layer ? 'green' : (e._sync_task ? cal2OpColor(e.operator) : 'ind'); // v750
+    var mdrg = e._pay_layer ? '' : ' draggable="true" ondragstart="event.stopPropagation();crmCalDragStartTask(event,\'' + e.id + '\')"';
+    html += '<div class="cal2-mo-ev c-' + color + (e.status === 'done' ? ' done' : '') + '"' + mdrg + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
      + (e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\'' + e.client_id + '\')"' : '') + '>'
-     + kbEsc((e.title || '').slice(0, 26)) + '</div>';
+     + (e._pay_layer ? '₸ ' : '') + kbEsc((e.title || '').slice(0, 26)) + '</div>';
    });
    if(evs.length > 3) html += '<div class="cal2-mo-more">ещё ' + (evs.length - 3) + '</div>';
    html += '</div>';
@@ -36249,7 +36281,9 @@ function crmCalRenderList(){
     ? '<span class="cal2-av av-' + cal2OpColor(e.operator) + '" style="width:24px;height:24px;font-size:9px">' + kbEsc(cal2Initials(e.operator)) + '</span>'
     : '<span class="cal2-av av-ind" style="width:24px;height:24px;font-size:9px">S</span>';
    html += '<div class="cal2-li' + (done ? ' done' : '') + '" onclick="cal2ShowDetail(\'' + e.id + '\', event)">'
-    + '<span class="cal2-cb' + (done ? ' done' : '') + '" onclick="event.stopPropagation();crmEventToggleDone(\'' + e.id + '\')">' + (done ? '✓' : '') + '</span>'
+    + (e._pay_layer
+       ? '<span class="cal2-cb" style="border:none;color:#3FD68F;font-size:11px;font-weight:800;cursor:default">₸</span>'
+       : '<span class="cal2-cb' + (done ? ' done' : '') + '" onclick="event.stopPropagation();crmEventToggleDone(\'' + e.id + '\')">' + (done ? '✓' : '') + '</span>')
     + av
     + '<div class="ti"><div class="t">' + kbEsc(e.title || '') + '</div><div class="m">' + meta.join(' · ') + '</div></div>'
     + '<span class="tm">' + (e.time_start ? kbEsc(e.time_start + (e.time_end ? '–' + e.time_end : '')) : '') + '</span>'
@@ -36264,11 +36298,11 @@ function crmCalRenderList(){
 // v745: попап-карточка события (правой панели больше нет) — детали + те же действия
 window.cal2ShowDetail = function(id, ev){
  if(window._cal2Dragged) return; // v749: click после растягивания/протяжки — не открывать карточку
- var sel = crmEventsAll().find(function(e){ return e.id === id; });
+ var sel = cal2AllEvents().find(function(e){ return e.id === id; });
  if(!sel) return;
  var old = document.getElementById('cal2-detail'); if(old) old.remove();
  var time = sel.time_start ? (sel.date + ', ' + sel.time_start + (sel.time_end ? ' – ' + sel.time_end : '')) : (sel.date || 'без даты');
- var typeLabel = ({call:'Звонок',training:'Обучение',meeting:'Встреча',deadline:'Дедлайн',other:'Задача'})[sel.type] || 'Задача';
+ var typeLabel = sel._pay_layer ? 'Оплата (продление подписки)' : (({call:'Звонок',training:'Обучение',meeting:'Встреча',deadline:'Дедлайн',other:'Задача'})[sel.type] || 'Задача'); // v750
  var d = document.createElement('div');
  d.className = 'cal2-detail'; d.id = 'cal2-detail';
  d.innerHTML = '<span class="dt-x" onclick="this.parentNode.remove()">×</span>'
@@ -36280,10 +36314,12 @@ window.cal2ShowDetail = function(id, ev){
   + (sel.status === 'done' ? '<div class="dt-row"><span class="lbl">Статус</span><b>Выполнена</b></div>' : '')
   + (sel.notes ? '<div class="dt-row" style="display:block;margin-top:6px;font-size:11.5px;line-height:1.45">' + kbEsc(sel.notes) + '</div>' : '')
   + '<div class="dt-actions">'
-  + '<button onclick="crmEventDelete(\'' + sel.id + '\')">Удалить</button>'
-  + '<button onclick="crmEventOpenModal(\'' + sel.id + '\')">Редактировать</button>'
-  + (sel.client_id ? '<button onclick="crmCalOpenClient(\'' + sel.client_id + '\')">Карточка клиента</button>' : '')
-  + (sel.status !== 'done' ? '<button onclick="crmEventToggleDone(\'' + sel.id + '\')" style="background:#2BB577;border-color:#2BB577;color:#0B0C10;font-weight:700">Выполнить</button>' : '')
+  + (sel._pay_layer
+     ? (sel.client_id ? '<button onclick="crmCalOpenClient(\'' + sel.client_id + '\')">Карточка клиента</button>' : '')
+     : ('<button onclick="crmEventDelete(\'' + sel.id + '\')">Удалить</button>'
+      + '<button onclick="crmEventOpenModal(\'' + sel.id + '\')">Редактировать</button>'
+      + (sel.client_id ? '<button onclick="crmCalOpenClient(\'' + sel.client_id + '\')">Карточка клиента</button>' : '')
+      + (sel.status !== 'done' ? '<button onclick="crmEventToggleDone(\'' + sel.id + '\')" style="background:#2BB577;border-color:#2BB577;color:#0B0C10;font-weight:700">Выполнить</button>' : '')))
   + '</div>';
  var host = document.getElementById('view-calendar') || document.body;
  host.appendChild(d);
@@ -36344,7 +36380,7 @@ function cal2RenderTimeGrid(days){
  if(!listEl) return;
  var today = crmDateStr(new Date());
  var firstStr = crmDateStr(days[0]), lastStr = crmDateStr(days[days.length - 1]);
- var evs = _calApplyFilters(crmEventsAll()).filter(function(e){ return e.date && e.date >= firstStr && e.date <= lastStr; });
+ var evs = _calApplyFilters(cal2AllEvents()).filter(function(e){ return e.date && e.date >= firstStr && e.date <= lastStr; });
  var byDay = {}, allDay = {};
  var minH = 8, maxH = 19;
  evs.forEach(function(e){
@@ -36378,7 +36414,10 @@ function cal2RenderTimeGrid(days){
   var ds = crmDateStr(d);
   html += '<div class="cell" ondragover="event.preventDefault()" ondrop="event.preventDefault();crmCalDropOnDate(\'' + ds + '\',event)">';
   (allDay[ds] || []).forEach(function(e){
-   html += '<span class="cal2-adev" draggable="true" ondragstart="crmCalDragStartTask(event,\'' + e.id + '\')" onclick="cal2ShowDetail(\'' + e.id + '\', event)"><span>' + kbEsc(e.title || '') + '</span></span>';
+   // v750: оплаты — зелёные, не перетаскиваются (дата продления живёт в реестре клиентов)
+   var payCls = e._pay_layer ? ' pay' : '';
+   var drg = e._pay_layer ? '' : ' draggable="true" ondragstart="crmCalDragStartTask(event,\'' + e.id + '\')"';
+   html += '<span class="cal2-adev' + payCls + '"' + drg + ' onclick="cal2ShowDetail(\'' + e.id + '\', event)"><span>' + (e._pay_layer ? '₸ ' : '') + kbEsc(e.title || '') + '</span></span>';
   });
   html += '</div>';
  });
@@ -36717,6 +36756,8 @@ function crmCalendarInit(){
  if(typeof crmCalSyncTasksToLocal === 'function'){
   crmCalSyncTasksToLocal().then(function(){ if(typeof crmCalRender === 'function') crmCalRender(); });
  }
+ // v750: даты следующих оплат действующих клиентов (слой «Оплаты клиентов»)
+ cal2LoadPayments().then(function(){ if(typeof crmCalRender === 'function') crmCalRender(); });
  // v745: автофильтр «на себя» убран — календарь командный, все включены по умолчанию;
  // «только я» достигается двумя кликами по галочкам в панели
  if((typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'){
