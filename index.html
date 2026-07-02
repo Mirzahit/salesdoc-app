@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v743</title>
+<title>SalesDoc — Финансовый Дашборд v744</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -3950,8 +3950,10 @@ body.light .kbsp-field select,body.light .kbsp-field input{background:#FFFFFF;bo
 .kb-cl-item input{flex:1;background:var(--dark-bg);border:1px solid var(--dark-border);border-radius:8px;padding:8px 12px;color:var(--text-primary);font-size:12px}
 .kb-cl-item .kb-cl-del{background:none;border:none;color:#E5604D;cursor:pointer;font-size:16px;padding:4px 8px;opacity:.6;transition:opacity .2s}
 .kb-cl-item .kb-cl-del:hover{opacity:1}
-/* Checklist warning toast */
-.kb-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(214,115,115,.15);border:1px solid rgba(214,115,115,.3);color:#D89595;padding:10px 24px;border-radius:10px;font-size:12px;font-weight:600;z-index:300;opacity:0;transition:opacity .3s;pointer-events:none}
+/* v744: тост по умолчанию нейтральный графит («Клиент активирован» не должен выглядеть тревогой);
+   красный — только для ошибок (.err ставится в kbShowToast по kind или словам-маркерам) */
+.kb-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#232833;border:1px solid #3d4557;color:#E7EAF0;padding:10px 24px;border-radius:10px;font-size:12px;font-weight:600;z-index:300;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.kb-toast.err{background:rgba(214,115,115,.15);border-color:rgba(214,115,115,.3);color:#D89595}
 .kb-toast.visible{opacity:1;pointer-events:auto}
 /* KANBAN CRM FIELDS */
 .kbc-fields{margin-top:4px}
@@ -4637,17 +4639,24 @@ body.light .route-col-amo .rc .act.go{color:#4651B5}
 #view-route .rtbtn.primary{background:#3f6bd6;border-color:#3f6bd6;color:#fff;font-weight:600}
 #view-route .rtbtn.primary:hover{filter:brightness(1.12)}
 #view-route .rt-frow{display:flex;gap:8px;align-items:center;padding:0 2px 12px}
-/* v738: поле поиска клиента */
-#view-route .rt-search{display:flex;align-items:center;gap:8px;background:var(--surface,#232833);border:1px solid var(--border,#2E3440);border-radius:8px;padding:7px 11px;width:230px;color:var(--text-faint,#6B7280)}
+/* v744: тихий поиск — без коробки (CEO: «мне не нравится»); рамка только при наведении/фокусе */
+#view-route .rt-search{display:flex;align-items:center;gap:8px;background:none;border:1px solid transparent;border-radius:8px;padding:7px 11px;width:230px;color:var(--text-faint,#6B7280);transition:border-color .12s,background .12s}
+#view-route .rt-search:hover{border-color:var(--border,#2E3440)}
+#view-route .rt-search:focus-within{background:var(--surface,#16181d);border-color:#3f6bd6}
 #view-route .rt-search input{background:none;border:none;outline:none;color:var(--text,#E7EAF0);font:inherit;font-size:12.5px;width:100%}
 #view-route .rt-search input::placeholder{color:var(--text-faint,#6B7280)}
-#view-route .rt-search:focus-within{border-color:#3f6bd6}
 #view-route .rt-chip{display:flex;align-items:center;gap:6px;background:var(--surface,#232833);border:1px solid var(--border,#2E3440);border-radius:8px;padding:7px 12px;font-size:12.5px;color:var(--text-2,#9AA1AE);cursor:pointer;white-space:nowrap;user-select:none}
 #view-route .rt-chip:hover{border-color:var(--border-strong,#3d4557);color:var(--text,#E7EAF0)}
 #view-route .rt-chip b{color:var(--text,#E7EAF0);font-weight:600}
 #view-route .rt-chip .car{color:var(--text-faint,#6B7280);font-size:9px;margin-top:1px}
 #view-route .rt-chip.on{border-color:#3f6bd6;color:#5AA7F0}
 #view-route .rt-chip.on b{color:#5AA7F0}
+/* v744: сегмент «Мои/Все» (паттерн Поддержки) */
+#view-route .rt-seg{display:inline-flex;background:var(--surface,#16181d);border:1px solid var(--border,#2E3440);border-radius:8px;padding:2px;gap:2px}
+#view-route .rt-seg button{background:none;border:none;border-radius:6px;color:var(--text-soft,#9AA1AE);font-family:inherit;font-size:12px;font-weight:600;padding:5px 11px;cursor:pointer}
+#view-route .rt-seg button:hover{color:var(--text,#E7EAF0)}
+#view-route .rt-seg button.on{background:rgba(90,167,240,.14);color:#5AA7F0}
+#view-route .rt-seg .cnt{font-weight:400;opacity:.7;font-variant-numeric:tabular-nums}
 #view-route .rt-kb{display:flex;gap:0;border:1px solid var(--border,#23272f);border-bottom:none;border-radius:12px 12px 0 0;background:var(--surface,#16181d);overflow:hidden;height:calc(100vh - 230px);min-height:480px} /* v742: доска впритык к низу экрана, без нижней рамки (CEO: «нигде не должно быть пустоты») */
 #view-route .rt-col{flex:1 1 0;min-width:0;border-right:1px solid var(--border-faint,#14171d);display:flex;flex-direction:column;min-height:0}
 #view-route .rt-col:last-child{border-right:none}
@@ -8940,6 +8949,11 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
    <div class="rt-search">
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
     <input id="route-search" type="text" placeholder="Поиск клиента..." oninput="routeRender()">
+   </div>
+   <!-- v744: «Мои/Все» как в Поддержке — виден только операторам, «Мои» = фильтр по себе -->
+   <div class="rt-seg" id="route-scope-toggle" style="display:none">
+    <button data-scope="mine" onclick="routeScopeSet('mine')">Мои <span class="cnt"></span></button>
+    <button data-scope="all" onclick="routeScopeSet('all')">Все <span class="cnt"></span></button>
    </div>
    <div class="rt-chip" id="route-op-chip" onclick="routeOpFilterChip(this)">Оператор: <b id="route-op-chip-val">Все</b> <span class="car">&#9662;</span></div>
    <div class="rt-chip" id="route-unassigned-chip" onclick="_routeToggleUnassigned()">Без оператора</div>
@@ -29263,16 +29277,24 @@ async function routeLoad(){
   _b.innerHTML = _skc + _skc + _skc + _skc + _skc;
  }
  try {
-  // v738: allSettled — операторы и чек-листы вторичны, их падение не должно валить всю доску
+  // v738: allSettled — операторы/чек-листы/задачи вторичны, их падение не должно валить всю доску
   var _rs = await Promise.allSettled([
    sbFetch('/api/cards'),
    authFetch('/api/sb-ping').then(r=>r.json()),
-   sbFetch('/api/checklist?all=1')
+   sbFetch('/api/checklist?all=1'),
+   // v744: открытые задачи (отсортированы по сроку) — для «задачи дня» на карточках
+   (typeof crmTasksFetch === 'function' ? crmTasksFetch('/api/tasks') : sbFetch('/api/tasks'))
   ]);
   var cardsRes = _rs[0].status === 'fulfilled' ? _rs[0].value : null;
   var opsRes = _rs[1].status === 'fulfilled' ? _rs[1].value : {};
   var clRes = _rs[2].status === 'fulfilled' ? _rs[2].value : {};
+  var tasksRes = _rs[3].status === 'fulfilled' ? _rs[3].value : {};
   if(!cardsRes || !cardsRes.ok) throw new Error((cardsRes && cardsRes.error) || 'cards load failed');
+  // v744: ближайшая открытая задача на клиента (список уже по deadline_at asc — первая и есть ближайшая)
+  window._routeTaskByClient = {};
+  ((tasksRes && tasksRes.tasks) || []).forEach(function(t){
+   if(t.client_id && !window._routeTaskByClient[t.client_id]) window._routeTaskByClient[t.client_id] = t;
+  });
   routeCards = cardsRes.cards || [];
   routeOperators = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
   // v365: посчитать прогресс чек-листа на каждую карточку (для бейджа 3/6 на главной)
@@ -29361,6 +29383,25 @@ function routeOpFilterChip(anchor){
   if(chip) chip.classList.toggle('on', !!v);
   routeRender();
  });
+}
+
+// v744: «Мои/Все» — как в Поддержке. «Мои» просто ставит фильтр оператора на себя,
+// отдельного состояния нет (один механизм фильтрации, ноль рассинхрона).
+function _routeMyOperatorName(){
+ if(typeof currentUser === 'undefined' || !currentUser || !currentUser.name) return null;
+ var first = String(currentUser.name).trim().split(/\s+/)[0];
+ return routeOperators.some(function(o){ return o.name === first; }) ? first : null;
+}
+function routeScopeSet(scope){
+ var me = _routeMyOperatorName();
+ var sel = document.getElementById('route-filter-op');
+ if(!sel) return;
+ sel.value = (scope === 'mine' && me) ? me : '';
+ var lbl = document.getElementById('route-op-chip-val');
+ if(lbl) lbl.textContent = sel.value || 'Все';
+ var chip = document.getElementById('route-op-chip');
+ if(chip) chip.classList.toggle('on', !!sel.value);
+ routeRender();
 }
 
 // v738: клик по пустому аватару на карточке — назначить оператора прямо с доски
@@ -29455,6 +29496,20 @@ function routeRender(){
  // v734: синхронизация чипа с фильтром (его тогглят и из шапки колонки)
  var _uch = document.getElementById('route-unassigned-chip');
  if(_uch) _uch.classList.toggle('on', filterUnassigned);
+ // v744: «Мои/Все» — видим только операторам, подсветка и счётчики от текущего фильтра
+ var _seg = document.getElementById('route-scope-toggle');
+ if(_seg){
+  var _me = _routeMyOperatorName();
+  _seg.style.display = _me ? 'inline-flex' : 'none';
+  if(_me){
+   var _mineN = routeCards.filter(function(c){ return c.operator === _me; }).length;
+   _seg.querySelectorAll('button').forEach(function(b){
+    b.classList.toggle('on', b.dataset.scope === 'mine' ? (filterOp === _me) : !filterOp);
+    var cnt = b.querySelector('.cnt');
+    if(cnt) cnt.textContent = b.dataset.scope === 'mine' ? _mineN : routeCards.length;
+   });
+  }
+ }
  _routeUpdateStats();
  var html = '';
  ROUTE_STAGES.forEach(function(stage){
@@ -29511,12 +29566,30 @@ function routeRender(){
    var _av = card.operator
     ? '<span class="rt-av" title="' + _escHtml(card.operator) + '">' + _escHtml(_ini) + '</span>'
     : '<span class="rt-av none" title="Назначить оператора" onclick="event.stopPropagation();routeAssignChip(this,\'' + _cid + '\')">+</span>';
+   // v744: амо-паттерн — внизу карточки БЛИЖАЙШАЯ ЗАДАЧА (главный вопрос оператора «что делать»),
+   // чек-лист остаётся счётчиком справа. Без задачи — состояние чек-листа как раньше.
    var _ckTxt, _dotColor, _stCls = 'rt-st';
-   if(card._checkTotal > 0 && card._checkDone >= card._checkTotal){ _ckTxt = 'Чек-лист готов'; _dotColor = '#3FD08A'; _stCls += ' today'; }
-   else if(card._checkDone > 0){ _ckTxt = 'Чек-лист в работе'; _dotColor = '#8A909C'; }
-   // v738: красный «не начат» только когда карточка стоит 2+ дня — свежая не должна кричать
-   else if(days !== null && days >= 2){ _ckTxt = 'Чек-лист не начат'; _dotColor = '#FF5C8A'; _stCls += ' hot'; }
-   else { _ckTxt = 'Чек-лист не начат'; _dotColor = '#8A909C'; }
+   var _task = (window._routeTaskByClient || {})[card.client_id];
+   var _dl = _task && _task.deadline_at ? new Date(_task.deadline_at) : null;
+   if(_dl && isFinite(_dl.getTime())){
+    var _now = new Date();
+    var _isToday = _dl.toDateString() === _now.toDateString();
+    if(_isToday){
+     _ckTxt = 'Задача сегодня' + (_task.is_all_day ? '' : ' ' + _dl.toTimeString().slice(0,5));
+     _dotColor = '#3FD08A'; _stCls += ' today';
+    } else if(_dl.getTime() < _now.getTime()){
+     var _odD = Math.max(1, Math.floor((_now.getTime() - _dl.getTime())/86400000));
+     _ckTxt = 'Задача просрочена ' + _odD + ' дн';
+     _dotColor = '#FF5C8A'; _stCls += ' hot';
+    } else {
+     _ckTxt = 'Задача ' + _dl.toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' });
+     _dotColor = '#8A909C';
+    }
+   }
+   else if(card._checkTotal > 0 && card._checkDone >= card._checkTotal){ _ckTxt = 'Чек-лист готов'; _dotColor = '#3FD08A'; _stCls += ' today'; }
+   // v738: красный «нет задач» только когда карточка стоит 2+ дня — свежая не должна кричать
+   else if(days !== null && days >= 2){ _ckTxt = 'Нет задач'; _dotColor = '#FF5C8A'; _stCls += ' hot'; }
+   else { _ckTxt = 'Нет задач'; _dotColor = '#8A909C'; }
    var _ckNum = card._checkTotal > 0 ? '<span class="rt-cksum">' + card._checkDone + '/' + card._checkTotal + '</span>' : '';
    var _tags = '';
    if(card.payment_amount) _tags += '<span class="rt-tg">' + _routeFmtSum(Number(card.payment_amount)) + '</span>';
@@ -41240,9 +41313,12 @@ function kbMoveCard(card, newStage) {
  kbSaveToSheet(card, oldStage, newStage);
 }
 
-function kbShowToast(msg) {
+function kbShowToast(msg, kind) {
  var t = document.getElementById('kb-toast');
  t.textContent = msg;
+ // v744: kind 'err' → красный; без kind — угадываем по словам-маркерам (44 вызова по файлу, не переписывать же все)
+ var isErr = kind === 'err' || (!kind && /не получилось|не удалось|ошибка|заполните|не найден|не загрузился|введите|выберите|сначала|недоступен|допустимые|макс\./i.test(String(msg)));
+ t.classList.toggle('err', isErr);
  t.classList.add('visible');
  setTimeout(function(){ t.classList.remove('visible'); }, 3000);
 }
