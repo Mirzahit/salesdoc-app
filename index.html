@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v756</title>
+<title>SalesDoc — Финансовый Дашборд v757</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -36373,9 +36373,20 @@ function crmCalRender(){
  cal2RenderToolbar();
  cal2RenderGrid();
 }
-// v756: кнопка «Меню» — показать/скрыть боковую колонку программы поверх календаря
+// v756: кнопка «Меню» — показать/скрыть боковую колонку программы поверх календаря.
+// v757: открытое меню перекрывает саму кнопку — закрытие кликом в любое место мимо меню.
 window.cal2ToggleNav = function(){
- document.body.classList.toggle('cal2-nav-open');
+ var open = document.body.classList.toggle('cal2-nav-open');
+ if(open && !window._cal2NavCloser){
+  window._cal2NavCloser = function(e){
+   if(!e.target.closest('.sidebar')){
+    document.body.classList.remove('cal2-nav-open');
+    document.removeEventListener('mousedown', window._cal2NavCloser, true);
+    window._cal2NavCloser = null;
+   }
+  };
+  setTimeout(function(){ document.addEventListener('mousedown', window._cal2NavCloser, true); }, 0);
+ }
 };
 // v754: свернуть/развернуть панель фильтров кнопкой ≡ в тулбаре
 window.cal2ToggleSide = function(){
