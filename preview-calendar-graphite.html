@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Превью — Календарь SalesDoc</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0B0C10;
+  --panel:linear-gradient(180deg,#181A24 0%,#10121A 100%);
+  --panel-flat:#14161e;
+  --card:#1D2029;
+  --line:rgba(255,255,255,.06);
+  --line2:rgba(255,255,255,.10);
+  --line3:rgba(255,255,255,.16);
+  --tx:#F2F4F8;
+  --tx2:#9AA3B2;
+  --tx3:#5F6674;
+  --ind:#6E79E0;
+  --ind2:#9AA4FF;
+  --blue:#56A8FF;
+  --purple:#B78AF7;
+  --green:#3FD68F;
+  --orange:#FFA857;
+  --pink:#FF5C8A;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:
+    radial-gradient(1000px 500px at 55% -10%, rgba(110,121,224,.14) 0%, transparent 60%),
+    radial-gradient(700px 400px at 90% 110%, rgba(86,168,255,.05) 0%, transparent 60%),
+    var(--bg);
+  color:var(--tx);
+  font-family:'Inter',-apple-system,'Segoe UI',sans-serif;
+  font-size:13px;line-height:1.4;-webkit-font-smoothing:antialiased;overflow:hidden;
+}
+.app{display:flex;height:100vh}
+
+/* ═══ ЛЕВАЯ ПАНЕЛЬ ═══ */
+.side{
+  width:250px;flex:none;display:flex;flex-direction:column;gap:18px;
+  background:var(--panel);border-right:1px solid var(--line);
+  padding:18px 16px;overflow-y:auto;scrollbar-width:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+}
+.brand{display:flex;align-items:center;gap:10px;padding:0 2px}
+.brand .logo{
+  width:30px;height:30px;border-radius:9px;flex:none;
+  background:linear-gradient(135deg,#7A85F2 0%,#4D57C8 100%);
+  box-shadow:0 4px 14px rgba(110,121,224,.4), inset 0 1px 0 rgba(255,255,255,.25);
+  display:grid;place-items:center;font-size:14px;font-weight:800;color:#fff;
+}
+.brand h1{font-size:15.5px;font-weight:700;letter-spacing:-.3px}
+.brand .sub{font-size:10.5px;color:var(--tx3);margin-top:1px}
+.newbtn{
+  position:relative;border:none;border-radius:10px;color:#fff;width:100%;
+  background:linear-gradient(135deg,#7A85F2 0%,#5560D4 100%);
+  box-shadow:0 6px 18px rgba(110,121,224,.35), inset 0 1px 0 rgba(255,255,255,.22);
+  font:inherit;font-size:13px;font-weight:700;padding:10px 12px;cursor:pointer;
+  letter-spacing:-.1px;
+}
+.newbtn:hover{filter:brightness(1.08)}
+
+/* мини-календарь */
+.mini{background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:12px;padding:10px 10px 8px}
+.mini .mhead{display:flex;align-items:center;justify-content:space-between;padding:0 4px 8px;font-size:12.5px;font-weight:700}
+.mini .mnav{color:var(--tx3);cursor:pointer;padding:1px 7px;border-radius:5px;font-size:13px}
+.mini .mnav:hover{color:var(--tx);background:var(--card)}
+.mini table{width:100%;border-collapse:collapse;font-size:10.5px}
+.mini th{color:var(--tx3);font-weight:600;padding:2px 0 5px;text-align:center}
+.mini td{text-align:center;padding:1px 0}
+.mini td span{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:25px;height:23px;border-radius:6px;color:var(--tx2);cursor:pointer;
+  font-variant-numeric:tabular-nums;font-weight:500;
+}
+.mini td span:hover{background:var(--card);color:var(--tx)}
+.mini td.dim span{color:var(--tx3);opacity:.4}
+.mini td.today span{
+  background:linear-gradient(135deg,#7A85F2,#5560D4);color:#fff;font-weight:700;
+  box-shadow:0 3px 10px rgba(110,121,224,.45);
+}
+.mini td.inweek span{background:rgba(110,121,224,.13)}
+.mini td .dt{position:relative}
+.mini td.has::after{content:'';position:absolute;width:3px;height:3px;border-radius:50%;background:var(--ind2);margin-top:17px;margin-left:-2px}
+
+/* секции */
+.sec .h{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:10px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;
+  color:var(--tx3);padding:2px 4px 9px;
+}
+.person{
+  display:flex;align-items:center;gap:10px;padding:6px 7px;border-radius:9px;cursor:pointer;user-select:none;
+  transition:background .12s;
+}
+.person:hover{background:rgba(255,255,255,.04)}
+.person .av{
+  width:26px;height:26px;border-radius:8px;flex:none;
+  display:grid;place-items:center;font-size:10px;font-weight:800;color:#fff;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25), 0 2px 6px rgba(0,0,0,.35);
+}
+.person .nm{flex:1;font-size:12.5px;font-weight:600;color:var(--tx)}
+.person .load{font-size:10.5px;color:var(--tx3);font-family:var(--mono)}
+.person .chk{
+  width:15px;height:15px;border-radius:5px;border:1.5px solid var(--line3);flex:none;
+  display:grid;place-items:center;transition:all .12s;
+}
+.person .chk svg{display:block;opacity:1}
+.person.off .av{filter:grayscale(1);opacity:.45}
+.person.off .nm{color:var(--tx3)}
+.person.off .chk{border-color:var(--line2);background:none}
+.person.off .chk svg{display:none}
+.av-blue{background:linear-gradient(135deg,#67B4FF,#2E7CD6)}
+.av-purple{background:linear-gradient(135deg,#C79BFF,#8B5CE0)}
+.av-green{background:linear-gradient(135deg,#54E5A1,#1FA968)}
+.av-orange{background:linear-gradient(135deg,#FFBB70,#E5822E)}
+.chk-blue{background:#3D8FE8;border-color:#3D8FE8!important}
+.chk-purple{background:#9E6CE8;border-color:#9E6CE8!important}
+.chk-green{background:#2BB577;border-color:#2BB577!important}
+.chk-orange{background:#F09040;border-color:#F09040!important}
+.chk-ind{background:#6E79E0;border-color:#6E79E0!important}
+.chk-gray{background:#4A5160;border-color:#4A5160!important}
+/* строки фильтров (тип/статус) */
+.trow{display:flex;align-items:center;gap:10px;padding:5px 7px;border-radius:8px;cursor:pointer;user-select:none}
+.trow:hover{background:rgba(255,255,255,.04)}
+.trow .nm{font-size:12px;font-weight:500;color:var(--tx2);flex:1}
+.trow .chk{width:15px;height:15px;border-radius:5px;border:1.5px solid var(--line3);display:grid;place-items:center;flex:none;background:none}
+.trow .chk svg{display:none}
+.trow .chk.on{background:#4A5160;border-color:#4A5160}
+.trow .chk.on svg{display:block}
+/* поиск клиента */
+.csearch{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:9px;padding:7px 10px;color:var(--tx3)}
+.csearch:focus-within{border-color:var(--ind)}
+.csearch input{background:none;border:none;outline:none;color:var(--tx);font:inherit;font-size:12px;width:100%}
+.csearch input::placeholder{color:var(--tx3)}
+/* итог дня */
+.daysum{
+  background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:12px;padding:12px 13px;
+}
+.daysum .t{font-size:10px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--tx3);margin-bottom:8px}
+.daysum .row{display:flex;justify-content:space-between;font-size:12px;color:var(--tx2);padding:3px 0}
+.daysum .row b{color:var(--tx);font-family:var(--mono);font-size:12px}
+.daysum .row.alert b{color:var(--pink)}
+
+/* ═══ ГЛАВНАЯ ═══ */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.toolbar{
+  display:flex;align-items:center;gap:12px;padding:14px 20px;flex:none;
+}
+.tbtn{
+  background:var(--card);border:1px solid var(--line2);border-radius:9px;color:var(--tx);
+  font:inherit;font-size:12.5px;font-weight:600;padding:7px 15px;cursor:pointer;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+}
+.tbtn:hover{border-color:var(--line3)}
+.nav{display:flex;gap:2px}
+.nav button{
+  background:none;border:none;color:var(--tx3);font-size:16px;cursor:pointer;
+  width:30px;height:30px;border-radius:8px;
+}
+.nav button:hover{background:var(--card);color:var(--tx)}
+.title{font-size:18px;font-weight:800;letter-spacing:-.4px}
+.title .yr{color:var(--tx3);font-weight:500}
+.sp{flex:1}
+.tstat{display:flex;gap:8px}
+.tchip{
+  display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--tx2);
+  background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:8px;padding:5px 11px;
+}
+.tchip b{color:var(--tx);font-family:var(--mono);font-weight:600}
+.tchip.alert b{color:var(--pink)}
+.seg{
+  display:inline-flex;background:rgba(0,0,0,.35);border:1px solid var(--line);
+  border-radius:10px;padding:3px;gap:2px;
+}
+.seg button{
+  background:none;border:none;border-radius:7px;color:var(--tx3);
+  font:inherit;font-size:12px;font-weight:600;padding:6px 14px;cursor:pointer;
+}
+.seg button:hover{color:var(--tx2)}
+.seg button.on{
+  background:linear-gradient(180deg,#262A38,#1D212D);color:var(--tx);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 2px 6px rgba(0,0,0,.4);
+}
+
+/* ═══ НЕДЕЛЯ ═══ */
+.sheet{
+  flex:1;min-height:0;display:flex;flex-direction:column;margin:0 20px 0;
+  background:var(--panel-flat);border:1px solid var(--line);border-radius:16px 16px 0 0;
+  box-shadow:0 -1px 0 rgba(255,255,255,.04) inset, 0 20px 60px rgba(0,0,0,.35);
+  overflow:hidden;
+}
+.week{flex:1;min-height:0;display:flex;flex-direction:column}
+.whead{display:grid;grid-template-columns:56px repeat(7,1fr);flex:none;border-bottom:1px solid var(--line2)}
+.whead .cell{padding:10px 12px;border-left:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.whead .dow{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--tx3)}
+.whead .dnum{font-size:17px;font-weight:700;color:var(--tx2);font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.whead .cell.wknd .dnum{color:var(--tx3)}
+.whead .cell.today{position:relative}
+.whead .cell.today .dow{color:var(--ind2)}
+.whead .cell.today .dnum{
+  background:linear-gradient(135deg,#7A85F2,#5560D4);color:#fff;font-weight:800;
+  border-radius:9px;padding:2px 9px;margin-left:-3px;
+  box-shadow:0 4px 14px rgba(110,121,224,.5);
+}
+.whead .today-tag{
+  font-size:9px;font-weight:800;letter-spacing:.6px;color:var(--ind2);
+  text-transform:uppercase;margin-left:auto;
+}
+/* весь день */
+.allday{display:grid;grid-template-columns:56px repeat(7,1fr);flex:none;border-bottom:1px solid var(--line2);min-height:34px}
+.allday .lbl{font-size:8.5px;font-weight:700;color:var(--tx3);text-align:right;padding:11px 8px 0 0;text-transform:uppercase;letter-spacing:.4px}
+.allday .cell{border-left:1px solid var(--line);padding:4px 5px}
+.adev{
+  display:inline-flex;align-items:center;gap:7px;border-radius:7px;padding:4px 10px;margin:1px 2px;
+  font-size:11px;font-weight:700;color:#fff;cursor:pointer;max-width:100%;
+  background:linear-gradient(135deg,rgba(110,121,224,.85),rgba(77,87,200,.85));
+  box-shadow:0 3px 10px rgba(110,121,224,.3), inset 0 1px 0 rgba(255,255,255,.2);
+}
+.adev span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* сетка часов */
+.wgrid{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.wgrid-in{display:grid;grid-template-columns:56px repeat(7,1fr);position:relative}
+.hcell{height:56px;position:relative}
+.hcell span{
+  position:absolute;top:-6px;right:10px;font-size:9.5px;color:var(--tx3);
+  font-family:var(--mono);background:var(--panel-flat);padding:0 3px;
+}
+.dcol{border-left:1px solid var(--line);position:relative}
+.dcol .hline{height:56px;border-bottom:1px solid var(--line)}
+.dcol.today{
+  background:linear-gradient(180deg, rgba(110,121,224,.09) 0%, rgba(110,121,224,.03) 30%, rgba(110,121,224,.05) 100%);
+  box-shadow:inset 1px 0 0 rgba(110,121,224,.25), inset -1px 0 0 rgba(110,121,224,.25);
+}
+.dcol.wknd{background:rgba(0,0,0,.18)}
+/* линия «сейчас» */
+.nowline{position:absolute;left:0;right:0;height:2px;z-index:6;pointer-events:none;
+  background:linear-gradient(90deg,var(--pink),rgba(255,92,138,.35));
+}
+.nowline .pill{
+  position:absolute;left:6px;top:-9px;background:var(--pink);color:#16060c;
+  font-size:9.5px;font-weight:800;font-family:var(--mono);border-radius:5px;padding:2px 6px;
+  box-shadow:0 3px 10px rgba(255,92,138,.45);
+}
+/* событие */
+.ev{
+  position:absolute;left:5px;right:7px;border-radius:9px;padding:6px 9px;
+  font-size:11px;line-height:1.32;cursor:pointer;overflow:hidden;z-index:2;
+  border:1px solid transparent;
+  box-shadow:0 4px 12px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.12);
+  transition:transform .1s, box-shadow .1s;
+}
+.ev:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.15);z-index:5}
+.ev .t{font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px}
+.ev .m{color:rgba(255,255,255,.75);font-size:10px;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.ev .who{
+  position:absolute;right:6px;top:6px;width:17px;height:17px;border-radius:6px;
+  display:grid;place-items:center;font-size:7.5px;font-weight:800;color:#fff;
+  box-shadow:0 2px 5px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.3);
+}
+.ev.c-blue{background:linear-gradient(135deg,rgba(46,124,214,.92),rgba(28,86,158,.92))}
+.ev.c-purple{background:linear-gradient(135deg,rgba(139,92,224,.92),rgba(100,60,178,.92))}
+.ev.c-green{background:linear-gradient(135deg,rgba(31,169,104,.92),rgba(20,120,74,.92))}
+.ev.c-orange{background:linear-gradient(135deg,rgba(229,130,46,.92),rgba(178,94,26,.92))}
+.ev.c-ind{background:linear-gradient(135deg,rgba(110,121,224,.92),rgba(77,87,200,.92))}
+.ev.done{opacity:.38;box-shadow:none}
+.ev.done .t{text-decoration:line-through}
+.ev.late{outline:2px solid var(--pink);outline-offset:1px}
+.ev.late .m{color:#FFC2D4;font-weight:600}
+
+/* ═══ МЕСЯЦ ═══ */
+.month{flex:1;min-height:0;display:none;flex-direction:column}
+.mo-head{display:grid;grid-template-columns:repeat(7,1fr);flex:none;border-bottom:1px solid var(--line2)}
+.mo-head div{padding:9px 12px;font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--tx3);border-left:1px solid var(--line)}
+.mo-grid{flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;min-height:0}
+.mo-cell{border-left:1px solid var(--line);border-bottom:1px solid var(--line);padding:7px 8px;min-height:0;overflow:hidden;cursor:pointer;transition:background .1s}
+.mo-cell:hover{background:rgba(255,255,255,.025)}
+.mo-cell.wknd{background:rgba(0,0,0,.18)}
+.mo-cell .dn{font-size:12px;font-weight:600;color:var(--tx2);font-variant-numeric:tabular-nums;margin-bottom:5px}
+.mo-cell.dim .dn{color:var(--tx3);opacity:.4}
+.mo-cell.today{
+  background:linear-gradient(180deg, rgba(110,121,224,.10), rgba(110,121,224,.03));
+  box-shadow:inset 0 0 0 1px rgba(110,121,224,.35);
+}
+.mo-cell.today .dn{
+  display:inline-flex;background:linear-gradient(135deg,#7A85F2,#5560D4);color:#fff;font-weight:800;
+  border-radius:7px;padding:1px 8px;box-shadow:0 3px 10px rgba(110,121,224,.45);
+}
+.mo-ev{
+  display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;color:#fff;
+  padding:2.5px 7px;border-radius:5px;margin-bottom:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1);
+}
+.mo-ev.c-blue{background:linear-gradient(135deg,rgba(46,124,214,.75),rgba(28,86,158,.75))}
+.mo-ev.c-purple{background:linear-gradient(135deg,rgba(139,92,224,.75),rgba(100,60,178,.75))}
+.mo-ev.c-green{background:linear-gradient(135deg,rgba(31,169,104,.75),rgba(20,120,74,.75))}
+.mo-ev.c-orange{background:linear-gradient(135deg,rgba(229,130,46,.75),rgba(178,94,26,.75))}
+.mo-ev.c-ind{background:linear-gradient(135deg,rgba(110,121,224,.8),rgba(77,87,200,.8))}
+.mo-more{font-size:10px;color:var(--tx3);padding-left:6px;font-weight:600}
+
+/* ═══ quick-add ═══ */
+.qa{
+  position:fixed;z-index:100;width:320px;display:none;
+  background:linear-gradient(180deg,#20242F,#171A22);
+  border:1px solid var(--line3);border-radius:14px;padding:16px;
+  box-shadow:0 24px 64px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.qa.open{display:block}
+.qa input{
+  width:100%;background:none;border:none;outline:none;color:var(--tx);
+  font:inherit;font-size:14px;font-weight:700;margin-bottom:12px;letter-spacing:-.2px;
+}
+.qa input::placeholder{color:var(--tx3);font-weight:500}
+.qa .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.qa .chip{
+  background:rgba(255,255,255,.05);border:1px solid var(--line2);border-radius:7px;
+  padding:5px 10px;font-size:11.5px;font-weight:600;color:var(--tx2);cursor:pointer;
+}
+.qa .chip:hover{border-color:var(--line3);color:var(--tx)}
+.qa .foot{display:flex;gap:8px;justify-content:flex-end;align-items:center}
+.qa .kind{margin-right:auto;display:inline-flex;background:rgba(0,0,0,.35);border-radius:8px;padding:2px;gap:2px}
+.qa .kind button{background:none;border:none;border-radius:6px;color:var(--tx3);font:inherit;font-size:11.5px;font-weight:700;padding:5px 11px;cursor:pointer}
+.qa .kind button.on{background:linear-gradient(180deg,#262A38,#1D212D);color:var(--tx);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.qa .save{
+  background:linear-gradient(135deg,#7A85F2,#5560D4);border:none;border-radius:8px;color:#fff;
+  font:inherit;font-size:12px;font-weight:700;padding:7px 16px;cursor:pointer;
+  box-shadow:0 4px 14px rgba(110,121,224,.4), inset 0 1px 0 rgba(255,255,255,.2);
+}
+
+.hint{
+  position:fixed;left:50%;bottom:10px;transform:translateX(-50%);
+  background:#20242F;border:1px solid var(--line2);border-radius:9px;
+  color:var(--tx2);font-size:11px;padding:6px 14px;z-index:50;white-space:nowrap;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ЛЕВАЯ ПАНЕЛЬ -->
+  <aside class="side">
+    <div class="brand">
+      <span class="logo">К</span>
+      <div>
+        <h1>Календарь</h1>
+        <div class="sub">команда внедрения</div>
+      </div>
+    </div>
+    <button class="newbtn" onclick="openQA(600,240)">+ Задача или событие</button>
+
+    <div class="mini">
+      <div class="mhead">
+        <span class="mnav">&lsaquo;</span>
+        <span>Июль 2026</span>
+        <span class="mnav">&rsaquo;</span>
+      </div>
+      <table>
+        <tr><th>П</th><th>В</th><th>С</th><th>Ч</th><th>П</th><th>С</th><th>В</th></tr>
+        <tr><td class="dim inweek"><span>29</span></td><td class="dim inweek"><span>30</span></td><td class="inweek"><span>1</span></td><td class="today"><span>2</span></td><td class="inweek"><span>3</span></td><td class="inweek"><span>4</span></td><td class="inweek"><span>5</span></td></tr>
+        <tr><td><span>6</span></td><td><span>7</span></td><td><span>8</span></td><td><span>9</span></td><td><span>10</span></td><td><span>11</span></td><td><span>12</span></td></tr>
+        <tr><td><span>13</span></td><td><span>14</span></td><td><span>15</span></td><td><span>16</span></td><td><span>17</span></td><td><span>18</span></td><td><span>19</span></td></tr>
+        <tr><td><span>20</span></td><td><span>21</span></td><td><span>22</span></td><td><span>23</span></td><td><span>24</span></td><td><span>25</span></td><td><span>26</span></td></tr>
+        <tr><td><span>27</span></td><td><span>28</span></td><td><span>29</span></td><td><span>30</span></td><td><span>31</span></td><td class="dim"><span>1</span></td><td class="dim"><span>2</span></td></tr>
+      </table>
+    </div>
+
+    <div class="daysum">
+      <div class="t">Сегодня, четверг</div>
+      <div class="row"><span>Задач</span><b>5</b></div>
+      <div class="row"><span>Выполнено</span><b>1</b></div>
+      <div class="row alert"><span>Просрочено</span><b>1</b></div>
+    </div>
+
+    <div class="sec">
+      <div class="h"><span>Команда</span></div>
+      <div class="person" data-op="blue" onclick="togglePerson(this)">
+        <span class="av av-blue">АЯ</span><span class="nm">Аян</span><span class="load">6</span>
+        <span class="chk chk-blue"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span>
+      </div>
+      <div class="person" data-op="purple" onclick="togglePerson(this)">
+        <span class="av av-purple">АК</span><span class="nm">Акбар</span><span class="load">5</span>
+        <span class="chk chk-purple"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span>
+      </div>
+      <div class="person" data-op="green" onclick="togglePerson(this)">
+        <span class="av av-green">СМ</span><span class="nm">Самат</span><span class="load">3</span>
+        <span class="chk chk-green"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span>
+      </div>
+      <div class="person" data-op="orange" onclick="togglePerson(this)">
+        <span class="av av-orange">ДТ</span><span class="nm">Дулат</span><span class="load">2</span>
+        <span class="chk chk-orange"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="h"><span>Показывать</span></div>
+      <div class="person" data-op="task" onclick="togglePerson(this)">
+        <span class="av" style="background:linear-gradient(135deg,#5A6272,#3A414E)">✓</span><span class="nm">Задачи по клиентам</span>
+        <span class="chk chk-gray"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span>
+      </div>
+      <div class="person" data-op="ind" onclick="togglePerson(this)">
+        <span class="av" style="background:linear-gradient(135deg,#7A85F2,#4D57C8)">S</span><span class="nm">События команды</span>
+        <span class="chk chk-ind"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="h"><span>Тип</span></div>
+      <div class="trow" data-type="meeting" onclick="toggleType(this)"><span class="chk on"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span><span class="nm">Встречи и демо</span></div>
+      <div class="trow" data-type="training" onclick="toggleType(this)"><span class="chk on"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span><span class="nm">Обучения</span></div>
+      <div class="trow" data-type="call" onclick="toggleType(this)"><span class="chk on"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span><span class="nm">Звонки</span></div>
+      <div class="trow" data-type="deadline" onclick="toggleType(this)"><span class="chk on"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span><span class="nm">Дедлайны и работы</span></div>
+    </div>
+
+    <div class="sec">
+      <div class="h"><span>Статус</span></div>
+      <div class="trow" onclick="toggleDone(this)"><span class="chk"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span><span class="nm">Скрывать выполненные</span></div>
+      <div class="trow" onclick="toggleLate(this)"><span class="chk"><svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span><span class="nm">Только просроченные</span></div>
+    </div>
+
+    <div class="sec">
+      <div class="h"><span>Клиент</span></div>
+      <div class="csearch">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <input id="csearch" placeholder="Найти клиента..." oninput="filterClient(this.value)">
+      </div>
+    </div>
+  </aside>
+
+  <!-- ГЛАВНАЯ -->
+  <main class="main">
+    <div class="toolbar">
+      <button class="tbtn">Сегодня</button>
+      <div class="nav"><button>&lsaquo;</button><button>&rsaquo;</button></div>
+      <div class="title">29 июня &ndash; 5 июля <span class="yr">2026</span></div>
+      <div class="sp"></div>
+      <div class="tstat">
+        <span class="tchip">На неделе <b>16</b></span>
+        <span class="tchip alert">Просрочено <b>1</b></span>
+      </div>
+      <div class="seg">
+        <button onclick="hint()">День</button>
+        <button class="on" onclick="showWeek(this)">Неделя</button>
+        <button onclick="showMonth(this)">Месяц</button>
+        <button onclick="hint()">Список</button>
+      </div>
+    </div>
+
+    <div class="sheet">
+    <!-- НЕДЕЛЯ -->
+    <div class="week" id="v-week">
+      <div class="whead">
+        <div></div>
+        <div class="cell"><span class="dow">Пн</span><span class="dnum">29</span></div>
+        <div class="cell"><span class="dow">Вт</span><span class="dnum">30</span></div>
+        <div class="cell"><span class="dow">Ср</span><span class="dnum">1</span></div>
+        <div class="cell today"><span class="dow">Чт</span><span class="dnum">2</span><span class="today-tag">Сегодня</span></div>
+        <div class="cell"><span class="dow">Пт</span><span class="dnum">3</span></div>
+        <div class="cell wknd"><span class="dow">Сб</span><span class="dnum">4</span></div>
+        <div class="cell wknd"><span class="dow">Вс</span><span class="dnum">5</span></div>
+      </div>
+      <div class="allday">
+        <div class="lbl">Весь день</div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+        <div class="cell"><span class="adev" data-op="ind"><span>Вебинар для новых клиентов</span></span></div>
+        <div class="cell"></div>
+        <div class="cell"></div>
+      </div>
+      <div class="wgrid" id="wgrid">
+        <div class="wgrid-in" id="wgin">
+          <div class="hcol">
+            <div class="hcell"></div>
+            <div class="hcell"><span>09:00</span></div>
+            <div class="hcell"><span>10:00</span></div>
+            <div class="hcell"><span>11:00</span></div>
+            <div class="hcell"><span>12:00</span></div>
+            <div class="hcell"><span>13:00</span></div>
+            <div class="hcell"><span>14:00</span></div>
+            <div class="hcell"><span>15:00</span></div>
+            <div class="hcell"><span>16:00</span></div>
+            <div class="hcell"><span>17:00</span></div>
+            <div class="hcell"><span>18:00</span></div>
+          </div>
+          <!-- Пн 29 -->
+          <div class="dcol" onclick="qaFromGrid(event)">
+            <div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div>
+            <div class="ev c-ind" data-op="ind" style="top:60px;height:26px"><div class="t">Планёрка недели</div></div>
+            <div class="ev c-blue" data-op="blue" style="top:116px;height:54px"><span class="who av-blue">АЯ</span><div class="t">Настройка кассы</div><div class="m">10:00 · Рахат Кофейня</div></div>
+            <div class="ev c-green late" data-op="green" style="top:396px;height:26px"><span class="who av-green">СМ</span><div class="t">Позвонить · satori</div></div>
+            <div class="ev c-purple" data-op="purple" style="top:284px;height:40px"><span class="who av-purple">АК</span><div class="t">Демо · muzdytau</div><div class="m">13:00</div></div>
+          </div>
+          <!-- Вт 30 -->
+          <div class="dcol" onclick="qaFromGrid(event)">
+            <div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div>
+            <div class="ev c-green" data-op="green" style="top:172px;height:26px"><span class="who av-green">СМ</span><div class="t">Звонок · Feya</div></div>
+            <div class="ev c-purple" data-op="purple" style="top:340px;height:82px"><span class="who av-purple">АК</span><div class="t">Обучение · Dostyk Pharm</div><div class="m">14:00&ndash;15:30 · кассиры</div></div>
+            <div class="ev c-blue" data-op="blue" style="top:88px;height:40px"><span class="who av-blue">АЯ</span><div class="t">Принтер чеков · shah-shymkent1</div><div class="m">09:30</div></div>
+          </div>
+          <!-- Ср 1 -->
+          <div class="dcol" onclick="qaFromGrid(event)">
+            <div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div>
+            <div class="ev c-blue" data-op="blue" style="top:88px;height:54px"><span class="who av-blue">АЯ</span><div class="t">Тест продаж · Bereke Fresh</div><div class="m">09:30 · обе кассы</div></div>
+            <div class="ev c-orange" data-op="orange" style="top:228px;height:40px"><span class="who av-orange">ДТ</span><div class="t">ТЗ доработки · Asktrade</div><div class="m">12:00</div></div>
+            <div class="ev c-ind" data-op="ind" style="top:508px;height:40px"><div class="t">Разбор недели с командой</div><div class="m">16:00</div></div>
+          </div>
+          <!-- Чт 2 — СЕГОДНЯ -->
+          <div class="dcol today" onclick="qaFromGrid(event)">
+            <div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div>
+            <div class="ev c-green done" data-op="green" style="top:60px;height:40px"><span class="who av-green">СМ</span><div class="t">Проверить сервер · echogroup</div><div class="m">09:00 · готово</div></div>
+            <div class="ev c-purple" data-op="purple" style="top:172px;height:54px"><span class="who av-purple">АК</span><div class="t">Обучение · Керемет Той</div><div class="m">11:00&ndash;12:00 · директор + бар</div></div>
+            <div class="ev c-blue" data-op="blue" style="top:396px;height:40px"><span class="who av-blue">АЯ</span><div class="t">Финальный звонок · assan-comp</div><div class="m">15:00</div></div>
+            <div class="ev c-green" data-op="green" style="top:480px;height:26px"><span class="who av-green">СМ</span><div class="t">Отчёт по серверам</div></div>
+            <div class="nowline" style="top:152px"><span class="pill">10:43</span></div>
+          </div>
+          <!-- Пт 3 -->
+          <div class="dcol" onclick="qaFromGrid(event)">
+            <div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div>
+            <div class="ev c-purple" data-op="purple" style="top:116px;height:26px"><span class="who av-purple">АК</span><div class="t">Созвон · Nur Baraka KG</div></div>
+            <div class="ev c-orange" data-op="orange" style="top:284px;height:68px"><span class="who av-orange">ДТ</span><div class="t">Интеграция 1С · Miras Toy</div><div class="m">13:00&ndash;14:15 · с бухгалтером</div></div>
+            <div class="ev c-blue" data-op="blue" style="top:452px;height:26px"><span class="who av-blue">АЯ</span><div class="t">Паспорт клиента · bekzhanshym</div></div>
+          </div>
+          <!-- Сб 4 -->
+          <div class="dcol wknd" onclick="qaFromGrid(event)">
+            <div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div>
+            <div class="ev c-blue" data-op="blue" style="top:172px;height:26px"><span class="who av-blue">АЯ</span><div class="t">Проверка · Zher Ana</div></div>
+          </div>
+          <!-- Вс 5 -->
+          <div class="dcol wknd" onclick="qaFromGrid(event)">
+            <div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div><div class="hline"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- МЕСЯЦ -->
+    <div class="month" id="v-month">
+      <div class="mo-head"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div>
+      <div class="mo-grid">
+        <div class="mo-cell dim"><div class="dn">29</div><div class="mo-ev c-blue">Настройка кассы</div><div class="mo-ev c-ind">Планёрка недели</div><div class="mo-more">ещё 2</div></div>
+        <div class="mo-cell dim"><div class="dn">30</div><div class="mo-ev c-purple">Обучение · Dostyk</div><div class="mo-ev c-blue">Принтер чеков</div></div>
+        <div class="mo-cell"><div class="dn">1</div><div class="mo-ev c-blue">Тест продаж · Bereke</div><div class="mo-ev c-orange">ТЗ · Asktrade</div></div>
+        <div class="mo-cell today"><div class="dn">2</div><div class="mo-ev c-purple">Обучение · Керемет</div><div class="mo-ev c-blue">Звонок · assan-comp</div><div class="mo-more">ещё 2</div></div>
+        <div class="mo-cell"><div class="dn">3</div><div class="mo-ev c-orange">Интеграция 1С · Miras</div><div class="mo-ev c-ind">Вебинар</div><div class="mo-more">ещё 1</div></div>
+        <div class="mo-cell wknd"><div class="dn">4</div><div class="mo-ev c-blue">Проверка · Zher Ana</div></div>
+        <div class="mo-cell wknd"><div class="dn">5</div></div>
+        <div class="mo-cell"><div class="dn">6</div></div>
+        <div class="mo-cell"><div class="dn">7</div><div class="mo-ev c-green">Звонок · Avahriev</div></div>
+        <div class="mo-cell"><div class="dn">8</div></div>
+        <div class="mo-cell"><div class="dn">9</div><div class="mo-ev c-ind">Планёрка месяца</div></div>
+        <div class="mo-cell"><div class="dn">10</div></div>
+        <div class="mo-cell wknd"><div class="dn">11</div></div>
+        <div class="mo-cell wknd"><div class="dn">12</div></div>
+        <div class="mo-cell"><div class="dn">13</div></div>
+        <div class="mo-cell"><div class="dn">14</div></div>
+        <div class="mo-cell"><div class="dn">15</div><div class="mo-ev c-purple">Обучение · fortisfood</div></div>
+        <div class="mo-cell"><div class="dn">16</div></div>
+        <div class="mo-cell"><div class="dn">17</div></div>
+        <div class="mo-cell wknd"><div class="dn">18</div></div>
+        <div class="mo-cell wknd"><div class="dn">19</div></div>
+        <div class="mo-cell"><div class="dn">20</div></div>
+        <div class="mo-cell"><div class="dn">21</div></div>
+        <div class="mo-cell"><div class="dn">22</div></div>
+        <div class="mo-cell"><div class="dn">23</div></div>
+        <div class="mo-cell"><div class="dn">24</div></div>
+        <div class="mo-cell wknd"><div class="dn">25</div></div>
+        <div class="mo-cell wknd"><div class="dn">26</div></div>
+        <div class="mo-cell"><div class="dn">27</div></div>
+        <div class="mo-cell"><div class="dn">28</div></div>
+        <div class="mo-cell"><div class="dn">29</div></div>
+        <div class="mo-cell"><div class="dn">30</div></div>
+        <div class="mo-cell"><div class="dn">31</div></div>
+        <div class="mo-cell dim wknd"><div class="dn">1</div></div>
+        <div class="mo-cell dim wknd"><div class="dn">2</div></div>
+      </div>
+    </div>
+    </div>
+  </main>
+</div>
+
+<!-- quick-add -->
+<div class="qa" id="qa">
+  <input placeholder="Что нужно сделать?" id="qa-in">
+  <div class="chips">
+    <span class="chip">Чт, 2 июля</span>
+    <span class="chip">11:00</span>
+    <span class="chip">Аян &#9662;</span>
+    <span class="chip">Клиент &#9662;</span>
+  </div>
+  <div class="foot">
+    <div class="kind">
+      <button class="on">Задача</button>
+      <button>Событие</button>
+    </div>
+    <button class="save" onclick="closeQA()">Сохранить</button>
+  </div>
+</div>
+
+<div class="hint" id="hintbox">Превью на выдуманных данных · клик по сетке — быстрое создание · галочки слева фильтруют · Неделя/Месяц кликаются</div>
+
+<script>
+function showWeek(btn){ setSeg(btn); document.getElementById('v-week').style.display='flex'; document.getElementById('v-month').style.display='none'; }
+function showMonth(btn){ setSeg(btn); document.getElementById('v-week').style.display='none'; document.getElementById('v-month').style.display='flex'; }
+function setSeg(btn){ document.querySelectorAll('.seg button').forEach(b=>b.classList.remove('on')); btn.classList.add('on'); }
+function hint(){ var h=document.getElementById('hintbox'); h.textContent='В готовой версии будут все 4 вида — в превью показаны Неделя и Месяц'; setTimeout(()=>h.textContent='Превью на выдуманных данных · клик по сетке — быстрое создание · галочки слева фильтруют · Неделя/Месяц кликаются', 2600); }
+// единое состояние фильтров: люди + слои + тип + статус + клиент
+var F = {
+  ops: { blue:1, purple:1, green:1, orange:1, task:1, ind:1 },
+  types: { meeting:1, training:1, call:1, deadline:1 },
+  hideDone: false, onlyLate: false, q: ''
+};
+// тип события в превью определяем по названию (в проде — реальный type_id задачи)
+document.querySelectorAll('.ev, .adev, .mo-ev').forEach(function(el){
+  var t = el.textContent.toLowerCase();
+  el.dataset.type = /обучение|вебинар/.test(t) ? 'training'
+    : /звонок|созвон|позвонить/.test(t) ? 'call'
+    : /планёрка|демо|встреча|разбор/.test(t) ? 'meeting' : 'deadline';
+});
+function applyFilters(){
+  document.querySelectorAll('.ev, .adev, .mo-ev').forEach(function(el){
+    var ok = true;
+    if(el.dataset.op && !F.ops[el.dataset.op]) ok = false;
+    if(ok && el.dataset.type && !F.types[el.dataset.type]) ok = false;
+    if(ok && F.hideDone && el.classList.contains('done')) ok = false;
+    if(ok && F.onlyLate && !el.classList.contains('late')) ok = false;
+    if(ok && F.q && el.textContent.toLowerCase().indexOf(F.q) < 0) ok = false;
+    el.style.display = ok ? '' : 'none';
+  });
+}
+function togglePerson(el){
+  el.classList.toggle('off');
+  F.ops[el.dataset.op] = el.classList.contains('off') ? 0 : 1;
+  applyFilters();
+}
+function toggleType(el){
+  var chk = el.querySelector('.chk');
+  chk.classList.toggle('on');
+  F.types[el.dataset.type] = chk.classList.contains('on') ? 1 : 0;
+  applyFilters();
+}
+function toggleDone(el){
+  var chk = el.querySelector('.chk');
+  chk.classList.toggle('on');
+  F.hideDone = chk.classList.contains('on');
+  applyFilters();
+}
+function toggleLate(el){
+  var chk = el.querySelector('.chk');
+  chk.classList.toggle('on');
+  F.onlyLate = chk.classList.contains('on');
+  applyFilters();
+}
+function filterClient(v){
+  F.q = (v || '').trim().toLowerCase();
+  applyFilters();
+}
+function openQA(x, y){
+  var qa = document.getElementById('qa');
+  qa.style.left = Math.min(x, window.innerWidth-340) + 'px';
+  qa.style.top = Math.min(y, window.innerHeight-230) + 'px';
+  qa.classList.add('open');
+  setTimeout(()=>document.getElementById('qa-in').focus(), 50);
+}
+function closeQA(){ document.getElementById('qa').classList.remove('open'); }
+function qaFromGrid(e){
+  if(e.target.closest('.ev')) return;
+  openQA(e.clientX + 8, e.clientY - 40);
+  e.stopPropagation();
+}
+document.addEventListener('click', function(e){
+  var qa = document.getElementById('qa');
+  if(qa.classList.contains('open') && !qa.contains(e.target) && !e.target.closest('.dcol') && !e.target.closest('.newbtn')) closeQA();
+});
+document.getElementById('wgrid').scrollTop = 34;
+</script>
+</body>
+</html>
