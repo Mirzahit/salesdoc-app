@@ -91,6 +91,16 @@ async function handleGet(req, res) {
     return res.status(200).json({ ok: true, count: tasks.length, tasks });
   }
 
+  // v760: GET /api/tasks?status=done — недавно закрытые (для календаря: погашенные плашки и пресет «Выполненные»)
+  if (q.status === 'done') {
+    const tasks = await sbSelect('tasks', {
+      status: 'eq.done',
+      order: 'closed_at.desc',
+      limit: '200'
+    });
+    return res.status(200).json({ ok: true, count: tasks.length, tasks });
+  }
+
   // Без фильтра — отдаём все открытые задачи (для отладки/админа). С limit для защиты.
   const tasks = await sbSelect('tasks', {
     status: 'eq.open',
