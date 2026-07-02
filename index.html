@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v759</title>
+<title>SalesDoc — Финансовый Дашборд v760</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -36822,14 +36822,21 @@ function crmCalOpenClient(clientId){
 async function crmCalSyncTasksToLocal(){
  if(typeof crmTasksFetch !== 'function') return;
  try {
-  var d = await crmTasksFetch('/api/tasks?status=open');
+  // v760: тянем и НЕДАВНО ЗАКРЫТЫЕ (последние 200) — раньше выполненная задача исчезала
+  // из календаря при следующем синке, и пресет «Выполненные» был вечно пуст
+  var _rs = await Promise.allSettled([
+   crmTasksFetch('/api/tasks?status=open'),
+   crmTasksFetch('/api/tasks?status=done')
+  ]);
+  var d = _rs[0].status === 'fulfilled' ? _rs[0].value : null;
+  var dDone = _rs[1].status === 'fulfilled' ? _rs[1].value : null;
   if(!d || !d.ok) return;
   var existing = crmEventsAll();
   // Сначала выкидываем все старые task-синки чтобы при удалении задачи в БД она исчезла и из календаря
   existing = existing.filter(function(e){ return !e._sync_task; });
   // v464: защита от quota exceeded в localStorage. На больших командах число открытых
   // задач может быть тысячами, а localStorage обычно ~5MB. Кэпим разумным числом.
-  var tasksArr = d.tasks || [];
+  var tasksArr = (d.tasks || []).concat((dDone && dDone.ok && dDone.tasks) || []);
   if(tasksArr.length > 500){
    console.warn('[cal] task sync: capping at 500 of', tasksArr.length, 'tasks to avoid localStorage overflow');
    tasksArr = tasksArr.slice(0, 500);
