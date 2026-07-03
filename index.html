@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v787</title>
+<title>SalesDoc — Финансовый Дашборд v788</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1338,12 +1338,12 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-adev.f-gray{background:linear-gradient(135deg,rgba(112,120,134,.85),rgba(78,85,97,.85));box-shadow:0 3px 10px rgba(112,120,134,.3), inset 0 1px 0 rgba(255,255,255,.2)}
 #view-calendar .cal2-wgrid{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.10) transparent}
 #view-calendar .cal2-wgrid-in{display:grid;grid-template-columns:56px repeat(7,1fr);position:relative}
-#view-calendar .cal2-hcell{height:72px;position:relative} /* v756: = CAL2_SLOT */
+#view-calendar .cal2-hcell{height:90px;position:relative} /* v788: = CAL2_SLOT (CEO: «увеличь календарь») */
 #view-calendar .cal2-hcell span{position:absolute;top:-8px;right:8px;font-size:13px;font-weight:600;color:#B6BEC9;font-family:ui-monospace,monospace;background:#14161e;padding:0 3px} /* v756: часы ещё крупнее */
 /* v755: крестик выхода убран — налезал на переключатель видов; выход = кнопка «В программу» в тулбаре */
 #view-calendar .cal-exit-fs{display:none!important}
 #view-calendar .cal2-dcol{border-left:1px solid rgba(255,255,255,.06);position:relative;min-width:0}
-#view-calendar .cal2-dcol .hline{height:72px;border-bottom:1px solid rgba(255,255,255,.06)} /* v756: = CAL2_SLOT */
+#view-calendar .cal2-dcol .hline{height:90px;border-bottom:1px solid rgba(255,255,255,.06)} /* v788: = CAL2_SLOT */
 #view-calendar .cal2-dcol.today{background:linear-gradient(180deg, rgba(110,121,224,.09) 0%, rgba(110,121,224,.03) 30%, rgba(110,121,224,.05) 100%);box-shadow:inset 1px 0 0 rgba(110,121,224,.25), inset -1px 0 0 rgba(110,121,224,.25)}
 #view-calendar .cal2-dcol.wknd{background:rgba(0,0,0,.18)}
 /* v747: призрак выделения периода протяжкой; v748: .hold — след живёт, пока открыто окно создания */
@@ -36498,7 +36498,7 @@ function crmCalCount(){
 
 // ═══ v745: cal2-* — единые фильтры и палитра операторов ═══
 var CAL2_COLORS = ['blue','purple','green','orange','pink','teal'];
-var CAL2_SLOT = 72; // v756: высота часа в сетке (CEO: «сетка больше и часы больше»); менять СИНХРОННО с CSS .cal2-hcell/.hline
+var CAL2_SLOT = 90; // v788: ещё крупнее (CEO: «увеличь календарь»); менять СИНХРОННО с CSS .cal2-hcell/.hline
 // Цвет оператора — детерминированный хеш имени (команда растёт — календарь не ломается)
 function cal2OpColor(name){
  if(!name) return 'ind';
@@ -38583,7 +38583,9 @@ function cal2RenderTimeGrid(days){
 function crmCalRenderWeek(){
  var w = cal2WeekBounds();
  var days = [];
- for(var i = 0; i < 7; i++){ var dd = new Date(w.mon); dd.setDate(w.mon.getDate() + i); days.push(dd); }
+ // v788: неделя ПН-СБ, воскресенье убрано из недельного вида (просьба CEO; в Месяце и Списке
+ // воскресные задачи видны, потеряться не могут)
+ for(var i = 0; i < 6; i++){ var dd = new Date(w.mon); dd.setDate(w.mon.getDate() + i); days.push(dd); }
  cal2RenderTimeGrid(days);
 }
 // v746: День = та же сетка, одна колонка (старый табличный вид удалён)
