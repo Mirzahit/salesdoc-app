@@ -183,7 +183,8 @@ export default async function handler(req, res) {
   const period = validatePeriod(String(req.query.period || 'last_30d'));
   // v442: country явно префиксом — раньше попадал внутрь req.query, но порядок ключей
   // в JSON.stringify не гарантирован, что давало риск смешения кэша KZ и KG.
-  const cacheKey = country + '|' + endpoint + '|' + period + '|' + JSON.stringify(req.query);
+  // v786: country в верхний регистр — 'kz' и 'KZ' раньше плодили два кэша (двойные запросы к Meta)
+  const cacheKey = String(country || '').toUpperCase() + '|' + endpoint + '|' + period + '|' + JSON.stringify(req.query);
   const cached = cacheGet(cacheKey);
   if (cached) {
     res.setHeader('X-Cache', 'HIT');

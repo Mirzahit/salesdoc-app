@@ -35,6 +35,10 @@ export default async function handler(req, res) {
       // renewal_within=-1 → уже просрочены (next_billing_at < today)
       if (renewal_within !== undefined) {
         const n = parseInt(renewal_within, 10);
+        // v786: нечисловое значение раньше роняло запрос в 500 (new Date(NaN).toISOString())
+        if (Number.isNaN(n)) {
+          return res.status(400).json({ ok: false, error: 'renewal_within должен быть числом' });
+        }
         const today = new Date().toISOString().slice(0, 10);
         if (n < 0) {
           params['next_billing_at'] = 'lt.' + today;

@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v785</title>
+<title>SalesDoc — Финансовый Дашборд v786</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -7123,8 +7123,9 @@ body.light .acad-bar { background:rgba(15,18,25,.10); }
 .mt-card { background:#0b1220; border:1px solid #1e2837; border-radius:8px; padding:10px 12px; margin-bottom:8px; cursor:grab; transition:transform .1s, box-shadow .15s, border-color .15s; }
 .mt-card:hover { border-color:#2a3a52; box-shadow:0 2px 10px rgba(0,0,0,.3); }
 .mt-card.is-dragging { opacity:.4; }
-.mt-card.is-overdue { border-left:3px solid #f37575; }
-.mt-card.is-today { border-left:3px solid #6CC09C; }
+/* v786: цветные border-left запрещены правилом проекта — сигналим рамкой целиком */
+.mt-card.is-overdue { border-color:rgba(243,117,117,.55); }
+.mt-card.is-today { border-color:rgba(108,192,156,.5); }
 .mt-card-stage-row { display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-bottom:4px; }
 .mt-card-contact { font-size:11px; color:#c5cad1; }
 .mt-card-stage { font-size:10px; padding:1px 7px; border-radius:3px; color:#5a1818; font-weight:600; }
@@ -12789,11 +12790,12 @@ function morningInit(){
 
 // ===== v270: ПРОГНОЗ CASH-FLOW =====
 var _cfHorizon = 30; // дней
-var CF_BALANCE_KEY = 'sd_cf_balance';
+// v786: остаток на счетах — СВОЙ на страну (был один: тенге KZ подставлялись в прогноз KG как сомы)
+function cfBalanceKey(){ return 'sd_cf_balance_' + (typeof currentCountry !== 'undefined' ? currentCountry : 'KZ'); }
 
 function cfInit(){
  // Восстанавливаем введённый остаток
- var saved = localStorage.getItem(CF_BALANCE_KEY);
+ var saved = localStorage.getItem(cfBalanceKey()) || localStorage.getItem('sd_cf_balance'); // fallback: старый общий ключ
  var inp = document.getElementById('cf-balance');
  if(inp && saved) inp.value = saved;
  // v592: валюта по стране в подписи остатка (был зашит ₸)
@@ -12906,7 +12908,7 @@ async function cfLoadHistoricalExpenses(monthsBack){
 function cfSaveBalance(){
  var inp = document.getElementById('cf-balance');
  if(!inp) return;
- localStorage.setItem(CF_BALANCE_KEY, inp.value || '');
+ localStorage.setItem(cfBalanceKey(), inp.value || ''); // v786: пострановой ключ
  cfRender();
 }
 
@@ -13009,7 +13011,7 @@ function cfBuildForecast(){
  for(var i=0;i<horizon;i++){ days[i].outgoing = dailyExp; }
 
  // === НЕТТО и кумулятив ===
- var balance = Number(localStorage.getItem(CF_BALANCE_KEY)) || 0;
+ var balance = Number(localStorage.getItem(cfBalanceKey())) || 0; // v786: пострановой ключ
  var cumNet = 0;
  days.forEach(function(d){
  d.net = d.incoming - d.outgoing;
@@ -14378,9 +14380,12 @@ function renderAllPayments() {
  }
 
  document.getElementById('all-payments').innerHTML = ps.map(function(p) {
- const seatBtn = '<button onclick="togglePaySeated('+JSON.stringify(p.id)+')" class="seated-badge '+(p.seated?'seated-yes':'seated-no')+'">'
+ // v786: JSON.stringify строкового id давал ДВОЙНЫЕ кавычки внутри onclick="..." — атрибут рвался,
+ // кнопки у свежедобавленных оплат (UUID/m-id) были мёртвые до перезагрузки. Одинарные кавычки.
+ const _pid = String(p.id).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'');
+ const seatBtn = '<button onclick="togglePaySeated(\''+_pid+'\')" class="seated-badge '+(p.seated?'seated-yes':'seated-no')+'">'
  +(p.seated ? ' Посажена' : 'Нет')+'</button>';
- const svcBtn = '<button onclick="togglePayService('+JSON.stringify(p.id)+')" class="seated-badge '+(p.serviceWritten?'seated-yes':'seated-no')+'">'
+ const svcBtn = '<button onclick="togglePayService(\''+_pid+'\')" class="seated-badge '+(p.serviceWritten?'seated-yes':'seated-no')+'">'
  +(p.serviceWritten ? ' Списана' : 'Нет')+'</button>';
  return '<tr data-pay-id="'+String(p.id).replace(/"/g,'&quot;')+'">'
  +'<td style="color:var(--text-muted)">'+sanitize(p.date)+'</td>'
@@ -14392,7 +14397,7 @@ function renderAllPayments() {
  +'<td>'+seatBtn+'</td>'
  +'<td>'+svcBtn+'</td>'
  +'<td style="color:var(--text-muted);font-size:11px">'+sanitize(p.comment||'—')+'</td>'
- +'<td><button onclick="inspectPayRow('+JSON.stringify(p.id)+')" style="font-size:9px;padding:1px 6px;border-radius:10px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer" title="Просмотр сырых данных из таблицы"></button></td>'
+ +'<td><button onclick="inspectPayRow(\''+_pid+'\')" style="font-size:9px;padding:1px 6px;border-radius:10px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer" title="Просмотр сырых данных из таблицы"></button></td>'
  +'</tr>';
  }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px">Нет записей</td></tr>';
  finRenderHeader();
@@ -14421,7 +14426,7 @@ function finFindDuplicates(){
     var badge = '<span class="fd-src fd-src-'+(src==='manual'?'m':'a')+'">'+(src==='manual'?'ручной':'авто'+(src?' · '+sanitize(src):''))+'</span>';
     var act;
     if(i===0) act='<span class="fd-keep">оставить</span>';
-    else if(src==='manual') act='<button class="fd-del" onclick="finDeleteDup('+JSON.stringify(p._sbId)+')">Удалить</button>';
+    else if(src==='manual') act='<button class="fd-del" onclick="finDeleteDup(\''+String(p._sbId).replace(/'/g,"\\'").replace(/"/g,'')+'\')">Удалить</button>'; /* v786: JSON.stringify рвал атрибут двойными кавычками — кнопка была мёртвой всегда */
     else act='<span class="fd-note">удалить в таблице</span>';
     return '<div class="fd-row"><span class="fd-mgr">'+sanitize(p.managerName||'—')+'</span>'+badge+act+'</div>';
    }).join('');
@@ -14666,13 +14671,14 @@ function renderAllActs() {
  if (!el) return;
  const statusMap={signed:'status-signed',process:'status-process',pending:'status-pending'};
  const statusLabel={signed:'ПОДПИСАН',process:'В ПРОЦЕССЕ',pending:'ОЖИДАНИЕ'};
+ // v786: sanitize на данных из Sheets — тот же класс бага, что «поплывший текст» оплат (v699)
  el.innerHTML=acts.slice().reverse().map(a=>`<tr>
- <td style="color:var(--text-muted)">${a.date}</td><td>${a.client}</td>
- <td style="color:var(--text-secondary);font-size:11px"><span style="display:inline-flex;align-items:center;gap:6px">${renderAvatar(a.techSupport||empName(a.employee),'avatar-sm')}<span>${empName(a.employee)}</span></span></td>
- <td style="color:var(--text-secondary);max-width:180px;overflow:hidden;text-overflow:ellipsis">${a.project.substring(0,35)}${a.project.length>35?'...':''}</td>
+ <td style="color:var(--text-muted)">${sanitize(a.date)}</td><td>${sanitize(a.client)}</td>
+ <td style="color:var(--text-secondary);font-size:11px"><span style="display:inline-flex;align-items:center;gap:6px">${renderAvatar(a.techSupport||empName(a.employee),'avatar-sm')}<span>${sanitize(empName(a.employee))}</span></span></td>
+ <td style="color:var(--text-secondary);max-width:180px;overflow:hidden;text-overflow:ellipsis">${sanitize(String(a.project||'').substring(0,35))}${String(a.project||'').length>35?'...':''}</td>
  <td style="color:var(--gold-bright);font-weight:600">${fmtFull(a.amount)}</td>
- <td style="color:var(--text-muted)">${a.number}</td>
- <td><span class="status-badge ${statusMap[a.status]}">${statusLabel[a.status]}</span></td></tr>`).join('');
+ <td style="color:var(--text-muted)">${sanitize(a.number)}</td>
+ <td><span class="status-badge ${statusMap[a.status]||''}">${statusLabel[a.status]||sanitize(a.status||'')}</span></td></tr>`).join('');
 }
 
 function renderPlanView() {
@@ -16590,6 +16596,9 @@ function updateTriggerLabel() {
 function calApply() {
  if (!calRangeFrom) return;
  if (!calRangeTo) calRangeTo = calRangeFrom;
+ // v786: без синка legacy-переменных выбор ОДНОГО дня показывал старый месяц —
+ // currentPeriod оставался прежним, цифры не менялись (syncLegacyPeriod никем не вызывался)
+ syncLegacyPeriod();
  updateTriggerLabel();
  closeCalDropdown();
  renderAll();
@@ -16663,12 +16672,13 @@ async function saveRecord() {
  if(!client||!amount){alert('Заполните Клиент и Сумму');return;}
  acts.push({id:nextActId++,client,date:document.getElementById('a-date').value,employee:parseInt(document.getElementById('a-employee').value)||1,number:document.getElementById('a-number').value,amount,project:document.getElementById('a-project').value,status:document.getElementById('a-status').value,type:document.getElementById('a-type').value});
  document.getElementById('a-client').value='';document.getElementById('a-amount').value='';document.getElementById('a-project').value='';
- showNotif('Акт добавлен',client+' — '+fmtFull(amount));
+ // v786: акт живёт только в памяти до синка (в отличие от оплат, в базу не пишется) — честно предупреждаем
+ showNotif('Акт добавлен (временно)',client+' — '+fmtFull(amount)+'. Акт пропадёт при обновлении данных — продублируйте в Google-таблицу.');
  }
  closeModal(); renderAll();
 }
 
-function showNotif(title,msg){ document.getElementById('notif-title').textContent=title; document.getElementById('notif-msg').textContent=msg; const n=document.getElementById('notif'); n.classList.add('show'); setTimeout(()=>n.classList.remove('show'),3500); }
+function showNotif(title,msg){ document.getElementById('notif-title').textContent=title; document.getElementById('notif-msg').textContent=msg; const n=document.getElementById('notif'); n.classList.add('show'); clearTimeout(window._notifT); window._notifT=setTimeout(()=>n.classList.remove('show'),3500); } /* v786: таймер первого тоста гасил второй почти сразу */
 
 // v527: универсальная UI-модалка подтверждения — замена браузерному confirm().
 // opts: { title, body, confirmLabel?, cancelLabel?, danger?: bool } → Promise<bool>
@@ -25235,8 +25245,7 @@ function renderOperatorCards(grid) {
 
  operators.forEach(function(op) {
  var card = document.createElement('div');
- card.className = 'panel';
- card.style.cssText = 'border-left: 3px solid #CE93D8;';
+ card.className = 'panel'; // v786: цветная border-left убрана (правило проекта)
 
  // Пока нет привязки оператор→клиент, показываем общую информацию
  var totalImplSum = allImpl.reduce(function(s,p){ return s+p.amount; }, 0);
@@ -26283,7 +26292,8 @@ function intgSbRerender(){
  });
  if(typeof intgSbRenderAnalytics === 'function') intgSbRenderAnalytics(analyticsBase);
  var st = document.getElementById('intg-status');
- if(st) st.textContent = filtered.length + ' / ' + all.length + ' записей'
+ // v786: счётчик показывал filtered, а доска дополнительно резалась скоупом «Мои» — цифры не бились
+ if(st) st.textContent = (typeof window._intgVisibleCount === 'number' ? window._intgVisibleCount : filtered.length) + ' / ' + all.length + ' записей'
    + (fStatus  ? ' · ' + fStatus  : '')
    + (fType    ? ' · ' + fType    : '')
    + (fCountry ? ' · ' + fCountry : '')
@@ -26570,6 +26580,7 @@ function intgSbRender(items){
  var visibleItems = (intgScope === 'mine' && intgMe)
   ? items.filter(function(r){ return r.operator === intgMe; })
   : items;
+ window._intgVisibleCount = visibleItems.length; // v786: для честного счётчика «X / Y записей»
  if(!visibleItems.length){
   var empty = document.createElement('div');
   empty.style.cssText = 'font-size:13px;color:var(--text-muted);padding:24px 0;text-align:center;line-height:1.5';
@@ -27377,7 +27388,7 @@ function closeSearch(){
  document.getElementById('search-overlay').classList.remove('open');
 }
 document.addEventListener('keydown',function(e){
- if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openSearch();}
+ if((e.ctrlKey||e.metaKey)&&(e.code==='KeyK'||e.key==='k'||e.key==='л')){e.preventDefault();openSearch();} /* v786: e.key на русской раскладке = 'л' — Ctrl+K не работал */
  if(e.key==='Escape'){closeSearch();}
 });
 document.getElementById('search-input').addEventListener('input',function(){
@@ -31240,8 +31251,9 @@ async function ticketsLoad(){
    var clients = (clRes.clients || []).slice();
    clients.sort(function(a, b){
     var statusOrder = { active: 0, onboarding: 1, sale: 2, lead: 3, paused: 4, churned: 5 };
-    var sa = statusOrder[a.status] || 99;
-    var sb = statusOrder[b.status] || 99;
+    // v786: `0 || 99` = 99 — действующие (active=0) улетали В КОНЕЦ списка, ниже ушедших
+    var sa = (a.status in statusOrder) ? statusOrder[a.status] : 99;
+    var sb = (b.status in statusOrder) ? statusOrder[b.status] : 99;
     if(sa !== sb) return sa - sb;
     return (a.company_name || '').localeCompare(b.company_name || '');
    });
@@ -32094,7 +32106,9 @@ function ticketsOpenNewForClient(clientId){
    var clients = (r.clients || []).slice();
    clients.sort(function(a, b){
     var statusOrder = { active:0, onboarding:1, sale:2, lead:3, paused:4, churned:5 };
-    var sa = statusOrder[a.status] || 99, sb = statusOrder[b.status] || 99;
+    // v786: `0 || 99` = 99 — действующие улетали в конец списка (см. фикс выше)
+    var sa = (a.status in statusOrder) ? statusOrder[a.status] : 99;
+    var sb = (b.status in statusOrder) ? statusOrder[b.status] : 99;
     if(sa !== sb) return sa - sb;
     return (a.company_name || '').localeCompare(b.company_name || '');
    });
@@ -32106,6 +32120,15 @@ function ticketsOpenNewForClient(clientId){
     sel.appendChild(opt);
    });
    sel.value = clientId;
+   // v786: клиент другой страны отсутствует в списке — select молча оставался на «— выберите —»,
+   // тикет мог уйти не на того клиента; добавляем option вручную (паттерн acQuickTaskFor)
+   if(clientId && sel.value !== clientId){
+    var _miss = document.createElement('option');
+    _miss.value = clientId;
+    _miss.textContent = clientId;
+    sel.appendChild(_miss);
+    sel.value = clientId;
+   }
   }
  });
 }
@@ -39885,7 +39908,9 @@ function acGetActiveClients(){
  client: name, host: item.host || '', billing_host: item.billing_host || '',
  monthlyQty: item.qty || 0, monthlySum: item.sum || 0,
  segment: acGetSegment(item.qty),
- operator: card ? (card.operator || '') : '',
+ // v786: у клиента БЕЗ карточки внедрения operator был всегда пуст — скоуп оператора (v733)
+ // отрезал его из «Действующих»; берём куратора из Supabase-клиента как fallback
+ operator: (card && card.operator) || item.operator || item.curator_operator || '',
  activDate: card ? (card.activDate || '') : '',
  stage: card ? card.stage : '',
  cardId: card ? card.id : null,
@@ -40078,9 +40103,10 @@ function acRender(){
  if(rb){
  var maxR = Math.max(1, high, med, low);
  rb.innerHTML = ''
- + acRiskBar('Горит (60+ дней без оплаты)', high, maxR, 'f-red')
- + acRiskBar('Med (31-60 дн)', med, maxR, 'f-warn')
- + acRiskBar('Low (0-30 дн)', low, maxR, 'f-done');
+ /* v786: подписи врали — риск с v302 считается по «Доступ до», а не по дням без оплаты */
+ + acRiskBar('Горит — доступ закончился', high, maxR, 'f-red')
+ + acRiskBar('Просрочка до 7 дней', med, maxR, 'f-warn')
+ + acRiskBar('Доступ активен', low, maxR, 'f-done');
  var rsub = document.getElementById('ac-risk-sub');
  if(rsub) rsub.textContent = 'Средняя давность оплаты: ' + avgDays + ' дн';
  }
@@ -40169,8 +40195,8 @@ function acRender(){
       var labels = {risk:'Риск', problem:'Проблема', working:'В работе', ok:'Норма'};
       return '<span class="ac-tag" title="'+t+'">'+(labels[t]||t)+'</span>';
      }).join('');
-     var clientEsc = (c.client || '').replace(/'/g, "\\'");
-     var hostEscBtn = (c.host || '').replace(/'/g, "\\'");
+     var clientEsc = (c.client || '').replace(/'/g, "\\'").replace(/"/g, '&quot;'); /* v786: двойная кавычка в названии (ТОО "Арай") рвала onclick */
+     var hostEscBtn = (c.host || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
      return '<tr>'
       + '<td><b style="color:var(--accent-text,#4CB782);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="acOpenClientCard(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" title="Открыть карту клиента">'+kbEsc(c.client)+'</b></td>'
       + '<td style="font-size:12px;color:var(--text-soft)" title="Имя сервера (код в биллинге) — по нему находим оплаты">'+kbEsc(c.billing_host||c.host||'—')+'</td>'
@@ -40757,7 +40783,7 @@ function acTagModal(client){
  {key:'working', label:'В работе', desc:'Идёт активная работа над улучшением'},
  {key:'ok', label:'Норма', desc:'Всё хорошо, риск низкий, отслеживать не нужно'}
  ];
- var clientEsc = client.replace(/'/g, "\\'");
+ var clientEsc = client.replace(/'/g, "\\'").replace(/"/g, '&quot;'); /* v786: кавычки в названии рвали onclick */
  var html = '<div class="crm-modal" onclick="event.stopPropagation()">'
  + '<div class="crm-modal-title">Теги клиента</div>'
  + '<div style="font-size:13px;color:var(--text-2);margin-bottom:14px">' + kbEsc(client) + '</div>';
@@ -41665,7 +41691,7 @@ function crmRenderClientCalendar(client){
  var clientEvents = all.filter(function(e){ return e.client === client; });
  var cnt = document.getElementById('crm-cnt-ev');
  if(cnt) cnt.textContent = clientEvents.length;
- var clientEsc = (client||'').replace(/\x27/g,"\\\x27");
+ var clientEsc = (client||'').replace(/\x27/g,"\\\x27").replace(/"/g,'&quot;'); /* v786: кавычки в названии рвали onclick */
  if(!clientEvents.length){
  pane.innerHTML = '<div class="crm-empty"><div class="crm-empty-ico"></div><div class="crm-empty-msg">Событий для этого клиента пока нет</div><div class="crm-empty-hint">Запланируйте обучение, встречу или дедлайн</div></div>'
  + '<button class="crm-contacts-add" onclick="crmEventOpenModalForClient(\''+clientEsc+'\')">+ Создать событие</button>';
@@ -44957,8 +44983,15 @@ function kbLoadActs() {
 }
 
 // Сохранить акты в localStorage
+// v786: quota localStorage ~5МБ — base64 большого файла раньше падал МОЛЧА (файл «съедался» без тоста)
 function kbSaveActs(acts) {
- localStorage.setItem(KB_ACTS_KEY, JSON.stringify(acts));
+ try {
+  localStorage.setItem(KB_ACTS_KEY, JSON.stringify(acts));
+  return true;
+ } catch(e) {
+  if(typeof kbShowToast === 'function') kbShowToast('Файл не сохранился — хранилище браузера переполнено. Уменьшите файл (до ~1 МБ) или удалите старые акты.');
+  return false;
+ }
 }
 
 // Загрузка файла акта (PDF/фото) — конвертирует в base64
