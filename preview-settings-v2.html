@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Превью — Настройки v2 (сотрудники, страна, права по группам)</title>
+<style>
+:root{
+  --bg:#0f1115;
+  --panel:#16181d;
+  --panel-line:#23272f;
+  --card:#232833;
+  --card-line:#2E3440;
+  --card-line-h:#3d4557;
+  --tx:#E7EAF0;
+  --tx2:#9AA1AE;
+  --tx3:#6B7280;
+  --blue:#5AA7F0;
+  --indigo:#5E6AD2;
+  --green:#3FD08A;
+  --pink:#FF5C8A;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:var(--bg);color:var(--tx);
+  font-family:-apple-system,'Segoe UI','Inter',sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  padding:24px;
+}
+h1{font-size:19px;letter-spacing:-.3px;margin-bottom:16px}
+
+/* вкладки */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--panel-line);margin-bottom:18px}
+.tab{
+  background:none;border:none;color:var(--tx3);font:inherit;font-size:13px;font-weight:600;
+  padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent;
+}
+.tab:hover{color:var(--tx2)}
+.tab.on{color:var(--tx);border-bottom-color:var(--indigo)}
+
+/* таблица сотрудников */
+.emp-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.emp-head .cnt{color:var(--tx3);font-size:12px}
+.emp-head .sp{flex:1}
+.addbtn{
+  background:var(--indigo);border:none;border-radius:8px;color:#fff;
+  font:inherit;font-size:12.5px;font-weight:600;padding:8px 16px;cursor:pointer;
+}
+.addbtn:hover{filter:brightness(1.1)}
+table{width:100%;border-collapse:collapse}
+th{
+  text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  color:var(--tx3);padding:8px 12px;border-bottom:1px solid var(--panel-line);
+}
+td{padding:10px 12px;border-bottom:1px solid #1d2129;font-size:12.5px}
+tr.row{cursor:pointer}
+tr.row:hover td{background:rgba(255,255,255,.02)}
+.nm{font-weight:600}
+.nm .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:8px;vertical-align:1px}
+.dot.ok{background:var(--green)}
+.dot.off{background:var(--tx3)}
+td.dim{color:var(--tx3)}
+.pill{
+  display:inline-block;font-size:11px;font-weight:600;padding:2px 10px;border-radius:99px;
+  background:var(--card);border:1px solid var(--card-line);color:var(--tx2);
+}
+.pill.role{color:var(--blue)}
+.flag{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);
+}
+.flag .fdot{width:8px;height:8px;border-radius:2px}
+.fdot.kz{background:#4FA8DE}
+.fdot.kg{background:#E0533D}
+tr.dismissed td{opacity:.45}
+
+/* ── модалка сотрудника ── */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;
+  align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;
+}
+.modal{
+  background:var(--panel);border:1px solid var(--panel-line);border-radius:14px;
+  width:min(640px,100%);box-shadow:0 24px 64px rgba(0,0,0,.5);
+}
+.m-head{display:flex;align-items:center;padding:18px 22px 0}
+.m-head h2{font-size:16px;letter-spacing:-.2px}
+.m-head .x{
+  margin-left:auto;background:none;border:none;color:var(--tx3);font-size:18px;cursor:pointer;
+  width:28px;height:28px;border-radius:7px;
+}
+.m-head .x:hover{background:var(--card);color:var(--tx)}
+.m-body{padding:16px 22px 22px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.f label{
+  display:block;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  color:var(--tx3);margin-bottom:5px;
+}
+.f input{
+  width:100%;background:var(--card);border:1px solid var(--card-line);border-radius:8px;
+  color:var(--tx);font:inherit;font-size:13px;padding:9px 12px;outline:none;
+}
+.f input:focus{border-color:var(--indigo)}
+.f input::placeholder{color:var(--tx3)}
+
+/* наш дропдаун роли (не системный select) */
+.ddchip{
+  width:100%;display:flex;align-items:center;justify-content:space-between;
+  background:var(--card);border:1px solid var(--card-line);border-radius:8px;
+  color:var(--tx);font-size:13px;padding:9px 12px;cursor:pointer;position:relative;
+}
+.ddchip:hover{border-color:var(--card-line-h)}
+.ddchip .car{color:var(--tx3);font-size:10px}
+.ddmenu{
+  position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:10;
+  background:#1a1d24;border:1px solid var(--card-line);border-radius:8px;padding:4px 0;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;
+}
+.ddmenu.open{display:block}
+.ddmenu div{padding:8px 12px;cursor:pointer;font-size:12.5px}
+.ddmenu div:hover{background:var(--card)}
+.ddmenu div.sel{color:var(--blue)}
+
+/* страна — сегмент KZ/KG */
+.seg{display:flex;background:var(--card);border:1px solid var(--card-line);border-radius:8px;padding:3px;gap:3px}
+.seg button{
+  flex:1;background:none;border:none;border-radius:6px;color:var(--tx3);
+  font:inherit;font-size:12.5px;font-weight:600;padding:7px 0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.seg button.on{background:#2c3140;color:var(--tx)}
+.seg .fdot{width:8px;height:8px;border-radius:2px}
+.seg-hint{font-size:11px;color:var(--tx3);margin-top:5px;line-height:1.4}
+
+/* активность */
+.actrow{
+  display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--card-line);
+  border-radius:8px;padding:10px 12px;margin-bottom:16px;
+}
+.sw{width:34px;height:20px;border-radius:99px;background:var(--indigo);position:relative;cursor:pointer;flex:none}
+.sw::after{content:'';position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:#fff}
+.actrow .st{color:var(--blue);font-weight:600;font-size:12.5px}
+
+/* права доступа */
+.rights-head{display:flex;align-items:baseline;gap:10px;margin:4px 0 10px}
+.rights-head .t{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--tx3)}
+.rights-head .hint{font-size:11.5px;color:var(--tx3)}
+.rgroup{border:1px solid var(--panel-line);border-radius:10px;margin-bottom:8px;overflow:hidden}
+.rgroup .gh{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card);
+  cursor:pointer;user-select:none;
+}
+.rgroup .gh .gt{font-weight:600;font-size:12.5px}
+.rgroup .gh .gc{font-size:11px;color:var(--tx3);margin-left:auto}
+.rgroup .gh .car{color:var(--tx3);font-size:10px}
+.rgroup .gitems{display:none;padding:4px 6px}
+.rgroup.open .gitems{display:block}
+.ritem{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px}
+.ritem:hover{background:rgba(255,255,255,.02)}
+.ritem .rl{flex:1;font-size:12.5px}
+.ritem .rs{font-size:11px;color:var(--tx3)}
+.cb{
+  width:17px;height:17px;border-radius:4px;border:1px solid var(--card-line-h);
+  display:grid;place-items:center;cursor:pointer;flex:none;
+}
+.cb.on{background:var(--indigo);border-color:var(--indigo)}
+.cb.on::after{content:'';width:9px;height:5px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translate(0,-1px)}
+
+/* низ модалки */
+.m-foot{display:flex;gap:10px;align-items:center;padding:14px 22px;border-top:1px solid var(--panel-line)}
+.m-foot .resetlnk{background:none;border:none;color:var(--tx3);font:inherit;font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.m-foot .resetlnk:hover{color:var(--blue)}
+.m-foot .sp{flex:1}
+.savebtn{
+  background:var(--indigo);border:none;border-radius:8px;color:#fff;
+  font:inherit;font-size:13px;font-weight:600;padding:10px 22px;cursor:pointer;
+}
+.savebtn:hover{filter:brightness(1.1)}
+.note{font-size:11.5px;color:var(--tx3);margin-top:10px;line-height:1.5}
+
+.hint-fixed{
+  position:fixed;left:50%;bottom:10px;transform:translateX(-50%);
+  background:var(--card);border:1px solid var(--card-line);border-radius:8px;
+  color:var(--tx2);font-size:11.5px;padding:6px 14px;z-index:50;white-space:nowrap;
+  box-shadow:0 4px 24px rgba(0,0,0,.4);
+}
+</style>
+</head>
+<body>
+
+<h1>Настройки</h1>
+<div class="tabs">
+  <button class="tab on">Сотрудники</button>
+  <button class="tab">Планы</button>
+  <button class="tab">Подключения</button>
+  <button class="tab">Telegram-бот</button>
+</div>
+
+<div class="emp-head">
+  <span class="cnt">9 работают · 4 уволены</span>
+  <span class="sp"></span>
+  <button class="addbtn">+ Добавить сотрудника</button>
+</div>
+
+<table>
+  <thead>
+    <tr><th>Сотрудник</th><th>Должность</th><th>Логин</th><th>Роль</th><th>Страна</th><th>Статус</th></tr>
+  </thead>
+  <tbody>
+    <tr class="row"><td class="nm"><span class="dot ok"></span>Mirzahit</td><td class="dim">CEO</td><td class="dim">office@salesdoc.io</td><td><span class="pill role">Администратор</span></td><td><span class="flag"><span class="fdot kz"></span>Обе страны</span></td><td>Работает</td></tr>
+    <tr class="row"><td class="nm"><span class="dot ok"></span>Aidos Hapez</td><td class="dim">Sales Manager</td><td class="dim">aidosh</td><td><span class="pill role">Менеджер</span></td><td><span class="flag"><span class="fdot kz"></span>KZ</span></td><td>Работает</td></tr>
+    <tr class="row"><td class="nm"><span class="dot ok"></span>Samat</td><td class="dim">Support</td><td class="dim">samat</td><td><span class="pill role">Оператор</span></td><td><span class="flag"><span class="fdot kz"></span>KZ</span></td><td>Работает</td></tr>
+    <tr class="row"><td class="nm"><span class="dot ok"></span>Азамат (новый)</td><td class="dim">Оператор внедрения</td><td class="dim">azamat</td><td><span class="pill role">Оператор</span></td><td><span class="flag"><span class="fdot kg"></span>KG · только Кыргызстан</span></td><td>Работает</td></tr>
+    <tr class="row dismissed"><td class="nm"><span class="dot off"></span>Dana</td><td class="dim">Manager</td><td class="dim">dana</td><td><span class="pill">Менеджер</span></td><td><span class="flag"><span class="fdot kz"></span>KZ</span></td><td>Уволен</td></tr>
+  </tbody>
+</table>
+
+<!-- МОДАЛКА СОТРУДНИКА -->
+<div class="overlay">
+  <div class="modal">
+    <div class="m-head">
+      <h2>Новый сотрудник</h2>
+      <button class="x">&times;</button>
+    </div>
+    <div class="m-body">
+      <div class="grid2">
+        <div class="f"><label>Имя</label><input placeholder="Имя Фамилия" value="Азамат"></div>
+        <div class="f"><label>Должность</label><input placeholder="Оператор внедрения" value="Оператор внедрения"></div>
+      </div>
+      <div class="grid2">
+        <div class="f"><label>Email / логин</label><input placeholder="user@salesdoc.io" value="azamat@salesdoc.io"></div>
+        <div class="f"><label>% бонуса</label><input value="0"></div>
+      </div>
+      <div class="grid2">
+        <div class="f">
+          <label>Роль</label>
+          <div class="ddchip" onclick="this.querySelector('.ddmenu').classList.toggle('open')">
+            Оператор <span class="car">&#9662;</span>
+            <div class="ddmenu">
+              <div>Администратор</div>
+              <div>Руководитель</div>
+              <div>РОП</div>
+              <div>Менеджер</div>
+              <div class="sel">Оператор</div>
+              <div>Бухгалтер</div>
+              <div>Просмотр</div>
+            </div>
+          </div>
+        </div>
+        <div class="f">
+          <label>Страна</label>
+          <div class="seg">
+            <button>&mdash; Обе</button>
+            <button><span class="fdot kz"></span>KZ</button>
+            <button class="on"><span class="fdot kg"></span>KG</button>
+          </div>
+          <div class="seg-hint">KG — сотрудник видит только Кыргызстан: клиентов, оплаты, цифры. Переключателя стран у него не будет.</div>
+        </div>
+      </div>
+      <div class="actrow"><span class="sw"></span><span class="st">Работает</span></div>
+
+      <div class="rights-head">
+        <span class="t">Права доступа</span>
+        <span class="hint">проставлены по роли «Оператор» — можно менять точечно</span>
+      </div>
+
+      <div class="rgroup open">
+        <div class="gh" onclick="this.parentElement.classList.toggle('open')"><span class="gt">Клиенты</span><span class="gc">4 из 5</span><span class="car">&#9662;</span></div>
+        <div class="gitems">
+          <div class="ritem"><span class="cb on"></span><span class="rl">Внедрение</span></div>
+          <div class="ritem"><span class="cb on"></span><span class="rl">Действующие</span></div>
+          <div class="ritem"><span class="cb on"></span><span class="rl">Поддержка</span></div>
+          <div class="ritem"><span class="cb on"></span><span class="rl">Тех.поддержка</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">Интеграции</span></div>
+        </div>
+      </div>
+      <div class="rgroup">
+        <div class="gh" onclick="this.parentElement.classList.toggle('open')"><span class="gt">Задачи и команда</span><span class="gc">3 из 6</span><span class="car">&#9662;</span></div>
+        <div class="gitems">
+          <div class="ritem"><span class="cb on"></span><span class="rl">Задачи (календарь)</span></div>
+          <div class="ritem"><span class="cb on"></span><span class="rl">Мои задачи</span></div>
+          <div class="ritem"><span class="cb on"></span><span class="rl">Академия</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">Планёрки</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">База знаний</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">Отчёты</span></div>
+        </div>
+      </div>
+      <div class="rgroup">
+        <div class="gh" onclick="this.parentElement.classList.toggle('open')"><span class="gt">Финансы</span><span class="gc">0 из 5</span><span class="car">&#9662;</span></div>
+        <div class="gitems">
+          <div class="ritem"><span class="cb"></span><span class="rl">Дашборд</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">Оплаты</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">Акты</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">План</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">Расходы</span></div>
+        </div>
+      </div>
+      <div class="rgroup">
+        <div class="gh" onclick="this.parentElement.classList.toggle('open')"><span class="gt">Маркетинг и управление</span><span class="gc">0 из 5</span><span class="car">&#9662;</span></div>
+        <div class="gitems">
+          <div class="ritem"><span class="cb"></span><span class="rl">Маркетинг</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">Настройки и сотрудники</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">Telegram-бот</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">Вносить оплаты</span></div>
+          <div class="ritem"><span class="cb"></span><span class="rl">Менять планы</span></div>
+        </div>
+      </div>
+
+      <div class="note">Пароль придумывать не нужно: программа создаст одноразовый и покажет его один раз — отправь сотруднику. При первом входе попросит сменить.</div>
+    </div>
+    <div class="m-foot">
+      <button class="resetlnk">Сбросить пароль</button>
+      <span class="sp"></span>
+      <button class="savebtn">Сохранить сотрудника</button>
+    </div>
+  </div>
+</div>
+
+<div class="hint-fixed">Превью на выдуманных данных · группы прав и дропдаун роли кликаются</div>
+
+</body>
+</html>
