@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v786</title>
+<title>SalesDoc — Финансовый Дашборд v787</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -31599,6 +31599,30 @@ async function ticketsCreate(){
      })
     });
    } catch(_){ /* история не критична — тикет уже создан, не валим UI */ }
+   // v787: тикет автоматически рождает ЗАДАЧУ на оператора со сроком по приоритету (SLA) —
+   // тикет виден в календаре, «Моих задачах» и в Google-подписке. Не критично — не валим UI.
+   try {
+    var _slaH = { critical: 2, high: 4, normal: 24, low: 72 }[priority] || 24;
+    var _clientName = '';
+    try {
+     var _selOpt = document.getElementById('tickets-new-client').selectedOptions[0];
+     _clientName = _selOpt ? String(_selOpt.textContent).split(' · ')[0] : '';
+    } catch(_){}
+    await sbFetch('/api/tasks', {
+     method: 'POST',
+     headers: (typeof crmTasksAuthHeaders === 'function') ? crmTasksAuthHeaders() : {},
+     body: JSON.stringify({
+      client_id: client_id,
+      contact_name: _clientName || null,
+      type_id: 1,
+      text: 'Тикет: ' + title,
+      deadline_at: new Date(Date.now() + _slaH * 3600 * 1000).toISOString(),
+      is_all_day: false,
+      assignee_operator: (typeof crmOpCanon === 'function') ? crmOpCanon(operator) : operator,
+      eisenhower: priority === 'critical' ? 'red' : (priority === 'high' ? 'yellow' : null)
+     })
+    });
+   } catch(_){}
   }
   ticketsCloseNew();
   ticketsLoad();
@@ -32512,6 +32536,26 @@ async function _assignRouteOperator(card, newOp){
   });
   if(!d.ok) throw new Error(d.error || 'PATCH failed');
   if(typeof showNotif === 'function') showNotif('Готово', newOp ? ('Передано ' + newOp) : 'Назначение снято');
+  // v787: ПЕРВОЕ назначение оператора на карточку Внедрения → автозадача «связаться с клиентом»
+  // на завтра 10:00 (видна в календаре и Google-подписке). Переназначения не спамят.
+  if(newOp && !prev && card.client_id){
+   try {
+    var _tmr = new Date(); _tmr.setDate(_tmr.getDate() + 1); _tmr.setHours(10, 0, 0, 0);
+    await sbFetch('/api/tasks', {
+     method: 'POST',
+     headers: (typeof crmTasksAuthHeaders === 'function') ? crmTasksAuthHeaders() : {},
+     body: JSON.stringify({
+      client_id: card.client_id,
+      contact_name: (card.clients && card.clients.name) || card.client_id,
+      type_id: 1,
+      text: 'Связаться с клиентом — начать внедрение',
+      deadline_at: _tmr.toISOString(),
+      is_all_day: false,
+      assignee_operator: (typeof crmOpCanon === 'function') ? crmOpCanon(newOp) : newOp
+     })
+    });
+   } catch(_){}
+  }
  } catch(e){
   // Откат
   card.operator = prev;
@@ -36590,6 +36634,31 @@ window.cal2ToggleOp = function(el){
 window.cal2ToggleLayer = function(key){ crmCalState.layers[key] = !crmCalState.layers[key]; cal2SaveFilters(); crmCalRender(); };
 window.cal2ToggleType = function(key){ crmCalState.types[key] = !crmCalState.types[key]; cal2SaveFilters(); crmCalRender(); };
 window.cal2ToggleFlag = function(key){ crmCalState.flags[key] = !crmCalState.flags[key]; cal2SaveFilters(); crmCalRender(); }; // v770
+// v787: окошко подписки Google Calendar — персональная и командная ICS-ссылки
+window.cal2GcalInfo = function(ev){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ var old = document.getElementById('cal2-detail'); if(old) old.remove();
+ var me = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? crmOpCanon(String(currentUser.name).trim().split(/\s+/)[0]) : '';
+ var base = location.origin + '/api/ical?token=' + encodeURIComponent(window._APP_TOKEN || '');
+ var myUrl = me ? (base + '&assignee=' + encodeURIComponent(me)) : '';
+ var allUrl = base;
+ function row(label, url){
+  return '<div style="margin-top:10px"><div style="font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#5F6674;margin-bottom:5px">' + label + '</div>'
+   + '<div style="display:flex;gap:6px"><input readonly value="' + kbEsc(url) + '" onclick="this.select()" style="flex:1;background:#14161e;border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#9AA3B2;font-family:inherit;font-size:10.5px;padding:7px 9px;outline:none;min-width:0">'
+   + '<button onclick="navigator.clipboard.writeText(this.previousElementSibling.value);if(typeof kbShowToast===\'function\')kbShowToast(\'Ссылка скопирована\')" style="background:#2BB577;border:1px solid #2BB577;border-radius:8px;color:#0B0C10;font-weight:700;font-family:inherit;font-size:11px;padding:0 12px;cursor:pointer;flex:none">Копировать</button></div></div>';
+ }
+ var d = document.createElement('div');
+ d.className = 'cal2-detail'; d.id = 'cal2-detail';
+ d.style.width = '360px';
+ d.innerHTML = '<span class="dt-x" onclick="this.parentNode.remove()">×</span>'
+  + '<div class="dt-title">Задачи в Google Календаре</div>'
+  + '<div style="font-size:11.5px;line-height:1.5;color:#9AA3B2">Скопируй ссылку и добавь в Google Календарь:<br>на телефоне/компьютере открой calendar.google.com &rarr; слева «Другие календари» &rarr; «+» &rarr; <b style="color:#F2F4F8">«По URL»</b> &rarr; вставь ссылку. Задачи появятся и будут обновляться сами (Google подтягивает раз в несколько часов).</div>'
+  + (myUrl ? row('Мои задачи (' + kbEsc(me) + ')', myUrl) : '')
+  + row('Все задачи команды', allUrl);
+ (document.getElementById('view-calendar') || document.body).appendChild(d);
+ d.style.left = Math.max(12, window.innerWidth / 2 - 190) + 'px';
+ d.style.top = '140px';
+};
 window.cal2ToggleDone = function(){ crmCalState.hideDone = !crmCalState.hideDone; cal2SaveFilters(); crmCalRender(); };
 window.cal2ToggleLate = function(){ crmCalState.onlyLate = !crmCalState.onlyLate; cal2SaveFilters(); crmCalRender(); };
 window.cal2SetClientQ = function(v){
@@ -36673,6 +36742,9 @@ function cal2RenderSide(){
  html += '<div class="cal2-sec"><div class="h">Клиент</div><div class="cal2-csearch">'
   + '<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
   + '<input id="cal2-q" placeholder="Найти клиента..." value="' + kbEsc(s.clientQ || '') + '" oninput="cal2SetClientQ(this.value)"></div></div>';
+ // v787: подписка Google Calendar (ICS-лента /api/ical)
+ html += '<div class="cal2-sec"><div class="h">Google Календарь</div>'
+  + '<div class="cal2-trow" onclick="cal2GcalInfo(event)"><span class="nm" style="color:var(--tx2,#9AA3B2)">Подписка на задачи &rsaquo;</span></div></div>';
  el.innerHTML = html;
 }
 // v745: мини-календарь — свой курсор месяца (miniYM), стрелки не дёргают основной вид
