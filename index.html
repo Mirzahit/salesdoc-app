@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v770</title>
+<title>SalesDoc — Финансовый Дашборд v771</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1331,6 +1331,11 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-adev span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* v750: плашка оплаты клиента — зелёная */
 #view-calendar .cal2-adev.pay{background:linear-gradient(135deg,rgba(43,181,119,.85),rgba(26,130,84,.85));box-shadow:0 3px 10px rgba(43,181,119,.3), inset 0 1px 0 rgba(255,255,255,.2)}
+/* v771: весь-день плашки в цвет флажка Эйзенхауэра */
+#view-calendar .cal2-adev.f-red{background:linear-gradient(135deg,rgba(224,74,74,.85),rgba(170,42,42,.85));box-shadow:0 3px 10px rgba(224,74,74,.3), inset 0 1px 0 rgba(255,255,255,.2)}
+#view-calendar .cal2-adev.f-yellow{background:linear-gradient(135deg,rgba(230,150,20,.85),rgba(176,108,10,.85));box-shadow:0 3px 10px rgba(230,150,20,.3), inset 0 1px 0 rgba(255,255,255,.2)}
+#view-calendar .cal2-adev.f-green{background:linear-gradient(135deg,rgba(31,169,104,.85),rgba(20,120,74,.85));box-shadow:0 3px 10px rgba(31,169,104,.3), inset 0 1px 0 rgba(255,255,255,.2)}
+#view-calendar .cal2-adev.f-gray{background:linear-gradient(135deg,rgba(112,120,134,.85),rgba(78,85,97,.85));box-shadow:0 3px 10px rgba(112,120,134,.3), inset 0 1px 0 rgba(255,255,255,.2)}
 #view-calendar .cal2-wgrid{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.10) transparent}
 #view-calendar .cal2-wgrid-in{display:grid;grid-template-columns:56px repeat(7,1fr);position:relative}
 #view-calendar .cal2-hcell{height:72px;position:relative} /* v756: = CAL2_SLOT */
@@ -1366,6 +1371,11 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-ev.c-pink{background:linear-gradient(135deg,rgba(224,68,122,.92),rgba(168,44,88,.92))}
 #view-calendar .cal2-ev.c-teal{background:linear-gradient(135deg,rgba(31,163,150,.92),rgba(20,115,106,.92))}
 #view-calendar .cal2-ev.c-ind{background:linear-gradient(135deg,rgba(110,121,224,.92),rgba(77,87,200,.92))}
+/* v771: флажок Эйзенхауэра красит плашку целиком (выбор CEO, вариант Б); кто делает — по аватару */
+#view-calendar .cal2-ev.c-flag-red{background:linear-gradient(135deg,rgba(224,74,74,.92),rgba(170,42,42,.92))}
+#view-calendar .cal2-ev.c-flag-yellow{background:linear-gradient(135deg,rgba(230,150,20,.92),rgba(176,108,10,.92))}
+#view-calendar .cal2-ev.c-flag-green{background:linear-gradient(135deg,rgba(31,169,104,.92),rgba(20,120,74,.92))}
+#view-calendar .cal2-ev.c-flag-gray{background:linear-gradient(135deg,rgba(112,120,134,.92),rgba(78,85,97,.92))}
 #view-calendar .cal2-ev.done{opacity:.38;box-shadow:none}
 #view-calendar .cal2-ev.done .t{text-decoration:line-through}
 /* v749: ручка растягивания длительности за нижний край */
@@ -1394,6 +1404,11 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-mo-ev.c-pink{background:linear-gradient(135deg,rgba(224,68,122,.75),rgba(168,44,88,.75))}
 #view-calendar .cal2-mo-ev.c-teal{background:linear-gradient(135deg,rgba(31,163,150,.75),rgba(20,115,106,.75))}
 #view-calendar .cal2-mo-ev.c-ind{background:linear-gradient(135deg,rgba(110,121,224,.8),rgba(77,87,200,.8))}
+/* v771: месяц — плашки в цвет флажка */
+#view-calendar .cal2-mo-ev.c-flag-red{background:linear-gradient(135deg,rgba(224,74,74,.75),rgba(170,42,42,.75))}
+#view-calendar .cal2-mo-ev.c-flag-yellow{background:linear-gradient(135deg,rgba(230,150,20,.75),rgba(176,108,10,.75))}
+#view-calendar .cal2-mo-ev.c-flag-green{background:linear-gradient(135deg,rgba(31,169,104,.75),rgba(20,120,74,.75))}
+#view-calendar .cal2-mo-ev.c-flag-gray{background:linear-gradient(135deg,rgba(112,120,134,.75),rgba(78,85,97,.75))}
 #view-calendar .cal2-mo-ev.done{opacity:.38}
 #view-calendar .cal2-mo-more{font-size:10px;color:#5F6674;padding-left:6px;font-weight:600}
 /* попап-карточка события (замена правой панели) */
@@ -35907,6 +35922,11 @@ function cal2FlagDot(e){
  var c = e && e.eisenhower ? CAL2_FLAG_COLORS[e.eisenhower] : null;
  return c ? '<span class="fdot" style="background:' + c + '" title="' + (CAL2_FLAG_LABELS[e.eisenhower] || '') + '"></span>' : '';
 }
+// v771: цвет плашки — флажок красит целиком (вариант Б, выбор CEO); без флажка — цвет сотрудника
+function cal2EvColorCls(e){
+ if(e && e.eisenhower && !e._pay_layer) return 'flag-' + e.eisenhower;
+ return e._sync_task ? cal2OpColor(e.operator) : 'ind';
+}
 // 4 UI-корзины типов: call/meeting/training/(deadline+other вместе)
 function _calUiType(e){
  if(e.type === 'call') return 'call';
@@ -36251,11 +36271,11 @@ function crmCalRenderMonth(){
    var evs = (byDay[ds] || []).slice().sort(function(a,b){ return (a.time_start||'99').localeCompare(b.time_start||'99'); }); // v746: топ-3 по времени
    html += '<div class="cal2-mo-cell ' + cls.join(' ') + '" ondragover="event.preventDefault()" ondrop="event.preventDefault();crmCalDropOnDate(\'' + ds + '\',event)" onclick="crmCalSetViewDate(\'' + ds + '\');crmCalSetViewMode(\'day\')"><div class="dn">' + date.getDate() + '</div>';
    evs.slice(0, 3).forEach(function(e){
-    var color = e._pay_layer ? 'green' : (e._sync_task ? cal2OpColor(e.operator) : 'ind'); // v750
+    var color = e._pay_layer ? 'green' : cal2EvColorCls(e); // v750; v771: флажок красит плашку
     var mdrg = e._pay_layer ? '' : ' draggable="true" ondragstart="event.stopPropagation();crmCalDragStartTask(event,\'' + e.id + '\')"';
     html += '<div class="cal2-mo-ev c-' + color + (e.status === 'done' ? ' done' : '') + '"' + mdrg + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
      + (e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\'' + e.client_id + '\')"' : '') + '>'
-     + cal2FlagDot(e) + (e._pay_layer ? '₸ ' : '') + kbEsc((e.title || '').slice(0, 26)) + '</div>';
+     + (e._pay_layer ? '₸ ' : '') + kbEsc((e.title || '').slice(0, 26)) + '</div>'; /* v771: точка убрана — плашка в цвете флажка */
    });
    if(evs.length > 3) html += '<div class="cal2-mo-more">ещё ' + (evs.length - 3) + '</div>';
    html += '</div>';
@@ -37285,7 +37305,9 @@ function cal2RenderTimeGrid(days){
    // v750: оплаты — зелёные, не перетаскиваются (дата продления живёт в реестре клиентов)
    var payCls = e._pay_layer ? ' pay' : '';
    var drg = e._pay_layer ? '' : ' draggable="true" ondragstart="crmCalDragStartTask(event,\'' + e.id + '\')"';
-   html += '<span class="cal2-adev' + payCls + '"' + drg + ' onclick="cal2ShowDetail(\'' + e.id + '\', event)">' + cal2FlagDot(e) + '<span>' + (e._pay_layer ? '₸ ' : '') + kbEsc(e.title || '') + '</span></span>';
+   // v771: весь-день — класс f-<флажок> красит плашку, точка убрана
+   var flagCls = (e.eisenhower && !e._pay_layer) ? ' f-' + e.eisenhower : '';
+   html += '<span class="cal2-adev' + payCls + flagCls + '"' + drg + ' onclick="cal2ShowDetail(\'' + e.id + '\', event)"><span>' + (e._pay_layer ? '₸ ' : '') + kbEsc(e.title || '') + '</span></span>';
   });
   html += '</div>';
  });
@@ -37309,7 +37331,7 @@ function cal2RenderTimeGrid(days){
    var e = it.e;
    var top = (it.startMin - minH * 60) / 60 * SLOT;
    var height = Math.max(26, (it.endMin - it.startMin) / 60 * SLOT);
-   var color = e._sync_task ? cal2OpColor(e.operator) : 'ind';
+   var color = cal2EvColorCls(e); // v771: флажок красит плашку
    var isLate = e.date < today && e.status !== 'done';
    var meta = [];
    if(e.time_start) meta.push(e.time_start + (e.time_end ? '–' + e.time_end : ''));
@@ -37325,7 +37347,7 @@ function cal2RenderTimeGrid(days){
     + ' style="top:' + top.toFixed(0) + 'px;height:' + height.toFixed(0) + 'px' + laneStyle + '"'
     + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
     + (e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\'' + e.client_id + '\')"' : '') + '>'
-    + who + cal2FlagDot(e) + '<div class="t">' + kbEsc(e.title || '') + '</div>'
+    + who + '<div class="t">' + kbEsc(e.title || '') + '</div>' /* v771: точка убрана — плашка сама в цвете флажка */
     + (meta.length ? '<div class="m">' + kbEsc(meta.join(' · ')) + '</div>' : '')
     + '<span class="rsz" draggable="false" onmousedown="cal2ResizeStart(event,\'' + e.id + '\')"></span>'
     + '</div>';
