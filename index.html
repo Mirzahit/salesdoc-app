@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v777</title>
+<title>SalesDoc — Финансовый Дашборд v778</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1418,7 +1418,9 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
    открывается с любого экрана (клик по уведомлению об упоминании).
    z-index 1000002 — выше полноэкранных карт (999999); дропдауны .ct-dd/.tt-dp (1000005) выше неё.
    ============================================================================ */
-.tcard-wrap{position:fixed;z-index:1000002;width:450px;max-width:calc(100vw - 24px);background:#1b1e26;border:1px solid #2a2e39;border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.5);overflow:hidden;font-family:Inter,-apple-system,sans-serif;font-size:13.5px;color:#ECEEF4;animation:ttQaFade .12s ease-out} /* v774: крупнее (CEO: «всё мелкое») */
+.tcard-wrap{position:fixed;z-index:1000002;width:520px;max-width:calc(100vw - 24px);background:#1b1e26;border:1px solid #2a2e39;border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.5);overflow:hidden;font-family:Inter,-apple-system,sans-serif;font-size:13.5px;color:#ECEEF4;animation:ttQaFade .12s ease-out} /* v774/778: крупнее — как панель TickTick */
+/* v778: подсветка выбранной задачи в календаре, пока её карточка открыта (как в TickTick) */
+#view-calendar .tsel{outline:2px solid #4CC2C0 !important;outline-offset:1px}
 .tcard-wrap .tc-top{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid #2a2e39}
 .tcard-wrap .tc-check{width:22px;height:22px;border-radius:7px;border:1.5px solid #3a3f4d;cursor:pointer;flex:none;display:grid;place-items:center;color:transparent;font-size:13px}
 .tcard-wrap .tc-check:hover{border-color:#4CC2C0;color:#4CC2C0}
@@ -1433,14 +1435,14 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 .tcard-wrap .tc-flag svg{width:20px;height:20px}
 .tcard-wrap .tc-x{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;cursor:pointer;flex:none;color:#646B78;font-size:18px;border:none;background:none;font-family:inherit}
 .tcard-wrap .tc-x:hover{background:rgba(255,255,255,.05);color:#ECEEF4}
-.tcard-wrap .tc-body{padding:16px 18px 12px;max-height:62vh;overflow-y:auto;scrollbar-width:thin}
+.tcard-wrap .tc-body{padding:16px 18px 12px;max-height:70vh;overflow-y:auto;scrollbar-width:thin}
 /* v775/v777: глобальный стиль `input:not([type=checkbox]):not([type=radio])` (строка ~5830, !important,
    специфичность выше класса) красил заголовок в тёмную коробку. Перебиваем через #tcard-wrap (id сильнее).
    В TickTick-карточке заголовок и описание — плоский текст, без коробок. */
 #tcard-wrap .tc-title{font-size:17px;font-weight:700;letter-spacing:-.2px;outline:none;border:none!important;background:transparent!important;box-shadow:none!important;color:#ECEEF4;width:100%;font-family:inherit;margin-bottom:9px;padding:0!important;border-radius:0!important}
 #tcard-wrap .tc-title::placeholder{color:#646B78}
 #tcard-wrap .tc-title.done{text-decoration:line-through;color:#646B78}
-#tcard-wrap .tc-desc{width:100%;border:none!important;background:transparent!important;box-shadow:none!important;outline:none;resize:none;color:#9AA1AE;font-family:inherit;font-size:13.5px;line-height:1.55;min-height:88px;padding:0!important;border-radius:0!important}
+#tcard-wrap .tc-desc{width:100%;border:none!important;background:transparent!important;box-shadow:none!important;outline:none;resize:none;color:#9AA1AE;font-family:inherit;font-size:13.5px;line-height:1.55;min-height:150px;padding:0!important;border-radius:0!important} /* v778: выше — воздух как в TickTick */
 #tcard-wrap .tc-desc::placeholder{color:#646B78}
 /* v777: поле комментария и инлайн-поля — мягкая коробка TickTick, а не глобальный «гласс» */
 #tcard-wrap .tc-cm-input input{background:#20242e!important;border:1px solid #3a3f4d!important;border-radius:10px!important;box-shadow:none!important}
@@ -36016,6 +36018,10 @@ function cal2FlagDot(e){
  var c = e && e.eisenhower ? CAL2_FLAG_COLORS[e.eisenhower] : null;
  return c ? '<span class="fdot" style="background:' + c + '" title="' + (CAL2_FLAG_LABELS[e.eisenhower] || '') + '"></span>' : '';
 }
+// v778: класс подсветки выбранной задачи (карточка открыта) — переживает перерендер сетки
+function cal2SelCls(e){
+ return (window._tcard && e && e._task_id && window._tcard.taskId === e._task_id) ? ' tsel' : '';
+}
 // v771: цвет плашки — флажок красит целиком (вариант Б, выбор CEO); без флажка — цвет сотрудника
 function cal2EvColorCls(e){
  if(e && e.eisenhower && !e._pay_layer) return 'flag-' + e.eisenhower;
@@ -36367,7 +36373,7 @@ function crmCalRenderMonth(){
    evs.slice(0, 3).forEach(function(e){
     var color = e._pay_layer ? 'green' : cal2EvColorCls(e); // v750; v771: флажок красит плашку
     var mdrg = e._pay_layer ? '' : ' draggable="true" ondragstart="event.stopPropagation();crmCalDragStartTask(event,\'' + e.id + '\')"';
-    html += '<div class="cal2-mo-ev c-' + color + (e.status === 'done' ? ' done' : '') + '"' + mdrg + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
+    html += '<div class="cal2-mo-ev c-' + color + (e.status === 'done' ? ' done' : '') + cal2SelCls(e) + '"' + mdrg + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
      + (e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\'' + e.client_id + '\')"' : '') + '>'
      + (e._pay_layer ? '₸ ' : '') + kbEsc((e.title || '').slice(0, 26)) + '</div>'; /* v771: точка убрана — плашка в цвете флажка */
    });
@@ -37329,6 +37335,11 @@ async function tcardOpen(taskId, ev){
  tcardPlace();
  window._tcardResize = tcardPlace;
  window.addEventListener('resize', window._tcardResize);
+ // v778: подсветить выбранную плашку сразу (перерендеры сетки дальше держат её через cal2SelCls)
+ try {
+  var _pl = ev && ev.target && ev.target.closest && ev.target.closest('.cal2-ev, .cal2-mo-ev, .cal2-li, .cal2-adev');
+  if(_pl) _pl.classList.add('tsel');
+ } catch(_){}
  // закрытие: клик мимо (с flush автосейва) и Esc. v773-qa: слоёное закрытие —
  // конфирм поверх не трогает карточку; date-picker карточки закрывается ПЕРВЫМ, отдельно.
  window._tcardCloser = function(e2){
@@ -37365,6 +37376,8 @@ function tcardClose(flush){
  if(window._tcardKeys){ document.removeEventListener('keydown', window._tcardKeys, true); window._tcardKeys = null; }
  if(window._tcardResize){ window.removeEventListener('resize', window._tcardResize); window._tcardResize = null; } // v776
  window._tcard = null;
+ // v778: снять подсветку выбранной плашки
+ try { document.querySelectorAll('.tsel').forEach(function(el){ el.classList.remove('tsel'); }); } catch(_){}
 }
 window.tcardOpen = tcardOpen;
 window.tcardClose = tcardClose;
@@ -37807,7 +37820,7 @@ function crmCalRenderList(){
    var av = e.operator
     ? '<span class="cal2-av av-' + cal2OpColor(e.operator) + '" style="width:24px;height:24px;font-size:9px">' + kbEsc(cal2Initials(e.operator)) + '</span>'
     : '<span class="cal2-av av-ind" style="width:24px;height:24px;font-size:9px">S</span>';
-   html += '<div class="cal2-li' + (done ? ' done' : '') + '" onclick="cal2ShowDetail(\'' + e.id + '\', event)">'
+   html += '<div class="cal2-li' + (done ? ' done' : '') + cal2SelCls(e) + '" onclick="cal2ShowDetail(\'' + e.id + '\', event)">'
     + (e._pay_layer
        ? '<span class="cal2-cb" style="border:none;color:#3FD68F;font-size:11px;font-weight:800;cursor:default">₸</span>'
        : '<span class="cal2-cb' + (done ? ' done' : '') + '" onclick="event.stopPropagation();crmEventToggleDone(\'' + e.id + '\')">' + (done ? '✓' : '') + '</span>')
@@ -37980,7 +37993,7 @@ function cal2RenderTimeGrid(days){
    var drg = e._pay_layer ? '' : ' draggable="true" ondragstart="crmCalDragStartTask(event,\'' + e.id + '\')"';
    // v771: весь-день — класс f-<флажок> красит плашку, точка убрана
    var flagCls = (e.eisenhower && !e._pay_layer) ? ' f-' + e.eisenhower : '';
-   html += '<span class="cal2-adev' + payCls + flagCls + '"' + drg + ' onclick="cal2ShowDetail(\'' + e.id + '\', event)"><span>' + (e._pay_layer ? '₸ ' : '') + kbEsc(e.title || '') + '</span></span>';
+   html += '<span class="cal2-adev' + payCls + flagCls + cal2SelCls(e) + '"' + drg + ' onclick="cal2ShowDetail(\'' + e.id + '\', event)"><span>' + (e._pay_layer ? '₸ ' : '') + kbEsc(e.title || '') + '</span></span>';
   });
   html += '</div>';
  });
@@ -38015,7 +38028,7 @@ function cal2RenderTimeGrid(days){
     var lw = 100 / it.laneCount;
     laneStyle = ';left:calc(' + (it.lane * lw).toFixed(2) + '% + 4px);width:calc(' + lw.toFixed(2) + '% - 8px)';
    }
-   html += '<div class="cal2-ev c-' + color + (e.status === 'done' ? ' done' : '') + (isLate ? ' late' : '') + '"'
+   html += '<div class="cal2-ev c-' + color + (e.status === 'done' ? ' done' : '') + (isLate ? ' late' : '') + cal2SelCls(e) + '"'
     + ' draggable="true" ondragstart="crmCalDragStartTask(event,\'' + e.id + '\')"'
     + ' style="top:' + top.toFixed(0) + 'px;height:' + height.toFixed(0) + 'px' + laneStyle + '"'
     + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
