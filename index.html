@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v791</title>
+<title>SalesDoc — Финансовый Дашборд v792</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -38674,6 +38674,9 @@ function cal2HScrollInit(dayW, bufStartStr, startIndex, visible, total){
   if(allday) allday.scrollLeft = grid.scrollLeft;
   clearTimeout(t);
   t = setTimeout(function(){
+   // v792: сетку могли перерисовать, пока таймер ждал — у выброшенной из DOM сетки scrollLeft=0,
+   // и «хвостовой» таймер утаскивал окно на 9 дней назад каскадом. Мёртвая сетка — выходим.
+   if(!grid.isConnected) return;
    var idx = Math.round(grid.scrollLeft / dayW);
    var d0 = new Date(bufStartStr + 'T00:00:00');
    d0.setDate(d0.getDate() + idx);
