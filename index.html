@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v771</title>
+<title>SalesDoc — Финансовый Дашборд v772</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -29555,6 +29555,15 @@ var KB_SHEET_ID = '1lXBeS-TTH2SihtV_6Ki4O_nnuNaC9xza2esw0sZnZKc';
 var KB_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxwDR2XdFd7-AgZDumdwxlJqGOe8jGFYS3sQFi6To60jsN0QraOYkRtgCpnWRdScrxd/exec';
 // v224: операторы — iOS systemColors (blue / indigo / orange)
 var KB_OP_COLORS = {'Айдос':'#0A84FF','Акбар':'#5E5CE0','Самат':'#FF9F0A'};
+// v772: канонизация имён операторов. Логины из employees — латиницей (Samat), списки операторов —
+// кириллицей (Самат); задачи писались то так, то так → в «Команде» календаря человек двоился.
+// Ключ — ПОЛНОЕ имя в lowercase: «Aidos Hapez» (менеджер) ≠ «Айдос» (оператор), их НЕ склеивать!
+var CRM_OP_ALIASES = { 'aidos':'Айдос', 'akbar':'Акбар', 'samat':'Самат', 'nuray':'Нурай' };
+function crmOpCanon(name){
+ if(!name) return name;
+ var t = String(name).trim();
+ return CRM_OP_ALIASES[t.toLowerCase()] || t;
+}
 
 // Цвета колонок (amoCRM style pipeline) — сохраняются в localStorage
 // v224: цвета этапов — оттенки iOS systemBlue от светлого к тёмному + systemGreen для активации
@@ -36733,7 +36742,8 @@ async function ttQaSave(){
   endISO = new Date(s.date + 'T' + s.time_end + ':00').toISOString();
  }
 
- var assignee = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : null;
+ // v772: канонизируем имя (Samat → Самат), иначе создатель двоился в «Команде» календаря
+ var assignee = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? crmOpCanon(currentUser.name) : null;
 
  var body = {
   client_id: s.client_id || null,          // v770: чип «Клиент» — задача видна в карточке клиента
@@ -37635,7 +37645,7 @@ async function crmCalSyncTasksToLocal(){
     eisenhower: t.eisenhower || null, // v770: флажок Эйзенхауэра (точка на плашке + фильтр)
     priority: 4,
     client: t.contact_name || t.client_id || '',
-    operator: t.assignee_operator || '',
+    operator: crmOpCanon(t.assignee_operator || ''), // v772: латиница/кириллица → одно имя
     location: '',
     notes: 'Задача из модуля Tasks (client_id: ' + (t.client_id||'—') + ')',
     status: t.status === 'done' ? 'done' : 'planned',
@@ -41486,7 +41496,9 @@ function mytasksInit(){
  // Автоустановка фильтра «Мои» на основе текущего пользователя
  var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
  if(u && u.name){
-  mytasksState.assignee = u.name.split(' ')[0];
+  // v772: канонизация полного имени (Samat → Самат) — задачи теперь пишутся каноничным именем,
+  // фильтр «Мои» должен искать по нему же. Полное имя, не первое слово: «Aidos Hapez» ≠ «Айдос».
+  mytasksState.assignee = crmOpCanon(u.name);
  } else {
   mytasksState.assignee = (typeof kbOperators !== 'undefined' && kbOperators[0]) || null;
  }
