@@ -296,6 +296,25 @@ async function handlePatch(req, res) {
     return res.status(200).json({ ok: true, type: updated[0] });
   }
 
+  // v774: PATCH /api/tasks?comment_edit=UUID body {text, mentions[]} — править комментарий (только автор)
+  if (q.comment_edit) {
+    const rows = await sbSelect('task_comments', { id: 'eq.' + q.comment_edit, select: 'id,author', limit: 1 });
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'комментарий не найден' });
+    const un = (req.headers['x-user-name'] || '').toString().trim();
+    if (!un || un !== rows[0].author) {
+      return res.status(403).json({ ok: false, error: 'править комментарий может только автор' });
+    }
+    const bodyC = await readBody(req);
+    const textC = (bodyC.text || '').toString().trim();
+    if (textC.length < 1 || textC.length > 2000) {
+      return res.status(400).json({ ok: false, error: 'text: 1-2000 символов' });
+    }
+    let mentionsC = Array.isArray(bodyC.mentions) ? bodyC.mentions : [];
+    mentionsC = mentionsC.map(m => String(m).trim()).filter(m => m && m.length <= 60).slice(0, 10);
+    const updatedC = await sbUpdate('task_comments', { id: 'eq.' + q.comment_edit }, { text: textC, mentions: mentionsC });
+    return res.status(200).json({ ok: true, comment: updatedC[0] });
+  }
+
   const id = q.id;
   if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
 
@@ -407,6 +426,20 @@ async function handlePatch(req, res) {
 // ============================================================================
 async function handleDelete(req, res) {
   const q = req.query || {};
+
+  // v774: DELETE /api/tasks?comment_id=UUID — удалить комментарий (автор или admin)
+  if (q.comment_id) {
+    const rows = await sbSelect('task_comments', { id: 'eq.' + q.comment_id, select: 'id,author', limit: 1 });
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'комментарий не найден' });
+    const un = (req.headers['x-user-name'] || '').toString().trim();
+    const ur = (req.headers['x-user-role'] || '').toString().trim().toLowerCase();
+    if (!(un && un === rows[0].author) && ur !== 'admin') {
+      return res.status(403).json({ ok: false, error: 'удалять комментарий может только автор или admin' });
+    }
+    await sbDelete('task_comments', { id: 'eq.' + q.comment_id });
+    return res.status(200).json({ ok: true, deleted: q.comment_id });
+  }
+
   const id = q.id;
   if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
 
