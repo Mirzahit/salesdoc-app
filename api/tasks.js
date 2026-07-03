@@ -29,8 +29,13 @@ import { checkAuth } from './_auth.js';
 const ALLOWED_PATCH_FIELDS = [
   'text', 'deadline_at', 'deadline_end_at', 'is_all_day',
   'type_id', 'assignee_operator', 'contact_name', 'stage_label', 'stage_color',
-  'pinned'
+  'pinned',
+  'client_id',   // v770: календарь теперь умеет привязывать клиента к задаче
+  'eisenhower'   // v770: флажок Эйзенхауэра red/yellow/green/gray/null
 ];
+
+// v770: валидация флажка (общая для POST и PATCH)
+const EISENHOWER_VALUES = ['red', 'yellow', 'green', 'gray'];
 
 const MOVE_TARGETS = ['today', 'tomorrow', 'after_tomorrow', 'next_week', 'next_month', 'done'];
 
@@ -211,7 +216,9 @@ async function handlePost(req, res) {
     is_all_day:        !!body.is_all_day,
     assignee_operator: body.assignee_operator,
     created_by:        userName,
-    status:            'open'
+    status:            'open',
+    // v770: флажок Эйзенхауэра (red/yellow/green/gray), null = без флажка
+    eisenhower:        EISENHOWER_VALUES.includes(body.eisenhower) ? body.eisenhower : null
   };
 
   const result = await sbInsert('tasks', row);
@@ -319,10 +326,19 @@ async function handlePatch(req, res) {
   if (Object.keys(patch).length === 0) {
     return res.status(400).json({ ok: false, error: 'нет полей для обновления (whitelist: ' + ALLOWED_PATCH_FIELDS.join(', ') + ')' });
   }
-  // Валидация type_id если меняют
+  // Валидация type_id если меняют.
+  // v770: снят зашитый потолок 19 — типы создаются через ?add_type=1 с id > 19 (латентный баг v759,
+  // POST уже валидирует мягко). FK на task_types отбросит несуществующий id на уровне базы.
   if (patch.type_id !== undefined) {
-    if (!Number.isInteger(patch.type_id) || patch.type_id < 1 || patch.type_id > 19) {
-      return res.status(400).json({ ok: false, error: 'type_id должен быть 1..19' });
+    if (!Number.isInteger(patch.type_id) || patch.type_id < 1) {
+      return res.status(400).json({ ok: false, error: 'type_id должен быть положительным числом' });
+    }
+  }
+  // v770: валидация флажка Эйзенхауэра (null/'' = снять флажок)
+  if (patch.eisenhower !== undefined) {
+    if (patch.eisenhower === '' || patch.eisenhower === null) patch.eisenhower = null;
+    else if (!EISENHOWER_VALUES.includes(patch.eisenhower)) {
+      return res.status(400).json({ ok: false, error: 'eisenhower: red/yellow/green/gray или null' });
     }
   }
   const updated = await sbUpdate('tasks', { id: 'eq.' + id }, patch);
