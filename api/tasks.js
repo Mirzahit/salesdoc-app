@@ -31,7 +31,8 @@ const ALLOWED_PATCH_FIELDS = [
   'type_id', 'assignee_operator', 'contact_name', 'stage_label', 'stage_color',
   'pinned',
   'client_id',   // v770: календарь теперь умеет привязывать клиента к задаче
-  'eisenhower'   // v770: флажок Эйзенхауэра red/yellow/green/gray/null
+  'eisenhower',  // v770: флажок Эйзенхауэра red/yellow/green/gray/null
+  'description'  // v773: описание под заголовком (карточка задачи)
 ];
 
 // v770: валидация флажка (общая для POST и PATCH)
@@ -70,6 +71,38 @@ async function handleGet(req, res) {
   if (q.types) {
     const types = await sbSelect('task_types', { order: 'sort.asc' });
     return res.status(200).json({ ok: true, types });
+  }
+
+  // v773: GET /api/tasks?comments_for=UUID → комментарии задачи (карточка TickTick-стиля)
+  if (q.comments_for) {
+    const comments = await sbSelect('task_comments', {
+      task_id: 'eq.' + q.comments_for,
+      order: 'created_at.asc',
+      limit: '200'
+    });
+    return res.status(200).json({ ok: true, comments });
+  }
+
+  // v773: GET /api/tasks?mentions_of=Имя&since=ISO → свежие комментарии, где Имя отмечен (@)
+  // Для поллинга уведомлений «такой-то отметил вас в задаче». Свои комментарии исключены.
+  if (q.mentions_of) {
+    const name = String(q.mentions_of).trim();
+    // PostgREST cs.{...} ломается на запятых/кавычках — имена только буквы/цифры/пробел/дефис
+    if (!/^[\p{L}\p{N} _-]{1,60}$/u.test(name)) {
+      return res.status(400).json({ ok: false, error: 'некорректное имя' });
+    }
+    const since = q.since && !isNaN(new Date(q.since).getTime())
+      ? new Date(q.since).toISOString()
+      : new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const comments = await sbSelect('task_comments', {
+      select: '*,tasks(id,text,status)',
+      mentions: 'cs.{"' + name + '"}',
+      created_at: 'gt.' + since,
+      author: 'neq.' + name,
+      order: 'created_at.asc',
+      limit: '20'
+    });
+    return res.status(200).json({ ok: true, comments });
   }
 
   // GET /api/tasks?id=UUID  →  одна задача
@@ -191,6 +224,24 @@ async function handlePost(req, res) {
     return res.status(400).json({ ok: false, error: 'header x-user-name обязателен' });
   }
 
+  // v773: POST /api/tasks?comment=1 body {task_id, text, mentions[]} — комментарий к задаче
+  if ((req.query || {}).comment) {
+    const taskId = (body.task_id || '').toString().trim();
+    const text = (body.text || '').toString().trim();
+    if (!taskId) return res.status(400).json({ ok: false, error: 'task_id обязателен' });
+    if (text.length < 1 || text.length > 2000) {
+      return res.status(400).json({ ok: false, error: 'text: 1-2000 символов' });
+    }
+    let mentions = Array.isArray(body.mentions) ? body.mentions : [];
+    mentions = mentions.map(m => String(m).trim()).filter(m => m && m.length <= 60).slice(0, 10);
+    const taskRows = await sbSelect('tasks', { id: 'eq.' + taskId, select: 'id', limit: 1 });
+    if (!taskRows.length) return res.status(404).json({ ok: false, error: 'задача не найдена' });
+    const inserted = await sbInsert('task_comments', {
+      task_id: taskId, author: userName, text, mentions
+    });
+    return res.status(201).json({ ok: true, comment: inserted[0] });
+  }
+
   // Валидация обязательных полей.
   // v759: тип проверяем по справочнику task_types (раньше зашитый диапазон 1..19 отклонял новые типы)
   if (!body.type_id || !Number.isInteger(body.type_id) || body.type_id < 1) {
@@ -218,7 +269,9 @@ async function handlePost(req, res) {
     created_by:        userName,
     status:            'open',
     // v770: флажок Эйзенхауэра (red/yellow/green/gray), null = без флажка
-    eisenhower:        EISENHOWER_VALUES.includes(body.eisenhower) ? body.eisenhower : null
+    eisenhower:        EISENHOWER_VALUES.includes(body.eisenhower) ? body.eisenhower : null,
+    // v773: описание под заголовком (карточка TickTick-стиля)
+    description:       body.description ? String(body.description).slice(0, 4000) : null
   };
 
   const result = await sbInsert('tasks', row);
@@ -340,6 +393,10 @@ async function handlePatch(req, res) {
     else if (!EISENHOWER_VALUES.includes(patch.eisenhower)) {
       return res.status(400).json({ ok: false, error: 'eisenhower: red/yellow/green/gray или null' });
     }
+  }
+  // v773: описание — ограничение длины
+  if (patch.description !== undefined && patch.description !== null) {
+    patch.description = String(patch.description).slice(0, 4000) || null;
   }
   const updated = await sbUpdate('tasks', { id: 'eq.' + id }, patch);
   return res.status(200).json({ ok: true, task: updated[0] });
