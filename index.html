@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v775</title>
+<title>SalesDoc — Финансовый Дашборд v776</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -37305,14 +37305,23 @@ async function tcardOpen(taskId, ev){
  document.body.appendChild(wrap);
  window._tcard.wrap = wrap;
  tcardRender();
- // позиция: у курсора с clamp, иначе центр
- var W = 400, H = Math.min(window.innerHeight * .8, wrap.offsetHeight || 420);
- var x = (ev && typeof ev.clientX === 'number') ? ev.clientX + 12 : (window.innerWidth - W) / 2;
- var y = (ev && typeof ev.clientY === 'number') ? ev.clientY - 30 : Math.max(24, (window.innerHeight - H) / 2 - 40);
- if(x + W > window.innerWidth - 12) x = Math.max(12, window.innerWidth - W - 12);
- if(y + H > window.innerHeight - 12) y = Math.max(12, window.innerHeight - H - 12);
- wrap.style.left = Math.max(12, x) + 'px';
- wrap.style.top = Math.max(12, y) + 'px';
+ // v776: позиция по РЕАЛЬНЫМ размерам карточки (расчёт на зашитые 400px обрезал её за краем —
+ // CEO: «карточки не адаптивны»); узкий экран — по центру; resize окна — переклампить
+ function tcardPlace(){
+  var w2 = document.getElementById('tcard-wrap');
+  if(!w2) return;
+  var W = w2.offsetWidth || 450, H = w2.offsetHeight || 420;
+  var narrow = window.innerWidth < 560;
+  var x = (!narrow && ev && typeof ev.clientX === 'number') ? ev.clientX + 12 : (window.innerWidth - W) / 2;
+  var y = (!narrow && ev && typeof ev.clientY === 'number') ? ev.clientY - 30 : Math.max(16, (window.innerHeight - H) / 2 - 30);
+  if(x + W > window.innerWidth - 12) x = window.innerWidth - W - 12;
+  if(y + H > window.innerHeight - 12) y = window.innerHeight - H - 12;
+  w2.style.left = Math.max(12, x) + 'px';
+  w2.style.top = Math.max(12, y) + 'px';
+ }
+ tcardPlace();
+ window._tcardResize = tcardPlace;
+ window.addEventListener('resize', window._tcardResize);
  // закрытие: клик мимо (с flush автосейва) и Esc. v773-qa: слоёное закрытие —
  // конфирм поверх не трогает карточку; date-picker карточки закрывается ПЕРВЫМ, отдельно.
  window._tcardCloser = function(e2){
@@ -37347,6 +37356,7 @@ function tcardClose(flush){
  var w = document.getElementById('tcard-wrap'); if(w) w.remove();
  if(window._tcardCloser){ document.removeEventListener('mousedown', window._tcardCloser, true); window._tcardCloser = null; }
  if(window._tcardKeys){ document.removeEventListener('keydown', window._tcardKeys, true); window._tcardKeys = null; }
+ if(window._tcardResize){ window.removeEventListener('resize', window._tcardResize); window._tcardResize = null; } // v776
  window._tcard = null;
 }
 window.tcardOpen = tcardOpen;
