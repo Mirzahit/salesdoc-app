@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v789</title>
+<title>SalesDoc — Финансовый Дашборд v790</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -36799,9 +36799,13 @@ function cal2RenderToolbar(){
  var today = crmDateStr(new Date());
  var title = 'Список';
  if(mode === 'week'){
-  var w = cal2WeekBounds();
+  // v790: заголовок по реально видимому окну (скольжение freeStart) и до субботы (v788)
+  var wf, wt;
+  if(crmCalState.freeStart){ wf = new Date(crmCalState.freeStart + 'T00:00:00'); }
+  else { wf = cal2WeekBounds().mon; }
+  wt = new Date(wf); wt.setDate(wf.getDate() + 5);
   var f = function(x){ return x.toLocaleDateString('ru-RU', { day:'numeric', month:'long' }); };
-  title = kbEsc(f(w.mon) + ' – ' + f(w.sun)) + ' <span class="yr">' + w.sun.getFullYear() + '</span>';
+  title = kbEsc(f(wf) + ' – ' + f(wt)) + ' <span class="yr">' + wt.getFullYear() + '</span>';
  } else if(mode === 'month'){
   var dm = crmCalState.viewDate ? new Date(crmCalState.viewDate + 'T00:00:00') : new Date();
   title = kbEsc(dm.toLocaleDateString('ru-RU', { month:'long', year:'numeric' }).replace(' г.', ''));
@@ -36842,6 +36846,7 @@ window.crmCalSetViewMode = function(mode){
 };
 window.crmCalSetViewDate = function(date){
  crmCalState.viewDate = date;
+ crmCalState.freeStart = null; // v790: «Сегодня»/мини-календарь возвращают обычную неделю
  crmCalState.miniYM = null; // мини-календарь следует за основным видом
  crmCalRender();
 };
@@ -36868,13 +36873,20 @@ window.crmCalNavDay = function(delta){
  window._cal2SwipeOn = true;
  var lastNav = 0;
  function navBy(delta){
-  var now = Date.now();
-  if(now - lastNav < 350) return; // защита от «пролистало пять недель одним движением»
-  lastNav = now;
   var mode = crmCalState.viewMode || 'week';
+  var now = Date.now();
+  // v790: неделя/день скользят плавнее (короткий троттлинг), месяц — целыми месяцами
+  if(now - lastNav < (mode === 'month' ? 350 : 130)) return;
+  lastNav = now;
   if(mode === 'month') crmCalNavMonth(delta);
   else if(mode === 'day') crmCalNavDay(delta);
-  else crmCalNavWeek(delta);
+  else {
+   // v790: неделя СКОЛЬЗИТ по одному дню — жестом можно остановиться на любых датах
+   var base = crmCalState.freeStart ? new Date(crmCalState.freeStart + 'T00:00:00') : cal2WeekBounds().mon;
+   base.setDate(base.getDate() + delta);
+   crmCalState.freeStart = crmDateStr(base);
+   crmCalRender();
+  }
  }
  document.addEventListener('wheel', function(e){
   var view = document.getElementById('view-calendar');
@@ -38630,11 +38642,17 @@ function cal2RenderTimeGrid(days){
 }
 // v745: Неделя = сетка 7 дней от понедельника
 function crmCalRenderWeek(){
- var w = cal2WeekBounds();
  var days = [];
- // v788: неделя ПН-СБ, воскресенье убрано из недельного вида (просьба CEO; в Месяце и Списке
- // воскресные задачи видны, потеряться не могут)
- for(var i = 0; i < 6; i++){ var dd = new Date(w.mon); dd.setDate(w.mon.getDate() + i); days.push(dd); }
+ // v788: окно 6 дней (воскресенье убрано из недельного вида по просьбе CEO).
+ // v790: окно может СКОЛЬЗИТЬ по дням (freeStart) — жестом останавливаешься на любых датах;
+ // стрелки/Сегодня/мини-календарь сбрасывают на обычную неделю от понедельника.
+ var start;
+ if(crmCalState.freeStart){
+  start = new Date(crmCalState.freeStart + 'T00:00:00');
+ } else {
+  start = cal2WeekBounds().mon;
+ }
+ for(var i = 0; i < 6; i++){ var dd = new Date(start); dd.setDate(start.getDate() + i); days.push(dd); }
  cal2RenderTimeGrid(days);
 }
 // v746: День = та же сетка, одна колонка (старый табличный вид удалён)
@@ -38811,9 +38829,11 @@ function cal2NowTick(minH, SLOT){
 }
 
 window.crmCalNavWeek = function(delta){
- var d = crmCalState.viewDate ? new Date(crmCalState.viewDate+'T00:00:00') : new Date();
- d.setDate(d.getDate() + delta * 7);
- crmCalState.viewDate = crmDateStr(d);
+ // v790: стрелки листают ЦЕЛЫМИ неделями и возвращают окно к понедельнику (сброс скольжения)
+ var base = crmCalState.freeStart ? new Date(crmCalState.freeStart+'T00:00:00') : (crmCalState.viewDate ? new Date(crmCalState.viewDate+'T00:00:00') : new Date());
+ crmCalState.freeStart = null;
+ base.setDate(base.getDate() + delta * 7);
+ crmCalState.viewDate = crmDateStr(base);
  crmCalRender();
 };
 function crmCalSetList(key){ crmCalState.list = key; crmCalRender(); }
