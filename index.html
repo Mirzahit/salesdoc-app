@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v779</title>
+<title>SalesDoc — Финансовый Дашборд v780</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6666,8 +6666,15 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 .ct-dd-item.is-selected { background:#15233a; color:#60a5fa; }
 .ct-dd-item-icon { display:inline-block; width:14px; text-align:center; font-size:12px; }
 /* v770: поповер выбора клиента в quick-add (поиск + список) и чипы флажка в редакторе задачи */
-.ct-dd-search { display:block; width:calc(100% - 16px); margin:2px 8px 6px; padding:7px 10px; background:#0b1220; border:1px solid #1e2837; border-radius:6px; color:#e5e7eb; font-size:12px; outline:none; font-family:inherit; }
+.ct-dd-search, .ct-dd input.ct-dd-search { display:block; width:calc(100% - 16px); margin:2px 8px 6px; padding:7px 10px; background:#0b1220; border:1px solid #1e2837; border-radius:6px; color:#e5e7eb; font-size:12px; outline:none; font-family:inherit; }
 .ct-dd-search:focus { border-color:#2563eb; }
+/* v780: Chrome-автозаполнение красило поиск клиента в белое системное поле — броня через inset-тень
+   (единственный способ перебить внутренний стиль автозаполнения Chrome) */
+.ct-dd-search:-webkit-autofill, .ct-dd-search:-webkit-autofill:hover, .ct-dd-search:-webkit-autofill:focus {
+ -webkit-box-shadow: 0 0 0 1000px #0b1220 inset !important;
+ -webkit-text-fill-color: #e5e7eb !important;
+ caret-color: #e5e7eb;
+}
 .ct-dd-listbox { max-height:240px; overflow-y:auto; }
 .ct-flag-opt { background:#15233a; border:1px solid #1e2837; border-radius:99px; color:#e5e7eb; font-family:inherit; font-size:11.5px; padding:5px 12px; cursor:pointer; display:inline-flex; align-items:center; }
 .ct-flag-opt.on { border-color:#2563eb; background:#1f2f4d; }
@@ -36771,6 +36778,8 @@ async function sdClientPickerOpen(anchor, currentId, onPick){
  inp.type = 'text';
  inp.placeholder = 'Найти клиента...';
  inp.className = 'ct-dd-search';
+ inp.autocomplete = 'off'; // v780: Chrome принимал поле за адресную форму и красил в белое
+ inp.setAttribute('name', 'sd-noauto-q');
  dd.appendChild(inp);
  var listBox = document.createElement('div');
  listBox.className = 'ct-dd-listbox';
@@ -37411,7 +37420,7 @@ function tcardRender(){
   + '<button class="tc-x" id="tc-x">&times;</button>'
   + '</div>'
   + '<div class="tc-done-row" id="tc-done-row" style="display:none">'
-  + '<input id="tc-done-result" placeholder="Что сделано? (обязательно, минимум 3 символа)">'
+  + '<input id="tc-done-result" placeholder="Что сделано? (обязательно, минимум 3 символа)" autocomplete="off" name="sd-noauto-res">'
   + '<button class="tc-done-go" id="tc-done-go">Готово</button>'
   + '</div>'
   + '<div class="tc-body">'
@@ -37420,7 +37429,7 @@ function tcardRender(){
   + '<div class="tc-comments">'
   + '<div id="tc-cm-list"></div>'
   + '<div class="tc-cm-input">'
-   + '<input id="tc-cm-text" placeholder="Написать комментарий... @ — отметить коллегу" maxlength="2000">'
+   + '<input id="tc-cm-text" placeholder="Написать комментарий... @ — отметить коллегу" maxlength="2000" autocomplete="off" name="sd-noauto-cm">'
    + '<button class="tc-cm-send" id="tc-cm-send">&#8593;</button>'
    + '<div class="mention-dd" id="tc-mention-dd" style="display:none"></div>'
   + '</div>'
