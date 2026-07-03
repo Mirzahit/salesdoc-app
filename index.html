@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v767</title>
+<title>SalesDoc — Финансовый Дашборд v768</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10895,7 +10895,19 @@ function connectKpiSheet() {
 // ============================================================
 // COUNTRY SWITCHER
 // ============================================================
+// v768: замок по стране. Сотрудник с заполненной страной видит только её:
+// переключатели спрятаны, switchCountry игнорирует чужую страну (кнопки и консоль).
+// Правило НЕ зависит от роли (Arslan — admin филиала KG, тоже заперт, как и до v768).
+// Свобода = пустая страна («Обе»): у CEO country пустой. Регистронезависимо (qa v768).
+function countryLockFor(u){
+ u = u || (typeof currentUser !== 'undefined' ? currentUser : null);
+ if(!u) return null;
+ var c = String(u.country || '').trim().toUpperCase();
+ return (c === 'KG' || c === 'KZ') ? c : null;
+}
 function switchCountry(code) {
+ var _lk = countryLockFor();
+ if (_lk && code !== _lk) return; // v768: запертый не может уйти со своей страны
  if (code === currentCountry) return;
  currentCountry = code;
  localStorage.setItem('sd_country', code);
@@ -16070,13 +16082,21 @@ function _enterAppAsCurrentUser(){
  loadAvatar();
  applyTheme(localStorage.getItem('sd-theme') || 'dark');
  try { if (typeof planSyncFetch === 'function') planSyncFetch(true); } catch(_){}
- if (currentUser.country) {
- switchCountry(currentUser.country);
+ // v768: замок по стране через countryLockFor — admin/head с заполненной страной
+ // больше НЕ запираются (раньше блок прятал лампу любому, у кого country задан).
+ var _clk = countryLockFor(currentUser);
+ if (_clk) {
+ switchCountry(_clk);
+ localStorage.setItem('sd_country', _clk); // switchCountry мог выйти рано, если страна уже совпала
  var cs=document.getElementById('country-switcher'); if(cs) cs.style.display='none';
  var tc=document.getElementById('country-lamp'); if(tc) tc.style.display='none';
+ var icf=document.getElementById('intg-filter-country'); if(icf){ icf.value=_clk; icf.style.display='none'; }
  } else {
  var cs2=document.getElementById('country-switcher'); if(cs2) cs2.style.display='none';
  var tc2=document.getElementById('country-lamp'); if(tc2) tc2.style.display='';
+ // v768-qa: если до этого в той же вкладке сидел запертый (logout без перезагрузки),
+ // фильтр стран Интеграций остался бы скрытым и залипшим на его стране — возвращаем.
+ var icf2=document.getElementById('intg-filter-country'); if(icf2){ icf2.style.display=''; icf2.value=''; }
  }
  updateCountrySwitcherUI();
  initCalendar();
@@ -25127,6 +25147,9 @@ function intgRender() {
  var filterStatus = (document.getElementById('intg-filter-status')||{}).value || '';
  var filterCountry = (document.getElementById('intg-filter-country')||{}).value || '';
  var filterPackage = (document.getElementById('intg-filter-package')||{}).value || '';
+ // v768: Sheets-архив интеграций содержит ОБЕ страны — при замке форсим страну сотрудника
+ var _lkIntg = (typeof countryLockFor === 'function') ? countryLockFor() : null;
+ if(_lkIntg) filterCountry = _lkIntg;
  // v497: объединяем Sheets-архив + активные карточки из Supabase в один массив для kanban
  // v503: фильтр null после _intgSbToRow, защита от падений
  var sbRows = (window.intgSbItems || []).map(_intgSbToRow).filter(function(r){ return r; });
@@ -25535,6 +25558,9 @@ function intgSbRerender(){
  var fType    = (document.getElementById('intg-filter-type')   ||{}).value || '';
  var fCountry = (document.getElementById('intg-filter-country')||{}).value || '';
  var fPackage = (document.getElementById('intg-filter-package')||{}).value || '';
+ // v768: при замке по стране показываем только страну сотрудника (см. intgRender)
+ var _lkIntg2 = (typeof countryLockFor === 'function') ? countryLockFor() : null;
+ if(_lkIntg2) fCountry = _lkIntg2;
  // v526: фильтр по периоду из топбара. Активные (Новая/В работе/На паузе) видны всегда —
  // это рабочий канбан, оператор должен видеть свои задачи независимо от выбранного месяца.
  // Готово/Отменено — фильтруем по date_done (когда завершено), чтобы за май видеть только
