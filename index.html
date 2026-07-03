@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v788</title>
+<title>SalesDoc — Финансовый Дашборд v789</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -36859,6 +36859,55 @@ window.crmCalNavDay = function(delta){
  crmCalState.miniYM = null;
  crmCalRender();
 };
+// v789: листание периодов как в TickTick — колесо мыши/трекпад и свайп по сетке.
+// Месяц: вертикальное колесо листает месяцы (сетка месяца не скроллится).
+// Неделя/День: вертикальное колесо по-прежнему скроллит часы, листает ГОРИЗОНТАЛЬНЫЙ жест
+// (трекпад-свайп / Shift+колесо даёт deltaX). Тач-свайп работает во всех видах.
+(function(){
+ if(window._cal2SwipeOn) return;
+ window._cal2SwipeOn = true;
+ var lastNav = 0;
+ function navBy(delta){
+  var now = Date.now();
+  if(now - lastNav < 350) return; // защита от «пролистало пять недель одним движением»
+  lastNav = now;
+  var mode = crmCalState.viewMode || 'week';
+  if(mode === 'month') crmCalNavMonth(delta);
+  else if(mode === 'day') crmCalNavDay(delta);
+  else crmCalNavWeek(delta);
+ }
+ document.addEventListener('wheel', function(e){
+  var view = document.getElementById('view-calendar');
+  if(!view || view.style.display === 'none') return;
+  if(!e.target.closest || !e.target.closest('#tt-list')) return;
+  var mode = crmCalState.viewMode || 'week';
+  if(mode === 'list') return;
+  if(mode === 'month'){
+   var d1 = e.deltaY || e.deltaX;
+   if(Math.abs(d1) < 8) return;
+   e.preventDefault();
+   navBy(d1 > 0 ? 1 : -1);
+  } else {
+   if(Math.abs(e.deltaX) <= Math.abs(e.deltaY) || Math.abs(e.deltaX) < 12) return;
+   e.preventDefault();
+   navBy(e.deltaX > 0 ? 1 : -1);
+  }
+ }, { passive:false });
+ var _sx = null, _sy = null;
+ document.addEventListener('touchstart', function(e){
+  var view = document.getElementById('view-calendar');
+  if(!view || view.style.display === 'none' || !e.target.closest || !e.target.closest('#tt-list')){ _sx = null; return; }
+  _sx = e.touches[0].clientX; _sy = e.touches[0].clientY;
+ }, { passive:true });
+ document.addEventListener('touchend', function(e){
+  if(_sx == null) return;
+  var dx = e.changedTouches[0].clientX - _sx, dy = e.changedTouches[0].clientY - _sy;
+  _sx = null;
+  if(Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+  if((crmCalState.viewMode || 'week') === 'list') return;
+  navBy(dx < 0 ? 1 : -1);
+ }, { passive:true });
+})();
 
 // v339: пустое состояние с иллюстрацией
 function crmCalEmptyState(extraHint){
