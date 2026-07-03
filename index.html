@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v792</title>
+<title>SalesDoc — Финансовый Дашборд v793</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1349,14 +1349,23 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-whead, #view-calendar .cal2-allday{overflow-x:hidden}
 #view-calendar .cal2-wgrid{overflow-x:auto;overscroll-behavior-x:contain}
 #view-calendar .cal2-wgrid-in{width:max-content;min-width:100%}
+/* v793: колонка часов, уголок шапки и подпись «Весь день» ПРИКЛЕЕНЫ слева — не уезжают при скролле */
+#view-calendar .cal2-wgrid-in > div:first-child{position:sticky;left:0;z-index:6;background:#14161e}
+#view-calendar .cal2-whead > div:first-child{position:sticky;left:0;z-index:6;background:#14161e}
+#view-calendar .cal2-allday > .lbl{position:sticky;left:0;z-index:6;background:#14161e}
+body.light #view-calendar .cal2-wgrid-in > div:first-child,
+body.light #view-calendar .cal2-whead > div:first-child,
+body.light #view-calendar .cal2-allday > .lbl{background:#FFFFFF}
+/* v793: линия «сейчас» — через всю неделю (как TickTick), пилюля времени приклеена к колонке часов */
+#view-calendar .cal2-nowline .pill{position:sticky;left:4px;display:inline-block;transform:translateY(-9px)}
 #view-calendar .cal2-dcol.today{background:linear-gradient(180deg, rgba(110,121,224,.09) 0%, rgba(110,121,224,.03) 30%, rgba(110,121,224,.05) 100%);box-shadow:inset 1px 0 0 rgba(110,121,224,.25), inset -1px 0 0 rgba(110,121,224,.25)}
 #view-calendar .cal2-dcol.wknd{background:rgba(0,0,0,.18)}
 /* v747: призрак выделения периода протяжкой; v748: .hold — след живёт, пока открыто окно создания */
 #view-calendar .cal2-ghost{position:absolute;left:4px;right:6px;background:rgba(110,121,224,.22);border:1.5px dashed #6E79E0;border-radius:8px;z-index:4;pointer-events:none;display:flex;align-items:flex-start;padding:4px 8px}
 #view-calendar .cal2-ghost span{font-size:10px;font-weight:700;font-family:ui-monospace,monospace;color:#C0C6FF}
 #view-calendar .cal2-ghost.hold{background:rgba(110,121,224,.32);border-style:solid;box-shadow:0 4px 14px rgba(110,121,224,.25), inset 0 1px 0 rgba(255,255,255,.15)}
-#view-calendar .cal2-nowline{position:absolute;left:0;right:0;height:2px;z-index:6;pointer-events:none;background:linear-gradient(90deg,#FF5C8A,rgba(255,92,138,.35))}
-#view-calendar .cal2-nowline .pill{position:absolute;left:6px;top:-9px;background:#FF5C8A;color:#16060c;font-size:9.5px;font-weight:800;font-family:ui-monospace,monospace;border-radius:5px;padding:2px 6px;box-shadow:0 3px 10px rgba(255,92,138,.45)}
+#view-calendar .cal2-nowline{position:absolute;left:0;right:0;height:2px;z-index:7;pointer-events:none;background:rgba(255,92,138,.65)} /* v793: сплошная на всю ширину, поверх приклеенной колонки часов */
+#view-calendar .cal2-nowline .pill{background:#FF5C8A;color:#16060c;font-size:9.5px;font-weight:800;font-family:ui-monospace,monospace;border-radius:5px;padding:2px 6px;box-shadow:0 3px 10px rgba(255,92,138,.45)}
 #view-calendar .cal2-ev{position:absolute;left:5px;right:7px;border-radius:9px;padding:6px 9px;font-size:11px;line-height:1.32;cursor:pointer;overflow:hidden;z-index:2;border:1px solid transparent;box-shadow:0 4px 12px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.12);transition:transform .1s, box-shadow .1s}
 #view-calendar .cal2-ev:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.15);z-index:5}
 #view-calendar .cal2-ev .t{font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px}
@@ -38643,9 +38652,12 @@ function cal2RenderTimeGrid(days, opts){
     + '<span class="rsz" draggable="false" onmousedown="cal2ResizeStart(event,\'' + e.id + '\')"></span>'
     + '</div>';
   });
-  if(isToday) html += '<div class="cal2-nowline" id="cal2-nowline" style="display:none"><span class="pill" id="cal2-nowpill"></span></div>';
   html += '</div>';
  });
+ // v793: линия «сейчас» — прямой ребёнок .cal2-wgrid-in (через всю неделю), а не внутри колонки дня
+ if(days.some(function(d){ return crmDateStr(d) === today; })){
+  html += '<div class="cal2-nowline" id="cal2-nowline" style="display:none"><span class="pill" id="cal2-nowpill"></span></div>';
+ }
  html += '</div></div></div>';
  listEl.innerHTML = html;
  cal2NowTick(minH, SLOT);
