@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v772</title>
+<title>SalesDoc — Финансовый Дашборд v773</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1105,7 +1105,7 @@ body.light .tt-mode-btn.on{background:rgba(0,0,0,.08);border-color:transparent;c
 .tt-qa-icon-btn svg{width:14px;height:14px}
 
 /* Date-picker popup (Этап 2) */
-.tt-dp{position:fixed;z-index:10001;width:300px;background:var(--surface);border:1px solid var(--border-strong);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.50),0 4px 12px rgba(0,0,0,.30);padding:14px;display:flex;flex-direction:column;gap:12px;font-family:Inter,sans-serif;animation:ttQaFade .12s ease-out}
+.tt-dp{position:fixed;z-index:1000005;width:300px;/* v773: выше карточки задачи (1000002) и полноэкранных карт */background:var(--surface);border:1px solid var(--border-strong);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.50),0 4px 12px rgba(0,0,0,.30);padding:14px;display:flex;flex-direction:column;gap:12px;font-family:Inter,sans-serif;animation:ttQaFade .12s ease-out}
 .tt-dp-tabs{display:flex;gap:4px;padding:4px;background:rgba(120,120,128,.10);border-radius:10px}
 .tt-dp-tab{flex:1;padding:6px 0;font-size:12px;font-weight:600;background:transparent;color:var(--text-soft);border:none;border-radius:7px;cursor:pointer;font-family:Inter,sans-serif}
 .tt-dp-tab.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.18)}
@@ -1413,6 +1413,69 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-mo-more{font-size:10px;color:#5F6674;padding-left:6px;font-weight:600}
 /* попап-карточка события (замена правой панели) */
 #view-calendar .cal2-detail{position:fixed;z-index:10001;width:320px;background:linear-gradient(180deg,#20242F,#171A22);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:16px;box-shadow:0 24px 64px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08)}
+/* ============================================================================
+   v773: карточка задачи TickTick-стиля (.tcard) — НЕ скоупим #view-calendar:
+   открывается с любого экрана (клик по уведомлению об упоминании).
+   z-index 1000002 — выше полноэкранных карт (999999); дропдауны .ct-dd/.tt-dp (1000005) выше неё.
+   ============================================================================ */
+.tcard-wrap{position:fixed;z-index:1000002;width:400px;max-width:calc(100vw - 24px);background:#1b1e26;border:1px solid #2a2e39;border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.5);overflow:hidden;font-family:Inter,-apple-system,sans-serif;font-size:13px;color:#ECEEF4;animation:ttQaFade .12s ease-out}
+.tcard-wrap .tc-top{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #2a2e39}
+.tcard-wrap .tc-check{width:19px;height:19px;border-radius:6px;border:1.5px solid #3a3f4d;cursor:pointer;flex:none;display:grid;place-items:center;color:transparent;font-size:11px}
+.tcard-wrap .tc-check:hover{border-color:#4CC2C0;color:#4CC2C0}
+.tcard-wrap .tc-check.done{background:#4CC2C0;border-color:#4CC2C0;color:#0f1115}
+.tcard-wrap .tc-when{color:#646B78;font-size:12.5px;cursor:pointer;display:flex;align-items:center;gap:7px;flex:1;min-width:0}
+.tcard-wrap .tc-when:hover{color:#9AA1AE}
+.tcard-wrap .tc-when.set{color:#4CC2C0}
+.tcard-wrap .tc-when.late{color:#FF5C8A}
+.tcard-wrap .tc-when svg{width:14px;height:14px;flex:none}
+.tcard-wrap .tc-flag{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;cursor:pointer;flex:none;color:#646B78}
+.tcard-wrap .tc-flag:hover{background:rgba(255,255,255,.05)}
+.tcard-wrap .tc-flag svg{width:15px;height:15px}
+.tcard-wrap .tc-x{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;cursor:pointer;flex:none;color:#646B78;font-size:15px;border:none;background:none;font-family:inherit}
+.tcard-wrap .tc-x:hover{background:rgba(255,255,255,.05);color:#ECEEF4}
+.tcard-wrap .tc-body{padding:14px 16px 10px;max-height:56vh;overflow-y:auto;scrollbar-width:thin}
+.tcard-wrap .tc-title{font-size:15.5px;font-weight:700;letter-spacing:-.2px;outline:none;border:none;background:none;color:#ECEEF4;width:100%;font-family:inherit;margin-bottom:8px}
+.tcard-wrap .tc-title::placeholder{color:#646B78}
+.tcard-wrap .tc-title.done{text-decoration:line-through;color:#646B78}
+.tcard-wrap .tc-desc{width:100%;border:none;background:none;outline:none;resize:none;color:#9AA1AE;font-family:inherit;font-size:13px;line-height:1.55;min-height:64px}
+.tcard-wrap .tc-desc::placeholder{color:#646B78}
+.tcard-wrap .tc-foot{display:flex;align-items:center;gap:6px;padding:9px 12px;border-top:1px solid #2a2e39;color:#646B78;font-size:12px;flex-wrap:wrap}
+.tcard-wrap .tc-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:7px;cursor:pointer;color:#9AA1AE;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tcard-wrap .tc-chip:hover{background:rgba(255,255,255,.05);color:#ECEEF4}
+.tcard-wrap .tc-chip .dot{width:7px;height:7px;border-radius:50%;background:#c5cad1;flex:none}
+.tcard-wrap .tc-foot .sp{flex:1}
+.tcard-wrap .tc-more{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;cursor:pointer;border:none;background:none;color:#646B78;font-family:inherit;font-size:14px}
+.tcard-wrap .tc-more:hover{background:rgba(255,255,255,.05);color:#ECEEF4}
+/* закрытие с результатом (инлайн) */
+.tcard-wrap .tc-done-row{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid #2a2e39;background:rgba(76,194,192,.06)}
+.tcard-wrap .tc-done-row input{flex:1;background:#171a21;border:1px solid #2a2e39;border-radius:8px;color:#ECEEF4;font:inherit;font-size:12.5px;padding:7px 11px;outline:none}
+.tcard-wrap .tc-done-row input:focus{border-color:#4CC2C0}
+.tcard-wrap .tc-done-go{border:none;border-radius:8px;background:#4CC2C0;color:#0f1115;font-family:inherit;font-size:12px;font-weight:700;padding:0 14px;cursor:pointer}
+/* комментарии */
+.tcard-wrap .tc-comments{border-top:1px solid #2a2e39;margin-top:12px;padding-top:12px;position:relative}
+.tcard-wrap .tc-cm{display:flex;gap:9px;margin-bottom:11px}
+.tcard-wrap .tc-av{width:24px;height:24px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:9px;font-weight:800;color:#fff;background:#3a3f4d}
+.tcard-wrap .tc-cm-b{flex:1;min-width:0}
+.tcard-wrap .tc-cm-h{font-size:12px;font-weight:700}
+.tcard-wrap .tc-cm-h span{color:#646B78;font-weight:400;font-size:11px;margin-left:6px}
+.tcard-wrap .tc-cm-t{font-size:12.5px;color:#9AA1AE;margin-top:1px;word-wrap:break-word}
+.tcard-wrap .mention{color:#4CC2C0;font-weight:600}
+.tcard-wrap .tc-cm-input{display:flex;gap:8px;margin-top:4px;position:relative}
+.tcard-wrap .tc-cm-input input{flex:1;background:#171a21;border:1px solid #2a2e39;border-radius:9px;color:#ECEEF4;font:inherit;font-size:12.5px;padding:8px 12px;outline:none}
+.tcard-wrap .tc-cm-input input:focus{border-color:#4CC2C0}
+.tcard-wrap .tc-cm-input input::placeholder{color:#646B78}
+.tcard-wrap .tc-cm-send{width:34px;border-radius:9px;border:none;background:#4CC2C0;color:#0f1115;font-size:15px;font-weight:800;cursor:pointer;flex:none;font-family:inherit}
+.tcard-wrap .tc-cm-send:disabled{opacity:.4;cursor:default}
+.tcard-wrap .mention-dd{position:absolute;bottom:42px;left:0;width:190px;background:#20242e;border:1px solid #3a3f4d;border-radius:10px;padding:4px 0;box-shadow:0 12px 32px rgba(0,0,0,.5);z-index:5}
+.tcard-wrap .mention-dd .mi{display:flex;align-items:center;gap:9px;padding:7px 12px;cursor:pointer;font-size:12.5px}
+.tcard-wrap .mention-dd .mi:hover{background:rgba(255,255,255,.05)}
+/* тост «вас отметили» */
+.mn-toast{position:fixed;right:16px;bottom:16px;z-index:1000006;width:330px;max-width:calc(100vw - 32px);background:#20242e;border:1px solid #3a3f4d;border-radius:12px;padding:12px 14px;display:flex;gap:10px;box-shadow:0 12px 32px rgba(0,0,0,.5);cursor:pointer;font-family:Inter,-apple-system,sans-serif;color:#ECEEF4;animation:ttQaFade .15s ease-out}
+.mn-toast .tc-av{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:10px;font-weight:800;color:#fff;background:#3a3f4d}
+.mn-toast .nb{flex:1;min-width:0}
+.mn-toast .nt{font-size:12.5px;line-height:1.4}
+.mn-toast .nt b{color:#4CC2C0}
+.mn-toast .nd{font-size:11px;color:#646B78;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #view-calendar .cal2-detail .dt-title{font-size:14px;font-weight:700;letter-spacing:-.2px;margin-bottom:10px;padding-right:20px}
 #view-calendar .cal2-detail .dt-row{display:flex;gap:8px;font-size:12px;color:#9AA3B2;padding:4px 0;align-items:baseline}
 #view-calendar .cal2-detail .dt-row .lbl{color:#5F6674;width:78px;font-size:10px;letter-spacing:.4px;text-transform:uppercase;font-weight:700;flex-shrink:0}
@@ -16162,7 +16225,8 @@ function confirmAction(opts){
  opts = opts || {};
  return new Promise(function(resolve){
   var bg = document.createElement('div');
-  bg.style.cssText = 'position:fixed;inset:0;z-index:11000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;animation:cfaFade .15s ease-out';
+  bg.className = 'cfa-bg'; // v773-qa: карточка задачи по этому классу понимает «конфирм поверх — не закрываться»
+  bg.style.cssText = 'position:fixed;inset:0;z-index:1000010;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;animation:cfaFade .15s ease-out'; // v773: выше карточки задачи (1000002) и поповеров (1000005)
   var box = document.createElement('div');
   var danger = !!opts.danger;
   var accentBg = danger ? '#EF4444' : 'var(--accent, #5E6AD2)';
@@ -16240,6 +16304,7 @@ function _enterAppAsCurrentUser(){
  }
  updateCountrySwitcherUI();
  initCalendar();
+ if(typeof mnPollStart === 'function') mnPollStart(); // v773: поллинг упоминаний в комментариях
  renderAll();
  showView(_initialViewAfterLogin());
  setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
@@ -16334,6 +16399,8 @@ async function doLogin() {
 })();
 
 function doLogout() {
+ if(typeof mnPollStop === 'function') mnPollStop(); // v773: стоп поллинга упоминаний
+ if(typeof tcardClose === 'function') try { tcardClose(false); } catch(_){} // v773: карточка задачи не должна пережить выход
  currentUser = null;
  window._tempLoginPass = ''; // v589: не держим введённый временный пароль
  window._SESSION_TOKEN = ''; try { localStorage.removeItem('sd_session'); } catch(_){} // v626 SEC (фаза 1)
@@ -36431,11 +36498,23 @@ window.ttQaTypeAdd = function(){
  var old = document.getElementById('cal2-detail'); if(old) old.remove();
  var d = document.createElement('div');
  d.className = 'cal2-detail'; d.id = 'cal2-detail';
- d.innerHTML = '<span class="dt-x" onclick="this.parentNode.remove()">×</span>'
+ d.innerHTML = '<span class="dt-x" onclick="window._typeAddCb=null;this.parentNode.remove()">×</span>'
   + '<div class="dt-title">Новый тип задачи</div>'
   + '<input id="cal2-newtype-name" placeholder="Например: Замер или Доставка" style="width:100%;background:#14161e;border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#F2F4F8;font-family:inherit;font-size:12.5px;padding:8px 10px;outline:none;box-sizing:border-box">'
   + '<div class="dt-actions"><button onclick="ttQaTypeAddSave()" style="background:#2BB577;border-color:#2BB577;color:#0B0C10;font-weight:700">Добавить</button></div>';
- (document.getElementById('view-calendar') || document.body).appendChild(d);
+ // v773-qa: из карточки задачи (_typeAddCb) окошко живёт в body поверх карточки —
+ // CSS .cal2-detail заскоуплен #view-calendar (z 10001), в календаре оно пряталось ПОД карточкой
+ // (z 1000002), а с других экранов уходило в скрытый #view-calendar и было невидимым.
+ if(window._typeAddCb){
+  d.style.cssText = 'position:fixed;z-index:1000008;width:320px;background:linear-gradient(180deg,#20242F,#171A22);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:16px;box-shadow:0 24px 64px rgba(0,0,0,.6);font-family:Inter,sans-serif;color:#F2F4F8';
+  document.body.appendChild(d);
+  var _tt = d.querySelector('.dt-title'); if(_tt) _tt.style.cssText = 'font-size:14px;font-weight:700;margin-bottom:10px';
+  var _tx = d.querySelector('.dt-x'); if(_tx) _tx.style.cssText = 'position:absolute;right:12px;top:8px;cursor:pointer;color:#9AA3B2;font-size:16px';
+  var _ta = d.querySelector('.dt-actions'); if(_ta) _ta.style.cssText = 'margin-top:10px;display:flex;justify-content:flex-end';
+  var _tb = d.querySelector('.dt-actions button'); if(_tb) _tb.style.cssText = 'background:#2BB577;border:1px solid #2BB577;border-radius:8px;color:#0B0C10;font-weight:700;font-family:inherit;font-size:12px;padding:7px 12px;cursor:pointer';
+ } else {
+  (document.getElementById('view-calendar') || document.body).appendChild(d);
+ }
  d.style.left = Math.max(12, window.innerWidth / 2 - 160) + 'px';
  d.style.top = '160px';
  setTimeout(function(){
@@ -36452,6 +36531,8 @@ window.ttQaTypeAddSave = async function(){
   if(!r || !r.ok) throw new Error((r && r.error) || 'не получилось добавить');
   await cal2LoadTypes();
   if(window._ttQa && r.type) window._ttQa.state.type_id = r.type.id;
+  // v773: если тип добавляли из карточки задачи — отдаём новый тип её колбэку
+  if(window._typeAddCb && r.type){ try { window._typeAddCb(r.type); } catch(_){} window._typeAddCb = null; }
   ttQaTypeRefresh();
   if(typeof kbShowToast === 'function') kbShowToast('Тип «' + name + '» добавлен');
   var d = document.getElementById('cal2-detail'); if(d) d.remove();
@@ -36641,12 +36722,9 @@ function ttQaFlagOpen(ev){
   ttQaChipsRefresh();
  });
 }
-// Поповер клиента: поиск + список активных клиентов (кэш на сессию).
-// Класс .ct-dd — он в whitelist outside-click quick-add'а, окно создания не закроется.
-async function ttQaClientOpen(ev){
- if(ev && ev.stopPropagation) ev.stopPropagation();
- if(!window._ttQa) return;
- var anchor = ev.currentTarget || ev.target;
+// v773: общий поповер выбора клиента (quick-add И карточка задачи): поиск + активные клиенты.
+// Класс .ct-dd — в whitelist outside-click quick-add'а и карточки. onPick(id, name); null = без клиента.
+async function sdClientPickerOpen(anchor, currentId, onPick){
  if(!window._ttQaClients){
   try {
    var d = await sbFetch('/api/clients?status=active');
@@ -36670,14 +36748,13 @@ async function ttQaClientOpen(ev){
  var listBox = document.createElement('div');
  listBox.className = 'ct-dd-listbox';
  dd.appendChild(listBox);
- var s = window._ttQa.state;
  function renderList(q){
   q = (q || '').toLowerCase();
   listBox.replaceChildren();
   var none = document.createElement('div');
-  none.className = 'ct-dd-item' + (!s.client_id ? ' is-selected' : '');
+  none.className = 'ct-dd-item' + (!currentId ? ' is-selected' : '');
   none.textContent = '— Без клиента';
-  none.onclick = function(){ s.client_id = null; s.client_name = ''; dd.remove(); ttQaChipsRefresh(); };
+  none.onclick = function(){ dd.remove(); onPick(null, ''); };
   listBox.appendChild(none);
   var shown = 0;
   (window._ttQaClients || []).forEach(function(c){
@@ -36685,9 +36762,9 @@ async function ttQaClientOpen(ev){
    if(shown >= 50) return;
    shown++;
    var it = document.createElement('div');
-   it.className = 'ct-dd-item' + (s.client_id === c.id ? ' is-selected' : '');
+   it.className = 'ct-dd-item' + (currentId === c.id ? ' is-selected' : '');
    it.textContent = c.name;
-   it.onclick = function(){ s.client_id = c.id; s.client_name = c.name; dd.remove(); ttQaChipsRefresh(); };
+   it.onclick = function(){ dd.remove(); onPick(c.id, c.name); };
    listBox.appendChild(it);
   });
   if(!shown && q){
@@ -36715,6 +36792,17 @@ async function ttQaClientOpen(ev){
    if(!dd.contains(e2.target)){ dd.remove(); document.removeEventListener('mousedown', closer, true); }
   }, true);
  }, 50);
+}
+// Тонкая обёртка для quick-add (поведение прежнее)
+async function ttQaClientOpen(ev){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ if(!window._ttQa) return;
+ var s = window._ttQa.state;
+ sdClientPickerOpen(ev.currentTarget || ev.target, s.client_id, function(id, name){
+  s.client_id = id;
+  s.client_name = name || '';
+  ttQaChipsRefresh();
+ });
 }
 
 async function ttQaSave(){
@@ -36789,13 +36877,16 @@ async function ttQaSave(){
 // ============================================================
 window._ttDp = window._ttDp || null;
 
-function ttDpOpen(ev){
+// v773: ttDpOpen параметризован — карточка задачи переиспользует тот же date-picker.
+// opts: { state:{date,time_start,time_end,is_all_day}, onApply:function(result), anchor:El }
+function ttDpOpen(ev, opts){
  if(ev && ev.stopPropagation) ev.stopPropagation();
- if(!window._ttQa) return;
+ opts = opts || {};
+ var src = (opts.state) || (window._ttQa && window._ttQa.state);
+ if(!src) return;
  // Закрыть прошлый dp если был
  var prev = document.getElementById('tt-dp'); if(prev) prev.remove();
 
- var src = window._ttQa.state;
  // Клон стейта чтобы Cancel/Очистить не ломали родительский
  var dpState = {
   tab: 'date',                          // 'date' | 'duration'
@@ -36808,7 +36899,7 @@ function ttDpOpen(ev){
   view_m: parseInt(src.date.slice(5,7), 10) - 1,
   reminder: '5m'                        // дефолт: за 5 минут (TODO: не шлём пока на бэк)
  };
- window._ttDp = { state: dpState };
+ window._ttDp = { state: dpState, onApply: opts.onApply || null, anchorEl: opts.anchor || null };
 
  var dp = document.createElement('div');
  dp.className = 'tt-dp';
@@ -36816,8 +36907,8 @@ function ttDpOpen(ev){
  dp.onclick = function(e){ e.stopPropagation(); };
  document.body.appendChild(dp);
 
- // Позиционирование — рядом с чипом quick-add
- var anchor = document.querySelector('#tt-qa-pop .tt-qa-chip');
+ // Позиционирование — рядом с чипом quick-add (или переданным якорем, v773)
+ var anchor = (opts.anchor) || document.querySelector('#tt-qa-pop .tt-qa-chip');
  if(anchor){
   var r = anchor.getBoundingClientRect();
   var x = r.left;
@@ -37075,8 +37166,22 @@ function ttDpClear(){
 }
 
 function ttDpApply(){
- if(!window._ttDp || !window._ttQa) return;
+ if(!window._ttDp) return;
  var s = window._ttDp.state;
+ // v773: если открыт из карточки задачи — отдаём результат колбэку, quick-add не трогаем
+ if(window._ttDp.onApply){
+  var cb = window._ttDp.onApply;
+  var dpEl = document.getElementById('tt-dp'); if(dpEl) dpEl.remove();
+  window._ttDp = null;
+  cb({
+   date: s.date,
+   is_all_day: !!s.is_all_day,
+   time_start: s.is_all_day ? '' : (s.time_start || '09:00'),
+   time_end: s.is_all_day ? '' : (s.time_end || '')
+  });
+  return;
+ }
+ if(!window._ttQa) return;
  var q = window._ttQa.state;
  q.date = s.date;
  q.is_all_day = !!s.is_all_day;
@@ -37122,6 +37227,469 @@ window.ttDpPreset = ttDpPreset;
 window.ttDpClear = ttDpClear;
 window.ttDpApply = ttDpApply;
 
+// ============================================================================
+// v773: КАРТОЧКА ЗАДАЧИ (TickTick-стиль) — клик по синк-задаче открывает её вместо
+// маленького попапа. Standalone: tcardOpen(taskId) работает с любого экрана
+// (клик по уведомлению об упоминании). Дизайн: preview-task-card-v2.html.
+// ============================================================================
+window._tcard = null;
+
+function tcardFlagSvg(color){
+ if(color) return '<svg viewBox="0 0 24 24" fill="' + color + '"><path d="M5 3v18h2v-7h11l-3-4.5L18 5H7V3H5z"/></svg>';
+ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3v18M5 4h12l-2.5 4L17 12H5"/></svg>';
+}
+function tcardFmtWhen(t){
+ if(!t.deadline_at) return 'Когда выполнить';
+ var d = new Date(t.deadline_at);
+ if(isNaN(d.getTime())) return 'Когда выполнить';
+ var today = new Date(); today.setHours(0,0,0,0);
+ var dd = new Date(d); dd.setHours(0,0,0,0);
+ var diff = Math.round((dd - today) / 86400000);
+ var day;
+ if(diff === 0) day = 'Сегодня';
+ else if(diff === 1) day = 'Завтра';
+ else if(diff === -1) day = 'Вчера';
+ else day = d.toLocaleDateString('ru-RU', { day:'numeric', month:'long' });
+ if(t.is_all_day) return day + ', весь день';
+ var pad = function(n){ return n < 10 ? '0' + n : '' + n; };
+ var s = day + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+ if(t.deadline_end_at){
+  var e = new Date(t.deadline_end_at);
+  if(!isNaN(e.getTime())) s += ' – ' + pad(e.getHours()) + ':' + pad(e.getMinutes());
+ }
+ return s;
+}
+function tcardAvColor(name){
+ var m = { blue:'#0A84FF', purple:'#5E5CE0', green:'#2BB577', orange:'#FF9F0A', pink:'#E0447A', teal:'#1FA396', ind:'#6E79E0' };
+ return m[cal2OpColor(name)] || '#3a3f4d';
+}
+
+async function tcardOpen(taskId, ev){
+ if(window._tcardOpening) return; // v773-qa: двойной клик — второе открытие глотаем (иначе карточка-призрак)
+ window._tcardOpening = true;
+ try {
+ if(typeof ttQaCloseAll === 'function'){ try { ttQaCloseAll(); } catch(_){} } // не пересекаться с quick-add
+ tcardClose(true);
+ var loads = await Promise.allSettled([
+  crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId)),
+  crmTasksFetch('/api/tasks?comments_for=' + encodeURIComponent(taskId)),
+  (window._cal2Types && window._cal2Types.length) ? Promise.resolve(null) : (typeof cal2LoadTypes === 'function' ? cal2LoadTypes() : Promise.resolve(null))
+ ]);
+ var dTask = loads[0].status === 'fulfilled' ? loads[0].value : null;
+ if(!dTask || !dTask.ok || !dTask.task){
+  if(typeof kbShowToast === 'function') kbShowToast('Не удалось открыть задачу');
+  return;
+ }
+ var dCm = loads[1].status === 'fulfilled' ? loads[1].value : null;
+ window._tcard = {
+  taskId: taskId,
+  task: dTask.task,
+  comments: (dCm && dCm.ok && dCm.comments) || [],
+  savedText: dTask.task.text || '',
+  savedDesc: dTask.task.description || ''
+ };
+ var wrap = document.createElement('div');
+ wrap.className = 'tcard-wrap';
+ wrap.id = 'tcard-wrap';
+ document.body.appendChild(wrap);
+ window._tcard.wrap = wrap;
+ tcardRender();
+ // позиция: у курсора с clamp, иначе центр
+ var W = 400, H = Math.min(window.innerHeight * .8, wrap.offsetHeight || 420);
+ var x = (ev && typeof ev.clientX === 'number') ? ev.clientX + 12 : (window.innerWidth - W) / 2;
+ var y = (ev && typeof ev.clientY === 'number') ? ev.clientY - 30 : Math.max(24, (window.innerHeight - H) / 2 - 40);
+ if(x + W > window.innerWidth - 12) x = Math.max(12, window.innerWidth - W - 12);
+ if(y + H > window.innerHeight - 12) y = Math.max(12, window.innerHeight - H - 12);
+ wrap.style.left = Math.max(12, x) + 'px';
+ wrap.style.top = Math.max(12, y) + 'px';
+ // закрытие: клик мимо (с flush автосейва) и Esc. v773-qa: слоёное закрытие —
+ // конфирм поверх не трогает карточку; date-picker карточки закрывается ПЕРВЫМ, отдельно.
+ window._tcardCloser = function(e2){
+  if(document.querySelector('.cfa-bg')) return; // confirm открыт — все клики его
+  if(window._ttDp && window._ttDp.onApply && !e2.target.closest('.tt-dp')){
+   var dp0 = document.getElementById('tt-dp'); if(dp0) dp0.remove();
+   window._ttDp = null;
+   return; // закрыли только календарик, карточка живёт
+  }
+  if(e2.target.closest('.tcard-wrap, .tt-dp, .ct-dd, .cal2-detail, .crm-modal-bg, .ct-modal-bg, .mn-toast, .cfa-bg')) return;
+  tcardClose(true);
+ };
+ setTimeout(function(){ document.addEventListener('mousedown', window._tcardCloser, true); }, 0);
+ window._tcardKeys = function(e2){
+  if(e2.key !== 'Escape') return;
+  if(document.querySelector('.cfa-bg')) return; // Esc принадлежит конфирму
+  if(window._ttDp && window._ttDp.onApply){
+   var dp1 = document.getElementById('tt-dp'); if(dp1) dp1.remove();
+   window._ttDp = null;
+   return; // Esc закрыл только календарик
+  }
+  tcardClose(true);
+ };
+ document.addEventListener('keydown', window._tcardKeys, true);
+ } finally { window._tcardOpening = false; } // v773-qa: снять защёлку двойного клика при любом исходе
+}
+function tcardClose(flush){
+ if(flush) tcardFlushText();
+ // v773-qa: добираем «карточный» date-picker и колбэк добавления типа — не оставлять сирот
+ if(window._ttDp && window._ttDp.onApply){ var dpc = document.getElementById('tt-dp'); if(dpc) dpc.remove(); window._ttDp = null; }
+ window._typeAddCb = null;
+ var w = document.getElementById('tcard-wrap'); if(w) w.remove();
+ if(window._tcardCloser){ document.removeEventListener('mousedown', window._tcardCloser, true); window._tcardCloser = null; }
+ if(window._tcardKeys){ document.removeEventListener('keydown', window._tcardKeys, true); window._tcardKeys = null; }
+ window._tcard = null;
+}
+window.tcardOpen = tcardOpen;
+window.tcardClose = tcardClose;
+
+function tcardRender(){
+ var st = window._tcard;
+ if(!st || !st.wrap) return;
+ // v773-qa: не терять недописанный комментарий при перерисовке (смена флажка/типа/даты)
+ var _cmDraft = '';
+ var _oldCm = st.wrap.querySelector('#tc-cm-text');
+ if(_oldCm) _cmDraft = _oldCm.value;
+ var t = st.task;
+ var isDone = t.status === 'done';
+ var flagColor = t.eisenhower ? CAL2_FLAG_COLORS[t.eisenhower] : null;
+ var isLate = !isDone && t.deadline_at && new Date(t.deadline_at).getTime() < Date.now() && !t.is_all_day;
+ var typeName = 'Тип';
+ var ty = (window._cal2Types || []).find(function(x){ return x.id === t.type_id; });
+ if(ty) typeName = ty.name;
+ else if(typeof crmTasksTypeById === 'function'){ var ty2 = crmTasksTypeById(t.type_id); if(ty2) typeName = ty2.name; }
+ var html =
+  '<div class="tc-top">'
+  + '<span class="tc-check' + (isDone ? ' done' : '') + '" id="tc-check" title="' + (isDone ? 'Выполнена' : 'Выполнить') + '">' + (isDone ? '&#10003;' : '&#10003;') + '</span>'
+  + '<span class="tc-when' + (t.deadline_at ? ' set' : '') + (isLate ? ' late' : '') + '" id="tc-when">'
+   + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>'
+   + '<span>' + kbEsc(tcardFmtWhen(t)) + '</span>'
+  + '</span>'
+  + '<span class="tc-flag" id="tc-flag" title="Флажок"' + (flagColor ? ' style="color:' + flagColor + '"' : '') + '>' + tcardFlagSvg(flagColor) + '</span>'
+  + '<button class="tc-x" id="tc-x">&times;</button>'
+  + '</div>'
+  + '<div class="tc-done-row" id="tc-done-row" style="display:none">'
+  + '<input id="tc-done-result" placeholder="Что сделано? (обязательно, минимум 3 символа)">'
+  + '<button class="tc-done-go" id="tc-done-go">Готово</button>'
+  + '</div>'
+  + '<div class="tc-body">'
+  + '<input class="tc-title' + (isDone ? ' done' : '') + '" id="tc-title" placeholder="Название задачи" value="' + kbEsc(t.text || '') + '">'
+  + '<textarea class="tc-desc" id="tc-desc" placeholder="Описание...">' + kbEsc(t.description || '') + '</textarea>'
+  + '<div class="tc-comments">'
+  + '<div id="tc-cm-list"></div>'
+  + '<div class="tc-cm-input">'
+   + '<input id="tc-cm-text" placeholder="Написать комментарий... @ — отметить коллегу" maxlength="2000">'
+   + '<button class="tc-cm-send" id="tc-cm-send">&#8593;</button>'
+   + '<div class="mention-dd" id="tc-mention-dd" style="display:none"></div>'
+  + '</div>'
+  + '</div>'
+  + '</div>'
+  + '<div class="tc-foot">'
+  + '<span class="tc-chip" id="tc-type"><span class="dot"' + (ty && ty.color ? ' style="background:' + kbEsc(ty.color) + '"' : '') + '></span>' + kbEsc(typeName) + '</span>'
+  + '<span class="tc-chip" id="tc-assignee">' + kbEsc(t.assignee_operator || 'Исполнитель') + '</span>'
+  + '<span class="tc-chip" id="tc-client"' + (t.client_id ? '' : ' style="color:#646B78"') + '>' + kbEsc(t.contact_name || t.client_id || '+ Клиент') + '</span>'
+  + '<span class="sp"></span>'
+  + '<button class="tc-more" id="tc-more" title="Ещё">&#8943;</button>'
+  + '</div>';
+ st.wrap.innerHTML = html;
+ tcardRenderComments();
+ // слушатели
+ var $ = function(id){ return document.getElementById(id); };
+ $('tc-x').onclick = function(){ tcardClose(true); };
+ $('tc-when').onclick = tcardWhenOpen;
+ $('tc-flag').onclick = tcardFlagMenu;
+ $('tc-type').onclick = tcardTypeMenu;
+ $('tc-assignee').onclick = tcardAssigneeMenu;
+ $('tc-client').onclick = tcardClientMenu;
+ $('tc-more').onclick = tcardMoreMenu;
+ $('tc-title').onblur = tcardFlushText;
+ $('tc-desc').onblur = tcardFlushText;
+ $('tc-check').onclick = function(){
+  if(window._tcard.task.status === 'done') return; // reopen API не умеет
+  var row = $('tc-done-row');
+  row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+  if(row.style.display === 'flex') $('tc-done-result').focus();
+ };
+ $('tc-done-go').onclick = tcardDoneSubmit;
+ $('tc-done-result').onkeydown = function(e2){ if(e2.key === 'Enter') tcardDoneSubmit(); };
+ $('tc-cm-send').onclick = tcardCommentSend;
+ var cmIn = $('tc-cm-text');
+ cmIn.onkeydown = function(e2){ if(e2.key === 'Enter'){ e2.preventDefault(); tcardCommentSend(); } };
+ cmIn.oninput = tcardMentionHint;
+ if(_cmDraft) cmIn.value = _cmDraft; // v773-qa: вернуть черновик комментария
+}
+
+// ---- комментарии ----
+function tcardRenderComments(){
+ var st = window._tcard;
+ var box = document.getElementById('tc-cm-list');
+ if(!st || !box) return;
+ box.innerHTML = (st.comments || []).map(function(c){
+  var txt = kbEsc(c.text || '');
+  // подсветка @Имя — только имена из mentions[] (после escape) — XSS-безопасно
+  (c.mentions || []).forEach(function(m){
+   var em = kbEsc('@' + m);
+   txt = txt.split(em).join('<span class="mention">' + em + '</span>');
+  });
+  var when = '';
+  try { when = _fmtFeedDate(c.created_at); } catch(_){}
+  return '<div class="tc-cm">'
+   + '<span class="tc-av" style="background:' + tcardAvColor(c.author) + '">' + kbEsc(cal2Initials(c.author || '?')) + '</span>'
+   + '<div class="tc-cm-b"><div class="tc-cm-h">' + kbEsc(c.author || '') + ' <span>' + kbEsc(when) + '</span></div>'
+   + '<div class="tc-cm-t">' + txt + '</div></div>'
+   + '</div>';
+ }).join('');
+}
+function tcardMentionNames(){
+ var set = {};
+ ((typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators : ['Айдос','Акбар','Самат']).forEach(function(n){ set[crmOpCanon(n)] = 1; });
+ try { (employees || []).forEach(function(e){ if(e.active !== false && e.name) set[crmOpCanon(e.name)] = 1; }); } catch(_){}
+ return Object.keys(set);
+}
+function tcardMentionHint(){
+ var inp = document.getElementById('tc-cm-text');
+ var dd = document.getElementById('tc-mention-dd');
+ if(!inp || !dd) return;
+ var upto = inp.value.slice(0, inp.selectionStart == null ? inp.value.length : inp.selectionStart);
+ var m = upto.match(/@([\wа-яА-ЯёЁ-]*)$/);
+ if(!m){ dd.style.display = 'none'; return; }
+ var q = (m[1] || '').toLowerCase();
+ var names = tcardMentionNames().filter(function(n){ return !q || n.toLowerCase().indexOf(q) === 0; }).slice(0, 6);
+ if(!names.length){ dd.style.display = 'none'; return; }
+ dd.innerHTML = names.map(function(n){
+  return '<div class="mi" data-n="' + kbEsc(n) + '"><span class="tc-av" style="background:' + tcardAvColor(n) + '">' + kbEsc(cal2Initials(n)) + '</span>' + kbEsc(n) + '</div>';
+ }).join('');
+ dd.style.display = '';
+ Array.prototype.forEach.call(dd.querySelectorAll('.mi'), function(el){
+  el.onmousedown = function(e2){
+   e2.preventDefault();
+   var name = el.dataset.n;
+   var pos = inp.selectionStart == null ? inp.value.length : inp.selectionStart;
+   var before = inp.value.slice(0, pos).replace(/@([\wа-яА-ЯёЁ-]*)$/, '@' + name + ' ');
+   inp.value = before + inp.value.slice(pos);
+   dd.style.display = 'none';
+   inp.focus();
+  };
+ });
+}
+async function tcardCommentSend(){
+ var st = window._tcard;
+ var inp = document.getElementById('tc-cm-text');
+ var btn = document.getElementById('tc-cm-send');
+ if(!st || !inp) return;
+ var text = inp.value.trim();
+ if(!text) return;
+ // mentions: скан текста по известным именам (@Имя)
+ var mentions = tcardMentionNames().filter(function(n){ return text.indexOf('@' + n) >= 0; });
+ if(btn) btn.disabled = true;
+ try {
+  var d = await crmTasksFetch('/api/tasks?comment=1', {
+   method:'POST',
+   body: JSON.stringify({ task_id: st.taskId, text: text, mentions: mentions })
+  });
+  if(!d || !d.ok) throw new Error((d && d.error) || 'не отправился');
+  st.comments.push(d.comment || { author: crmOpCanon((currentUser && currentUser.name) || ''), text: text, mentions: mentions, created_at: new Date().toISOString() });
+  inp.value = '';
+  tcardRenderComments();
+ } catch(e){
+  if(typeof kbShowToast === 'function') kbShowToast('Комментарий не отправился: ' + (e.message || e));
+ }
+ if(btn) btn.disabled = false;
+}
+
+// ---- автосохранение заголовка/описания ----
+async function tcardFlushText(){
+ var st = window._tcard;
+ if(!st) return;
+ var titleEl = document.getElementById('tc-title');
+ var descEl = document.getElementById('tc-desc');
+ var patch = {};
+ if(titleEl && titleEl.value.trim() && titleEl.value.trim() !== st.savedText) patch.text = titleEl.value.trim();
+ if(descEl && descEl.value !== st.savedDesc) patch.description = descEl.value;
+ if(!Object.keys(patch).length) return;
+ if(patch.text !== undefined) st.savedText = patch.text;
+ if(patch.description !== undefined) st.savedDesc = patch.description;
+ try {
+  var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(st.taskId), { method:'PATCH', body: JSON.stringify(patch) });
+  if(d && d.ok){ if(typeof _mtMaybeReload === 'function') _mtMaybeReload(); }
+ } catch(_){}
+}
+// ---- общий PATCH поля + перерисовка ----
+async function tcardPatch(patch){
+ var st = window._tcard;
+ if(!st) return false;
+ try {
+  var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(st.taskId), { method:'PATCH', body: JSON.stringify(patch) });
+  if(!d || !d.ok){ if(typeof kbShowToast === 'function') kbShowToast('Не сохранилось: ' + ((d && d.error) || 'сеть')); return false; }
+  st.task = d.task || Object.assign({}, st.task, patch);
+  tcardRender();
+  if(typeof _mtMaybeReload === 'function') _mtMaybeReload();
+  return true;
+ } catch(e){ if(typeof kbShowToast === 'function') kbShowToast('Ошибка сети'); return false; }
+}
+
+// ---- меню и пикеры ----
+function tcardWhenOpen(ev){
+ var st = window._tcard;
+ if(!st) return;
+ var t = st.task;
+ var pad = function(n){ return n < 10 ? '0' + n : '' + n; };
+ var d = t.deadline_at ? new Date(t.deadline_at) : new Date();
+ var state = {
+  date: d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()),
+  time_start: t.is_all_day ? '' : pad(d.getHours()) + ':' + pad(d.getMinutes()),
+  time_end: '',
+  is_all_day: !!t.is_all_day
+ };
+ if(t.deadline_end_at && !t.is_all_day){
+  var e = new Date(t.deadline_end_at);
+  if(!isNaN(e.getTime())) state.time_end = pad(e.getHours()) + ':' + pad(e.getMinutes());
+ }
+ ttDpOpen(ev, {
+  state: state,
+  anchor: ev.currentTarget || ev.target,
+  onApply: function(r){
+   var deadline_at = new Date(r.date + 'T' + (r.is_all_day ? '00:00' : (r.time_start || '09:00')) + ':00').toISOString();
+   var deadline_end_at = (!r.is_all_day && r.time_end) ? new Date(r.date + 'T' + r.time_end + ':00').toISOString() : null;
+   tcardPatch({ deadline_at: deadline_at, deadline_end_at: deadline_end_at, is_all_day: !!r.is_all_day });
+  }
+ });
+}
+function tcardFlagMenu(ev){
+ if(typeof crmTasksOpenDropdown !== 'function') return;
+ var st = window._tcard;
+ var items = ['red','yellow','green','gray'].map(function(v){
+  return { value:v, label:CAL2_FLAG_LABELS[v], icon:true, color:CAL2_FLAG_COLORS[v], selected: st.task.eisenhower === v };
+ });
+ items.push({ value:'', label:'Без флажка', selected: !st.task.eisenhower });
+ crmTasksOpenDropdown(ev.currentTarget || ev.target, items, function(v){ tcardPatch({ eisenhower: v || null }); });
+}
+function tcardTypeMenu(ev){
+ if(typeof crmTasksOpenDropdown !== 'function') return;
+ var st = window._tcard;
+ var items = (window._cal2Types || []).map(function(t){
+  return { value:String(t.id), label:t.name, icon:true, color:t.color || '#c5cad1', selected: st.task.type_id === t.id };
+ });
+ items.push({ value:'__add', label:'+ Добавить тип…' });
+ crmTasksOpenDropdown(ev.currentTarget || ev.target, items, function(v){
+  if(v === '__add'){
+   // новый тип вернётся колбэком из ttQaTypeAddSave (v773)
+   window._typeAddCb = function(type){ tcardPatch({ type_id: type.id }); };
+   ttQaTypeAdd();
+   return;
+  }
+  tcardPatch({ type_id: parseInt(v, 10) || 1 });
+ });
+}
+function tcardAssigneeMenu(ev){
+ if(typeof crmTasksOpenDropdown !== 'function') return;
+ var st = window._tcard;
+ var ops = (typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators.slice() : ['Айдос','Акбар','Самат'];
+ var cur = st.task.assignee_operator;
+ if(cur && ops.indexOf(cur) < 0) ops.push(cur);
+ crmTasksOpenDropdown(ev.currentTarget || ev.target, ops.map(function(o){
+  return { value:o, label:o, selected: o === cur };
+ }), function(v){ tcardPatch({ assignee_operator: v }); });
+}
+function tcardClientMenu(ev){
+ var st = window._tcard;
+ sdClientPickerOpen(ev.currentTarget || ev.target, st.task.client_id, function(id, name){
+  tcardPatch({ client_id: id, contact_name: name || null });
+ });
+}
+function tcardMoreMenu(ev){
+ if(typeof crmTasksOpenDropdown !== 'function') return;
+ var st = window._tcard;
+ var items = [];
+ if(st.task.client_id) items.push({ value:'client', label:'Карточка клиента' });
+ items.push({ value:'del', label:'Удалить задачу' });
+ crmTasksOpenDropdown(ev.currentTarget || ev.target, items, async function(v){
+  if(v === 'client'){
+   var cid = st.task.client_id;
+   tcardClose(true);
+   if(typeof crmCalOpenClient === 'function') crmCalOpenClient(cid);
+   return;
+  }
+  if(v === 'del'){
+   var ok = await confirmAction({ title:'Удалить задачу?', body:'Задача будет удалена у всех. Это нельзя отменить.', danger:true, confirmLabel:'Удалить' });
+   if(!ok) return;
+   try {
+    var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(st.taskId), { method:'DELETE' });
+    if(!d || !d.ok){ if(typeof kbShowToast === 'function') kbShowToast('Не удалось удалить: ' + ((d && d.error) || 'нет прав')); return; }
+    tcardClose(false);
+    if(typeof kbShowToast === 'function') kbShowToast('Задача удалена');
+    if(typeof _mtMaybeReload === 'function') _mtMaybeReload();
+   } catch(_){ if(typeof kbShowToast === 'function') kbShowToast('Ошибка сети'); }
+  }
+ });
+}
+async function tcardDoneSubmit(){
+ var st = window._tcard;
+ var inp = document.getElementById('tc-done-result');
+ if(!st || !inp) return;
+ var result = inp.value.trim();
+ if(result.length < 3){ if(typeof kbShowToast === 'function') kbShowToast('Напишите результат — минимум 3 символа'); inp.focus(); return; }
+ try {
+  var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(st.taskId) + '&close=1', {
+   method:'PATCH', body: JSON.stringify({ result: result })
+  });
+  if(!d || !d.ok){ if(typeof kbShowToast === 'function') kbShowToast('Не получилось закрыть: ' + ((d && d.error) || 'сеть')); return; }
+  st.task.status = 'done';
+  tcardRender();
+  if(typeof kbShowToast === 'function') kbShowToast('Задача выполнена');
+  if(typeof _mtMaybeReload === 'function') _mtMaybeReload();
+ } catch(_){ if(typeof kbShowToast === 'function') kbShowToast('Ошибка сети — текст не потерян, попробуйте ещё раз'); }
+}
+
+// ============================================================================
+// v773: УВЕДОМЛЕНИЯ ОБ УПОМИНАНИЯХ — поллинг раз в 2 минуты (+ сразу при входе).
+// «Акбар отметил вас в задаче ...» → клик открывает карточку поверх любого экрана.
+// ============================================================================
+function mnMyName(){
+ if(typeof currentUser === 'undefined' || !currentUser || !currentUser.name) return null;
+ return crmOpCanon(String(currentUser.name).trim().split(/\s+/)[0]);
+}
+function mnPollStart(){
+ if(window._mnTimer){ clearInterval(window._mnTimer); }
+ window._mnTimer = setInterval(mnPoll, 120000);
+ setTimeout(mnPoll, 4000); // первый тик после загрузки данных
+}
+function mnPollStop(){ if(window._mnTimer){ clearInterval(window._mnTimer); window._mnTimer = null; } }
+async function mnPoll(){
+ if(document.hidden) return;
+ var me = mnMyName();
+ if(!me || typeof crmTasksFetch !== 'function') return;
+ var key = 'sd_mn_last_' + me;
+ var since = null;
+ try { since = localStorage.getItem(key); } catch(_){}
+ if(!since){
+  // первый вход — не заливаем историей, стартуем с «сейчас»
+  try { localStorage.setItem(key, new Date().toISOString()); } catch(_){}
+  return;
+ }
+ var d;
+ try {
+  d = await crmTasksFetch('/api/tasks?mentions_of=' + encodeURIComponent(me) + '&since=' + encodeURIComponent(since));
+ } catch(_){ return; }
+ if(!d || !d.ok || !Array.isArray(d.comments) || !d.comments.length) return;
+ var maxAt = since;
+ d.comments.slice(0, 3).forEach(function(c, i){ mnShowToast(c, i); });
+ d.comments.forEach(function(c){ if(c.created_at > maxAt) maxAt = c.created_at; });
+ try { localStorage.setItem(key, maxAt); } catch(_){}
+}
+function mnShowToast(c, idx){
+ var taskText = (c.tasks && c.tasks.text) || 'задаче';
+ var el = document.createElement('div');
+ el.className = 'mn-toast';
+ el.style.bottom = (16 + (idx || 0) * 92) + 'px';
+ el.innerHTML = '<span class="tc-av" style="background:' + tcardAvColor(c.author) + '">' + kbEsc(cal2Initials(c.author || '?')) + '</span>'
+  + '<div class="nb"><div class="nt"><b>' + kbEsc(c.author || '') + '</b> отметил вас в задаче «' + kbEsc(String(taskText).slice(0, 60)) + '»</div>'
+  + '<div class="nd">' + kbEsc(String(c.text || '').slice(0, 80)) + '</div></div>';
+ el.onclick = function(){ el.remove(); tcardOpen(c.task_id); };
+ document.body.appendChild(el);
+ setTimeout(function(){ if(el.parentNode) el.remove(); }, 12000);
+}
+window.mnPollStart = mnPollStart;
+window.mnPollStop = mnPollStop;
+
 // v746: Список — cal2-вид: день-заголовки + строки с чекбоксом, аватаром и временем справа
 function crmCalRenderList(){
  var list = crmCalFilter();
@@ -37166,6 +37734,8 @@ window.cal2ShowDetail = function(id, ev){
  if(window._cal2Dragged) return; // v749: click после растягивания/протяжки — не открывать карточку
  var sel = cal2AllEvents().find(function(e){ return e.id === id; });
  if(!sel) return;
+ // v773: синк-задачи открываются большой карточкой TickTick-стиля; оплаты и нативные — старый попап
+ if(sel._sync_task && sel._task_id && !sel._pay_layer){ tcardOpen(sel._task_id, ev); return; }
  var old = document.getElementById('cal2-detail'); if(old) old.remove();
  var time = sel.time_start ? (sel.date + ', ' + sel.time_start + (sel.time_end ? ' – ' + sel.time_end : '')) : (sel.date || 'без даты');
  var typeLabel = sel._pay_layer ? 'Оплата (продление подписки)' : (({call:'Звонок',training:'Обучение',meeting:'Встреча',deadline:'Дедлайн',other:'Задача'})[sel.type] || 'Задача'); // v750
