@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v769</title>
+<title>SalesDoc — Финансовый Дашборд v770</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1352,6 +1352,13 @@ body.light .tt-type-chip.on{background:rgba(0,0,0,.08);border-color:transparent;
 #view-calendar .cal2-ev .t{font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px}
 #view-calendar .cal2-ev .m{color:rgba(255,255,255,.85);font-size:11px;font-weight:500;font-family:ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px} /* v755: время на плашке крупнее */
 #view-calendar .cal2-ev .who{position:absolute;right:6px;top:6px;width:17px;height:17px;border-radius:6px;display:grid;place-items:center;font-size:7.5px;font-weight:800;color:#fff;box-shadow:0 2px 5px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.3)}
+/* v770: точка-флажок Эйзенхауэра на плашках (точка, НЕ полоса) */
+#view-calendar .cal2-ev .fdot{position:absolute;right:27px;top:10px;width:8px;height:8px;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.25)} /* v770-qa: рядом с аватаром, не ниже — короткие плашки с overflow:hidden обрезали точку */
+#view-calendar .cal2-adev .fdot{display:inline-block;width:7px;height:7px;border-radius:50%;flex:none}
+#view-calendar .cal2-mo-ev .fdot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:1px}
+#view-calendar .cal2-li .fdot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
+#view-calendar .cal2-flagdot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none;margin-right:2px}
+#view-calendar .cal2-detail .fdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:2px;vertical-align:0}
 #view-calendar .cal2-ev.c-blue{background:linear-gradient(135deg,rgba(46,124,214,.92),rgba(28,86,158,.92))}
 #view-calendar .cal2-ev.c-purple{background:linear-gradient(135deg,rgba(139,92,224,.92),rgba(100,60,178,.92))}
 #view-calendar .cal2-ev.c-green{background:linear-gradient(135deg,rgba(31,169,104,.92),rgba(20,120,74,.92))}
@@ -6557,6 +6564,12 @@ body.light .tk-card:hover { background:#FFFFFF; border-color:rgba(15,23,42,.22);
 .ct-dd-item:hover { background:#15233a; }
 .ct-dd-item.is-selected { background:#15233a; color:#60a5fa; }
 .ct-dd-item-icon { display:inline-block; width:14px; text-align:center; font-size:12px; }
+/* v770: поповер выбора клиента в quick-add (поиск + список) и чипы флажка в редакторе задачи */
+.ct-dd-search { display:block; width:calc(100% - 16px); margin:2px 8px 6px; padding:7px 10px; background:#0b1220; border:1px solid #1e2837; border-radius:6px; color:#e5e7eb; font-size:12px; outline:none; font-family:inherit; }
+.ct-dd-search:focus { border-color:#2563eb; }
+.ct-dd-listbox { max-height:240px; overflow-y:auto; }
+.ct-flag-opt { background:#15233a; border:1px solid #1e2837; border-radius:99px; color:#e5e7eb; font-family:inherit; font-size:11.5px; padding:5px 12px; cursor:pointer; display:inline-flex; align-items:center; }
+.ct-flag-opt.on { border-color:#2563eb; background:#1f2f4d; }
 
 /* --- Модалка закрытия задачи --- */
 .ct-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:10003; display:flex; align-items:center; justify-content:center; padding:20px; }
@@ -33728,6 +33741,7 @@ function _routeRenderNextStep(tasks, opts){
  var b = document.createElement('div'); b.className = 'ns-body';
  var l1 = document.createElement('div'); l1.className = 'ns-l1';
  l1.textContent = isLate ? 'Просроченный шаг' : 'Следующий шаг';
+ var _nfd = _taskFlagDot(t); if(_nfd){ _nfd.style.marginLeft = '6px'; l1.appendChild(_nfd); } // v770
  b.appendChild(l1);
  var l2 = document.createElement('div'); l2.className = 'ns-l2';
  var typeName = 'Задача';
@@ -33780,6 +33794,18 @@ function _routeNextStepGo(taskId){
 //               | ↗ задача — текст задачи
 //               | [Добавить результат ......] [Выполнить]  ← инлайн закрытие, без модалки
 // Закрытая (status=done): серый бордер, opacity .7, аватар ✓, вместо инпута — «Результат: ...»
+// v770: точка-флажок Эйзенхауэра для задач в карте клиента (DOM-элемент, не innerHTML)
+function _taskFlagDot(t){
+ var C = { red:'#f37575', yellow:'#FF9F0A', green:'#2BB577', gray:'#6b7280' };
+ var L = { red:'Срочно и важно', yellow:'Важно, не срочно', green:'Срочно, не важно', gray:'Не срочно и не важно' };
+ var c = t && t.eisenhower ? C[t.eisenhower] : null;
+ if(!c) return null;
+ var s = document.createElement('span');
+ s.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:50%;flex:none;background:' + c;
+ s.title = L[t.eisenhower] || '';
+ return s;
+}
+
 function _buildFeedTask(t){
  var isDone = t.status === 'done';
  // v459 fix: розовый бордер ТОЛЬКО если задача просрочена. Открытые в срок — нейтральный.
@@ -33799,6 +33825,7 @@ function _buildFeedTask(t){
  // === Row 1: дата + просрочка + от/для ===
  var meta = document.createElement('div');
  meta.className = 'amocard-task-feed-meta';
+ var _fd = _taskFlagDot(t); if(_fd) meta.appendChild(_fd); // v770: флажок Эйзенхауэра
  if(t.deadline_at){
   var dl = new Date(t.deadline_at);
   var dd = String(dl.getDate()).padStart(2,'0') + '.' + String(dl.getMonth()+1).padStart(2,'0') + '.' + dl.getFullYear();
@@ -35822,6 +35849,7 @@ var crmCalState = {
  operators: {},                       // {имя:false} = скрыт; отсутствие ключа = показан
  layers: { task: true, team: true, pay: true },  // task = синк из /api/tasks, team = нативные, pay = оплаты клиентов (v750)
  types: { call: true, meeting: true, training: true, deadline: true },
+ flags: { red: true, yellow: true, green: true, gray: true, none: true }, // v770: флажки Эйзенхауэра (none = без флажка)
  hideDone: false, onlyLate: false, clientQ: ''
 };
 
@@ -35872,6 +35900,13 @@ function cal2Initials(name){
  var p = String(name || '').trim().split(/\s+/);
  return ((p[0] || '').slice(0,1) + (p[1] ? p[1].slice(0,1) : (p[0] || '').slice(1,2))).toUpperCase();
 }
+// v770: флажки Эйзенхауэра — цвета и точка-индикатор на плашках (точка, НЕ полоса — правило CEO)
+var CAL2_FLAG_COLORS = { red:'#f37575', yellow:'#FF9F0A', green:'#2BB577', gray:'#6b7280' };
+var CAL2_FLAG_LABELS = { red:'Срочно и важно', yellow:'Важно, не срочно', green:'Срочно, не важно', gray:'Не срочно и не важно' };
+function cal2FlagDot(e){
+ var c = e && e.eisenhower ? CAL2_FLAG_COLORS[e.eisenhower] : null;
+ return c ? '<span class="fdot" style="background:' + c + '" title="' + (CAL2_FLAG_LABELS[e.eisenhower] || '') + '"></span>' : '';
+}
 // 4 UI-корзины типов: call/meeting/training/(deadline+other вместе)
 function _calUiType(e){
  if(e.type === 'call') return 'call';
@@ -35888,6 +35923,8 @@ function _calApplyFilters(events){
   var layerOk = e._pay_layer ? s.layers.pay : (e._sync_task ? s.layers.task : s.layers.team);
   if(!layerOk) return false;
   if(!e._pay_layer && !s.types[_calUiType(e)]) return false; // оплатами управляет только их слой
+  // v770: фильтр флажков Эйзенхауэра (события без флажка — корзина 'none')
+  if(!e._pay_layer && s.flags && s.flags[e.eisenhower || 'none'] === false) return false;
   if(s.hideDone && e.status === 'done') return false;
   if(s.onlyLate && !(e.date && e.date < today && e.status !== 'done')) return false;
   if(q && ((e.client || '') + ' ' + (e.title || '')).toLowerCase().indexOf(q) < 0) return false;
@@ -35952,7 +35989,7 @@ function cal2Stats(){
 function cal2SaveFilters(){
  try {
   var s = crmCalState;
-  localStorage.setItem('cal2_filters', JSON.stringify({ operators: s.operators, layers: s.layers, types: s.types, hideDone: s.hideDone, onlyLate: s.onlyLate }));
+  localStorage.setItem('cal2_filters', JSON.stringify({ operators: s.operators, layers: s.layers, types: s.types, flags: s.flags, hideDone: s.hideDone, onlyLate: s.onlyLate }));
  } catch(e){}
 }
 function cal2LoadFilters(){
@@ -35965,6 +36002,7 @@ function cal2LoadFilters(){
   if(f.operators) s.operators = f.operators;
   if(f.layers) s.layers = Object.assign({}, s.layers, f.layers);
   if(f.types) s.types = Object.assign({}, s.types, f.types);
+  if(f.flags) s.flags = Object.assign({}, s.flags, f.flags); // v770: merge — у старых юзеров ключей нет
   s.hideDone = !!f.hideDone;
   s.onlyLate = !!f.onlyLate;
  } catch(e){}
@@ -35977,6 +36015,7 @@ window.cal2ToggleOp = function(el){
 };
 window.cal2ToggleLayer = function(key){ crmCalState.layers[key] = !crmCalState.layers[key]; cal2SaveFilters(); crmCalRender(); };
 window.cal2ToggleType = function(key){ crmCalState.types[key] = !crmCalState.types[key]; cal2SaveFilters(); crmCalRender(); };
+window.cal2ToggleFlag = function(key){ crmCalState.flags[key] = !crmCalState.flags[key]; cal2SaveFilters(); crmCalRender(); }; // v770
 window.cal2ToggleDone = function(){ crmCalState.hideDone = !crmCalState.hideDone; cal2SaveFilters(); crmCalRender(); };
 window.cal2ToggleLate = function(){ crmCalState.onlyLate = !crmCalState.onlyLate; cal2SaveFilters(); crmCalRender(); };
 window.cal2SetClientQ = function(v){
@@ -36043,6 +36082,16 @@ function cal2RenderSide(){
  var T = [['call','Звонки'],['meeting','Встречи и демо'],['training','Обучения'],['deadline','Дедлайны и работы']];
  html += '<div class="cal2-sec"><div class="h">Тип</div>';
  T.forEach(function(t){ html += '<div class="cal2-trow" onclick="cal2ToggleType(\'' + t[0] + '\')">' + cal2Chk(s.types[t[0]], null) + '<span class="nm">' + t[1] + '</span></div>'; });
+ html += '</div>';
+ // v770: фильтр флажков Эйзенхауэра
+ var F = [['red','Срочно и важно'],['yellow','Важно, не срочно'],['green','Срочно, не важно'],['gray','Не срочно, не важно'],['none','Без флажка']];
+ html += '<div class="cal2-sec"><div class="h">Флажки</div>';
+ F.forEach(function(f){
+  var dot = f[0] === 'none'
+   ? '<span class="cal2-flagdot" style="border:1px solid #5F6674"></span>'
+   : '<span class="cal2-flagdot" style="background:' + CAL2_FLAG_COLORS[f[0]] + '"></span>';
+  html += '<div class="cal2-trow" onclick="cal2ToggleFlag(\'' + f[0] + '\')">' + cal2Chk(s.flags[f[0]], null) + dot + '<span class="nm">' + f[1] + '</span></div>';
+ });
  html += '</div>';
  html += '<div class="cal2-sec"><div class="h">Статус</div>'
   + '<div class="cal2-trow" onclick="cal2ToggleDone()">' + cal2Chk(s.hideDone, null) + '<span class="nm">Скрывать выполненные</span></div>'
@@ -36206,7 +36255,7 @@ function crmCalRenderMonth(){
     var mdrg = e._pay_layer ? '' : ' draggable="true" ondragstart="event.stopPropagation();crmCalDragStartTask(event,\'' + e.id + '\')"';
     html += '<div class="cal2-mo-ev c-' + color + (e.status === 'done' ? ' done' : '') + '"' + mdrg + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
      + (e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\'' + e.client_id + '\')"' : '') + '>'
-     + (e._pay_layer ? '₸ ' : '') + kbEsc((e.title || '').slice(0, 26)) + '</div>';
+     + cal2FlagDot(e) + (e._pay_layer ? '₸ ' : '') + kbEsc((e.title || '').slice(0, 26)) + '</div>';
    });
    if(evs.length > 3) html += '<div class="cal2-mo-more">ещё ' + (evs.length - 3) + '</div>';
    html += '</div>';
@@ -36433,7 +36482,9 @@ function ttQuickAddOpen(date, hour, anchorEv, times){
   time_start: startStr,
   time_end: endStr,
   is_all_day: !!(times && times.all_day), // v761: клик по строке «Весь день»
-  type_id: 1 // v759: тип задачи, меняется чипом «Тип»
+  type_id: 1, // v759: тип задачи, меняется чипом «Тип»
+  client_id: null, client_name: '',       // v770: чип «Клиент» — задача попадает в карточку клиента
+  eisenhower: null                        // v770: чип «Флажок» Эйзенхауэра
  };
  window._ttQa = { state: state };
 
@@ -36503,6 +36554,13 @@ function ttQaRender(pop, state){
    + '<div class="tt-qa-chip tt-qa-type" onclick="ttQaTypeOpen(event)" title="Тип задачи">'
     + '<span>'+kbEsc(ttQaTypeLabel(state.type_id || 1))+'</span><span style="font-size:9px;opacity:.7">&#9662;</span>'
    + '</div>'
+   // v770: чип клиента (задача появится в его карточке) и чип флажка Эйзенхауэра
+   + '<div class="tt-qa-chip tt-qa-client" onclick="ttQaClientOpen(event)" title="Привязать клиента — задача появится в его карточке">'
+    + ttQaClientChipInner(state)
+   + '</div>'
+   + '<div class="tt-qa-chip tt-qa-flag" onclick="ttQaFlagOpen(event)" title="Флажок Эйзенхауэра">'
+    + ttQaFlagChipInner(state)
+   + '</div>'
   + '</div>'
   + '<textarea class="tt-qa-input" placeholder="Что бы вы хотели сделать?"></textarea>'
   + '<div style="font-size:10.5px;color:var(--text-faint);padding:0 2px;margin-top:-4px">Enter — сохранить · Shift+Enter — новая строка · Esc — отмена</div>'
@@ -36520,6 +36578,114 @@ function ttQaRefreshChip(){
  if(!pop || !window._ttQa) return;
  var chipSpan = pop.querySelector('.tt-qa-chip span');
  if(chipSpan) chipSpan.textContent = ttQaFmtChip(window._ttQa.state);
+}
+
+// ============================================================
+// v770: чипы «Клиент» и «Флажок» в quick-add
+// ============================================================
+function ttQaClientChipInner(s){
+ return '<span>' + kbEsc(s.client_name || 'Клиент') + '</span><span style="font-size:9px;opacity:.7">&#9662;</span>';
+}
+function ttQaFlagChipInner(s){
+ var c = s.eisenhower ? CAL2_FLAG_COLORS[s.eisenhower] : null;
+ return (c ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c + '"></span>' : '')
+  + '<span>' + kbEsc(s.eisenhower ? CAL2_FLAG_LABELS[s.eisenhower] : 'Флажок') + '</span><span style="font-size:9px;opacity:.7">&#9662;</span>';
+}
+// Точечное обновление чипов (полный ttQaRender стёр бы введённый текст задачи)
+function ttQaChipsRefresh(){
+ var pop = document.getElementById('tt-qa-pop');
+ if(!pop || !window._ttQa) return;
+ var s = window._ttQa.state;
+ var fc = pop.querySelector('.tt-qa-flag'); if(fc) fc.innerHTML = ttQaFlagChipInner(s);
+ var cc = pop.querySelector('.tt-qa-client'); if(cc) cc.innerHTML = ttQaClientChipInner(s);
+}
+function ttQaFlagOpen(ev){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ if(!window._ttQa || typeof crmTasksOpenDropdown !== 'function') return;
+ var s = window._ttQa.state;
+ var items = ['red','yellow','green','gray'].map(function(v){
+  return { value:v, label:CAL2_FLAG_LABELS[v], icon:true, color:CAL2_FLAG_COLORS[v], selected:s.eisenhower === v };
+ });
+ items.push({ value:'', label:'Без флажка', selected:!s.eisenhower });
+ crmTasksOpenDropdown(ev.currentTarget || ev.target, items, function(v){
+  s.eisenhower = v || null;
+  ttQaChipsRefresh();
+ });
+}
+// Поповер клиента: поиск + список активных клиентов (кэш на сессию).
+// Класс .ct-dd — он в whitelist outside-click quick-add'а, окно создания не закроется.
+async function ttQaClientOpen(ev){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ if(!window._ttQa) return;
+ var anchor = ev.currentTarget || ev.target;
+ if(!window._ttQaClients){
+  try {
+   var d = await sbFetch('/api/clients?status=active');
+   // v770-qa: sbFetch не бросает на 401/500 — проверяем ok явно, иначе пустой список кэшировался бы навсегда
+   if(!d || !d.ok){ if(typeof kbShowToast === 'function') kbShowToast('Не удалось загрузить клиентов'); return; }
+   window._ttQaClients = (d.clients || []).map(function(c){
+    return { id: c.client_id, name: c.company_name || c.client_id };
+   }).filter(function(c){ return c.id; }).sort(function(a, b){ return String(a.name).localeCompare(String(b.name), 'ru'); });
+  } catch(e){ window._ttQaClients = null; if(typeof kbShowToast === 'function') kbShowToast('Не удалось загрузить клиентов'); return; }
+ }
+ if(typeof crmTasksCloseDropdowns === 'function') crmTasksCloseDropdowns();
+ var rect = anchor.getBoundingClientRect();
+ var dd = document.createElement('div');
+ dd.className = 'ct-dd';
+ dd.style.minWidth = '240px';
+ var inp = document.createElement('input');
+ inp.type = 'text';
+ inp.placeholder = 'Найти клиента...';
+ inp.className = 'ct-dd-search';
+ dd.appendChild(inp);
+ var listBox = document.createElement('div');
+ listBox.className = 'ct-dd-listbox';
+ dd.appendChild(listBox);
+ var s = window._ttQa.state;
+ function renderList(q){
+  q = (q || '').toLowerCase();
+  listBox.replaceChildren();
+  var none = document.createElement('div');
+  none.className = 'ct-dd-item' + (!s.client_id ? ' is-selected' : '');
+  none.textContent = '— Без клиента';
+  none.onclick = function(){ s.client_id = null; s.client_name = ''; dd.remove(); ttQaChipsRefresh(); };
+  listBox.appendChild(none);
+  var shown = 0;
+  (window._ttQaClients || []).forEach(function(c){
+   if(q && String(c.name).toLowerCase().indexOf(q) < 0 && String(c.id).toLowerCase().indexOf(q) < 0) return;
+   if(shown >= 50) return;
+   shown++;
+   var it = document.createElement('div');
+   it.className = 'ct-dd-item' + (s.client_id === c.id ? ' is-selected' : '');
+   it.textContent = c.name;
+   it.onclick = function(){ s.client_id = c.id; s.client_name = c.name; dd.remove(); ttQaChipsRefresh(); };
+   listBox.appendChild(it);
+  });
+  if(!shown && q){
+   var e0 = document.createElement('div');
+   e0.className = 'ct-dd-item';
+   e0.style.cssText = 'opacity:.6;cursor:default';
+   e0.textContent = 'Не найдено';
+   listBox.appendChild(e0);
+  }
+ }
+ renderList('');
+ inp.oninput = function(){ renderList(inp.value.trim()); };
+ document.body.appendChild(dd);
+ // позиционирование с auto-flip (паттерн v522)
+ var dr = dd.getBoundingClientRect();
+ var w2 = dr.width || 240, h2 = dr.height || 300;
+ var x2 = rect.left, y2 = rect.bottom + 4;
+ if(x2 + w2 > window.innerWidth - 12) x2 = Math.max(12, window.innerWidth - w2 - 12);
+ if(y2 + h2 > window.innerHeight - 12) y2 = Math.max(12, rect.top - h2 - 4);
+ dd.style.left = Math.max(12, x2) + 'px';
+ dd.style.top = Math.max(12, y2) + 'px';
+ setTimeout(function(){ inp.focus(); }, 30);
+ setTimeout(function(){
+  document.addEventListener('mousedown', function closer(e2){
+   if(!dd.contains(e2.target)){ dd.remove(); document.removeEventListener('mousedown', closer, true); }
+  }, true);
+ }, 50);
 }
 
 async function ttQaSave(){
@@ -36550,13 +36716,15 @@ async function ttQaSave(){
  var assignee = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : null;
 
  var body = {
-  client_id: null,
+  client_id: s.client_id || null,          // v770: чип «Клиент» — задача видна в карточке клиента
+  contact_name: s.client_name || null,     // v770: имя для подписи на плашке
   type_id: (s.type_id || 1), // v759: тип из чипа
   text: text,
   deadline_at: startISO,
   deadline_end_at: endISO,
   is_all_day: !!s.is_all_day,
-  assignee_operator: assignee
+  assignee_operator: assignee,
+  eisenhower: s.eisenhower || null         // v770: флажок Эйзенхауэра
  };
 
  try {
@@ -36952,7 +37120,7 @@ function crmCalRenderList(){
     + (e._pay_layer
        ? '<span class="cal2-cb" style="border:none;color:#3FD68F;font-size:11px;font-weight:800;cursor:default">₸</span>'
        : '<span class="cal2-cb' + (done ? ' done' : '') + '" onclick="event.stopPropagation();crmEventToggleDone(\'' + e.id + '\')">' + (done ? '✓' : '') + '</span>')
-    + av
+    + av + cal2FlagDot(e)
     + '<div class="ti"><div class="t">' + kbEsc(e.title || '') + '</div><div class="m">' + meta.join(' · ') + '</div></div>'
     + '<span class="tm">' + (e.time_start ? kbEsc(e.time_start + (e.time_end ? '–' + e.time_end : '')) : '') + '</span>'
     + '</div>';
@@ -36979,13 +37147,18 @@ window.cal2ShowDetail = function(id, ev){
   + (sel.client ? '<div class="dt-row"><span class="lbl">Клиент</span><b>' + kbEsc(sel.client) + '</b></div>' : '')
   + (sel.operator ? '<div class="dt-row"><span class="lbl">Оператор</span><b>' + kbEsc(sel.operator) + '</b></div>' : '')
   + '<div class="dt-row"><span class="lbl">Тип</span><b>' + typeLabel + '</b></div>'
+  + (sel.eisenhower ? '<div class="dt-row"><span class="lbl">Флажок</span><b>' + cal2FlagDot(sel) + ' ' + (CAL2_FLAG_LABELS[sel.eisenhower] || '') + '</b></div>' : '') // v770
   + (sel.status === 'done' ? '<div class="dt-row"><span class="lbl">Статус</span><b>Выполнена</b></div>' : '')
   + (sel.notes ? '<div class="dt-row" style="display:block;margin-top:6px;font-size:11.5px;line-height:1.45">' + kbEsc(sel.notes) + '</div>' : '')
   + '<div class="dt-actions">'
   + (sel._pay_layer
      ? (sel.client_id ? '<button onclick="crmCalOpenClient(\'' + sel.client_id + '\')">Карточка клиента</button>' : '')
      : ('<button onclick="crmEventDelete(\'' + sel.id + '\')">Удалить</button>'
-      + '<button onclick="crmEventOpenModal(\'' + sel.id + '\')">Редактировать</button>'
+      // v770: синк-задача редактируется ПРАВИЛЬНЫМ редактором (PATCH в базу). Старый путь
+      // crmEventOpenModal правил только localStorage и терял маркеры синка → дубли плашек.
+      + (sel._sync_task && sel._task_id
+         ? '<button onclick="document.getElementById(\'cal2-detail\').remove();crmTaskEditStart(\'' + sel._task_id + '\')">Редактировать</button>'
+         : '<button onclick="crmEventOpenModal(\'' + sel.id + '\')">Редактировать</button>')
       + (sel.client_id ? '<button onclick="crmCalOpenClient(\'' + sel.client_id + '\')">Карточка клиента</button>' : '')
       + (sel.status !== 'done' ? '<button onclick="crmEventToggleDone(\'' + sel.id + '\')" style="background:#2BB577;border-color:#2BB577;color:#0B0C10;font-weight:700">Выполнить</button>' : '')))
   + '</div>';
@@ -37112,7 +37285,7 @@ function cal2RenderTimeGrid(days){
    // v750: оплаты — зелёные, не перетаскиваются (дата продления живёт в реестре клиентов)
    var payCls = e._pay_layer ? ' pay' : '';
    var drg = e._pay_layer ? '' : ' draggable="true" ondragstart="crmCalDragStartTask(event,\'' + e.id + '\')"';
-   html += '<span class="cal2-adev' + payCls + '"' + drg + ' onclick="cal2ShowDetail(\'' + e.id + '\', event)"><span>' + (e._pay_layer ? '₸ ' : '') + kbEsc(e.title || '') + '</span></span>';
+   html += '<span class="cal2-adev' + payCls + '"' + drg + ' onclick="cal2ShowDetail(\'' + e.id + '\', event)">' + cal2FlagDot(e) + '<span>' + (e._pay_layer ? '₸ ' : '') + kbEsc(e.title || '') + '</span></span>';
   });
   html += '</div>';
  });
@@ -37152,7 +37325,7 @@ function cal2RenderTimeGrid(days){
     + ' style="top:' + top.toFixed(0) + 'px;height:' + height.toFixed(0) + 'px' + laneStyle + '"'
     + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
     + (e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\'' + e.client_id + '\')"' : '') + '>'
-    + who + '<div class="t">' + kbEsc(e.title || '') + '</div>'
+    + who + cal2FlagDot(e) + '<div class="t">' + kbEsc(e.title || '') + '</div>'
     + (meta.length ? '<div class="m">' + kbEsc(meta.join(' · ')) + '</div>' : '')
     + '<span class="rsz" draggable="false" onmousedown="cal2ResizeStart(event,\'' + e.id + '\')"></span>'
     + '</div>';
@@ -37383,8 +37556,10 @@ async function crmCalSyncTasksToLocal(){
   var dDone = _rs[1].status === 'fulfilled' ? _rs[1].value : null;
   if(!d || !d.ok) return;
   var existing = crmEventsAll();
-  // Сначала выкидываем все старые task-синки чтобы при удалении задачи в БД она исчезла и из календаря
-  existing = existing.filter(function(e){ return !e._sync_task; });
+  // Сначала выкидываем все старые task-синки чтобы при удалении задачи в БД она исчезла и из календаря.
+  // v770: + санация клонов-сирот прошлых версий — события с id 'task_...' БЕЗ маркера _sync_task
+  // (редактор до v770 терял маркер при правке — такие клоны и были «дублями»).
+  existing = existing.filter(function(e){ return !e._sync_task && String(e.id || '').indexOf('task_') !== 0; });
   // v464: защита от quota exceeded в localStorage. На больших командах число открытых
   // задач может быть тысячами, а localStorage обычно ~5MB. Кэпим разумным числом.
   var tasksArr = (d.tasks || []).concat((dDone && dDone.ok && dDone.tasks) || []);
@@ -37435,6 +37610,7 @@ async function crmCalSyncTasksToLocal(){
     time_end: te,
     type: typeMap[t.type_id] || 'other',
     type_id: t.type_id || null,      // v517: для показа полного типа в подписи
+    eisenhower: t.eisenhower || null, // v770: флажок Эйзенхауэра (точка на плашке + фильтр)
     priority: 4,
     client: t.contact_name || t.client_id || '',
     operator: t.assignee_operator || '',
@@ -39538,6 +39714,20 @@ window.cal2DoneSave = async function(id){
 async function crmEventDelete(id){
  var ok = await confirmAction({ title:'Удалить задачу?', body:'Задача будет удалена. Это нельзя отменить.', danger:true, confirmLabel:'Удалить' });
  if(!ok) return;
+ // v770: синк-задача удаляется В БАЗЕ (иначе воскресала при следующем синке). Права — автор/admin.
+ var _ev = crmEventsAll().find(function(e){ return e.id === id; });
+ if(_ev && _ev._sync_task && _ev._task_id && typeof crmTasksFetch === 'function'){
+ try {
+ var _dr = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(_ev._task_id), { method:'DELETE' });
+ if(!_dr || !_dr.ok){
+ if(typeof kbShowToast === 'function') kbShowToast('Не удалось удалить: ' + ((_dr && _dr.error) || 'нет прав или сеть'));
+ return;
+ }
+ } catch(e){
+ if(typeof kbShowToast === 'function') kbShowToast('Ошибка сети — задача не удалена');
+ return;
+ }
+ }
  var all = crmEventsAll().filter(function(e){ return e.id !== id; });
  crmEventsSaveAll(all);
  if(crmCalState.selectedId === id) crmCalState.selectedId = null;
@@ -39616,9 +39806,23 @@ function crmEventSave(eventId){
  var idx = all.findIndex(function(x){ return x.id === eventId; });
  if(idx >= 0){
  var ex = all[idx];
- data.created_at = ex.created_at;
- data.status = ex.status;
+ // v770: НЕ заменяем объект целиком — сохраняем маркеры синка (_sync_task/_task_id) и поля,
+ // которых нет в этой модалке (client_id/time_end/is_all_day/type_id). Раньше замена целиком
+ // теряла маркеры → следующий синк не убирал локальный клон и пушил серверную копию = ДУБЛИ.
+ data = Object.assign({}, ex, data, { created_at: ex.created_at, status: ex.status });
  all[idx] = data;
+ // Подстраховка: правка синк-задачи уходит и в базу (основной путь редактирования —
+ // crmTaskEditStart из cal2ShowDetail, но эта модалка ещё доступна из старых вьюх)
+ if(ex._sync_task && ex._task_id && typeof crmTasksFetch === 'function'){
+ try {
+ var _pd = { text: data.title };
+ if(data.date){
+ _pd.is_all_day = !data.time_start;
+ _pd.deadline_at = new Date(data.date + 'T' + (data.time_start || '00:00') + ':00').toISOString();
+ }
+ crmTasksFetch('/api/tasks?id=' + encodeURIComponent(ex._task_id), { method:'PATCH', body: JSON.stringify(_pd) }).catch(function(){});
+ } catch(_){}
+ }
  } else {
  all.push(data);
  }
@@ -40774,6 +40978,10 @@ function crmTasksOpenDropdown(anchor, items, onSelect){
  dd.style.top = y + 'px';
  setTimeout(function(){
   document.addEventListener('click', function close(e){
+   // v770-qa: если dd уже убран (пункт выбран) — снимаем слушатель и выходим. Раньше при выборе
+   // пункта слушатель оставался висеть и следующий клик убивал ЛЮБОЙ открытый .ct-dd
+   // (например поповер «Клиент» в quick-add закрывался при клике в его же поле поиска).
+   if(!document.body.contains(dd)){ document.removeEventListener('click', close); return; }
    if(!dd.contains(e.target) && e.target !== anchor){
     crmTasksCloseDropdowns();
     document.removeEventListener('click', close);
@@ -41119,6 +41327,15 @@ async function crmTaskEditStart(taskId){
    '<div class="ct-modal-field"><label class="ct-modal-label">Дата</label><input type="date" id="ct-edit-date" value="'+ctEsc(dateStr)+'"></div>' +
    '<div class="ct-modal-field"><label class="ct-modal-label">Ответственный</label><select id="ct-edit-assignee">'+opOpts+'</select></div>' +
   '</div>' +
+  // v770: флажок Эйзенхауэра — ряд чипов (классы без «-btn»)
+  '<div class="ct-modal-field"><label class="ct-modal-label">Флажок</label><div id="ct-edit-flag" style="display:flex;gap:6px;flex-wrap:wrap">' +
+   [['','Без флажка',''],['red','Срочно и важно','#f37575'],['yellow','Важно, не срочно','#FF9F0A'],['green','Срочно, не важно','#2BB577'],['gray','Не срочно','#6b7280']].map(function(f){
+    var selF = (t.eisenhower || '') === f[0];
+    return '<button type="button" class="ct-flag-opt' + (selF ? ' on' : '') + '" data-val="' + f[0] + '" onclick="ctFlagPick(this)">'
+     + (f[2] ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + f[2] + ';margin-right:5px"></span>' : '')
+     + f[1] + '</button>';
+   }).join('') +
+  '</div></div>' +
   '<div class="ct-modal-field"><label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#e5e7eb;cursor:pointer"><input type="checkbox" id="ct-edit-allday" '+(t.is_all_day?'checked':'')+' style="width:auto;cursor:pointer"> Весь день</label></div>' +
   '<div class="ct-modal-row" id="ct-edit-times" style="'+(t.is_all_day?'display:none':'')+'">' +
    '<div class="ct-modal-field"><label class="ct-modal-label">Начало</label><input type="time" id="ct-edit-time-start" value="'+ctEsc(timeStr)+'"></div>' +
@@ -41134,6 +41351,14 @@ async function crmTaskEditStart(taskId){
  document.getElementById('ct-edit-allday').onchange = function(){
   document.getElementById('ct-edit-times').style.display = this.checked ? 'none' : 'flex';
  };
+}
+
+// v770: выбор флажка в редакторе задачи — один активный чип в ряду
+function ctFlagPick(el){
+ var box = el.parentElement;
+ if(!box) return;
+ box.querySelectorAll('.ct-flag-opt').forEach(function(b){ b.classList.remove('on'); });
+ el.classList.add('on');
 }
 
 async function crmTaskEditSubmit(taskId){
@@ -41160,6 +41385,9 @@ async function crmTaskEditSubmit(taskId){
   is_all_day: allDay,
   assignee_operator: assignee
  };
+ // v770: флажок Эйзенхауэра из ряда чипов
+ var _flagEl = document.querySelector('#ct-edit-flag .ct-flag-opt.on');
+ if(_flagEl) patch.eisenhower = _flagEl.dataset.val || null;
  try {
   var d = await crmTasksFetch('/api/tasks?id=' + encodeURIComponent(taskId), {
    method:'PATCH', body: JSON.stringify(patch)
