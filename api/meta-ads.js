@@ -253,6 +253,12 @@ export default async function handler(req, res) {
       result = { period, campaigns: (data.data || []).map(c => {
         const ins = (c.insights && c.insights.data && c.insights.data[0]) || null;
         const leads = ins ? summarizeLeads(ins.actions, ins.cost_per_action_type) : { count: 0, breakdown: [] };
+        // v798: у WhatsApp/Messages-кампаний результат — начатые переписки, не лид-формы.
+        // Без этого они всегда «0 лидов → убрать», что несправедливо.
+        const msgs = (ins && Array.isArray(ins.actions))
+          ? ins.actions.filter(a => a.action_type === 'onsite_conversion.messaging_conversation_started_7d')
+              .reduce((s, a) => s + (parseFloat(a.value) || 0), 0)
+          : 0;
         return {
           id: c.id,
           name: c.name,
@@ -262,7 +268,7 @@ export default async function handler(req, res) {
           lifetime_budget: c.lifetime_budget ? Number(c.lifetime_budget)/100 : null,
           start_time: c.start_time || null,
           stop_time: c.stop_time || null,
-          insights: ins ? { ...ins, leads_count: leads.count, actions_breakdown: leads.breakdown } : null
+          insights: ins ? { ...ins, leads_count: leads.count, msgs_count: msgs, actions_breakdown: leads.breakdown } : null
         };
       }) };
 

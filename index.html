@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v797</title>
+<title>SalesDoc — Финансовый Дашборд v798</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8902,7 +8902,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div id="view-mkt-target" class="sd-overlay-screen" style="display:none;position:fixed;inset:0;z-index:9999;background:#0B0B0D;overflow-y:auto">
  <div class="kbc-header">
  <button class="kbc-back" onclick="mktCloseTargetPage()">&#8592; Маркетинг</button>
- <div class="kbc-title">Таргет: Рекламные кабинеты</div>
+ <div class="kbc-title">Кампании</div>
  </div>
  <div style="padding:24px;max-width:1400px;margin:0 auto">
  <!-- v160: единая шапка — pills периода + действия -->
@@ -23115,7 +23115,7 @@ window.mktMetaApiLoad = async function(){
  if (kpiEl) kpiEl.style.display = 'block';
  } finally {
  if (btn) btn.disabled = false;
- if (lbl) lbl.textContent = 'Обновить через Meta API';
+ if (lbl) lbl.textContent = 'Обновить'; // v798: без «через Meta API» — жаргон
  }
 };
 
@@ -23253,9 +23253,14 @@ function _metaRenderCampaigns(camps, info){
  var totSpend = 0, totLeads = 0;
  filtered.forEach(function(c){ var i=c.insights||{}; totSpend += parseFloat(i.spend||0); totLeads += parseFloat(i.leads_count||0); });
  // Вердикт по соотношению цены лида к средней.
- function verdict(spend, leads){
+ // v798: msgs — начатые переписки (WhatsApp/Messages-кампании). Их результат не лид-форма,
+ // поэтому «0 лидов → убрать» к ним не применяем — показываем переписки и их цену.
+ function verdict(spend, leads, msgs){
   var r = (avgCpl > 0 && leads > 0) ? (spend/leads)/avgCpl : 0;
-  if (leads === 0) return spend > 0 ? { rank: 4, cls: 'bad', label: 'убрать' } : { rank: 1.5, cls: 'hold', label: '' };
+  if (leads === 0){
+   if (msgs > 0) return { rank: 1.5, cls: 'hold', label: 'переписки' };
+   return spend > 0 ? { rank: 4, cls: 'bad', label: 'убрать' } : { rank: 1.5, cls: 'hold', label: '' };
+  }
   if (leads < 10) {
    // мало лидов — обычно рано судить; НО если лид уже сильно дороже среднего, это явный слив, не прячем
    if (r > 1.6) return { rank: 4, cls: 'bad', label: 'убрать' };
@@ -23268,8 +23273,8 @@ function _metaRenderCampaigns(camps, info){
  }
  var rowsData = filtered.map(function(c){
   var i = c.insights || {};
-  var sp = parseFloat(i.spend||0), ld = parseFloat(i.leads_count||0);
-  return { c:c, sp:sp, ld:ld, cpl: ld>0 ? sp/ld : null, v: verdict(sp, ld) };
+  var sp = parseFloat(i.spend||0), ld = parseFloat(i.leads_count||0), ms = parseFloat(i.msgs_count||0);
+  return { c:c, sp:sp, ld:ld, ms:ms, cpl: ld>0 ? sp/ld : (ms>0 ? sp/ms : null), v: verdict(sp, ld, ms) };
  });
  // Проблемные сверху: по «тяжести» вердикта убыв., затем по расходу убыв.
  rowsData.sort(function(a,b){ if (b.v.rank !== a.v.rank) return b.v.rank - a.v.rank; return b.sp - a.sp; });
@@ -23300,8 +23305,8 @@ function _metaRenderCampaigns(camps, info){
   return '<tr class="mc-row'+(act?'':' off')+'">'
    + '<td><span class="mc-cmp"><span class="mc-st'+(act?'':' pause')+'"></span><span class="mc-nm">'+sanitize(e.c.name||'—')+'</span></span></td>'
    + '<td class="mc-r mc-v">'+_metaFmtMoney(e.sp, cur)+'</td>'
-   + '<td class="mc-r mc-v">'+(e.ld>0?_metaFmtNum(e.ld):'—')+'</td>'
-   + '<td class="mc-r '+cplClass(e)+'">'+(e.cpl!==null?_metaFmtMoney(e.cpl.toFixed(2), cur):'—')+'</td>'
+   + '<td class="mc-r mc-v">'+(e.ld>0?_metaFmtNum(e.ld):(e.ms>0?_metaFmtNum(e.ms)+' <span style="font-size:10px;color:var(--text-muted)">переписок</span>':'—'))+'</td>'
+   + '<td class="mc-r '+cplClass(e)+'">'+(e.cpl!==null?_metaFmtMoney(e.cpl.toFixed(2), cur)+(e.ld===0&&e.ms>0?' <span style="font-size:10px;color:var(--text-muted)">за переписку</span>':''):'—')+'</td>'
    + '<td class="mc-r">'+vlab+'</td>'
    + '</tr>';
  }).join('');
