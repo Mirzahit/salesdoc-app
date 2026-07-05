@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Превью: Интеграции v794</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:#F6F7FA;color:#16181D;padding:28px 32px;font-size:13px}
+h2{font-size:15px;font-weight:700;margin:34px 0 4px}
+h2:first-child{margin-top:0}
+.note{color:#8A90A0;font-size:12px;margin-bottom:12px}
+.wrap{background:#FFFFFF;border:1px solid rgba(15,18,25,.08);border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(15,18,25,.04)}
+
+/* ── верхняя полоса ── */
+.fbar{display:flex;align-items:center;gap:8px}
+.fchip{display:inline-flex;align-items:center;gap:6px;background:#F2F3F7;border:1px solid rgba(15,18,25,.08);border-radius:9px;padding:6px 11px;font-size:12px;font-weight:600;color:#16181D;cursor:pointer}
+.fchip .lb{color:#8A90A0;font-weight:500}
+.fchip .car{font-size:9px;color:#8A90A0}
+.fchip.act{background:rgba(94,106,210,.10);border-color:rgba(94,106,210,.35);color:#4651B5}
+.fbtn{background:#FFF;border:1px solid rgba(15,18,25,.12);border-radius:9px;padding:6px 12px;font-size:12px;font-weight:600;color:#5A6072;cursor:pointer}
+.fcnt{margin-left:auto;color:#8A90A0;font-size:12px}
+.newbtn{background:#5E6AD2;color:#fff;border:none;border-radius:9px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer}
+
+/* ── канбан ── */
+.kb{display:grid;grid-template-columns:repeat(5,minmax(280px,1fr));gap:14px;overflow-x:auto;padding-bottom:8px;margin-top:14px}
+.col{background:#F2F3F7;border-radius:12px;padding:10px;min-width:280px}
+.colh{display:flex;align-items:center;gap:7px;padding:2px 4px 10px;font-size:12.5px;font-weight:700}
+.dot{width:8px;height:8px;border-radius:50%}
+.colh .cnt{margin-left:auto;background:rgba(15,18,25,.07);border-radius:7px;padding:1px 7px;font-size:11px;font-weight:700;color:#5A6072}
+.colh .per{font-size:10px;font-weight:600;color:#8A90A0;margin-left:2px}
+.noop{font-size:11px;color:#E5604D;font-weight:600;padding:0 4px 8px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted}
+.rc{background:#FFF;border:1px solid rgba(15,18,25,.08);border-radius:10px;padding:9px 11px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 2px rgba(15,18,25,.04)}
+.rc:hover{background:#FBFBFD}
+.rc .r1{display:flex;align-items:center;gap:8px;font-weight:700;font-size:12.5px}
+.qn{flex:none;min-width:24px;height:19px;display:inline-flex;align-items:center;justify-content:center;background:rgba(94,106,210,.12);color:#4651B5;font-size:10.5px;font-weight:800;border-radius:6px;padding:0 5px;font-variant-numeric:tabular-nums}
+.rc .av{margin-left:auto;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;background:rgba(94,106,210,.16);color:#4651B5;flex:none}
+.rc .av.none{background:none;border:1.5px dashed #C7CBD6;color:#C7CBD6;font-size:13px}
+.rc .r2{color:#8A90A0;font-size:11.5px;margin-top:3px}
+.rc .r3{display:flex;gap:6px;margin-top:7px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;border-radius:6px;padding:2px 7px;background:rgba(15,18,25,.06);color:#5A6072}
+.chip.warn{background:rgba(255,159,10,.14);color:#B87708}
+.chip.red{background:rgba(229,96,77,.12);color:#C0392B}
+.chip svg{width:10px;height:10px}
+
+/* ── модалка ── */
+.modal{max-width:430px;background:#FFF;border:1px solid rgba(15,18,25,.10);border-radius:16px;padding:20px 22px;box-shadow:0 20px 60px rgba(15,18,25,.18)}
+.modal h3{font-size:14.5px;font-weight:700;margin-bottom:16px}
+.fl{font-size:11px;font-weight:700;color:#8A90A0;text-transform:uppercase;letter-spacing:.4px;margin:14px 0 7px}
+.fl:first-of-type{margin-top:0}
+.pick{display:flex;align-items:center;gap:8px;border:1px solid rgba(15,18,25,.12);border-radius:9px;padding:8px 12px;font-size:12.5px;color:#16181D;cursor:pointer;background:#FBFBFD}
+.pick .ph{color:#A8AEBC}
+.pick .car{margin-left:auto;color:#8A90A0;font-size:10px}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg .s{border:1px solid rgba(15,18,25,.12);background:#FFF;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:#5A6072;cursor:pointer}
+.seg .s.on{background:rgba(94,106,210,.10);border-color:#5E6AD2;color:#4651B5}
+.din{border:1px solid rgba(15,18,25,.12);border-radius:9px;padding:8px 12px;font-size:12.5px;width:160px;background:#FBFBFD;color:#16181D;font-family:inherit}
+.mact{display:flex;gap:10px;margin-top:20px}
+.mact .go{background:#5E6AD2;color:#fff;border:none;border-radius:9px;padding:9px 16px;font-weight:700;font-size:12.5px;cursor:pointer}
+.mact .no{background:none;border:none;color:#8A90A0;font-size:12.5px;cursor:pointer}
+
+/* ── статус-чип карты ── */
+.cardhead{display:flex;align-items:center;gap:14px}
+.cardhead .t{font-size:19px;font-weight:800}
+.cardhead .sub{color:#8A90A0;font-size:11.5px}
+.stchip{position:relative;display:inline-flex;align-items:center;gap:6px;background:rgba(255,159,10,.14);color:#B87708;font-weight:700;font-size:12px;border-radius:8px;padding:5px 11px;cursor:pointer}
+.stchip .car{font-size:9px;opacity:.7}
+.dd{position:absolute;top:calc(100% + 6px);left:0;background:#FFF;border:1px solid rgba(15,18,25,.10);border-radius:10px;box-shadow:0 12px 40px rgba(15,18,25,.16);padding:5px;min-width:150px;z-index:10}
+.dd .i{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;font-size:12px;font-weight:600;color:#16181D;cursor:pointer}
+.dd .i:hover{background:#F2F3F7}
+.dd .i.on{background:rgba(94,106,210,.08);color:#4651B5}
+
+/* ── авто-блок ── */
+.auto{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.auto .a{background:#FFF;border:1px solid rgba(15,18,25,.08);border-radius:12px;padding:14px 16px}
+.auto .a b{display:block;font-size:12.5px;margin-bottom:5px}
+.auto .a span{color:#5A6072;font-size:12px;line-height:1.5}
+.tag{display:inline-block;background:rgba(76,183,130,.14);color:#2E7D57;font-size:10px;font-weight:800;border-radius:5px;padding:2px 7px;margin-bottom:8px;letter-spacing:.4px}
+</style>
+</head>
+<body>
+
+<h2>1. Верхняя полоса — вместо белых системных списков</h2>
+<div class="note">Фильтры — свои чипы (как в календаре), одна кнопка «Обновить» вместо двух, кнопка создания. Счётчик справа.</div>
+<div class="wrap">
+ <div class="fbar">
+  <button class="newbtn">+ Новая интеграция</button>
+  <span class="fchip"><span class="lb">Статус:</span> Все <span class="car">&#9662;</span></span>
+  <span class="fchip act"><span class="lb">Тип:</span> Интеграция <span class="car">&#9662;</span></span>
+  <span class="fchip"><span class="lb">Страна:</span> Все <span class="car">&#9662;</span></span>
+  <span class="fchip"><span class="lb">Пакет:</span> Все <span class="car">&#9662;</span></span>
+  <button class="fbtn">Обновить</button>
+  <span class="fcnt">24 из 227 записей</span>
+ </div>
+</div>
+
+<h2>2. Канбан — карточки с оператором, сроком и «сколько дней висит»</h2>
+<div class="note">Первая колонка — очередь: у каждой карточки номер. Порядок — кто раньше оплатил, тот выше; срочного клиента можно перетащить вверх, порядок запоминается для всех. Колонка «Отменено» больше не обрезается (доска скроллится). У «Готово» подпись месяца — видно, что это фильтр, а не «ничего не сделано». Карточки таскаются мышкой между колонками. «+» на карточке — назначить оператора прямо с доски.</div>
+<div class="wrap">
+ <div class="kb">
+  <div class="col">
+   <div class="colh"><span class="dot" style="background:#5E6AD2"></span>Очередь<span class="cnt">20</span></div>
+   <div class="noop">20 без оператора</div>
+   <div class="rc"><div class="r1"><span class="qn">№ 1</span>Bravo<span class="av none">+</span></div><div class="r2">Интеграция · Услуга</div><div class="r3"><span class="chip red">9 дн без оператора</span></div></div>
+   <div class="rc"><div class="r1"><span class="qn">№ 2</span>Максимальный Размах<span class="av none">+</span></div><div class="r2">Интеграция · Услуга</div><div class="r3"><span class="chip red">6 дн без оператора</span></div></div>
+   <div class="rc"><div class="r1"><span class="qn">№ 3</span>dulcedo<span class="av none">+</span></div><div class="r2">Доработка</div><div class="r3"><span class="chip">2 дн</span></div></div>
+  </div>
+  <div class="col">
+   <div class="colh"><span class="dot" style="background:#FF9F0A"></span>В работе<span class="cnt">2</span></div>
+   <div class="rc"><div class="r1">VELES DISTRIBUTION<span class="av">АЯ</span></div><div class="r2">Интеграция · Стандарт+</div><div class="r3"><span class="chip">4 дн в работе</span><span class="chip warn">срок 09.07</span></div></div>
+   <div class="rc"><div class="r1">MEHKAZ<span class="av">ДУ</span></div><div class="r2">Интеграция · Премиум</div><div class="r3"><span class="chip">1 дн в работе</span><span class="chip">срок 16.07</span></div></div>
+  </div>
+  <div class="col">
+   <div class="colh"><span class="dot" style="background:#9E9E9E"></span>На паузе<span class="cnt">2</span></div>
+   <div class="rc"><div class="r1">ип Баумаг<span class="av none">+</span></div><div class="r2">Интеграция</div><div class="r3"><span class="chip red">просрочен 12 дн</span></div></div>
+  </div>
+  <div class="col">
+   <div class="colh"><span class="dot" style="background:#4CB782"></span>Готово<span class="cnt">3</span><span class="per">за июль</span></div>
+   <div class="rc"><div class="r1">fortisfood<span class="av">АБ</span></div><div class="r2">Интеграция · Стандарт</div><div class="r3"><span class="chip">сделано 01.07</span></div></div>
+  </div>
+  <div class="col">
+   <div class="colh"><span class="dot" style="background:#E5604D"></span>Отменено<span class="cnt">1</span><span class="per">за июль</span></div>
+   <div class="rc"><div class="r1">uta<span class="av none">+</span></div><div class="r2">Услуга</div><div class="r3"><span class="chip">отменено 02.07</span></div></div>
+  </div>
+ </div>
+</div>
+
+<h2>3. Новая интеграция — руками</h2>
+<div class="note">Для доработок и разработок, где оплата прошла не категорией «Нов интеграция». Клиент из общего списка, всё остальное чипами.</div>
+<div class="modal">
+ <h3>Новая интеграция</h3>
+ <div class="fl">Клиент</div>
+ <div class="pick">Максимальный Размах <span class="car">&#9662;</span></div>
+ <div class="fl">Тип</div>
+ <div class="seg"><span class="s on">Интеграция</span><span class="s">Доработка</span><span class="s">Разработка</span></div>
+ <div class="fl">Пакет</div>
+ <div class="seg"><span class="s">Стандарт</span><span class="s on">Стандарт+</span><span class="s">Премиум</span><span class="s">Услуга</span></div>
+ <div class="fl">Оператор</div>
+ <div class="seg"><span class="s on">Аян</span><span class="s">Дулат</span><span class="s">Абзал</span><span class="s">Не назначать</span></div>
+ <div class="fl">Срок (не обязательно)</div>
+ <input class="din" type="date" value="2026-07-17">
+ <div class="mact"><button class="go">Создать</button><button class="no">Отмена</button></div>
+</div>
+
+<h2>4. Карта интеграции — статус меняется чипом, все поля редактируются</h2>
+<div class="note">Клик по статусу — свой список (не системный). Тип, пакет, вид базы, сервер, контакты, менеджер, даты — теперь кликабельны и редактируются, как в карте клиента.</div>
+<div class="wrap" style="padding-bottom:120px">
+ <div class="cardhead">
+  <div>
+   <div class="t">Bravo</div>
+   <div class="sub">KZ · клиент: SD-KZ-2026-00495</div>
+  </div>
+  <span class="stchip">В работе <span class="car">&#9662;</span>
+   <span class="dd">
+    <span class="i">Новая</span>
+    <span class="i on">В работе</span>
+    <span class="i">На паузе</span>
+    <span class="i">Готово</span>
+    <span class="i">Отменено</span>
+   </span>
+  </span>
+ </div>
+</div>
+
+<h2>5. Что будет происходить автоматически</h2>
+<div class="auto">
+ <div class="a"><span class="tag">НАЗНАЧЕНИЕ</span><b>Задача оператору в календарь</b><span>Назначил Аяна на интеграцию — у Аяна в «Задачах» появляется «Интеграция: Bravo» со сроком. Как во Внедрении.</span></div>
+ <div class="a"><span class="tag">В РАБОТУ</span><b>Срок ставится сам</b><span>Перетащил карточку в «В работе» — дата взятия ставится сегодня, срок +14 дней. Можно поправить руками в карте.</span></div>
+ <div class="a"><span class="tag">ЧИСТКА</span><b>Старый код удаляется</b><span>~530 строк мёртвого кода от старой Google-таблицы уходят из программы. На вид не влияет, программа легче.</span></div>
+</div>
+
+</body>
+</html>
