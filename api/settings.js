@@ -11,7 +11,9 @@ import { sbSelect, sbUpsert } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 
 // intg_fields (v796): настройка полей карты интеграции — {hidden:[стандартные ключи], custom:[{key,label}]}
-const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields'];
+// mkt_lead_plan (v797): план лидов на месяц по странам — {KZ:{plan:200}, KG:{plan:80}}
+// mkt_costs (v797): курс доллара и гонорар таргетолога — {KZ:{usd_rate:478, fee:150000}, KG:{...}}
+const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs'];
 
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
