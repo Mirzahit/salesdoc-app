@@ -267,6 +267,15 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
     if(source){ tagCounts[source]++; _accountedByTag++; }
   });
 
+  // v797: явные «выигранные» — деньги от рекламы для блока окупаемости в Маркетинге.
+  // id 142 — системный статус amo «Успешно реализовано»; имя проверяем как fallback.
+  const isWonStage = (s) => Number(s.id) === 142 || /успешн.*реализ/i.test(String(s.name || ''));
+  const wonStages = stages.filter(isWonStage);
+  const won = {
+    count: wonStages.reduce((a, s) => a + s.count, 0),
+    sum: wonStages.reduce((a, s) => a + s.total_price, 0)
+  };
+
   return {
     pipeline: { id: p.id, name: p.name },
     total_leads: leads.length,
@@ -276,6 +285,7 @@ async function getFunnel(pipelineId, env, fromTs, toTs, tagFilter){
     period: { from: fromTs || null, to: toTs || null },
     tag_filter: tagFilter || null,
     tag_counts: tagCounts,
+    won: won, // v797: {count, sum} успешных сделок (суммы в валюте аккаунта amo)
     stages: stages,
     logical_flow: logicalFlow,
     leads_by_step: leadsByStep, // v422: списки сделок по логическим шагам — для отладки
@@ -548,6 +558,7 @@ export default async function handler(req, res){
       const data = await getFunnel(pipelineId, env, fromTs, toTs, tagFilter);
       // v447: фронту нужен subdomain чтобы построить правильную ссылку KZ vs KG (был захардкожен salesdoctorkz).
       data._subdomain = env.AMO_SUBDOMAIN;
+      data.currency = country === 'KG' ? 'KGS' : 'KZT'; // v797: валюта сумм сделок для блока «Деньги»
       return res.status(200).json(data);
     }
     if(action === 'honest_meta_funnel'){
