@@ -35,6 +35,11 @@ const ALLOWED_COUNTRIES = ['KZ','KG'];
 const IMPLEMENTATION_CATEGORIES = ['Нов внедрение'];
 const INTEGRATION_PAYMENT_CATEGORIES = ['Нов интеграция'];
 const RENEWAL_CATEGORIES = ['абон. плата'];
+// v794: KG-бот шлёт категории в другом написании («нов.интеграция», «нов.внедрение») —
+// точное сравнение их игнорировало, карточки появлялись только через сутки из крон-синка.
+// Сравниваем без регистра/точек/пробелов (как mapCategoryFromSheet в payments.js).
+function _normCategory(c) { return String(c || '').toLowerCase().replace(/[^a-zа-яё0-9]/g, ''); }
+function _catIn(list, cat) { const n = _normCategory(cat); return list.some(x => _normCategory(x) === n); }
 
 // v378: Тикет-система поддержки
 const TICKET_STATUSES = ['new','in_progress','waiting_client','solved','closed','reopened'];
@@ -291,9 +296,10 @@ async function handlePaymentBotSync(body, res) {
 
   // Категории которые не создают и не продлевают (баланс, доработка, бот-услуги и т.п.).
   // Фиксируем приём, но действий не выполняем.
-  const isImpl = IMPLEMENTATION_CATEGORIES.includes(category);
-  const isInteg = INTEGRATION_PAYMENT_CATEGORIES.includes(category);
-  const isRenewal = RENEWAL_CATEGORIES.includes(category);
+  // v794: сравнение без регистра/точек — KG-вариант «нов.интеграция» раньше игнорировался
+  const isImpl = _catIn(IMPLEMENTATION_CATEGORIES, category);
+  const isInteg = _catIn(INTEGRATION_PAYMENT_CATEGORIES, category);
+  const isRenewal = _catIn(RENEWAL_CATEGORIES, category);
   if (!isImpl && !isInteg && !isRenewal) {
     return res.status(200).json({ ok: true, action: 'ignored', reason: 'category not in implementation/integration/renewal whitelist' });
   }
@@ -604,9 +610,10 @@ async function handleTicketsRoute(req, res) {
 // =============================================================================
 
 const INTEGRATION_STATUSES = ['Новая','В работе','Готово','Отменено','На паузе','Архив'];
-// Type и Package оставлены свободными — у интеграторов могут появляться новые
-// варианты, не хочется блокировать ввод и каждый раз ходить править код.
-// Валидируем только то что точно зафиксировано (status, country).
+// v794: type/package валидируем по whitelist — но только НОВЫЕ значения (POST/PATCH).
+// Старые строки из Sheets-импорта со свободными значениями продолжают жить, пока их не трогают.
+const INTEGRATION_TYPES = ['Интеграция','Доработка','Разработка'];
+const INTEGRATION_PACKAGES = ['Стандарт','Стандарт+','Премиум','Услуга'];
 
 // v430: разовый импорт интеграций из Google-таблицы.
 // Параметры: ?action=import_sheets&dry_run=1 (по умолчанию dry_run=1)
@@ -946,7 +953,7 @@ async function handleIntegrationsRoute(req, res) {
     // v592 SEC: секреты (login_password, server) отдаём ТОЛЬКО в детальном запросе (по id/client_id),
     // а в общем списке доски — нет, иначе любой с бандл-токеном выкачивает учётки клиентов.
     const isDetail = !!(id || client_id);
-    const SAFE_COLS = 'id,client_id,company_name,country,status,type,package,db_type,operator,manager,date_paid,date_taken,deadline,date_done,contact_persons,comment,sheet_row,created_at,updated_at,sheet_month';
+    const SAFE_COLS = 'id,client_id,company_name,country,status,type,package,db_type,operator,manager,date_paid,date_taken,deadline,date_done,contact_persons,comment,sheet_row,created_at,updated_at,sheet_month,queue_pos';
     const params = {
       select: (isDetail ? '*' : SAFE_COLS) + ',clients(company_name,main_phone,curator_operator,status)',
       order: 'created_at.desc'
@@ -981,6 +988,12 @@ async function handleIntegrationsRoute(req, res) {
     if (!INTEGRATION_STATUSES.includes(statusVal)) {
       return res.status(400).json({ ok: false, error: 'status должен быть один из: ' + INTEGRATION_STATUSES.join(', ') });
     }
+    if (body.type && !INTEGRATION_TYPES.includes(body.type)) {
+      return res.status(400).json({ ok: false, error: 'type должен быть один из: ' + INTEGRATION_TYPES.join(', ') });
+    }
+    if (body.package && !INTEGRATION_PACKAGES.includes(body.package)) {
+      return res.status(400).json({ ok: false, error: 'package должен быть один из: ' + INTEGRATION_PACKAGES.join(', ') });
+    }
     const row = {
       client_id: body.client_id || null,
       company_name: String(body.company_name).trim(),
@@ -1012,7 +1025,7 @@ async function handleIntegrationsRoute(req, res) {
     // Whitelist изменяемых полей. Защита от случайной перезаписи id/client_id/created_at.
     const ALLOWED_FIELDS = ['company_name','status','type','package','db_type','operator','manager',
                             'date_paid','date_taken','deadline','date_done',
-                            'login_password','server','contact_persons','comment','country'];
+                            'login_password','server','contact_persons','comment','country','queue_pos'];
     const patch = {};
     Object.keys(rawBody).forEach(k => {
       if (ALLOWED_FIELDS.includes(k)) patch[k] = rawBody[k];
@@ -1020,11 +1033,37 @@ async function handleIntegrationsRoute(req, res) {
     if (patch.status && !INTEGRATION_STATUSES.includes(patch.status)) {
       return res.status(400).json({ ok: false, error: 'status должен быть один из: ' + INTEGRATION_STATUSES.join(', ') });
     }
+    if (patch.type && !INTEGRATION_TYPES.includes(patch.type)) {
+      return res.status(400).json({ ok: false, error: 'type должен быть один из: ' + INTEGRATION_TYPES.join(', ') });
+    }
+    if (patch.package && !INTEGRATION_PACKAGES.includes(patch.package)) {
+      return res.status(400).json({ ok: false, error: 'package должен быть один из: ' + INTEGRATION_PACKAGES.join(', ') });
+    }
     if (patch.country && !ALLOWED_COUNTRIES.includes(patch.country)) {
       return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
     }
     if (!Object.keys(patch).length) {
       return res.status(400).json({ ok: false, error: 'нечего обновлять' });
+    }
+    // v794: авто-даты при смене статуса. Единая точка для всех путей (inline-редактор,
+    // статус-чип, drag&drop, боты). Даты date-only по Алматы (UTC+5).
+    // «В работе» → date_taken=сегодня, deadline=+14 дней (если пустые).
+    // «Готово»/«Отменено» → date_done=сегодня (если пустой) — иначе доска и аналитика
+    // считают завершение по deadline/updated_at и относят его не к тому месяцу.
+    if (patch.status && ['В работе', 'Готово', 'Отменено'].includes(patch.status)) {
+      const cur = await sbSelect('integrations', { id: 'eq.' + id, select: 'status,date_taken,deadline,date_done', limit: '1' });
+      if (cur.length && cur[0].status !== patch.status) {
+        const almaty = new Date(Date.now() + 5 * 3600 * 1000);
+        const iso = d => d.toISOString().slice(0, 10);
+        if (patch.status === 'В работе') {
+          if (!cur[0].date_taken && !patch.date_taken) patch.date_taken = iso(almaty);
+          if (!cur[0].deadline && !patch.deadline) {
+            patch.deadline = iso(new Date(almaty.getTime() + 14 * 86400000));
+          }
+        } else {
+          if (!cur[0].date_done && !patch.date_done) patch.date_done = iso(almaty);
+        }
+      }
     }
     // updated_at обновляется триггером БД, тут не трогаем
     const result = await sbUpdate('integrations', { id: 'eq.' + id }, patch);

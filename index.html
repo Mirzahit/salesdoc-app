@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v793</title>
+<title>SalesDoc — Финансовый Дашборд v794</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6782,6 +6782,21 @@ body.light #view-integrations, body.light #view-tickets {
 .route-col-amo-sum b { color:var(--rk-text-2); font-weight:700; }
 .route-col-amo-body { flex:1; overflow-y:auto; padding:4px 0 6px; display:flex; flex-direction:column; gap:10px; min-height:0; }
 .route-col-amo-empty { font-size:12px; color:var(--rk-text-faint); text-align:center; padding:24px 14px; font-style:italic; }
+/* v794: канбан Интеграций — очередь, фильтры-чипы, drag&drop */
+.rc .intg-qn{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:18px;background:rgba(94,106,210,.16);color:#9AA4FF;font-size:10px;font-weight:800;border-radius:6px;padding:0 5px;font-variant-numeric:tabular-nums}
+body.light .rc .intg-qn{background:rgba(94,106,210,.12);color:#4651B5}
+.intg-fchip{display:inline-flex;align-items:center;gap:5px;background:var(--surface-2);border:1px solid var(--border-faint);border-radius:9px;padding:6px 11px;font-size:11.5px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit}
+.intg-fchip.is-on{background:rgba(94,106,210,.14);border-color:rgba(94,106,210,.45);color:#9AA4FF}
+body.light .intg-fchip{background:#F2F3F7;border-color:rgba(15,18,25,.08);color:#16181D}
+body.light .intg-fchip.is-on{background:rgba(94,106,210,.10);border-color:rgba(94,106,210,.35);color:#4651B5}
+.rc.intg-dragging{opacity:.45}
+.route-col-amo.intg-drop-hover{outline:2px dashed rgba(94,106,210,.55);outline-offset:-2px;border-radius:12px}
+.intg-new-seg{border:1px solid var(--border-faint);background:transparent;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--text-soft);cursor:pointer;font-family:inherit}
+.intg-new-seg[data-on="1"]{background:rgba(94,106,210,.14);border-color:var(--accent,#5E6AD2);color:#9AA4FF}
+body.light .intg-new-seg{border-color:rgba(15,18,25,.12);color:#5A6072}
+body.light .intg-new-seg[data-on="1"]{background:rgba(94,106,210,.10);color:#4651B5}
+#intg-new-modal input[type="date"]{color-scheme:dark}
+body.light #intg-new-modal input[type="date"]{color-scheme:light}
 /* v467: канбан внедрения — без внутреннего вертикального скролла в колонках.
    Колонки растут по высоте контента, скроллится сама страница. */
 #view-route .route-col-amo { max-height:none; }
@@ -8091,35 +8106,14 @@ body.light .mt-filter-section-title { color:#8A90A0; }
 
  <!-- INTEGRATIONS QUEUE VIEW -->
  <div id="view-integrations" style="display:none;position:relative">
- <!-- Top bar — v524: фильтры и обновление работают на Supabase (intgSbLoad/intgSbRerender) -->
+ <!-- Top bar — v794: кнопка создания + фильтры-чипы (.ct-dd), нативные select убраны (правило проекта) -->
  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
- <div style="display:flex;align-items:center;gap:10px">
- <button class="add-btn" onclick="intgSbLoad()" id="intg-refresh-btn" style="font-size:11px;padding:5px 14px">Обновить</button>
- <select id="intg-filter-status" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgSbRerender()">
- <option value="">Все статусы</option>
- <option value="Новая">Новые</option>
- <option value="В работе">В работе</option>
- <option value="На паузе">На паузе</option>
- <option value="Готово">Готово</option>
- <option value="Отменено">Отменено</option>
- </select>
- <select id="intg-filter-type" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgSbRerender()">
- <option value="">Все типы</option>
- <option value="Интеграция">Интеграция</option>
- <option value="Доработка">Доработка</option>
- <option value="Разработка">Разработка</option>
- </select>
- <select id="intg-filter-country" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgSbRerender()">
- <option value="">Все страны</option>
- <option value="KZ">KZ</option>
- <option value="KG">KG</option>
- </select>
- <select id="intg-filter-package" class="form-select" style="font-size:11px;padding:4px 10px" onchange="intgSbRerender()">
- <option value="">Все пакеты</option>
- <option value="Стандарт">Стандарт</option>
- <option value="Стандарт+">Стандарт+</option>
- <option value="Премиум">Премиум</option>
- </select>
+ <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+ <button onclick="intgOpenNew()" style="background:var(--accent,#5E6AD2);color:#fff;border:none;border-radius:9px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">+ Новая интеграция</button>
+ <button type="button" class="intg-fchip" id="intg-fchip-status" onclick="_intgFilterDdOpen(event,'status')"><span style="opacity:.65;font-weight:500">Статус:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
+ <button type="button" class="intg-fchip" id="intg-fchip-type" onclick="_intgFilterDdOpen(event,'type')"><span style="opacity:.65;font-weight:500">Тип:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
+ <button type="button" class="intg-fchip" id="intg-fchip-country" onclick="_intgFilterDdOpen(event,'country')"><span style="opacity:.65;font-weight:500">Страна:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
+ <button type="button" class="intg-fchip" id="intg-fchip-package" onclick="_intgFilterDdOpen(event,'package')"><span style="opacity:.65;font-weight:500">Пакет:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
  </div>
  <div id="intg-status" style="font-size:11px;color:var(--text-muted)"></div>
  </div>
@@ -11517,14 +11511,12 @@ function switchCountry(code) {
  gsUrl = cfg.gsUrl;
  EXP_SHEET_ID = cfg.EXP_SHEET_ID;
  EXPENSES_SHEET_ID = cfg.EXP_SHEET_ID;
- INTG_SHEET_ID = cfg.INTG_SHEET_ID;
  LEADS_SHEET_ID = cfg.LEADS_SHEET_ID;
  kpiSheetId = cfg.kpiSheetId;
  LTV_2025_ID = cfg.LTV_ID;
  // Clear data
  payments.length = 0;
  if (typeof expensesData !== 'undefined') expensesData = [];
- if (typeof intgData !== 'undefined') intgData = [];
  if (typeof expData !== 'undefined') expData = [];
  Object.keys(SEATED_MAP).forEach(function(k){ delete SEATED_MAP[k]; });
  // v557: при смене страны сбрасываем AC_KZ_CACHE, чтобы acLoadKZClients подтянул клиентов
@@ -16769,13 +16761,17 @@ function _enterAppAsCurrentUser(){
  localStorage.setItem('sd_country', _clk); // switchCountry мог выйти рано, если страна уже совпала
  var cs=document.getElementById('country-switcher'); if(cs) cs.style.display='none';
  var tc=document.getElementById('country-lamp'); if(tc) tc.style.display='none';
- var icf=document.getElementById('intg-filter-country'); if(icf){ icf.value=_clk; icf.style.display='none'; }
+ // v794: фильтр страны Интеграций теперь чип (_intgFilters) — фиксируем значение,
+ // чип прячет сама _intgFchipsRender по countryLockFor
+ if(window._intgFilters) window._intgFilters.country = _clk;
+ if(typeof _intgFchipsRender === 'function') _intgFchipsRender();
  } else {
  var cs2=document.getElementById('country-switcher'); if(cs2) cs2.style.display='none';
  var tc2=document.getElementById('country-lamp'); if(tc2) tc2.style.display='';
  // v768-qa: если до этого в той же вкладке сидел запертый (logout без перезагрузки),
  // фильтр стран Интеграций остался бы скрытым и залипшим на его стране — возвращаем.
- var icf2=document.getElementById('intg-filter-country'); if(icf2){ icf2.style.display=''; icf2.value=''; }
+ if(window._intgFilters) window._intgFilters.country = '';
+ if(typeof _intgFchipsRender === 'function') _intgFchipsRender();
  }
  updateCountrySwitcherUI();
  initCalendar();
@@ -25730,502 +25726,8 @@ async function expLoadPrevTotal(currentTotal){
 // /EXPENSES MODULE
 
 // INTEGRATIONS QUEUE MODULE 
-let INTG_SHEET_ID = COUNTRY_CONFIG[currentCountry].INTG_SHEET_ID;
-let intgData = []; // {company, type, status, state, dateStart, deadline, dateDone, operator, manager}
-
-async function intgLoad() {
- var st = document.getElementById('intg-status');
- var btn = document.getElementById('intg-refresh-btn');
- if (st) st.textContent = 'Загрузка данных...';
- if (btn) { btn.classList.add('btn-loading'); btn.textContent = ' Загрузка...'; }
-
- intgData = [];
- var loaded = false;
- var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
-
- // Шаг 1: Пробуем загрузить ВСЕ данные (без указания листа — Apps Script вернёт первый лист)
- var sheetNames = ['Интеграция','интеграция','KZ','Sheet1','Лист1'];
- 
- for (var si = 0; si < sheetNames.length; si++) {
- if (loaded) break;
- try {
- var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(sheetNames[si]) + '&spreadsheetId=' + INTG_SHEET_ID;
- var resp = await fetch(url);
- var text = await resp.text();
- var json = JSON.parse(text);
- if (json.error) continue;
- if (!json.rows || json.rows.length < 2) continue;
- parseIntgRows(json.rows);
- loaded = true;
- } catch(e) { }
- }
-
- // Если ничего не нашли — попробуем без имени листа (первый лист по умолчанию)
- if (!loaded) {
- try {
- var url2 = GS_URL + '?action=getSheet&sheet=&spreadsheetId=' + INTG_SHEET_ID;
- var resp2 = await fetch(url2);
- var text2 = await resp2.text();
- var json2 = JSON.parse(text2);
- if (json2.rows && json2.rows.length > 2) {
- parseIntgRows(json2.rows);
- loaded = true;
- }
- } catch(e2) { }
- }
-
- // Статусы для фильтра
- var statusSelect = document.getElementById('intg-filter-status');
- if (statusSelect && intgData.length) {
- var statuses = {};
- intgData.forEach(function(r){ if(r.status && r.status !== '—') statuses[r.status] = true; });
- statusSelect.innerHTML = '<option value="">Все статусы</option>';
- Object.keys(statuses).sort().forEach(function(s){
- statusSelect.innerHTML += '<option value="'+s+'">'+s+'</option>';
- });
- }
-
- window._intgLoaded = true;
- console.log('[intg] Sheets-архив: ' + intgData.length + ' записей, loaded=' + loaded);
- intgRender();
- if (btn) { btn.classList.remove('btn-loading'); btn.textContent = 'Обновить'; }
- // v498: показываем оба источника в статусе
- var sbCount = (window.intgSbItems || []).length;
- if (st) st.textContent = (loaded ? ('Архив: ' + intgData.length) : 'Архив: ошибка') + ' · Активные: ' + sbCount;
-}
-
-function parseIntgRows(rows) {
- var headerIdx = -1;
- for (var i = 0; i < Math.min(10, rows.length); i++) {
- var rowStr = (rows[i]||[]).map(function(c){ return String(c||'').toLowerCase(); }).join(' ');
- if (rowStr.indexOf('компани') >= 0 || rowStr.indexOf('названи') >= 0) { headerIdx = i; break; }
- }
- if (headerIdx < 0) headerIdx = 0;
-
- var hdr = rows[headerIdx];
- var colCompany=5, colStatus=6, colState=7, colType=8, colOperator=9, colManager=10;
- var colDateStart=2, colDeadline=3, colDateDone=4;
- var colLogin=11, colServer=12, colContact=13, colComment=14, colDbType=15, colPackage=-1;
- for (var hi = 0; hi < hdr.length; hi++) {
- var h = String(hdr[hi]||'').toLowerCase().trim();
- if (h.indexOf('компани') >= 0 || h.indexOf('названи') >= 0) colCompany = hi;
- if (h === 'статус') colStatus = hi;
- if (h.indexOf('состояни') >= 0) colState = hi;
- if (h === 'тип') colType = hi;
- if (h.indexOf('оператор') >= 0) colOperator = hi;
- if (h.indexOf('менеджер') >= 0) colManager = hi;
- if (h.indexOf('взят') >= 0 || h.indexOf('дата взятия') >= 0) colDateStart = hi;
- if (h === 'срок') colDeadline = hi;
- if (h.indexOf('исполнен') >= 0) colDateDone = hi;
- if (h.indexOf('логин') >= 0 || h.indexOf('пароль') >= 0) colLogin = hi;
- if (h.indexOf('сервер') >= 0) colServer = hi;
- if (h.indexOf('контакт') >= 0) colContact = hi;
- if (h.indexOf('коммент') >= 0) colComment = hi;
- if (h.indexOf('вид базы') >= 0) colDbType = hi;
- if (h.indexOf('пакет') >= 0 || h.indexOf('тип интеграц') >= 0) colPackage = hi;
- }
-
- rows.slice(headerIdx + 1).forEach(function(row) {
- if (!row) return;
- var company = String(row[colCompany]||'').trim();
- if (!company) return;
- intgData.push({
- company: company,
- country: String(row[0]||'').trim().toUpperCase() || '—',
- // v502: default 'Интеграция' вместо '—' — иначе запись не попадёт ни в одну из 3 kanban-колонок (Интеграция/Доработка/Разработка) и станет невидимой
- type: String(row[colType]||'').trim() || 'Интеграция',
- status: String(row[colStatus]||'').trim() || '—',
- state: String(row[colState]||'').trim() || '—',
- dateStart: parseDateFromSheet(row[colDateStart]) || '—',
- deadline: parseDateFromSheet(row[colDeadline]) || '—',
- dateDone: parseDateFromSheet(row[colDateDone]) || '—',
- operator: String(row[colOperator]||'').trim() || '—',
- manager: String(row[colManager]||'').trim() || '—',
- login: String(row[colLogin]||'').trim(),
- server: String(row[colServer]||'').trim(),
- contact: String(row[colContact]||'').trim(),
- comment: String(row[colComment]||'').trim(),
- dbType: String(row[colDbType]||'').trim(),
- package: colPackage >= 0 ? (function(v){ v=String(v||'').trim(); return v ? v.charAt(0).toUpperCase()+v.slice(1) : ''; })(row[colPackage]) : ''
- });
- });
-}
-
-function intgRender() {
- var filterType = (document.getElementById('intg-filter-type')||{}).value || '';
- var filterStatus = (document.getElementById('intg-filter-status')||{}).value || '';
- var filterCountry = (document.getElementById('intg-filter-country')||{}).value || '';
- var filterPackage = (document.getElementById('intg-filter-package')||{}).value || '';
- // v768: Sheets-архив интеграций содержит ОБЕ страны — при замке форсим страну сотрудника
- var _lkIntg = (typeof countryLockFor === 'function') ? countryLockFor() : null;
- if(_lkIntg) filterCountry = _lkIntg;
- // v497: объединяем Sheets-архив + активные карточки из Supabase в один массив для kanban
- // v503: фильтр null после _intgSbToRow, защита от падений
- var sbRows = (window.intgSbItems || []).map(_intgSbToRow).filter(function(r){ return r; });
- var _norm = function(s){ return String(s||'').toLowerCase().replace(/[^a-zа-я0-9]/gi,''); };
- var sbKeys = {};
- sbRows.forEach(function(r){ var k = _norm(r.company); if(k) sbKeys[k] = true; });
- var sheetsUniq = (intgData || []).filter(function(r){ var k = _norm(r.company); return !k || !sbKeys[k]; });
- var data = sbRows.concat(sheetsUniq);
- if (filterType) data = data.filter(function(r){ return r.type === filterType; });
- if (filterStatus) data = data.filter(function(r){ return r.status === filterStatus; });
- if (filterCountry) data = data.filter(function(r){ return r.country === filterCountry; });
- if (filterPackage) data = data.filter(function(r){ return r.package === filterPackage; });
-
- // Period
- var selM = selectedMonth ? selectedMonth.month : new Date().getMonth();
- var selY = selectedMonth ? selectedMonth.year : new Date().getFullYear();
- var isYearMode = currentPeriod === 'year';
- var MONTHS_F = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
- var periodLabel = isYearMode ? String(selY) : MONTHS_F[selM] + ' ' + selY;
-
- function isInPeriod(dateStr) {
- if (!dateStr || dateStr === '\u2014') return false;
- var d;
- if (dateStr.indexOf('-') >= 0) d = new Date(dateStr + 'T00:00:00');
- else { var p = dateStr.split('.'); if (p.length===3) d = new Date(p[2]+'-'+p[1]+'-'+p[0]+'T00:00:00'); else return false; }
- if (isNaN(d)) return false;
- if (isYearMode) return d.getFullYear() === selY;
- return d.getMonth() === selM && d.getFullYear() === selY;
- }
-
- // Period stats
- var INTG_PLAN = 10;
- var allData = data; // v502: используем дедуплицированный массив
- if (filterCountry) allData = allData.filter(function(r){ return r.country === filterCountry; });
- var types = ['Интеграция','Доработка','Разработка'];
- // v224: iOS systemBlue + systemOrange + systemIndigo
- var typeColors = {'Интеграция':'#0A84FF','Доработка':'#FF9F0A','Разработка':'#5E5CE0'};
- var psEl = document.getElementById('intg-period-stats');
- if (psEl) {
- var statsHtml = '<div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:10px;font-weight:600">ВЫПОЛНЕНО ЗА ' + periodLabel.toUpperCase() + '</div>';
- statsHtml += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">';
- var totalDonePeriod = 0, totalInWork = 0, totalCancelled = 0;
- types.forEach(function(type) {
- var tc = typeColors[type];
- var allOfType = allData.filter(function(r){ return r.type === type; });
- var doneP = allOfType.filter(function(r){ return r.status==='Готово' && (isInPeriod(r.dateDone) || ((!r.dateDone || r.dateDone==='\u2014') && isInPeriod(r.deadline))); }).length;
- var inWork = allOfType.filter(function(r){ return r.status!=='Готово' && r.status!=='Отменено'; }).length;
- totalDonePeriod += doneP;
- totalInWork += inWork;
- var hasPlan = type === 'Интеграция';
- var plan = hasPlan ? INTG_PLAN : 0;
- var pct = hasPlan ? Math.round(doneP / plan * 100) : 0;
- // v222: Emerald Depth для прогресса
- var barColor = hasPlan ? (pct >= 80 ? '#4CB782' : pct >= 50 ? '#FF9F0A' : '#FF453A') : '#4CB782';
- var barW = hasPlan ? Math.min(100, pct) : 100;
- // v222: убрана верхняя цветная полоса (border-top), цвет остаётся в тексте метки
- statsHtml += '<div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:16px;box-shadow:var(--sh-1)">';
- statsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
- statsHtml += '<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:'+tc+'">'+type.toUpperCase()+'</span>';
- if (hasPlan) statsHtml += '<span style="font-size:10px;color:var(--text-muted)">план: '+plan+'</span>';
- statsHtml += '</div>';
- statsHtml += '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">';
- statsHtml += '<span style="font-family:Inter,sans-serif;font-size:26px;color:'+barColor+'">'+doneP+'</span>';
- if (hasPlan) statsHtml += '<span style="font-size:11px;color:var(--text-muted)">/ '+plan+'</span><span style="font-size:11px;color:'+barColor+';font-weight:600;margin-left:auto">'+pct+'%</span>';
- else statsHtml += '<span style="font-size:11px;color:var(--text-muted)">выполнено</span>';
- statsHtml += '</div>';
- statsHtml += '<div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;margin-bottom:6px;overflow:hidden">';
- statsHtml += '<div style="height:100%;width:'+barW+'%;background:'+barColor+';border-radius:3px"></div></div>';
- statsHtml += '<div style="display:flex;justify-content:space-between;font-size:10px">';
- statsHtml += '<span style="color:#FF9F0A">'+inWork+' в работе</span>';
- if (hasPlan) statsHtml += '<span style="color:var(--text-muted)">осталось '+ Math.max(0, plan - doneP)+'</span>';
- else statsHtml += '<span style="color:var(--text-muted)">всего '+allOfType.length+'</span>';
- statsHtml += '</div></div>';
- });
- statsHtml += '</div>';
- var totalCancelledP = allData.filter(function(r){ return r.status==='Отменено' && (isInPeriod(r.dateDone) || isInPeriod(r.deadline)); }).length;
- statsHtml += '<div style="font-size:10px;color:var(--text-muted);text-align:center;border-top:1px solid rgba(255,255,255,.06);padding-top:8px">';
- statsHtml += 'Итого за '+periodLabel+': <span style="color:#4CB782;font-weight:700">'+totalDonePeriod+' выполнено</span> / <span style="color:#FF9F0A;font-weight:700">'+totalInWork+' в работе</span>';
- if (totalCancelledP > 0) statsHtml += ' / <span style="color:#FF453A;font-weight:700">'+totalCancelledP+' отменено</span>';
- statsHtml += '</div>';
- psEl.innerHTML = statsHtml;
- }
-
- // Package stats dashboard
- var pkgEl = document.getElementById('intg-package-stats');
- if (pkgEl) {
- var pkgDone = {};
- var pkgInWork = {};
- data.forEach(function(r){
- var pkg = r.package || 'Не указан';
- var isDone = r.status === 'Готово' && (isInPeriod(r.dateDone) || ((!r.dateDone || r.dateDone==='\u2014') && isInPeriod(r.deadline)));
- var isWork = r.status !== 'Готово' && r.status !== 'Отменено';
- if (isDone) pkgDone[pkg] = (pkgDone[pkg]||0) + 1;
- if (isWork) pkgInWork[pkg] = (pkgInWork[pkg]||0) + 1;
- });
- // v222: Emerald Depth + Navy Mirage вместо разноцветья
- var pkgStyleMap = {
- 'Стандарт':['#8E8E93','rgba(142,142,147,.12)'],'стандарт Плюс':['#5AC8FA','rgba(90,200,250,.14)'],
- 'Стандарт Плюс':['#5AC8FA','rgba(90,200,250,.14)'],'Стандарт+':['#5AC8FA','rgba(90,200,250,.14)'],
- 'Премиум':['#5E5CE0','rgba(94,92,224,.18)'],'Не указан':['#636366','rgba(255,255,255,.04)']
- };
- // Собираем все пакеты (done + inWork)
- var allPkgs = {};
- Object.keys(pkgDone).forEach(function(k){ allPkgs[k]=true; });
- Object.keys(pkgInWork).forEach(function(k){ allPkgs[k]=true; });
- var pkgKeys = Object.keys(allPkgs).sort(function(a,b){ return (pkgDone[b]||0)-(pkgDone[a]||0); });
- var totalDone = 0; pkgKeys.forEach(function(k){ totalDone += (pkgDone[k]||0); });
- var ph = '<div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:10px;font-weight:600">'+periodLabel.toUpperCase()+'</div>';
- ph += '<div style="display:grid;grid-template-columns:repeat('+Math.min(pkgKeys.length,4)+',1fr);gap:10px;margin-bottom:12px">';
- pkgKeys.forEach(function(pkg){
- var st = pkgStyleMap[pkg] || ['#94A3B8','rgba(255,255,255,.04)'];
- var done = pkgDone[pkg] || 0;
- var inW = pkgInWork[pkg] || 0;
- var pct = totalDone > 0 ? Math.round(done/totalDone*100) : 0;
- ph += '<div style="background:'+st[1]+';border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;border-left:3px solid '+st[0]+'">';
- ph += '<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:'+st[0]+';margin-bottom:8px">'+pkg.toUpperCase()+'</div>';
- ph += '<div style="display:flex;align-items:baseline;gap:8px">';
- ph += '<span style="font-family:Inter,sans-serif;font-size:28px;color:#4CB782">'+done+'</span>';
- ph += '<span style="font-size:11px;color:var(--text-muted)">выполнено</span></div>';
- ph += '<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+pct+'% от выполненных</div>';
- ph += '<div style="margin-top:8px;font-size:10px;color:#E0A458">'+inW+' в работе</div>';
- ph += '</div>';
- });
- ph += '</div>';
- pkgEl.innerHTML = ph;
- }
-
- // MONTHLY TABLE
- var mtEl = document.getElementById('intg-monthly-table');
- if (mtEl) {
- var MONTHS_S = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
- var allForMonthly = intgData;
- if (filterCountry) allForMonthly = allForMonthly.filter(function(r){ return r.country === filterCountry; });
- if (filterPackage) allForMonthly = allForMonthly.filter(function(r){ return r.package === filterPackage; });
- // Определяем диапазон месяцев с данными
- var monthBuckets = {};
- allForMonthly.forEach(function(r) {
- if (r.status !== 'Готово') return;
- var ds = (r.dateDone && r.dateDone !== '\u2014' && r.dateDone !== '') ? r.dateDone : r.deadline;
- if (!ds || ds === '\u2014' || ds === '') return;
- var d;
- if (ds.indexOf('-') >= 0) d = new Date(ds + 'T00:00:00');
- else { var p = ds.split('.'); if (p.length===3) d = new Date(p[2]+'-'+p[1]+'-'+p[0]+'T00:00:00'); else return; }
- if (isNaN(d)) return;
- var key = d.getFullYear() + '-' + String(d.getMonth()).padStart(2,'0');
- if (!monthBuckets[key]) monthBuckets[key] = {int:0,dor:0,raz:0};
- if (r.type === 'Интеграция') monthBuckets[key].int++;
- else if (r.type === 'Доработка') monthBuckets[key].dor++;
- else if (r.type === 'Разработка') monthBuckets[key].raz++;
- });
- var sortedKeys = Object.keys(monthBuckets).sort();
- if (sortedKeys.length) {
- var mHtml = '<table style="width:100%;border-collapse:collapse;font-size:11px">';
- mHtml += '<thead><tr><th style="text-align:left;padding:6px 8px;color:var(--text-muted);border-bottom:2px solid rgba(255,255,255,.08)"></th>';
- sortedKeys.forEach(function(k) {
- var parts = k.split('-');
- var yr = parts[0]; var mi = parseInt(parts[1]);
- var isCur = (mi === selM && parseInt(yr) === selY);
- mHtml += '<th style="text-align:center;padding:6px 6px;color:'+(isCur?'#A6ADEA':'var(--text-muted)')+';border-bottom:2px solid rgba(255,255,255,.08);font-weight:'+(isCur?'700':'600')+';font-size:10px'+(isCur?';background:rgba(94,106,210,.06)':'')+'">'+MONTHS_S[mi]+(mi===0?' '+yr.slice(2):'')+'</th>';
- });
- mHtml += '</tr></thead><tbody>';
- // Интеграция
- mHtml += '<tr><td style="padding:5px 8px;font-weight:700;color:#5E6AD2;font-size:10px;letter-spacing:.5px">Интеграция</td>';
- sortedKeys.forEach(function(k) { var v = monthBuckets[k].int; var parts = k.split('-'); var isCur = (parseInt(parts[1])===selM && parseInt(parts[0])===selY); mHtml += '<td style="text-align:center;padding:5px 4px;color:'+(v>=10?'#4CB782':v>=7?'#E0A458':'#94A3B8')+';font-weight:'+(isCur?'700':'400')+(isCur?';background:rgba(94,106,210,.06)':'')+'">'+v+'</td>'; });
- mHtml += '</tr>';
- // План
- mHtml += '<tr><td style="padding:2px 8px;font-size:9px;color:var(--text-muted)"></td>';
- sortedKeys.forEach(function(k) { var parts = k.split('-'); var isCur = (parseInt(parts[1])===selM && parseInt(parts[0])===selY); mHtml += '<td style="text-align:center;padding:2px 4px;font-size:9px;color:var(--text-muted)'+(isCur?';background:rgba(94,106,210,.06)':'')+'">/ 10</td>'; });
- mHtml += '</tr>';
- // Доработка
- mHtml += '<tr><td style="padding:5px 8px;font-weight:700;color:#828FF7;font-size:10px;letter-spacing:.5px">Доработка</td>';
- sortedKeys.forEach(function(k) { var v = monthBuckets[k].dor; var parts = k.split('-'); var isCur = (parseInt(parts[1])===selM && parseInt(parts[0])===selY); mHtml += '<td style="text-align:center;padding:5px 4px;color:#94A3B8;font-weight:'+(isCur?'700':'400')+(isCur?';background:rgba(94,106,210,.06)':'')+'">'+v+'</td>'; });
- mHtml += '</tr>';
- // Разработка
- mHtml += '<tr><td style="padding:5px 8px;font-weight:700;color:#5E6AD2;font-size:10px;letter-spacing:.5px">Разработка</td>';
- sortedKeys.forEach(function(k) { var v = monthBuckets[k].raz; var parts = k.split('-'); var isCur = (parseInt(parts[1])===selM && parseInt(parts[0])===selY); mHtml += '<td style="text-align:center;padding:5px 4px;color:#94A3B8;font-weight:'+(isCur?'700':'400')+(isCur?';background:rgba(94,106,210,.06)':'')+'">'+v+'</td>'; });
- mHtml += '</tr>';
- // Итого
- mHtml += '<tr style="border-top:2px solid rgba(255,255,255,.08)"><td style="padding:5px 8px;font-weight:700;color:#A6ADEA;font-size:10px;letter-spacing:.5px">Итого</td>';
- sortedKeys.forEach(function(k) { var v = monthBuckets[k].int+monthBuckets[k].dor+monthBuckets[k].raz; var parts = k.split('-'); var isCur = (parseInt(parts[1])===selM && parseInt(parts[0])===selY); mHtml += '<td style="text-align:center;padding:5px 4px;color:#A6ADEA;font-weight:700'+(isCur?';background:rgba(94,106,210,.06)':'')+'">'+v+'</td>'; });
- mHtml += '</tr>';
- mHtml += '</tbody></table>';
- mtEl.innerHTML = mHtml;
- } else {
- mtEl.innerHTML = '<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:16px">Нет данных для таблицы</div>';
- }
- }
-
- // KANBAN
- var kanbanEl = document.getElementById('intg-kanban');
- if (!kanbanEl) return;
- var parseD = function(d) {
- if (!d || d === '\u2014') return new Date(9999,0,1);
- if (d.indexOf('-') >= 0) return new Date(d+'T00:00:00');
- var p = d.split('.'); if(p.length===3) return new Date(p[2]+'-'+p[1]+'-'+p[0]+'T00:00:00');
- return new Date(9999,0,1);
- };
- var fmtD = function(d) {
- if (!d || d === '\u2014') return '';
- if (d.indexOf('-') >= 0) return d.split('-').reverse().join('.');
- return d;
- };
- // v224: iOS systemBlue + systemOrange + systemIndigo
- var typeBorder = {'Интеграция':'#0A84FF','Доработка':'#FF9F0A','Разработка':'#5E5CE0'};
- var showQueue = (filterStatus === 'Выполняется' || filterStatus === 'В очереди' || filterStatus === 'Очередь' || filterStatus === 'Тестируют' || filterStatus === '');
-
- function buildCard(r, queueNum) {
- var isOverdue = false;
- var deadline = fmtD(r.deadline);
- if (deadline && r.status !== 'Готово' && r.status !== 'Отменено') {
- try { isOverdue = parseD(r.deadline) < new Date(); } catch(e){}
- }
- var countryBadge = (r.country && r.country !== '\u2014') ? '<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;background:'+(r.country==='KG'?'rgba(94,92,224,.18)':'rgba(52,199,122,.16)')+';color:'+(r.country==='KG'?'#5E5CE0':'#0A84FF')+'">'+r.country+'</span>' : '';
- // v222: Emerald Depth + Navy Mirage для пакетов
- var pkgColors = {'Стандарт':['rgba(142,142,147,.15)','#8E8E93'],'Стандарт+':['rgba(90,200,250,.15)','#5AC8FA'],'стандарт Плюс':['rgba(90,200,250,.15)','#5AC8FA'],'Стандарт Плюс':['rgba(90,200,250,.15)','#5AC8FA'],'Премиум':['rgba(94,92,224,.18)','#5E5CE0']};
- var pkgKey = r.package || '';
- var pkgStyle = pkgColors[pkgKey] || pkgColors[pkgKey.charAt(0).toUpperCase()+pkgKey.slice(1)] || null;
- var pkgBadge = (pkgKey && pkgStyle) ? '<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:4px;background:'+pkgStyle[0]+';color:'+pkgStyle[1]+';letter-spacing:.3px">'+pkgKey.toUpperCase()+'</span>' : (pkgKey ? '<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.06);color:#94A3B8;letter-spacing:.3px">'+pkgKey.toUpperCase()+'</span>' : '');
- var badges = '<div style="display:flex;gap:4px;margin-left:auto;flex-shrink:0">' + pkgBadge + countryBadge + '</div>';
- // v222: карточка интеграции — Emerald Depth токены, без синих акцентов
- // v497: Supabase-карточки кликабельны → открывают full карточку интеграции (intgOpenCard).
- // Sheets-архив — тоже кликается, но просто разворачивает деталь (toggle).
- var clickAttr = r._sb && r._sb_id ? 'onclick="event.stopPropagation();intgOpenCard(\'' + r._sb_id + '\')"' : 'onclick="this.classList.toggle(\'intg-open\')"';
- var h = '<div class="intg-card" ' + clickAttr + ' style="background:var(--surface-2);border-radius:10px;padding:10px 12px;cursor:pointer;transition:all .15s;margin-bottom:6px;border:1px solid var(--border-faint)">';
- h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">';
- if (queueNum > 0) h += '<div style="width:20px;height:20px;border-radius:50%;background:var(--accent-bg);color:var(--accent-text);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:Inter,sans-serif">'+queueNum+'</div>';
- h += '<div style="font-size:12px;font-weight:700;color:#E2E8F0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'+(r.status==='Отменено'?';text-decoration:line-through;opacity:.5':'')+'">'+r.company+'</div>';
- h += badges + '</div>';
- if (r.operator && r.operator !== '\u2014') h += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;padding:1px 0"><span style="color:#475569">Оператор</span><span style="color:#94A3B8;display:inline-flex;align-items:center;gap:5px">'+renderAvatar(r.operator,'avatar-sm')+'<span>'+r.operator+'</span></span></div>';
- if (deadline) h += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0"><span style="color:#475569">'+(r.status==='Готово'?'Выполнено':'Срок')+'</span><span style="color:'+(isOverdue?'#FF453A':r.status==='Готово'?'#4CB782':'#94A3B8')+';font-weight:'+(isOverdue?'700':'400')+'">'+(isOverdue?'ПРОСРОЧЕН ':'')+deadline+'</span></div>';
- if (r.state && r.state !== '\u2014' && r.state !== 'Нормально') h += '<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0"><span style="color:#475569">Состояние</span><span style="color:#FF9F0A;font-weight:600">'+r.state+'</span></div>';
- h += '<div class="intg-detail" style="display:none;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06);font-size:10px">';
- if (r.manager && r.manager !== '\u2014') h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:1px 0"><span style="color:#475569">Менеджер</span><span style="color:#94A3B8;display:inline-flex;align-items:center;gap:5px">'+renderAvatar(r.manager,'avatar-sm')+'<span>'+r.manager+'</span></span></div>';
- if (fmtD(r.dateStart)) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Взято в работу</span><span style="color:#94A3B8">'+fmtD(r.dateStart)+'</span></div>';
- if (r.status === 'Готово' && fmtD(r.dateDone)) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Дата исполнения</span><span style="color:#4CB782">'+fmtD(r.dateDone)+'</span></div>';
- if (r.login) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Логин/пароль</span><span style="color:#94A3B8;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.login.replace(/"/g,'&quot;')+'">'+r.login+'</span></div>';
- if (r.server) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Сервер</span><span style="color:#94A3B8;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.server.replace(/"/g,'&quot;')+'">'+r.server+'</span></div>';
- if (r.contact) h += '<div style="display:flex;justify-content:space-between;padding:1px 0"><span style="color:#475569">Контакт</span><span style="color:#94A3B8">'+r.contact+'</span></div>';
- if (r.comment) h += '<div style="margin-top:4px;padding:4px 6px;background:rgba(255,255,255,.03);border-radius:4px;color:#64748B;font-size:10px;line-height:1.4">'+r.comment.substring(0,150)+(r.comment.length>150?'...':'')+'</div>';
- h += '</div></div>';
- return h;
- }
-
- // v504: канбан в стиле «Внедрения» — 5 колонок по СТАТУСУ + горизонтальный скролл.
- // Тип (Интеграция/Доработка/Разработка) теперь — цветная метка на карточке.
- var STAGE_GROUPS = [
-  { key:'new',    label:'Новые',    color:'#5E6AD2', statuses:['В очереди','Очередь','Новая'] },
-  { key:'work',   label:'В работе', color:'#FF9F0A', statuses:['Выполняется','В работе','Тестируют'] },
-  { key:'pause',  label:'На паузе', color:'#9E9E9E', statuses:['Перенесено','На паузе'] },
-  { key:'done',   label:'Готово',   color:'#4CB782', statuses:['Готово','Протестирован','Архив'] },
-  { key:'cancel', label:'Отменено', color:'#E5604D', statuses:['Отменено'] }
- ];
- var byStage = {};
- STAGE_GROUPS.forEach(function(g){ byStage[g.key] = []; });
- data.forEach(function(r){
-  var matched = false;
-  for(var gi = 0; gi < STAGE_GROUPS.length; gi++){
-   if(STAGE_GROUPS[gi].statuses.indexOf(r.status) >= 0){ byStage[STAGE_GROUPS[gi].key].push(r); matched = true; break; }
-  }
-  if(!matched) byStage['new'].push(r);
- });
- ['new','work','pause'].forEach(function(k){ byStage[k].sort(function(a,b){ return parseD(a.dateStart) - parseD(b.dateStart); }); });
- ['done','cancel'].forEach(function(k){ byStage[k].sort(function(a,b){ return parseD(b.dateDone) - parseD(a.dateDone); }); });
-
- kanbanEl.style.display = 'grid';
- kanbanEl.style.gridTemplateColumns = 'repeat(5,minmax(280px,1fr))';
- kanbanEl.style.gap = '14px';
- kanbanEl.style.overflowX = 'auto';
- kanbanEl.style.minHeight = '420px';
-
- var html = '';
- STAGE_GROUPS.forEach(function(g){
-  var items = byStage[g.key];
-  html += '<div class="route-col-amo" style="--route-col-color:' + g.color + ';max-height:none;min-width:280px">';
-  html += '<div class="route-col-amo-head"><div class="route-col-amo-title-row">';
-  html += '<div class="route-col-amo-title">' + g.label + '</div>';
-  html += '<div class="route-col-amo-count">' + items.length + '</div>';
-  html += '</div></div>';
-  html += '<div class="route-col-amo-body" style="overflow:visible">';
-  if(!items.length){
-   html += '<div class="route-col-amo-empty">Пусто</div>';
-  } else {
-   items.forEach(function(r){
-    var tCol = typeBorder[r.type] || '#94A3B8';
-    var clickAttr = r._sb && r._sb_id ? 'onclick="intgOpenCard(\'' + _escHtml(r._sb_id) + '\')"' : '';
-    var typeBadge = '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:' + tCol + '22;color:' + tCol + ';letter-spacing:.3px">' + String(r.type||'—').slice(0,3).toUpperCase() + '</span>';
-    var countryBadge = (r.country && r.country !== '—') ? '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:' + (r.country==='KG'?'rgba(94,92,224,.18)':'rgba(52,199,122,.16)') + ';color:' + (r.country==='KG'?'#5E5CE0':'#0A84FF') + '">' + r.country + '</span>' : '';
-    var pkgBadge = (r.package && r.package !== '—') ? '<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:#94A3B8">' + r.package.toUpperCase() + '</span>' : '';
-    var deadline = fmtD(r.deadline);
-    var isOverdue = false;
-    if(deadline && r.status !== 'Готово' && r.status !== 'Отменено' && r.status !== 'Архив'){
-     try { isOverdue = parseD(r.deadline) < new Date(); } catch(_){}
-    }
-    var dlBadge = '';
-    if(deadline){
-     var dlCol = isOverdue ? '#FF453A' : (r.status === 'Готово' ? '#4CB782' : 'var(--text-soft)');
-     dlBadge = '<span style="font-size:10.5px;color:' + dlCol + ';font-weight:' + (isOverdue?'700':'500') + '">' + (isOverdue?'просрочен ':'') + deadline + '</span>';
-    }
-    html += '<div class="tk-card" ' + clickAttr + ' style="border-left:3px solid ' + tCol + '">';
-    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">';
-    html += '<div style="font-weight:600;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1' + (r.status==='Отменено'?';text-decoration:line-through;opacity:.55':'') + '">' + _escHtml(r.company || '—') + '</div>';
-    html += '<div style="display:flex;gap:3px;flex-shrink:0">' + typeBadge + countryBadge + '</div></div>';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;color:var(--text-soft)">';
-    html += '<span>' + (r.operator && r.operator !== '—' ? _escHtml(r.operator) : '<span style="font-size:10.5px;font-weight:500;padding:2px 8px;border-radius:999px;background:rgba(120,120,128,.14);color:var(--text-muted)">не назначен</span>') + '</span>';
-    html += pkgBadge;
-    html += '</div>';
-    if(dlBadge) html += '<div style="display:flex;justify-content:flex-end">' + dlBadge + '</div>';
-    html += '</div>';
-   });
-  }
-  html += '</div></div>';
- });
- kanbanEl.innerHTML = html;
- return; // v504: ниже идёт старый рендер по типам — пропускаем
-
- // === LEGACY (не используется в v504) ===
- var _legacy = types.map(function(type) {
- var tc = typeBorder[type];
- var typeItems = data.filter(function(r){ return r.type === type; });
- // Для статусов Готово/Отменено — фильтруем по периоду
- // Фильтруем по периоду: Готово/Отменено — только за выбранный месяц, остальные — все
- // v498: period-фильтр для kanban-таблицы отключён — показываем ВСЮ историю компаний
- // (в работе / в очереди / готово / отменено / архив) независимо от выбранного месяца.
- // Period применяется только к верхним статистическим блокам «Выполнено за месяц».
- var needPeriodFilter = false;
- if (needPeriodFilter) {
- typeItems = typeItems.filter(function(r) {
- // Незавершённые — показываем все
- if (r.status !== 'Готово' && r.status !== 'Отменено' && r.status !== 'Протестирован' && r.status !== 'Архив') return true;
- // Завершённые — только за период
- if (r.dateDone && r.dateDone !== '\u2014' && isInPeriod(r.dateDone)) return true;
- if (r.deadline && r.deadline !== '\u2014' && isInPeriod(r.deadline)) return true;
- return false;
- });
- }
- typeItems.sort(function(a,b){ return parseD(a.dateStart) - parseD(b.dateStart); });
-
- // v222: убрана верхняя цветная полоса (3px border-top), карточка нейтральная
- var html = '<div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:18px;padding:14px;display:flex;flex-direction:column;box-shadow:var(--sh-1)">';
- html += '<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;margin-bottom:8px">';
- html += '<span style="font-family:Inter,sans-serif;font-size:12px;letter-spacing:1.5px;color:'+tc+'">'+type.toUpperCase()+'</span>';
- html += '<span style="font-size:11px;font-weight:700;color:'+tc+'">'+typeItems.length+'</span></div>';
- html += '<div style="flex:1;overflow-y:auto;max-height:600px">';
-
- if (!typeItems.length) {
- html += '<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:20px">Нет данных</div>';
- } else {
- typeItems.forEach(function(r, idx) {
- var qNum = showQueue ? (idx + 1) : 0;
- html += buildCard(r, qNum);
- });
- }
-
- html += '</div></div>';
- return html;
- }).join('');
-
- if (!document.getElementById('intg-card-style')) {
- var s = document.createElement('style');
- s.id = 'intg-card-style';
- s.textContent = '.intg-open .intg-detail{display:block!important}.intg-card:hover{border-color:var(--border-strong)!important;background:var(--surface-3)!important}';
- document.head.appendChild(s);
- }
-
- var st = document.getElementById('intg-status');
- if (st) st.textContent = data.length + ' записей' + (filterType ? ' / тип: '+filterType : '') + (filterStatus ? ' / статус: '+filterStatus : '') + (filterCountry ? ' / страна: '+filterCountry : '') + (filterPackage ? ' / пакет: '+filterPackage : '');
-}
+// v794: мёртвый Sheets-код удалён (~530 строк: intgLoad/parseIntgRows/intgRender/_intgSbToRow,
+// декларации INTG_SHEET_ID/intgData). Источник — только Supabase, см. intgSbLoad ниже.
 // v430/v524: единственный источник интеграций — Supabase. Архив из Google Sheets полностью мигрирован
 // 2026-05-29 (275 записей: канбан + аналитика по периоду/пакетам/месяцам — всё отсюда).
 // API: /api/cards?entity=integration&include_archive=1 — отдаёт весь массив (активные + архив).
@@ -26262,11 +25764,12 @@ async function intgSbLoad(){
 // v524: единый пересчёт kanban + аналитики с применением фильтров. Вызывается из всех onchange.
 function intgSbRerender(){
  var all = window.intgSbItems || [];
- // Фильтры верхнего тулбара
- var fStatus  = (document.getElementById('intg-filter-status') ||{}).value || '';
- var fType    = (document.getElementById('intg-filter-type')   ||{}).value || '';
- var fCountry = (document.getElementById('intg-filter-country')||{}).value || '';
- var fPackage = (document.getElementById('intg-filter-package')||{}).value || '';
+ // v794: фильтры — чипы со своим состоянием (нативные select убраны)
+ var fStatus  = window._intgFilters.status  || '';
+ var fType    = window._intgFilters.type    || '';
+ var fCountry = window._intgFilters.country || '';
+ var fPackage = window._intgFilters.package || '';
+ if(typeof _intgFchipsRender === 'function') _intgFchipsRender();
  // v768: при замке по стране показываем только страну сотрудника (см. intgRender)
  var _lkIntg2 = (typeof countryLockFor === 'function') ? countryLockFor() : null;
  if(_lkIntg2) fCountry = _lkIntg2;
@@ -26286,6 +25789,9 @@ function intgSbRerender(){
  }
  var ACTIVE_STAGES = {'Новая':1,'В работе':1,'На паузе':1};
  var filtered = all.filter(function(it){
+  // v794-qa: «Архив» на доску не попадает никогда (раньше проваливался в бакет «Новая»
+  // и вставал в очередь с номером). Архивные видны в карте клиента.
+  if(it.status === 'Архив') return false;
   if(fStatus  && it.status  !== fStatus ) return false;
   if(fType    && it.type    !== fType   ) return false;
   if(fCountry && String(it.country||'').toUpperCase() !== fCountry) return false;
@@ -26481,42 +25987,10 @@ function intgSbRenderAnalytics(items){
   }
  }
 }
-// v497: маппинг Supabase-карточки в формат intgData (Sheets-формат).
-// v503: жёсткая защита от плохих данных — любой item не должен ронять весь рендер.
-function _intgSbToRow(it){
- if(!it || typeof it !== 'object') return null;
- try {
-  var statusMap = { 'Новая':'В очереди', 'В работе':'Выполняется', 'На паузе':'Перенесено', 'Готово':'Готово', 'Отменено':'Отменено' };
-  var deadline = '—';
-  if(it.deadline){ try { deadline = new Date(it.deadline).toISOString().slice(0,10); } catch(_){} }
-  var dateStart = '—';
-  if(it.created_at){ try { dateStart = new Date(it.created_at).toISOString().slice(0,10); } catch(_){} }
-  return {
-   _sb: true,
-   _sb_id: it.id,
-   company: it.company_name || '—',
-   country: String(it.country || '').toUpperCase() || '—',
-   type: it.type || 'Интеграция',
-   status: statusMap[it.status] || it.status || 'В очереди',
-   state: '—',
-   dateStart: dateStart,
-   deadline: deadline,
-   dateDone: '—',
-   operator: it.operator || '—',
-   manager: it.manager || '—',
-   login: it.login || '',
-   server: it.server || '',
-   contact: it.contact || '',
-   comment: it.comment || '',
-   dbType: it.db_type || '',
-   package: it.package || ''
-  };
- } catch(e){ console.warn('[intg] _intgSbToRow failed for', it, e); return null; }
-}
 
 // v432: канбан-доска как во Внедрении. 5 колонок по статусам. Карточки кликабельные.
 var INTG_STAGES = [
- { key: 'Новая',    label: 'Новые',     color: '#5E6AD2' },
+ { key: 'Новая',    label: 'Очередь',   color: '#5E6AD2' },
  { key: 'В работе', label: 'В работе',  color: '#FF9F0A' },
  { key: 'На паузе', label: 'На паузе',  color: '#9E9E9E' },
  { key: 'Готово',   label: 'Готово',    color: '#4CB782' },
@@ -26525,6 +25999,23 @@ var INTG_STAGES = [
 // v437: список интеграторов (команда интеграции SalesDoc).
 // Используется как whitelist для выпадашки «Оператор» в карте интеграции.
 var INTG_OPERATORS = ['Аян','Дулат','Абзал'];
+// v794: справочники типа/пакета — синхронно с INTEGRATION_TYPES/PACKAGES в api/cards.js
+var INTG_TYPES = ['Интеграция','Доработка','Разработка'];
+var INTG_PACKAGES = ['Стандарт','Стандарт+','Премиум','Услуга'];
+var SD_MANAGERS = ['Мирзахит','Юлия','Айдос Хапез'];
+
+// v794: сортировка очереди (колонка «Новая»): ручной порядок queue_pos первичен,
+// без него — кто раньше оплатил, тот выше. NULL queue_pos уходит после ручных.
+function _intgQueueSort(arr){
+ return arr.slice().sort(function(a, b){
+  var qa = (a.queue_pos != null) ? a.queue_pos : Infinity;
+  var qb = (b.queue_pos != null) ? b.queue_pos : Infinity;
+  if(qa !== qb) return qa - qb;
+  var da = a.date_paid || a.created_at || '';
+  var db = b.date_paid || b.created_at || '';
+  return String(da).localeCompare(String(db));
+ });
+}
 
 // v445: toggle фильтра «только без оператора» для канбана Интеграций
 function _intgToggleUnassigned(){
@@ -26624,15 +26115,34 @@ function intgSbRender(items){
  // v435: ширина колонок 280px+ (как в Маршруте), gap 14px. max-height колонки
  // снимаем через style override (родительский класс ставит max-height:calc(100vh-280px)
  // что добавляет вертикальный скроллбар внутри — пользователю не нравится).
- var html = '<div class="route-kanban" style="display:grid;grid-template-columns:repeat(5,minmax(280px,1fr));gap:14px;margin-top:4px">';
+ // v794: очередь — колонка «Новая» сортируется по queue_pos/дате оплаты, карточки получают № 1..N
+ byStage['Новая'] = _intgQueueSort(byStage['Новая']);
+ // v794-qa: номер — по ПОЛНОЙ очереди (все «Новая» без фильтров/скоупа), иначе «Мои» и фильтры
+ // перенумеруют и оператор скажет клиенту неправду («вы первый», а он седьмой).
+ var _qnMap = {};
+ _intgQueueSort((window.intgSbItems || []).filter(function(i){ return i.status === 'Новая'; }))
+  .forEach(function(i, n){ _qnMap[i.id] = n + 1; });
+ // v794: подпись «за <месяц>» у Готово/Отменено — они фильтруются периодом, ноль пугал («ничего не сделано»)
+ var _mS = ['янв','фев','март','апр','май','июнь','июль','авг','сент','окт','нояб','дек'];
+ var _selM2 = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth.month : new Date().getMonth();
+ var _isYear2 = (typeof currentPeriod !== 'undefined') && currentPeriod === 'year';
+ var _perLbl = _isYear2 ? 'за год' : ('за ' + _mS[_selM2]);
+ var _allItems = window.intgSbItems || [];
+ // v794: overflow-x:auto — на узких экранах 5-я колонка («Отменено») обрезалась без скролла
+ var html = '<div class="route-kanban" style="display:grid;grid-template-columns:repeat(5,minmax(280px,1fr));gap:14px;margin-top:4px;overflow-x:auto;padding-bottom:6px">';
  INTG_STAGES.forEach(function(stage, sIdx){
   // v445: счётчик «без оператора» по всей колонке (до фильтра видимости)
   var intgUnassignedInStage = byStage[stage.key].filter(function(r){ return !r.operator; }).length;
   // Применяем фильтр видимости
   var visibleStage = intgFilterUnassigned ? byStage[stage.key].filter(function(r){ return !r.operator; }) : byStage[stage.key];
-  html += '<div class="route-col-amo route-col s' + (sIdx + 1) + '" data-intg-stage="' + stage.key + '" style="--route-col-color:' + stage.color + ';max-height:none">';
+  var _isDoneCol = stage.key === 'Готово' || stage.key === 'Отменено';
+  var _totalAll = _isDoneCol ? _allItems.filter(function(r){ return r.status === stage.key; }).length : 0;
+  html += '<div class="route-col-amo route-col s' + (sIdx + 1) + '" data-intg-stage="' + stage.key + '" style="--route-col-color:' + stage.color + ';max-height:none"'
+   + ' ondragover="_intgDragOver(event)" ondragleave="_intgDragLeave(event)" ondrop="_intgDrop(event,\'' + stage.key + '\')">';
   html += '<div class="route-col-amo-head"' + (intgFilterUnassigned ? ' style="outline:1px dashed rgba(214,115,115,.4);outline-offset:-2px;border-radius:8px"' : '') + '>';
-  html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage.label + '</div><div class="route-col-amo-count">' + visibleStage.length + '</div></div>';
+  html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage.label
+   + (_isDoneCol ? ' <span style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:none">' + _perLbl + '</span>' : '') + '</div>'
+   + '<div class="route-col-amo-count"' + (_isDoneCol ? ' title="Всего за всё время: ' + _totalAll + '"' : '') + '>' + visibleStage.length + '</div></div>';
   // v445: кликабельный бейдж-фильтр «без оператора»
   if(intgUnassignedInStage > 0){
    html += '<div style="margin-top:4px"><span onclick="event.stopPropagation();_intgToggleUnassigned()" title="Показать только без оператора" style="font-size:10.5px;color:#E5604D;cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-weight:600">' + intgUnassignedInStage + ' без оператора</span></div>';
@@ -26643,18 +26153,34 @@ function intgSbRender(items){
   if(!visibleStage.length){
    html += '<div class="route-col-amo-empty">Пусто</div>';
   } else {
-   visibleStage.forEach(function(r){
+   visibleStage.forEach(function(r, rIdx){
     // v677: карточка Интеграций в едином виде .rc (как Маршрут). Дедлайн вместо возраста, без чек-листа/суммы.
     var typePkg = [r.type, r.package].filter(Boolean).join(' · ');
     var _ini = r.operator ? r.operator.trim().split(/\s+/).map(function(w){return w.charAt(0);}).join('').slice(0,2).toUpperCase() : '';
-    var _av = r.operator ? '<span class="av" title="' + _escHtml(r.operator) + '">' + _escHtml(_ini) + '</span>' : '<span class="av none" title="не назначен">+</span>';
+    // v794: «+» на аватаре — назначить оператора прямо с доски (было некликабельно)
+    var _av = r.operator ? '<span class="av" title="' + _escHtml(r.operator) + '">' + _escHtml(_ini) + '</span>'
+     : '<span class="av none" title="Назначить оператора" onclick="event.stopPropagation();intgKanbanAssignOpen(event,\'' + _escHtml(r.id) + '\')">+</span>';
     var _dlCls = 'age', _dlText = '', _over = '';
     if(r.deadline){ var _d = new Date(r.deadline); if(!isNaN(_d)){ var _days = Math.ceil((_d - new Date()) / 86400000); _dlText = _days < 0 ? 'просрочен' : (_days === 0 ? 'сегодня' : ('+' + _days + ' дн')); _dlCls = _days < 0 ? 'age red' : (_days < 3 ? 'age warn' : 'age'); if(_days < 0) _over = ' over'; } }
     var _ageHtml = _dlText ? '<span class="' + _dlCls + '"><svg class="clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg>' + _dlText + '</span>' : '';
-    html += '<div class="rc' + _over + '" onclick="intgOpenCard(\'' + _escHtml(r.id) + '\')" style="cursor:pointer">';
-    html += '<div class="r1"><span class="cl" title="' + _escHtml(r.company_name || '—') + '">' + _escHtml(r.company_name || '—') + '</span>' + _av + '</div>';
+    // v794: сколько дней карточка в текущем статусе. «В работе» — от date_taken, «Новая» — от
+    // даты оплаты (updated_at тут врал бы: любой PATCH очереди обнулял счётчик), иначе updated_at.
+    var _stFrom = (r.status === 'В работе' && r.date_taken) ? r.date_taken
+     : (r.status === 'Новая' ? (r.date_paid || r.created_at) : (r.updated_at || r.created_at));
+    var _stD = _stFrom ? Math.max(0, Math.floor((Date.now() - new Date(_stFrom).getTime()) / 86400000)) : null;
+    var _stHtml = '';
+    if(_stD !== null && !_isDoneCol){
+     var _noOp = stage.key === 'Новая' && !r.operator;
+     _stHtml = '<span class="age' + (_noOp && _stD >= 3 ? ' red' : '') + '">' + _stD + ' дн' + (_noOp ? ' без оператора' : (stage.key === 'В работе' ? ' в работе' : '')) + '</span>';
+    }
+    // v794: номер в очереди — только в колонке «Новая», по полной очереди (см. _qnMap выше)
+    var _qn = (stage.key === 'Новая' && _qnMap[r.id]) ? '<span class="intg-qn">№ ' + _qnMap[r.id] + '</span>' : '';
+    html += '<div class="rc' + _over + '" data-intg-id="' + _escHtml(r.id) + '" draggable="true"'
+     + ' ondragstart="_intgDragStart(event,\'' + _escHtml(r.id) + '\')" ondragend="_intgDragEnd(event)"'
+     + ' onclick="intgOpenCard(\'' + _escHtml(r.id) + '\')" style="cursor:pointer">';
+    html += '<div class="r1">' + _qn + '<span class="cl" title="' + _escHtml(r.company_name || '—') + '">' + _escHtml(r.company_name || '—') + '</span>' + _av + '</div>';
     if(typePkg) html += '<div class="r2">' + _escHtml(typePkg) + '</div>';
-    if(_ageHtml) html += '<div class="r3">' + _ageHtml + '</div>';
+    if(_ageHtml || _stHtml) html += '<div class="r3">' + _stHtml + _ageHtml + '</div>';
     html += '</div>';
    });
   }
@@ -26663,6 +26189,373 @@ function intgSbRender(items){
  html += '</div>';
  listEl.innerHTML = html;
 }
+
+// ============================ v794: интерактив канбана Интеграций ============================
+// Общий дропдаун (класс .ct-dd — тот же вид что в задачах/календаре, z поверх карт).
+function _intgDdOpen(anchorEl, options, current, onPick){
+ if(typeof crmTasksCloseDropdowns === 'function') crmTasksCloseDropdowns();
+ document.querySelectorAll('.ct-dd._intg').forEach(function(d){ d.remove(); });
+ var rect = anchorEl.getBoundingClientRect();
+ var dd = document.createElement('div');
+ dd.className = 'ct-dd _intg';
+ dd.style.minWidth = '170px';
+ var listBox = document.createElement('div');
+ listBox.className = 'ct-dd-listbox';
+ dd.appendChild(listBox);
+ options.forEach(function(opt){
+  var val = (typeof opt === 'string') ? opt : opt.value;
+  var lbl = (typeof opt === 'string') ? opt : opt.label;
+  var it = document.createElement('div');
+  it.className = 'ct-dd-item' + (current === val ? ' is-selected' : '');
+  it.textContent = lbl;
+  it.onclick = function(e){ e.stopPropagation(); dd.remove(); onPick(val); };
+  listBox.appendChild(it);
+ });
+ document.body.appendChild(dd);
+ var dr = dd.getBoundingClientRect();
+ var x = rect.left, y = rect.bottom + 4;
+ if(x + dr.width > window.innerWidth - 12) x = Math.max(12, window.innerWidth - dr.width - 12);
+ if(y + dr.height > window.innerHeight - 12) y = Math.max(12, rect.top - dr.height - 4);
+ dd.style.left = x + 'px'; dd.style.top = y + 'px';
+ setTimeout(function(){
+  document.addEventListener('mousedown', function closer(e2){
+   if(!dd.contains(e2.target)){ dd.remove(); document.removeEventListener('mousedown', closer, true); }
+  }, true);
+ }, 50);
+}
+
+// «+» на карточке канбана — назначить оператора без открытия карты
+function intgKanbanAssignOpen(ev, integrationId){
+ var opts = INTG_OPERATORS.map(function(o){ return { value:o, label:o }; });
+ _intgDdOpen(ev.target, opts, null, function(op){
+  var items = window.intgSbItems || [];
+  var card = items.find(function(i){ return i.id === integrationId; });
+  if(!card) return;
+  var prev = card.operator || '';
+  card.operator = op;
+  intgSbRerender();
+  sbFetch('/api/cards?entity=integration&id=' + encodeURIComponent(integrationId), {
+   method:'PATCH', body: JSON.stringify({ operator: op })
+  }).then(function(d){
+   if(!d.ok) throw new Error(d.error || 'PATCH failed');
+   if(typeof showNotif === 'function') showNotif('Готово', 'Передано: ' + op);
+   _intgAutoTaskOnAssign(card, op, prev);
+  }).catch(function(e){
+   card.operator = prev || null;
+   intgSbRerender();
+   if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+  });
+ });
+}
+
+// Drag&drop: перенос между колонками = смена статуса; внутри «Очереди» = смена порядка.
+window._intgDragId = null;
+function _intgDragStart(ev, id){
+ window._intgDragId = id;
+ try { ev.dataTransfer.setData('text/plain', id); ev.dataTransfer.effectAllowed = 'move'; } catch(_){}
+ if(ev.target && ev.target.classList) ev.target.classList.add('intg-dragging');
+}
+function _intgDragEnd(ev){
+ window._intgDragId = null;
+ if(ev.target && ev.target.classList) ev.target.classList.remove('intg-dragging');
+ document.querySelectorAll('[data-intg-stage].intg-drop-hover').forEach(function(c){ c.classList.remove('intg-drop-hover'); });
+}
+function _intgDragOver(ev){
+ if(!window._intgDragId) return;
+ ev.preventDefault();
+ try { ev.dataTransfer.dropEffect = 'move'; } catch(_){}
+ var col = ev.currentTarget;
+ if(col && col.classList) col.classList.add('intg-drop-hover');
+}
+function _intgDragLeave(ev){
+ var col = ev.currentTarget;
+ if(col && col.classList && !col.contains(ev.relatedTarget)) col.classList.remove('intg-drop-hover');
+}
+async function _intgDrop(ev, stageKey){
+ ev.preventDefault();
+ var col = ev.currentTarget;
+ if(col && col.classList) col.classList.remove('intg-drop-hover');
+ var id = window._intgDragId;
+ window._intgDragId = null;
+ if(!id) return;
+ var items = window.intgSbItems || [];
+ var card = items.find(function(i){ return i.id === id; });
+ if(!card) return;
+ var fromStatus = card.status;
+ // Внутри очереди — пересортировка
+ if(stageKey === 'Новая' && fromStatus === 'Новая'){
+  var targetRc = ev.target.closest ? ev.target.closest('.rc') : null;
+  var beforeId = targetRc ? targetRc.getAttribute('data-intg-id') : null;
+  if(beforeId === id) return;
+  _intgQueueReorder(id, beforeId);
+  return;
+ }
+ if(fromStatus === stageKey) return;
+ // Смена статуса: оптимистично + PATCH (авто-срок при «В работе» придёт из API в d.integration)
+ card.status = stageKey;
+ intgSbRerender();
+ try {
+  var d = await sbFetch('/api/cards?entity=integration&id=' + encodeURIComponent(id), {
+   method:'PATCH', body: JSON.stringify({ status: stageKey })
+  });
+  if(!d.ok) throw new Error(d.error || 'PATCH failed');
+  if(d.integration){
+   var idx = items.findIndex(function(i){ return i.id === id; });
+   // v794-qa: merge, не замена — иначе теряется join clients(...) и в список попадают
+   // секретные колонки (login_password), которых в SAFE_COLS нет намеренно
+   if(idx >= 0) Object.assign(items[idx], d.integration);
+  }
+  _intgLogStatus(card, fromStatus, stageKey);
+  // Тост важен: «Готово»/«Отменено» фильтруются месяцем — карточка может исчезнуть с доски,
+  // без сообщения это выглядит как пропажа.
+  if(typeof showNotif === 'function') showNotif('Перенесено', (card.company_name || 'Карточка') + ' → ' + stageKey);
+  intgSbRerender();
+ } catch(e){
+  card.status = fromStatus;
+  intgSbRerender();
+  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+ }
+}
+
+// Пересортировка очереди: локально двигаем, всем в новом порядке проставляем queue_pos = (i+1)*10,
+// PATCH шлём только тем у кого позиция реально изменилась.
+async function _intgQueueReorder(dragId, beforeId){
+ var items = window.intgSbItems || [];
+ var queue = _intgQueueSort(items.filter(function(i){ return i.status === 'Новая'; }));
+ var dragged = queue.find(function(i){ return i.id === dragId; });
+ if(!dragged) return;
+ var rest = queue.filter(function(i){ return i.id !== dragId; });
+ var insertAt = beforeId ? rest.findIndex(function(i){ return i.id === beforeId; }) : rest.length;
+ if(insertAt < 0) insertAt = rest.length;
+ rest.splice(insertAt, 0, dragged);
+ var patches = [];
+ rest.forEach(function(i, idx){
+  var pos = (idx + 1) * 10;
+  if(i.queue_pos !== pos){
+   i.queue_pos = pos;
+   patches.push(sbFetch('/api/cards?entity=integration&id=' + encodeURIComponent(i.id), {
+    method:'PATCH', body: JSON.stringify({ queue_pos: pos })
+   }));
+  }
+ });
+ intgSbRerender();
+ try {
+  var results = await Promise.all(patches);
+  var bad = results.find(function(r){ return !r || !r.ok; });
+  if(bad) throw new Error((bad && bad.error) || 'не все карточки сохранились');
+ } catch(e){
+  if(typeof showNotif === 'function') showNotif('Ошибка', 'Порядок не сохранился: ' + (e.message || e));
+  intgSbLoad();
+ }
+}
+
+// Первое назначение оператора → задача в календарь (по образцу _assignRouteOperator v787).
+// Переназначения не спамят. Ошибка не валит UI.
+async function _intgAutoTaskOnAssign(card, newOp, prevOp){
+ if(!card || !newOp || prevOp || !card.client_id) return;
+ try {
+  var due;
+  if(card.deadline){
+   due = new Date(card.deadline + 'T10:00:00');
+   if(isNaN(due) || due < new Date()) due = null;
+  }
+  if(!due){ due = new Date(); due.setDate(due.getDate() + 1); due.setHours(10, 0, 0, 0); }
+  await sbFetch('/api/tasks', {
+   method: 'POST',
+   headers: (typeof crmTasksAuthHeaders === 'function') ? crmTasksAuthHeaders() : {},
+   body: JSON.stringify({
+    client_id: card.client_id,
+    contact_name: card.company_name || card.client_id,
+    type_id: 1,
+    text: 'Интеграция: ' + (card.company_name || card.client_id),
+    deadline_at: due.toISOString(),
+    is_all_day: false,
+    assignee_operator: (typeof crmOpCanon === 'function') ? crmOpCanon(newOp) : newOp
+   })
+  });
+ } catch(_){}
+}
+
+// Смена статуса → событие в единую историю клиента (видно и в карте интеграции, и в карте клиента)
+function _intgLogStatus(card, fromStatus, toStatus){
+ if(!card || !card.client_id || fromStatus === toStatus) return;
+ try {
+  sbFetch('/api/history', {
+   method:'POST',
+   body: JSON.stringify({
+    client_id: card.client_id,
+    event_type: 'system',
+    text: 'Статус интеграции: ' + (fromStatus || '—') + ' → ' + toStatus,
+    author: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : null
+   })
+  });
+ } catch(_){}
+}
+
+// Статус-чип в шапке карты интеграции — свой дропдаун (не системный select)
+function intgStatusChipOpen(ev){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ var card = _intgCurrentCard;
+ if(!card) return;
+ var opts = INTG_STAGES.map(function(s){ return { value:s.key, label:s.key }; });
+ opts.push({ value:'Архив', label:'Архив' });
+ _intgDdOpen(ev.target, opts, card.status, async function(st){
+  if(st === card.status) return;
+  var prev = card.status;
+  try {
+   var d = await sbFetch('/api/cards?entity=integration&id=' + encodeURIComponent(card.id), {
+    method:'PATCH', body: JSON.stringify({ status: st })
+   });
+   if(!d.ok) throw new Error(d.error || 'PATCH failed');
+   if(d.integration) _intgCurrentCard = Object.assign(card, d.integration);
+   _intgLogStatus(card, prev, st);
+   intgRenderCard(_intgCurrentCard);
+   if(typeof intgSbLoad === 'function') try { intgSbLoad(); } catch(_){}
+  } catch(e){
+   if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+  }
+ });
+}
+
+// ============================ v794: «Новая интеграция» руками ============================
+// Для доработок/разработок, где оплата прошла не категорией «Нов интеграция».
+window._intgNewState = null;
+function intgOpenNew(){
+ intgCloseNew();
+ window._intgNewState = { client_id:null, client_name:'', type:'Интеграция', package:null, operator:null, deadline:'' };
+ var wrap = document.createElement('div');
+ wrap.id = 'intg-new-modal';
+ wrap.style.cssText = 'position:fixed;inset:0;z-index:1000002;display:flex;align-items:center;justify-content:center;background:rgba(8,10,14,.55)';
+ wrap.onclick = function(e){ if(e.target === wrap) intgCloseNew(); };
+ var box = document.createElement('div');
+ box.style.cssText = 'width:430px;max-width:calc(100vw - 32px);max-height:calc(100vh - 48px);overflow-y:auto;background:var(--surface,#13161C);border:1px solid var(--border-faint);border-radius:16px;padding:20px 22px;box-shadow:0 24px 70px rgba(0,0,0,.5)';
+ function lbl(t){ return '<div style="font-size:10.5px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 7px">' + t + '</div>'; }
+ function segs(list, group, selected, allowNone){
+  var h = '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+  list.forEach(function(v){
+   h += '<button type="button" class="intg-new-seg" data-group="' + group + '" data-val="' + _escHtml(v) + '"'
+    + (selected === v ? ' data-on="1"' : '') + ' onclick="_intgNewSeg(this)">' + _escHtml(v) + '</button>';
+  });
+  if(allowNone) h += '<button type="button" class="intg-new-seg" data-group="' + group + '" data-val=""'
+   + (!selected ? ' data-on="1"' : '') + ' onclick="_intgNewSeg(this)">Не назначать</button>';
+  h += '</div>';
+  return h;
+ }
+ box.innerHTML = '<div style="font-size:14.5px;font-weight:700;color:var(--text)">Новая интеграция</div>'
+  + lbl('Клиент')
+  + '<button type="button" id="intg-new-client" onclick="_intgNewPickClient(event)" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:1px solid var(--border-faint);border-radius:9px;padding:9px 12px;font-size:12.5px;background:var(--surface-2);color:var(--text-muted);cursor:pointer;font-family:inherit">Выбрать клиента…<span style="margin-left:auto;font-size:10px">&#9662;</span></button>'
+  + lbl('Тип') + segs(INTG_TYPES, 'type', 'Интеграция')
+  + lbl('Пакет') + segs(INTG_PACKAGES, 'package', null, true)
+  + lbl('Оператор') + segs(INTG_OPERATORS, 'operator', null, true)
+  + lbl('Срок (не обязательно)')
+  + '<input type="date" id="intg-new-deadline" style="border:1px solid var(--border-faint);border-radius:9px;padding:8px 12px;font-size:12.5px;width:170px;background:var(--surface-2);color:var(--text);font-family:inherit">'
+  + '<div style="display:flex;gap:12px;margin-top:20px;align-items:center">'
+  + '<button type="button" onclick="intgCreateSubmit()" id="intg-new-submit" style="background:var(--accent,#5E6AD2);color:#fff;border:none;border-radius:9px;padding:9px 18px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit">Создать</button>'
+  + '<button type="button" onclick="intgCloseNew()" style="background:none;border:none;color:var(--text-muted);font-size:12.5px;cursor:pointer;font-family:inherit">Отмена</button>'
+  + '</div>';
+ wrap.appendChild(box);
+ document.body.appendChild(wrap);
+ document.addEventListener('keydown', _intgNewEsc);
+}
+function _intgNewEsc(e){ if(e.key === 'Escape') intgCloseNew(); }
+function intgCloseNew(){
+ var m = document.getElementById('intg-new-modal');
+ if(m) m.remove();
+ document.removeEventListener('keydown', _intgNewEsc);
+ window._intgNewState = null;
+}
+function _intgNewSeg(btn){
+ var group = btn.getAttribute('data-group');
+ var val = btn.getAttribute('data-val') || null;
+ document.querySelectorAll('.intg-new-seg[data-group="' + group + '"]').forEach(function(b){ b.removeAttribute('data-on'); });
+ btn.setAttribute('data-on', '1');
+ if(window._intgNewState) window._intgNewState[group] = val;
+}
+function _intgNewPickClient(ev){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ var btn = document.getElementById('intg-new-client');
+ sdClientPickerOpen(btn, window._intgNewState && window._intgNewState.client_id, function(id, name){
+  if(!window._intgNewState) return;
+  window._intgNewState.client_id = id;
+  window._intgNewState.client_name = name || '';
+  if(btn){
+   btn.firstChild.textContent = id ? name : 'Выбрать клиента…';
+   btn.style.color = id ? 'var(--text)' : 'var(--text-muted)';
+  }
+ });
+}
+async function intgCreateSubmit(){
+ var s = window._intgNewState;
+ if(!s) return;
+ if(!s.client_id){ if(typeof showNotif === 'function') showNotif('Не хватает', 'Выберите клиента'); return; }
+ var btn = document.getElementById('intg-new-submit');
+ if(btn){ btn.disabled = true; btn.style.opacity = '.6'; }
+ try {
+  // country берём из клиента — на доске стоит фильтр по стране
+  var country = 'KZ';
+  try {
+   var cd = await sbFetch('/api/clients?client_id=' + encodeURIComponent(s.client_id));
+   var cl = (cd && cd.ok && cd.clients && cd.clients[0]) || null;
+   if(cl && cl.country) country = String(cl.country).toUpperCase();
+  } catch(_){}
+  var dlEl = document.getElementById('intg-new-deadline');
+  var body = {
+   client_id: s.client_id,
+   company_name: s.client_name || s.client_id,
+   country: country,
+   status: 'Новая',
+   type: s.type || null,
+   package: s.package || null,
+   operator: s.operator || null,
+   deadline: (dlEl && dlEl.value) || null
+  };
+  var d = await sbFetch('/api/cards?entity=integration', { method:'POST', body: JSON.stringify(body) });
+  if(!d.ok) throw new Error(d.error || 'не удалось создать');
+  intgCloseNew();
+  if(typeof showNotif === 'function') showNotif('Создано', body.company_name + ' — в очереди');
+  if(d.integration && s.operator) _intgAutoTaskOnAssign(d.integration, s.operator, null);
+  intgSbLoad();
+ } catch(e){
+  if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+ } finally {
+  if(btn){ btn.disabled = false; btn.style.opacity = ''; }
+ }
+}
+
+// ============================ v794: фильтры-чипы вместо нативных select ============================
+window._intgFilters = { status:'', type:'', country:'', package:'' };
+var _INTG_FILTER_DEFS = {
+ status:  { label:'Статус',  all:'Все', options: ['Новая','В работе','На паузе','Готово','Отменено'] },
+ type:    { label:'Тип',     all:'Все', options: INTG_TYPES },
+ country: { label:'Страна',  all:'Все', options: ['KZ','KG'] },
+ package: { label:'Пакет',   all:'Все', options: INTG_PACKAGES }
+};
+function _intgFchipsRender(){
+ Object.keys(_INTG_FILTER_DEFS).forEach(function(key){
+  var chip = document.getElementById('intg-fchip-' + key);
+  if(!chip) return;
+  var def = _INTG_FILTER_DEFS[key];
+  var val = window._intgFilters[key];
+  chip.innerHTML = '<span style="opacity:.65;font-weight:500">' + def.label + ':</span> ' + _escHtml(val || def.all) + ' <span style="font-size:9px;opacity:.6">&#9662;</span>';
+  chip.classList.toggle('is-on', !!val);
+  // Замок по стране: чип страны прячем, значение зафиксировано в intgSbRerender
+  if(key === 'country'){
+   var lk = (typeof countryLockFor === 'function') ? countryLockFor() : null;
+   chip.style.display = lk ? 'none' : '';
+  }
+ });
+}
+function _intgFilterDdOpen(ev, key){
+ var def = _INTG_FILTER_DEFS[key];
+ if(!def) return;
+ var opts = [{ value:'', label: def.all }].concat(def.options.map(function(o){ return { value:o, label:o }; }));
+ _intgDdOpen(ev.currentTarget || ev.target, opts, window._intgFilters[key] || '', function(v){
+  window._intgFilters[key] = v || '';
+  _intgFchipsRender();
+  intgSbRerender();
+ });
+}
+// ============================ /v794 ============================
 
 // v433: открыть главную карту клиента (view-route-card) по client_id.
 // Используется и из Маршрута Внедрения (routeOpenCard), и из канбана Интеграции,
@@ -26725,6 +26618,8 @@ async function intgOpenCard(integrationId){
   // Параллельно грузим ленту по client_id + по card_id текущей интеграции + по card_id Маршрутов клиента
   if(_intgCurrentCard.client_id){
    try {
+    // v794: справочник типов задач — чтобы плашки задач не мигали «Тип 1» (паттерн v765)
+    var _typesReady = (typeof crmTasksLoadTypes === 'function') ? crmTasksLoadTypes().catch(function(){}) : null;
     var hReqs = [
      sbFetch('/api/history?client_id=' + encodeURIComponent(_intgCurrentCard.client_id) + '&limit=50'),
      sbFetch('/api/history?card_id=' + encodeURIComponent(_intgCurrentCard.id) + '&limit=50')
@@ -26735,7 +26630,14 @@ async function intgOpenCard(integrationId){
     routeList.forEach(function(rc){
      hReqs.push(sbFetch('/api/history?card_id=' + encodeURIComponent(rc.id) + '&limit=50'));
     });
+    // v794: задачи клиента в ленту (как в карте клиента) — что поставили, то и видно.
+    // catch на месте: упавшие задачи не должны ронять всю ленту истории.
+    var _tasksReq = ((typeof crmTasksFetch === 'function')
+     ? crmTasksFetch('/api/tasks?client_id=' + encodeURIComponent(_intgCurrentCard.client_id) + '&status=all')
+     : Promise.resolve({ ok:true, tasks: [] })).catch(function(){ return { ok:false, tasks: [] }; });
     var all = await Promise.all(hReqs);
+    var _tasksRes = await _tasksReq;
+    if(_typesReady) await _typesReady;
     // Объединяем, дедупим по id
     var seen = {}, merged = [];
     all.forEach(function(r){
@@ -26743,6 +26645,13 @@ async function intgOpenCard(integrationId){
       if(!it || !it.id || seen[it.id]) return;
       seen[it.id] = 1;
       merged.push(it);
+     });
+    });
+    // v794: задачи → feed-items с маркером _is_task (тот же формат что в _routeRenderFeed)
+    (((_tasksRes && _tasksRes.ok && _tasksRes.tasks) || [])).forEach(function(t){
+     merged.push({
+      id: 'task:' + t.id, _is_task: true, _task: t, event_type: 'task',
+      created_at: t.created_at || t.deadline_at, author: t.created_by, text: t.text || ''
      });
     });
     intgRenderCardFeed(merged);
@@ -26800,9 +26709,17 @@ function intgRenderCard(card){
    'Новая': '#5E6AD2', 'В работе': '#FF9F0A', 'Готово': '#4CB782',
    'Отменено': '#E5604D', 'На паузе': '#9E9E9E', 'Архив': 'var(--text-muted)'
   };
-  badgeEl.textContent = card.status || '—';
+  // v794: чип статуса — кликабельный, открывает свой дропдаун (intgStatusChipOpen)
+  badgeEl.textContent = (card.status || '—') + ' ';
+  var _car = document.createElement('span');
+  _car.style.cssText = 'font-size:9px;opacity:.7';
+  _car.innerHTML = '&#9662;';
+  badgeEl.appendChild(_car);
   badgeEl.style.background = STATUS_BG[card.status] || 'rgba(120,120,128,.16)';
   badgeEl.style.color = STATUS_COLOR[card.status] || 'var(--text-soft)';
+  badgeEl.style.cursor = 'pointer';
+  badgeEl.title = 'Сменить статус';
+  badgeEl.onclick = intgStatusChipOpen;
  }
 
  // Поля
@@ -26841,31 +26758,57 @@ function intgRenderCard(card){
   row.appendChild(lab); row.appendChild(val);
   fieldsEl.appendChild(row);
  }
- addRow('Статус', card.status, {
+ // v794: статус — read-only строка (менять через чип в шапке, единый путь с логом в историю);
+ // тип/пакет/вид базы/менеджер/даты/сервер/контакты стали редактируемыми (раньше мёртвые прочерки).
+ // Текущее значение вне справочника добавляем в choices — иначе редактор молча подменил бы старые
+ // свободные значения из Sheets-импорта.
+ function _withCur(list, cur){ return (cur && list.indexOf(cur) < 0) ? [cur].concat(list) : list; }
+ addRow('Статус', card.status);
+ addRow('Тип', card.type, {
   editable:true,
-  editOpts:{ field:'status', type:'select', choices:INTG_STAGES.map(function(s){ return s.key; }), rawValue:card.status }
+  editOpts:{ field:'type', type:'select', choices:_withCur(INTG_TYPES, card.type), rawValue:card.type }
  });
- addRow('Тип',         card.type);
- addRow('Пакет',       card.package);
- addRow('Вид базы',    card.db_type);
+ addRow('Пакет', card.package, {
+  editable:true,
+  editOpts:{ field:'package', type:'select', choices:_withCur(INTG_PACKAGES, card.package), rawValue:card.package }
+ });
+ addRow('Вид базы', card.db_type, {
+  editable:true,
+  editOpts:{ field:'db_type', type:'text', rawValue:card.db_type }
+ });
  addRow('Оператор', card.operator, {
   editable:true,
   editOpts:{ field:'operator', type:'select', choices:INTG_OPERATORS, rawValue:card.operator }
  });
- addRow('Менеджер',    card.manager);
+ addRow('Менеджер', card.manager, {
+  editable:true,
+  editOpts:{ field:'manager', type:'select', choices:_withCur(SD_MANAGERS, card.manager), rawValue:card.manager }
+ });
  addRow('Дата оплаты', fmtDate(card.date_paid));
- addRow('Взято в работу', fmtDate(card.date_taken));
+ addRow('Взято в работу', fmtDate(card.date_taken), {
+  editable:true,
+  editOpts:{ field:'date_taken', type:'date', rawValue:card.date_taken }
+ });
  addRow('Срок', fmtDate(card.deadline), {
   editable:true,
   editOpts:{ field:'deadline', type:'date', rawValue:card.deadline }
  });
- addRow('Исполнено',   fmtDate(card.date_done));
+ addRow('Исполнено', fmtDate(card.date_done), {
+  editable:true,
+  editOpts:{ field:'date_done', type:'date', rawValue:card.date_done }
+ });
  addRow('Логин/пароль', card.login_password, {
   mono:true, pre:true, editable:true,
   editOpts:{ field:'login_password', type:'textarea', rows:3, rawValue:card.login_password }
  });
- addRow('Сервер',      card.server, { mono: true });
- addRow('Контакты',    card.contact_persons, { pre: true });
+ addRow('Сервер', card.server, {
+  mono:true, editable:true,
+  editOpts:{ field:'server', type:'text', rawValue:card.server }
+ });
+ addRow('Контакты', card.contact_persons, {
+  pre:true, editable:true,
+  editOpts:{ field:'contact_persons', type:'textarea', rows:3, rawValue:card.contact_persons }
+ });
  addRow('Комментарий', card.comment, {
   pre:true, editable:true,
   editOpts:{ field:'comment', type:'textarea', rows:4, rawValue:card.comment }
@@ -26944,6 +26887,11 @@ async function intgRenderCardFeed(items){
  });
  var visible = sorted.slice(0, 80).reverse();
  visible.forEach(function(n){
+  // v794: задачи — отдельный билдер (как в карте клиента)
+  if(n._is_task && typeof _buildFeedTask === 'function'){
+   try { feedEl.appendChild(_buildFeedTask(n._task)); } catch(e){ console.warn('[intg-feed] task build failed', n, e); }
+   return;
+  }
   var et = (n.event_type || 'note').toLowerCase();
   var isTicket = (n.attachment_url || '').indexOf('ticket:') === 0;
   var isStage = et === 'stage_change';
@@ -27204,24 +27152,53 @@ async function intgComposeSubmit(){
   alert('У этой интеграции не привязан client_id — некуда писать в ленту.');
   return;
  }
- // Для задачи — префикс [TODO]. Так на бэке таблиц новых не нужно, всё в card_history.
- var finalText = (_intgComposeMode === 'task') ? '[TODO] ' + text : text;
  if(btn){ btn.disabled = true; btn.style.opacity = '0.6'; }
  try {
-  var d = await sbFetch('/api/history', {
-   method:'POST',
-   body: JSON.stringify({
-    client_id: _intgCurrentCard.client_id,
-    event_type: 'integration_note',
-    text: finalText,
-    author: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'интегратор'
-   })
-  });
-  if(!d.ok) throw new Error(d.error || 'не удалось добавить');
-  intgComposeReset();
-  // Перечитываем ленту
-  var h = await sbFetch('/api/history?client_id=' + encodeURIComponent(_intgCurrentCard.client_id) + '&limit=50');
-  intgRenderCardFeed((h && h.items) || []);
+  if(_intgComposeMode === 'task'){
+   // v794: НАСТОЯЩАЯ задача (раньше писался текст «[TODO] …» в ленту — в календарь не попадал).
+   // Исполнитель — оператор интеграции (или автор, если оператор не назначен), срок — срок
+   // интеграции, а если его нет — завтра 10:00. Задача видна в календаре, карте клиента и здесь.
+   var _asg = _intgCurrentCard.operator || ((typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : null);
+   var _due = null;
+   if(_intgCurrentCard.deadline){
+    _due = new Date(_intgCurrentCard.deadline + 'T10:00:00');
+    if(isNaN(_due) || _due < new Date()) _due = null;
+   }
+   if(!_due){ _due = new Date(); _due.setDate(_due.getDate() + 1); _due.setHours(10, 0, 0, 0); }
+   var td = await sbFetch('/api/tasks', {
+    method:'POST',
+    headers: (typeof crmTasksAuthHeaders === 'function') ? crmTasksAuthHeaders() : {},
+    body: JSON.stringify({
+     client_id: _intgCurrentCard.client_id,
+     contact_name: _intgCurrentCard.company_name || _intgCurrentCard.client_id,
+     type_id: 1,
+     text: text,
+     deadline_at: _due.toISOString(),
+     is_all_day: false,
+     assignee_operator: (typeof crmOpCanon === 'function' && _asg) ? crmOpCanon(_asg) : _asg
+    })
+   });
+   if(!td.ok) throw new Error(td.error || 'не удалось поставить задачу');
+   intgComposeReset();
+   if(typeof showNotif === 'function') showNotif('Задача поставлена', (_asg || '') + ' · ' + String(_due.getDate()).padStart(2,'0') + '.' + String(_due.getMonth()+1).padStart(2,'0'));
+   // Полная перезагрузка карты — лента с задачами соберётся заново
+   intgOpenCard(_intgCurrentCard.id);
+  } else {
+   var d = await sbFetch('/api/history', {
+    method:'POST',
+    body: JSON.stringify({
+     client_id: _intgCurrentCard.client_id,
+     event_type: 'integration_note',
+     text: text,
+     author: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'интегратор'
+    })
+   });
+   if(!d.ok) throw new Error(d.error || 'не удалось добавить');
+   intgComposeReset();
+   // Перечитываем ленту
+   var h = await sbFetch('/api/history?client_id=' + encodeURIComponent(_intgCurrentCard.client_id) + '&limit=50');
+   intgRenderCardFeed((h && h.items) || []);
+  }
  } catch(e){
   alert('Не удалось сохранить: ' + e.message);
  } finally {
@@ -32597,6 +32574,8 @@ async function _assignIntgOperator(card, newOp){
   });
   if(!d.ok) throw new Error(d.error || 'PATCH failed');
   if(typeof showNotif === 'function') showNotif('Готово', newOp ? ('Передано ' + newOp) : 'Назначение снято');
+  // v794: первое назначение → задача оператору в календарь (как во Внедрении)
+  if(typeof _intgAutoTaskOnAssign === 'function') _intgAutoTaskOnAssign(card, newOp, prev);
  } catch(e){
   card.operator = prev;
   if(typeof intgRenderCard === 'function') intgRenderCard(card);
@@ -33684,6 +33663,15 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
   input.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--amocard-accent);background:var(--amocard-surface);color:var(--amocard-text);border-radius:6px;font-family:inherit;font-size:13.5px;outline:none';
   // v388: убран пункт «—» в начале — оператор случайно сбрасывал значение.
   // Если нужно сбросить — кликает ESC.
+  // v794-qa: НО если поле сейчас ПУСТОЕ — плейсхолдер нужен, иначе браузер предвыберет
+  // первый вариант и «посмотрел + blur» случайно сохранит его. Риска сброса тут нет:
+  // пункт «—» появляется только у и так пустого поля.
+  if(opts.rawValue == null || opts.rawValue === ''){
+   var oEmpty = document.createElement('option');
+   oEmpty.value = '';
+   oEmpty.textContent = '—';
+   input.appendChild(oEmpty);
+  }
   (opts.choices || []).forEach(function(ch){
    var o = document.createElement('option');
    o.value = ch;
@@ -33810,6 +33798,10 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
     }
    } else if(opts.entity === 'integration'){
     _intgCurrentCard[opts.field] = newVal;
+    // v794: назначение оператора через inline-редактор — тоже даёт автозадачу (первое назначение)
+    if(opts.field === 'operator' && typeof _intgAutoTaskOnAssign === 'function'){
+     _intgAutoTaskOnAssign(_intgCurrentCard, newVal, opts.rawValue);
+    }
    } else {
     if(!_routeCurrentCard.clients) _routeCurrentCard.clients = {};
     _routeCurrentCard.clients[opts.field] = newVal;
@@ -36157,15 +36149,16 @@ function kbRenderScrollDots() {
 }
 
 function kbGetIntegrationInfo(card) {
- // Search in intgData (integration queue) by client name
- if(typeof intgData !== 'undefined' && intgData.length) {
+ // v794: поиск по Supabase-данным (intgData из Sheets удалён вместе с мёртвым intgLoad)
+ var arr = window.intgSbItems || [];
+ if(arr.length && card.client) {
  var clientLow = card.client.toLowerCase();
- var found = intgData.find(function(d){ return d.company && d.company.toLowerCase().indexOf(clientLow) >= 0; });
+ var found = arr.find(function(d){ return d.company_name && d.company_name.toLowerCase().indexOf(clientLow) >= 0; });
  if(found) {
- var status = found.status || found.state || 'В очереди';
+ var status = found.status || 'В очереди';
  var type = found.type || '';
  var text = status + (type ? ' (' + type + ')' : '');
- var color = status === 'Завершён' || status === 'done' ? '#4CB782' : status === 'В работе' ? '#E0A458' : '#828FF7';
+ var color = status === 'Готово' ? '#4CB782' : status === 'В работе' ? '#E0A458' : '#828FF7';
  return {text:text, color:color};
  }
  }
