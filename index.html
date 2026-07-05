@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v795</title>
+<title>SalesDoc — Финансовый Дашборд v796</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -26007,6 +26007,115 @@ function intgPlanEdit(ev){
  }, 50);
 }
 
+// ============================ v796: настраиваемые поля карты интеграции (amo-стиль) ============================
+// Набор полей ОБЩИЙ для всех интеграций: app_settings key='intg_fields'
+// { hidden:['db_type',...], custom:[{key:'cf_...', label:'Ссылка на ТЗ'}] }.
+// Значения своих полей — в integrations.custom_fields (jsonb на карточке).
+// Статус/Оператор/Срок скрыть нельзя — на них держится автоматика.
+var _intgFieldsCfgMode = false;
+function _intgCanCfgFields(){
+ return !!(typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'admin' || currentUser.role === 'head'));
+}
+async function _intgFieldDefsLoad(){
+ if(window._intgFieldDefs) return window._intgFieldDefs;
+ var defs = { hidden: [], custom: [] };
+ try {
+  var d = await sbFetch('/api/settings?key=intg_fields');
+  if(d && d.ok && d.value) defs = d.value;
+ } catch(_){}
+ if(!Array.isArray(defs.hidden)) defs.hidden = [];
+ if(!Array.isArray(defs.custom)) defs.custom = [];
+ window._intgFieldDefs = defs;
+ return defs;
+}
+function _intgFieldDefsSave(){
+ sbFetch('/api/settings', { method:'PATCH', body: JSON.stringify({ key:'intg_fields', value: window._intgFieldDefs }) })
+  .then(function(d){ if(!d.ok) throw new Error(d.error || 'не сохранилось'); })
+  .catch(function(e){ if(typeof showNotif === 'function') showNotif('Ошибка', 'Настройка полей: ' + (e.message || e)); });
+}
+function intgFieldsCfgToggle(){
+ _intgFieldsCfgMode = !_intgFieldsCfgMode;
+ if(_intgCurrentCard) intgRenderCard(_intgCurrentCard);
+}
+function intgFieldHide(key){
+ var defs = window._intgFieldDefs;
+ if(!defs || defs.hidden.indexOf(key) >= 0) return;
+ defs.hidden.push(key);
+ _intgFieldDefsSave();
+ if(_intgCurrentCard) intgRenderCard(_intgCurrentCard);
+}
+function intgFieldUnhide(key){
+ var defs = window._intgFieldDefs;
+ if(!defs) return;
+ defs.hidden = defs.hidden.filter(function(k){ return k !== key; });
+ _intgFieldDefsSave();
+ if(_intgCurrentCard) intgRenderCard(_intgCurrentCard);
+}
+async function intgFieldRemoveCustom(key){
+ var defs = window._intgFieldDefs;
+ if(!defs) return;
+ var f = defs.custom.find(function(c){ return c.key === key; });
+ var okGo = true;
+ if(typeof confirmAction === 'function'){
+  okGo = await confirmAction({ title: 'Удалить поле?', body: 'Поле «' + ((f && f.label) || key) + '» исчезнет из всех карт интеграций. Уже введённые значения останутся в базе, но показываться не будут.', danger: true, confirmLabel: 'Удалить' });
+ }
+ if(!okGo) return;
+ defs.custom = defs.custom.filter(function(c){ return c.key !== key; });
+ _intgFieldDefsSave();
+ if(_intgCurrentCard) intgRenderCard(_intgCurrentCard);
+}
+function intgFieldAdd(ev){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ document.querySelectorAll('.ct-dd._intg').forEach(function(d){ d.remove(); });
+ var anchor = ev.target;
+ var rect = anchor.getBoundingClientRect();
+ var dd = document.createElement('div');
+ dd.className = 'ct-dd _intg';
+ dd.style.cssText += ';padding:10px 12px;min-width:220px';
+ var lab = document.createElement('div');
+ lab.style.cssText = 'font-size:10.5px;font-weight:700;color:var(--text-muted);margin-bottom:7px';
+ lab.textContent = 'Название нового поля';
+ var inp = document.createElement('input');
+ inp.type = 'text';
+ inp.maxLength = 40;
+ inp.placeholder = 'например: Ссылка на ТЗ';
+ inp.autocomplete = 'off';
+ inp.setAttribute('name', 'sd-noauto-nf');
+ inp.style.cssText = 'width:100%;padding:6px 9px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:13px;font-family:inherit;outline:none';
+ dd.appendChild(lab); dd.appendChild(inp);
+ document.body.appendChild(dd);
+ var x = Math.max(12, Math.min(rect.left, window.innerWidth - dd.offsetWidth - 12));
+ var y = rect.bottom + 4;
+ if(y + dd.offsetHeight > window.innerHeight - 12) y = rect.top - dd.offsetHeight - 4;
+ dd.style.left = x + 'px'; dd.style.top = y + 'px';
+ var done = false;
+ function submit(){
+  if(done) return; done = true;
+  var label = String(inp.value || '').trim();
+  dd.remove();
+  if(!label) return;
+  var defs = window._intgFieldDefs || { hidden: [], custom: [] };
+  window._intgFieldDefs = defs;
+  var dupe = defs.custom.find(function(c){ return String(c.label).toLowerCase() === label.toLowerCase(); });
+  if(dupe){ if(typeof showNotif === 'function') showNotif('Уже есть', 'Поле «' + label + '» уже добавлено'); return; }
+  defs.custom.push({ key: 'cf_' + Date.now().toString(36), label: label });
+  _intgFieldDefsSave();
+  if(typeof showNotif === 'function') showNotif('Поле добавлено', label + ' — теперь во всех картах интеграций');
+  if(_intgCurrentCard) intgRenderCard(_intgCurrentCard);
+ }
+ inp.addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.preventDefault(); submit(); }
+  else if(e.key === 'Escape'){ done = true; dd.remove(); }
+ });
+ setTimeout(function(){ inp.focus(); }, 30);
+ setTimeout(function(){
+  document.addEventListener('mousedown', function closer(e2){
+   if(!dd.contains(e2.target)){ done = true; dd.remove(); document.removeEventListener('mousedown', closer, true); }
+  }, true);
+ }, 50);
+}
+// ============================ /v796 ============================
+
 // v432: канбан-доска как во Внедрении. 5 колонок по статусам. Карточки кликабельные.
 var INTG_STAGES = [
  { key: 'Новая',    label: 'Очередь',   color: '#5E6AD2' },
@@ -26630,9 +26739,12 @@ async function intgOpenCard(integrationId){
  if(nameEl) nameEl.textContent = 'Загрузка…';
  if(subEl) subEl.textContent = '';
  try {
+  // v796: набор полей (общая настройка) нужен ДО рендера — параллельно с карточкой
+  var _defsReq = (typeof _intgFieldDefsLoad === 'function') ? _intgFieldDefsLoad() : Promise.resolve();
   var d = await sbFetch('/api/cards?entity=integration&id=' + encodeURIComponent(integrationId));
   if(!d.ok || !d.integrations || !d.integrations.length) throw new Error('Не найдено');
   _intgCurrentCard = d.integrations[0];
+  try { await _defsReq; } catch(_){}
   intgRenderCard(_intgCurrentCard);
   // Параллельно грузим ленту по client_id + по card_id текущей интеграции + по card_id Маршрутов клиента
   if(_intgCurrentCard.client_id){
@@ -26689,6 +26801,7 @@ function intgCloseCard(){
  if(view) view.style.display = 'none';
  document.body.style.overflow = '';
  _intgCurrentCard = null;
+ _intgFieldsCfgMode = false; // v796: режим настройки полей не тащим в следующую карту
 }
 
 function intgRenderCard(card){
@@ -26775,63 +26888,117 @@ function intgRenderCard(card){
    });
   }
   row.appendChild(lab); row.appendChild(val);
+  // v796: режим настройки полей — справа кнопка «Скрыть»/«Вернуть»/«Удалить»
+  if(_intgFieldsCfgMode && (opts.cfgKey || opts.customKey)){
+   var act = document.createElement('button');
+   act.type = 'button';
+   act.style.cssText = 'flex:none;border:1px solid var(--border-faint);background:transparent;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text-muted)';
+   if(opts.customKey){
+    act.textContent = 'Удалить';
+    act.style.color = '#E5604D';
+    act.onclick = function(e){ e.stopPropagation(); intgFieldRemoveCustom(opts.customKey); };
+   } else if(opts.hiddenNow){
+    act.textContent = 'Вернуть';
+    act.onclick = function(e){ e.stopPropagation(); intgFieldUnhide(opts.cfgKey); };
+   } else {
+    act.textContent = 'Скрыть';
+    act.onclick = function(e){ e.stopPropagation(); intgFieldHide(opts.cfgKey); };
+   }
+   row.appendChild(act);
+  }
+  if(opts.hiddenNow) row.style.opacity = '.4';
   fieldsEl.appendChild(row);
  }
  // v794: статус — read-only строка (менять через чип в шапке, единый путь с логом в историю);
- // тип/пакет/вид базы/менеджер/даты/сервер/контакты стали редактируемыми (раньше мёртвые прочерки).
- // Текущее значение вне справочника добавляем в choices — иначе редактор молча подменил бы старые
- // свободные значения из Sheets-импорта.
+ // тип/пакет/вид базы/менеджер/даты/сервер/контакты редактируемые.
+ // v796: набор полей настраиваемый (amo-стиль): скрытые стандартные не показываются
+ // (в режиме настройки — полупрозрачные с «Вернуть»), внизу свои поля из app_settings.
  function _withCur(list, cur){ return (cur && list.indexOf(cur) < 0) ? [cur].concat(list) : list; }
- addRow('Статус', card.status);
- addRow('Тип', card.type, {
+ var _defs = window._intgFieldDefs || { hidden: [], custom: [] };
+ var _PROTECTED = ['status', 'operator', 'deadline'];
+ function std(key, label, value, opts){
+  var isHidden = _defs.hidden.indexOf(key) >= 0;
+  if(isHidden && !_intgFieldsCfgMode) return;
+  opts = opts || {};
+  if(_PROTECTED.indexOf(key) < 0) opts.cfgKey = key;
+  opts.hiddenNow = isHidden;
+  addRow(label, value, opts);
+ }
+ std('status', 'Статус', card.status);
+ std('type', 'Тип', card.type, {
   editable:true,
   editOpts:{ field:'type', type:'select', choices:_withCur(INTG_TYPES, card.type), rawValue:card.type }
  });
- addRow('Пакет', card.package, {
+ std('package', 'Пакет', card.package, {
   editable:true,
   editOpts:{ field:'package', type:'select', choices:_withCur(INTG_PACKAGES, card.package), rawValue:card.package }
  });
- addRow('Вид базы', card.db_type, {
+ std('db_type', 'Вид базы', card.db_type, {
   editable:true,
   editOpts:{ field:'db_type', type:'text', rawValue:card.db_type }
  });
- addRow('Оператор', card.operator, {
+ std('operator', 'Оператор', card.operator, {
   editable:true,
   editOpts:{ field:'operator', type:'select', choices:INTG_OPERATORS, rawValue:card.operator }
  });
- addRow('Менеджер', card.manager, {
+ std('manager', 'Менеджер', card.manager, {
   editable:true,
   editOpts:{ field:'manager', type:'select', choices:_withCur(SD_MANAGERS, card.manager), rawValue:card.manager }
  });
- addRow('Дата оплаты', fmtDate(card.date_paid));
- addRow('Взято в работу', fmtDate(card.date_taken), {
+ std('date_paid', 'Дата оплаты', fmtDate(card.date_paid));
+ std('date_taken', 'Взято в работу', fmtDate(card.date_taken), {
   editable:true,
   editOpts:{ field:'date_taken', type:'date', rawValue:card.date_taken }
  });
- addRow('Срок', fmtDate(card.deadline), {
+ std('deadline', 'Срок', fmtDate(card.deadline), {
   editable:true,
   editOpts:{ field:'deadline', type:'date', rawValue:card.deadline }
  });
- addRow('Исполнено', fmtDate(card.date_done), {
+ std('date_done', 'Исполнено', fmtDate(card.date_done), {
   editable:true,
   editOpts:{ field:'date_done', type:'date', rawValue:card.date_done }
  });
- addRow('Логин/пароль', card.login_password, {
+ std('login_password', 'Логин/пароль', card.login_password, {
   mono:true, pre:true, editable:true,
   editOpts:{ field:'login_password', type:'textarea', rows:3, rawValue:card.login_password }
  });
- addRow('Сервер', card.server, {
+ std('server', 'Сервер', card.server, {
   mono:true, editable:true,
   editOpts:{ field:'server', type:'text', rawValue:card.server }
  });
- addRow('Контакты', card.contact_persons, {
+ std('contact_persons', 'Контакты', card.contact_persons, {
   pre:true, editable:true,
   editOpts:{ field:'contact_persons', type:'textarea', rows:3, rawValue:card.contact_persons }
  });
- addRow('Комментарий', card.comment, {
+ std('comment', 'Комментарий', card.comment, {
   pre:true, editable:true,
   editOpts:{ field:'comment', type:'textarea', rows:4, rawValue:card.comment }
  });
+ // v796: свои поля (общий набор, значения на карточке)
+ var _cf = card.custom_fields || {};
+ _defs.custom.forEach(function(f){
+  addRow(f.label, _cf[f.key], {
+   editable:true, customKey:f.key,
+   editOpts:{ field:'custom:' + f.key, type:'text', rawValue:_cf[f.key] }
+  });
+ });
+ // v796: управление набором полей — только admin/head
+ if(_intgCanCfgFields()){
+  var cfgBar = document.createElement('div');
+  cfgBar.style.cssText = 'display:flex;gap:8px;padding:12px 0 4px';
+  var addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.textContent = '+ Добавить поле';
+  addBtn.style.cssText = 'border:1px dashed var(--border);background:transparent;border-radius:8px;padding:6px 12px;font-size:11.5px;font-weight:600;color:var(--text-soft);cursor:pointer;font-family:inherit';
+  addBtn.onclick = intgFieldAdd;
+  var cfgBtn = document.createElement('button');
+  cfgBtn.type = 'button';
+  cfgBtn.textContent = _intgFieldsCfgMode ? 'Готово' : 'Настроить';
+  cfgBtn.style.cssText = 'border:none;background:transparent;padding:6px 8px;font-size:11.5px;font-weight:600;color:' + (_intgFieldsCfgMode ? 'var(--accent, #5E6AD2)' : 'var(--text-muted)') + ';cursor:pointer;font-family:inherit';
+  cfgBtn.onclick = intgFieldsCfgToggle;
+  cfgBar.appendChild(addBtn); cfgBar.appendChild(cfgBtn);
+  fieldsEl.appendChild(cfgBar);
+ }
  // v445: кнопка «Передать» в шапке карты Интеграции — быстрый дубль поля «Оператор»
  if(typeof _renderAssignButton === 'function' && typeof INTG_OPERATORS !== 'undefined'){
   _renderAssignButton('intg-card-assign', card.operator, INTG_OPERATORS, function(newOp){
@@ -33768,6 +33935,13 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
 
   try {
    var body = {}; body[opts.field] = newVal;
+   // v796: своё поле интеграции — значение живёт в custom_fields (jsonb), шлём объект целиком
+   if(opts.entity === 'integration' && String(opts.field).indexOf('custom:') === 0){
+    var _ck = String(opts.field).slice(7);
+    var _cfObj = Object.assign({}, (_intgCurrentCard && _intgCurrentCard.custom_fields) || {});
+    if(newVal == null) delete _cfObj[_ck]; else _cfObj[_ck] = newVal;
+    body = { custom_fields: _cfObj };
+   }
    var url, method = 'PATCH';
    if(opts.entity === 'card'){
     // v728: синтетическая карта (id='client:...') — реальной карты Внедрения нет (активированный клиент
@@ -33816,7 +33990,11 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
      if(idx >= 0) routeCards[idx][opts.field] = newVal;
     }
    } else if(opts.entity === 'integration'){
-    _intgCurrentCard[opts.field] = newVal;
+    if(body.custom_fields){
+     _intgCurrentCard.custom_fields = body.custom_fields; // v796: своё поле
+    } else {
+     _intgCurrentCard[opts.field] = newVal;
+    }
     // v794: назначение оператора через inline-редактор — тоже даёт автозадачу (первое назначение)
     if(opts.field === 'operator' && typeof _intgAutoTaskOnAssign === 'function'){
      _intgAutoTaskOnAssign(_intgCurrentCard, newVal, opts.rawValue);

@@ -10,7 +10,8 @@
 import { sbSelect, sbUpsert } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 
-const ALLOWED_KEYS = ['intg_month_plan'];
+// intg_fields (v796): настройка полей карты интеграции — {hidden:[стандартные ключи], custom:[{key,label}]}
+const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields'];
 
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;

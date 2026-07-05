@@ -1025,7 +1025,7 @@ async function handleIntegrationsRoute(req, res) {
     // Whitelist изменяемых полей. Защита от случайной перезаписи id/client_id/created_at.
     const ALLOWED_FIELDS = ['company_name','status','type','package','db_type','operator','manager',
                             'date_paid','date_taken','deadline','date_done',
-                            'login_password','server','contact_persons','comment','country','queue_pos'];
+                            'login_password','server','contact_persons','comment','country','queue_pos','custom_fields'];
     const patch = {};
     Object.keys(rawBody).forEach(k => {
       if (ALLOWED_FIELDS.includes(k)) patch[k] = rawBody[k];
@@ -1041,6 +1041,19 @@ async function handleIntegrationsRoute(req, res) {
     }
     if (patch.country && !ALLOWED_COUNTRIES.includes(patch.country)) {
       return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+    }
+    // v796: значения своих полей — только плоский объект строк (защита от мусора в jsonb)
+    if (patch.custom_fields != null) {
+      if (typeof patch.custom_fields !== 'object' || Array.isArray(patch.custom_fields)) {
+        return res.status(400).json({ ok: false, error: 'custom_fields должен быть объектом' });
+      }
+      const cleaned = {};
+      Object.keys(patch.custom_fields).slice(0, 50).forEach(k => {
+        const v = patch.custom_fields[k];
+        if (v == null || v === '') return;
+        cleaned[String(k).slice(0, 60)] = String(v).slice(0, 2000);
+      });
+      patch.custom_fields = cleaned;
     }
     if (!Object.keys(patch).length) {
       return res.status(400).json({ ok: false, error: 'нечего обновлять' });
