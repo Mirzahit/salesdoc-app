@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v794</title>
+<title>SalesDoc — Финансовый Дашборд v795</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8141,14 +8141,10 @@ body.light .mt-filter-section-title { color:#8A90A0; }
    <div style="font-size:12px;color:var(--text-muted);padding:8px 0">Загрузка…</div>
   </div>
 
-  <!-- v524: аналитика на тех же Supabase-данных. Перенесена сюда из удалённого нижнего блока.
-       Рендерится в intgSbRenderAnalytics(items) после intgSbRender. ID сохранены — JS уже их знает. -->
+  <!-- v795: компактная аналитика — одна полоса (план/факт, очередь, срок, операторы)
+       + таблица по месяцам. Блок «По пакетам» убран, план настраиваемый (app_settings). -->
   <div style="margin-top:18px">
    <div id="intg-period-stats" style="margin-bottom:16px"></div>
-   <div class="panel" id="intg-chart-type" style="min-height:100px;margin-bottom:16px">
-    <div class="panel-title" style="margin-bottom:10px">По пакетам</div>
-    <div id="intg-package-stats"></div>
-   </div>
    <div class="panel" id="intg-monthly-panel" style="min-height:100px;margin-bottom:16px">
     <div class="panel-title" style="margin-bottom:10px">Выполнено по месяцам</div>
     <div id="intg-monthly-table" style="overflow-x:auto"></div>
@@ -25736,6 +25732,8 @@ async function intgSbLoad(){
  var listEl = document.getElementById('intg-sb-list');
  var btn = document.getElementById('intg-sb-refresh');
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
+ // v795: план на месяц из app_settings — параллельно, не блокирует доску
+ if(typeof intgPlanLoad === 'function') intgPlanLoad();
  try {
   // v524: include_archive=1 — нужны ВСЕ записи (Готово/Отменено тоже), иначе аналитика по периоду
   // и таблица «Выполнено по месяцам» будут пустые. Архив теперь в Supabase, не в Sheets.
@@ -25824,6 +25822,9 @@ function intgSbRerender(){
 // package stats (по пакетам за период), monthly table (выполнено по месяцам по типу).
 // Берёт текущий выбранный период из selectedMonth/currentPeriod (общие глобалы дашборда).
 function intgSbRenderAnalytics(items){
+ // v795: компактная полоса вместо трёх панелей v524. Считает: выполнено за период (план из
+ // app_settings, клик по плану — изменить), очередь (сколько ждут, старейшая), в работе +
+ // средний срок выполнения (Готово за 90 дн, date_done-date_taken), загрузка операторов.
  if(!Array.isArray(items)) items = [];
  var selM = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth.month : new Date().getMonth();
  var selY = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth.year  : new Date().getFullYear();
@@ -25831,6 +25832,7 @@ function intgSbRenderAnalytics(items){
  var MONTHS_F = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
  var MONTHS_S = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
  var periodLabel = isYearMode ? String(selY) : (MONTHS_F[selM] + ' ' + selY);
+ var PLAN = (window._intgPlan && window._intgPlan > 0) ? window._intgPlan : 10;
 
  function toDate(v){
   if(!v) return null;
@@ -25841,151 +25843,168 @@ function intgSbRenderAnalytics(items){
   if(isYearMode) return d.getFullYear() === selY;
   return d.getMonth() === selM && d.getFullYear() === selY;
  }
+ function doneDate(r){ return toDate(r.date_done) || toDate(r.deadline); }
 
- // ===== PERIOD STATS: 3 карточки по типу =====
  var psEl = document.getElementById('intg-period-stats');
  if(psEl){
-  var INTG_PLAN = 10;
-  var types = ['Интеграция','Доработка','Разработка'];
-  var typeColors = {'Интеграция':'#0A84FF','Доработка':'#FF9F0A','Разработка':'#5E5CE0'};
-  var html = '<div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:10px;font-weight:600">ВЫПОЛНЕНО ЗА ' + periodLabel.toUpperCase() + '</div>';
-  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">';
-  var totalDone = 0, totalWork = 0;
-  types.forEach(function(t){
-   var tc = typeColors[t];
-   var ofType = items.filter(function(r){ return r.type === t; });
-   var done = ofType.filter(function(r){
-    if(r.status !== 'Готово') return false;
-    var d = toDate(r.date_done) || toDate(r.deadline);
-    return inPeriod(d);
-   }).length;
-   var work = ofType.filter(function(r){ return r.status !== 'Готово' && r.status !== 'Отменено'; }).length;
-   totalDone += done; totalWork += work;
-   var hasPlan = (t === 'Интеграция');
-   var plan = hasPlan ? INTG_PLAN : 0;
-   var pct = hasPlan ? Math.round(done / plan * 100) : 0;
-   var barCol = hasPlan ? (pct >= 80 ? '#4CB782' : pct >= 50 ? '#FF9F0A' : '#FF453A') : '#4CB782';
-   var barW = hasPlan ? Math.min(100, pct) : 100;
-   html += '<div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:16px;box-shadow:var(--sh-1)">';
-   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
-   html += '<span style="font-size:10px;font-weight:700;letter-spacing:1px;color:' + tc + '">' + t.toUpperCase() + '</span>';
-   if(hasPlan) html += '<span style="font-size:10px;color:var(--text-muted)">план: ' + plan + '</span>';
-   html += '</div>';
-   html += '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">';
-   html += '<span style="font-family:Inter,sans-serif;font-size:26px;color:' + barCol + '">' + done + '</span>';
-   if(hasPlan) html += '<span style="font-size:11px;color:var(--text-muted)">/ ' + plan + '</span><span style="font-size:11px;color:' + barCol + ';font-weight:600;margin-left:auto">' + pct + '%</span>';
-   else html += '<span style="font-size:11px;color:var(--text-muted)">выполнено</span>';
-   html += '</div>';
-   html += '<div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;margin-bottom:6px;overflow:hidden">';
-   html += '<div style="height:100%;width:' + barW + '%;background:' + barCol + ';border-radius:3px"></div></div>';
-   html += '<div style="display:flex;justify-content:space-between;font-size:10px">';
-   html += '<span style="color:#FF9F0A">' + work + ' в работе</span>';
-   if(hasPlan) html += '<span style="color:var(--text-muted)">осталось ' + Math.max(0, plan - done) + '</span>';
-   else html += '<span style="color:var(--text-muted)">всего ' + ofType.length + '</span>';
-   html += '</div></div>';
-  });
-  html += '</div>';
-  html += '<div style="font-size:10px;color:var(--text-muted);text-align:center;border-top:1px solid rgba(255,255,255,.06);padding-top:8px">';
-  html += 'Итого за ' + periodLabel + ': <span style="color:#4CB782;font-weight:700">' + totalDone + ' выполнено</span> / <span style="color:#FF9F0A;font-weight:700">' + totalWork + ' в работе</span>';
-  html += '</div>';
-  psEl.innerHTML = html;
- }
-
- // ===== PACKAGE STATS: by package за период =====
- var pkgEl = document.getElementById('intg-package-stats');
- if(pkgEl){
-  var pkgDone = {}, pkgWork = {};
+  var doneByType = { 'Интеграция':0, 'Доработка':0, 'Разработка':0 };
+  var doneTotal = 0;
   items.forEach(function(r){
-   var pkg = r.package || 'Не указан';
-   var isDone = r.status === 'Готово' && inPeriod(toDate(r.date_done) || toDate(r.deadline));
-   var isWork = r.status !== 'Готово' && r.status !== 'Отменено';
-   if(isDone) pkgDone[pkg] = (pkgDone[pkg]||0) + 1;
-   if(isWork) pkgWork[pkg] = (pkgWork[pkg]||0) + 1;
+   if(r.status !== 'Готово' || !inPeriod(doneDate(r))) return;
+   doneTotal++;
+   if(doneByType[r.type] !== undefined) doneByType[r.type]++;
   });
-  var styleMap = {
-   'Стандарт':['#8E8E93','rgba(142,142,147,.12)'],
-   'Стандарт+':['#5AC8FA','rgba(90,200,250,.14)'],
-   'Премиум':['#5E5CE0','rgba(94,92,224,.18)'],
-   'Не указан':['#636366','rgba(255,255,255,.04)']
-  };
-  var allPkgs = {};
-  Object.keys(pkgDone).forEach(function(k){ allPkgs[k]=true; });
-  Object.keys(pkgWork).forEach(function(k){ allPkgs[k]=true; });
-  var pkgKeys = Object.keys(allPkgs).sort(function(a,b){ return (pkgDone[b]||0) - (pkgDone[a]||0); });
-  var totalDone = 0; pkgKeys.forEach(function(k){ totalDone += (pkgDone[k]||0); });
-  var ph = '<div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:10px;font-weight:600">' + periodLabel.toUpperCase() + '</div>';
-  if(!pkgKeys.length){
-   ph += '<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:16px">Нет данных за период</div>';
-  } else {
-   ph += '<div style="display:grid;grid-template-columns:repeat(' + Math.min(pkgKeys.length, 4) + ',1fr);gap:10px;margin-bottom:12px">';
-   pkgKeys.forEach(function(pkg){
-    var st = styleMap[pkg] || ['#94A3B8','rgba(255,255,255,.04)'];
-    var done = pkgDone[pkg] || 0;
-    var work = pkgWork[pkg] || 0;
-    var pct = totalDone > 0 ? Math.round(done / totalDone * 100) : 0;
-    ph += '<div style="background:' + st[1] + ';border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;border-left:3px solid ' + st[0] + '">';
-    ph += '<div style="font-size:10px;font-weight:700;letter-spacing:1px;color:' + st[0] + ';margin-bottom:8px">' + pkg.toUpperCase() + '</div>';
-    ph += '<div style="display:flex;align-items:baseline;gap:8px">';
-    ph += '<span style="font-family:Inter,sans-serif;font-size:28px;color:#4CB782">' + done + '</span>';
-    ph += '<span style="font-size:11px;color:var(--text-muted)">выполнено</span></div>';
-    ph += '<div style="font-size:10px;color:var(--text-muted);margin-top:4px">' + pct + '% от выполненных</div>';
-    ph += '<div style="margin-top:8px;font-size:10px;color:#E0A458">' + work + ' в работе</div>';
-    ph += '</div>';
-   });
-   ph += '</div>';
-  }
-  pkgEl.innerHTML = ph;
+  var queue = items.filter(function(r){ return r.status === 'Новая'; });
+  var oldestDays = 0;
+  queue.forEach(function(r){
+   var d = toDate(r.date_paid) || toDate(r.created_at);
+   if(d) oldestDays = Math.max(oldestDays, Math.floor((Date.now() - d.getTime()) / 86400000));
+  });
+  var inWork = items.filter(function(r){ return r.status === 'В работе'; }).length;
+  var paused = items.filter(function(r){ return r.status === 'На паузе'; }).length;
+  // Средний срок: Готово за последние 90 дней, где есть обе даты
+  var durs = [];
+  items.forEach(function(r){
+   if(r.status !== 'Готово') return;
+   var dd = toDate(r.date_done), dt = toDate(r.date_taken);
+   if(!dd || !dt || dd < dt) return;
+   if(Date.now() - dd.getTime() > 90 * 86400000) return;
+   durs.push((dd - dt) / 86400000);
+  });
+  var avgDur = durs.length ? Math.round(durs.reduce(function(a,b){ return a + b; }, 0) / durs.length) : null;
+  // Загрузка операторов (активные карточки)
+  var opLoad = {};
+  INTG_OPERATORS.forEach(function(o){ opLoad[o] = 0; });
+  items.forEach(function(r){
+   if(r.status === 'Готово' || r.status === 'Отменено') return;
+   if(r.operator && opLoad[r.operator] !== undefined) opLoad[r.operator]++;
+  });
+  var donePlan = doneByType['Интеграция'];
+  var pct = Math.min(100, Math.round(donePlan / PLAN * 100));
+  var pctCol = pct >= 80 ? '#4CB782' : pct >= 50 ? '#E0A458' : 'var(--text-muted)';
+  function tile(inner){ return '<div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:14px 16px;box-shadow:var(--sh-1)">' + inner + '</div>'; }
+  function tHead(t){ return '<div style="font-size:10px;font-weight:700;letter-spacing:.8px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">' + t + '</div>'; }
+  var h = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">';
+  h += tile(tHead('Выполнено · ' + periodLabel)
+   + '<div style="display:flex;align-items:baseline;gap:7px"><span style="font-size:24px;font-weight:700;color:var(--text)">' + doneTotal + '</span>'
+   + '<span style="font-size:11px;color:var(--text-muted)">интеграций <b style="color:' + pctCol + '">' + donePlan + '</b> из <b id="intg-plan-val" onclick="intgPlanEdit(event)" title="Кликни чтобы изменить план" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;color:var(--text)">' + PLAN + '</b></span></div>'
+   + '<div style="height:4px;background:var(--surface-3);border-radius:2px;margin-top:8px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + (pct >= 80 ? '#4CB782' : '#5E6AD2') + ';border-radius:2px"></div></div>'
+   + '<div style="font-size:10.5px;color:var(--text-muted);margin-top:7px">Доработки: ' + doneByType['Доработка'] + ' · Разработки: ' + doneByType['Разработка'] + '</div>');
+  h += tile(tHead('Очередь')
+   + '<div style="display:flex;align-items:baseline;gap:7px"><span style="font-size:24px;font-weight:700;color:var(--text)">' + queue.length + '</span><span style="font-size:11px;color:var(--text-muted)">ждут начала</span></div>'
+   + '<div style="font-size:10.5px;color:' + (oldestDays >= 14 ? '#E5604D' : 'var(--text-muted)') + ';margin-top:7px">' + (queue.length ? 'старейшая ждёт ' + oldestDays + ' дн' : 'очередь пуста') + '</div>');
+  h += tile(tHead('В работе')
+   + '<div style="display:flex;align-items:baseline;gap:7px"><span style="font-size:24px;font-weight:700;color:var(--text)">' + inWork + '</span><span style="font-size:11px;color:var(--text-muted)">сейчас' + (paused ? ' · ' + paused + ' на паузе' : '') + '</span></div>'
+   + '<div style="font-size:10.5px;color:var(--text-muted);margin-top:7px">' + (avgDur !== null ? 'средний срок выполнения ~' + avgDur + ' дн' : 'средний срок появится после первых закрытий') + '</div>');
+  var opsHtml = INTG_OPERATORS.map(function(o){
+   return '<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0"><span style="color:var(--text-soft)">' + o + '</span><b style="color:var(--text)">' + opLoad[o] + '</b></div>';
+  }).join('');
+  h += tile(tHead('На операторах') + opsHtml);
+  h += '</div>';
+  psEl.innerHTML = h;
  }
 
- // ===== MONTHLY TABLE: выполнено по месяцам, по типу =====
+ // ===== Выполнено по месяцам: последние 12 месяцев, подписи с годом =====
  var mtEl = document.getElementById('intg-monthly-table');
  if(mtEl){
   var buckets = {};
   items.forEach(function(r){
    if(r.status !== 'Готово') return;
-   var d = toDate(r.date_done) || toDate(r.deadline);
+   var d = doneDate(r);
    if(!d) return;
-   var key = d.getFullYear() + '-' + String(d.getMonth()).padStart(2,'0');
-   if(!buckets[key]) buckets[key] = {int:0, dor:0, raz:0};
-   if(r.type === 'Интеграция')     buckets[key].int++;
+   var key = d.getFullYear() * 12 + d.getMonth();
+   if(!buckets[key]) buckets[key] = { int:0, dor:0, raz:0 };
+   if(r.type === 'Интеграция')      buckets[key].int++;
    else if(r.type === 'Доработка')  buckets[key].dor++;
    else if(r.type === 'Разработка') buckets[key].raz++;
   });
-  var keys = Object.keys(buckets).sort();
-  if(!keys.length){
-   mtEl.innerHTML = '<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:16px">Нет данных для таблицы</div>';
-  } else {
-   var mh = '<table style="width:100%;border-collapse:collapse;font-size:11px">';
-   mh += '<thead><tr><th style="text-align:left;padding:6px 8px;color:var(--text-muted);border-bottom:2px solid rgba(255,255,255,.08)"></th>';
-   keys.forEach(function(k){
-    var p = k.split('-'); var yr = p[0]; var mi = parseInt(p[1]);
-    var isCur = (mi === selM && parseInt(yr) === selY);
-    mh += '<th style="text-align:center;padding:6px 6px;color:' + (isCur ? '#A6ADEA' : 'var(--text-muted)') + ';border-bottom:2px solid rgba(255,255,255,.08);font-weight:' + (isCur ? '700' : '600') + ';font-size:10px' + (isCur ? ';background:rgba(94,106,210,.06)' : '') + '">' + MONTHS_S[mi] + (mi === 0 ? ' ' + yr.slice(2) : '') + '</th>';
+  var curKey = selY * 12 + selM;
+  var cols = [];
+  for(var mi = 11; mi >= 0; mi--) cols.push(curKey - mi);
+  var mh = '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+  mh += '<thead><tr><th style="text-align:left;padding:6px 8px;color:var(--text-muted);border-bottom:2px solid var(--border-faint)"></th>';
+  cols.forEach(function(k, i){
+   var y = Math.floor(k / 12), m = k % 12;
+   var isCur = k === curKey;
+   var lbl = MONTHS_S[m] + ((m === 0 || i === 0) ? ' ' + String(y).slice(2) : '');
+   mh += '<th style="text-align:center;padding:6px 6px;color:' + (isCur ? '#A6ADEA' : 'var(--text-muted)') + ';border-bottom:2px solid var(--border-faint);font-weight:' + (isCur ? '700' : '600') + ';font-size:10px' + (isCur ? ';background:rgba(94,106,210,.06)' : '') + '">' + lbl + '</th>';
+  });
+  mh += '</tr></thead><tbody>';
+  function row(label, color, pick, boldColor){
+   var r = '<tr><td style="padding:5px 8px;font-weight:700;color:' + color + ';font-size:10px;letter-spacing:.5px">' + label + '</td>';
+   cols.forEach(function(k){
+    var b = buckets[k] || { int:0, dor:0, raz:0 };
+    var v = pick(b);
+    var isCur = k === curKey;
+    var vc = boldColor ? boldColor : (label === 'Интеграция' ? (v >= PLAN ? '#4CB782' : v >= PLAN * .7 ? '#E0A458' : 'var(--text-soft)') : 'var(--text-soft)');
+    r += '<td style="text-align:center;padding:5px 4px;color:' + vc + ';font-weight:' + (isCur || boldColor ? '700' : '400') + (isCur ? ';background:rgba(94,106,210,.06)' : '') + '">' + v + '</td>';
    });
-   mh += '</tr></thead><tbody>';
-   // Интеграция + план
-   mh += '<tr><td style="padding:5px 8px;font-weight:700;color:#5E6AD2;font-size:10px;letter-spacing:.5px">Интеграция</td>';
-   keys.forEach(function(k){ var v = buckets[k].int; var p = k.split('-'); var isCur = (parseInt(p[1]) === selM && parseInt(p[0]) === selY); mh += '<td style="text-align:center;padding:5px 4px;color:' + (v >= 10 ? '#4CB782' : v >= 7 ? '#E0A458' : '#94A3B8') + ';font-weight:' + (isCur ? '700' : '400') + (isCur ? ';background:rgba(94,106,210,.06)' : '') + '">' + v + '</td>'; });
-   mh += '</tr>';
-   mh += '<tr><td style="padding:2px 8px;font-size:9px;color:var(--text-muted)"></td>';
-   keys.forEach(function(k){ var p = k.split('-'); var isCur = (parseInt(p[1]) === selM && parseInt(p[0]) === selY); mh += '<td style="text-align:center;padding:2px 4px;font-size:9px;color:var(--text-muted)' + (isCur ? ';background:rgba(94,106,210,.06)' : '') + '">/ 10</td>'; });
-   mh += '</tr>';
-   // Доработка
-   mh += '<tr><td style="padding:5px 8px;font-weight:700;color:#828FF7;font-size:10px;letter-spacing:.5px">Доработка</td>';
-   keys.forEach(function(k){ var v = buckets[k].dor; var p = k.split('-'); var isCur = (parseInt(p[1]) === selM && parseInt(p[0]) === selY); mh += '<td style="text-align:center;padding:5px 4px;color:#94A3B8;font-weight:' + (isCur ? '700' : '400') + (isCur ? ';background:rgba(94,106,210,.06)' : '') + '">' + v + '</td>'; });
-   mh += '</tr>';
-   // Разработка
-   mh += '<tr><td style="padding:5px 8px;font-weight:700;color:#5E6AD2;font-size:10px;letter-spacing:.5px">Разработка</td>';
-   keys.forEach(function(k){ var v = buckets[k].raz; var p = k.split('-'); var isCur = (parseInt(p[1]) === selM && parseInt(p[0]) === selY); mh += '<td style="text-align:center;padding:5px 4px;color:#94A3B8;font-weight:' + (isCur ? '700' : '400') + (isCur ? ';background:rgba(94,106,210,.06)' : '') + '">' + v + '</td>'; });
-   mh += '</tr>';
-   // Итого
-   mh += '<tr style="border-top:2px solid rgba(255,255,255,.08)"><td style="padding:5px 8px;font-weight:700;color:#A6ADEA;font-size:10px;letter-spacing:.5px">Итого</td>';
-   keys.forEach(function(k){ var v = buckets[k].int + buckets[k].dor + buckets[k].raz; var p = k.split('-'); var isCur = (parseInt(p[1]) === selM && parseInt(p[0]) === selY); mh += '<td style="text-align:center;padding:5px 4px;color:#A6ADEA;font-weight:700' + (isCur ? ';background:rgba(94,106,210,.06)' : '') + '">' + v + '</td>'; });
-   mh += '</tr>';
-   mh += '</tbody></table>';
-   mtEl.innerHTML = mh;
+   return r + '</tr>';
   }
+  mh += row('Интеграция', '#5E6AD2', function(b){ return b.int; });
+  mh += row('Доработка', '#828FF7', function(b){ return b.dor; });
+  mh += row('Разработка', '#5E6AD2', function(b){ return b.raz; });
+  mh += row('Итого', '#A6ADEA', function(b){ return b.int + b.dor + b.raz; }, '#A6ADEA');
+  mh += '</tbody></table>';
+  mh += '<div style="font-size:10px;color:var(--text-muted);margin-top:6px">План на месяц: ' + PLAN + ' интеграций (зелёное — план сделан). Доработки и разработки идут без плана.</div>';
+  mtEl.innerHTML = mh;
  }
+}
+
+// v795: план интеграций в месяц — из app_settings, редактируется кликом по числу.
+async function intgPlanLoad(){
+ if(window._intgPlan) return;
+ try {
+  var d = await sbFetch('/api/settings?key=intg_month_plan');
+  if(d && d.ok && d.value && d.value.plan > 0){
+   window._intgPlan = parseInt(d.value.plan, 10);
+   if(typeof intgSbRerender === 'function' && window.intgSbItems) intgSbRerender();
+  }
+ } catch(_){}
+}
+function intgPlanEdit(ev){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ document.querySelectorAll('.ct-dd._intg').forEach(function(d){ d.remove(); });
+ var anchor = ev.target;
+ var rect = anchor.getBoundingClientRect();
+ var dd = document.createElement('div');
+ dd.className = 'ct-dd _intg';
+ dd.style.cssText += ';padding:10px 12px;min-width:190px';
+ var lab = document.createElement('div');
+ lab.style.cssText = 'font-size:10.5px;font-weight:700;color:var(--text-muted);margin-bottom:7px';
+ lab.textContent = 'План интеграций в месяц';
+ var inp = document.createElement('input');
+ inp.type = 'number'; inp.min = '1'; inp.max = '999';
+ inp.value = window._intgPlan || 10;
+ inp.style.cssText = 'width:100%;padding:6px 9px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:13px;font-family:inherit;outline:none';
+ dd.appendChild(lab); dd.appendChild(inp);
+ document.body.appendChild(dd);
+ var x = Math.max(12, Math.min(rect.left, window.innerWidth - dd.offsetWidth - 12));
+ var y = rect.bottom + 4;
+ if(y + dd.offsetHeight > window.innerHeight - 12) y = rect.top - dd.offsetHeight - 4;
+ dd.style.left = x + 'px'; dd.style.top = y + 'px';
+ var done = false;
+ function save(){
+  if(done) return; done = true;
+  var n = parseInt(inp.value, 10);
+  dd.remove();
+  if(!n || n < 1 || n > 999 || n === window._intgPlan) return;
+  window._intgPlan = n;
+  intgSbRerender();
+  sbFetch('/api/settings', { method:'PATCH', body: JSON.stringify({ key:'intg_month_plan', value:{ plan:n } }) })
+   .then(function(d){ if(!d.ok) throw new Error(d.error || 'не сохранилось'); if(typeof showNotif === 'function') showNotif('Сохранено', 'План: ' + n + ' в месяц'); })
+   .catch(function(e){ if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e)); });
+ }
+ inp.addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){ e.preventDefault(); save(); }
+  else if(e.key === 'Escape'){ done = true; dd.remove(); }
+ });
+ setTimeout(function(){ inp.focus(); inp.select(); }, 30);
+ setTimeout(function(){
+  document.addEventListener('mousedown', function closer(e2){
+   if(!dd.contains(e2.target)){ save(); document.removeEventListener('mousedown', closer, true); }
+  }, true);
+ }, 50);
 }
 
 // v432: канбан-доска как во Внедрении. 5 колонок по статусам. Карточки кликабельные.
