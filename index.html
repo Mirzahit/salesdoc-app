@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v798</title>
+<title>SalesDoc — Финансовый Дашборд v799</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -44957,7 +44957,10 @@ function amoRenderFunnel(d){
   : '#5E6AD2';
  var pctOfFirst = Math.round(s.count / firstCount * 100);
  var widthPct = Math.max(6, pctOfFirst);
- var convFromPrev = prevS && prevS.count > 0 ? Math.round(s.count / prevS.count * 100) : 100;
+ // v799: если на предыдущем шаге 0 — конверсия 0 (или 100 только когда и тут что-то есть),
+ // раньше дефолт 100 рисовал «100%» на пустых шагах после нуля (баг от CEO со скрина)
+ var convFromPrev = !prevS ? 100
+  : (prevS.count > 0 ? Math.round(s.count / prevS.count * 100) : (s.count > 0 ? 100 : 0));
  var lost = prevS ? Math.max(0, prevS.count - s.count) : 0;
 
  // v423: если у шага есть привязанный список сделок (logical_flow keys: meeting_set,
