@@ -228,12 +228,15 @@ export default async function handler(req, res) {
       };
 
     } else if (endpoint === 'daily') {
-      // Разбивка по дням
+      // Разбивка по дням.
+      // v797: limit обязателен — дефолтная страница Meta = 25 строк, и last_90d обрывался
+      // на 25-м дне (недельная динамика в Маркетинге показывала апрель вместо июля).
       const data = await metaFetch(`/${ACCOUNT}/insights`, {
         fields: INSIGHT_FIELDS,
         date_preset: period,
         level: 'account',
-        time_increment: 1
+        time_increment: 1,
+        limit: 100
       }, TOKEN);
       const days = (data.data || []).map(d => {
         const leads = summarizeLeads(d.actions, d.cost_per_action_type);
