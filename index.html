@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v806</title>
+<title>SalesDoc — Финансовый Дашборд v807</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -2944,6 +2944,15 @@ body.light #view-academy .acad-tb.on{background:#F2F3F7}
 body.light #view-academy .acad-card,body.light #view-academy .msg.bot{background:#F6F7FA;border-color:rgba(15,18,25,.07)}
 body.light #view-academy .stp{background:#F6F7FA;border-color:rgba(15,18,25,.07)}
 body.light #view-academy .acad-tin input{background:#F6F7FA;border-color:rgba(15,18,25,.10)}
+/* v807: защита контента Академии — текст не выделяется, печать отключена, водяной знак
+   с именем сотрудника (от фото экрана не защищает ничто — знак делает утечку именной) */
+#view-academy .acad-lesson{position:relative;overflow:hidden}
+#view-academy .acad-lesson,#view-academy .acad-mods{-webkit-user-select:none;user-select:none}
+#view-academy .acad-tin input{-webkit-user-select:text;user-select:text}
+#view-academy .acad-wm{position:absolute;inset:-60px;display:flex;flex-wrap:wrap;gap:80px 100px;align-items:center;justify-content:center;transform:rotate(-24deg);pointer-events:none;z-index:5;opacity:.05}
+#view-academy .acad-wm span{font-size:13px;font-weight:700;white-space:nowrap;color:var(--text)}
+body.light #view-academy .acad-wm{opacity:.07}
+@media print{#view-academy{display:none!important}}
 
 .nav-section{padding:4px 0;flex:1 1 0;overflow:visible;min-height:0;width:100%;display:flex;flex-direction:column;align-items:center}
 .nav-section::-webkit-scrollbar{width:4px}
@@ -30227,12 +30236,45 @@ function acadRenderLesson(){
   + '</div>';
  var html = '<div class="acad-crumb">' + (mod ? sanitize(mod.title) : '') + '</div>'
   + '<div class="acad-lt">' + sanitize(L.title) + '</div>' + steps
-  + '<div id="acad-step-body"></div>';
+  + '<div id="acad-step-body"></div>'
+  + acadWatermark();
  le.innerHTML = html;
  if(_acad.step === 1) acadRenderCards();
  else if(_acad.step === 2) acadRenderTrainer();
  else acadRenderTest();
 }
+
+// v807: водяной знак — имя+email сотрудника сеткой поверх урока. Скрин/фото/запись сделать
+// можно (это не остановит ни один сайт), но на любой копии видно, чей аккаунт слил.
+function acadWatermark(){
+ var who = (currentUser ? [currentUser.name, currentUser.email].filter(Boolean).join(' · ') : '') || 'SalesDoc';
+ var stamp = who + ' · ' + new Date().toLocaleDateString('ru-RU');
+ var cells = '';
+ for(var i = 0; i < 24; i++) cells += '<span>' + sanitize(stamp) + '</span>';
+ return '<div class="acad-wm" aria-hidden="true">' + cells + '</div>';
+}
+
+// v807: блокировка копирования/печати внутри Академии. Это защита «от честных людей»:
+// скрин или фото экрана не остановит ни один сайт — для этого водяной знак выше.
+(function(){
+ function inAcademy(){ var v = document.getElementById('view-academy'); return v && v.style.display !== 'none'; }
+ ['copy', 'cut', 'contextmenu', 'dragstart'].forEach(function(evt){
+  document.addEventListener(evt, function(e){
+   if(!inAcademy()) return;
+   var t = e.target;
+   if(t && t.closest && t.closest('.acad-tin')) return; // поле ответа в тренажёре — рабочее
+   e.preventDefault();
+  });
+ });
+ document.addEventListener('keydown', function(e){
+  if(!inAcademy()) return;
+  var k = (e.key || '').toLowerCase();
+  if((e.ctrlKey || e.metaKey) && (k === 'p' || k === 's')){
+   e.preventDefault();
+   if(typeof showNotif === 'function') showNotif('Академия', 'Печать и сохранение материалов отключены');
+  }
+ });
+})();
 
 function acadSetStep(n){
  if(n === 2 && !_acad.lesson.trainer) n = 3;
