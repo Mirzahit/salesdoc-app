@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Превью: Настройки v801</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+ --bg:#0F1116; --surface:#14161E; --surface2:#1A1D26; --surface3:#20242F; --border:rgba(255,255,255,.08); --border-f:rgba(255,255,255,.06);
+ --text:#E8EAF0; --soft:#9AA3B2; --muted:#5F6674; --accent:#5E6AD2; --green:#4CB782; --red:#E5604D; --amber:#E0A458;
+}
+body.light{
+ --bg:#F6F7FA; --surface:#FFFFFF; --surface2:#F2F3F7; --surface3:#E9EBF1; --border:rgba(15,18,25,.10); --border-f:rgba(15,18,25,.07);
+ --text:#16181D; --soft:#5A6072; --muted:#8A90A0;
+}
+body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);padding:26px 30px;font-size:13px}
+h2{font-size:14px;font-weight:700;margin:34px 0 4px}
+h2:first-of-type{margin-top:0}
+.note{color:var(--muted);font-size:11.5px;margin-bottom:10px;line-height:1.5}
+.themeb{position:fixed;top:14px;right:16px;z-index:5;background:var(--surface);border:1px solid var(--border);color:var(--soft);border-radius:9px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.num{font-variant-numeric:tabular-nums}
+
+/* табы раздела — единый стиль с Маркетингом */
+.stabs{display:flex;gap:2px;background:var(--surface);border:1px solid var(--border-f);border-radius:11px;padding:4px;margin-bottom:14px;width:fit-content}
+.stabs span{padding:7px 18px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--soft);cursor:pointer}
+.stabs span.on{background:var(--surface2);color:var(--text)}
+
+.pane{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 22px}
+.phead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.phead .t{font-size:14px;font-weight:700}
+.phead .t small{font-size:11px;color:var(--muted);font-weight:500;margin-left:8px}
+.addb{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:8px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+
+/* сотрудники */
+.emp{display:grid;grid-template-columns:2fr 1.4fr 1.8fr 1.1fr 1fr .9fr;gap:10px;align-items:center;padding:9px 12px;border-radius:10px;font-size:12.5px}
+.emp:hover{background:var(--surface2)}
+.emp.h{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border-f);border-radius:0;padding-bottom:8px}
+.emp .who{display:flex;align-items:center;gap:10px;font-weight:600}
+.av{width:28px;height:28px;border-radius:50%;background:rgba(94,106,210,.16);color:#8B95E8;display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:800;flex:none}
+.emp .pos{color:var(--soft)}
+.emp .log{font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rb{display:inline-block;font-size:10.5px;font-weight:700;border-radius:6px;padding:3px 9px;width:fit-content}
+.rb.admin{background:rgba(94,106,210,.15);color:#8B95E8}
+.rb.mgr{background:rgba(76,183,130,.13);color:var(--green)}
+.rb.op{background:rgba(224,164,88,.14);color:var(--amber)}
+.rb.view{background:rgba(120,120,128,.14);color:var(--soft)}
+.cty{font-size:11px;color:var(--soft);font-weight:600}
+.cty .lock{color:var(--amber)}
+.stat{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--soft);justify-content:flex-end}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+.fired{border-top:1px solid var(--border-f);margin-top:8px;padding-top:10px}
+.fired .fh{font-size:11px;color:var(--muted);font-weight:600;cursor:pointer;padding:2px 12px}
+
+/* модалка сотрудника */
+.modal{max-width:760px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 24px;box-shadow:0 24px 64px rgba(0,0,0,.4)}
+.modal h3{font-size:15px;font-weight:700;margin-bottom:16px}
+.mgrid{display:grid;grid-template-columns:1fr 1.1fr;gap:22px}
+.fl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 5px}
+.fl:first-of-type{margin-top:0}
+.fin{width:100%;border:1px solid var(--border-f);border-radius:9px;padding:8px 12px;font-size:12.5px;background:var(--surface2);color:var(--text);font-family:inherit}
+.half{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chipdd{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border-f);border-radius:9px;padding:8px 12px;font-size:12.5px;background:var(--surface2);cursor:pointer}
+.chipdd .car{color:var(--muted);font-size:10px}
+.seg3{display:flex;background:var(--surface2);border:1px solid var(--border-f);border-radius:9px;padding:2px}
+.seg3 b{flex:1;text-align:center;padding:7px 0;font-size:12px;border-radius:7px;color:var(--soft);cursor:pointer;font-weight:600}
+.seg3 b.on{background:rgba(94,106,210,.18);color:var(--text)}
+.tgl{display:flex;align-items:center;gap:10px;margin-top:12px}
+.tgl .sw{width:38px;height:21px;border-radius:11px;background:var(--green);position:relative;flex:none}
+.tgl .sw:after{content:'';position:absolute;right:2px;top:2px;width:17px;height:17px;border-radius:50%;background:#fff}
+.accg{border:1px solid var(--border-f);border-radius:11px;margin-bottom:7px;overflow:hidden}
+.accg .gh{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--surface2);font-size:12px;font-weight:700;cursor:pointer}
+.accg .gh .cnt{margin-left:auto;font-size:10.5px;color:var(--muted);font-weight:600}
+.accg .gh .car{color:var(--muted);font-size:9px}
+.accg .rows{padding:4px 6px}
+.arow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;font-size:12px;color:var(--soft);cursor:pointer}
+.arow:hover{background:var(--surface2)}
+.tick{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--muted);flex:none}
+.tick.on{background:rgba(76,183,130,.2);border-color:var(--green);position:relative}
+.tick.on:after{content:'';position:absolute;left:4px;top:1px;width:5px;height:9px;border:solid var(--green);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.mact{display:flex;gap:10px;margin-top:18px;justify-content:flex-end}
+.mact .go{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:9px 18px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit}
+.mact .no{background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;font-family:inherit}
+
+/* планы */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.pcard{background:var(--surface2);border:1px solid var(--border-f);border-radius:12px;padding:13px 15px}
+.pcard .c{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:7px;display:flex;justify-content:space-between}
+.pcard .v{font-size:17px;font-weight:700}
+.pcard .v .edit{text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;cursor:pointer}
+.pcard .f{font-size:11px;color:var(--soft);margin-top:3px}
+.pcard .bar{height:4px;background:var(--surface3);border-radius:2px;margin-top:9px;overflow:hidden}
+.pcard .bar i{display:block;height:100%;background:var(--accent)}
+.pcard.ok .bar i{background:var(--green)}
+.pcard .pс{font-size:10.5px;margin-top:6px;color:var(--muted)}
+.pcard.warn{border-color:rgba(224,164,88,.4)}
+.pcard.warn .pс{color:var(--amber)}
+
+/* подключения */
+.conn{display:flex;align-items:center;gap:14px;padding:13px 15px;border:1px solid var(--border-f);border-radius:12px;margin-bottom:8px;background:var(--surface2)}
+.cico{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:none}
+.conn .nm{font-weight:700;font-size:12.5px}
+.conn .ds{font-size:11px;color:var(--muted);margin-top:1px}
+.conn .st{margin-left:auto;font-size:11px;font-weight:700;color:var(--green);display:flex;align-items:center;gap:6px}
+.conn .st i{width:7px;height:7px;border-radius:50%;background:var(--green)}
+.conn .car{color:var(--muted);font-size:10px;margin-left:10px}
+</style>
+</head>
+<body>
+<button class="themeb" onclick="document.body.classList.toggle('light')">Светлая / тёмная</button>
+
+<h2>1. Главный экран — всё за карточками, ничего лишнего</h2>
+<div class="note">Настройки открываются спокойным экраном из шести карточек. Клик по карточке — открывается раздел. Сотрудники больше не вываливаются простынёй.</div>
+<div class="pane" style="max-width:940px">
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:10px">
+  <div class="conn" style="margin:0;cursor:pointer"><span class="cico" style="background:rgba(94,106,210,.15);color:#8B95E8">СО</span><span><div class="nm">Сотрудники</div><div class="ds">11 работают · роли, страны, права</div></span><span class="car" style="margin-left:auto">&#9656;</span></div>
+  <div class="conn" style="margin:0;cursor:pointer"><span class="cico" style="background:rgba(76,183,130,.15);color:var(--green)">ПО</span><span><div class="nm">Подключения</div><div class="ds">Google Таблица, Светофор, Telegram-бот</div></span><span class="car" style="margin-left:auto">&#9656;</span></div>
+  <div class="conn" style="margin:0;cursor:pointer"><span class="cico" style="background:rgba(139,92,246,.15);color:#A78BFA">УВ</span><span><div class="nm">Уведомления</div><div class="ds">Дайджест в Telegram: время и состав</div></span><span class="car" style="margin-left:auto">&#9656;</span></div>
+  <div class="conn" style="margin:0;cursor:pointer"><span class="cico" style="background:rgba(224,164,88,.15);color:var(--amber)">ПА</span><span><div class="nm">Параметры</div><div class="ds">Курс доллара, оплата таргетологу</div></span><span class="car" style="margin-left:auto">&#9656;</span></div>
+  <div class="conn" style="margin:0;cursor:pointer"><span class="cico" style="background:rgba(120,120,128,.15);color:var(--soft)">ПР</span><span><div class="nm">Мой профиль</div><div class="ds">Сменить свой пароль</div></span><span class="car" style="margin-left:auto">&#9656;</span></div>
+ </div>
+ <div class="note" style="margin:12px 2px 0">Планов в Настройках больше нет — все цели переезжают в раздел «Планы» в меню (см. блок 1а). Вкладка «Telegram-бот» становится подключением. Параметры — только то, что влияет на расчёты: курс и гонорар.</div>
+</div>
+
+<h2>1а. Раздел «Планы» в меню — установка и выполнение в одном месте</h2>
+<div class="note">Пункт меню «Выполнение плана» переименовывается в «Планы». Внутри: план/факт из Светофора, установка плана кликом по числу, планы лидов и интеграций (это тоже цели компании) и история изменений — всё, что раньше было разорвано между меню и Настройками.</div>
+<div class="pane" style="max-width:940px">
+ <div class="phead"><span class="t">Планы · июль<small>факт из Светофора, Meta и amo — сам</small></span>
+ <span class="stabs" style="margin:0"><span>Неделя</span><span class="on">Месяц</span><span>Квартал</span><span>Год</span></span></div>
+ <div class="pgrid num">
+  <div class="pcard"><div class="c">Новые продажи</div><div class="v"><span class="edit">10 000 000</span> ₸</div><div class="f">факт: 2 140 000 ₸</div><div class="bar"><i style="width:21%"></i></div><div class="pс">21% · к 5 июля темп в норме</div></div>
+  <div class="pcard warn"><div class="c">Абон. платы</div><div class="v"><span class="edit">300 000</span> ₸</div><div class="f">факт: 3 796 400 ₸</div><div class="bar"><i style="width:100%;background:var(--amber)"></i></div><div class="pс">факт больше плана в 12 раз — проверь план</div></div>
+  <div class="pcard"><div class="c">Лиды · KZ</div><div class="v"><span class="edit">200</span></div><div class="f">факт: 8 · из Meta</div><div class="bar"><i style="width:4%"></i></div><div class="pс">4% · отстаём от темпа</div></div>
+  <div class="pcard"><div class="c">Лиды · KG</div><div class="v"><span class="edit">80</span></div><div class="f">факт: 0 · из Meta</div><div class="bar"><i style="width:2%"></i></div><div class="pс">0%</div></div>
+  <div class="pcard"><div class="c">Интеграции</div><div class="v"><span class="edit">10</span></div><div class="f">факт: 0 готово · 22 в очереди</div><div class="bar"><i style="width:2%"></i></div><div class="pс">0% · из раздела Интеграции</div></div>
+  <div class="pcard"><div class="c">Встречи</div><div class="v"><span class="edit">80</span></div><div class="f">факт: 0 · из Светофора</div><div class="bar"><i style="width:2%"></i></div><div class="pс">0%</div></div>
+ </div>
+ <div class="note" style="margin:12px 2px 0">Ниже на странице: история изменений планов (кто, когда, что поменял).</div>
+</div>
+
+<h2>1б. Настройки → «Уведомления» — управление дайджестом</h2>
+<div class="note">Дайджест переезжает на сервер: один раз в день, данные из базы. Здесь включается и настраивается.</div>
+<div class="pane" style="max-width:940px">
+ <div class="phead"><span class="t">Уведомления в Telegram</span></div>
+ <div class="conn"><span class="cico" style="background:rgba(94,106,210,.15);color:#8B95E8">ДЖ</span><span><div class="nm">Утренний дайджест</div><div class="ds">Доходы KZ и KG, вчерашние оплаты, очередь интеграций, просроченные задачи, расход Meta</div></span><span class="st"><i></i>включён · 09:00</span><span class="car">&#9662;</span></div>
+ <div class="note" style="margin:8px 2px 0">Старая отправка из браузера удаляется — дубли и кривые цифры уйдут.</div>
+</div>
+
+<h2>1в. Настройки → «Параметры» — только то, что влияет на расчёты</h2>
+<div class="pane" style="max-width:940px">
+ <div class="pgrid num">
+  <div class="pcard"><div class="c">Курс доллара · KZ</div><div class="v"><span class="edit">478</span> ₸</div><div class="f">расход Meta в Маркетинге</div></div>
+  <div class="pcard"><div class="c">Курс доллара · KG</div><div class="v"><span class="edit">87</span> сом</div><div class="f">расход Meta · Кыргызстан</div></div>
+  <div class="pcard"><div class="c">Таргетолог · KZ</div><div class="v"><span class="edit">150 000</span> ₸/мес</div><div class="f">входит в расход рекламы</div></div>
+  <div class="pcard"><div class="c">Таргетолог · KG</div><div class="v"><span class="edit">0</span> сом/мес</div><div class="f">входит в расход рекламы</div></div>
+ </div>
+</div>
+
+<h2>2. Сотрудники — открываются кнопкой, уволенные свёрнуты</h2>
+<div class="note">Внутри раздела: аватары, роль цветным бейджем, замок страны у KG. Уволенные свёрнуты внизу. Кнопка «назад» к главному экрану настроек.</div>
+<div class="pane">
+ <div class="phead"><span class="t">Сотрудники<small>11 работают</small></span><button class="addb">+ Добавить</button></div>
+ <div class="emp h"><span>Сотрудник</span><span>Должность</span><span>Логин</span><span>Роль</span><span>Страна</span><span style="text-align:right">Статус</span></div>
+ <div class="emp"><span class="who"><span class="av">МИ</span>Mirzahit</span><span class="pos">CEO</span><span class="log">office@salesdoc.io</span><span class="rb admin">Администратор</span><span class="cty">Обе</span><span class="stat"><span class="dot"></span>работает</span></div>
+ <div class="emp"><span class="who"><span class="av" style="background:rgba(76,183,130,.14);color:var(--green)">АХ</span>Aidos Hapez</span><span class="pos">Sales Manager</span><span class="log">aidosh</span><span class="rb mgr">Менеджер</span><span class="cty">Обе</span><span class="stat"><span class="dot"></span>работает</span></div>
+ <div class="emp"><span class="who"><span class="av" style="background:rgba(76,183,130,.14);color:var(--green)">ЮЛ</span>Yulia</span><span class="pos">Sales Manager</span><span class="log">yulia</span><span class="rb mgr">Менеджер</span><span class="cty">Обе</span><span class="stat"><span class="dot"></span>работает</span></div>
+ <div class="emp"><span class="who"><span class="av" style="background:rgba(224,164,88,.15);color:var(--amber)">АК</span>Akbar</span><span class="pos">Support</span><span class="log">akbar</span><span class="rb op">Оператор</span><span class="cty">Обе</span><span class="stat"><span class="dot"></span>работает</span></div>
+ <div class="emp"><span class="who"><span class="av" style="background:rgba(224,164,88,.15);color:var(--amber)">ЭЛ</span>Eliza</span><span class="pos">Support</span><span class="log">evanliza9701@gmail.com</span><span class="rb op">Оператор</span><span class="cty"><span class="lock">KG · замок</span></span><span class="stat"><span class="dot"></span>работает</span></div>
+ <div class="emp"><span class="who"><span class="av" style="background:rgba(120,120,128,.15);color:var(--soft)">ГУ</span>Gulshan</span><span class="pos">Accountant</span><span class="log">gulshan</span><span class="rb view">Просмотр</span><span class="cty">Обе</span><span class="stat"><span class="dot"></span>работает</span></div>
+ <div class="fired"><div class="fh">Уволенные · 4 — показать ▾</div></div>
+</div>
+
+<h2>3. Карточка сотрудника — профиль слева, права справа</h2>
+<div class="note">Вместо длинной простыни — два столбца: слева профиль, справа права доступа группами со счётчиками. Подписи по-человечески: «Email» вместо «Email / Логин», у бонуса написано от чего процент. Заодно чиню найденный баг: при редактировании галочки прав не подгружались из профиля.</div>
+<div class="modal">
+ <h3>Акбар — оператор поддержки</h3>
+ <div class="mgrid">
+  <div>
+   <div class="fl">Имя</div><input class="fin" value="Akbar">
+   <div class="fl">Должность</div><input class="fin" value="Support">
+   <div class="half">
+    <div><div class="fl">Email</div><input class="fin" value="akbar"></div>
+    <div><div class="fl">Новый пароль</div><input class="fin" placeholder="пусто = не менять"></div>
+   </div>
+   <div class="half">
+    <div><div class="fl">Роль</div><div class="chipdd"><span>Оператор</span><span class="car">&#9662;</span></div></div>
+    <div><div class="fl">Бонус, % от оплат</div><input class="fin" value="30"></div>
+   </div>
+   <div class="fl">Страна</div>
+   <div class="seg3"><b class="on">Обе</b><b>KZ</b><b>KG</b></div>
+   <div class="tgl"><span class="sw"></span><span style="font-size:12px;color:var(--soft)">Работает</span></div>
+  </div>
+  <div>
+   <div class="fl" style="margin-top:0">Права доступа</div>
+   <div class="accg"><div class="gh"><span class="car">&#9662;</span>Клиенты<span class="cnt">4 из 6</span></div>
+    <div class="rows">
+     <div class="arow"><span class="tick on"></span>Внедрение</div>
+     <div class="arow"><span class="tick on"></span>Действующие клиенты</div>
+     <div class="arow"><span class="tick on"></span>Поддержка</div>
+     <div class="arow"><span class="tick on"></span>Интеграции</div>
+     <div class="arow"><span class="tick"></span>Ключевые клиенты</div>
+    </div>
+   </div>
+   <div class="accg"><div class="gh"><span class="car">&#9656;</span>Задачи и команда<span class="cnt">3 из 8</span></div></div>
+   <div class="accg"><div class="gh"><span class="car">&#9656;</span>Финансы<span class="cnt">0 из 5</span></div></div>
+   <div class="accg"><div class="gh"><span class="car">&#9656;</span>Маркетинг и управление<span class="cnt">0 из 9</span></div></div>
+  </div>
+ </div>
+ <div class="mact"><button class="no">Отмена</button><button class="go">Сохранить</button></div>
+</div>
+
+<h2>4. Подключения — с иконками, Telegram-бот теперь здесь</h2>
+<div class="note">Пустые квадраты заменяются иконками-буквами, статус с точкой. Управление Telegram-ботом (рассылки менеджерам) — раскрывается внутри его карточки, отдельная скрытая вкладка не нужна. Код для разработчиков остаётся за кнопкой, с «Скопировать».</div>
+<div class="pane">
+ <div class="conn"><span class="cico" style="background:rgba(76,183,130,.15);color:var(--green)">GT</span><span><div class="nm">Google Таблица «Доходы»</div><div class="ds">Основной источник оплат</div></span><span class="st"><i></i>подключено</span><span class="car">&#9662;</span></div>
+ <div class="conn"><span class="cico" style="background:rgba(94,106,210,.15);color:#8B95E8">КС</span><span><div class="nm">КПИ Светофор</div><div class="ds">Планы и факт для раздела «Планы»</div></span><span class="st"><i></i>подключено</span><span class="car">&#9662;</span></div>
+ <div class="conn"><span class="cico" style="background:rgba(224,164,88,.15);color:var(--amber)">TG</span><span><div class="nm">Telegram-бот оплат</div><div class="ds">Приём оплат от менеджеров · Railway</div></span><span class="st"><i></i>работает</span><span class="car">&#9662;</span></div>
+</div>
+
+</body>
+</html>

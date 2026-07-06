@@ -13,7 +13,13 @@ import { checkAuth } from './_auth.js';
 // intg_fields (v796): настройка полей карты интеграции — {hidden:[стандартные ключи], custom:[{key,label}]}
 // mkt_lead_plan (v797): план лидов на месяц по странам — {KZ:{plan:200}, KG:{plan:80}}
 // mkt_costs (v797): курс доллара и гонорар таргетолога — {KZ:{usd_rate:478, fee:150000}, KG:{...}}
-const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs'];
+// tg_digest (v801): утренний дайджест в Telegram — {enabled:bool, hour:9, last_sent:'YYYY-MM-DD'};
+//   шлёт серверный крон (api/cron-digest.js, v802), фронт только настраивает.
+// company_plans (v801): цели компании со страницы «Планы» — {week|month|quarter|year:{категория:число}};
+//   override поверх плана из Светофора (пустая ячейка = берём Светофор/дефолт).
+// plan_history (v801): история изменений планов — МАССИВ (typeof 'object' — валидацию ниже проходит),
+//   новые сверху, фронт держит cap 50 записей.
+const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'tg_digest', 'company_plans', 'plan_history'];
 
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
