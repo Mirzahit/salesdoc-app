@@ -221,8 +221,9 @@ export default async function handler(req, res) {
     // Это страховка на случай, если фронт обойдут. Список можно расширить
     // через ENV ASSISTANT_ALLOWED_EMAILS (через запятую).
     // v541: исключение для support_responder — этот агент нужен ВСЕМ операторам поддержки.
+    // v806: academy_trainer — тренажёр Академии, нужен всем сотрудникам (менеджеры/операторы учатся).
     // Авторизация уже проверена через checkAuth (x-app-token); дополнительной email-проверки не нужно.
-    const SUPPORT_AGENTS = ['support_responder'];
+    const SUPPORT_AGENTS = ['support_responder', 'academy_trainer'];
     if (SUPPORT_AGENTS.indexOf(agentId) === -1) {
       const allowedRaw = process.env.ASSISTANT_ALLOWED_EMAILS || 'office@salesdoc.io';
       const allowed = allowedRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
