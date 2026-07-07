@@ -63,21 +63,40 @@ export default async function handler(req, res) {
       const q = req.query || {};
 
       if (q.structure === '1') {
-        const [mods, lessons] = await Promise.all([
+        // v808: курсы → модули → уроки (вид GetCourse). Неактивный курс = карточка «скоро».
+        const [courses, mods, lessons] = await Promise.all([
+          sbSelect('academy_courses', { order: 'sort.asc' }),
           sbSelect('academy_modules', { active: 'eq.true', order: 'sort.asc' }),
-          sbSelect('academy_lessons', { active: 'eq.true', order: 'sort.asc', select: 'id,module_id,sort,title,duration_label,trainer,questions' })
+          sbSelect('academy_lessons', { active: 'eq.true', order: 'sort.asc', select: 'id,module_id,sort,title,duration_label,trainer,questions,video_path' })
         ]);
         const byMod = {};
         lessons.forEach(l => {
           (byMod[l.module_id] = byMod[l.module_id] || []).push({
             id: l.id, sort: l.sort, title: l.title, duration_label: l.duration_label,
             has_trainer: !!l.trainer,
+            has_video: !!l.video_path,
             questions_count: Array.isArray(l.questions) ? l.questions.length : 0
           });
         });
+        const byCourse = {};
+        // Модуль без course_id (забыли привязать в Supabase) не должен молча исчезать —
+        // докидываем его в первый активный курс и оставляем след в логах
+        const fallbackCourse = courses.find(c => c.active !== false) || courses[0];
+        mods.forEach(m => {
+          let cid = m.course_id;
+          if (!cid || !courses.some(c => c.id === cid)) {
+            console.warn('[api/academy] модуль без курса, показан в первом активном:', m.id, m.title);
+            cid = fallbackCourse ? fallbackCourse.id : cid;
+          }
+          (byCourse[cid] = byCourse[cid] || []).push({ id: m.id, sort: m.sort, title: m.title, lessons: byMod[m.id] || [] });
+        });
         return res.status(200).json({
           ok: true,
-          modules: mods.map(m => ({ id: m.id, sort: m.sort, title: m.title, lessons: byMod[m.id] || [] }))
+          courses: courses.map(c => ({
+            id: c.id, sort: c.sort, title: c.title, subtitle: c.subtitle, audience: c.audience,
+            roles: c.roles || null, active: c.active !== false,
+            modules: byCourse[c.id] || []
+          }))
         });
       }
 
@@ -91,6 +110,7 @@ export default async function handler(req, res) {
             id: l.id, module_id: l.module_id, title: l.title, duration_label: l.duration_label,
             cards: l.cards || [],
             trainer: l.trainer || null,
+            has_video: !!l.video_path, // v808: сам путь не отдаём — плеер берёт подписанную ссылку через ?video=
             // Правильные ответы наружу не отдаём — проверка только в check_test
             questions: (l.questions || []).map(it => ({ q: it.q, options: it.options }))
           }
@@ -146,6 +166,17 @@ export default async function handler(req, res) {
       }
 
       if (body.action === 'progress') {
+        // mark_passed: зачёт урока БЕЗ теста (видео/конспект). Проверяем на сервере,
+        // что теста действительно нет — иначе тест обходился бы одной кнопкой.
+        let markPassed = false;
+        if (body.mark_passed) {
+          const ls = await sbSelect('academy_lessons', { id: 'eq.' + lessonId, select: 'questions', limit: '1' });
+          if (!ls.length) return res.status(404).json({ ok: false, error: 'урок не найден' });
+          if (Array.isArray(ls[0].questions) && ls[0].questions.length) {
+            return res.status(400).json({ ok: false, error: 'в этом уроке есть тест — зачёт только через тест' });
+          }
+          markPassed = true;
+        }
         const row = {
           user_email: email,
           lesson_id: lessonId,
@@ -154,7 +185,7 @@ export default async function handler(req, res) {
           trainer_review: body.trainer_review != null ? String(body.trainer_review).slice(0, 4000) : (cur ? cur.trainer_review : null),
           test_score: cur ? cur.test_score : null,
           test_attempts: cur ? cur.test_attempts : 0,
-          passed: cur ? cur.passed : false,
+          passed: markPassed || (cur ? cur.passed : false),
           updated_at: new Date().toISOString()
         };
         const saved = await sbUpsert('academy_progress', row, 'user_email,lesson_id');
