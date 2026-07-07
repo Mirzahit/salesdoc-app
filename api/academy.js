@@ -135,10 +135,15 @@ export default async function handler(req, res) {
       const lessonId = String(body.lesson_id || '');
       if (!lessonId) return res.status(400).json({ ok: false, error: 'нужен lesson_id' });
 
-      const existing = await sbSelect('academy_progress', {
-        user_email: 'eq.' + email, lesson_id: 'eq.' + lessonId, limit: '1'
-      });
-      const cur = existing[0] || null;
+      // v808: прогресс читаем только там, где он нужен (upload_sign/set_video работают
+      // с lesson_id и падали бы на select с невалидным uuid до своей ветки)
+      let cur = null;
+      if (body.action === 'progress' || body.action === 'check_test') {
+        const existing = await sbSelect('academy_progress', {
+          user_email: 'eq.' + email, lesson_id: 'eq.' + lessonId, limit: '1'
+        });
+        cur = existing[0] || null;
+      }
 
       if (body.action === 'progress') {
         const row = {
