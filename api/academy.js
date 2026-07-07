@@ -11,12 +11,27 @@
 // Личность — заголовок x-user-email (sbFetch шлёт сам). Известное ограничение проекта:
 // заголовок можно подделать с APP_TOKEN (как в employee-access) — приемлемо для внутреннего инструмента.
 
-import { sbSelect, sbUpsert } from './_supabase.js';
+import { sbSelect, sbUpsert, sbUpdate } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 
 export const config = { maxDuration: 30 };
 
 const PASS_SCORE = 80;
+
+// v808: видео уроков — приватный бакет academy-videos. Плеер получает временную подписанную
+// ссылку (2 часа), загрузка — прямым PUT в Storage по подписанному upload-URL (мимо лимита
+// тела запроса Vercel 4.5МБ). Публичных ссылок на видео не существует.
+const SB_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+const SB_KEY = process.env.SUPABASE_SECRET_KEY || '';
+
+async function storageFetch(path, body) {
+  const r = await fetch(`${SB_URL}/storage/v1${path}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${SB_KEY}`, 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return { status: r.status, json: await r.json().catch(() => ({})) };
+}
 
 function callerEmail(req) {
   return String(req.headers['x-user-email'] || '').trim().toLowerCase();
@@ -80,6 +95,15 @@ export default async function handler(req, res) {
             questions: (l.questions || []).map(it => ({ q: it.q, options: it.options }))
           }
         });
+      }
+
+      // v808: подписанная ссылка на видео урока (2 часа), только для авторизованных
+      if (q.video) {
+        const rows = await sbSelect('academy_lessons', { id: 'eq.' + q.video, select: 'video_path', limit: '1' });
+        if (!rows.length || !rows[0].video_path) return res.status(404).json({ ok: false, error: 'у урока нет видео' });
+        const { json } = await storageFetch('/object/sign/academy-videos/' + rows[0].video_path, { expiresIn: 7200 });
+        if (!json.signedURL) return res.status(500).json({ ok: false, error: 'не удалось подписать видео' });
+        return res.status(200).json({ ok: true, url: SB_URL + '/storage/v1' + json.signedURL });
       }
 
       if (q.progress === '1') {
@@ -163,6 +187,27 @@ export default async function handler(req, res) {
         const saved = await sbUpsert('academy_progress', row, 'user_email,lesson_id');
         // Правильные индексы не раскрываем — только какие вопросы мимо
         return res.status(200).json({ ok: true, score, passed: saved[0].passed, correct_count: correct, total: questions.length, wrong_indexes: wrong, attempts: saved[0].test_attempts });
+      }
+
+      // v808: подписанный upload-URL для загрузки видео (только руководители).
+      // Браузер шлёт файл PUT-ом прямо в Storage — мимо Vercel.
+      if (body.action === 'upload_sign') {
+        if (!(await isHead(email))) return res.status(403).json({ ok: false, error: 'загрузка видео — только руководителям' });
+        const raw = String(body.path || '').trim();
+        if (!raw) return res.status(400).json({ ok: false, error: 'нужен path' });
+        const path = raw.replace(/[^a-zA-Z0-9/_.-]/g, '_').replace(/\.\./g, '_').slice(0, 200);
+        const { json } = await storageFetch('/object/upload/sign/academy-videos/' + path, {});
+        if (!json.url) return res.status(500).json({ ok: false, error: 'не удалось подписать загрузку', detail: json });
+        return res.status(200).json({ ok: true, upload_url: SB_URL + '/storage/v1' + json.url, path });
+      }
+
+      // v808: привязать загруженное видео к уроку (только руководители)
+      if (body.action === 'set_video') {
+        if (!(await isHead(email))) return res.status(403).json({ ok: false, error: 'только руководителям' });
+        const vp = body.video_path == null ? null : String(body.video_path).slice(0, 200);
+        const upd = await sbUpdate('academy_lessons', { id: 'eq.' + lessonId }, { video_path: vp });
+        if (!upd.length) return res.status(404).json({ ok: false, error: 'урок не найден' });
+        return res.status(200).json({ ok: true, lesson_id: lessonId, video_path: upd[0].video_path });
       }
 
       return res.status(400).json({ ok: false, error: 'неизвестный action' });
