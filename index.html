@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v808</title>
+<title>SalesDoc — Финансовый Дашборд v809</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -26654,26 +26654,27 @@ function _intgToggleUnassigned(){
 
 // v448: «Мои/Все» для канбана Интеграций. По образцу _ticketsCurrentOperatorName.
 // «Мои» — карточки где operator === me. Состояние в localStorage.
-function _intgIsOperator(){ return !!(typeof currentUser!=='undefined' && currentUser && currentUser.role === 'operator'); }
 function _intgCurrentOperatorName(){
  if(typeof currentUser === 'undefined' || !currentUser || !currentUser.name) return null;
  var firstWord = String(currentUser.name).trim().split(/\s+/)[0];
  if(INTG_OPERATORS.indexOf(firstWord) >= 0) return firstWord;
- // v592: операторы вне списка тоже скоупятся по своему имени (не видят чужие карточки)
- if(_intgIsOperator()) return firstWord;
+ // v809: v592-скоуп «оператор видит только своё» УБРАН — очередь общая на отдел (решение v794).
+ // Раньше Akbar/Samat/Eliza скоупились по имени, которого нет в карточках → пустой раздел.
  return null;
 }
 function _intgGetScope(){
- // v592: оператор всегда «Мои» — правило продукта «оператор видит только своё» (как в тикетах)
- if(_intgIsOperator()) return 'mine';
  var saved = null;
  try { saved = localStorage.getItem('intg_scope'); } catch(_){}
- if(saved === 'mine' || saved === 'all') return saved;
- // По умолчанию: интегратору — «Мои», остальным (CEO/менеджеры) — «Все».
+ if(saved === 'mine' || saved === 'all'){
+  // v809: залипшее 'mine' со времён v592-форсирования у людей вне INTG_OPERATORS — игнорируем,
+  // иначе переключатель рисуется без единой подсвеченной кнопки
+  if(saved === 'mine' && !_intgCurrentOperatorName()) return 'all';
+  return saved;
+ }
+ // По умолчанию: интегратору (Аян/Дулат/Абзал) — «Мои», остальным — «Все».
  return _intgCurrentOperatorName() ? 'mine' : 'all';
 }
 function _intgSetScope(scope){
- if(_intgIsOperator()) scope = 'mine'; // v592: оператор не может переключиться на «Все»
  if(scope !== 'mine' && scope !== 'all') return;
  try { localStorage.setItem('intg_scope', scope); } catch(_){}
  if(typeof intgSbLoad === 'function') intgSbLoad();
@@ -26687,11 +26688,13 @@ function _intgRenderScopeToggle(items){
  var mineCount = me ? arr.filter(function(r){ return r.operator === me; }).length : 0;
  var allCount = arr.length;
  var btns = toggle.querySelectorAll('button[data-scope]');
- var opOnly = _intgIsOperator(); // v592: оператору кнопку «Все» не показываем
  for(var i = 0; i < btns.length; i++){
   var btn = btns[i];
   var s = btn.getAttribute('data-scope');
-  if(opOnly && s === 'all'){ btn.style.display = 'none'; continue; }
+  // v809: кнопка «Все» видна всем — очередь общая на отдел (v592-ограничение убрано)
+  btn.style.display = '';
+  // v809: «Мои» без смысла, когда пользователя нет в списке операторов интеграции
+  if(s === 'mine' && !me){ btn.style.display = 'none'; continue; }
   var isActive = s === scope;
   btn.style.background = isActive ? 'var(--accent, #5E6AD2)' : 'transparent';
   btn.style.color = isActive ? '#fff' : 'var(--text-soft)';
@@ -26719,7 +26722,7 @@ function intgSbRender(items){
   var empty = document.createElement('div');
   empty.style.cssText = 'font-size:13px;color:var(--text-muted);padding:24px 0;text-align:center;line-height:1.5';
   if(intgScope === 'mine' && intgMe){
-   empty.textContent = _intgIsOperator() ? 'У вас пока нет назначенных интеграций.' : 'У вас нет активных интеграций. Переключите на «Все» — заберите новую из общей очереди.';
+   empty.textContent = 'У вас нет активных интеграций. Переключите на «Все» — заберите новую из общей очереди.'; // v809: подсказка видна всем — «Все» больше не скрыта
   } else if(!items.length){
    empty.textContent = 'Пока новых интеграций нет — появятся когда пройдёт первая оплата «Нов интеграция» через бота.';
   } else {
