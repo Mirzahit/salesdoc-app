@@ -176,6 +176,23 @@ async function readBody(req) {
 // kind: 'impl' | 'integ'. Возвращает { action, client_id, card_id?|integration_id? }.
 // Идемпотентность: дедуп по (country, sheet_row, sheet_month); fallback по client_id
 // (активная карта / интеграция «Новая» той же датой) — на случай отсутствия sheet-полей.
+// v810: оператор новой интеграции подтягивается с Внедрения клиента —
+// сначала постоянный ведущий (clients.curator_operator), иначе оператор последней карты Маршрута.
+// Сбой не критичен: карточка создастся без оператора, как раньше.
+async function operatorFromImplementation(clientId) {
+  if (!clientId) return null;
+  try {
+    const cl = await sbSelect('clients', { client_id: 'eq.' + clientId, select: 'curator_operator', limit: '1' });
+    const cur = cl.length ? String(cl[0].curator_operator || '').trim() : '';
+    if (cur) return cur;
+    const cards = await sbSelect('kanban_cards', {
+      client_id: 'eq.' + clientId, select: 'operator', order: 'created_at.desc', limit: '5'
+    });
+    const withOp = cards.find(c => String(c.operator || '').trim());
+    return withOp ? String(withOp.operator).trim() : null;
+  } catch (_) { return null; }
+}
+
 export async function ensureBoardEntryForPayment(opts) {
   const company = (opts.company || '').trim();
   const country = (opts.country || 'KZ').toUpperCase();
@@ -239,6 +256,7 @@ export async function ensureBoardEntryForPayment(opts) {
     const inserted = await sbInsert('integrations', {
       client_id: clientId, company_name: company, country: country, status: 'Новая',
       manager: (opts.manager || '').trim() || null, date_paid: todayIso,
+      operator: await operatorFromImplementation(clientId), // v810: оператор с Внедрения клиента
       package: opts.tariff || null, sheet_row: sheet_row, sheet_month: sheet_month
     });
     return { action: 'integration_created', integration_id: inserted[0].id, client_id: clientId };
@@ -1002,7 +1020,7 @@ async function handleIntegrationsRoute(req, res) {
       type: body.type || null,
       package: body.package || null,
       db_type: body.db_type || null,
-      operator: body.operator || null,
+      operator: body.operator || await operatorFromImplementation(body.client_id) || null, // v810
       manager: body.manager || null,
       date_paid: body.date_paid || null,
       date_taken: body.date_taken || null,

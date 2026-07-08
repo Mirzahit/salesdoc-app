@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v809</title>
+<title>SalesDoc — Финансовый Дашборд v810</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8363,6 +8363,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <button type="button" class="intg-fchip" id="intg-fchip-type" onclick="_intgFilterDdOpen(event,'type')"><span style="opacity:.65;font-weight:500">Тип:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
  <button type="button" class="intg-fchip" id="intg-fchip-country" onclick="_intgFilterDdOpen(event,'country')"><span style="opacity:.65;font-weight:500">Страна:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
  <button type="button" class="intg-fchip" id="intg-fchip-package" onclick="_intgFilterDdOpen(event,'package')"><span style="opacity:.65;font-weight:500">Пакет:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
+ <button type="button" class="intg-fchip" id="intg-fchip-operator" onclick="_intgFilterDdOpen(event,'operator')"><span style="opacity:.65;font-weight:500">Оператор:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
+ <button type="button" class="intg-fchip" id="intg-fchip-manager" onclick="_intgFilterDdOpen(event,'manager')"><span style="opacity:.65;font-weight:500">Менеджер:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
  </div>
  <div id="intg-status" style="font-size:11px;color:var(--text-muted)"></div>
  </div>
@@ -26268,6 +26270,14 @@ function intgSbRerender(){
  var fType    = window._intgFilters.type    || '';
  var fCountry = window._intgFilters.country || '';
  var fPackage = window._intgFilters.package || '';
+ var fOperator = window._intgFilters.operator || ''; // v810: кто внедряет ('__none' = не назначен)
+ var fManager  = window._intgFilters.manager  || ''; // v810: кто продал
+ function _intgWhoMatch(val, f){
+  if(!f) return true;
+  var v = String(val || '').trim();
+  if(f === '__none') return !v;
+  return v === f;
+ }
  if(typeof _intgFchipsRender === 'function') _intgFchipsRender();
  // v768: при замке по стране показываем только страну сотрудника (см. intgRender)
  var _lkIntg2 = (typeof countryLockFor === 'function') ? countryLockFor() : null;
@@ -26295,6 +26305,8 @@ function intgSbRerender(){
   if(fType    && it.type    !== fType   ) return false;
   if(fCountry && String(it.country||'').toUpperCase() !== fCountry) return false;
   if(fPackage && it.package !== fPackage) return false;
+  if(!_intgWhoMatch(_intgOperOf(it), fOperator)) return false; // v810: оператор карточки или с внедрения клиента
+  if(!_intgWhoMatch(it.manager, fManager)) return false;       // v810
   // Активные — всегда
   if(ACTIVE_STAGES[it.status]) return true;
   // Готово/Отменено — только если попадает в выбранный месяц
@@ -26316,7 +26328,9 @@ function intgSbRerender(){
    + (fStatus  ? ' · ' + fStatus  : '')
    + (fType    ? ' · ' + fType    : '')
    + (fCountry ? ' · ' + fCountry : '')
-   + (fPackage ? ' · ' + fPackage : '');
+   + (fPackage ? ' · ' + fPackage : '')
+   + (fOperator ? ' · ' + (fOperator === '__none' ? 'без оператора' : fOperator) : '')  // v810
+   + (fManager  ? ' · ' + (fManager  === '__none' ? 'без менеджера' : fManager)  : ''); // v810
 }
 
 // v524: аналитика по Supabase-данным. Считает 3 блока: period stats (по типу),
@@ -26646,10 +26660,12 @@ function _intgQueueSort(arr){
  });
 }
 
-// v445: toggle фильтра «только без оператора» для канбана Интеграций
+// v445→v810: красный линк «N без оператора» теперь управляет тем же чипом «Оператор» (__none).
+// Раньше было отдельное состояние _intgFilterUnassigned — два фильтра об одном спорили между собой.
 function _intgToggleUnassigned(){
- window._intgFilterUnassigned = !window._intgFilterUnassigned;
- if(typeof intgSbLoad === 'function') intgSbLoad();
+ window._intgFilters.operator = (window._intgFilters.operator === '__none') ? '' : '__none';
+ if(typeof _intgFchipsRender === 'function') _intgFchipsRender();
+ if(typeof intgSbRerender === 'function') intgSbRerender();
 }
 
 // v448: «Мои/Все» для канбана Интеграций. По образцу _ticketsCurrentOperatorName.
@@ -26685,7 +26701,7 @@ function _intgRenderScopeToggle(items){
  var scope = _intgGetScope();
  var me = _intgCurrentOperatorName();
  var arr = Array.isArray(items) ? items : [];
- var mineCount = me ? arr.filter(function(r){ return r.operator === me; }).length : 0;
+ var mineCount = me ? arr.filter(function(r){ return String(r.operator||'').trim() === me; }).length : 0; // v810: trim — как в фильтре
  var allCount = arr.length;
  var btns = toggle.querySelectorAll('button[data-scope]');
  for(var i = 0; i < btns.length; i++){
@@ -26715,13 +26731,17 @@ function intgSbRender(items){
  var intgMe = _intgCurrentOperatorName();
  _intgRenderScopeToggle(items);
  var visibleItems = (intgScope === 'mine' && intgMe)
-  ? items.filter(function(r){ return r.operator === intgMe; })
+  ? items.filter(function(r){ return String(r.operator||'').trim() === intgMe; }) // v810: trim — как в фильтре
   : items;
  window._intgVisibleCount = visibleItems.length; // v786: для честного счётчика «X / Y записей»
  if(!visibleItems.length){
   var empty = document.createElement('div');
   empty.style.cssText = 'font-size:13px;color:var(--text-muted);padding:24px 0;text-align:center;line-height:1.5';
-  if(intgScope === 'mine' && intgMe){
+  // v810: если стоят чипы-фильтры — виноваты они, а не скоуп; не врём «у вас нет интеграций»
+  var _anyChip = Object.keys(window._intgFilters || {}).some(function(k){ return !!window._intgFilters[k]; });
+  if(_anyChip){
+   empty.textContent = 'Под этот фильтр ничего не попало.';
+  } else if(intgScope === 'mine' && intgMe){
    empty.textContent = 'У вас нет активных интеграций. Переключите на «Все» — заберите новую из общей очереди.'; // v809: подсказка видна всем — «Все» больше не скрыта
   } else if(!items.length){
    empty.textContent = 'Пока новых интеграций нет — появятся когда пройдёт первая оплата «Нов интеграция» через бота.';
@@ -26739,8 +26759,8 @@ function intgSbRender(items){
   var key = byStage[r.status] !== undefined ? r.status : 'Новая';
   byStage[key].push(r);
  });
- // v445: toggle-фильтр «только без оператора» по канбану Интеграций (тот же паттерн что в Маршруте)
- var intgFilterUnassigned = window._intgFilterUnassigned === true;
+ // v810: «только без оператора» — то же состояние что чип «Оператор» (__none), не отдельный флаг
+ var intgFilterUnassigned = (window._intgFilters && window._intgFilters.operator === '__none');
 
  // v433: используем те же CSS-классы что и канбан Маршрута/Поддержки —
  // route-col-amo для колонок, .tk-card для карточек. Чтоб выглядело точно так же.
@@ -27155,20 +27175,42 @@ async function intgCreateSubmit(){
 }
 
 // ============================ v794: фильтры-чипы вместо нативных select ============================
-window._intgFilters = { status:'', type:'', country:'', package:'' };
+window._intgFilters = { status:'', type:'', country:'', package:'', operator:'', manager:'' };
 var _INTG_FILTER_DEFS = {
  status:  { label:'Статус',  all:'Все', options: ['Новая','В работе','На паузе','Готово','Отменено'] },
  type:    { label:'Тип',     all:'Все', options: INTG_TYPES },
  country: { label:'Страна',  all:'Все', options: ['KZ','KG'] },
- package: { label:'Пакет',   all:'Все', options: INTG_PACKAGES }
+ package: { label:'Пакет',   all:'Все', options: INTG_PACKAGES },
+ // v810: кто внедряет / кто продал. options=null — список собирается из карточек в момент открытия
+ operator:{ label:'Оператор', all:'Все', options: null, noneLabel:'Без оператора' },
+ manager: { label:'Менеджер', all:'Все', options: null, noneLabel:'Без менеджера' }
 };
+// v810: эффективный оператор карточки — своё поле, а если пустое, подтягиваем
+// оператора внедрения клиента (clients.curator_operator приходит в join)
+function _intgOperOf(it){
+ return String(it.operator || '').trim() || String(((it || {}).clients || {}).curator_operator || '').trim();
+}
+// v810: значение «__none» = поле пустое; живые варианты собираем из загруженных карточек,
+// чтобы в списке были только реально встречающиеся имена (плюс штатные списки)
+function _intgDynOptions(key){
+ var seen = {};
+ var out = [];
+ function add(v){ v = String(v || '').trim(); if(v && !seen[v]){ seen[v] = 1; out.push(v); } }
+ if(key === 'operator') INTG_OPERATORS.forEach(add);
+ if(key === 'manager' && typeof SD_MANAGERS !== 'undefined') SD_MANAGERS.forEach(add);
+ (window.intgSbItems || []).forEach(function(it){
+  if(key === 'operator'){ add(_intgOperOf(it)); } else { add(it[key]); }
+ });
+ return out;
+}
 function _intgFchipsRender(){
  Object.keys(_INTG_FILTER_DEFS).forEach(function(key){
   var chip = document.getElementById('intg-fchip-' + key);
   if(!chip) return;
   var def = _INTG_FILTER_DEFS[key];
   var val = window._intgFilters[key];
-  chip.innerHTML = '<span style="opacity:.65;font-weight:500">' + def.label + ':</span> ' + _escHtml(val || def.all) + ' <span style="font-size:9px;opacity:.6">&#9662;</span>';
+  var shown = val === '__none' ? def.noneLabel : (val || def.all); // v810
+  chip.innerHTML = '<span style="opacity:.65;font-weight:500">' + def.label + ':</span> ' + _escHtml(shown) + ' <span style="font-size:9px;opacity:.6">&#9662;</span>';
   chip.classList.toggle('is-on', !!val);
   // Замок по стране: чип страны прячем, значение зафиксировано в intgSbRerender
   if(key === 'country'){
@@ -27180,9 +27222,16 @@ function _intgFchipsRender(){
 function _intgFilterDdOpen(ev, key){
  var def = _INTG_FILTER_DEFS[key];
  if(!def) return;
- var opts = [{ value:'', label: def.all }].concat(def.options.map(function(o){ return { value:o, label:o }; }));
+ var source = def.options || _intgDynOptions(key); // v810: оператор/менеджер — из карточек
+ var opts = [{ value:'', label: def.all }];
+ if(def.noneLabel) opts.push({ value:'__none', label: def.noneLabel });
+ opts = opts.concat(source.map(function(o){ return { value:o, label:o }; }));
  _intgDdOpen(ev.currentTarget || ev.target, opts, window._intgFilters[key] || '', function(v){
   window._intgFilters[key] = v || '';
+  // v810: выбрал конкретного оператора — скоуп «Мои» больше не должен резать результат
+  if(key === 'operator' && v && v !== '__none' && v !== _intgCurrentOperatorName()){
+   try { localStorage.setItem('intg_scope', 'all'); } catch(_){}
+  }
   _intgFchipsRender();
   intgSbRerender();
  });
