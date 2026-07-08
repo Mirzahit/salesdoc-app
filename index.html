@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v810</title>
+<title>SalesDoc — Финансовый Дашборд v811</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -27338,9 +27338,11 @@ async function intgOpenCard(integrationId){
       created_at: t.created_at || t.deadline_at, author: t.created_by, text: t.text || ''
      });
     });
+    window._intgFeedItems = merged; // v811: кэш для переключения вкладок ленты без перезагрузки
     intgRenderCardFeed(merged);
-   } catch(_){ intgRenderCardFeed([]); }
+   } catch(_){ window._intgFeedItems = []; intgRenderCardFeed([]); }
   } else {
+   window._intgFeedItems = [];
    intgRenderCardFeed([]);
   }
  } catch(e){
@@ -27613,15 +27615,53 @@ async function intgRenderCardFeed(items){
  feedEl.style.overflowY = 'auto';
  feedEl.style.height = '100%';
  feedEl.replaceChildren();
- if(!items || !items.length){
+ items = items || [];
+ // v811: лента раздвоена по просьбе CEO («каша») — «Интеграция» отдельно, «Внедрение и клиент» отдельно.
+ // Источник события: card_id текущей интеграции или event_type integration_* → интеграция; задачи видны в обеих.
+ var _intgId = (typeof _intgCurrentCard !== 'undefined' && _intgCurrentCard) ? _intgCurrentCard.id : null;
+ function _feedSrc(n){
+  if(n._is_task) return 'task';
+  var et = String(n.event_type || '').toLowerCase();
+  if((n.card_id && n.card_id === _intgId) || et.indexOf('integration') === 0) return 'intg';
+  if(/^статус интеграции/i.test(String(n.text || ''))) return 'intg'; // системные события смены статуса (_intgLogStatus)
+  return 'impl';
+ }
+ var tab = window._intgFeedTab === 'impl' ? 'impl' : 'intg';
+ var nIntg = 0, nImpl = 0;
+ items.forEach(function(n){ var s = _feedSrc(n); if(s === 'intg') nIntg++; else if(s === 'impl') nImpl++; });
+ // Вкладки — сиблинг ПЕРЕД лентой (родитель — flex-колонка), чтобы не уезжали со скроллом
+ var tabsBox = document.getElementById('intg-feed-tabs');
+ if(!tabsBox){
+  tabsBox = document.createElement('div');
+  tabsBox.id = 'intg-feed-tabs';
+  feedEl.parentElement.insertBefore(tabsBox, feedEl);
+ }
+ tabsBox.style.cssText = 'display:flex;gap:6px;margin:0 0 8px;flex:none';
+ tabsBox.replaceChildren();
+ [['intg', 'Интеграция', nIntg], ['impl', 'Внедрение и клиент', nImpl]].forEach(function(t){
+  var b = document.createElement('button');
+  b.type = 'button';
+  var on = tab === t[0];
+  b.textContent = t[1] + (t[2] ? ' · ' + t[2] : '');
+  b.style.cssText = 'border:1px solid ' + (on ? 'rgba(94,106,210,.55)' : 'var(--border-faint,rgba(127,127,127,.22))')
+   + ';background:' + (on ? 'rgba(94,106,210,.14)' : 'transparent')
+   + ';color:' + (on ? '#9AA4FF' : 'var(--text-soft,#9AA3B2)')
+   + ';border-radius:9px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit';
+  b.onclick = function(){ window._intgFeedTab = t[0]; intgRenderCardFeed(window._intgFeedItems || items); };
+  tabsBox.appendChild(b);
+ });
+ var shown = items.filter(function(n){ var s = _feedSrc(n); return s === 'task' || s === tab; });
+ if(!shown.length){
   var empty = document.createElement('div');
   empty.className = 'amocard-empty';
-  empty.textContent = 'Событий по этому клиенту пока нет. Напишите первую заметку внизу.';
+  empty.textContent = tab === 'intg'
+   ? 'По этой интеграции событий пока нет. Напишите первую заметку внизу.'
+   : 'По Внедрению и клиенту событий нет.';
   feedEl.appendChild(empty);
   return;
  }
  // Сортировка desc → берём 80 самых свежих → reverse чтобы свежие были внизу
- var sorted = items.slice().sort(function(a, b){
+ var sorted = shown.slice().sort(function(a, b){
   return new Date(b.created_at || 0) - new Date(a.created_at || 0);
  });
  var visible = sorted.slice(0, 80).reverse();
@@ -27927,6 +27967,8 @@ async function intgComposeSubmit(){
     method:'POST',
     body: JSON.stringify({
      client_id: _intgCurrentCard.client_id,
+     // v811: card_id НЕ шлём — в card_history он FK на карты Внедрения, id интеграции не примет.
+     // Вкладка «Интеграция» опознаёт заметки по event_type integration_*.
      event_type: 'integration_note',
      text: text,
      author: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'интегратор'
@@ -27934,9 +27976,8 @@ async function intgComposeSubmit(){
    });
    if(!d.ok) throw new Error(d.error || 'не удалось добавить');
    intgComposeReset();
-   // Перечитываем ленту
-   var h = await sbFetch('/api/history?client_id=' + encodeURIComponent(_intgCurrentCard.client_id) + '&limit=50');
-   intgRenderCardFeed((h && h.items) || []);
+   // v811: полная перезагрузка карты (как у задач) — лента с вкладками соберётся из всех источников
+   intgOpenCard(_intgCurrentCard.id);
   }
  } catch(e){
   alert('Не удалось сохранить: ' + e.message);
@@ -34759,27 +34800,32 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
 
  var input;
  if(opts.type === 'select'){
-  input = document.createElement('select');
-  input.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--amocard-accent);background:var(--amocard-surface);color:var(--amocard-text);border-radius:6px;font-family:inherit;font-size:13.5px;outline:none';
-  // v388: убран пункт «—» в начале — оператор случайно сбрасывал значение.
-  // Если нужно сбросить — кликает ESC.
-  // v794-qa: НО если поле сейчас ПУСТОЕ — плейсхолдер нужен, иначе браузер предвыберет
-  // первый вариант и «посмотрел + blur» случайно сохранит его. Риска сброса тут нет:
-  // пункт «—» появляется только у и так пустого поля.
-  if(opts.rawValue == null || opts.rawValue === ''){
-   var oEmpty = document.createElement('option');
-   oEmpty.value = '';
-   oEmpty.textContent = '—';
-   input.appendChild(oEmpty);
-  }
+  // v811: нативный select заменён своим дропдауном (.ct-dd) — системный список опций
+  // не красится под тёмную тему (белая коробка с невидимым текстом) и выглядит чужим.
+  // Правила v388/v794-qa сохранены: пункт «—» только у пустого поля; save только по выбору.
+  input = document.createElement('input');
+  input.type = 'text';
+  input.readOnly = true;
+  // v811-qa: в инпуте показываем подпись (lead → Новый), сырое значение живёт в _selRaw
+  var _selRaw = opts.rawValue == null ? '' : String(opts.rawValue);
+  input.value = (opts.choiceLabels && opts.choiceLabels[_selRaw]) || _selRaw;
+  input.style.cssText = 'width:100%;padding:6px 8px;border:1px solid var(--amocard-accent);background:var(--amocard-surface);color:var(--amocard-text);border-radius:6px;font-family:inherit;font-size:13.5px;outline:none;cursor:pointer';
+  var _selItems = [];
+  if(_selRaw === '') _selItems.push({ value:'', label:'—' });
   (opts.choices || []).forEach(function(ch){
-   var o = document.createElement('option');
-   o.value = ch;
    // Если choiceLabels задан — показываем человеческие подписи (lead → Новый)
-   o.textContent = (opts.choiceLabels && opts.choiceLabels[ch]) || ch;
-   input.appendChild(o);
+   _selItems.push({ value: ch, label: (opts.choiceLabels && opts.choiceLabels[ch]) || ch });
   });
-  input.value = opts.rawValue || '';
+  var _selOpen = function(){
+   _intgDdOpen(input, _selItems, _selRaw, function(v){
+    _selRaw = v;
+    input.value = v;  // save() читает input.value синхронно первой строкой
+    save();
+    input.value = (opts.choiceLabels && opts.choiceLabels[v]) || v; // пока PATCH летит — подпись, не raw
+   });
+  };
+  input.addEventListener('click', _selOpen);
+  setTimeout(_selOpen, 0);
  } else if(opts.type === 'textarea'){
   // v437: многострочное поле для login_password / comment / contact_persons
   input = document.createElement('textarea');
@@ -34811,6 +34857,8 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
  }
  function cancel(){
   if(done) return; done = true;
+  // v811-qa: свой дропдаун живёт на body — при перерисовке поля снимаем его, иначе висит
+  document.querySelectorAll('.ct-dd._intg').forEach(function(d){ d.remove(); });
   // v437: для интеграции — своя разметка (не amocard), перерисовываем карту целиком
   if(opts.entity === 'integration'){
    cleanup();
@@ -34839,6 +34887,9 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
 
   // Если значение не изменилось — просто закрываем
   if(String(newVal) === String(opts.rawValue == null ? '' : opts.rawValue)){
+   // v811-qa: done уже true — cancel молча выходил и поле «замерзало» редактором
+   // (свой дропдаун, в отличие от нативного change, зовёт onPick и на текущем значении)
+   done = false;
    cancel();
    return;
   }
@@ -34938,7 +34989,7 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
    // редактор. Иначе следующий blur вызовет save и второй alert.
    if(opts.field === 'billing_host' && /billing_host|unique|duplicate|занят/i.test(e.message||'')) alert('Это имя сервера уже занято другим клиентом');
    else alert('Не удалось сохранить: ' + e.message);
-   done = true; cancel();
+   done = false; cancel(); // v811-qa: done=true делал cancel пустым — редактор зависал задизейбленным
   }
  }
 
