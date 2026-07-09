@@ -25,6 +25,7 @@
 
 import { sbSelect, sbInsert, sbUpdate, sbDelete } from './_supabase.js';
 import { checkAuth } from './_auth.js';
+import { notifCreate, opEmailByName } from './_notify.js'; // v813: уведомления (задача поставлена, @упоминание в комментарии)
 
 const ALLOWED_PATCH_FIELDS = [
   'text', 'deadline_at', 'deadline_end_at', 'is_all_day',
@@ -239,6 +240,29 @@ async function handlePost(req, res) {
     const inserted = await sbInsert('task_comments', {
       task_id: taskId, author: userName, text, mentions
     });
+    // v813: упоминание в комментарии задачи → уведомление в колокольчик + TG
+    // (раньше жило только в mnPoll-тостах). Сбой уведомления не валит комментарий.
+    if (mentions.length) {
+      try {
+        // v813-qa: сравнение по email, не по строкам — assignee/mentions кириллица, x-user-name латиница
+        const emActor = await opEmailByName(userName);
+        const seen = {};
+        const notifRows = [];
+        for (const nm of mentions) {
+          const em = await opEmailByName(nm);
+          if (!em || seen[em]) continue;
+          seen[em] = 1;
+          if (emActor && em === emActor) continue; // сам себя упомянул
+          notifRows.push({
+            user_email: em, type: 'mention',
+            title: userName + ' упомянул вас в комментарии к задаче',
+            body: text.slice(0, 200),
+            entity_type: 'task', entity_id: taskId, actor: userName
+          });
+        }
+        if (notifRows.length) await notifCreate(notifRows);
+      } catch (e) { console.warn('[tasks] mention notify failed:', e.message); }
+    }
     return res.status(201).json({ ok: true, comment: inserted[0] });
   }
 
@@ -275,6 +299,29 @@ async function handlePost(req, res) {
   };
 
   const result = await sbInsert('tasks', row);
+
+  // v813: постановка задачи другому человеку → уведомление исполнителю (колокольчик + TG).
+  // Сравнение по первому слову имени; сбой уведомления не ломает ответ 201.
+  try {
+    const assignee = String(body.assignee_operator || '').trim();
+    if (assignee) {
+      // v813-qa: сравнение по email — assignee кириллица («Акбар»), x-user-name латиница («Akbar»);
+      // строковое сравнение всегда false → задача самому себе спамила бы уведомлением
+      const em = await opEmailByName(assignee);
+      const emActor = await opEmailByName(userName);
+      if (em && em !== emActor) {
+        const dl = body.deadline_at ? new Date(body.deadline_at) : null;
+        const dlTxt = dl && !isNaN(dl) ? (String(dl.getUTCDate()).padStart(2, '0') + '.' + String(dl.getUTCMonth() + 1).padStart(2, '0')) : '';
+        await notifCreate([{
+          user_email: em, type: 'task_assigned',
+          title: userName + ' поставил вам задачу',
+          body: [body.text || '', body.contact_name || '', dlTxt ? 'срок ' + dlTxt : ''].filter(Boolean).join(' · ').slice(0, 300),
+          entity_type: 'task', entity_id: result[0] && result[0].id, client_id: body.client_id || null, actor: userName
+        }]);
+      }
+    }
+  } catch (e) { console.warn('[tasks] assign notify failed:', e.message); }
+
   return res.status(201).json({ ok: true, task: result[0] });
 }
 

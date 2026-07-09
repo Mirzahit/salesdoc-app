@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Превью: Уведомления (колокольчик + Телеграм)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0C0D11;--card:#17181D;--card2:#1E2027;--line:#2A2C34;--text:#F2F3F7;--soft:#9AA3B2;--muted:#5F6674;--accent:#5E6AD2;--accent2:#828FF7;--green:#37B26C;--red:#E5604D;--amber:#E0A458}
+body.light{--bg:#F4F5F8;--card:#FFFFFF;--card2:#F1F2F6;--line:#E4E6EE;--text:#161822;--soft:#5A6272;--muted:#8B92A3;--accent2:#4651B5;--red:#C62828;--amber:#B8860B}
+body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);padding:26px 30px;font-size:14px}
+.wrap{max-width:920px}
+h2{font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:34px 0 12px}
+h2:first-of-type{margin-top:0}
+.note{color:var(--muted);font-size:11.5px;margin:6px 0 16px;line-height:1.5}
+.themebtn{position:fixed;top:14px;right:16px;background:var(--card2);color:var(--soft);border:1px solid var(--line);border-radius:18px;padding:7px 16px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;z-index:9}
+.num{font-variant-numeric:tabular-nums}
+
+/* топбар с колокольчиком */
+.topbar{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:14px;padding:12px 18px;margin-bottom:14px}
+.topbar .title{font-size:16px;font-weight:800;flex:1}
+.pill{background:var(--card2);border:1px solid var(--line);border-radius:18px;padding:7px 14px;font-size:11.5px;color:var(--soft);font-weight:600}
+.bell{position:relative;width:36px;height:36px;border-radius:50%;background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.bell svg{display:block}
+.bell .bdg{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--red);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center}
+
+/* панель уведомлений */
+.npanel{width:420px;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.4);overflow:hidden;margin-left:auto}
+.npanel .nh{display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line)}
+.npanel .nh .t{font-size:13px;font-weight:800;flex:1}
+.npanel .nh .rd{font-size:11px;color:var(--accent2);font-weight:700;cursor:pointer}
+.nitem{display:flex;gap:11px;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer;position:relative}
+.nitem:hover{background:var(--card2)}
+.nitem:last-child{border-bottom:none}
+.nitem.unread:before{content:'';position:absolute;left:6px;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:var(--accent2)}
+.nitem .ic{width:32px;height:32px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;margin-left:6px}
+.nitem .ic.red{background:rgba(229,96,77,.14);color:var(--red)}
+.nitem .ic.amb{background:rgba(224,164,88,.14);color:var(--amber)}
+.nitem .ic.ind{background:rgba(94,106,210,.16);color:var(--accent2)}
+.nitem .ic.grn{background:rgba(55,178,108,.14);color:var(--green)}
+.nitem .bd{flex:1;min-width:0}
+.nitem .bd .t1{font-size:12.5px;font-weight:700;line-height:1.35}
+.nitem .bd .t2{font-size:11.5px;color:var(--soft);margin-top:2px;line-height:1.4}
+.nitem .bd .t2 b{color:var(--accent2);font-weight:700}
+.nitem .when{font-size:10px;color:var(--muted);white-space:nowrap;flex:none;margin-top:2px}
+.nitem.read{opacity:.55}
+
+/* композер с @-подсказкой */
+.composer{background:var(--card);border-radius:14px;padding:14px 16px;max-width:560px}
+.composer .lbl{font-size:11px;color:var(--muted);margin-bottom:8px}
+.cbox{position:relative;border:1px solid var(--accent);border-radius:8px;background:var(--card2);padding:9px 12px;font-size:13px;line-height:1.4}
+.cbox .mn{color:var(--accent2);font-weight:700}
+.cbox .caret{display:inline-block;width:1px;height:14px;background:var(--text);vertical-align:middle;animation:bl 1s steps(1) infinite}
+@keyframes bl{50%{opacity:0}}
+.mdd{position:absolute;left:70px;top:100%;margin-top:6px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.4);min-width:200px;overflow:hidden;z-index:5}
+.mdd .mi{display:flex;align-items:center;gap:9px;padding:8px 12px;font-size:12px;cursor:pointer}
+.mdd .mi:hover,.mdd .mi.on{background:var(--card2)}
+.mdd .mi .av{width:22px;height:22px;border-radius:50%;background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:var(--soft)}
+.mdd .mi .rl{margin-left:auto;font-size:10px;color:var(--muted)}
+
+/* привязка ТГ */
+.tgcard{background:var(--card);border-radius:14px;padding:16px 18px;max-width:560px}
+.tgcard .t{font-size:13px;font-weight:700;margin-bottom:4px}
+.tgcard .s{font-size:11.5px;color:var(--soft);line-height:1.55;margin-bottom:12px}
+.tgcode{display:inline-flex;align-items:center;gap:10px;background:var(--card2);border:1px dashed var(--line);border-radius:10px;padding:9px 16px;font-size:15px;font-weight:800;letter-spacing:2px}
+.tgbtn{background:linear-gradient(135deg,var(--accent),#4B55B8);color:#fff;border:none;border-radius:20px;padding:9px 20px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:10px}
+.tgok{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--green);font-weight:700;margin-top:10px}
+</style>
+</head>
+<body>
+<button class="themebtn" onclick="document.body.classList.toggle('light')">Светлая / тёмная</button>
+<div class="wrap">
+
+<h2>Колокольчик в шапке</h2>
+<div class="note">Справа в топбаре, рядом с переключателем темы. Красный счётчик — непрочитанные. Проверка новых — раз в минуту, без перезагрузки.</div>
+<div class="topbar">
+ <div class="title">Обзор финансов</div>
+ <span class="pill">Поиск</span>
+ <span class="pill">Март 2026</span>
+ <div class="bell">
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M18 15v-5a6 6 0 1 0-12 0v5l-1.6 2.4c-.3.5 0 1.1.6 1.1h14c.6 0 .9-.6.6-1.1L18 15Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10 21a2.2 2.2 0 0 0 4 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+  <span class="bdg num">4</span>
+ </div>
+</div>
+
+<h2>Панель уведомлений (клик по колокольчику)</h2>
+<div class="npanel">
+ <div class="nh"><div class="t">Уведомления</div><div class="rd">Прочитать все</div></div>
+ <div class="nitem unread">
+  <div class="ic red"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+  <div class="bd"><div class="t1">Интеграция просрочена: ТОО Global Wine Almaty</div><div class="t2">Срок был 05.07 · 4 дня просрочки · оператор Аян</div></div>
+  <div class="when">09:00</div>
+ </div>
+ <div class="nitem unread">
+  <div class="ic amb"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+  <div class="bd"><div class="t1">Завтра срок интеграции: IP Snak Tobe</div><div class="t2">Дедлайн 10.07 · пакет Стандарт+</div></div>
+  <div class="when">09:00</div>
+ </div>
+ <div class="nitem unread">
+  <div class="ic ind"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 6h16v10H9l-5 4V6Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></div>
+  <div class="bd"><div class="t1">Дулат упомянул вас в заметке</div><div class="t2">MDM: «<b>@Акбар</b> посмотри доступы к серверу, клиент ждёт»</div></div>
+  <div class="when">вчера</div>
+ </div>
+ <div class="nitem unread">
+  <div class="ic grn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17l9-10" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="bd"><div class="t1">Мирзахит поставил вам задачу</div><div class="t2">Обучение клиента · ТОО Байсерке-Агро · срок завтра 10:00</div></div>
+  <div class="when">вчера</div>
+ </div>
+ <div class="nitem read">
+  <div class="ic red"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+  <div class="bd"><div class="t1">Внедрение зависло: Rokos Almaty</div><div class="t2">12 дней на этапе «Настройка» · оператор Самат</div></div>
+  <div class="when">пн</div>
+ </div>
+</div>
+<div class="note">Клик по уведомлению открывает карту клиента, интеграции или задачу. Прочитанные — приглушённые. Тебе как CEO дедлайны «за день/в день» не приходят — только просрочки и зависшие внедрения.</div>
+
+<h2>Упоминание в комментарии — @ с подсказкой</h2>
+<div class="composer">
+ <div class="lbl">Заметка в карте клиента / интеграции — набираешь @ и выбираешь из списка:</div>
+ <div class="cbox">Клиент просил перезвонить после обеда, <span class="mn">@Ак</span><span class="caret"></span>
+  <div class="mdd">
+   <div class="mi on"><span class="av">АК</span>Акбар<span class="rl">оператор</span></div>
+   <div class="mi"><span class="av">АС</span>Аян<span class="rl">интеграция</span></div>
+  </div>
+ </div>
+</div>
+<div class="note">Упомянутому мгновенно падает уведомление в колокольчик и в Телеграм: «Мирзахит упомянул вас в заметке: …»</div>
+
+<h2>Телеграм — привязка в Настройках (Мой профиль)</h2>
+<div class="tgcard">
+ <div class="t">Уведомления в Телеграм</div>
+ <div class="s">Открой бота SalesDoc, отправь ему код ниже — и все уведомления будут дублироваться тебе в Телеграм. Отвязать можно в любой момент.</div>
+ <span class="tgcode">7 4 2 9</span><button class="tgbtn">Проверить привязку</button>
+ <div class="tgok"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17l9-10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Пример после привязки: «Телеграм привязан · Akbar»</div>
+</div>
+<div class="note">Кто не привязал — получает уведомления только в приложении, ничего не ломается. Цифры и имена в макете выдуманы.</div>
+
+</div>
+</body>
+</html>

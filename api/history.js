@@ -8,6 +8,7 @@
 // event_type: 'call' | 'whatsapp' | 'note' | 'stage_change' | 'file' | 'system'
 
 import { sbSelect, sbInsert, sbUpdate, sbDelete } from './_supabase.js';
+import { notifCreate, opEmailByName } from './_notify.js'; // v813: уведомления об @упоминаниях
 
 const ALLOWED_PATCH_FIELDS = ['text', 'pinned'];
 import { checkAuth } from './_auth.js';
@@ -47,6 +48,38 @@ export default async function handler(req, res) {
         author: body.author || null
       };
       const result = await sbInsert('card_history', row);
+
+      // v813: @упоминания — фронт шлёт mentions[] (имена из выпадающей подсказки),
+      // сервер перепроверяет и резолвит в email. Сбой уведомления не валит заметку.
+      if (Array.isArray(body.mentions) && body.mentions.length) {
+        try {
+          const authorName = String(row.author || '').trim();
+          const names = body.mentions.slice(0, 10)
+            .map(n => String(n || '').trim())
+            .filter(n => n && /^[\p{L}\s.-]{2,40}$/u.test(n));
+          const seen = {};
+          const notifRows = [];
+          for (const nm of names) {
+            const em = await opEmailByName(nm);
+            if (!em || seen[em]) continue;
+            seen[em] = 1;
+            // сам себя упомянул — не уведомляем
+            if (authorName && nm.split(/\s+/)[0].toLowerCase() === authorName.split(/\s+/)[0].toLowerCase()) continue;
+            notifRows.push({
+              user_email: em,
+              type: 'mention',
+              title: (authorName || 'Коллега') + ' упомянул вас в заметке',
+              body: String(row.text || '').slice(0, 200),
+              entity_type: body.event_type === 'integration_note' ? 'integration' : (row.card_id ? 'kanban_card' : 'client'),
+              entity_id: body.mention_entity_id || row.card_id || row.client_id || null,
+              client_id: row.client_id || null,
+              actor: authorName || null
+            });
+          }
+          if (notifRows.length) await notifCreate(notifRows);
+        } catch (e) { console.warn('[history] mention notify failed:', e.message); }
+      }
+
       return res.status(201).json({ ok: true, item: result[0] });
     }
 
