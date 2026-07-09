@@ -11,6 +11,7 @@
 //      APP_TOKEN (для внутреннего запроса к meta-ads).
 
 import { sbSelect, sbUpsert } from './_supabase.js';
+import { runReminders } from './_reminders.js'; // v813: напоминания о дедлайнах — второй блок этого крона
 
 export const config = { maxDuration: 60 };
 
@@ -136,6 +137,51 @@ function formatDigest(d) {
   return L.join('\n');
 }
 
+// v813: блок дайджеста вынесен в функцию — рядом теперь живут напоминания (runReminders),
+// оба блока независимы: падение одного не мешает другому.
+async function runDigest() {
+  const botToken = (process.env.TG_BOT_TOKEN || '').trim();
+  const ceoChatId = (process.env.CEO_TG_CHAT_ID || '').trim();
+  if (!botToken) return { skipped: 'no_tg_bot_token' };
+  if (!ceoChatId) return { skipped: 'no_ceo_chat_id' };
+
+  const settings = await getDigestSettings();
+  if (!settings.enabled) return { skipped: 'disabled' };
+
+  const nowA = almatyNow();
+  const today = isoDate(nowA);
+  const hour = Number(settings.hour == null ? 9 : settings.hour);
+  if (nowA.getUTCHours() !== hour) return { skipped: 'not_the_hour', almaty_hour: nowA.getUTCHours() };
+  if (settings.last_sent === today) return { skipped: 'already_sent' };
+
+  const monthStart = today.slice(0, 8) + '01';
+  const yest = isoDate(new Date(nowA.getTime() - 86400000));
+
+  const [pay, intg, overdue, metaKZ, metaKG] = await Promise.all([
+    collectPayments(monthStart, yest),
+    collectIntegrations(monthStart),
+    collectOverdueTasks(),
+    metaSpendYesterday('KZ'),
+    metaSpendYesterday('KG')
+  ]);
+
+  const MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const dateLabel = nowA.getUTCDate() + ' ' + MONTHS[nowA.getUTCMonth()] + ' ' + nowA.getUTCFullYear();
+
+  const text = formatDigest({ dateLabel, pay, intg, overdue, metaKZ, metaKG });
+
+  const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: ceoChatId, text: text, parse_mode: 'HTML', disable_web_page_preview: true })
+  });
+  const j = await r.json();
+  if (!j || !j.ok) return { error: 'tg_failed', tg: j };
+
+  await markSent(settings, today);
+  return { sent: true };
+}
+
 export default async function handler(req, res) {
   // fail-closed (паттерн v592 из cron-fdx-reminder)
   const expected = (process.env.CRON_SECRET || '').trim();
@@ -143,49 +189,18 @@ export default async function handler(req, res) {
   const got = String(req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
   if (got !== expected) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
-  const botToken = (process.env.TG_BOT_TOKEN || '').trim();
-  const ceoChatId = (process.env.CEO_TG_CHAT_ID || '').trim();
-  if (!botToken) return res.status(200).json({ ok: true, skipped: 'no_tg_bot_token' });
-  if (!ceoChatId) return res.status(200).json({ ok: true, skipped: 'no_ceo_chat_id' });
-
+  const results = {};
   try {
-    const settings = await getDigestSettings();
-    if (!settings.enabled) return res.status(200).json({ ok: true, skipped: 'disabled' });
-
-    const nowA = almatyNow();
-    const today = isoDate(nowA);
-    const hour = Number(settings.hour == null ? 9 : settings.hour);
-    if (nowA.getUTCHours() !== hour) return res.status(200).json({ ok: true, skipped: 'not_the_hour', almaty_hour: nowA.getUTCHours() });
-    if (settings.last_sent === today) return res.status(200).json({ ok: true, skipped: 'already_sent' });
-
-    const monthStart = today.slice(0, 8) + '01';
-    const yest = isoDate(new Date(nowA.getTime() - 86400000));
-
-    const [pay, intg, overdue, metaKZ, metaKG] = await Promise.all([
-      collectPayments(monthStart, yest),
-      collectIntegrations(monthStart),
-      collectOverdueTasks(),
-      metaSpendYesterday('KZ'),
-      metaSpendYesterday('KG')
-    ]);
-
-    const MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
-    const dateLabel = nowA.getUTCDate() + ' ' + MONTHS[nowA.getUTCMonth()] + ' ' + nowA.getUTCFullYear();
-
-    const text = formatDigest({ dateLabel, pay, intg, overdue, metaKZ, metaKG });
-
-    const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: ceoChatId, text: text, parse_mode: 'HTML', disable_web_page_preview: true })
-    });
-    const j = await r.json();
-    if (!j || !j.ok) return res.status(200).json({ ok: false, error: 'tg_failed', tg: j });
-
-    await markSent(settings, today);
-    return res.status(200).json({ ok: true, sent: true });
+    results.digest = await runDigest();
   } catch (e) {
     console.error('[cron-digest]', e);
-    return res.status(200).json({ ok: false, error: String((e && e.message) || e) });
+    results.digest = { error: String((e && e.message) || e) };
   }
+  try {
+    results.reminders = await runReminders();
+  } catch (e) {
+    console.error('[cron-reminders]', e);
+    results.reminders = { error: String((e && e.message) || e) };
+  }
+  return res.status(200).json({ ok: true, ...results });
 }

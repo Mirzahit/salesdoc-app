@@ -73,6 +73,24 @@ export async function sbUpsert(table, rowOrRows, onConflict) {
   return text ? JSON.parse(text) : [];
 }
 
+// v813: INSERT c игнором дублей по уникальному индексу — возвращает ТОЛЬКО реально вставленные
+// строки (дубли молча отбрасываются). Нужен для идемпотентных уведомлений: по вставленным шлём
+// Telegram, по отброшенным — нет. sbUpsert не подходит: merge перезаписал бы и вернул все.
+export async function sbInsertIgnoreDup(table, rowOrRows, onConflict) {
+  checkEnv();
+  const body = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
+  if (!body.length) return [];
+  const qs = onConflict ? `?on_conflict=${encodeURIComponent(onConflict)}` : '';
+  const r = await fetch(`${URL_BASE}/rest/v1/${table}${qs}`, {
+    method: 'POST',
+    headers: headers({ 'Prefer': 'resolution=ignore-duplicates,return=representation' }),
+    body: JSON.stringify(body)
+  });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`INSERT-IGNORE ${table} failed [${r.status}]: ${text}`);
+  return text ? JSON.parse(text) : [];
+}
+
 // UPDATE: sbUpdate('kanban_cards', { id: 'eq.xxx' }, { stage: 'Активация' })
 export async function sbUpdate(table, filterParams, patch) {
   checkEnv();
