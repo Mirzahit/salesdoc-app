@@ -34017,6 +34017,13 @@ function _pluralDays(n){
 // v457: shared task draft defaults — используется тремя composer'ами (route-chat / client tab / mytasks)
 // Возвращает defaults с правильным ассайном (мэтчинг currentUser → kbOperators) и временем
 // (следующий круглый час, пересчитывается при каждом вызове — не кэшируется).
+// v814: локальная дата YYYY-MM-DD. НЕ toISOString().slice(0,10) — тот отдаёт дату по UTC:
+// для Алматы (GMT+5) локальная полночь = 19:00 вчерашнего дня по UTC, и выбор «Сегодня»
+// в чипах задачи записывал вчера. Та же ловушка уже чинилась точечно в v364 (активация).
+function taskLocalIso(d){
+ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
 function taskDraftDefaults(){
  var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
  var rawName = (u.name || '').toString();
@@ -34030,7 +34037,7 @@ function taskDraftDefaults(){
  now.setHours(now.getHours() + 1, 0, 0, 0);   // следующий круглый час, всегда пересчёт
  return {
   type_id: 1,                                  // «Связаться»
-  date_iso: now.toISOString().slice(0,10),
+  date_iso: taskLocalIso(now),
   time_start: String(now.getHours()).padStart(2,'0') + ':00',
   is_all_day: false,
   assignee: assignee
@@ -34250,18 +34257,26 @@ function _routeChatRefreshChips(){
 function routeChatChipDate(anchor){
  if(!window._routeChatTaskState) _routeChatInitTaskState();
  var today = new Date(); today.setHours(0,0,0,0);
- var toIso = function(d){ return d.toISOString().slice(0,10); };
+ // v814: taskLocalIso вместо toISOString — UTC-сдвиг записывал «вчера» при любом выборе
  var t1 = new Date(today); t1.setDate(t1.getDate()+1);
  var t2 = new Date(today); t2.setDate(t2.getDate()+2);
  var t7 = new Date(today); t7.setDate(t7.getDate()+7);
  var items = [
-  { value:toIso(today), label:'Сегодня' },
-  { value:toIso(t1), label:'Завтра' },
-  { value:toIso(t2), label:'Послезавтра' },
-  { value:toIso(t7), label:'Через неделю' }
+  { value:taskLocalIso(today), label:'Сегодня' },
+  { value:taskLocalIso(t1), label:'Завтра' },
+  { value:taskLocalIso(t2), label:'Послезавтра' },
+  { value:taskLocalIso(t7), label:'Через неделю' },
+  { value:'__custom__', label:'Выбрать дату…' }
  ];
  if(typeof crmTasksOpenDropdown !== 'function'){ alert('Модуль задач не загружен'); return; }
  crmTasksOpenDropdown(anchor, items, function(v){
+  if(v === '__custom__'){
+   crmTasksPickCustomDate(window._routeChatTaskState.date_iso, function(iso){
+    window._routeChatTaskState.date_iso = iso;
+    _routeChatRefreshChips();
+   });
+   return;
+  }
   window._routeChatTaskState.date_iso = v;
   _routeChatRefreshChips();
  });
@@ -43589,7 +43604,7 @@ function crmTasksFormInitState(){
  // на kbOperators) и пересчёта времени.
  var defaults = (typeof taskDraftDefaults === 'function') ? taskDraftDefaults() : {
   type_id: 1,
-  date_iso: new Date().toISOString().slice(0,10),
+  date_iso: taskLocalIso(new Date()),
   time_start: '09:00',
   is_all_day: false,
   assignee: 'Айдос'
@@ -43917,50 +43932,53 @@ function crmTasksDDAssignee(anchor){
 
 function crmTasksDDDate(anchor){
  var today = new Date(); today.setHours(0,0,0,0);
- var toIso = function(d){ return d.toISOString().slice(0,10); };
+ // v814: taskLocalIso вместо toISOString — UTC-сдвиг записывал «вчера» при любом выборе
  var t1 = new Date(today); t1.setDate(t1.getDate()+1);
  var t2 = new Date(today); t2.setDate(t2.getDate()+2);
  var t7 = new Date(today); t7.setDate(t7.getDate()+7);
  var items = [
-  { value:toIso(today), label:'Сегодня' },
-  { value:toIso(t1), label:'Завтра' },
-  { value:toIso(t2), label:'Послезавтра' },
-  { value:toIso(t7), label:'Через неделю' },
+  { value:taskLocalIso(today), label:'Сегодня' },
+  { value:taskLocalIso(t1), label:'Завтра' },
+  { value:taskLocalIso(t2), label:'Послезавтра' },
+  { value:taskLocalIso(t7), label:'Через неделю' },
   { value:'__custom__', label:'Выбрать дату…' }
  ];
  crmTasksOpenDropdown(anchor, items, function(v){
-  if(v === '__custom__'){ crmTasksPickCustomDate(); return; }
+  if(v === '__custom__'){
+   crmTasksPickCustomDate(crmTasksFormState.date_iso, function(iso){
+    crmTasksFormState.date_iso = iso;
+    var card = window._kbCurrentCard;
+    if(card) crmClientTasksRender(card);
+   });
+   return;
+  }
   crmTasksFormState.date_iso = v;
   var card = window._kbCurrentCard;
   if(card) crmClientTasksRender(card);
  });
 }
 
-// Модалка кастомной даты
-function crmTasksPickCustomDate(){
+// Модалка кастомной даты. v814: генерализована — зовётся из формы задач карточки
+// (crmTasksDDDate) и из чипов ленты (routeChatChipDate); onPick получает YYYY-MM-DD.
+function crmTasksPickCustomDate(currentIso, onPick){
  var bg = document.createElement('div');
  bg.className = 'ct-modal-bg';
  bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
  var inner = '<div class="ct-modal" onclick="event.stopPropagation()">' +
   '<div class="ct-modal-title">Выбрать дату</div>' +
-  '<div class="ct-modal-field"><input type="date" id="ct-pick-date" value="'+ctEsc(crmTasksFormState.date_iso)+'"></div>' +
+  '<div class="ct-modal-field"><input type="date" id="ct-pick-date" value="'+ctEsc(currentIso || '')+'"></div>' +
   '<div class="ct-modal-actions">' +
-   '<button class="ct-modal-btn ct-modal-btn-secondary" onclick="this.closest(\'.ct-modal-bg\').remove()">Отмена</button>' +
-   '<button class="ct-modal-btn ct-modal-btn-primary" onclick="crmTasksApplyCustomDate()">OK</button>' +
+   '<button class="ct-modal-btn ct-modal-btn-secondary" data-act="cancel">Отмена</button>' +
+   '<button class="ct-modal-btn ct-modal-btn-primary" data-act="ok">OK</button>' +
   '</div>' +
  '</div>';
  bg.insertAdjacentHTML('beforeend', inner);
+ bg.querySelector('[data-act="cancel"]').onclick = function(){ bg.remove(); };
+ bg.querySelector('[data-act="ok"]').onclick = function(){
+  var inp = bg.querySelector('#ct-pick-date');
+  if(inp && inp.value){ bg.remove(); onPick(inp.value); }
+ };
  document.body.appendChild(bg);
-}
-
-function crmTasksApplyCustomDate(){
- var inp = document.getElementById('ct-pick-date');
- if(inp && inp.value){
-  crmTasksFormState.date_iso = inp.value;
-  var bg = document.querySelector('.ct-modal-bg'); if(bg) bg.remove();
-  var card = window._kbCurrentCard;
-  if(card) crmClientTasksRender(card);
- }
 }
 
 // Модалка времени (start + end + чекбокс «Весь день»)
@@ -44801,7 +44819,7 @@ async function mytasksNewTaskStart(){
  var ops = (typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators.slice() : ['Айдос','Акбар','Самат'];
  // v457: identity bug fix — используем общий taskDraftDefaults, который мэтчит юзера
  // против kbOperators, а не split(' ')[0] (раньше CEO «Mirzahit» попадал на пустого assignee).
- var defaults = (typeof taskDraftDefaults === 'function') ? taskDraftDefaults() : { assignee: ops[0], date_iso: new Date().toISOString().slice(0,10), time_start: '09:00' };
+ var defaults = (typeof taskDraftDefaults === 'function') ? taskDraftDefaults() : { assignee: ops[0], date_iso: taskLocalIso(new Date()), time_start: '09:00' };
  var meName = defaults.assignee;
  var dateStr = defaults.date_iso;
  var timeStr = defaults.time_start;
