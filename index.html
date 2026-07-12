@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v815</title>
+<title>SalesDoc — Финансовый Дашборд v816</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -2886,6 +2886,26 @@ body.light .logout-nav:hover .nav-label{color:#E5604D!important;-webkit-text-fil
 #view-academy .acad-tabbar{display:flex;gap:2px;background:var(--surface,#14161E);border:1px solid var(--border-faint);border-radius:11px;padding:4px}
 #view-academy .acad-tb{padding:7px 16px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--text-soft);cursor:pointer;background:none;border:none;font-family:inherit}
 #view-academy .acad-tb.on{background:var(--surface-2,rgba(120,120,128,.12));color:var(--text)}
+/* v816: рейтинг «Баллы мощности» */
+#view-academy .acr-rules{font-size:11.5px;color:var(--text-muted);margin-bottom:14px;line-height:1.5}
+#view-academy .acr-list{display:flex;flex-direction:column}
+#view-academy .acr-row{display:flex;align-items:center;gap:12px;padding:10px;border-bottom:1px solid var(--border-faint)}
+#view-academy .acr-row:last-child{border-bottom:none}
+#view-academy .acr-row.me{background:var(--surface-2,rgba(120,120,128,.10));border-radius:10px}
+#view-academy .acr-place{width:22px;text-align:center;font-size:12px;color:var(--text-muted);font-variant-numeric:tabular-nums;font-weight:600;flex:none}
+#view-academy .acr-row.top1 .acr-place{color:#E8B84B}
+#view-academy .acr-row.top2 .acr-place{color:#B9C2CE}
+#view-academy .acr-row.top3 .acr-place{color:#C98F5F}
+#view-academy .acr-ava{width:28px;height:28px;border-radius:50%;background:var(--surface-2,rgba(120,120,128,.14));display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;color:var(--text-soft);flex:none}
+#view-academy .acr-name{font-size:13px;font-weight:600;min-width:150px}
+#view-academy .acr-name em{font-style:normal;font-size:10.5px;color:var(--text-muted);font-weight:500;margin-left:6px}
+#view-academy .acr-chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+#view-academy .acr-chip{font-size:10.5px;color:var(--text-soft);background:var(--surface-2,rgba(120,120,128,.10));border-radius:6px;padding:2px 8px;white-space:nowrap}
+#view-academy .acr-pts{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;margin-left:auto;flex:none}
+#view-academy .acr-hrow{display:flex;align-items:center;gap:14px;padding:7px 10px;border-bottom:1px solid var(--border-faint);font-size:12px;flex-wrap:wrap}
+#view-academy .acr-hrow:last-child{border-bottom:none}
+#view-academy .acr-hmon{color:var(--text-muted);min-width:110px}
+#view-academy .acr-hwin{font-variant-numeric:tabular-nums}
 #view-academy .acx-wrap{max-width:960px}
 #view-academy .acx-hero{position:relative;border-radius:20px;overflow:hidden;background:linear-gradient(120deg,#1A1D2E 0%,#232645 55%,#2E3160 100%);padding:38px 36px 32px;margin-bottom:14px}
 #view-academy .acx-hero:before{content:'';position:absolute;inset:0;background:radial-gradient(600px 260px at 85% 20%,rgba(122,133,242,.25),transparent 70%)}
@@ -9600,10 +9620,12 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
   <div class="acad-tabbar" id="acad-tabbar">
    <button class="acad-tb on" id="acad-tb-learn" onclick="acadSetTab('learn')">Обучение</button>
+   <button class="acad-tb" id="acad-tb-rating" onclick="acadSetTab('rating')">Рейтинг</button>
    <button class="acad-tb" id="acad-tb-team" style="display:none" onclick="acadSetTab('team')">Команда</button>
   </div>
  </div>
  <div id="acad-learn"><div id="acad-screen" class="acx-wrap"></div></div>
+ <div id="acad-rating" class="panel" style="display:none"></div>
  <div id="acad-team" class="panel" style="display:none"></div>
  </div>
 
@@ -30321,7 +30343,7 @@ function kbOpen(id) {
 
 var _acad = {
  view: 'courses', courseId: null, moduleId: null, lessonId: null, lesson: null,
- structure: null, progress: {}, tab: 'learn',
+ structure: null, progress: {}, tab: 'learn', rating: null,
  chat: [], chatBusy: false, chatDone: false, userTurns: 0, trainerOpen: false,
  testOrder: [], testOptOrder: [], testAnswers: {}, testResult: null
 };
@@ -30354,15 +30376,19 @@ async function acadLoad(){
  }
 }
 
+// v816: вкладки массивом — раньше логика была бинарной (learn/team) и третья вкладка её ломала
+var ACAD_TABS = ['learn', 'rating', 'team'];
 function acadSetTab(tab){
+ if(ACAD_TABS.indexOf(tab) < 0) tab = 'learn';
  _acad.tab = tab;
- var lb = document.getElementById('acad-tb-learn'), tb = document.getElementById('acad-tb-team');
- if(lb) lb.classList.toggle('on', tab === 'learn');
- if(tb) tb.classList.toggle('on', tab === 'team');
- var learn = document.getElementById('acad-learn'), team = document.getElementById('acad-team');
- if(learn) learn.style.display = tab === 'learn' ? '' : 'none';
- if(team) team.style.display = tab === 'team' ? '' : 'none';
+ ACAD_TABS.forEach(function(t){
+  var b = document.getElementById('acad-tb-' + t);
+  if(b) b.classList.toggle('on', t === tab);
+  var pane = document.getElementById('acad-' + t);
+  if(pane) pane.style.display = t === tab ? '' : 'none';
+ });
  if(tab === 'team') acadTeamLoad();
+ if(tab === 'rating') acadRatingLoad();
 }
 
 // ---- модель доступов ----
@@ -30621,6 +30647,7 @@ async function acadMarkDone(){
   if(!d || !d.ok) throw new Error((d && d.error) || 'не удалось сохранить');
   _acad.progress[_acad.lessonId] = d.row || Object.assign({}, _acad.progress[_acad.lessonId], { passed: true, notes_done: true });
   acadDonebar();
+  if(d.points_awarded){ _acad.rating = null; if(typeof showNotif === 'function') showNotif('Баллы мощности', '+' + d.points_awarded + ' баллов за урок'); }
  } catch(e){
   if(btn){ btn.disabled = false; btn.textContent = 'Отметить пройденным'; }
   if(typeof showNotif === 'function') showNotif('Академия', e.message || String(e));
@@ -30706,6 +30733,7 @@ async function acadTrainerCall(appendReview){
    try {
     var pd = await sbFetch('/api/academy', { method: 'POST', body: JSON.stringify({ action: 'progress', lesson_id: _acad.lessonId, trainer_score: score, trainer_review: reply }) });
     if(pd && pd.ok && pd.row) _acad.progress[_acad.lessonId] = pd.row;
+    if(pd && pd.points_awarded){ _acad.rating = null; if(typeof showNotif === 'function') showNotif('Баллы мощности', '+' + pd.points_awarded + ' баллов за тренажёр'); }
    } catch(_){}
    acadDonebar();
   }
@@ -30798,10 +30826,82 @@ async function acadTestSubmit(){
   _acad.progress[_acad.lessonId] = p;
   acadRenderTest();
   acadDonebar();
+  if(d.points_awarded){ _acad.rating = null; if(typeof showNotif === 'function') showNotif('Баллы мощности', '+' + d.points_awarded + ' баллов за тест'); }
  } catch(e){
   if(btn){ btn.disabled = false; btn.textContent = 'Проверить · зачёт от 80%'; }
   if(typeof showNotif === 'function') showNotif('Тест', e.message || String(e));
  }
+}
+
+// ---- Рейтинг «Баллы мощности» (v816) ----
+// Гонка месяца: баллы начисляет только сервер (api/academy), фронт лишь показывает.
+var ACAD_MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+function acadMonthLabel(m){
+ var p = String(m || '').split('-');
+ var mi = parseInt(p[1], 10) - 1;
+ return (ACAD_MONTHS_RU[mi] || p[1] || '') + ' ' + (p[0] || '');
+}
+async function acadRatingLoad(){
+ var el = document.getElementById('acad-rating');
+ if(!el) return;
+ // Кэша нет намеренно: рейтинг общий, чужие свежие баллы должны появляться при каждом открытии
+ el.innerHTML = '<div style="font-size:12px;color:var(--text-muted)">Загрузка…</div>';
+ try {
+  var d = await sbFetch('/api/academy?rating=1');
+  if(!d || !d.ok) throw new Error((d && d.error) || 'не удалось загрузить рейтинг');
+  _acad.rating = d;
+  acadRenderRating();
+ } catch(e){
+  el.innerHTML = '<div style="font-size:12px;color:#E5604D">' + sanitize(e.message || String(e)) + '</div>';
+ }
+}
+function acadRatingChips(br){
+ br = br || {};
+ var parts = [];
+ var tests = (br.test_pass || 0) + (br.test_first_try || 0);
+ var mods = (br.module_pass || 0) + (br.module_tempo || 0);
+ if(tests) parts.push('Тесты ' + tests);
+ if(br.lesson_pass) parts.push('Уроки ' + br.lesson_pass);
+ if(br.trainer) parts.push('Тренажёр ' + br.trainer);
+ if(mods) parts.push('Модули ' + mods);
+ if(br.weekly) parts.push('Регулярность ' + br.weekly);
+ return parts;
+}
+function acadRenderRating(){
+ var el = document.getElementById('acad-rating');
+ var d = _acad.rating;
+ if(!el || !d) return;
+ var myEmail = String((currentUser && currentUser.email) || '').toLowerCase();
+ var html = '<div class="panel-title" style="margin-bottom:2px">Баллы мощности · ' + sanitize(acadMonthLabel(d.month)) + '</div>'
+  + '<div class="acr-rules">Тест +10, с первой попытки ещё +5 · урок без теста +5 · тренажёр до 10 за урок · модуль целиком +20, уложился в неделю — ещё +10 · каждая неделя с зачётом +5</div>';
+ var board = d.board || [];
+ if(!board.length){
+  html += '<div style="font-size:12.5px;color:var(--text-muted);padding:14px 0">В этом месяце баллов ещё нет. Первый зачёт откроет гонку.</div>';
+ } else {
+  html += '<div class="acr-list">';
+  board.forEach(function(r, i){
+   var me = r.email === myEmail;
+   var chips = acadRatingChips(r.by_rule).map(function(c){ return '<span class="acr-chip">' + sanitize(c) + '</span>'; }).join('');
+   var ini = String(r.name || '?').trim().split(/\s+/).slice(0, 2).map(function(w){ return w.charAt(0); }).join('').toUpperCase();
+   html += '<div class="acr-row' + (me ? ' me' : '') + (i < 3 ? ' top' + (i + 1) : '') + '">'
+    + '<span class="acr-place">' + (i + 1) + '</span>'
+    + '<span class="acr-ava">' + sanitize(ini) + '</span>'
+    + '<span class="acr-name">' + sanitize(r.name || r.email) + (me ? ' <em>это ты</em>' : '') + '</span>'
+    + '<span class="acr-chips">' + chips + '</span>'
+    + '<span class="acr-pts">' + (r.total || 0) + '</span>'
+    + '</div>';
+  });
+  html += '</div>';
+ }
+ var hist = d.history || [];
+ if(hist.length){
+  html += '<div class="panel-title" style="margin:18px 0 8px;font-size:12.5px">Победители прошлых месяцев</div>';
+  hist.forEach(function(h){
+   var tops = (h.top || []).map(function(t, i){ return '<span class="acr-hwin">' + (i + 1) + '. ' + sanitize(t.name) + ' · ' + t.total + '</span>'; }).join('');
+   html += '<div class="acr-hrow"><span class="acr-hmon">' + sanitize(acadMonthLabel(h.month)) + '</span>' + tops + '</div>';
+  });
+ }
+ el.innerHTML = html;
 }
 
 // ---- Команда (admin/head) ----
