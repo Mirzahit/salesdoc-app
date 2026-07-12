@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v813</title>
+<title>SalesDoc — Финансовый Дашборд v814</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -20206,6 +20206,30 @@ async function fdxDeleteGoal(g){
 }
 
 // Модалка создания/редактирования цели
+// v814: замена нативного <select> в формах Планов — правило «без системных списков»
+// (системный список опций не красится под тёмную тему: белая коробка с невидимым текстом).
+// readOnly-инпут показывает подпись, сырое значение живёт в input.dataset.value,
+// клик открывает свой дропдаун _intgDdOpen (.ct-dd, z-index выше модалок).
+// options: [{value, label}]. Читать выбранное — через el.dataset.value, НЕ el.value.
+function _fdxMakeSelect(options, currentRaw, styleCss){
+ var input = document.createElement('input');
+ input.type = 'text';
+ input.readOnly = true;
+ input.style.cssText = styleCss + ';cursor:pointer';
+ var labels = {};
+ options.forEach(function(o){ labels[o.value] = o.label; });
+ var raw = currentRaw == null ? '' : String(currentRaw);
+ input.dataset.value = raw;
+ input.value = labels[raw] != null ? labels[raw] : raw;
+ input.addEventListener('click', function(){
+  _intgDdOpen(input, options, input.dataset.value, function(v){
+   input.dataset.value = v;
+   input.value = labels[v] != null ? labels[v] : v;
+  });
+ });
+ return input;
+}
+
 function fdxOpenGoalEditor(initial){
  initial = initial || {};
  var isEdit = !!initial.id;
@@ -20257,9 +20281,7 @@ function fdxOpenGoalEditor(initial){
  tl.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
  tl.textContent = 'Целевая цифра'; tw.appendChild(tl); tw.appendChild(targetI); row1.appendChild(tw);
 
- var unitS = document.createElement('select');
- ['₸','шт','клиентов','%','иное'].forEach(function(u){ var o = document.createElement('option'); o.value=u; o.textContent=u; if((initial.unit||'₸')===u) o.selected=true; unitS.appendChild(o); });
- unitS.style.cssText = inputStyle;
+ var unitS = _fdxMakeSelect(['₸','шт','клиентов','%','иное'].map(function(u){ return { value:u, label:u }; }), initial.unit || '₸', inputStyle);
  var uw = document.createElement('div'); var ul = document.createElement('label');
  ul.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
  ul.textContent = 'Единица'; uw.appendChild(ul); uw.appendChild(unitS); row1.appendChild(uw);
@@ -20307,7 +20329,7 @@ function fdxOpenGoalEditor(initial){
    title: titleI.value.trim(),
    target: Number(targetI.value) || 0,
    current: Number(currentI.value) || 0,
-   unit: unitS.value,
+   unit: unitS.dataset.value,
    period_start: startI.value,
    period_end: dlI.value,
    type: initial.type || 'year',
@@ -20601,15 +20623,11 @@ function fdxOpenMetricEditor(initial){
  addField('Название', titleI);
 
  // Цель (привязка)
- var goalS = document.createElement('select'); goalS.style.cssText = inputStyle;
- var noneOpt = document.createElement('option'); noneOpt.value = ''; noneOpt.textContent = '— без привязки —';
- goalS.appendChild(noneOpt);
+ var goalOpts = [{ value:'', label:'— без привязки —' }];
  (_fdxState.goals || []).filter(function(g){ return g.country === (currentCountry || 'KZ'); }).forEach(function(g){
-  var o = document.createElement('option'); o.value = g.id;
-  o.textContent = ({year:'Год',quarter:'Квартал',month:'Месяц',week:'Неделя'}[g.type] || g.type) + ': ' + g.title;
-  if(initial.goal_id === g.id) o.selected = true;
-  goalS.appendChild(o);
+  goalOpts.push({ value: String(g.id), label: ({year:'Год',quarter:'Квартал',month:'Месяц',week:'Неделя'}[g.type] || g.type) + ': ' + g.title });
  });
+ var goalS = _fdxMakeSelect(goalOpts, initial.goal_id || '', inputStyle);
  addField('К какой цели ведёт', goalS);
 
  var row1 = document.createElement('div'); row1.style.cssText = 'display:grid;grid-template-columns:1fr 130px;gap:10px;margin-bottom:12px';
@@ -20620,33 +20638,23 @@ function fdxOpenMetricEditor(initial){
  tl.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
  tl.textContent = 'Сколько за период'; tw.appendChild(tl); tw.appendChild(targetI); row1.appendChild(tw);
 
- var periodS = document.createElement('select'); periodS.style.cssText = inputStyle;
- [['day','в день'],['week','в неделю']].forEach(function(p){
-  var o = document.createElement('option'); o.value = p[0]; o.textContent = p[1];
-  if((initial.period || 'week') === p[0]) o.selected = true;
-  periodS.appendChild(o);
- });
+ var periodS = _fdxMakeSelect([['day','в день'],['week','в неделю']].map(function(p){ return { value:p[0], label:p[1] }; }), initial.period || 'week', inputStyle);
  var pw = document.createElement('div'); var pl = document.createElement('label');
  pl.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
  pl.textContent = 'Период'; pw.appendChild(pl); pw.appendChild(periodS); row1.appendChild(pw);
  modal.appendChild(row1);
 
  var row2 = document.createElement('div'); row2.style.cssText = 'display:grid;grid-template-columns:1fr 130px;gap:10px;margin-bottom:12px';
- var ownerS = document.createElement('select'); ownerS.style.cssText = inputStyle;
- var noneO = document.createElement('option'); noneO.value = ''; noneO.textContent = '— общий —'; ownerS.appendChild(noneO);
- var allOwners = [];
- ['Мирзахит','Юлия','Айдос','Акбар','Самат','Нурай','Аян','Дулат','Абзал','Айдос Хапез'].forEach(function(n){ if(allOwners.indexOf(n) === -1) allOwners.push(n); });
- allOwners.forEach(function(n){
-  var o = document.createElement('option'); o.value = n; o.textContent = n;
-  if(initial.owner === n) o.selected = true;
-  ownerS.appendChild(o);
+ var ownerOpts = [{ value:'', label:'— общий —' }];
+ ['Мирзахит','Юлия','Айдос','Акбар','Самат','Нурай','Аян','Дулат','Абзал','Айдос Хапез'].forEach(function(n){
+  if(!ownerOpts.some(function(o){ return o.value === n; })) ownerOpts.push({ value:n, label:n });
  });
+ var ownerS = _fdxMakeSelect(ownerOpts, initial.owner || '', inputStyle);
  var ow = document.createElement('div'); var ol = document.createElement('label');
  ol.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
  ol.textContent = 'Ответственный'; ow.appendChild(ol); ow.appendChild(ownerS); row2.appendChild(ow);
 
- var unitS = document.createElement('select'); unitS.style.cssText = inputStyle;
- ['шт','раз','мин','часов','%'].forEach(function(u){ var o = document.createElement('option'); o.value=u; o.textContent=u; if((initial.unit||'шт')===u) o.selected=true; unitS.appendChild(o); });
+ var unitS = _fdxMakeSelect(['шт','раз','мин','часов','%'].map(function(u){ return { value:u, label:u }; }), initial.unit || 'шт', inputStyle);
  var uw2 = document.createElement('div'); var ul2 = document.createElement('label');
  ul2.style.cssText = 'display:block;font-size:11px;color:var(--text-soft);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em';
  ul2.textContent = 'Единица'; uw2.appendChild(ul2); uw2.appendChild(unitS); row2.appendChild(uw2);
@@ -20660,10 +20668,10 @@ function fdxOpenMetricEditor(initial){
   var payload = {
    title: titleI.value.trim(),
    target_per_period: Number(targetI.value) || 0,
-   period: periodS.value,
-   owner: ownerS.value || null,
-   unit: unitS.value,
-   goal_id: goalS.value || null,
+   period: periodS.dataset.value,
+   owner: ownerS.dataset.value || null,
+   unit: unitS.dataset.value,
+   goal_id: goalS.dataset.value || null,
    country: initial.country || currentCountry || 'KZ',
    active: true
   };
@@ -20829,12 +20837,7 @@ function fdxOpenSessionEditor(initial){
  }
  addField('Когда', whenI);
 
- var teamS = document.createElement('select'); teamS.style.cssText = inputStyle;
- [['all','Вся команда'],['sales','Продажи'],['support','Поддержка'],['integration','Интеграция']].forEach(function(p){
-  var o = document.createElement('option'); o.value = p[0]; o.textContent = p[1];
-  if((initial.team || 'all') === p[0]) o.selected = true;
-  teamS.appendChild(o);
- });
+ var teamS = _fdxMakeSelect([['all','Вся команда'],['sales','Продажи'],['support','Поддержка'],['integration','Интеграция']].map(function(p){ return { value:p[0], label:p[1] }; }), initial.team || 'all', inputStyle);
  addField('Кто участвует', teamS);
 
  var btns = document.createElement('div'); btns.style.cssText = 'display:flex;gap:10px;margin-top:14px';
@@ -20844,7 +20847,7 @@ function fdxOpenSessionEditor(initial){
  saveBtn.onclick = async function(){
   var payload = {
    scheduled_at: whenI.value,
-   team: teamS.value,
+   team: teamS.dataset.value,
    country: initial.country || currentCountry || 'KZ',
    facilitator_email: (currentUser && currentUser.email) || ''
   };
@@ -21084,12 +21087,9 @@ function _fdxRunnerStep3(box, s){
  // Форма добавления
  var form = document.createElement('div');
  form.style.cssText = 'display:grid;grid-template-columns:140px 1fr 100px;gap:8px;align-items:center;padding:12px;background:var(--surface-2);border-radius:8px';
- var ownerS = document.createElement('select');
- ownerS.style.cssText = 'padding:8px;border:1px solid var(--border-faint);border-radius:6px;background:var(--surface);color:var(--text);font-size:12.5px';
- ['','Мирзахит','Юлия','Айдос','Акбар','Самат','Нурай','Аян','Дулат','Абзал'].forEach(function(n){
-  var o = document.createElement('option'); o.value = n; o.textContent = n || '— Кто —';
-  ownerS.appendChild(o);
- });
+ var ownerS = _fdxMakeSelect(
+  ['','Мирзахит','Юлия','Айдос','Акбар','Самат','Нурай','Аян','Дулат','Абзал'].map(function(n){ return { value:n, label:n || '— Кто —' }; }),
+  '', 'padding:8px;border:1px solid var(--border-faint);border-radius:6px;background:var(--surface);color:var(--text);font-size:12.5px');
  var textI = document.createElement('input');
  textI.type = 'text'; textI.placeholder = 'Что обещает сделать (одной фразой)';
  textI.style.cssText = 'padding:8px;border:1px solid var(--border-faint);border-radius:6px;background:var(--surface);color:var(--text);font-size:12.5px';
@@ -21101,7 +21101,7 @@ function _fdxRunnerStep3(box, s){
   addBtn.disabled = true;
   try {
    await fdxPost({ entity:'commitments', action:'upsert', payload:{
-    session_id: s.id, country: s.country, owner: ownerS.value || null, text: textI.value.trim()
+    session_id: s.id, country: s.country, owner: ownerS.dataset.value || null, text: textI.value.trim()
    }});
    textI.value = '';
    var fresh = await fdxFetch('commitments');
@@ -33093,33 +33093,44 @@ function _ticketRenderFields(){
  }
 }
 
-// v401: редактор поля в sidebar — заменяет .tk-input на <select> в том же стиле.
+// v401: редактор поля в sidebar. v814: нативный <select> заменён своим дропдауном
+// (.ct-dd через _intgDdOpen) по образцу карты интеграции v811 — системный список опций
+// не красится под тёмную тему (белая коробка с невидимым текстом).
 function _openTicketSidebarEditor(inputEl, valueEl, opts){
  if(inputEl.dataset.editing === '1') return;
  inputEl.dataset.editing = '1';
- var rect = inputEl.getBoundingClientRect();
- var sel = document.createElement('select');
- sel.style.cssText = 'width:100%;padding:7px 10px;border:1px solid var(--amocard-accent,#3B8B57);background:var(--amocard-surface-2);color:var(--amocard-text);border-radius:5px;font-family:inherit;font-size:12.5px;outline:none;box-sizing:border-box;min-height:32px';
- (opts.choices || []).forEach(function(ch){
-  var o = document.createElement('option'); o.value = ch;
-  o.textContent = (opts.choiceLabels && opts.choiceLabels[ch] != null) ? opts.choiceLabels[ch] : ch;
-  sel.appendChild(o);
+ var input = document.createElement('input');
+ input.type = 'text';
+ input.readOnly = true;
+ input.style.cssText = 'width:100%;padding:7px 10px;border:1px solid var(--amocard-accent,#3B8B57);background:var(--amocard-surface-2);color:var(--amocard-text);border-radius:5px;font-family:inherit;font-size:12.5px;outline:none;box-sizing:border-box;min-height:32px;cursor:pointer';
+ // v811-qa: в инпуте показываем подпись (open → Открыт), сырое значение живёт в _selRaw
+ var _selRaw = opts.rawValue == null ? '' : String(opts.rawValue);
+ input.value = (opts.choiceLabels && opts.choiceLabels[_selRaw] != null) ? opts.choiceLabels[_selRaw] : _selRaw;
+ var _selItems = (opts.choices || []).map(function(ch){
+  return { value: ch, label: (opts.choiceLabels && opts.choiceLabels[ch] != null) ? opts.choiceLabels[ch] : ch };
  });
- sel.value = opts.rawValue == null ? '' : String(opts.rawValue);
- inputEl.replaceChildren(sel);
- setTimeout(function(){ sel.focus(); }, 0);
+ inputEl.replaceChildren(input);
+ setTimeout(function(){ input.focus(); }, 0);
  var done = false;
  function cleanup(){ inputEl.dataset.editing = ''; }
  function cancel(){
   if(done) return; done = true;
+  // v811-qa: свой дропдаун живёт на body — при перерисовке поля снимаем его, иначе висит
+  document.querySelectorAll('.ct-dd._intg').forEach(function(d){ d.remove(); });
   _ticketRenderFields(); cleanup();
  }
- async function save(){
+ async function save(newVal){
   if(done) return; done = true;
-  var newVal = sel.value;
+  // сравниваем ДО конверсии ''→null, иначе повторный выбор пустого пункта шлёт PATCH null поверх null
+  if(String(newVal) === String(opts.rawValue == null ? '' : opts.rawValue)){
+   // v811-qa: done уже true — cancel молча выходил и поле «замерзало» редактором
+   // (свой дропдаун, в отличие от нативного change, зовёт onPick и на текущем значении)
+   done = false;
+   cancel();
+   return;
+  }
   if(newVal === '') newVal = null;
-  if(String(newVal) === String(opts.rawValue == null ? '' : opts.rawValue)){ cancel(); return; }
-  sel.disabled = true; sel.style.opacity = '0.6';
+  input.disabled = true; input.style.opacity = '0.6';
   try {
    var body = {}; body[opts.field] = newVal;
    var d = await sbFetch('/api/cards?entity=ticket&id=' + _ticketCurrentTicket.id, { method:'PATCH', body: JSON.stringify(body) });
@@ -33133,13 +33144,22 @@ function _openTicketSidebarEditor(inputEl, valueEl, opts){
    if(typeof ticketsRender === 'function'){ try { ticketsRender(); ticketsUpdateStats(); } catch(_){} }
   } catch(e){
    alert('Не удалось сохранить: ' + e.message);
+   done = false; // иначе cancel — no-op и поле остаётся замороженным
    cancel();
   }
  }
- sel.addEventListener('change', save);
- // iOS Safari: blur может прилететь до change → задержка
- sel.addEventListener('blur', function(){ setTimeout(function(){ if(!done) cancel(); }, 200); });
- sel.addEventListener('keydown', function(e){
+ var _selOpen = function(){
+  _intgDdOpen(input, _selItems, _selRaw, function(v){
+   _selRaw = v;
+   input.value = (opts.choiceLabels && opts.choiceLabels[v] != null) ? opts.choiceLabels[v] : v;
+   save(v);
+  });
+ };
+ input.addEventListener('click', _selOpen);
+ setTimeout(_selOpen, 0);
+ // v398-паттерн: blur с задержкой — выбор в дропдауне успевает выставить done до отмены
+ input.addEventListener('blur', function(){ setTimeout(function(){ if(!done) cancel(); }, 200); });
+ input.addEventListener('keydown', function(e){
   if(e.key === 'Escape'){ e.preventDefault(); cancel(); }
  });
 }
@@ -33997,6 +34017,13 @@ function _pluralDays(n){
 // v457: shared task draft defaults — используется тремя composer'ами (route-chat / client tab / mytasks)
 // Возвращает defaults с правильным ассайном (мэтчинг currentUser → kbOperators) и временем
 // (следующий круглый час, пересчитывается при каждом вызове — не кэшируется).
+// v814: локальная дата YYYY-MM-DD. НЕ toISOString().slice(0,10) — тот отдаёт дату по UTC:
+// для Алматы (GMT+5) локальная полночь = 19:00 вчерашнего дня по UTC, и выбор «Сегодня»
+// в чипах задачи записывал вчера. Та же ловушка уже чинилась точечно в v364 (активация).
+function taskLocalIso(d){
+ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
 function taskDraftDefaults(){
  var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
  var rawName = (u.name || '').toString();
@@ -34010,7 +34037,7 @@ function taskDraftDefaults(){
  now.setHours(now.getHours() + 1, 0, 0, 0);   // следующий круглый час, всегда пересчёт
  return {
   type_id: 1,                                  // «Связаться»
-  date_iso: now.toISOString().slice(0,10),
+  date_iso: taskLocalIso(now),
   time_start: String(now.getHours()).padStart(2,'0') + ':00',
   is_all_day: false,
   assignee: assignee
@@ -34230,18 +34257,26 @@ function _routeChatRefreshChips(){
 function routeChatChipDate(anchor){
  if(!window._routeChatTaskState) _routeChatInitTaskState();
  var today = new Date(); today.setHours(0,0,0,0);
- var toIso = function(d){ return d.toISOString().slice(0,10); };
+ // v814: taskLocalIso вместо toISOString — UTC-сдвиг записывал «вчера» при любом выборе
  var t1 = new Date(today); t1.setDate(t1.getDate()+1);
  var t2 = new Date(today); t2.setDate(t2.getDate()+2);
  var t7 = new Date(today); t7.setDate(t7.getDate()+7);
  var items = [
-  { value:toIso(today), label:'Сегодня' },
-  { value:toIso(t1), label:'Завтра' },
-  { value:toIso(t2), label:'Послезавтра' },
-  { value:toIso(t7), label:'Через неделю' }
+  { value:taskLocalIso(today), label:'Сегодня' },
+  { value:taskLocalIso(t1), label:'Завтра' },
+  { value:taskLocalIso(t2), label:'Послезавтра' },
+  { value:taskLocalIso(t7), label:'Через неделю' },
+  { value:'__custom__', label:'Выбрать дату…' }
  ];
  if(typeof crmTasksOpenDropdown !== 'function'){ alert('Модуль задач не загружен'); return; }
  crmTasksOpenDropdown(anchor, items, function(v){
+  if(v === '__custom__'){
+   crmTasksPickCustomDate(window._routeChatTaskState.date_iso, function(iso){
+    window._routeChatTaskState.date_iso = iso;
+    _routeChatRefreshChips();
+   });
+   return;
+  }
   window._routeChatTaskState.date_iso = v;
   _routeChatRefreshChips();
  });
@@ -43569,7 +43604,7 @@ function crmTasksFormInitState(){
  // на kbOperators) и пересчёта времени.
  var defaults = (typeof taskDraftDefaults === 'function') ? taskDraftDefaults() : {
   type_id: 1,
-  date_iso: new Date().toISOString().slice(0,10),
+  date_iso: taskLocalIso(new Date()),
   time_start: '09:00',
   is_all_day: false,
   assignee: 'Айдос'
@@ -43897,50 +43932,53 @@ function crmTasksDDAssignee(anchor){
 
 function crmTasksDDDate(anchor){
  var today = new Date(); today.setHours(0,0,0,0);
- var toIso = function(d){ return d.toISOString().slice(0,10); };
+ // v814: taskLocalIso вместо toISOString — UTC-сдвиг записывал «вчера» при любом выборе
  var t1 = new Date(today); t1.setDate(t1.getDate()+1);
  var t2 = new Date(today); t2.setDate(t2.getDate()+2);
  var t7 = new Date(today); t7.setDate(t7.getDate()+7);
  var items = [
-  { value:toIso(today), label:'Сегодня' },
-  { value:toIso(t1), label:'Завтра' },
-  { value:toIso(t2), label:'Послезавтра' },
-  { value:toIso(t7), label:'Через неделю' },
+  { value:taskLocalIso(today), label:'Сегодня' },
+  { value:taskLocalIso(t1), label:'Завтра' },
+  { value:taskLocalIso(t2), label:'Послезавтра' },
+  { value:taskLocalIso(t7), label:'Через неделю' },
   { value:'__custom__', label:'Выбрать дату…' }
  ];
  crmTasksOpenDropdown(anchor, items, function(v){
-  if(v === '__custom__'){ crmTasksPickCustomDate(); return; }
+  if(v === '__custom__'){
+   crmTasksPickCustomDate(crmTasksFormState.date_iso, function(iso){
+    crmTasksFormState.date_iso = iso;
+    var card = window._kbCurrentCard;
+    if(card) crmClientTasksRender(card);
+   });
+   return;
+  }
   crmTasksFormState.date_iso = v;
   var card = window._kbCurrentCard;
   if(card) crmClientTasksRender(card);
  });
 }
 
-// Модалка кастомной даты
-function crmTasksPickCustomDate(){
+// Модалка кастомной даты. v814: генерализована — зовётся из формы задач карточки
+// (crmTasksDDDate) и из чипов ленты (routeChatChipDate); onPick получает YYYY-MM-DD.
+function crmTasksPickCustomDate(currentIso, onPick){
  var bg = document.createElement('div');
  bg.className = 'ct-modal-bg';
  bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
  var inner = '<div class="ct-modal" onclick="event.stopPropagation()">' +
   '<div class="ct-modal-title">Выбрать дату</div>' +
-  '<div class="ct-modal-field"><input type="date" id="ct-pick-date" value="'+ctEsc(crmTasksFormState.date_iso)+'"></div>' +
+  '<div class="ct-modal-field"><input type="date" id="ct-pick-date" value="'+ctEsc(currentIso || '')+'"></div>' +
   '<div class="ct-modal-actions">' +
-   '<button class="ct-modal-btn ct-modal-btn-secondary" onclick="this.closest(\'.ct-modal-bg\').remove()">Отмена</button>' +
-   '<button class="ct-modal-btn ct-modal-btn-primary" onclick="crmTasksApplyCustomDate()">OK</button>' +
+   '<button class="ct-modal-btn ct-modal-btn-secondary" data-act="cancel">Отмена</button>' +
+   '<button class="ct-modal-btn ct-modal-btn-primary" data-act="ok">OK</button>' +
   '</div>' +
  '</div>';
  bg.insertAdjacentHTML('beforeend', inner);
+ bg.querySelector('[data-act="cancel"]').onclick = function(){ bg.remove(); };
+ bg.querySelector('[data-act="ok"]').onclick = function(){
+  var inp = bg.querySelector('#ct-pick-date');
+  if(inp && inp.value){ bg.remove(); onPick(inp.value); }
+ };
  document.body.appendChild(bg);
-}
-
-function crmTasksApplyCustomDate(){
- var inp = document.getElementById('ct-pick-date');
- if(inp && inp.value){
-  crmTasksFormState.date_iso = inp.value;
-  var bg = document.querySelector('.ct-modal-bg'); if(bg) bg.remove();
-  var card = window._kbCurrentCard;
-  if(card) crmClientTasksRender(card);
- }
 }
 
 // Модалка времени (start + end + чекбокс «Весь день»)
@@ -44781,7 +44819,7 @@ async function mytasksNewTaskStart(){
  var ops = (typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators.slice() : ['Айдос','Акбар','Самат'];
  // v457: identity bug fix — используем общий taskDraftDefaults, который мэтчит юзера
  // против kbOperators, а не split(' ')[0] (раньше CEO «Mirzahit» попадал на пустого assignee).
- var defaults = (typeof taskDraftDefaults === 'function') ? taskDraftDefaults() : { assignee: ops[0], date_iso: new Date().toISOString().slice(0,10), time_start: '09:00' };
+ var defaults = (typeof taskDraftDefaults === 'function') ? taskDraftDefaults() : { assignee: ops[0], date_iso: taskLocalIso(new Date()), time_start: '09:00' };
  var meName = defaults.assignee;
  var dateStr = defaults.date_iso;
  var timeStr = defaults.time_start;
