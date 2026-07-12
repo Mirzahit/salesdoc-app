@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v814</title>
+<title>SalesDoc — Финансовый Дашборд v815</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -12078,7 +12078,7 @@ function parseSheetData(data) {
 }
 
 function parseAmount(v){ if(!v)return 0; return parseFloat(String(v).replace(/[^0-9.]/g,''))||0; }
-function formatDate(v){ if(!v)return new Date().toISOString().split('T')[0]; if(v instanceof Date)return v.toISOString().split('T')[0]; const s=String(v); if(s.includes('.'))return s.split('.').reverse().join('-'); return s.substring(0,10); }
+function formatDate(v){ if(!v)return taskLocalIso(new Date()); if(v instanceof Date)return taskLocalIso(v); const s=String(v); if(s.includes('.'))return s.split('.').reverse().join('-'); return s.substring(0,10); }
 function mapCategory(v){ const s=String(v||'').toLowerCase(); if(s.includes('доп')&&s.includes('лиц'))return'other'; if(s.includes('лиц')||s.includes('lic'))return'license'; if(s.includes('абон')||s.includes('sub'))return'subscription'; if(s.includes('интеграц')||s.includes('integr'))return'integration'; if(s.includes('доработ'))return'revision'; if(s.includes('внед')||s.includes('impl'))return'implementation'; return'other'; }
 function mapStatus(v){ const s=String(v||'').toLowerCase(); if(s.includes('оплач')||s.includes('paid'))return'paid'; return'pending'; }
 
@@ -12595,7 +12595,7 @@ async function aiWidgetRefresh(widgetId){
 function aiCtxDashboard(){
  var lines = ['<context>'];
  var now = new Date();
- lines.push('Сегодня: ' + now.toISOString().slice(0,10));
+ lines.push('Сегодня: ' + taskLocalIso(now));
  try {
  var pPlan = (planGetPlan('new_sales') + planGetPlan('subscription'));
  var ps = getPeriodPayments('month');
@@ -12641,7 +12641,7 @@ function aiCtxDashboard(){
 
 function aiCtxClients(){
  var lines = ['<context>'];
- lines.push('Сегодня: ' + new Date().toISOString().slice(0,10));
+ lines.push('Сегодня: ' + taskLocalIso(new Date()));
  try {
  if(typeof acGetActiveClients === 'function'){
  var ac = acGetActiveClients();
@@ -12685,7 +12685,7 @@ function aiCtxClients(){
 
 function aiCtxKanban(){
  var lines = ['<context>'];
- lines.push('Сегодня: ' + new Date().toISOString().slice(0,10));
+ lines.push('Сегодня: ' + taskLocalIso(new Date()));
  try {
  var cards = (typeof kbCards !== 'undefined' && kbCards) ? kbCards : [];
  var notAct = cards.filter(function(c){ return c.stage !== 'Активирован' && !c.activDate; });
@@ -12732,7 +12732,7 @@ function aiCtxKanban(){
 function aiCtxMarketing(){
  // Маркетолог получает контекст с Meta Ads на серверной стороне (buildMarketingContext в /api/chat).
  // Достаточно передать минимальный клиентский контекст.
- return '<context>\nСегодня: ' + new Date().toISOString().slice(0,10) + '\nКонтекст Meta Ads подтянется на сервере.\n</context>';
+ return '<context>\nСегодня: ' + taskLocalIso(new Date()) + '\nКонтекст Meta Ads подтянется на сервере.\n</context>';
 }
 
 // v280: AI-оверлей для канбана (Внедрение) — открывается по кнопке «AI-анализ»
@@ -12849,7 +12849,7 @@ async function morningAnalyze(){
 function morningBuildAiContext(){
  var lines = ['<context>'];
  var now = new Date();
- lines.push('Сегодня: ' + now.toISOString().slice(0,10));
+ lines.push('Сегодня: ' + taskLocalIso(now));
  // План/факт
  try {
  var pPlan = (planGetPlan('new_sales') + planGetPlan('subscription'));
@@ -13403,8 +13403,8 @@ function morningRender(){
  if(dateEl) dateEl.textContent = days[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
 
  // Собираем данные
- var todayStr = now.toISOString().slice(0,10);
- var weekEnd = new Date(now.getTime() + 7*86400000).toISOString().slice(0,10);
+ var todayStr = taskLocalIso(now);
+ var weekEnd = taskLocalIso(new Date(now.getTime() + 7*86400000));
  var cards = (typeof kbCards !== 'undefined' && kbCards) ? kbCards : [];
  var pays = (typeof payments !== 'undefined' && payments) ? payments : [];
  var events = (typeof crmEventsAll === 'function') ? crmEventsAll() : [];
@@ -17036,7 +17036,7 @@ function updatePeriodLabel() {
 // MODAL
 // ============================================================
 
-function openModal(tab){ document.getElementById('modal').classList.add('open'); if(tab)switchTab(tab); const t=new Date().toISOString().split('T')[0]; document.getElementById('p-date').value=t; document.getElementById('a-date').value=t; document.getElementById('a-number').value='АКТ-2026-00'+nextActId; }
+function openModal(tab){ document.getElementById('modal').classList.add('open'); if(tab)switchTab(tab); const t=taskLocalIso(new Date()); document.getElementById('p-date').value=t; document.getElementById('a-date').value=t; document.getElementById('a-number').value='АКТ-2026-00'+nextActId; }
 function closeModal(){ document.getElementById('modal').classList.remove('open'); }
 function switchTab(t){ currentTab=t; document.getElementById('form-payment').style.display=t==='payment'?'block':'none'; document.getElementById('form-act').style.display=t==='act'?'block':'none'; document.getElementById('tab-payment').classList.toggle('active',t==='payment'); document.getElementById('tab-act').classList.toggle('active',t==='act'); }
 async function saveRecord() {
@@ -17945,7 +17945,7 @@ function asstBuildContext(){
  name: c.client, host: c.host,
  segment: c.segment, monthly_qty: c.monthlyQty, monthly_sum: c.monthlySum,
  access_status: c.accessStatus,
- access_until: c.accessUntil ? new Date(c.accessUntil).toISOString().slice(0,10) : null,
+ access_until: c.accessUntil ? taskLocalIso(new Date(c.accessUntil)) : null,
  days_overdue: c.daysOverdue || 0,
  operator: c.operator || null, tags: c.tags || [],
  pay_count_2026: c.payCount, total_amount_2026: c.totalAmount
@@ -17974,7 +17974,7 @@ function asstBuildContext(){
  host: u.host,
  pay_count: u.pay.payCount,
  total_amount: Math.round(u.pay.totalAmount||0),
- last_pay: u.pay.lastPay ? new Date(u.pay.lastPay).toISOString().slice(0,10) : null
+ last_pay: u.pay.lastPay ? taskLocalIso(new Date(u.pay.lastPay)) : null
  };
  })
  };
@@ -18000,7 +18000,7 @@ function asstBuildContext(){
 
  return {
  country: currentCountry,
- today: new Date().toISOString().slice(0,10),
+ today: taskLocalIso(new Date()),
  ui_current_period_label: periodLabel,
  totals: totals,
  by_month: monthsSorted,
@@ -18994,7 +18994,7 @@ async function disableEmpFromCard(id){
  try {
  await apiDisableUser(emp.id);
  emp.active = false;
- emp.pass_hash = 'disabled-' + new Date().toISOString().slice(0,10);
+ emp.pass_hash = 'disabled-' + taskLocalIso(new Date());
  saveCustomEmployees();
  renderEmployees();
  showNotif('Сотрудник уволен', emp.name);
@@ -20529,7 +20529,7 @@ function _fdxBuildMetricCard(m, light){
   if(!v || isNaN(v)){ input.focus(); return; }
   submit.disabled = true;
   try {
-   await fdxPost({ entity:'entries', action:'upsert', payload:{ metric_id:m.id, value:v, country:m.country, date: new Date().toISOString().slice(0,10) } });
+   await fdxPost({ entity:'entries', action:'upsert', payload:{ metric_id:m.id, value:v, country:m.country, date: taskLocalIso(new Date()) } });
    input.value = '';
    if(typeof showNotif === 'function') showNotif('Записано', '+' + v + ' ' + (m.unit||''));
    fdxRenderMetricsPane();
@@ -20833,7 +20833,7 @@ function fdxOpenSessionEditor(initial){
  else {
   // Дефолт — понедельник 10:00 следующей недели
   var d = new Date(); d.setDate(d.getDate() + (8 - d.getDay()) % 7); d.setHours(10,0,0,0);
-  whenI.value = d.toISOString().slice(0,16);
+  whenI.value = taskLocalIso(d) + 'T10:00';
  }
  addField('Когда', whenI);
 
@@ -21149,8 +21149,8 @@ async function fdxRenderAnalyticsPane(){
  pane.appendChild(loader);
 
  // Период — последние 30 дней
- var from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0,10);
- var to = new Date().toISOString().slice(0,10);
+ var from = taskLocalIso(new Date(Date.now() - 30 * 86400000));
+ var to = taskLocalIso(new Date());
  var [byPerson, traffic] = await Promise.all([
   fdxFetch('analytics', { kind:'commitments_by_person', from: from, to: to }),
   fdxFetch('analytics', { kind:'metrics_traffic' })
@@ -21244,7 +21244,7 @@ async function fdxRenderAnalyticsPane(){
 
 function planFmtDate(s){ try { var d = new Date(s); return ('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2); } catch(e){ return s; } }
 function planDaysBetween(a,b){ return Math.max(1, Math.round((new Date(b)-new Date(a))/86400000)+1); }
-function planDayOf(start){ return Math.max(1, Math.min(planDaysBetween(start, (new Date()).toISOString().slice(0,10)), 99)); }
+function planDayOf(start){ return Math.max(1, Math.min(planDaysBetween(start, taskLocalIso(new Date())), 99)); }
 function planStatusLabel(s){ return {ontrack:'На треке', atrisk:'Риск', delayed:'Просрочен'}[s] || s; }
 function planRenderSprintCard(sp){
  // v707: карточка спринта 1:1 с макетом preview-sprints-list (.spr): цель + факт/цель + статус + период + гипотезы + аватары
@@ -21324,7 +21324,7 @@ function planRenderTeamRating(sprints){
  var sprintEndById = {}; sprints.forEach(function(s){ sprintEndById[s.id] = s.end; });
  var allTasks = planLoadTasks().filter(function(t){return sprintIds.indexOf(t.sprint_id)!==-1;});
  if (!allTasks.length) { box.style.display='none'; box.innerHTML=''; return; }
- var todayStr = (new Date()).toISOString().slice(0,10);
+ var todayStr = taskLocalIso(new Date());
  // v175: группируем по каждому ответственному (мульти-владельцы — задача учитывается всем)
  var byOwner = {};
  allTasks.forEach(function(t){
@@ -21394,7 +21394,7 @@ window.planShowRatingTasks = function(ownerIdx, cat){
  if (!_planRatingCtx || !_planRatingCtx.owners) return;
  var ownerName = _planRatingCtx.owners[ownerIdx];
  if (ownerName == null) return;
- var todayStr = (new Date()).toISOString().slice(0,10);
+ var todayStr = taskLocalIso(new Date());
  var spById = {}; (planLoadSprints()||[]).forEach(function(s){ spById[s.id]=s; });
  var catLabel = ({ total:'все задачи', done:'готовые', inwork:'в работе', overdue:'просроченные' })[cat] || 'задачи';
  var tasks = planLoadTasks().filter(function(t){
@@ -22248,7 +22248,7 @@ function planRenderKanban(){
  var arr = tasks.filter(function(t){return t.status===st;});
  if (cnt) cnt.textContent = arr.length;
  if (!arr.length) { box.innerHTML = '<div class="plan-kb-empty">Пусто</div>'; return; }
- var todayStr = (new Date()).toISOString().slice(0,10);
+ var todayStr = taskLocalIso(new Date());
  box.innerHTML = arr.map(function(t){
  // v175: мульти-владельцы — аватары-инициалы (до 2-х + бейдж +N)
  var ownersList = Array.isArray(t.owners) && t.owners.length ? t.owners : (t.owner ? String(t.owner).split(',').map(function(s){return s.trim();}) : []);
@@ -22395,7 +22395,7 @@ window.planSubmitTaskModal = function(){
  progress_pct: 0,           // v710: % выполнения
  priority: priority,
  status:'todo',
- created_at: (new Date()).toISOString().slice(0,10)
+ created_at: taskLocalIso(new Date())
  });
  // v192: запись «создал задачу» в историю
  _planLogActivity(all, all.length - 1, 'created', 'создал(а) задачу');
@@ -22985,7 +22985,7 @@ function _planBuildTaskMeta(t){
  var owners = Array.isArray(t.owners) && t.owners.length ? t.owners : (t.owner ? String(t.owner).split(',').map(function(s){return s.trim();}).filter(Boolean) : []);
  if (owners.length) meta.push('<span><strong style="color:var(--text-secondary)">Ответственные:</strong> '+owners.join(', ')+'</span>');
  if (t.due_date) {
- var todayStr = (new Date()).toISOString().slice(0,10);
+ var todayStr = taskLocalIso(new Date());
  var overdue = todayStr > t.due_date && t.status !== 'done';
  meta.push('<span style="color:'+(overdue?'#E5604D':'var(--text-secondary)')+'"><strong>Дедлайн:</strong> '+planFmtDate(t.due_date)+'</span>');
  }
@@ -23207,7 +23207,7 @@ function _planRenderBurndownVerdict(sp, tasks){
  var total = tasks.length;
  var done = tasks.filter(function(t){return t.status==='done';}).length;
  var totalDays = planDaysBetween(sp.start, sp.end);
- var todayStr = (new Date()).toISOString().slice(0,10);
+ var todayStr = taskLocalIso(new Date());
  var daysSinceStart = Math.max(0, Math.min(planDaysBetween(sp.start, todayStr) - 1, totalDays));
  var planByToday = totalDays > 0 ? Math.round(total * (daysSinceStart / totalDays) * 10) / 10 : 0;
  var diff = done - planByToday;
@@ -23241,7 +23241,7 @@ function _planDrawBurndown(canvas, sp, tasks){
  var totalUnits = tasks.length;
  var labels = [], idealLine = [], actualLine = [], paceLine = [], todayMarker = [];
  var startDate = new Date(sp.start);
- var todayStr = (new Date()).toISOString().slice(0,10);
+ var todayStr = taskLocalIso(new Date());
  var daysSinceStart = Math.max(0, Math.min(planDaysBetween(sp.start, todayStr) - 1, totalDays));
  var doneUnits = tasks.filter(function(t){return t.status==='done';}).length;
  var pacePerDay = daysSinceStart > 0 ? doneUnits / daysSinceStart : 0;
@@ -23336,7 +23336,7 @@ function planRenderVelocity(sprint, tasks){
  var totalSP = tasks.length;
  var doneSP = tasks.filter(function(t){return t.status==='done';}).length;
  var totalDays = planDaysBetween(sprint.start, sprint.end);
- var todayStr = (new Date()).toISOString().slice(0,10);
+ var todayStr = taskLocalIso(new Date());
  var daysSinceStart = Math.max(1, Math.min(planDaysBetween(sprint.start, todayStr), totalDays));
  var avgPerDay = (doneSP / daysSinceStart) || 0;
  var spLeft = totalSP - doneSP;
@@ -23439,7 +23439,7 @@ window.planSubmitRetroModal = function(){
  if (!text) { if (msg) msg.textContent = 'Напиши что хочешь зафиксировать'; return; }
  var all = planLoadRetros();
  var nextId = (all.reduce(function(m,r){return Math.max(m, r.id||0);}, 0) || 0) + 1;
- all.push({ id:nextId, sprint_id:_planCurrentSprintId, type:_planRetroType, text:text, author:author, date: (new Date()).toISOString().slice(0,10) });
+ all.push({ id:nextId, sprint_id:_planCurrentSprintId, type:_planRetroType, text:text, author:author, date: taskLocalIso(new Date()) });
  planSaveRetros(all);
  var sp = planLoadSprints().find(function(s){return s.id===_planCurrentSprintId;});
  if (sp) planRenderRetro(sp);
@@ -24767,7 +24767,7 @@ async function churnSendToSprint(rowsList){
    if(existing.has(ck)){ totalSkipped++; return; }
    tasks.push({ id:nextTid++, sprint_id:sp.id, title:'Возврат: '+(r.company_name||r.company_key||''),
      owners:[], owner_ids:[], owner:'', start_date:_planYmd(today), due_date:sp.end,
-     priority:'high', status:'todo', created_at:new Date().toISOString().slice(0,10),
+     priority:'high', status:'todo', created_at:taskLocalIso(new Date()),
      company_key:ck, return_churn:true, churn_reason:(r.reason||r.fileReason||'') });
    existing.add(ck); totalAdded++;
   });
@@ -25162,7 +25162,7 @@ window.metaExportReport = function() {
  var blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
  var a = document.createElement('a');
  a.href = URL.createObjectURL(blob);
- a.download = 'target_ads_report_' + new Date().toISOString().slice(0,10) + '.csv';
+ a.download = 'target_ads_report_' + taskLocalIso(new Date()) + '.csv';
  a.click();
  if (typeof showNotif === 'function') showNotif('Экспорт', 'Отчёт target_ads скачан');
 };
@@ -28614,7 +28614,7 @@ function exportPaymentsCSV(){
  var csv='\uFEFF'+rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(';');}).join('\n');
  var blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
  var a=document.createElement('a');a.href=URL.createObjectURL(blob);
- a.download='payments_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+ a.download='payments_'+taskLocalIso(new Date())+'.csv';a.click();
  showNotif('Экспорт','Файл payments скачан');
 }
 
@@ -29001,7 +29001,7 @@ function testsSaveEval(person,type,count){
  var comment=document.getElementById('test-comment')?.value||'';
  _testsResults.push({
  person:person,type:type,scores:scores,comment:comment,
- date:new Date().toISOString().slice(0,10),
+ date:taskLocalIso(new Date()),
  evaluator:currentUser?currentUser.name:'Admin'
  });
  testsSaveData();
@@ -35007,7 +35007,7 @@ function _openFieldEditor(fieldEl, valueEl, currentDisplayValue, opts){
   // Для date — приводим к YYYY-MM-DD (input[type=date] требует ISO)
   if(opts.type === 'date' && opts.rawValue){
    var _d = new Date(opts.rawValue);
-   if(!isNaN(_d)) input.value = _d.toISOString().slice(0,10);
+   if(!isNaN(_d)) input.value = taskLocalIso(_d);
    else input.value = '';
   } else {
    input.value = opts.rawValue != null ? String(opts.rawValue) : '';
@@ -40797,7 +40797,7 @@ function supportRender(){
  var cards = supportState.operator ? rawCards.filter(function(c){ return c.operator === supportState.operator; }) : rawCards;
  var events = supportState.operator ? rawEvents.filter(function(e){ return e.operator === supportState.operator; }) : rawEvents;
  var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
- var todayStr = (new Date()).toISOString().slice(0,10);
+ var todayStr = taskLocalIso(new Date());
 
  // KPIs
  var totalClients = cards.length;
@@ -41012,7 +41012,7 @@ function supportChartOpsLoad(events, ops){
  var el = document.getElementById('sd-chart-ops');
  if(!el) return;
  if(!ops.length){ el.innerHTML = '<div class="sd-empty">Нет операторов</div>'; return; }
- var todayStr = (new Date()).toISOString().slice(0,10);
+ var todayStr = taskLocalIso(new Date());
  var stats = ops.map(function(op){
  var opE = events.filter(function(e){ return e.operator === op; });
  var done = opE.filter(function(e){ return e.status === 'done'; }).length;
@@ -45748,7 +45748,7 @@ window.kbInputTab = function(tab) {
  }
  // Set today as default
  var dateEl = document.getElementById('kbc-task-date');
- if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+ if(dateEl && !dateEl.value) dateEl.value = taskLocalIso(new Date());
  } else {
  noteTab.classList.add('active'); taskTab.classList.remove('active');
  noteMode.style.display = 'flex'; taskMode.style.display = 'none';
@@ -45788,7 +45788,7 @@ window.kbPostTask = function() {
  time: timeEl ? timeEl.value : '',
  text: textEl ? textEl.value.trim() : '',
  done: false,
- created: new Date().toISOString().slice(0,10)
+ created: taskLocalIso(new Date())
  };
 
  var tasks = [];
