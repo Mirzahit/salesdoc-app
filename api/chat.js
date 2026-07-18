@@ -54,7 +54,7 @@ async function buildMarketingContext(req, country) {
   const fmt = v => sym + (parseFloat(v || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }));
   const num = v => Math.round(parseFloat(v || 0)).toLocaleString('en-US');
 
-  const today = new Date();
+  const today = new Date(Date.now() + 5 * 3600 * 1000); // v817: «сегодня» по Алматы — до 5 утра ассистент считал что вчера
   const todayStr = today.toISOString().slice(0, 10);
   const monthName = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][today.getUTCMonth()];
 

@@ -23,6 +23,7 @@
 
 import { sbSelect, sbInsert, sbUpdate } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
+import { almatyIso } from './_dates.js';
 
 // v364: whitelist разрешённых стадий — иначе мусорный stage сохранится молча
 const ALLOWED_STAGES = ['Новый','Настройка','Обучение','Тестирование','Активация','Архив'];
@@ -97,7 +98,9 @@ export default async function handler(req, res) {
       if (!ALLOWED_STAGES.includes(stage)) {
         return res.status(400).json({ ok: false, error: 'stage должен быть один из: ' + ALLOWED_STAGES.join(', ') });
       }
-      const country = (body.country || 'KZ').toUpperCase();
+      // v817: фронт передаёт country в query (sbFetch), body может его не содержать —
+      // без фолбэка карточка с доски KG молча писалась как KZ
+      const country = (body.country || (req.query || {}).country || 'KZ').toUpperCase();
       if (!ALLOWED_COUNTRIES.includes(country)) {
         return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
       }
@@ -245,7 +248,7 @@ export async function ensureBoardEntryForPayment(opts) {
         return { action: 'already_synced_integration', integration_id: existInteg[0].id, client_id: existInteg[0].client_id };
       }
     }
-    const todayIso = opts.date_paid || new Date().toISOString().slice(0, 10);
+    const todayIso = opts.date_paid || almatyIso(); // v817: было по Гринвичу — ночная оплата уезжала на вчера
     const recentInteg = await sbSelect('integrations', {
       client_id: 'eq.' + clientId, status: 'eq.Новая', date_paid: 'eq.' + todayIso,
       select: 'id,client_id,status', limit: '1'

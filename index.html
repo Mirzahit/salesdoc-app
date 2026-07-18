@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v816</title>
+<title>SalesDoc — Финансовый Дашборд v817</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8983,7 +8983,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="modal-overlay" id="plan-task-detail-modal" onclick="if(event.target.id==='plan-task-detail-modal')planCloseTaskDetail()" style="z-index:10003">
  <div class="modal" style="max-width:580px">
  <button class="modal-close" onclick="planCloseTaskDetail()"></button>
- <input id="ptd-title" class="form-input" placeholder="Название задачи" onchange="planUpdateTaskTitle()" title="Кликни, чтобы переименовать" style="font-size:17px;font-weight:700;margin-bottom:8px;width:100%;background:transparent;border:1px solid transparent;padding:6px 8px;border-radius:8px" onfocus="this.style.borderColor='var(--dark-border)';this.style.background='rgba(255,255,255,.03)'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">
+ <input id="ptd-title" class="form-input" placeholder="Название задачи" onchange="planUpdateTaskTitleFromDetail()" title="Кликни, чтобы переименовать" style="font-size:17px;font-weight:700;margin-bottom:8px;width:100%;background:transparent;border:1px solid transparent;padding:6px 8px;border-radius:8px" onfocus="this.style.borderColor='var(--dark-border)';this.style.background='rgba(255,255,255,.03)'" onblur="this.style.borderColor='transparent';this.style.background='transparent'">
  <div id="ptd-meta" style="font-size:11px;color:var(--text-muted);margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px"></div>
 
  <!-- v195: Даты (редактируемые) -->
@@ -14263,7 +14263,7 @@ function renderRecognizedRevenue() {
  html += '<div style="font-size:9px;color:var(--text-muted);letter-spacing:1px;margin-bottom:6px">НЕ АКТИВИРОВАНЫ</div>';
  notActivated.forEach(function(na){
  html += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px">'+
- '<span style="color:#D89595">'+na.client+'</span>'+
+ '<span style="color:#D89595">'+sanitize(na.client)+'</span>'+
  '<span style="color:#FBBF77;font-family:Inter,sans-serif;font-size:11px">'+fmt(na.amount)+' '+_CUR+'</span></div>';
  });
  html += '</div>';
@@ -14297,7 +14297,7 @@ function renderRecognizedRevenue() {
  mh += '</div>';
  g.items.forEach(function(it){
  mh += '<div style="display:flex;justify-content:space-between;padding:4px 0 4px 18px;font-size:12px">';
- mh += '<span style="color:var(--text-secondary);margin-right:12px">'+it.client+'</span>';
+ mh += '<span style="color:var(--text-secondary);margin-right:12px">'+sanitize(it.client)+'</span>';
  mh += '<span style="color:var(--text-primary);font-family:Inter,sans-serif;font-size:11px;white-space:nowrap">'+fmt(it.amount)+' '+_CUR+'</span>';
  mh += '</div>';
  });
@@ -14348,7 +14348,7 @@ function renderRecognizedRevenue() {
  mh += '<div style="font-size:10px;color:rgba(94,106,210,0.7);font-weight:600;margin:8px 0 4px">'+mk+'</div>';
  byMonth[mk].forEach(function(nc){
  mh += '<div style="display:flex;justify-content:space-between;padding:3px 0 3px 10px;font-size:11px">';
- mh += '<span style="color:var(--text-secondary);flex:1">'+nc.client+'</span>';
+ mh += '<span style="color:var(--text-secondary);flex:1">'+sanitize(nc.client)+'</span>';
  mh += '<span style="color:var(--text-secondary);width:50px;text-align:center">'+nc.qty+' лиц.</span>';
  mh += '<span style="color:var(--text-primary);font-family:Inter,sans-serif;font-size:10px;white-space:nowrap;width:70px;text-align:right">'+fmt(nc.amount)+' '+_CUR+'</span>';
  mh += '</div>';
@@ -14867,7 +14867,7 @@ function inspectPayRow(pid) {
  }).filter(Boolean).join('');
  div.innerHTML = '<div style="background:var(--dark-card);border:1px solid var(--gold-deep);border-radius:16px;padding:24px;max-width:700px;width:95%;max-height:85vh;overflow-y:auto">'
  +'<div style="font-family:Bebas Neue,sans-serif;font-size:18px;color:var(--gold-bright);letter-spacing:2px;margin-bottom:4px">СЫРЫЕ ДАННЫЕ ИЗ ТАБЛИЦЫ</div>'
- +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">'+p.client+' · '+p.date+'</div>'
+ +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">'+sanitize(p.client)+' · '+sanitize(p.date)+'</div>'
  +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr>'
  +'<th style="color:var(--text-muted);text-align:left;padding:4px 10px">№</th>'
  +'<th style="color:var(--text-muted);text-align:left;padding:4px 14px">Заголовок</th>'
@@ -15294,7 +15294,7 @@ function renderKeyClients(){
  e=document.getElementById('kc-'+cat+'-pct'); if(e) e.textContent=pct+'%';
  var lE=document.getElementById('kc-'+cat+'-list');
  if(lE){var clr=kcCatColors[cat]; lE.innerHTML=list.map(function(c){
- return '<div class="kc-cl-row"><span style="font-weight:600;color:'+clr+'">'+c.client+'</span><span><span style="font-family:Inter,sans-serif;font-size:12px;color:'+clr+'">'+fmt(c.total)+'</span><span style="font-size:10px;opacity:0.5;margin-left:6px;color:'+clr+'">'+c.pct+'%</span></span></div>';
+ return '<div class="kc-cl-row"><span style="font-weight:600;color:'+clr+'">'+sanitize(c.client)+'</span><span><span style="font-family:Inter,sans-serif;font-size:12px;color:'+clr+'">'+fmt(c.total)+'</span><span style="font-size:10px;opacity:0.5;margin-left:6px;color:'+clr+'">'+c.pct+'%</span></span></div>';
  }).join('')||'<div style="font-size:11px;opacity:0.4;padding:8px 0">Нет клиентов</div>';}
  });
  kcRenderTop10(ranked,d);
@@ -15397,7 +15397,7 @@ function kcDoSearch(q){
  else if(d.silver.some(function(x){return x.client===c.client;})){cat='silver';catName='Средние';}
  var clr=kcCatColors[cat];
  h+='<div style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(94,106,210,0.1)">';
- h+='<div style="font-weight:700;font-size:14px;color:'+clr+';margin-bottom:6px">'+c.client+'</div>';
+ h+='<div style="font-weight:700;font-size:14px;color:'+clr+';margin-bottom:6px">'+sanitize(c.client)+'</div>';
  h+='<div style="display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:1px;color:'+clr+';background:'+kcCatBg[cat]+';border:1px solid rgba(94,106,210,0.15);margin-bottom:8px">'+catName+'</div>';
  h+='<div style="display:inline-block;margin-left:8px;font-size:12px;color:var(--gold-bright);font-weight:700">'+fmtFull(c.total)+'</div>';
  if(avail.length>1){
@@ -16540,9 +16540,9 @@ function showCeoBonus() {
  var catLabel = p.category === 'integration' ? 'Интеграция' : 'Внедрение';
  var rawLabel = p.categoryRaw || catLabel;
  return '<tr>'
- +'<td style="color:var(--text-muted);font-size:11px">'+p.date+'</td>'
- +'<td>'+p.client+'</td>'
- +'<td style="color:var(--text-secondary);font-size:11px">'+rawLabel+'</td>'
+ +'<td style="color:var(--text-muted);font-size:11px">'+sanitize(p.date)+'</td>'
+ +'<td>'+sanitize(p.client)+'</td>'
+ +'<td style="color:var(--text-secondary);font-size:11px">'+sanitize(rawLabel)+'</td>'
  +'<td style="color:var(--gold-bright);font-weight:600;text-align:right">'+fmtFull(p.amount)+'</td>'
  +'<td style="color:#4CB782;font-weight:700;text-align:right">'+fmtFull(bonus)+'</td>'
  +'</tr>';
@@ -17799,7 +17799,8 @@ const ASST_AGENTS = [
 let asstState = {
  currentAgent: 'financier',
  // history: { financier: [{role,content},...], sales: [...] }
- history: JSON.parse(localStorage.getItem('asst_history')||'{}'),
+ // v817: битый JSON в localStorage останавливал весь скрипт на этапе загрузки (белый экран)
+ history: (function(){ try { return JSON.parse(localStorage.getItem('asst_history')||'{}') || {}; } catch(_) { return {}; } })(),
  sending: false
 };
 
@@ -23043,7 +23044,9 @@ function _planEditOpenTask(mutate, logType, logText){
  if (_tc && _tc.style.display !== 'none' && typeof planRenderTaskCard === 'function') { try { planRenderTaskCard(); } catch(_){} }
  return all[i];
 }
-window.planUpdateTaskTitle = function(){
+// v817: была вторым объявлением planUpdateTaskTitle и перекрывала версию для амо-карточки —
+// переименование в карточке молча сохраняло не то. Теперь у детальной модалки своё имя.
+window.planUpdateTaskTitleFromDetail = function(){
  var inp = document.getElementById('ptd-title'); if (!inp) return;
  var v = (inp.value || '').trim();
  if (!v) { var cur = planLoadTasks().find(function(t){return t.id===_planOpenTaskId;}); if (cur) inp.value = cur.title || ''; return; }
@@ -23402,7 +23405,7 @@ function planRenderRetro(sprint){
  if (!items.length) { box.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:8px 4px;opacity:.6">Пусто. Добавь первую запись ↓</div>'; return; }
  box.innerHTML = items.map(function(r){
  return '<div class="plan-retro-item">' + (r.text||'').replace(/</g,'&lt;')
- + '<div style="font-size:10px;color:var(--text-muted);margin-top:6px">— ' + (r.author||'аноним') + ' · ' + (r.date||'') + '</div>'
+ + '<div style="font-size:10px;color:var(--text-muted);margin-top:6px">— ' + sanitize(r.author||'аноним') + ' · ' + sanitize(r.date||'') + '</div>'
  + '<span class="plan-retro-item-del" onclick="planDelRetro(' + r.id + ')"></span>'
  + '</div>';
  }).join('');
@@ -25823,7 +25826,7 @@ function showBonusDetail(bonusId) {
  var _clKey = c.client.toLowerCase().trim();
  var dupeWarn = _prevNewClients[_clKey] ? '<span style="color:#828FF7;font-size:9px;font-weight:600" title="Клиент уже был новым в ' + _prevNewClients[_clKey] + '"> [ПОВТОР: ' + _prevNewClients[_clKey] + ']</span>' : '';
  var rowStyle = c.excluded ? 'opacity:0.4;text-decoration:line-through' : '';
- html += '<tr style="'+rowStyle+'"><td>' + c.client + warn + dupeWarn + (c.excluded ? ' <span style="color:#E5604D;font-size:9px;text-decoration:none;display:inline-block">исключён</span>' : '') + '</td>';
+ html += '<tr style="'+rowStyle+'"><td>' + sanitize(c.client) + warn + dupeWarn + (c.excluded ? ' <span style="color:#E5604D;font-size:9px;text-decoration:none;display:inline-block">исключён</span>' : '') + '</td>';
  html += '<td style="color:var(--gold-bright);font-weight:600;text-align:right">' + fmtBonus(c.amount) + ' '+_CUR+'</td>';
  html += '<td style="color:'+(c.excluded?'var(--text-muted)':'#4CB782')+';font-weight:700;text-align:right">' + fmtBonus(c.bonus) + ' '+_CUR+'</td>';
  if (isAdmin) {
@@ -29051,8 +29054,8 @@ function testsShowHistory(person){
  +'<td style="color:var(--text-muted)">'+r.date+'</td>'
  +'<td><span style="color:'+color+';font-weight:600">'+(_testTypeNames[r.type]||r.type)+'</span></td>'
  +'<td style="color:var(--gold-bright);font-weight:700;font-family:Inter,sans-serif;font-size:16px">СР: '+avg+'</td>'
- +'<td style="color:var(--text-secondary);font-size:11px">'+r.evaluator+'</td>'
- +'<td style="color:var(--text-muted);font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis">'+(r.comment||'—')+'</td>'
+ +'<td style="color:var(--text-secondary);font-size:11px">'+sanitize(r.evaluator)+'</td>'
+ +'<td style="color:var(--text-muted);font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis">'+sanitize(r.comment||'—')+'</td>'
  +'<td><button onclick="testsDeleteResult('+realIdx+')" style="font-size:9px;padding:2px 6px;border-radius:4px;border:1px solid rgba(214,115,115,.3);background:rgba(214,115,115,.1);color:#D89595;cursor:pointer">×</button></td>'
  +'</tr>';
  });
@@ -29674,9 +29677,9 @@ window.statShowDrilldown = function(bucketIdx, kind){
  var mgr = p.managerName || (typeof empName==='function'?empName(p.employee):'');
  var actMark = p.activationDate ? '<span style="color:#4CB782" title="активирован '+p.activationDate+'">OK</span>' : '';
  rows += '<tr style="border-top:1px solid var(--dark-border)">'
- +'<td style="padding:8px 10px;white-space:nowrap">'+(p.date||p.d||'')+'</td>'
- +'<td style="padding:8px 10px">'+(p.client||'—')+' '+actMark+'</td>'
- +'<td style="padding:8px 10px;color:var(--text-secondary)">'+(p.categoryRaw||p.category||'')+'</td>'
+ +'<td style="padding:8px 10px;white-space:nowrap">'+sanitize(p.date||p.d||'')+'</td>'
+ +'<td style="padding:8px 10px">'+sanitize(p.client||'—')+' '+actMark+'</td>'
+ +'<td style="padding:8px 10px;color:var(--text-secondary)">'+sanitize(p.categoryRaw||p.category||'')+'</td>'
  +'<td style="padding:8px 10px"><span style="display:inline-flex;align-items:center;gap:6px">'+renderAvatar(mgr,'avatar-sm')+'<span>'+(mgr||'—')+'</span></span></td>'
  +'<td style="padding:8px 10px;text-align:right;font-weight:700;color:#5E6AD2">'+fmtFull(p.amount||0)+'</td>'
  +'</tr>';
@@ -32715,7 +32718,10 @@ function ticketsRender(){
  var html = '';
  TICKETS_STAGES.forEach(function(stage, sIdx){
   var stageTickets = ticketsList.filter(function(t){
-   if(t.status !== stage.key) return false;
+   // v817: статус reopened не имел своей колонки — тикет пропадал с доски, но горел в просрочке.
+   // Показываем переоткрытые в «Новое» (им нужно внимание как новым) с бейджем «Повторно».
+   var _st = (t.status === 'reopened') ? 'new' : t.status;
+   if(_st !== stage.key) return false;
    // v445: scope «Мои» — оператор или куратор клиента = me
    if(scope === 'mine' && me){
     var isMine = (t.operator === me) || (t.clients && t.clients.curator_operator === me);
@@ -32774,6 +32780,7 @@ function ticketsRender(){
    }
    html += '<div class="r3">' + (ageHtml || '<span class="age"></span>');
    var _tbadges = '';
+   if(t.status === 'reopened') _tbadges += '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:rgba(239,68,68,.14);color:#EF4444">Повторно</span>'; // v817
    if(t.priority === 'critical' || t.priority === 'high') _tbadges += '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:' + prioInfo.bg + ';color:' + prioInfo.color + '">' + prioInfo.label + '</span>';
    if(slaInfo) _tbadges += '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:' + slaInfo.bg + ';color:' + slaInfo.color + ';margin-left:4px">' + slaInfo.label + '</span>';
    if(_tbadges) html += '<span style="margin-left:auto;display:flex;gap:4px;align-items:center">' + _tbadges + '</span>';
@@ -37665,7 +37672,7 @@ function kbRenderHistory(card){
  '<div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:'+iconColor+'1a;color:'+iconColor+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">'+icon+'</div>'+
  '<div style="flex:1;min-width:0">'+
  '<div style="font-size:11px;color:var(--text-primary);font-weight:500;line-height:1.4">'+safeText+'</div>'+
- '<div style="font-size:9px;color:var(--text-muted);margin-top:2px">'+(ev.author||'—')+' · '+kbFormatTimeAgo(ev.ts)+'</div>'+
+ '<div style="font-size:9px;color:var(--text-muted);margin-top:2px">'+sanitize(ev.author||'—')+' · '+kbFormatTimeAgo(ev.ts)+'</div>'+
  '</div>'+
  '</div>';
  }).join('');
@@ -43043,10 +43050,10 @@ function kbCreateCardEl(card) {
  // если у клиента есть открытые задачи но не сегодня и не просрочены.
  if(typeof kbTaskIndicatorHtml === 'function') html += kbTaskIndicatorHtml(card.client_id);
  if(hasNext) html += '<button class="kb-next-btn" onclick="event.stopPropagation();kbNextStage(\''+card.id+'\')">' + kbColumns[curIdx+1] + ' &#8250;</button>';
- html += '<div class="kb-client">' + card.client + '</div>';
+ html += '<div class="kb-client">' + sanitize(card.client) + '</div>'; // v817: имя из Sheets/бота — экранируем
  html += '<div class="kb-meta">';
  if(card.amount) html += '<span>' + fmtFull(parseFloat(card.amount)||0) + '</span>';
- if(card.tariff) html += '<span>' + card.tariff + '</span>';
+ if(card.tariff) html += '<span>' + sanitize(card.tariff) + '</span>';
  if(card.payDate) html += '<span class="kb-badge ' + badgeClass + '">' + (card.stage === 'Запущен' ? 'Готов' : days + ' дн') + '</span>';
  // SLA: дней на текущем этапе (цвет по порогам)
  var stageDays = kbGetStageDays(card);
@@ -45416,7 +45423,7 @@ function kbSetOperatorPage(cardId, operator) {
  }).then(function(r){ return r.json(); }).then(function(res){
  if(res && res.row) card._row = res.row;
  console.log('Operator saved to sheet:', operator, 'row:', card._row);
- }).catch(function(e){ console.error('KB save operator error:', e); });
+ }).catch(function(e){ console.error('KB save operator error:', e); kbShowToast('Оператор не сохранился — проверьте интернет и попробуйте ещё раз', 'err'); }); // v817: ошибки перестали быть молчаливыми
  }
  kbShowToast(operator ? 'Оператор: ' + operator : 'Оператор снят');
 }
@@ -45444,7 +45451,7 @@ function kbWriteOperatorToDohodы(clientName, operator) {
  })
  }).then(function(r){ return r.json(); }).then(function(res){
  console.log('[Kanban] Оператор записан в Доходы:', clientName, operator, res);
- }).catch(function(e){ console.error('KB write operator to Доходы error:', e); });
+ }).catch(function(e){ console.error('KB write operator to Доходы error:', e); kbShowToast('Оператор не записался в таблицу Доходы — проверьте интернет', 'err'); }); // v817
  }
 }
 
@@ -45462,7 +45469,7 @@ function kbAddCommentFromPage() {
  if(KB_SCRIPT_URL) {
  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
  body:JSON.stringify({action:'addComment',sheetId:KB_SHEET_ID,client:card.client,operator:card.operator,who:who,comment:text})
- }).catch(function(e){ console.error('KB comment save error:', e); });
+ }).catch(function(e){ console.error('KB comment save error:', e); kbShowToast('Комментарий не сохранился — проверьте интернет и отправьте ещё раз', 'err'); }); // v817
  }
 }
 
@@ -45478,7 +45485,7 @@ function kbToggleCheck(cardId, idx) {
  if(KB_SCRIPT_URL) {
  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
  body:JSON.stringify({action:'updateChecklist',sheetId:KB_SHEET_ID,row:card._row,checklist:(typeof card.checklist==='string'?card.checklist:Array.isArray(card.checklist)?card.checklist.join(','):JSON.stringify(card.checklist||{}))})
- }).catch(function(e){ console.error('KB checklist save error:', e); });
+ }).catch(function(e){ console.error('KB checklist save error:', e); kbShowToast('Чек-лист не сохранился — проверьте интернет', 'err'); }); // v817
  }
 }
 
@@ -45495,7 +45502,7 @@ function kbFieldChanged(cardId, fieldKey, value) {
  }).then(function(){
  document.getElementById('kb-status').textContent = 'Сохранено';
  setTimeout(function(){ document.getElementById('kb-status').textContent = kbCards.length + ' клиентов'; }, 1500);
- }).catch(function(e){ console.error('KB field save error:', e); });
+ }).catch(function(e){ console.error('KB field save error:', e); kbShowToast('Изменение не сохранилось — проверьте интернет', 'err'); }); // v817
  }
 }
 
@@ -45745,7 +45752,7 @@ function kbSaveSettings() {
  if(KB_SCRIPT_URL) {
  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
  body:JSON.stringify({action:'saveSettings',sheetId:KB_SHEET_ID,columns:kbColumns,checklist:kbChecklist})
- }).catch(function(e){ console.error('KB save settings error:', e); });
+ }).catch(function(e){ console.error('KB save settings error:', e); kbShowToast('Настройки не сохранились — проверьте интернет', 'err'); }); // v817
  }
 }
 
@@ -45822,7 +45829,7 @@ window.kbToggleAct = function(cardId) {
  if(KB_SCRIPT_URL) {
  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
  body:JSON.stringify({action:'updateFields',sheetId:KB_SHEET_ID,row:card._row,client:card.client,fields:card.fields})
- }).catch(function(e){ console.error('KB save act error:', e); });
+ }).catch(function(e){ console.error('KB save act error:', e); kbShowToast('Акт не сохранился — проверьте интернет', 'err'); }); // v817
  }
  kbShowToast(card.fields._actReceived === '1' ? 'Акт получен' : 'Акт снят');
 };
@@ -45932,7 +45939,7 @@ function kbSaveTasksToSheet(card) {
  if(!KB_SCRIPT_URL) return;
  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
  body:JSON.stringify({action:'updateFields',sheetId:KB_SHEET_ID,row:card._row,client:card.client,fields:card.fields})
- }).catch(function(e){ console.error('KB save tasks error:', e); });
+ }).catch(function(e){ console.error('KB save tasks error:', e); kbShowToast('Задачи не сохранились — проверьте интернет', 'err'); }); // v817
 }
 
 // --- KANBAN REPORT ---
@@ -46715,7 +46722,7 @@ window.kbUploadActFile = function(cardId, input) {
  if(KB_SCRIPT_URL) {
  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
  body:JSON.stringify({action:'updateFields',sheetId:KB_SHEET_ID,row:card._row,client:card.client,fields:card.fields})
- }).catch(function(e){ console.error('KB save act file error:', e); });
+ }).catch(function(e){ console.error('KB save act file error:', e); kbShowToast('Файл акта не сохранился — проверьте интернет', 'err'); }); // v817
  }
 
  kbShowToast('Акт "' + file.name + '" загружен');
@@ -46776,7 +46783,7 @@ window.kbApproveAct = function(cardId) {
  if(KB_SCRIPT_URL) {
  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
  body:JSON.stringify({action:'updateFields',sheetId:KB_SHEET_ID,row:card._row,client:card.client,fields:card.fields})
- }).catch(function(e){ console.error('KB approve act error:', e); });
+ }).catch(function(e){ console.error('KB approve act error:', e); kbShowToast('Не получилось согласовать акт — проверьте интернет', 'err'); }); // v817
  }
 
  kbShowToast('Акт подтверждён! Бонус ' + fmtFull(acts[actKey].bonusAmount) + ' начислен оператору ' + card.operator);
@@ -46809,7 +46816,7 @@ window.kbRejectAct = function(cardId) {
  if(KB_SCRIPT_URL) {
  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
  body:JSON.stringify({action:'updateFields',sheetId:KB_SHEET_ID,row:card._row,client:card.client,fields:card.fields})
- }).catch(function(e){ console.error('KB reject act error:', e); });
+ }).catch(function(e){ console.error('KB reject act error:', e); kbShowToast('Не получилось отклонить акт — проверьте интернет', 'err'); }); // v817
  }
 
  kbShowToast('Акт отклонён');
@@ -46826,11 +46833,14 @@ window.kbViewActFile = function(cardId) {
  if(!act || !act.fileData) { kbShowToast('Файл не найден'); return; }
 
  // Открыть в новом окне
+ // v817: имя клиента экранируем, файл принимаем только как data:-адрес (защита от подсунутого кода)
+ if(!/^data:/.test(String(act.fileData||''))) { kbShowToast('Файл акта повреждён — загрузите заново', 'err'); return; }
+ var _actTitle = sanitize(card.client);
  var win = window.open('', '_blank');
  if(act.fileType === 'application/pdf') {
- win.document.write('<html><head><title>Акт: '+card.client+'</title></head><body style="margin:0"><embed src="'+act.fileData+'" type="application/pdf" width="100%" height="100%" style="position:fixed;inset:0"></body></html>');
+ win.document.write('<html><head><title>Акт: '+_actTitle+'</title></head><body style="margin:0"><embed src="'+act.fileData+'" type="application/pdf" width="100%" height="100%" style="position:fixed;inset:0"></body></html>');
  } else {
- win.document.write('<html><head><title>Акт: '+card.client+'</title></head><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="'+act.fileData+'" style="max-width:100%;max-height:100vh;object-fit:contain"></body></html>');
+ win.document.write('<html><head><title>Акт: '+_actTitle+'</title></head><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="'+act.fileData+'" style="max-width:100%;max-height:100vh;object-fit:contain"></body></html>');
  }
 };
 
@@ -46859,7 +46869,7 @@ window.kbDeleteActFile = function(cardId) {
  if(KB_SCRIPT_URL) {
  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
  body:JSON.stringify({action:'updateFields',sheetId:KB_SHEET_ID,row:card._row,client:card.client,fields:card.fields})
- }).catch(function(e){ console.error('KB delete act error:', e); });
+ }).catch(function(e){ console.error('KB delete act error:', e); kbShowToast('Не получилось удалить акт — проверьте интернет', 'err'); }); // v817
  }
 
  kbShowToast('Акт удалён');
