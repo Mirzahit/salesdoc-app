@@ -11,6 +11,7 @@
 //   ?action=funnel&pipeline_id=N  — счётчики лидов по этапам выбранной воронки
 
 import { checkAuth, checkAdminToken } from './_auth.js';
+import { almatyIso } from './_dates.js';
 
 function bad(res, code, msg, extra){
   res.status(code).json({ error: msg, ...(extra || {}) });
@@ -528,7 +529,7 @@ export default async function handler(req, res){
             amount: Number(l.price)||0,
             manager: userNameById[l.responsible_user_id] || '—',
             reason: reason,
-            date: l.closed_at ? new Date(l.closed_at*1000).toISOString().slice(0,10) : '',
+            date: l.closed_at ? almatyIso(l.closed_at*1000) : '', // v817: сделки, закрытые ночью, падали во вчерашний день
             lead_id: l.id
           });
         });

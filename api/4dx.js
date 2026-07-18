@@ -7,6 +7,7 @@
 // Каждая сущность имеет country: 'KZ' | 'KG'.
 
 import { checkAuth } from './_auth.js';
+import { almatyIso } from './_dates.js';
 
 // Кто может править цели/показатели/сессии (CEO + руководители).
 // Резолв своих обязательств и ввод entries — для всех залогиненных.
@@ -79,7 +80,7 @@ async function ensureMigratedFromWigV1() {
     target: Number(old.target) || 0,
     current: Number(old.current) || 0,
     unit: String(old.unit || '₸'),
-    period_start: String(old.started_at || new Date().toISOString().slice(0,10)),
+    period_start: String(old.started_at || almatyIso()), // v817: дата по Алматы, не по Гринвичу
     period_end: String(old.deadline || ''),
     why: String(old.why || ''),
     published: old.published === true,
@@ -268,7 +269,7 @@ export default async function handler(req, res) {
             id: genId('e'),
             country: String(payload.country || country || 'KZ').toUpperCase(),
             metric_id: String(payload.metric_id || ''),
-            date: String(payload.date || new Date().toISOString().slice(0, 10)),
+            date: String(payload.date || almatyIso()), // v817: ночная запись метрики уезжала на вчера
             value: Number(payload.value) || 0,
             author: user,
             note: String(payload.note || ''),

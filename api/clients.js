@@ -10,6 +10,7 @@
 
 import { sbSelect, sbInsert, sbUpdate } from './_supabase.js';
 import { checkAuth } from './_auth.js';
+import { almatyIso } from './_dates.js';
 
 const ALLOWED_STATUS = ['lead','sale','onboarding','active','paused','churned'];
 const ALLOWED_COUNTRIES = ['KZ','KG'];
@@ -39,11 +40,11 @@ export default async function handler(req, res) {
         if (Number.isNaN(n)) {
           return res.status(400).json({ ok: false, error: 'renewal_within должен быть числом' });
         }
-        const today = new Date().toISOString().slice(0, 10);
+        const today = almatyIso(); // v817: было по Гринвичу — утром фильтр биллинга сдвигался на день
         if (n < 0) {
           params['next_billing_at'] = 'lt.' + today;
         } else {
-          const future = new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+          const future = almatyIso(Date.now() + n * 86400000);
           // используем PostgREST `and=` для двух условий на одной колонке
           params['and'] = `(next_billing_at.gte.${today},next_billing_at.lte.${future})`;
         }
@@ -55,7 +56,9 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       const body = await readBody(req);
-      const country = (body.country || 'KZ').toUpperCase();
+      // v817: фронт передаёт country в query (sbFetch), body может его не содержать —
+      // без фолбэка клиент с доски KG получал вечный SD-KZ- id
+      const country = (body.country || (req.query || {}).country || 'KZ').toUpperCase();
       if (!ALLOWED_COUNTRIES.includes(country)) {
         return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
       }
@@ -191,7 +194,7 @@ export default async function handler(req, res) {
           body.next_billing_at = addMonthsISO(new Date(), months);
           if (!body.subscription_period_months) body.subscription_period_months = months;
         }
-        if (!body.activation_date) body.activation_date = new Date().toISOString().slice(0, 10);
+        if (!body.activation_date) body.activation_date = almatyIso(); // v817: ночная активация получала вчерашнюю дату
       }
       let result;
       try {
