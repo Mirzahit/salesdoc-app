@@ -41,6 +41,9 @@ export default async function handler(req, res) {
           return res.status(400).json({ ok: false, error: 'renewal_within должен быть числом' });
         }
         const today = almatyIso(); // v817: было по Гринвичу — утром фильтр биллинга сдвигался на день
+        // v819: если статус не задан явно — только действующие (иначе в списке продлений
+        // всплывали отвалившиеся и приостановленные клиенты со старой датой биллинга)
+        if (!status) params['status'] = 'eq.active';
         if (n < 0) {
           params['next_billing_at'] = 'lt.' + today;
         } else {

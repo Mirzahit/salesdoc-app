@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v818</title>
+<title>SalesDoc — Финансовый Дашборд v819</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13012,6 +13012,18 @@ function morningInit(){
  if((typeof AC_KZ_CACHE === 'undefined' || !AC_KZ_CACHE || !AC_KZ_CACHE.length) && typeof acLoadKZClients === 'function'){
  promises.push(new Promise(function(resolve){ try{ acLoadKZClients(function(){ resolve(); }); }catch(_){ resolve(); } }));
  }
+ // v819: продления — клиенты с датой следующей оплаты в ближайшие 30 дней + уже просроченные
+ if(typeof sbFetch === 'function'){
+ promises.push(Promise.all([
+ sbFetch('/api/clients?renewal_within=30'),
+ sbFetch('/api/clients?renewal_within=-1')
+ ]).then(function(rs){
+ window._morningRenewals = {
+ soon: (rs[0] && rs[0].clients) || [],
+ overdue: (rs[1] && rs[1].clients) || []
+ };
+ }).catch(function(e){ console.warn('morning renewals:', e); }));
+ }
  // Отменим старые таймеры
  _morningRetryTimers.forEach(function(t){ clearTimeout(t); });
  _morningRetryTimers = [];
@@ -13625,6 +13637,47 @@ function morningRender(){
  html += '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:'+Math.min(100,planSection.pct)+'%;background:'+color+'"></div></div>';
  html += '<div style="font-size:12px;color:var(--text)">Прогноз: <b style="color:'+color+'">'+fmt(planSection.forecast)+' '+_CUR+'</b> (' + planSection.fc + '%)</div>';
  html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Рабочий день '+planSection.daysPassed+' из '+planSection.totalDays+'</div>';
+ html += '</div>';
+ }
+
+ // === v819: Карточка 5 — ПРОДЛЕНИЯ (кому скоро платить и кто уже просрочил) ===
+ var rnw = window._morningRenewals;
+ if(rnw && ((rnw.overdue||[]).length || (rnw.soon||[]).length)){
+ // сумма клиента — его последний подписочный платёж из уже загруженных payments (матч по имени; нет матча — без суммы)
+ var _rnLastPay = {};
+ pays.forEach(function(p){
+ if(p.category !== 'subscription') return;
+ _rnLastPay[String(p.client||'').toLowerCase().trim()] = p.amount || 0;
+ });
+ var rnRows = [];
+ (rnw.overdue||[]).forEach(function(c){ rnRows.push({ c:c, over:true }); });
+ (rnw.soon||[]).forEach(function(c){ rnRows.push({ c:c, over:false }); });
+ var rnSum = 0;
+ rnRows.forEach(function(r){ rnSum += _rnLastPay[String(r.c.company_name||'').toLowerCase().trim()] || 0; });
+ var n = rnRows.length;
+ var rnCntTxt = n + ' ' + (n%10===1&&n%100!==11 ? 'клиент' : (n%10>=2&&n%10<=4&&(n%100<10||n%100>=20) ? 'клиента' : 'клиентов'));
+ html += '<div class="morning-card" style="background:var(--dark-card);border:1px solid var(--border-faint);border-radius:14px;padding:18px 20px">';
+ html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:14px">';
+ html += '<div style="font-size:11px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;font-weight:700">Продления · 30 дней</div>';
+ html += '<div style="font-size:11px;color:var(--text-muted);white-space:nowrap">'+rnCntTxt+(rnSum ? ' · ~'+fmt(rnSum)+' '+_CUR : '')+'</div>';
+ html += '</div>';
+ rnRows.slice(0,8).forEach(function(r){
+ var c = r.c;
+ var nb = String(c.next_billing_at||'').slice(0,10);
+ var dd = Math.round((new Date(nb) - new Date(todayStr)) / 86400000);
+ var when = r.over ? ('просрочено ' + Math.abs(dd) + ' дн') : (dd === 0 ? 'сегодня' : 'через ' + dd + ' дн');
+ var nbNice = nb ? nb.split('-').reverse().join('.') : '—';
+ var amt = _rnLastPay[String(c.company_name||'').toLowerCase().trim()];
+ var sub = 'Оплата ' + nbNice + (c.curator_operator ? ' · куратор ' + c.curator_operator : ' · без куратора') + (amt ? ' · ~' + fmt(amt) + ' ' + _CUR : '');
+ html += '<div style="padding:10px 0;border-bottom:1px solid var(--border-faint);cursor:pointer" onclick="showView(\'clients\')">';
+ html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">';
+ html += '<div style="font-size:13px;color:var(--text)">'+kbEsc(c.company_name || c.client_id || '—')+'</div>';
+ html += '<div style="font-size:12px;font-weight:700;white-space:nowrap;color:'+(r.over ? '#E5604D' : 'var(--accent)')+'">'+kbEsc(when)+'</div>';
+ html += '</div>';
+ html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">'+kbEsc(sub)+'</div>';
+ html += '</div>';
+ });
+ if(rnRows.length > 8) html += '<div style="font-size:11px;color:var(--text-muted);padding:10px 0 0">и ещё '+(rnRows.length-8)+' — полный список в разделе «Клиенты»</div>';
  html += '</div>';
  }
 
@@ -39867,9 +39920,15 @@ var NTF_ICON = {
  impl_stuck: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
  intg_deadline: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
  mention: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 6h16v10H9l-5 4V6Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
- task_assigned: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17l9-10" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+ task_assigned: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17l9-10" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+ // v819: удержание клиентов
+ renewal_due: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+ billing_overdue: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/><path d="M12 7v6M12 16.5v.01" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
+ pay_drop: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7l6 6 4-4 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 10v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+ renewals_summary: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'
 };
-var NTF_ICON_CLS = { intg_overdue:'red', impl_stuck:'red', intg_deadline:'amb', mention:'ind', task_assigned:'grn' };
+var NTF_ICON_CLS = { intg_overdue:'red', impl_stuck:'red', intg_deadline:'amb', mention:'ind', task_assigned:'grn',
+ renewal_due:'amb', billing_overdue:'red', pay_drop:'red', renewals_summary:'ind' }; // v819
 
 function ntfWhen(iso){
  var d = new Date(iso);

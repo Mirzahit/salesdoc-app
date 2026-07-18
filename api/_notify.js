@@ -51,7 +51,10 @@ export async function opEmailByName(name) {
 
 const TG_LABEL = {
   intg_deadline: 'Срок интеграции', intg_overdue: 'Просрочка',
-  impl_stuck: 'Внедрение зависло', mention: 'Упоминание', task_assigned: 'Новая задача'
+  impl_stuck: 'Внедрение зависло', mention: 'Упоминание', task_assigned: 'Новая задача',
+  // v819: удержание клиентов
+  renewal_due: 'Продление подписки', billing_overdue: 'Оплата просрочена',
+  pay_drop: 'Платёж меньше обычного', renewals_summary: 'Продления недели'
 };
 
 function _esc(s) {
