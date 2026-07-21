@@ -1043,7 +1043,8 @@ async function handleIntegrationsRoute(req, res) {
     const { id } = req.query || {};
     if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
     const rawBody = await readBody(req);
-    // Whitelist изменяемых полей. Защита от случайной перезаписи id/client_id/created_at.
+    // Whitelist изменяемых полей. Защита от случайной перезаписи id/created_at.
+    // client_id меняется только через явную ветку ниже (v820), с проверкой существования клиента.
     const ALLOWED_FIELDS = ['company_name','status','type','package','db_type','operator','manager',
                             'date_paid','date_taken','deadline','date_done',
                             'login_password','server','contact_persons','comment','country','queue_pos','custom_fields'];
@@ -1051,6 +1052,18 @@ async function handleIntegrationsRoute(req, res) {
     Object.keys(rawBody).forEach(k => {
       if (ALLOWED_FIELDS.includes(k)) patch[k] = rawBody[k];
     });
+    // v820: быстрая привязка клиента из очереди. client_id меняется только явно
+    // и только на существующего клиента (или null — отвязка).
+    if ('client_id' in rawBody) {
+      if (rawBody.client_id == null || rawBody.client_id === '') {
+        patch.client_id = null;
+      } else {
+        const cid = String(rawBody.client_id);
+        const cl = await sbSelect('clients', { client_id: 'eq.' + cid, select: 'client_id', limit: '1' });
+        if (!cl.length) return res.status(400).json({ ok: false, error: 'клиент не найден: ' + cid });
+        patch.client_id = cid;
+      }
+    }
     if (patch.status && !INTEGRATION_STATUSES.includes(patch.status)) {
       return res.status(400).json({ ok: false, error: 'status должен быть один из: ' + INTEGRATION_STATUSES.join(', ') });
     }

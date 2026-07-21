@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v819</title>
+<title>SalesDoc — Финансовый Дашборд v820</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8436,6 +8436,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <button type="button" class="intg-fchip" id="intg-fchip-package" onclick="_intgFilterDdOpen(event,'package')"><span style="opacity:.65;font-weight:500">Пакет:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
  <button type="button" class="intg-fchip" id="intg-fchip-operator" onclick="_intgFilterDdOpen(event,'operator')"><span style="opacity:.65;font-weight:500">Оператор:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
  <button type="button" class="intg-fchip" id="intg-fchip-manager" onclick="_intgFilterDdOpen(event,'manager')"><span style="opacity:.65;font-weight:500">Менеджер:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
+ <button type="button" class="intg-fchip" id="intg-fchip-client" onclick="_intgToggleNoClient()" title="Показать только карточки, не привязанные к клиенту">Без клиента</button>
  </div>
  <div id="intg-status" style="font-size:11px;color:var(--text-muted)"></div>
  </div>
@@ -26479,6 +26480,7 @@ async function intgSbLoad(){
   window.intgSbItems = d.integrations || [];
   console.log('[intg] Supabase: ' + window.intgSbItems.length + ' карточек (активных + архив)');
   intgSbRerender();
+  if(typeof sdOpLoadEnsure === 'function') sdOpLoadEnsure(); // v820: прогрев карточек Внедрения для счётчиков нагрузки
  } catch(e){
   console.error('[intg] Supabase load failed:', e);
   if(listEl){
@@ -26505,6 +26507,7 @@ function intgSbRerender(){
  var fPackage = window._intgFilters.package || '';
  var fOperator = window._intgFilters.operator || ''; // v810: кто внедряет ('__none' = не назначен)
  var fManager  = window._intgFilters.manager  || ''; // v810: кто продал
+ var fClient   = window._intgFilters.client   || ''; // v820: '__none' = карточка без client_id
  function _intgWhoMatch(val, f){
   if(!f) return true;
   var v = String(val || '').trim();
@@ -26540,8 +26543,13 @@ function intgSbRerender(){
   if(fPackage && it.package !== fPackage) return false;
   if(!_intgWhoMatch(_intgOperOf(it), fOperator)) return false; // v810: оператор карточки или с внедрения клиента
   if(!_intgWhoMatch(it.manager, fManager)) return false;       // v810
+  if(fClient === '__none' && it.client_id) return false;       // v820
   // Активные — всегда
   if(ACTIVE_STAGES[it.status]) return true;
+  // v820: при фильтре «Без клиента» показываем сирот целиком, без ограничения месяцем —
+  // задача разгрести все, а не только завершённые в выбранном периоде (иначе счётчик
+  // на чипе обещает 200+, а в списке 15 — QA/UX-ревью)
+  if(fClient === '__none') return true;
   // Готово/Отменено — только если попадает в выбранный месяц
   var doneDate = it.date_done || it.deadline || it.updated_at || it.created_at;
   return _intgInPeriod(doneDate);
@@ -26563,7 +26571,8 @@ function intgSbRerender(){
    + (fCountry ? ' · ' + fCountry : '')
    + (fPackage ? ' · ' + fPackage : '')
    + (fOperator ? ' · ' + (fOperator === '__none' ? 'без оператора' : fOperator) : '')  // v810
-   + (fManager  ? ' · ' + (fManager  === '__none' ? 'без менеджера' : fManager)  : ''); // v810
+   + (fManager  ? ' · ' + (fManager  === '__none' ? 'без менеджера' : fManager)  : '')  // v810
+   + (fClient   ? ' · без клиента' : ''); // v820
 }
 
 // v524: аналитика по Supabase-данным. Считает 3 блока: period stats (по типу),
@@ -27066,6 +27075,8 @@ function intgSbRender(items){
     html += '<div class="r1">' + _qn + '<span class="cl" title="' + _escHtml(r.company_name || '—') + '">' + _escHtml(r.company_name || '—') + '</span>' + _av + '</div>';
     if(typePkg) html += '<div class="r2">' + _escHtml(typePkg) + '</div>';
     if(_ageHtml || _stHtml) html += '<div class="r3">' + _stHtml + _ageHtml + '</div>';
+    // v820: карточка без привязки к клиенту — быстрая привязка прямо из очереди (см. фильтр «Без клиента»)
+    if(!r.client_id) html += '<div class="r3"><span onclick="event.stopPropagation();intgQuickBindClient(event,\'' + _escHtml(r.id) + '\')" title="Карточка не связана с клиентом — нажмите, чтобы выбрать" style="font-size:10.5px;color:var(--text-muted);cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">Привязать клиента</span></div>';
     html += '</div>';
    });
   }
@@ -27093,6 +27104,14 @@ function _intgDdOpen(anchorEl, options, current, onPick){
   var it = document.createElement('div');
   it.className = 'ct-dd-item' + (current === val ? ' is-selected' : '');
   it.textContent = lbl;
+  // v820: meta — серая приписка справа (нагрузка оператора); чистый DOM, без innerHTML
+  if(opt && opt.meta){
+   var mt = document.createElement('span');
+   mt.style.cssText = 'margin-left:8px;color:var(--text-muted);font-size:11px';
+   mt.textContent = String(opt.meta);
+   mt.title = (typeof SD_OPLOAD_TITLE !== 'undefined') ? SD_OPLOAD_TITLE : '';
+   it.appendChild(mt);
+  }
   it.onclick = function(e){ e.stopPropagation(); dd.remove(); onPick(val); };
   listBox.appendChild(it);
  });
@@ -27111,7 +27130,8 @@ function _intgDdOpen(anchorEl, options, current, onPick){
 
 // «+» на карточке канбана — назначить оператора без открытия карты
 function intgKanbanAssignOpen(ev, integrationId){
- var opts = INTG_OPERATORS.map(function(o){ return { value:o, label:o }; });
+ var _lc = (typeof sdOpLoadCounts === 'function') ? sdOpLoadCounts() : null; // v820: нагрузка
+ var opts = INTG_OPERATORS.map(function(o){ return { value:o, label:o, meta: _lc ? String(_lc[String(o).trim()] || 0) : '' }; });
  _intgDdOpen(ev.target, opts, null, function(op){
   var items = window.intgSbItems || [];
   var card = items.find(function(i){ return i.id === integrationId; });
@@ -27129,6 +27149,31 @@ function intgKanbanAssignOpen(ev, integrationId){
    card.operator = prev || null;
    intgSbRerender();
    if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e));
+  });
+ });
+}
+
+// v820: быстрая привязка клиента к карточке-сироте. Пикер общий (sdClientPickerOpen, только
+// активные клиенты). Optimistic update + откат при ошибке — паттерн intgKanbanAssignOpen.
+function intgQuickBindClient(ev, id){
+ var items = window.intgSbItems || [];
+ var card = items.find(function(i){ return i.id === id; });
+ if(!card) return;
+ sdClientPickerOpen(ev.target, card.client_id || null, function(clientId, clientName){
+  // «— Без клиента» в этом контексте ничего не меняет — говорим об этом, а не молчим (UX-ревью)
+  if(!clientId){ if(typeof sdToast === 'function') sdToast('Ничего не изменилось'); return; }
+  var prev = card.client_id || null;
+  card.client_id = clientId;
+  intgSbRerender();
+  sbFetch('/api/cards?entity=integration&id=' + encodeURIComponent(id), {
+   method:'PATCH', body: JSON.stringify({ client_id: clientId })
+  }).then(function(d){
+   if(!d.ok) throw new Error(d.error || 'не сохранилось');
+   if(typeof sdToast === 'function') sdToast('Привязано: ' + (clientName || clientId));
+  }).catch(function(e){
+   card.client_id = prev;
+   intgSbRerender();
+   if(typeof sdToast === 'function') sdToast('Ошибка привязки: ' + (e.message || e), 'error');
   });
  });
 }
@@ -27408,7 +27453,7 @@ async function intgCreateSubmit(){
 }
 
 // ============================ v794: фильтры-чипы вместо нативных select ============================
-window._intgFilters = { status:'', type:'', country:'', package:'', operator:'', manager:'' };
+window._intgFilters = { status:'', type:'', country:'', package:'', operator:'', manager:'', client:'' };
 var _INTG_FILTER_DEFS = {
  status:  { label:'Статус',  all:'Все', options: ['Новая','В работе','На паузе','Готово','Отменено'] },
  type:    { label:'Тип',     all:'Все', options: INTG_TYPES },
@@ -27416,8 +27461,16 @@ var _INTG_FILTER_DEFS = {
  package: { label:'Пакет',   all:'Все', options: INTG_PACKAGES },
  // v810: кто внедряет / кто продал. options=null — список собирается из карточек в момент открытия
  operator:{ label:'Оператор', all:'Все', options: null, noneLabel:'Без оператора' },
- manager: { label:'Менеджер', all:'Все', options: null, noneLabel:'Без менеджера' }
+ manager: { label:'Менеджер', all:'Все', options: null, noneLabel:'Без менеджера' },
+ // v820: карточки-сироты без привязки к клиенту. Чип-переключатель (не выпадашка) — см. _intgToggleNoClient
+ client:  { label:'Без клиента', all:'', options: [], noneLabel:'Без клиента', toggle: true }
 };
+// v820: «Без клиента» — переключатель: нажал — фильтр включился, ещё раз — выключился
+function _intgToggleNoClient(){
+ window._intgFilters.client = window._intgFilters.client ? '' : '__none';
+ _intgFchipsRender();
+ intgSbRerender();
+}
 // v810: эффективный оператор карточки — своё поле, а если пустое, подтягиваем
 // оператора внедрения клиента (clients.curator_operator приходит в join)
 function _intgOperOf(it){
@@ -27442,6 +27495,13 @@ function _intgFchipsRender(){
   if(!chip) return;
   var def = _INTG_FILTER_DEFS[key];
   var val = window._intgFilters[key];
+  // v820: чипы-переключатели (без выпадашки) — подпись + счётчик сирот, без стрелки
+  if(def.toggle){
+   var _orph = (window.intgSbItems || []).filter(function(it){ return !it.client_id && it.status !== 'Архив'; }).length;
+   chip.innerHTML = _escHtml(def.label) + (_orph ? ' <span style="opacity:.75">· ' + _orph + '</span>' : '');
+   chip.classList.toggle('is-on', !!val);
+   return;
+  }
   var shown = val === '__none' ? def.noneLabel : (val || def.all); // v810
   chip.innerHTML = '<span style="opacity:.65;font-weight:500">' + def.label + ':</span> ' + _escHtml(shown) + ' <span style="font-size:9px;opacity:.6">&#9662;</span>';
   chip.classList.toggle('is-on', !!val);
@@ -27791,7 +27851,7 @@ function intgRenderCard(card){
  if(typeof _renderAssignButton === 'function' && typeof INTG_OPERATORS !== 'undefined'){
   _renderAssignButton('intg-card-assign', card.operator, INTG_OPERATORS, function(newOp){
    _assignIntgOperator(card, newOp);
-  });
+  }, (typeof sdOpLoadCounts === 'function') ? sdOpLoadCounts() : null); // v820: нагрузка
  }
  // v511: чип активного Маршрута в шапке (визуальная связь Внедрение↔Интеграция)
  if(typeof _intgRenderCrossChip === 'function') _intgRenderCrossChip();
@@ -31772,6 +31832,7 @@ async function routeLoad(){
    if(t.client_id && !window._routeTaskByClient[t.client_id]) window._routeTaskByClient[t.client_id] = t;
   });
   routeCards = cardsRes.cards || [];
+  if(typeof sdOpLoadEnsure === 'function') sdOpLoadEnsure(); // v820: прогрев карточек Интеграции для счётчиков нагрузки
   routeOperators = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
   // v365: посчитать прогресс чек-листа на каждую карточку (для бейджа 3/6 на главной)
   var clItems = (clRes && clRes.items) || [];
@@ -31888,7 +31949,8 @@ function routeAssignChip(anchor, cardId){
   if(typeof kbShowToast === 'function') kbShowToast('Список операторов не загрузился — нажмите «Обновить»');
   return;
  }
- var items = routeOperators.map(function(o){ return { label: o.name, value: o.name, selected: card.operator === o.name }; });
+ var _lc = (typeof sdOpLoadCounts === 'function') ? sdOpLoadCounts() : null; // v820: нагрузка
+ var items = routeOperators.map(function(o){ return { label: o.name, value: o.name, selected: card.operator === o.name, meta: _lc ? String(_lc[String(o.name).trim()] || 0) : '' }; });
  crmTasksOpenDropdown(anchor, items, async function(v){
   var prev = card.operator || null;
   card.operator = v;
@@ -31912,8 +31974,10 @@ function routeNewOpChip(anchor){
  var sel = document.getElementById('route-new-operator');
  if(!sel || typeof crmTasksOpenDropdown !== 'function') return;
  var items = [];
+ var _lc2 = (typeof sdOpLoadCounts === 'function') ? sdOpLoadCounts() : null; // v820: нагрузка
  for(var i = 0; i < sel.options.length; i++){
-  items.push({ label: sel.options[i].textContent, value: sel.options[i].value, selected: sel.value === sel.options[i].value });
+  var _ov = sel.options[i].value;
+  items.push({ label: sel.options[i].textContent, value: _ov, selected: sel.value === _ov, meta: (_ov && _lc2) ? String(_lc2[String(_ov).trim()] || 0) : '' });
  }
  crmTasksOpenDropdown(anchor, items, function(v){
   sel.value = v;
@@ -33915,7 +33979,51 @@ function _routeOpChoices(cur){ var base=ROUTE_OPERATORS.slice(); if(cur && base.
 // v445: универсальная кнопка «Передать» с поповером. Используется в шапке карт Внедрения и Интеграции.
 // containerId — id <div> в шапке, currentOp — текущий оператор (или пусто), choices — массив строк,
 // onPick(newOp) — что делать при выборе (newOp === '' значит «Снять назначение»).
-function _renderAssignButton(containerId, currentOp, choices, onPick){
+// v820: нагрузка операторов — сколько активных карточек у каждого (Внедрение + Интеграция,
+// обе страны). Показывается серым числом в выпадашках назначения, чтобы не перегружать людей.
+function sdOpLoadCounts(){
+ var counts = {}, any = false;
+ function add(name){
+  name = String(name || '').trim();
+  if(!name) return;
+  counts[name] = (counts[name] || 0) + 1;
+ }
+ // Внедрение: активная часть маршрута — не «Активация» и не «Архив» (правило v726)
+ if(typeof routeCards !== 'undefined' && Array.isArray(routeCards) && routeCards.length){
+  any = true;
+  routeCards.forEach(function(c){ if(c.stage !== 'Активация' && c.stage !== 'Архив') add(c.operator); });
+ }
+ // Интеграция: Новая/В работе/На паузе. intgSbItems содержит и архив — фильтр по статусу обязателен
+ if((window.intgSbItems || []).length){
+  any = true;
+  (window.intgSbItems || []).forEach(function(it){
+   if(it.status === 'Новая' || it.status === 'В работе' || it.status === 'На паузе') add(it.operator);
+  });
+ }
+ // null = данные ещё не доехали (цифры не рисуем). Иначе у свободного оператора честный «0» —
+ // он и есть главный кандидат, без этого «0» неотличим от «нет данных» (QA v820).
+ return any ? counts : null;
+}
+// v820: подсказка к серой цифре — везде одна (UX: «7 чего?»)
+var SD_OPLOAD_TITLE = 'Активных карточек в работе: Внедрение + Интеграция';
+// v820: прогрев второго источника — на Внедрении в цифре должна быть и Интеграция (и наоборот).
+// Пишем в те же глобалы, что и сами доски (источник один — рассинхрона нет). Если данные
+// ещё не доехали, выпадашка просто рисуется без цифр — не блокируем.
+function sdOpLoadEnsure(){
+ try {
+  if(!(window.intgSbItems || []).length){
+   sbFetch('/api/cards?entity=integration&include_archive=1').then(function(d){
+    if(d && d.ok && Array.isArray(d.integrations) && !(window.intgSbItems || []).length) window.intgSbItems = d.integrations;
+   }).catch(function(){});
+  }
+  if(typeof routeCards !== 'undefined' && Array.isArray(routeCards) && !routeCards.length){
+   sbFetch('/api/cards').then(function(d){
+    if(d && d.ok && Array.isArray(d.cards) && !routeCards.length) routeCards = d.cards;
+   }).catch(function(){});
+  }
+ } catch(e){}
+}
+function _renderAssignButton(containerId, currentOp, choices, onPick, counts){
  var box = document.getElementById(containerId);
  if(!box) return;
  box.replaceChildren();
@@ -33951,6 +34059,14 @@ function _renderAssignButton(containerId, currentOp, choices, onPick){
   avi.textContent = ini;
   item.appendChild(avi);
   var nm = document.createElement('span'); nm.style.flex = '1'; nm.textContent = op; item.appendChild(nm);
+  // v820: число активных карточек оператора (Внедрение + Интеграция) — серым, чистый DOM
+  if(counts){
+   var cnt = document.createElement('span');
+   cnt.style.cssText = 'color:var(--text-muted);font-size:11px';
+   cnt.textContent = String(counts[String(op).trim()] || 0);
+   cnt.title = (typeof SD_OPLOAD_TITLE !== 'undefined') ? SD_OPLOAD_TITLE : '';
+   item.appendChild(cnt);
+  }
   if(op === currentOp){
    var chk = document.createElement('span'); chk.textContent = '✓'; chk.style.cssText = 'color:var(--accent, #4CB782);font-weight:700';
    item.appendChild(chk);
@@ -34122,7 +34238,7 @@ function _routeRenderCardHead(){
  if(!isSynthetic){
   _renderAssignButton('route-card-assign', card.operator, ROUTE_OPERATORS, function(newOp){
    _assignRouteOperator(card, newOp);
-  });
+  }, (typeof sdOpLoadCounts === 'function') ? sdOpLoadCounts() : null); // v820: нагрузка
  } else {
   var b = document.getElementById('route-card-assign');
   if(b) b.replaceChildren();
@@ -37985,7 +38101,7 @@ var crmCalState = {
  layers: { task: true, team: true, pay: true },  // task = синк из /api/tasks, team = нативные, pay = оплаты клиентов (v750)
  types: { call: true, meeting: true, training: true, deadline: true },
  flags: { red: true, yellow: true, green: true, gray: true, none: true }, // v770: флажки Эйзенхауэра (none = без флажка)
- hideDone: false, onlyLate: false, clientQ: ''
+ hideDone: false, onlyLate: false, myOrders: false, clientQ: ''  // v820: myOrders = мои поручения другим
 };
 
 function crmEventsAll(){
@@ -38062,7 +38178,9 @@ function _calUiType(e){
 function _calApplyFilters(events){
  var s = crmCalState, today = crmDateStr(new Date()), q = (s.clientQ || '').toLowerCase();
  return events.filter(function(e){
-  if(e.operator && s.operators[e.operator] === false) return false;
+  // v820: при «Только мои поручения другим» фильтр видимости операторов пропускаем — иначе у того,
+  // кто оставил галочку только на себе, фильтр поручений всегда давал бы пустой календарь (UX-ревью)
+  if(!s.myOrders && e.operator && s.operators[e.operator] === false) return false;
   // v750: три слоя — оплаты клиентов / задачи из базы / нативные события команды
   var layerOk = e._pay_layer ? s.layers.pay : (e._sync_task ? s.layers.task : s.layers.team);
   if(!layerOk) return false;
@@ -38071,6 +38189,14 @@ function _calApplyFilters(events){
   if(!e._pay_layer && s.flags && s.flags[e.eisenhower || 'none'] === false) return false;
   if(s.hideDone && e.status === 'done') return false;
   if(s.onlyLate && !(e.date && e.date < today && e.status !== 'done')) return false;
+  // v820: «Мои поручения» — я создал задачу, исполнитель другой. created_by исторически
+  // мог писаться полным именем, поэтому сравниваем первое слово через crmOpCanon.
+  if(s.myOrders){
+   var me = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? crmOpCanon(String(currentUser.name).trim().split(/\s+/)[0]) : '';
+   var cb = crmOpCanon(String(e.created_by || '').trim().split(/\s+/)[0] || '');
+   if(!me || cb !== me) return false;
+   if(crmOpCanon(String(e.operator || '').trim()) === me) return false;
+  }
   if(q && ((e.client || '') + ' ' + (e.title || '')).toLowerCase().indexOf(q) < 0) return false;
   return true;
  });
@@ -38133,7 +38259,7 @@ function cal2Stats(){
 function cal2SaveFilters(){
  try {
   var s = crmCalState;
-  localStorage.setItem('cal2_filters', JSON.stringify({ operators: s.operators, layers: s.layers, types: s.types, flags: s.flags, hideDone: s.hideDone, onlyLate: s.onlyLate }));
+  localStorage.setItem('cal2_filters', JSON.stringify({ operators: s.operators, layers: s.layers, types: s.types, flags: s.flags, hideDone: s.hideDone, onlyLate: s.onlyLate, myOrders: s.myOrders }));
  } catch(e){}
 }
 function cal2LoadFilters(){
@@ -38149,6 +38275,7 @@ function cal2LoadFilters(){
   if(f.flags) s.flags = Object.assign({}, s.flags, f.flags); // v770: merge — у старых юзеров ключей нет
   s.hideDone = !!f.hideDone;
   s.onlyLate = !!f.onlyLate;
+  s.myOrders = !!f.myOrders; // v820
  } catch(e){}
 }
 // тогглеры панели
@@ -38187,6 +38314,7 @@ window.cal2GcalInfo = function(ev){
 };
 window.cal2ToggleDone = function(){ crmCalState.hideDone = !crmCalState.hideDone; cal2SaveFilters(); crmCalRender(); };
 window.cal2ToggleLate = function(){ crmCalState.onlyLate = !crmCalState.onlyLate; cal2SaveFilters(); crmCalRender(); };
+window.cal2ToggleMyOrders = function(){ crmCalState.myOrders = !crmCalState.myOrders; cal2SaveFilters(); crmCalRender(); }; // v820
 window.cal2SetClientQ = function(v){
  crmCalState.clientQ = (v || '').trim();
  clearTimeout(window._cal2QT);
@@ -38264,7 +38392,11 @@ function cal2RenderSide(){
  html += '</div>';
  html += '<div class="cal2-sec"><div class="h">Статус</div>'
   + '<div class="cal2-trow" onclick="cal2ToggleDone()">' + cal2Chk(s.hideDone, null) + '<span class="nm">Скрывать выполненные</span></div>'
-  + '<div class="cal2-trow" onclick="cal2ToggleLate()">' + cal2Chk(s.onlyLate, null) + '<span class="nm">Только просроченные</span></div></div>';
+  + '<div class="cal2-trow" onclick="cal2ToggleLate()">' + cal2Chk(s.onlyLate, null) + '<span class="nm">Только просроченные</span></div>'
+  // v820: мои поручения другим (created_by = я, исполнитель != я); строка только у залогиненных
+  + ((typeof currentUser !== 'undefined' && currentUser && currentUser.name)
+    ? '<div class="cal2-trow" onclick="cal2ToggleMyOrders()" title="Показать только задачи, которые вы создали для других">' + cal2Chk(s.myOrders, null) + '<span class="nm">Только мои поручения другим</span></div>' : '')
+  + '</div>';
  html += '<div class="cal2-sec"><div class="h">Клиент</div><div class="cal2-csearch">'
   + '<svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
   + '<input id="cal2-q" placeholder="Найти клиента..." value="' + kbEsc(s.clientQ || '') + '" oninput="cal2SetClientQ(this.value)"></div></div>';
@@ -44072,7 +44204,9 @@ function crmTasksOpenDropdown(anchor, items, onSelect){
  items.forEach(function(it){
   var item = document.createElement('div');
   item.className = 'ct-dd-item' + (it.selected ? ' is-selected' : '');
-  var inner = (it.icon ? '<span class="ct-dd-item-icon" style="color:'+ctEsc(it.color||'#c5cad1')+'">●</span>' : '') + ctEsc(it.label);
+  var inner = (it.icon ? '<span class="ct-dd-item-icon" style="color:'+ctEsc(it.color||'#c5cad1')+'">●</span>' : '') + ctEsc(it.label)
+   // v820: meta — серая приписка справа (например, нагрузка оператора)
+   + (it.meta ? '<span title="' + ctEsc((typeof SD_OPLOAD_TITLE !== 'undefined') ? SD_OPLOAD_TITLE : '') + '" style="margin-left:8px;color:var(--text-muted);font-size:11px">' + ctEsc(it.meta) + '</span>' : '');
   item.insertAdjacentHTML('beforeend', inner);
   item.onclick = function(){ crmTasksCloseDropdowns(); onSelect(it.value); };
   dd.appendChild(item);
