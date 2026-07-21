@@ -222,12 +222,25 @@ function _parseRow(row, headerIdx, hdrRow, cfg, monthName, monthIdx, sheetRowAbs
 }
 
 async function _fetchSheet(sheetName, cfg) {
-  const url = cfg.gs_url + '?action=getSheet&sheet=' + encodeURIComponent(sheetName) + '&spreadsheetId=' + cfg.sheet_id;
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error('Sheets fetch failed: ' + resp.status);
-  const json = await resp.json();
-  if (json.error) throw new Error('Sheets API error: ' + json.error);
-  return json;
+  const tryOnce = async (name) => {
+    const url = cfg.gs_url + '?action=getSheet&sheet=' + encodeURIComponent(name) + '&spreadsheetId=' + cfg.sheet_id;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('Sheets fetch failed: ' + resp.status);
+    const json = await resp.json();
+    if (json.error) throw new Error('Sheets API error: ' + json.error);
+    return json;
+  };
+  try {
+    return await tryOnce(sheetName);
+  } catch (e) {
+    // v821: в таблице KG листы названы вразнобой («январь» vs «Май») — из-за этого
+    // импорт января-апреля молча падал и платежи не доезжали в Supabase.
+    // Пробуем другой регистр первой буквы; ключ вкладки в БД остаётся каноничным (cfg.months).
+    if (!/Sheet not found/i.test(String((e && e.message) || e))) throw e;
+    const lower = sheetName.toLowerCase();
+    const alt = lower !== sheetName ? lower : sheetName.charAt(0).toUpperCase() + sheetName.slice(1);
+    return await tryOnce(alt);
+  }
 }
 
 // Ядро импорта Sheets→Supabase для одной страны. Переиспользуется ручным
