@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v820</title>
+<title>SalesDoc — Финансовый Дашборд v822</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13239,7 +13239,7 @@ function cfBuildForecast(){
  } else {
  // Fallback: текущий expData
  var expArr = (typeof expData !== 'undefined' && expData) ? expData : [];
- monthlyExp = expArr.reduce(function(s,e){ return s + (Number(e.amount)||0); }, 0);
+ monthlyExp = expArr.reduce(function(s,e){ return s + ((typeof expIsTransfer==='function'&&expIsTransfer(e)) ? 0 : (Number(e.amount)||0)); }, 0); // v822: без переносов
  historySource = 'current-only';
  if(monthlyExp === 0 && typeof payments !== 'undefined' && payments){
  // Совсем нет данных — грубая эвристика 60% от среднего дохода
@@ -14522,7 +14522,7 @@ function finRenderHeader(){
   var ps=getPeriodPayments(currentPeriod);
   var income=ps.reduce(function(s,p){return s+(p.amount||0);},0);
   var _pm=(currentPeriod==='year')?[0,1,2,3,4,5,6,7,8,9,10,11]:(currentPeriod==='quarter')?(function(){var q=Math.floor(curMonth/3);return [q*3,q*3+1,q*3+2];})():[curMonth];
-  var monthExp=(typeof expensesData!=='undefined'&&expensesData)?expensesData.filter(function(e){return _pm.indexOf(e.month)>=0 && (e.year==null||e.year===curYear);}):[];
+  var monthExp=(typeof expensesData!=='undefined'&&expensesData)?expensesData.filter(function(e){return _pm.indexOf(e.month)>=0 && (e.year==null||e.year===curYear) && !(typeof expIsTransfer==='function'&&expIsTransfer(e));}):[]; // v822: без переносов между счетами
   var expense=monthExp.reduce(function(s,e){return s+(e.amount||0);},0);
   var profit=Math.round(income-expense);
   var margin=income>0?Math.round(profit/income*100):0;
@@ -26128,6 +26128,10 @@ var EXP_TABS = (function(){
 })();
 var expTabIdx = 0;
 var expData = []; // {date, category, note, amount, bank}
+// v822: «Перенос» — перекладка денег между своими счетами (статья в таблице расходов
+// содержит слово «перенос»). Операция видна в списке, но это НЕ расход — исключается
+// из итогов, категорий, прибыли и прогнозов.
+function expIsTransfer(e){ return /перенос/i.test(String((e && e.category) || '')); }
 // v212: монохромная Emerald-шкала + 1 muted-blue для контраста, без вырвиглазных оранжевого/красного
 // v679: монохромная индиго-шкала (единый акцент Linear, без радужки)
 var EXP_COLORS = {};
@@ -26199,10 +26203,12 @@ async function expLoad() {
 }
 
 function expRender() {
- var total = expData.reduce(function(s,e){ return s + e.amount; }, 0);
+ // v822: переносы между счетами не считаем расходом
+ var expReal = expData.filter(function(e){ return !expIsTransfer(e); });
+ var total = expReal.reduce(function(s,e){ return s + e.amount; }, 0);
  // Группируем по категориям
  var catMap = {};
- expData.forEach(function(e) {
+ expReal.forEach(function(e) {
  if (!catMap[e.category]) catMap[e.category] = 0;
  catMap[e.category] += e.amount;
  });
@@ -26214,8 +26220,9 @@ function expRender() {
  var _ef = function(n){ return Math.round(Number(n)||0).toLocaleString('ru-RU'); }; // полное число с разрядами, без валюты
  var totEl = document.getElementById('exp-hero-total'); if(totEl) totEl.textContent = _ef(total);
  var curEl = document.getElementById('exp-hero-cur'); if(curEl) curEl.textContent = ' ' + _CUR;
- var avg = expData.length ? Math.round(total / expData.length) : 0;
- var ctxEl = document.getElementById('exp-hero-ctx'); if(ctxEl) ctxEl.innerHTML = expData.length + ' операций · средний чек <b>' + _ef(avg) + ' ' + _CUR + '</b>';
+ var avg = expReal.length ? Math.round(total / expReal.length) : 0;
+ var _trCnt = expData.length - expReal.length; // v822: переносы между счетами
+ var ctxEl = document.getElementById('exp-hero-ctx'); if(ctxEl) ctxEl.innerHTML = expReal.length + ' операций · средний чек <b>' + _ef(avg) + ' ' + _CUR + '</b>' + (_trCnt ? ' · переносов между счетами: ' + _trCnt : '');
  var catsTotEl = document.getElementById('exp-cats-tot'); if(catsTotEl) catsTotEl.textContent = _ef(total) + ' ' + _CUR;
  var catsEl = document.getElementById('exp-cats');
  if(catsEl){
@@ -26273,6 +26280,7 @@ function expRenderBarChart() {
  var lastDay = new Date(chartYear, chartMon + 1, 0).getDate();
 
  expData.forEach(function(e) {
+ if (expIsTransfer(e)) return; // v822: переносы между счетами — не расход
  var d = new Date(e.date + 'T00:00:00');
  var day = d.getDate();
  var wn = Math.ceil(day / 7);
@@ -26408,16 +26416,17 @@ function expRenderTable() {
  filtered.sort(function(a,b){ return b.date.localeCompare(a.date); });
  var countEl = document.getElementById('exp-table-count');
  if (countEl) countEl.textContent = filtered.length + ' записей';
- // Сумма отфильтрованных
- var totalFiltered = filtered.reduce(function(s,e){return s+e.amount;},0);
+ // Сумма отфильтрованных (v822: переносы между счетами в итог не входят)
+ var totalFiltered = filtered.reduce(function(s,e){return s+(expIsTransfer(e)?0:e.amount);},0);
  var sumEl = document.getElementById('exp-filter-sum');
  if (sumEl) sumEl.textContent = 'Итого: ' + fmtFull(Math.round(totalFiltered));
  var tbody = document.getElementById('exp-table-body');
  tbody.innerHTML = filtered.map(function(e) {
  var color = expColor(e.category);
+ var trBadge = expIsTransfer(e) ? ' <span style="color:var(--text-muted);font-size:10.5px" title="Перекладка денег между своими счетами — не расход">не расход</span>' : '';
  return '<tr>' +
  '<td>'+e.date.split('-').slice(1).reverse().join('.')+'</td>' +
- '<td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+color+';margin-right:8px;vertical-align:middle"></span>'+sanitize(e.category)+'</td>' +
+ '<td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+color+';margin-right:8px;vertical-align:middle"></span>'+sanitize(e.category)+trBadge+'</td>' +
  '<td title="'+sanitize(e.note)+'">'+sanitize(e.note)+'</td>' +
  '<td class="exp-am">'+fmtFull(e.amount)+'</td>' +
  '<td class="exp-bk">'+sanitize(e.bank)+'</td>' +
@@ -26444,7 +26453,7 @@ async function expLoadPrevTotal(currentTotal){
   for(var i=0;i<json.rows.length;i++){ if(json.rows[i] && String(json.rows[i][0]||'').toLowerCase()==='дата'){ hIdx=i; break; } }
   var rows = hIdx>=0 ? json.rows.slice(hIdx+1) : json.rows.slice(1);
   var prevTotal = 0;
-  rows.forEach(function(row){ if(!row||!row[0]||!row[3]) return; var a = typeof row[3]==='number'?row[3]:parseFloat(String(row[3]).replace(/[^0-9.,]/g,'').replace(',','.')); if(a>0) prevTotal+=a; });
+  rows.forEach(function(row){ if(!row||!row[0]||!row[3]) return; if(/перенос/i.test(String(row[1]||''))) return; /* v822: переносы — не расход */ var a = typeof row[3]==='number'?row[3]:parseFloat(String(row[3]).replace(/[^0-9.,]/g,'').replace(',','.')); if(a>0) prevTotal+=a; });
   if(prevTotal<=0){ hide(); return; }
   var diff = currentTotal - prevTotal;
   var pct = Math.round(Math.abs(diff)/prevTotal*100);
@@ -28369,7 +28378,7 @@ function renderPnL() {
  var _pmMonths = (currentPeriod === 'year') ? [0,1,2,3,4,5,6,7,8,9,10,11]
    : (currentPeriod === 'quarter') ? (function(){ var q=Math.floor(curMonth/3); return [q*3,q*3+1,q*3+2]; })()
    : [curMonth]; // month и week — помесячные расходы за выбранный месяц
- var monthExpenses = expensesData.filter(function(e) { return _pmMonths.indexOf(e.month) >= 0 && (e.year == null || e.year === curYear); });
+ var monthExpenses = expensesData.filter(function(e) { return _pmMonths.indexOf(e.month) >= 0 && (e.year == null || e.year === curYear) && !expIsTransfer(e); }); // v822: переносы между счетами — не расход
  var totalExpense = monthExpenses.reduce(function(s, e) { return s + e.amount; }, 0);
  
  var profit = Math.round(totalIncome - totalExpense);
@@ -28391,7 +28400,7 @@ function renderPnL() {
  // v685: зеркало в премиум-карточки P&L наверху Дашборда (если они есть)
  var _di=document.getElementById('dp-income'); if(_di) _di.textContent = fmt(Math.round(totalIncome))+' '+_CUR;
  var _de=document.getElementById('dp-expense'); if(_de) _de.textContent = fmt(Math.round(totalExpense))+' '+_CUR;
- var _dp=document.getElementById('dp-profit'); if(_dp) _dp.textContent = (profit>=0?'+':'-')+fmt(Math.round(Math.abs(profit)))+' '+_CUR;
+ var _dp=document.getElementById('dp-profit'); if(_dp){ _dp.textContent = (profit>=0?'+':'-')+fmt(Math.round(Math.abs(profit)))+' '+_CUR; _dp.style.color = profit>=0 ? '' : '#E5604D'; } // v822: минус — красным (CSS красит .pv зелёным безусловно)
  var _dm=document.getElementById('dp-margin'); if(_dm) _dm.textContent = 'маржа '+margin+'%';
 
  // Полоса
@@ -31544,7 +31553,7 @@ function reportGenerate(type) {
  } else if (type === 'pnl') {
  titleEl.textContent = 'P&L — ' + monthNames[curMonth] + ' ' + curYear;
  var income = payments.filter(function(p){var d=new Date(p.date);return d.getMonth()===curMonth && d.getFullYear()===curYear;}).reduce(function(s,p){return s+p.amount;},0);
- var expense = (typeof expensesData!=='undefined' && expensesData.length) ? expensesData.filter(function(e){var d=new Date(e.date);return d.getMonth()===curMonth && d.getFullYear()===curYear;}).reduce(function(s,e){return s+(e.amount||0);},0) : 0;
+ var expense = (typeof expensesData!=='undefined' && expensesData.length) ? expensesData.filter(function(e){var d=new Date(e.date);return d.getMonth()===curMonth && d.getFullYear()===curYear && !expIsTransfer(e);}).reduce(function(s,e){return s+(e.amount||0);},0) : 0; // v822
  var profit = income - expense;
  var profitColor = profit >= 0 ? '#4CB782' : '#E5604D';
  bodyEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;text-align:center">' +
@@ -31563,7 +31572,7 @@ function reportGenerate(type) {
  if (typeof expensesData==='undefined' || !expensesData.length) {
  bodyEl.innerHTML = '<div style="color:var(--text-muted);padding:20px;text-align:center">Загрузите данные расходов (откройте страницу Расходы)</div>';
  } else {
- var me = expensesData.filter(function(e){var d=new Date(e.date);return d.getMonth()===curMonth && d.getFullYear()===curYear;});
+ var me = expensesData.filter(function(e){var d=new Date(e.date);return d.getMonth()===curMonth && d.getFullYear()===curYear && !expIsTransfer(e);}); // v822: без переносов
  var totalExp = me.reduce(function(s,e){return s+(e.amount||0);},0);
  var byCatE = {};
  me.forEach(function(e){var cat=e.category||e.article||'Прочее';byCatE[cat]=(byCatE[cat]||0)+(e.amount||0);});
