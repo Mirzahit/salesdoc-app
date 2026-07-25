@@ -24,8 +24,12 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'POST' && req.query.action === 'link_hosts') return await handleLinkHosts(req, res);
     if (req.method === 'GET') {
-      const { client_id, status, curator, search, country, renewal_within } = req.query || {};
+      const { client_id, status, curator, search, country, renewal_within, limit } = req.query || {};
       const params = { order: 'updated_at.desc' };
+      // v823: limit раньше молча игнорировался — PostgREST резал на 1000 строк и пикер
+      // клиентов в форме оплаты «не находил» хвост списка (человек создавал дубль)
+      const lim = parseInt(limit, 10);
+      if (Number.isFinite(lim) && lim > 0) params['limit'] = String(Math.min(lim, 5000));
       if (client_id) params['client_id'] = 'eq.' + client_id;
       if (status) params['status'] = 'eq.' + status;
       if (curator) params['curator_operator'] = 'eq.' + curator;

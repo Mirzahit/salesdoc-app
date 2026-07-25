@@ -111,6 +111,77 @@ const SHEET_CONFIG = {
   }
 };
 
+// v823: запись ручной оплаты в лист «Доходы» через Apps Script (action=appendPayment).
+// Экшен живёт в деплое «SalesDoc — Users API» (отдельный URL от cfg.gs_url чтения!).
+// До деплоя экшена возвращает ok:false и платёж остаётся source:'manual' — это безопасно.
+const APPEND_GS_URL = 'https://script.google.com/macros/s/AKfycbwLMv7nA0ymu9wP6CPnQRXo9kf2sGkPyllFPq-3tHQPRpGUccZdjhlvEBcAxKAmeCtLPQ/exec';
+
+// КРУГОВОРОТ ДАТЫ (QA v823): крон читает лист через getSheetData, который отдаёт Date-ячейки
+// строкой «DD.MM.YYYY» → _parseDate ветка m2 прибавляет dateCorrection (KG: +1 день).
+// Поэтому в лист пишем дату МИНУС dateCorrection — после обратного импорта paid_at совпадает.
+function _sheetDateForMirror(paidAt, correction) {
+  const d = new Date(String(paidAt).slice(0, 10) + 'T00:00:00Z');
+  if (isNaN(d.getTime())) return null;
+  d.setUTCDate(d.getUTCDate() - (correction || 0));
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+}
+
+async function _mirrorPaymentToSheet(payment, body) {
+  const cfg = SHEET_CONFIG[payment.country];
+  if (!cfg) return { ok: false, error: 'нет конфигурации таблицы для ' + payment.country };
+  // Таблица «Доходы» — годовая: лист выбирается только по месяцу. Платёж за другой год
+  // молча лёг бы не туда — не зеркалим, честно говорим об этом.
+  const payYear = parseInt(String(payment.paid_at).slice(0, 4), 10);
+  if (payYear !== new Date().getFullYear()) {
+    return { ok: false, error: 'платёж за ' + payYear + ' год — в таблицу текущего года не пишем, добавьте в архивную таблицу вручную' };
+  }
+  const monthIdx = parseInt(String(payment.paid_at).slice(5, 7), 10) - 1;
+  const sheetTab = cfg.months[monthIdx];
+  if (!sheetTab) return { ok: false, error: 'не определён лист месяца для ' + payment.paid_at };
+  const sheetDate = _sheetDateForMirror(payment.paid_at, cfg.dateCorrection);
+  // Apps Script cold-start 11-19с — ждём щедро, но не бесконечно. Аборт НЕ раньше 25с:
+  // ранний аборт при живом append дал бы строку в листе без пометки в базе → дубль после крона.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25000);
+  let resp;
+  try {
+    resp = await fetch(APPEND_GS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // text/plain — Apps Script без preflight
+      signal: ctrl.signal,
+      body: JSON.stringify({
+        action: 'appendPayment',
+        spreadsheetId: cfg.sheet_id,
+        sheet: sheetTab,
+        row: {
+          date: sheetDate,                                        // A — Дата (ISO минус dateCorrection)
+          company: payment.company_name,                          // B — Компания
+          category: body.category_raw || payment.category_raw || '', // C — Статья (как пишут менеджеры)
+          qty: payment.qty,                                       // E — Кол-во лицензий
+          manager: payment.manager_name,                          // F — Менеджер
+          price: payment.price,                                   // H — Цена
+          period: payment.period_months,                          // I — Период (мес)
+          amountPlan: payment.amount_planned,                     // J — Сумма план
+          bank: payment.bank,                                     // K — Банк
+          amountFact: payment.amount                              // M — Сумма факт
+        }
+      })
+    });
+  } catch (e) {
+    return { ok: false, error: ctrl.signal.aborted ? 'Google-таблица не ответила за 25 секунд' : String((e && e.message) || e) };
+  } finally {
+    clearTimeout(timer);
+  }
+  let data = null;
+  try { data = await resp.json(); } catch (e) {
+    return { ok: false, error: 'Apps Script вернул не-JSON (экшен appendPayment не задеплоен?)' };
+  }
+  if (!data || data.ok !== true || !data.rowIndex) {
+    return { ok: false, error: (data && data.error) || 'appendPayment не сработал' };
+  }
+  return { ok: true, sheet_id: cfg.sheet_id, sheet_tab: sheetTab, row_index: parseInt(data.rowIndex, 10) };
+}
+
 function _parseDate(v, dateCorrection) {
   if (v == null) return null;
   if (typeof v === 'number') {
@@ -923,6 +994,31 @@ async function handlePost(req, res) {
 
   try {
     const result = await sbInsert('payments', row);
+    // v823: зеркалирование ручной оплаты в Google-таблицу «Доходы» (страховка CEO).
+    // При успехе конвертируем запись в source:'sheets_import' с натуральным ключом строки листа —
+    // иначе часовой крон-импорт зальёт ту же строку из листа второй раз (дубль), а режим
+    // пересборки месяца (v702) удаляет только sheets_import и не знает про manual-двойника.
+    // При ошибке Sheets запись остаётся manual (в листе её нет — крону нечего дублировать).
+    let sheetMirror = null;
+    if (body.mirror_to_sheet === true && result[0]) {
+      try {
+        sheetMirror = await _mirrorPaymentToSheet(result[0], body);
+        if (sheetMirror && sheetMirror.ok) {
+          await sbUpdate('payments', { id: 'eq.' + result[0].id }, {
+            source: 'sheets_import',
+            sheet_id: sheetMirror.sheet_id,
+            sheet_tab: sheetMirror.sheet_tab,
+            sheet_row: sheetMirror.row_index
+          });
+          result[0].source = 'sheets_import';
+          result[0].sheet_id = sheetMirror.sheet_id;
+          result[0].sheet_tab = sheetMirror.sheet_tab;
+          result[0].sheet_row = sheetMirror.row_index;
+        }
+      } catch (e) {
+        sheetMirror = { ok: false, error: String((e && e.message) || e) };
+      }
+    }
     // v636: ручная оплата внедрения/интеграции → завести карту в Маршруте / Очереди интеграции.
     // Side-effect, не роняем ответ если создание карты не удалось.
     let board = null;
@@ -950,7 +1046,8 @@ async function handlePost(req, res) {
       payment: result[0],
       client_linked: !!clientId,
       client_id: clientId,
-      board: board
+      board: board,
+      sheet_mirror: sheetMirror
     });
   } catch (e) {
     // Уникальный индекс мог сработать (двойная попытка импорта/бота)
