@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v823</title>
+<title>SalesDoc — Финансовый Дашборд v824</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -7305,6 +7305,13 @@ body.light #ac-bulk-bar { box-shadow:0 12px 32px rgba(15,18,25,.18); }
 #ac-bulk-bar .abb-btn:hover { border-color:var(--accent,#5E6AD2); }
 #ac-bulk-bar .abb-clear { margin-left:auto; background:transparent; border:none; color:var(--text-soft); font-size:12px; cursor:pointer; font-family:inherit; }
 .ac-cb { width:15px; height:15px; accent-color:var(--accent,#5E6AD2); cursor:pointer; vertical-align:middle; }
+/* v824: форма оплаты «как в боте» — чипы с переносом, плашка расчёта, кнопки прайса */
+.pay-chips-wrap { flex-wrap:wrap; }
+.pay-chips-wrap .pp-chip { flex:0 0 auto; padding:8px 14px; }
+.pay-plan-box { margin:2px 0 14px; padding:11px 14px; border-radius:10px; background:rgba(94,106,210,.10); border:1px solid rgba(94,106,210,.30); font-size:13px; color:var(--text); }
+.pay-plan-box b { font-size:15px; }
+.pay-plan-box .ppb-formula { color:var(--text-soft); font-size:11.5px; margin-top:3px; }
+body.light .pay-plan-box { background:rgba(94,106,210,.08); }
 body.light .ct-flag-opt { background:#F2F3F7; border-color:rgba(15,18,25,.12); color:#16181D; }
 body.light .ct-flag-opt.on { border-color:#2563eb; background:rgba(37,99,235,.08); }
 body.light .ct-time-scroll { scrollbar-color:rgba(15,18,25,.2) transparent; }
@@ -10702,13 +10709,15 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <button class="modal-tab" id="tab-act" onclick="switchTab('act')"> Акт работ</button>
  </div>
  <div id="form-payment">
- <!-- v823: клиент выбирается ИЗ БАЗЫ (пикер с поиском и создание с анти-дублем), а не пишется руками —
-      иначе платежи повисали «непривязанными» и плодились дубли marvel/Marvel -->
- <div class="form-row"><div class="form-group"><label class="form-label">Клиент</label><input class="form-input" id="p-client" placeholder="Выбрать из базы..." readonly style="cursor:pointer" onclick="payClientPickerOpen(this)"></div><div class="form-group"><label class="form-label">Дата</label><input class="form-input" id="p-date" type="date"></div></div>
- <div class="form-row"><div class="form-group"><label class="form-label">Сотрудник</label><select class="form-select" id="p-employee"></select></div><div class="form-group"><label class="form-label">Статья</label><select class="form-select" id="p-category"><option value="license">Новые лицензии</option><option value="subscription">Абонентская плата</option><option value="implementation">Внедрение</option><option value="integration">Интеграция</option><option value="revision">Доработки</option><option value="other">Прочее</option></select></div></div>
- <div class="form-row"><div class="form-group"><label class="form-label">Кол-во лицензий</label><input class="form-input" id="p-qty" type="number" min="0" placeholder="10"></div><div class="form-group"><label class="form-label">Период (мес)</label><div class="pay-period-chips" id="p-period"><button type="button" class="pp-chip on" data-v="1" onclick="payPeriodPick(this)">1</button><button type="button" class="pp-chip" data-v="3" onclick="payPeriodPick(this)">3</button><button type="button" class="pp-chip" data-v="6" onclick="payPeriodPick(this)">6</button><button type="button" class="pp-chip" data-v="12" onclick="payPeriodPick(this)">12</button></div></div></div>
- <div class="form-row"><div class="form-group"><label class="form-label">Сумма</label><input class="form-input" id="p-amount" type="number" placeholder="500000"></div><div class="form-group"><label class="form-label">Способ оплаты</label><select class="form-select" id="p-method"><option value="bank">Банковский перевод</option><option value="cash">Наличные</option><option value="card">Карта</option></select></div></div>
- <div class="form-row"><div class="form-group"><label class="form-label">Статус</label><select class="form-select" id="p-status"><option value="paid">Оплачено</option><option value="pending">Ожидание</option></select></div><div class="form-group"><label class="form-label">Комментарий</label><input class="form-input" id="p-comment" placeholder="Примечание..."></div></div>
+ <!-- v823: клиент выбирается ИЗ БАЗЫ (пикер с поиском и создание с анти-дублем), а не пишется руками.
+      v824: форма повторяет телеграм-бот оплат (репо salesdoc-bot): статья определяет путь
+      (лицензии считаются сами: цена × кол-во × месяцы тарифа; внедрение/интеграция — пакеты;
+      долги/доработки — сумма руками), план (J) и факт (M) раздельно, банки из таблицы страны -->
+ <div class="form-row"><div class="form-group"><label class="form-label">Клиент</label><input class="form-input" id="p-client" placeholder="Выбрать из базы..." readonly style="cursor:pointer" onclick="payClientPickerOpen(this)"></div><div class="form-group"><label class="form-label">Дата оплаты</label><input class="form-input" id="p-date" type="date"></div></div>
+ <div class="form-row"><div class="form-group"><label class="form-label">Менеджер</label><select class="form-select" id="p-employee"></select></div><div class="form-group"><label class="form-label">Статья</label><select class="form-select" id="p-category" onchange="payFlowRender()"></select></div></div>
+ <div id="p-flow"></div>
+ <div class="form-row single"><div class="form-group full"><label class="form-label">Банк</label><div class="pay-period-chips pay-chips-wrap" id="p-bank"></div></div></div>
+ <div class="form-row single"><div class="form-group full"><label class="form-label">Комментарий</label><input class="form-input" id="p-comment" placeholder="Примечание..."></div></div>
  </div>
  <div id="form-act" style="display:none">
  <div class="form-row"><div class="form-group"><label class="form-label">Клиент</label><input class="form-input" id="a-client" placeholder="ТОО Компания"></div><div class="form-group"><label class="form-label">Дата акта</label><input class="form-input" id="a-date" type="date"></div></div>
@@ -17167,7 +17176,7 @@ function updatePeriodLabel() {
 // MODAL
 // ============================================================
 
-function openModal(tab){ document.getElementById('modal').classList.add('open'); if(tab)switchTab(tab); const t=taskLocalIso(new Date()); document.getElementById('p-date').value=t; document.getElementById('a-date').value=t; document.getElementById('a-number').value='АКТ-2026-00'+nextActId; }
+function openModal(tab){ document.getElementById('modal').classList.add('open'); if(tab)switchTab(tab); const t=taskLocalIso(new Date()); document.getElementById('p-date').value=t; document.getElementById('a-date').value=t; document.getElementById('a-number').value='АКТ-2026-00'+nextActId; if(typeof payFormInit==='function') try{ payFormInit(); }catch(_){} /* v824: статьи/банки/менеджеры страны как в боте */ }
 function closeModal(){
  document.getElementById('modal').classList.remove('open');
  // v823-qa: сброс выбранного клиента и чипа периода — иначе прошлый выбор «переживал»
@@ -17182,13 +17191,14 @@ function switchTab(t){ currentTab=t; document.getElementById('form-payment').sty
 async function saveRecord() {
  if(currentTab==='payment'){
  // v823: клиент обязателен ИЗ БАЗЫ (client_id из пикера) — платёж не может быть «непривязанным».
- // Плюс зеркалирование строки в Google-таблицу «Доходы» (mirror_to_sheet) и защита от двойного клика.
+ // v824: сбор и расчёт полей — строго по веткам телеграм-бота (payCollect):
+ // план = цена × кол-во × месяцы, факт отдельно; в лист уходят и тип лицензии, и тариф.
  var clientInp = document.getElementById('p-client');
  const client = clientInp.value.trim();
  const clientId = clientInp.dataset.clientId || '';
- const amount = parseFloat(document.getElementById('p-amount').value);
  if(!clientId){sdToast('Выберите клиента из базы — поле «Клиент»');return;}
- if(!amount){sdToast('Заполните сумму');return;}
+ var col = payCollect();
+ if(!col) return;
  if(window._paySavingNow) return;
  window._paySavingNow = true;
  // v823-qa: Apps Script может холодно стартовать 10-20 сек — блокируем кнопку с честным
@@ -17196,24 +17206,20 @@ async function saveRecord() {
  var _submitBtn = document.querySelector('#modal .form-submit');
  var _submitOld = _submitBtn ? _submitBtn.textContent : null;
  if(_submitBtn){ _submitBtn.disabled = true; _submitBtn.textContent = 'СОХРАНЯЮ... (запись в базу и таблицу, до 20 сек)'; }
- var empId = parseInt(document.getElementById('p-employee').value)||0;
- var empObj = employees.find(function(e){ return e.id===empId; });
- var catSel = document.getElementById('p-category');
- var cat = catSel.value;
- var catRaw = (catSel.selectedOptions && catSel.selectedOptions[0]) ? catSel.selectedOptions[0].textContent.trim() : cat;
+ var mgrSel = document.getElementById('p-employee');
+ var managerName = (mgrSel && mgrSel.value) || null;
  var paidAt = document.getElementById('p-date').value || taskLocalIso(new Date());
- var methodSel = document.getElementById('p-method');
- var method = (methodSel.selectedOptions && methodSel.selectedOptions[0]) ? methodSel.selectedOptions[0].textContent.trim() : methodSel.value; /* v823-qa: в таблицу и базу — человеческое «Банковский перевод», а не «bank» */
  var comment = document.getElementById('p-comment').value || null;
- var qty = parseInt(document.getElementById('p-qty').value)||null;
- var perBtn = document.querySelector('#p-period .pp-chip.on');
- var per = perBtn ? (parseInt(perBtn.dataset.v)||1) : 1;
+ var catMapped = (typeof mapCategoryFromSheet === 'function') ? mapCategoryFromSheet(col.catLabel) : null;
  var payload = {
   country: (typeof currentCountry!=='undefined'?currentCountry:'KZ'),
-  paid_at: paidAt, company_name: client, client_id: clientId, amount: amount,
-  category: cat, category_raw: catRaw,
-  qty: qty, price: (qty && qty>0) ? Math.round(amount/qty) : null, period_months: per,
-  manager_name: empObj ? empObj.name : null, bank: method, comment: comment,
+  paid_at: paidAt, company_name: client, client_id: clientId,
+  category: catMapped, category_raw: col.catLabel,
+  license_type: col.licType, period_label: col.tariff,
+  qty: col.qty, price: col.unit,
+  period_months: (col.months && col.months > 0) ? col.months : null,
+  amount: col.fact, amount_planned: col.plan,
+  manager_name: managerName, bank: col.bank, comment: comment,
   source: 'manual', mirror_to_sheet: true,
   created_by: (typeof currentUser!=='undefined'&&currentUser&&currentUser.name)||null
  };
@@ -17226,20 +17232,18 @@ async function saveRecord() {
  }
  if(!res || !res.ok){ showNotif('Ошибка', (res&&res.error)||'Оплата не сохранилась. Попробуйте ещё раз.'); return; }
  // мгновенно показать в текущей сессии (источник правды — Supabase, подтянется при перезагрузке)
- payments.push({id:(res.payment&&res.payment.id)||('m'+Date.now()),client:client,date:paidAt,employee:empId,category:cat,categoryRaw:catRaw,amount:amount,qty:qty,periodMonths:per,method:method,managerName:payload.manager_name,comment:comment,seated:false,serviceWritten:false});
+ payments.push({id:(res.payment&&res.payment.id)||('m'+Date.now()),client:client,date:paidAt,category:catMapped,categoryRaw:col.catLabel,amount:col.fact,qty:col.qty,periodMonths:payload.period_months,method:col.bank,managerName:managerName,comment:comment,seated:false,serviceWritten:false});
  clientInp.value=''; clientInp.dataset.clientId='';
- document.getElementById('p-amount').value='';document.getElementById('p-comment').value='';document.getElementById('p-qty').value='';
- // v823-qa: чип периода назад на «1 мес» — иначе следующий платёж тихо уедет с прошлым периодом
- try {
-  document.querySelectorAll('#p-period .pp-chip').forEach(function(b){ b.classList.toggle('on', b.dataset.v === '1'); });
- } catch(_){}
+ document.getElementById('p-comment').value='';
+ payFlowRender(); // v824: пересборка динамической части — все суммы/чипы к дефолтам
+ var _planStr = (col.fact !== col.plan) ? (' (озвучено ' + payFmtN(col.plan) + ', факт ' + payFmtN(col.fact) + ')') : '';
  var _sm = res.sheet_mirror;
  if(_sm && _sm.ok){
-  showNotif('Оплата добавлена', client+' — '+fmtFull(amount)+'. Записано в базу и в Google-таблицу («'+_sm.sheet_tab+'», строка '+_sm.row_index+').');
+  showNotif('Оплата добавлена', client+' — '+fmtFull(col.fact)+_planStr+'. Записано в базу и в Google-таблицу («'+_sm.sheet_tab+'», строка '+_sm.row_index+').');
  } else {
   // v823-qa: НИ В КОЕМ СЛУЧАЕ не просить «добавьте строку руками» — платёж УЖЕ в базе,
   // ручная строка в листе стала бы дублем после часового импорта
-  showNotif('Оплата сохранена в базе', client+' — '+fmtFull(amount)+'. В Google-таблицу не записалось'+((_sm&&_sm.error)?(' ('+_sm.error+')'):'')+'. Строку руками НЕ добавляйте — скажите администратору.');
+  showNotif('Оплата сохранена в базе', client+' — '+fmtFull(col.fact)+'. В Google-таблицу не записалось'+((_sm&&_sm.error)?(' ('+_sm.error+')'):'')+'. Строку руками НЕ добавляйте — скажите администратору.');
  }
  } else {
  const client=document.getElementById('a-client').value.trim(), amount=parseFloat(document.getElementById('a-amount').value);
@@ -39270,6 +39274,239 @@ function payPeriodPick(btn){
  btn.classList.add('on');
 }
 
+// ============================================================
+// v824: форма оплаты «как в телеграм-боте» (репо salesdoc-bot, config.py).
+// Списки статей/тарифов/прайсов/банков — ТОЧНО по написанию таблиц «Доходы»
+// (иначе сводные формулы CEO не посчитают строку). Менять синхронно с ботом!
+// Типы путей: lic = лицензии (кол-во × цена × месяцы), pkg = пакеты услуг,
+// man = сумма руками, bot = период + сумма руками.
+// ============================================================
+var PAYBOT_CFG = {
+ KZ: {
+  currency: 'тг',
+  categories: [
+   {k:'abon_plata',    l:'абон. плата',    t:'lic'},
+   {k:'dop_lic',       l:'доп. лицензии',  t:'lic'},
+   {k:'new_client',    l:'новый клиент',   t:'lic'},
+   {k:'nov_vnedrenie', l:'Нов внедрение',  t:'pkg'},
+   {k:'nov_integr',    l:'Нов интеграция', t:'pkg'},
+   {k:'sta_vnedrenie', l:'Ста внедрение',  t:'pkg'},
+   {k:'sta_integr',    l:'Ста интеграция', t:'pkg'},
+   {k:'nakladnaya',    l:'наклодная',      t:'man'},
+   {k:'oplata_dolga',  l:'Оплата долга',   t:'man'},
+   {k:'balans',        l:'баланс',         t:'lic'},
+   {k:'dorabotka',     l:'доработка',      t:'man'},
+   {k:'telegram_boty', l:'телеграм боты',  t:'bot'},
+   {k:'bot_otchet',    l:'Бот отчет',      t:'bot'},
+   {k:'bot_zakaz',     l:'Бот заказ',      t:'bot'},
+   {k:'integr_plus',   l:'интеграция +',   t:'pkg'},
+   {k:'dop_obuchenie', l:'доп обучение',   t:'pkg'},
+   {k:'dvagis',        l:'2гис',           t:'man'}
+  ],
+  licTypes: ['Лицензии','Баланс','Услуга'],
+  periods: [
+   {l:'3 месячный',m:3},{l:'6 месячный',m:6},{l:'12 месяцев',m:12},
+   {l:'Месячный',m:1},{l:'10 дней',m:0},{l:'20 дней',m:0}
+  ],
+  pricesNew: {'10 дней':4200,'20 дней':5600,'Месячный':7000,'3 месячный':7000,'6 месячный':5600,'12 месяцев':5600},
+  pricesOld: {'10 дней':3000,'20 дней':4000,'Месячный':7000,'3 месячный':5000,'6 месячный':4500,'12 месяцев':4000},
+  packages: [99000,199000,599000],
+  banks: ['халык','каспи','Наличка'],
+  botPeriods: ['Месяц','3 месяца','6 месяцев','12 месяцев'],
+  managers: ['Мирзахит','Айдос','Юлия','Акбар','Самат']
+ },
+ KG: {
+  currency: 'сом',
+  categories: [
+   {k:'abon_plata',    l:'абон.плата',     t:'lic'},
+   {k:'dop_lic',       l:'доп.лицензия',   t:'lic'},
+   {k:'new_client',    l:'Нов.клиент',     t:'lic'},
+   {k:'nov_vnedrenie', l:'нов.внедрение',  t:'pkg'},
+   {k:'nov_integr',    l:'нов.интеграция', t:'pkg'},
+   {k:'oplata_dolga',  l:'Оплата долга',   t:'man'},
+   {k:'balans',        l:'Баланс',         t:'lic'},
+   {k:'dorabotka',     l:'доработка',      t:'man'},
+   {k:'telegram_boty', l:'телеграмм бот',  t:'bot'},
+   {k:'kantri',        l:'Кантри',         t:'man'}
+  ],
+  licTypes: ['лицензия','Баланс','Услуга'],
+  periods: [
+   {l:'3 месяц',m:3},{l:'6 месяц',m:6},{l:'12 месяц',m:12},
+   {l:'месяц',m:1},{l:'10 дней',m:0},{l:'20 дней',m:0}
+  ],
+  pricesNew: {'10 дней':750,'20 дней':1000,'месяц':1300,'3 месяц':1300,'6 месяц':1170,'12 месяц':1040},
+  pricesOld: {'10 дней':600,'20 дней':800,'месяц':1000,'3 месяц':1000,'6 месяц':900,'12 месяц':800},
+  packages: [19900,29900,99900],
+  banks: ['МБизнес','Мбизнес Услуги','РСК','Касса Мирзахит'],
+  botPeriods: ['Месяц','3 месяца','6 месяцев','12 месяцев'],
+  managers: ['Мирзахит','Айдос Х','Юлия КЗ','Самат','Адилет','Азима','Амир','Нурали','Азамат']
+ }
+};
+function payBotCfg(){
+ var c = (typeof currentCountry !== 'undefined' && currentCountry) || 'KZ';
+ return PAYBOT_CFG[c] || PAYBOT_CFG.KZ;
+}
+function payFmtN(n){ return Math.round(n).toLocaleString('ru-RU'); }
+
+// Заполнение статичных частей формы при открытии модалки (статьи/банки/менеджеры страны)
+function payFormInit(){
+ var cfg = payBotCfg();
+ var catSel = document.getElementById('p-category');
+ if(catSel){
+  catSel.innerHTML = cfg.categories.map(function(c){
+   return '<option value="' + c.k + '">' + _escHtml(c.l) + '</option>';
+  }).join('');
+ }
+ var mgrSel = document.getElementById('p-employee');
+ if(mgrSel){
+  var meFirst = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? String(currentUser.name).trim().split(/\s+/)[0].toLowerCase() : '';
+  mgrSel.innerHTML = cfg.managers.map(function(m){
+   var sel = meFirst && m.toLowerCase().indexOf(meFirst) === 0 ? ' selected' : '';
+   return '<option value="' + _escHtml(m) + '"' + sel + '>' + _escHtml(m) + '</option>';
+  }).join('');
+ }
+ var bankBox = document.getElementById('p-bank');
+ if(bankBox){
+  bankBox.innerHTML = cfg.banks.map(function(b, i){
+   return '<button type="button" class="pp-chip' + (i === 0 ? ' on' : '') + '" data-v="' + _escHtml(b) + '" onclick="payChip(this)">' + _escHtml(b) + '</button>';
+  }).join('');
+ }
+ payFlowRender();
+}
+
+// Общий чип: выделить в своей группе + пересчитать план
+function payChip(btn){
+ var box = btn.parentElement;
+ Array.prototype.forEach.call(box.querySelectorAll('.pp-chip'), function(b){ b.classList.remove('on'); });
+ btn.classList.add('on');
+ payRecalc();
+}
+function payChipVal(boxId){
+ var el = document.querySelector('#' + boxId + ' .pp-chip.on');
+ return el ? el.dataset.v : '';
+}
+
+// Динамическая часть формы — строится по типу выбранной статьи (как ветки бота)
+function payFlowRender(){
+ var cfg = payBotCfg();
+ var flow = document.getElementById('p-flow');
+ var catSel = document.getElementById('p-category');
+ if(!flow || !catSel) return;
+ var cat = cfg.categories.filter(function(c){ return c.k === catSel.value; })[0] || cfg.categories[0];
+ var h = '';
+ if(cat.t === 'lic'){
+  h += '<div class="form-row"><div class="form-group"><label class="form-label">Тип лицензии</label><div class="pay-period-chips pay-chips-wrap" id="p-lictype">'
+    + cfg.licTypes.map(function(t, i){ return '<button type="button" class="pp-chip' + (i === 0 ? ' on' : '') + '" data-v="' + _escHtml(t) + '" onclick="payChip(this)">' + _escHtml(t) + '</button>'; }).join('')
+    + '</div></div><div class="form-group"><label class="form-label">Кол-во лицензий</label><input class="form-input" id="p-qty" type="number" min="1" placeholder="10" oninput="payRecalc()"></div></div>';
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Тариф</label><div class="pay-period-chips pay-chips-wrap" id="p-tariff">'
+    + cfg.periods.map(function(p, i){ return '<button type="button" class="pp-chip' + (i === 0 ? ' on' : '') + '" data-v="' + _escHtml(p.l) + '" data-m="' + p.m + '" onclick="payChip(this)">' + _escHtml(p.l) + '</button>'; }).join('')
+    + '</div></div></div>';
+  h += '<div class="form-row"><div class="form-group"><label class="form-label">Прайс за 1 лицензию</label><div class="pay-period-chips" id="p-pricemode">'
+    + '<button type="button" class="pp-chip on" data-v="new" onclick="payChip(this)">Новый клиент</button>'
+    + '<button type="button" class="pp-chip" data-v="old" onclick="payChip(this)">Старый клиент</button>'
+    + '</div></div><div class="form-group"><label class="form-label">Или своя цена</label><input class="form-input" id="p-price" type="number" min="0" placeholder="по прайсу" oninput="payRecalc()"></div></div>';
+  h += '<div class="pay-plan-box" id="p-plan-box">Озвучено клиенту: <b>—</b><div class="ppb-formula">введите количество</div></div>';
+  h += '<div class="form-row"><div class="form-group"><label class="form-label">Клиент заплатил</label><div class="pay-period-chips" id="p-factmode">'
+    + '<button type="button" class="pp-chip on" data-v="plan" onclick="payChip(this)">Столько же</button>'
+    + '<button type="button" class="pp-chip" data-v="other" onclick="payChip(this)">Другую сумму</button>'
+    + '</div></div><div class="form-group"><label class="form-label">Фактически (' + cfg.currency + ')</label><input class="form-input" id="p-fact" type="number" min="0" placeholder="сколько пришло" oninput="payRecalc()" disabled></div></div>';
+ } else if(cat.t === 'pkg'){
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Пакет</label><div class="pay-period-chips pay-chips-wrap" id="p-package">'
+    + cfg.packages.map(function(a, i){ return '<button type="button" class="pp-chip' + (i === 0 ? ' on' : '') + '" data-v="' + a + '" onclick="payChip(this)">Пакет ' + (i + 1) + ' — ' + payFmtN(a) + '</button>'; }).join('')
+    + '</div></div></div>';
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Или своя сумма (' + cfg.currency + ')</label><input class="form-input" id="p-amount" type="number" min="0" placeholder="если не пакет" oninput="payRecalc()"></div></div>';
+ } else if(cat.t === 'bot'){
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Период</label><div class="pay-period-chips pay-chips-wrap" id="p-botper">'
+    + cfg.botPeriods.map(function(p, i){ return '<button type="button" class="pp-chip' + (i === 0 ? ' on' : '') + '" data-v="' + _escHtml(p) + '" onclick="payChip(this)">' + _escHtml(p) + '</button>'; }).join('')
+    + '</div></div></div>';
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Сумма (' + cfg.currency + ')</label><input class="form-input" id="p-amount" type="number" min="0" placeholder="15000"></div></div>';
+ } else { // man — сумма руками
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Сумма (' + cfg.currency + ')</label><input class="form-input" id="p-amount" type="number" min="0" placeholder="15000"></div></div>';
+ }
+ flow.innerHTML = h;
+ payRecalc();
+}
+
+// Живой расчёт «Озвучено клиенту» = цена × кол-во × месяцы (как в боте:
+// enter_price → plan_total = unit_price * qty * multiplier; 10/20 дней = ×1)
+function payRecalc(){
+ var box = document.getElementById('p-plan-box');
+ var factInp = document.getElementById('p-fact');
+ if(factInp){
+  var fm = payChipVal('p-factmode');
+  factInp.disabled = (fm !== 'other');
+  if(factInp.disabled) factInp.value = '';
+ }
+ if(!box) return;
+ var cfg = payBotCfg();
+ var qty = parseInt((document.getElementById('p-qty') || {}).value) || 0;
+ var tariffEl = document.querySelector('#p-tariff .pp-chip.on');
+ var tariff = tariffEl ? tariffEl.dataset.v : '';
+ var m = tariffEl ? (parseInt(tariffEl.dataset.m) || 0) : 0;
+ var mult = m > 0 ? m : 1;
+ var manual = parseFloat((document.getElementById('p-price') || {}).value) || 0;
+ var mode = payChipVal('p-pricemode') || 'new';
+ var unit = manual > 0 ? manual : ((mode === 'old' ? cfg.pricesOld : cfg.pricesNew)[tariff] || 0);
+ if(!qty || !unit){
+  box.innerHTML = 'Озвучено клиенту: <b>—</b><div class="ppb-formula">' + (!qty ? 'введите количество лицензий' : 'выберите прайс или введите цену') + '</div>';
+  return;
+ }
+ var plan = unit * qty * mult;
+ box.innerHTML = 'Озвучено клиенту: <b>' + payFmtN(plan) + ' ' + cfg.currency + '</b>'
+  + '<div class="ppb-formula">' + qty + ' лиц. × ' + payFmtN(unit) + ' × ' + mult + ' мес' + (manual > 0 ? ' · своя цена' : ' · прайс «' + (mode === 'old' ? 'старый' : 'новый') + '»') + '</div>';
+}
+
+// Сбор данных формы по ветке — вернёт null и покажет toast если что-то не заполнено
+function payCollect(){
+ var cfg = payBotCfg();
+ var catSel = document.getElementById('p-category');
+ var cat = cfg.categories.filter(function(c){ return c.k === catSel.value; })[0] || cfg.categories[0];
+ var bank = payChipVal('p-bank');
+ if(!bank){ sdToast('Выберите банк'); return null; }
+ var r = { catKey: cat.k, catLabel: cat.l, bank: bank, licType: '', tariff: '', qty: null, unit: null, months: null, plan: 0, fact: 0 };
+ if(cat.t === 'lic'){
+  r.licType = payChipVal('p-lictype') || cfg.licTypes[0];
+  var qty = parseInt((document.getElementById('p-qty') || {}).value) || 0;
+  if(qty <= 0){ sdToast('Введите количество лицензий'); return null; }
+  var tariffEl = document.querySelector('#p-tariff .pp-chip.on');
+  if(!tariffEl){ sdToast('Выберите тариф'); return null; }
+  r.tariff = tariffEl.dataset.v;
+  var m = parseInt(tariffEl.dataset.m) || 0;
+  r.months = m;
+  var manual = parseFloat((document.getElementById('p-price') || {}).value) || 0;
+  var mode = payChipVal('p-pricemode') || 'new';
+  var unit = manual > 0 ? manual : ((mode === 'old' ? cfg.pricesOld : cfg.pricesNew)[r.tariff] || 0);
+  if(unit <= 0){ sdToast('Не задана цена за лицензию'); return null; }
+  r.qty = qty; r.unit = unit;
+  r.plan = unit * qty * (m > 0 ? m : 1);
+  if(payChipVal('p-factmode') === 'other'){
+   r.fact = parseFloat((document.getElementById('p-fact') || {}).value) || 0;
+   if(r.fact <= 0){ sdToast('Введите фактическую сумму'); return null; }
+  } else {
+   r.fact = r.plan;
+  }
+ } else if(cat.t === 'pkg'){
+  r.licType = 'Услуга'; r.tariff = 'Услуга';
+  var own = parseFloat((document.getElementById('p-amount') || {}).value) || 0;
+  var pkgV = parseFloat(payChipVal('p-package')) || 0;
+  var amt = own > 0 ? own : pkgV;
+  if(amt <= 0){ sdToast('Выберите пакет или введите сумму'); return null; }
+  r.plan = amt; r.fact = amt; r.unit = amt; // бот: price = amount у пакетов
+ } else if(cat.t === 'bot'){
+  r.licType = 'Услуга';
+  r.tariff = payChipVal('p-botper') || '';
+  var amtB = parseFloat((document.getElementById('p-amount') || {}).value) || 0;
+  if(amtB <= 0){ sdToast('Введите сумму'); return null; }
+  r.plan = amtB; r.fact = amtB; r.unit = amtB;
+ } else {
+  r.licType = 'Услуга'; r.tariff = 'Услуга';
+  var amtM = parseFloat((document.getElementById('p-amount') || {}).value) || 0;
+  if(amtM <= 0){ sdToast('Введите сумму'); return null; }
+  r.plan = amtM; r.fact = amtM; r.unit = amtM;
+ }
+ return r;
+}
+
 async function ttQaSave(){
  if(!window._ttQa) return;
  var pop = document.getElementById('tt-qa-pop');
@@ -40725,7 +40962,7 @@ function cal2RenderTimeGrid(days, opts){
  }
  html += '</div></div></div>';
  listEl.innerHTML = html;
- cal2NowTick(minH, SLOT);
+ cal2NowTick(minH, maxH, SLOT);
  cal2SyncHeadPad(); // v752: выровнять шапку под скроллбар сетки
  var grid = document.getElementById('cal2-wgrid');
  if(grid){
@@ -40935,15 +41172,18 @@ window.addEventListener('resize', function(){
 });
 
 // линия «сейчас»: singleton-таймер, обновление раз в минуту, только когда календарь виден
-function cal2NowTick(minH, SLOT){
+function cal2NowTick(minH, maxH, SLOT){
  function upd(){
   var view = document.getElementById('view-calendar');
   if(!view || view.style.display === 'none' || (crmCalState.viewMode !== 'week' && crmCalState.viewMode !== 'day')) return; // v746: линия «сейчас» и в Дне
   var nl = document.getElementById('cal2-nowline');
   if(!nl) return;
   var n = new Date();
-  var top = ((n.getHours() * 60 + n.getMinutes()) - minH * 60) / 60 * SLOT;
-  if(top < 0){ nl.style.display = 'none'; return; }
+  var nowMin = n.getHours() * 60 + n.getMinutes();
+  var top = (nowMin - minH * 60) / 60 * SLOT;
+  // v824: линия «сейчас» позже конца сетки (часы рисуются до maxH) растягивала контейнер —
+  // вечером под календарём появлялось огромное пустое поле. За пределами сетки — прячем.
+  if(top < 0 || nowMin >= (maxH + 1) * 60){ nl.style.display = 'none'; return; }
   nl.style.display = '';
   nl.style.top = top.toFixed(0) + 'px';
   var pill = document.getElementById('cal2-nowpill');

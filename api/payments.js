@@ -153,18 +153,28 @@ async function _mirrorPaymentToSheet(payment, body) {
         action: 'appendPayment',
         spreadsheetId: cfg.sheet_id,
         sheet: sheetTab,
-        row: {
-          date: sheetDate,                                        // A — Дата (ISO минус dateCorrection)
-          company: payment.company_name,                          // B — Компания
-          category: body.category_raw || payment.category_raw || '', // C — Статья (как пишут менеджеры)
-          qty: payment.qty,                                       // E — Кол-во лицензий
-          manager: payment.manager_name,                          // F — Менеджер
-          price: payment.price,                                   // H — Цена
-          period: payment.period_months,                          // I — Период (мес)
-          amountPlan: payment.amount_planned,                     // J — Сумма план
-          bank: payment.bank,                                     // K — Банк
-          amountFact: payment.amount                              // M — Сумма факт
-        }
+        // v824: строка 1-в-1 как пишет телеграм-бот (salesdoc-bot services/sheets.py add_payment):
+        // J = план (озвучено клиенту), M = факт ТОЛЬКО если отличается от плана (иначе пусто),
+        // D = тип лицензии, G = тариф текстом, L = «Нет» (посажена).
+        row: (function () {
+          const plan = payment.amount_planned != null ? Number(payment.amount_planned) : Number(payment.amount);
+          const factDiffers = Number(payment.amount) !== plan;
+          return {
+            date: sheetDate,                                        // A — Дата (ISO минус dateCorrection)
+            company: payment.company_name,                          // B — Компания
+            category: body.category_raw || payment.category_raw || '', // C — Статья (как пишут менеджеры)
+            license: body.license_type || '',                       // D — Лицензия/Баланс/Услуга
+            qty: payment.qty,                                       // E — Кол-во лицензий
+            manager: payment.manager_name,                          // F — Менеджер
+            tariff: body.period_label || '',                        // G — Тариф (текст из таблицы)
+            price: payment.price,                                   // H — Цена за лицензию
+            period: payment.period_months,                          // I — Период (мес, только >0)
+            amountPlan: plan,                                       // J — Сумма план
+            bank: payment.bank,                                     // K — Банк
+            seated: 'Нет',                                          // L — Посажена
+            amountFact: factDiffers ? payment.amount : null         // M — Факт, если отличается
+          };
+        })()
       })
     });
   } catch (e) {

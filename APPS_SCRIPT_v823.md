@@ -54,15 +54,15 @@ function appendPaymentAction(spreadsheetId, sheetName, r) {
       dateVal,                                  // A Дата
       r.company || '',                          // B Компания
       r.category || '',                         // C Статья
-      '',                                       // D
+      r.license || '',                          // D Лицензия (v824)
       r.qty != null ? r.qty : '',               // E Кол-во лицензий
       r.manager || '',                          // F Менеджер
-      '',                                       // G
+      r.tariff || '',                           // G Тариф текстом (v824)
       r.price != null ? r.price : '',           // H Цена
       r.period != null ? r.period : '',         // I Период (мес)
       r.amountPlan != null ? r.amountPlan : '', // J Сумма план
       r.bank || '',                             // K Банк
-      '',                                       // L
+      r.seated || 'Нет',                        // L Посажена (v824)
       r.amountFact != null ? r.amountFact : ''  // M Сумма факт
     ]);
     return { ok: true, rowIndex: sh.getLastRow() };
