@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v822</title>
+<title>SalesDoc — Финансовый Дашборд v823</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -7291,6 +7291,20 @@ body.light .ct-dd-search:-webkit-autofill, body.light .ct-dd-search:-webkit-auto
  -webkit-text-fill-color: #16181D !important;
  caret-color: #16181D;
 }
+
+/* v823: чипы периода в форме оплаты + панель массового назначения куратора (Действующие).
+   Только CSS-переменные — чтобы светлая тема не протекала. */
+.pay-period-chips { display:flex; gap:6px; }
+.pp-chip { background:var(--surface-2); border:1px solid var(--border-faint); border-radius:8px; color:var(--text-soft); font-family:inherit; font-size:12px; font-weight:600; padding:8px 0; flex:1; cursor:pointer; }
+.pp-chip.on { border-color:var(--accent,#5E6AD2); background:rgba(94,106,210,.16); color:var(--text); }
+#ac-bulk-bar { display:none; position:sticky; bottom:14px; z-index:50; margin-top:12px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 14px; box-shadow:0 12px 32px rgba(0,0,0,.45); align-items:center; gap:10px; flex-wrap:wrap; }
+body.light #ac-bulk-bar { box-shadow:0 12px 32px rgba(15,18,25,.18); }
+#ac-bulk-bar .abb-count { font-size:12.5px; font-weight:700; color:var(--text); }
+#ac-bulk-bar .abb-hint { font-size:12px; color:var(--text-soft); }
+#ac-bulk-bar .abb-btn { padding:7px 14px; border-radius:8px; border:1px solid var(--border-faint); background:var(--surface-2); color:var(--text); font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
+#ac-bulk-bar .abb-btn:hover { border-color:var(--accent,#5E6AD2); }
+#ac-bulk-bar .abb-clear { margin-left:auto; background:transparent; border:none; color:var(--text-soft); font-size:12px; cursor:pointer; font-family:inherit; }
+.ac-cb { width:15px; height:15px; accent-color:var(--accent,#5E6AD2); cursor:pointer; vertical-align:middle; }
 body.light .ct-flag-opt { background:#F2F3F7; border-color:rgba(15,18,25,.12); color:#16181D; }
 body.light .ct-flag-opt.on { border-color:#2563eb; background:rgba(37,99,235,.08); }
 body.light .ct-time-scroll { scrollbar-color:rgba(15,18,25,.2) transparent; }
@@ -9887,6 +9901,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <input type="search" id="ac-filter-search" placeholder="Поиск по названию или имени сервера..." oninput="acSetSearch(this.value)" style="padding:7px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2);color:var(--text);font-size:13px;min-width:240px;flex:1 1 240px;font-family:inherit">
  <select class="sd-select" id="ac-filter-op" onchange="acSetOperator(this.value)">
  <option value="">Все операторы</option>
+ <option value="__none">Без куратора</option><!-- v823: главная дыра KG — ничьи клиенты; отсюда их разбирают -->
  </select>
  <select class="sd-select" id="ac-filter-risk" onchange="acSetRisk(this.value)">
  <option value="">Все риски</option>
@@ -9914,6 +9929,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <label style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-nosub" checked onchange="acSetShowNoSub(this.checked)" style="margin:0"> Показать без подписки</label>
  <!-- v549: кнопка «Сбросить фильтры» — появляется когда хоть один фильтр активен -->
  <button id="ac-filter-reset" onclick="acResetFilters()" style="display:none;padding:6px 12px;font-size:11px;font-weight:600;background:rgba(239,68,68,.10);color:#EF4444;border:1px solid rgba(239,68,68,.30);border-radius:6px;cursor:pointer">Сбросить фильтры</button>
+ <!-- v823: кураторы (операторы) вносят оплаты отсюда — страницу «Платежи» они не видят -->
+ <button id="ac-add-payment-btn" class="add-btn" style="display:none;font-size:11px;padding:6px 14px" onclick="openModal('payment')">+ Оплата</button>
  <button onclick="acReloadPrior()" id="ac-reload-prior-btn" title="Перечитать подписки из «Доходы 2025». Нужно только если в таблице 2025 что-то добавили вручную." style="display:none;padding:6px 10px;font-size:11px;background:rgba(120,120,128,.08);color:var(--text-soft);border:1px solid var(--border-faint);border-radius:6px;cursor:pointer">Обновить из 2025</button>
  </div>
  </div>
@@ -9967,6 +9984,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  </div>
  <div class="sd-section-title">Все клиенты <span id="ac-count" style="color:var(--text-soft);font-weight:500;text-transform:none;letter-spacing:0;font-size:13px"></span></div>
  <div class="sd-card"><div class="sd-table-wrap"><table class="sd-table" id="ac-table"></table></div></div>
+ <!-- v823: плавающая панель массового назначения куратора (появляется при выборе чекбоксами) -->
+ <div id="ac-bulk-bar"></div>
  </div>
  </div>
  <!-- /ACTIVECLIENTS VIEW -->
@@ -10683,8 +10702,11 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <button class="modal-tab" id="tab-act" onclick="switchTab('act')"> Акт работ</button>
  </div>
  <div id="form-payment">
- <div class="form-row"><div class="form-group"><label class="form-label">Клиент</label><input class="form-input" id="p-client" placeholder="ТОО Компания"></div><div class="form-group"><label class="form-label">Дата</label><input class="form-input" id="p-date" type="date"></div></div>
+ <!-- v823: клиент выбирается ИЗ БАЗЫ (пикер с поиском и создание с анти-дублем), а не пишется руками —
+      иначе платежи повисали «непривязанными» и плодились дубли marvel/Marvel -->
+ <div class="form-row"><div class="form-group"><label class="form-label">Клиент</label><input class="form-input" id="p-client" placeholder="Выбрать из базы..." readonly style="cursor:pointer" onclick="payClientPickerOpen(this)"></div><div class="form-group"><label class="form-label">Дата</label><input class="form-input" id="p-date" type="date"></div></div>
  <div class="form-row"><div class="form-group"><label class="form-label">Сотрудник</label><select class="form-select" id="p-employee"></select></div><div class="form-group"><label class="form-label">Статья</label><select class="form-select" id="p-category"><option value="license">Новые лицензии</option><option value="subscription">Абонентская плата</option><option value="implementation">Внедрение</option><option value="integration">Интеграция</option><option value="revision">Доработки</option><option value="other">Прочее</option></select></div></div>
+ <div class="form-row"><div class="form-group"><label class="form-label">Кол-во лицензий</label><input class="form-input" id="p-qty" type="number" min="0" placeholder="10"></div><div class="form-group"><label class="form-label">Период (мес)</label><div class="pay-period-chips" id="p-period"><button type="button" class="pp-chip on" data-v="1" onclick="payPeriodPick(this)">1</button><button type="button" class="pp-chip" data-v="3" onclick="payPeriodPick(this)">3</button><button type="button" class="pp-chip" data-v="6" onclick="payPeriodPick(this)">6</button><button type="button" class="pp-chip" data-v="12" onclick="payPeriodPick(this)">12</button></div></div></div>
  <div class="form-row"><div class="form-group"><label class="form-label">Сумма</label><input class="form-input" id="p-amount" type="number" placeholder="500000"></div><div class="form-group"><label class="form-label">Способ оплаты</label><select class="form-select" id="p-method"><option value="bank">Банковский перевод</option><option value="cash">Наличные</option><option value="card">Карта</option></select></div></div>
  <div class="form-row"><div class="form-group"><label class="form-label">Статус</label><select class="form-select" id="p-status"><option value="paid">Оплачено</option><option value="pending">Ожидание</option></select></div><div class="form-group"><label class="form-label">Комментарий</label><input class="form-input" id="p-comment" placeholder="Примечание..."></div></div>
  </div>
@@ -11690,6 +11712,12 @@ function applyUserAccess() {
  // topbar add btn
  // Кнопка Добавить скрыта
  document.querySelector('.add-btn').style.display = 'none';
+ // v823: «+ Оплата» в шапке Платежей — видна тем, у кого право «Добавлять оплаты»
+ // (Малика/Элиза вносят оплаты KG в программе; строка дублируется в Google-таблицу)
+ var _payBtn = document.querySelector('#view-payments .add-btn');
+ if(_payBtn) _payBtn.style.display = (u.access && u.access.add_payments) ? '' : 'none';
+ var _payBtn2 = document.getElementById('ac-add-payment-btn');
+ if(_payBtn2) _payBtn2.style.display = (u.access && u.access.add_payments) ? '' : 'none';
  // v418: после входа подтянуть число висящих тикетов и отрисовать кружок-индикатор
  // на табе «Поддержка». setTimeout чтоб не блокировать рендер сразу после логина.
  setTimeout(function(){ if(typeof ticketsLoadBadgeOnly === 'function') ticketsLoadBadgeOnly(); }, 500);
@@ -17140,34 +17168,79 @@ function updatePeriodLabel() {
 // ============================================================
 
 function openModal(tab){ document.getElementById('modal').classList.add('open'); if(tab)switchTab(tab); const t=taskLocalIso(new Date()); document.getElementById('p-date').value=t; document.getElementById('a-date').value=t; document.getElementById('a-number').value='АКТ-2026-00'+nextActId; }
-function closeModal(){ document.getElementById('modal').classList.remove('open'); }
+function closeModal(){
+ document.getElementById('modal').classList.remove('open');
+ // v823-qa: сброс выбранного клиента и чипа периода — иначе прошлый выбор «переживал»
+ // закрытие модалки и следующая оплата уходила на старого клиента / со старым периодом
+ try {
+  var pc = document.getElementById('p-client');
+  if(pc){ pc.value=''; pc.dataset.clientId=''; }
+  document.querySelectorAll('#p-period .pp-chip').forEach(function(b){ b.classList.toggle('on', b.dataset.v === '1'); });
+ } catch(_){}
+}
 function switchTab(t){ currentTab=t; document.getElementById('form-payment').style.display=t==='payment'?'block':'none'; document.getElementById('form-act').style.display=t==='act'?'block':'none'; document.getElementById('tab-payment').classList.toggle('active',t==='payment'); document.getElementById('tab-act').classList.toggle('active',t==='act'); }
 async function saveRecord() {
  if(currentTab==='payment'){
- const client=document.getElementById('p-client').value.trim(), amount=parseFloat(document.getElementById('p-amount').value);
- if(!client||!amount){sdToast('Заполните Клиент и Сумму');return;}
- // v592 FIX: раньше оплата писалась только в память (payments.push) и показывалось «Оплата добавлена» —
- // при перезагрузке пропадала. Теперь пишем в Supabase (/api/payments), потом отражаем локально.
+ // v823: клиент обязателен ИЗ БАЗЫ (client_id из пикера) — платёж не может быть «непривязанным».
+ // Плюс зеркалирование строки в Google-таблицу «Доходы» (mirror_to_sheet) и защита от двойного клика.
+ var clientInp = document.getElementById('p-client');
+ const client = clientInp.value.trim();
+ const clientId = clientInp.dataset.clientId || '';
+ const amount = parseFloat(document.getElementById('p-amount').value);
+ if(!clientId){sdToast('Выберите клиента из базы — поле «Клиент»');return;}
+ if(!amount){sdToast('Заполните сумму');return;}
+ if(window._paySavingNow) return;
+ window._paySavingNow = true;
+ // v823-qa: Apps Script может холодно стартовать 10-20 сек — блокируем кнопку с честным
+ // текстом, иначе человек решит что зависло, обновит страницу и внесёт оплату второй раз
+ var _submitBtn = document.querySelector('#modal .form-submit');
+ var _submitOld = _submitBtn ? _submitBtn.textContent : null;
+ if(_submitBtn){ _submitBtn.disabled = true; _submitBtn.textContent = 'СОХРАНЯЮ... (запись в базу и таблицу, до 20 сек)'; }
  var empId = parseInt(document.getElementById('p-employee').value)||0;
  var empObj = employees.find(function(e){ return e.id===empId; });
- var cat = document.getElementById('p-category').value;
- var paidAt = document.getElementById('p-date').value || new Date().toLocaleDateString('en-CA');
- var method = document.getElementById('p-method').value;
+ var catSel = document.getElementById('p-category');
+ var cat = catSel.value;
+ var catRaw = (catSel.selectedOptions && catSel.selectedOptions[0]) ? catSel.selectedOptions[0].textContent.trim() : cat;
+ var paidAt = document.getElementById('p-date').value || taskLocalIso(new Date());
+ var methodSel = document.getElementById('p-method');
+ var method = (methodSel.selectedOptions && methodSel.selectedOptions[0]) ? methodSel.selectedOptions[0].textContent.trim() : methodSel.value; /* v823-qa: в таблицу и базу — человеческое «Банковский перевод», а не «bank» */
  var comment = document.getElementById('p-comment').value || null;
+ var qty = parseInt(document.getElementById('p-qty').value)||null;
+ var perBtn = document.querySelector('#p-period .pp-chip.on');
+ var per = perBtn ? (parseInt(perBtn.dataset.v)||1) : 1;
  var payload = {
   country: (typeof currentCountry!=='undefined'?currentCountry:'KZ'),
-  paid_at: paidAt, company_name: client, amount: amount, category: cat,
+  paid_at: paidAt, company_name: client, client_id: clientId, amount: amount,
+  category: cat, category_raw: catRaw,
+  qty: qty, price: (qty && qty>0) ? Math.round(amount/qty) : null, period_months: per,
   manager_name: empObj ? empObj.name : null, bank: method, comment: comment,
-  source: 'manual', created_by: (typeof currentUser!=='undefined'&&currentUser&&currentUser.name)||null
+  source: 'manual', mirror_to_sheet: true,
+  created_by: (typeof currentUser!=='undefined'&&currentUser&&currentUser.name)||null
  };
  var res;
  try { res = await sbFetch('/api/payments', { method:'POST', body: JSON.stringify(payload) }); }
  catch(e){ res = null; }
+ finally {
+  window._paySavingNow = false;
+  if(_submitBtn){ _submitBtn.disabled = false; if(_submitOld !== null) _submitBtn.textContent = _submitOld; }
+ }
  if(!res || !res.ok){ showNotif('Ошибка', (res&&res.error)||'Оплата не сохранилась. Попробуйте ещё раз.'); return; }
  // мгновенно показать в текущей сессии (источник правды — Supabase, подтянется при перезагрузке)
- payments.push({id:(res.payment&&res.payment.id)||('m'+Date.now()),client:client,date:paidAt,employee:empId,category:cat,categoryRaw:cat,amount:amount,method:method,managerName:payload.manager_name,comment:comment,seated:false,serviceWritten:false});
- document.getElementById('p-client').value='';document.getElementById('p-amount').value='';document.getElementById('p-comment').value='';
- showNotif('Оплата добавлена',client+' — '+fmtFull(amount));
+ payments.push({id:(res.payment&&res.payment.id)||('m'+Date.now()),client:client,date:paidAt,employee:empId,category:cat,categoryRaw:catRaw,amount:amount,qty:qty,periodMonths:per,method:method,managerName:payload.manager_name,comment:comment,seated:false,serviceWritten:false});
+ clientInp.value=''; clientInp.dataset.clientId='';
+ document.getElementById('p-amount').value='';document.getElementById('p-comment').value='';document.getElementById('p-qty').value='';
+ // v823-qa: чип периода назад на «1 мес» — иначе следующий платёж тихо уедет с прошлым периодом
+ try {
+  document.querySelectorAll('#p-period .pp-chip').forEach(function(b){ b.classList.toggle('on', b.dataset.v === '1'); });
+ } catch(_){}
+ var _sm = res.sheet_mirror;
+ if(_sm && _sm.ok){
+  showNotif('Оплата добавлена', client+' — '+fmtFull(amount)+'. Записано в базу и в Google-таблицу («'+_sm.sheet_tab+'», строка '+_sm.row_index+').');
+ } else {
+  // v823-qa: НИ В КОЕМ СЛУЧАЕ не просить «добавьте строку руками» — платёж УЖЕ в базе,
+  // ручная строка в листе стала бы дублем после часового импорта
+  showNotif('Оплата сохранена в базе', client+' — '+fmtFull(amount)+'. В Google-таблицу не записалось'+((_sm&&_sm.error)?(' ('+_sm.error+')'):'')+'. Строку руками НЕ добавляйте — скажите администратору.');
+ }
  } else {
  const client=document.getElementById('a-client').value.trim(), amount=parseFloat(document.getElementById('a-amount').value);
  if(!client||!amount){sdToast('Заполните Клиент и Сумму');return;}
@@ -39088,6 +39161,115 @@ async function ttQaClientOpen(ev){
  });
 }
 
+// v823: пикер клиента для формы «+ Оплата». Отличия от sdClientPickerOpen:
+// все клиенты страны (не только active), нормализованный поиск (регистр/дефисы/пробелы
+// не мешают — «сапат» найдёт «Сапат» и «sapat»), пункт «+ Создать клиента» с анти-дублем
+// на сервере (/api/clients POST вернёт existed:true если нормализованное имя уже есть).
+async function payClientPickerOpen(anchor){
+ var country = (typeof currentCountry!=='undefined'&&currentCountry)||'KZ';
+ if(!window._payClients) window._payClients = {};
+ if(!window._payClients[country]){
+  try {
+   var d = await sbFetch('/api/clients?limit=2000');
+   if(!d || !d.ok){ sdToast('Не удалось загрузить клиентов'); return; }
+   window._payClients[country] = (d.clients||[]).map(function(c){
+    return { id: c.client_id, name: c.company_name || c.client_id };
+   }).filter(function(c){ return c.id; }).sort(function(a,b){ return String(a.name).localeCompare(String(b.name),'ru'); });
+  } catch(e){ sdToast('Не удалось загрузить клиентов'); return; }
+ }
+ var list = window._payClients[country] || [];
+ var norm = function(s){ return String(s||'').toLowerCase().replace(/[^a-zа-яё0-9]/gi,''); };
+ var rect = anchor.getBoundingClientRect();
+ var dd = document.createElement('div');
+ dd.className = 'ct-dd';
+ dd.style.minWidth = '280px';
+ dd.style.zIndex = '1000006'; // выше модалки формы, ниже confirmAction (1000010)
+ var inp = document.createElement('input');
+ inp.type = 'text'; inp.placeholder = 'Найти клиента...'; inp.className = 'ct-dd-search';
+ inp.autocomplete = 'off'; inp.setAttribute('name','sd-noauto-q');
+ dd.appendChild(inp);
+ var listBox = document.createElement('div');
+ listBox.className = 'ct-dd-listbox';
+ dd.appendChild(listBox);
+ function closeDd(){ try { dd.remove(); } catch(_){} }
+ function pick(id, name){ closeDd(); anchor.value = name; anchor.dataset.clientId = id; }
+ async function createClient(name){
+  closeDd();
+  var ok = await confirmAction({
+   title: 'Создать нового клиента?',
+   body: '«'+name+'» появится в базе клиентов ('+country+').\nЕсли это существующий клиент с другим написанием — лучше найти его в списке, чтобы не плодить дубли.',
+   confirmLabel: 'Создать'
+  });
+  if(!ok) return;
+  try {
+   /* v823-qa: skip_auto_task — иначе каждый созданный из формы оплаты клиент вешал
+      мусорную задачу «Связаться» на assignee 'system' (сервер читает x-user-name, а его нет) */
+   var r = await sbFetch('/api/clients', { method:'POST', body: JSON.stringify({ company_name:name, country:country, status:'active', skip_auto_task:true }) });
+   if(r && r.ok && r.client && r.client.client_id){
+    window._payClients[country] = null; // сброс кэша — при следующем открытии подтянется свежий список
+    pick(r.client.client_id, r.client.company_name || name);
+    if(r.existed) sdToast('Такой клиент уже есть в базе — привязал к нему');
+    else sdToast('Клиент создан: '+name);
+   } else {
+    sdToast('Не получилось создать: '+((r&&r.error)||'ошибка сервера'));
+   }
+  } catch(e){ sdToast('Ошибка сети: '+(e.message||e)); }
+ }
+ function renderList(q){
+  var nq = norm(q);
+  listBox.replaceChildren();
+  var shown = 0;
+  list.forEach(function(c){
+   if(nq && norm(c.name).indexOf(nq) < 0 && norm(c.id).indexOf(nq) < 0) return;
+   if(shown >= 50) return;
+   shown++;
+   var it = document.createElement('div');
+   it.className = 'ct-dd-item' + (anchor.dataset.clientId === c.id ? ' is-selected' : '');
+   it.textContent = c.name;
+   it.onclick = function(){ pick(c.id, c.name); };
+   listBox.appendChild(it);
+  });
+  if(!shown){
+   var e0 = document.createElement('div');
+   e0.className = 'ct-dd-item';
+   e0.style.cssText = 'opacity:.6;cursor:default';
+   e0.textContent = q ? 'Не найдено в базе' : 'База клиентов пуста';
+   listBox.appendChild(e0);
+  }
+  if(q && q.trim()){
+   var cr = document.createElement('div');
+   cr.className = 'ct-dd-item';
+   cr.style.cssText = 'border-top:1px solid var(--border-faint);color:#4CB782;font-weight:600';
+   cr.textContent = '+ Создать клиента «'+q.trim()+'»';
+   cr.onclick = function(){ createClient(q.trim()); };
+   listBox.appendChild(cr);
+  }
+ }
+ renderList('');
+ inp.oninput = function(){ renderList(inp.value.trim()); };
+ document.body.appendChild(dd);
+ var dr = dd.getBoundingClientRect();
+ var w2 = dr.width || 280, h2 = dr.height || 300;
+ var x2 = rect.left, y2 = rect.bottom + 4;
+ if(x2 + w2 > window.innerWidth - 12) x2 = Math.max(12, window.innerWidth - w2 - 12);
+ if(y2 + h2 > window.innerHeight - 12) y2 = Math.max(12, rect.top - h2 - 4);
+ dd.style.left = Math.max(12, x2) + 'px';
+ dd.style.top = Math.max(12, y2) + 'px';
+ setTimeout(function(){ inp.focus(); }, 30);
+ setTimeout(function(){
+  document.addEventListener('mousedown', function closer(e2){
+   if(!dd.contains(e2.target)){ closeDd(); document.removeEventListener('mousedown', closer, true); }
+  }, true);
+ }, 50);
+}
+
+// v823: выбор периода в форме оплаты (чипы 1/3/6/12 мес)
+function payPeriodPick(btn){
+ var box = btn.parentElement;
+ Array.prototype.forEach.call(box.querySelectorAll('.pp-chip'), function(b){ b.classList.remove('on'); });
+ btn.classList.add('on');
+}
+
 async function ttQaSave(){
  if(!window._ttQa) return;
  var pop = document.getElementById('tt-qa-pop');
@@ -41420,7 +41602,7 @@ var AC_TAGS_KEY = 'crm_client_tags';
 var AC_KZ_CACHE = null;
 // v553: showChurned/showNoSub = true по умолчанию — чтобы видеть ВСЕХ клиентов сразу, без нажатия галок.
 // Если кому-то нужно отделить активных — пусть включит фильтр риска или галку выключит.
-var acState = { operator: '', risk: '', tag: '', segment: '', showChurned: true, showNoSub: true, search: '' };
+var acState = { operator: '', risk: '', tag: '', segment: '', showChurned: true, showNoSub: true, search: '', selected: {} }; /* v823: selected = client_id→1 для массового назначения куратора */
 
 // v253: сегменты клиентов по кол-ву пользователей (qty)
 var AC_SEGMENTS = [
@@ -42055,6 +42237,80 @@ function acRiskLevelByDays(client, days, accessStatus, accessUntil){
 }
 
 function acSetOperator(op){ acState.operator = op || ''; acRender(); }
+
+// ============================================================
+// v823: массовое назначение куратора (Действующие)
+// Сценарий KG: 151 активный клиент без куратора → фильтр «Без куратора» →
+// Малика/Элиза (или руководитель) галочками разбирают клиентов по 10-20 штук.
+// ============================================================
+function acBulkOps(){
+ var country = (typeof currentCountry!=='undefined'&&currentCountry)||'KZ';
+ var ops = [];
+ try {
+  (employees||[]).forEach(function(e){
+   if(e && String(e.role||'')==='operator' && String(e.country||'').toUpperCase()===country && e.name) ops.push(e.name);
+  });
+ } catch(_){}
+ if(!ops.length && typeof KB_OP_COLORS !== 'undefined') ops = Object.keys(KB_OP_COLORS);
+ return ops;
+}
+function acToggleSelect(cid, on){
+ if(on) acState.selected[cid] = 1; else delete acState.selected[cid];
+ acUpdateBulkBar();
+}
+function acClearSelection(){
+ acState.selected = {};
+ acRender();
+ acUpdateBulkBar();
+}
+function acUpdateBulkBar(){
+ var bar = document.getElementById('ac-bulk-bar');
+ if(!bar) return;
+ var n = Object.keys(acState.selected).length;
+ if(!n){ bar.style.display = 'none'; bar.innerHTML = ''; return; }
+ var ops = acBulkOps();
+ var esc = function(s){ return String(s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); };
+ bar.style.display = 'flex';
+ bar.innerHTML = '<span class="abb-count">Выбрано: ' + n + '</span>'
+  + '<span class="abb-hint">Назначить куратора:</span>'
+  + ops.map(function(o){
+     return '<button class="abb-btn" onclick="acBulkAssignCurator(\'' + esc(o) + '\')">' + _escHtml(o) + '</button>';
+    }).join('')
+  + '<button class="abb-btn" onclick="acBulkAssignCurator(null)" title="Убрать ответственного у выбранных">Снять куратора</button>'
+  + '<button class="abb-clear" onclick="acClearSelection()">Отменить выбор</button>';
+}
+async function acBulkAssignCurator(name){
+ var ids = Object.keys(acState.selected);
+ if(!ids.length) return;
+ var ok = await confirmAction({
+  title: name ? ('Назначить куратора: ' + name) : 'Снять куратора у выбранных',
+  body: 'Клиентов: ' + ids.length + '.' + (name ? '\nКуратор увидит их в своих «Действующих» и в карте клиента.' : ''),
+  confirmLabel: name ? 'Назначить' : 'Снять'
+ });
+ if(!ok) return;
+ var bar = document.getElementById('ac-bulk-bar');
+ if(bar) bar.innerHTML = '<span class="abb-hint">Сохраняю... 0 из ' + ids.length + '</span>';
+ var done = 0, fail = 0;
+ for(var i = 0; i < ids.length; i++){
+  try {
+   var r = await sbFetch('/api/clients?client_id=' + encodeURIComponent(ids[i]), {
+    method: 'PATCH', body: JSON.stringify({ curator_operator: name })
+   });
+   if(r && r.ok) done++; else fail++;
+  } catch(e){ fail++; }
+  if(bar && (i % 5 === 4)) bar.innerHTML = '<span class="abb-hint">Сохраняю... ' + (i+1) + ' из ' + ids.length + '</span>';
+ }
+ acState.selected = {};
+ // инвалидация кэша клиентов — чтобы operator подтянулся заново из Supabase
+ try {
+  var country = (typeof currentCountry!=='undefined'&&currentCountry)||'KZ';
+  delete AC_COUNTRY_CACHE[country];
+  AC_KZ_CACHE = null;
+  if(window._payClients) window._payClients[country] = null;
+ } catch(_){}
+ acLoadKZClients(function(){ acRender(); acUpdateBulkBar(); });
+ showNotif(name ? 'Куратор назначен' : 'Куратор снят', 'Обновлено клиентов: ' + done + (fail ? (', ошибок: ' + fail) : ''));
+}
 function acSetRisk(r){ acState.risk = r || ''; acRender(); }
 function acSetTag(t){ acState.tag = t || ''; acRender(); }
 function acSetSegment(s){ acState.segment = s || ''; acRender(); }
@@ -42088,13 +42344,28 @@ function acReloadPrior(){
 
 function acInit(){
  var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
+ // v823: KB_OP_COLORS — казахстанский хардкод; добавляем операторов текущей страны из
+ // «Сотрудников» (для KG это Malika/Eliza), иначе кураторов KG нет в фильтре.
+ try {
+  var _cn = (typeof currentCountry!=='undefined'&&currentCountry)||'KZ';
+  (employees||[]).forEach(function(e){
+   if(e && String(e.role||'')==='operator' && String(e.country||'').toUpperCase()===_cn && ops.indexOf(e.name)<0) ops.push(e.name);
+  });
+ } catch(_){}
  var sel = document.getElementById('ac-filter-op');
- if(sel && sel.children.length <= 1){
- ops.forEach(function(op){
- var opt = document.createElement('option');
- opt.value = op; opt.textContent = op;
- sel.appendChild(opt);
- });
+ // v823-qa: пересобираем список при каждом заходе — при переключении страны KZ→KG
+ // старый guard оставлял казахстанских операторов и не показывал Малику/Элизу
+ if(sel){
+  while(sel.children.length > 2) sel.removeChild(sel.lastChild); /* два статических: Все + Без куратора */
+  ops.forEach(function(op){
+   var opt = document.createElement('option');
+   opt.value = op; opt.textContent = op;
+   sel.appendChild(opt);
+  });
+  // если выбранного оператора больше нет в списке (сменили страну) — сбросить фильтр
+  if(acState.operator && acState.operator !== '__none' && ops.indexOf(acState.operator) < 0){
+   acState.operator = ''; sel.value = '';
+  } else { sel.value = acState.operator; }
  }
  // v257-fix: дождаться kbLoad чтобы операторы/этапы из канбана корректно
  // подтянулись в карточки клиентов (acGetActiveClients использует kbCards).
@@ -42133,7 +42404,9 @@ function acRender(){
   });
  }
  var filtered = all.filter(function(c){
- if(acState.operator && c.operator !== acState.operator) return false;
+ // v823: «Без куратора» — клиенты без ответственного (их разбирают Малика/Элиза)
+ if(acState.operator === '__none'){ if(c.operator) return false; }
+ else if(acState.operator && c.operator !== acState.operator) return false;
  if(acState.risk && c.risk !== acState.risk) return false;
  if(acState.tag && c.tags.indexOf(acState.tag) < 0) return false;
  if(acState.segment && c.segment !== acState.segment) return false;
@@ -42216,8 +42489,12 @@ function acRender(){
  // Table
  // v253: таблица с группировкой по сегментам (заголовок-строка для каждого сегмента)
  var tbl = document.getElementById('ac-table');
+ // v823: массовое назначение куратора — чекбоксы видят все, кроме роли «оператор»
+ // (оператор и так работает только со своими). Чекбокс только у строк из Supabase (_clientId).
+ var _acCanBulk = !(typeof currentUser !== 'undefined' && currentUser && String(currentUser.role||'').toLowerCase() === 'operator');
+ var _acColspan = _acCanBulk ? 10 : 9;
  if(tbl){
-  var thead = '<thead><tr><th>Клиент</th><th>Имя сервера</th><th class="num">Пользователей</th><th class="num">Абонплата</th><th>Ответственный</th><th>Доступ до</th><th>Риск</th><th>Теги</th><th>Действия</th></tr></thead><tbody>';
+  var thead = '<thead><tr>' + (_acCanBulk ? '<th style="width:26px"></th>' : '') + '<th>Клиент</th><th>Имя сервера</th><th class="num">Пользователей</th><th class="num">Абонплата</th><th>Ответственный</th><th>Доступ до</th><th>Риск</th><th>Теги</th><th>Действия</th></tr></thead><tbody>';
   if(!filtered.length){
    // v550: понятное сообщение вместо «Нет клиентов по фильтру».
    // Корень: данные платежей в коде статичны (январь-март 2026), апрель-май лежат в Supabase
@@ -42239,7 +42516,7 @@ function acRender(){
         + '<div style="font-size:12px;margin-bottom:14px;line-height:1.5">База пуста или данные не загрузились. Нажми ↻ в топбаре чтобы перезагрузить.</div>'
         + '</div>';
    }
-   tbl.innerHTML = thead + '<tr><td colspan="9" style="padding:0;background:transparent">' + msg + '</td></tr></tbody>';
+   tbl.innerHTML = thead + '<tr><td colspan="'+_acColspan+'" style="padding:0;background:transparent">' + msg + '</td></tr></tbody>';
   } else {
    var groups = {};
    AC_SEGMENTS.forEach(function(s){ groups[s.key] = []; });
@@ -42254,7 +42531,7 @@ function acRender(){
     if(!rows.length) return;
     var grpSum = rows.reduce(function(a,c){return a + (c.monthlySum||0);}, 0);
     var grpLic = rows.reduce(function(a,c){return a + (c.monthlyQty||0);}, 0);
-    body += '<tr class="ac-seg-head"><td colspan="9">'
+    body += '<tr class="ac-seg-head"><td colspan="'+_acColspan+'">'
      + '<div class="ac-seg-row">'
      + '<div class="ac-seg-name" style="color:'+s.color+'"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+s.color+';margin-right:6px;vertical-align:middle"></span>'+s.name+' <span style="color:var(--text-soft);font-weight:500">· '+s.desc+'</span></div>'
      + '<div class="ac-seg-stats">'+rows.length+' клиентов · '+grpLic+' лиц. · '+fmtSum(grpSum)+'/мес</div>'
@@ -42284,7 +42561,14 @@ function acRender(){
      }).join('');
      var clientEsc = (c.client || '').replace(/'/g, "\\'").replace(/"/g, '&quot;'); /* v786: двойная кавычка в названии (ТОО "Арай") рвала onclick */
      var hostEscBtn = (c.host || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+     /* v823: чекбокс массового назначения — только строки из Supabase (у static-KZ нет client_id) */
+     var cbTd = '';
+     if(_acCanBulk){
+      var cidEsc = String(c._clientId || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      cbTd = '<td>' + (c._clientId ? ('<input type="checkbox" class="ac-cb" '+(acState.selected[c._clientId]?'checked ':'')+'onclick="event.stopPropagation()" onchange="acToggleSelect(\''+cidEsc+'\', this.checked)">') : '') + '</td>';
+     }
      return '<tr>'
+      + cbTd
       + '<td><b style="color:var(--accent-text,#4CB782);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="acOpenClientCard(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" title="Открыть карту клиента">'+kbEsc(c.client)+'</b></td>'
       + '<td style="font-size:12px;color:var(--text-soft)" title="Имя сервера (код в биллинге) — по нему находим оплаты">'+kbEsc(c.billing_host||c.host||'—')+'</td>'
       + '<td class="num">'+(c.monthlyQty||0)+'</td>'
@@ -42306,6 +42590,8 @@ function acRender(){
  if(typeof acRenderPrefixMerged === 'function') acRenderPrefixMerged();
  // v295: MRR / ARR / Churn / NRR
  try { acRenderMRRStrip(); } catch(_){}
+ // v823: панель массового назначения куратора живёт поверх перерисовок
+ try { acUpdateBulkBar(); } catch(_){}
 }
 
 // v511/v552: ищем client_id в Supabase по имени/хосту.
