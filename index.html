@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v833</title>
+<title>SalesDoc — Финансовый Дашборд v834</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -14788,6 +14788,9 @@ function renderAllPayments() {
  +'</tr>';
  }).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px">Нет записей</td></tr>';
  finRenderHeader();
+ // v834: греем подписанные ссылки всех видимых чеков — клик по «Чек» открывается сразу,
+ // без ожидания холодного сервера (чеков в выдаче единицы, трафик копеечный)
+ try { ps.filter(function(p){ return p.receiptPath; }).slice(0, 30).forEach(function(p){ payReceiptPrefetch(p.id); }); } catch(_){}
 }
 
 // v700: поиск и удаление дублей платежей (один платёж дважды: клиент + сумма + дата)
@@ -15005,7 +15008,8 @@ function quickFilterPayments(label) {
 // поэтому бухгалтер сажала через бот). Теперь пишет в базу и в лист «Доходы» (колонка L)
 // через /api/payments?action=set_seated; при ошибке листа сервер откатывает базу, мы — галку.
 async function togglePaySeated(pid) {
- var p = payments.find(function(x){ return x.id === pid; });
+ /* v834-fix: id числовой, pid из onclick — строка; строгое === никогда не совпадало и кнопка молча не работала */
+ var p = payments.find(function(x){ return String(x.id) === String(pid); });
  if (!p) return;
  var target = !p.seated;
  var sbId = p._sbId || (typeof p.id === 'string' && p.id.length > 20 ? p.id : null);
@@ -15037,7 +15041,7 @@ async function togglePaySeated(pid) {
 }
 
 function togglePayService(pid) {
- var p = payments.find(function(x){ return x.id === pid; });
+ var p = payments.find(function(x){ return String(x.id) === String(pid); }); /* v834-fix: число vs строка */
  if (!p) return;
  p.serviceWritten = !p.serviceWritten;
  renderAllPayments();
@@ -15045,7 +15049,7 @@ function togglePayService(pid) {
 }
 
 function inspectPayRow(pid) {
- var p = payments.find(function(x){ return x.id===pid; });
+ var p = payments.find(function(x){ return String(x.id) === String(pid); }); /* v834-fix: число vs строка */
  if (!p || !p._rawRow) { showNotif('Нет данных', 'Только для записей из Google Таблицы'); return; }
  var hdr = ['Дата','Компания','Статья','Лицензии','Кол-во','Менеджер','Тариф','Цена','Период','Сумма','Банк','Оплата посажена','','Сумма остатка','Дата активации','Ссылка','Комментарий','Тех поддержка','Итого'];
  var div = document.createElement('div');
