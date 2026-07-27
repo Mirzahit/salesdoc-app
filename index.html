@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v832</title>
+<title>SalesDoc — Финансовый Дашборд v833</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8027,6 +8027,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
  <div class="fsearch"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--text-muted)"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg><input id="fin-search" oninput="renderAllPayments()" placeholder="Поиск по клиенту…"></div>
  <div class="fseg" id="fin-seg"><button class="on" onclick="finSeg(this,'all')">Все</button><button onclick="finSeg(this,'yes')">Списано</button><button onclick="finSeg(this,'no')">Не списано</button></div>
+ <!-- v833: фильтр посадки — раньше был только скрытый select (DS-редизайн спрятал), бухгалтер не мог отфильтровать -->
+ <div class="fseg" id="fin-seg-seat"><button class="on" onclick="finSegSeat(this,'all')">Все</button><button onclick="finSegSeat(this,'yes')">Посажены</button><button onclick="finSegSeat(this,'no')">Не посажены</button></div>
  <select id="filter-employee" class="form-select" style="font-size:11px;padding:4px 10px" onchange="renderAllPayments()">
  <option value="">Все менеджеры</option>
  </select>
@@ -10754,7 +10756,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="form-row single"><div class="form-group full"><label class="form-label">Комментарий</label><input class="form-input" id="p-comment" placeholder="Примечание..."></div></div>
  <!-- v825: чек ОБЯЗАТЕЛЕН — бухгалтер сверяет оплату с банком по этому файлу (хранится только в программе) -->
  <div class="form-row single"><div class="form-group full"><label class="form-label">Чек основной оплаты — скрин перевода (обязательно)</label>
-  <input type="file" id="p-receipt-input" accept="image/*,application/pdf" style="display:none" onchange="payReceiptPick(this)">
+  <input type="file" id="p-receipt-input" accept="image/*,.pdf,application/pdf" style="display:none" onchange="payReceiptPick(this)"><!-- v833: .pdf явно — на Windows без расширения PDF-файлы в диалоге бывают серыми -->
   <div id="p-receipt-box"></div>
  </div></div>
  </div>
@@ -14590,6 +14592,12 @@ function finSeg(btn,val){
     var fs=document.getElementById('filter-service'); if(fs) fs.value=val; renderAllPayments();
   }catch(e){}
 }
+// v833: сегмент «Посадка» — пишет в скрытый #filter-seated (его читают renderAllPayments и отчёты)
+function finSegSeat(btn,val){
+  try{ var seg=document.getElementById('fin-seg-seat'); if(seg){ Array.prototype.forEach.call(seg.querySelectorAll('button'),function(b){b.classList.remove('on');}); btn.classList.add('on'); }
+    var fs=document.getElementById('filter-seated'); if(fs) fs.value=val; renderAllPayments();
+  }catch(e){}
+}
 function finRenderHeader(){
  try{
   if(typeof getPeriodPayments!=='function'||document.getElementById('fin-hero-big')==null) return;
@@ -14646,6 +14654,10 @@ function renderAllPayments() {
  const fSvc = document.getElementById('filter-service')?.value || 'all';
  const fBank = document.getElementById('filter-bank')?.value || '';
  const fQ = (document.getElementById('fin-search')?.value || '').trim().toLowerCase();
+ // v833: подсветка сегмента «Посадка» синхронно со значением (quickFilterPayments ставит его программно)
+ try { var _segSeat = document.getElementById('fin-seg-seat');
+  if(_segSeat){ var _vals = ['all','yes','no']; Array.prototype.forEach.call(_segSeat.querySelectorAll('button'), function(b, i){ b.classList.toggle('on', _vals[i] === fSeat); }); }
+ } catch(_){}
 
  // Фильтруем по текущему выбранному периоду (Неделя / Месяц / Квартал / Год)
  let ps = getPeriodPayments(currentPeriod).slice().reverse();
@@ -14770,7 +14782,7 @@ function renderAllPayments() {
  // v825: чек — путь в onclick не встраиваем, только id (паттерн _pid); ссылку подписывает /api/receipts.
  // Кнопка нейтральная (зелёный у нас значит «посажена/списана», а чек — просто файл)
  /* v831: кнопку «Чек» было не разглядеть (мелкий контур) — теперь заметный индиго-бейдж в размере «Посажена» */
- +'<td>'+(p.receiptPath ? '<button onclick="openPayReceipt(\''+_pid+'\')" class="seated-badge" style="background:rgba(94,106,210,.16);color:#828FF7;border:1px solid rgba(94,106,210,.4)" title="Открыть чек — скрин перевода">Чек</button>' : '<span style="color:var(--text-muted)" title="Чек не требовался — оплата внесена не через программу">—</span>')+'</td>'
+ +'<td>'+(p.receiptPath ? '<button onclick="openPayReceipt(\''+_pid+'\')" onmouseenter="payReceiptPrefetch(\''+_pid+'\')" class="seated-badge" style="background:rgba(94,106,210,.16);color:#828FF7;border:1px solid rgba(94,106,210,.4)" title="Открыть чек — скрин перевода">Чек</button>' : '<span style="color:var(--text-muted)" title="Чек не требовался — оплата внесена не через программу">—</span>')+'</td>'
  +'<td style="color:var(--text-muted);font-size:11px">'+sanitize(p.comment||'—')+'</td>'
  +'<td><button onclick="inspectPayRow(\''+_pid+'\')" style="font-size:9px;padding:1px 6px;border-radius:10px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer" title="Просмотр сырых данных из таблицы"></button></td>'
  +'</tr>';
@@ -15014,7 +15026,13 @@ async function togglePaySeated(pid) {
  } catch (e) {
   p.seated = !target;
   renderAllPayments(); renderAll();
-  showNotif('Не сохранилось', 'Посадка не записалась: ' + (e.message || e) + '. Галка возвращена как было — попробуйте ещё раз.');
+  // v833: ошибка посадки — модалкой с кнопкой, а не тостом на 3.5 сек (бухгалтер не успевала
+  // прочитать и думала «кнопка не работает»)
+  if(typeof confirmAction === 'function'){
+   confirmAction({ title: 'Посадка не записалась', body: String(e.message || e) + '\n\nГалка возвращена как было. Попробуйте ещё раз — если повторится, скажите администратору.', confirmLabel: 'Понятно', hideCancel: true });
+  } else {
+   showNotif('Не сохранилось', 'Посадка не записалась: ' + (e.message || e));
+  }
  }
 }
 
@@ -39821,7 +39839,7 @@ function payExtrasRender(){
     + cfg.banks.map(function(b){ return '<button type="button" class="pp-chip' + (ex.bank === b ? ' on' : '') + '" data-v="' + _escHtml(b) + '" onclick="payChip(this)">' + _escHtml(b) + '</button>'; }).join('')
     + '</div></div></div>';
   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Чек услуги</label>'
-    + '<input type="file" id="p-ex' + i + '-receipt-input" accept="image/*,application/pdf" style="display:none" onchange="payExtraReceiptPick(' + i + ',this)">'
+    + '<input type="file" id="p-ex' + i + '-receipt-input" accept="image/*,.pdf,application/pdf" style="display:none" onchange="payExtraReceiptPick(' + i + ',this)">'
     + '<div id="p-ex' + i + '-receipt-box"></div>'
     + '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Если банк тот же, что у основной оплаты — можно не прикладывать, пойдёт общий чек. Если другой — приложите чек этого перевода.</div>'
     + '</div></div>';
@@ -40068,6 +40086,27 @@ function payReceiptPreviewOpen(url, caption){
  bg.onclick = function(){ bg.remove(); };
  document.body.appendChild(bg);
 }
+// v833: чек открывался долго (каждый раз — serverless + подпись + загрузка файла).
+// Кэшируем подписанные ссылки (живут час, держим 50 мин), греем по наведению на кнопку
+// и заранее подгружаем соседние чеки в листалке — переход стрелкой мгновенный.
+window._rcptUrlCache = {};
+async function payReceiptSignedUrl(path){
+ var c = window._rcptUrlCache[path];
+ if(c && (Date.now() - c.ts) < 50 * 60 * 1000) return c.url;
+ var d = await sbFetch('/api/receipts?path=' + encodeURIComponent(path));
+ if(!d || !d.ok || !d.url) throw new Error((d && d.error) || 'нет ссылки');
+ window._rcptUrlCache[path] = { url: d.url, ts: Date.now() };
+ return d.url;
+}
+function payReceiptPrefetch(pid){
+ try {
+  var p = (typeof payments !== 'undefined' ? payments : []).filter(function(x){ return String(x.id) === String(pid); })[0];
+  if(!p || !p.receiptPath) return;
+  payReceiptSignedUrl(p.receiptPath).then(function(u){
+   if(!/\.pdf(\?|$)/.test(p.receiptPath)){ var im = new Image(); im.src = u; } // браузер положит картинку в кэш
+  }).catch(function(){});
+ } catch(_){}
+}
 // v826: просмотрщик чеков для бухгалтера — листание стрелками (кнопки и клавиатура)
 // по всем строкам С ЧЕКАМИ в текущем виде таблицы. Сверка пачки переводов подряд,
 // не тыкая каждую строку отдельно. PDF показывается во фрейме.
@@ -40118,20 +40157,21 @@ async function payReceiptViewerShow(list, idx){
  if(list.length > 1){ bg.appendChild(mkArrow('‹', -1, 'left')); bg.appendChild(mkArrow('›', 1, 'right')); }
  document.body.appendChild(bg);
  try {
-  var d = await sbFetch('/api/receipts?path=' + encodeURIComponent(p.receiptPath));
-  if(!d || !d.ok || !d.url) throw new Error((d && d.error) || 'нет ссылки');
+  var url = await payReceiptSignedUrl(p.receiptPath); // v833: кэш ссылок — повторное открытие мгновенно
   content.textContent = '';
   if(/\.pdf(\?|$)/.test(p.receiptPath)){
    var fr = document.createElement('iframe');
-   fr.src = d.url; // signed URL от нашего API
+   fr.src = url; // signed URL от нашего API
    fr.style.cssText = 'width:min(920px,92vw);height:84vh;border:none;border-radius:8px;background:#fff';
    content.appendChild(fr);
   } else {
    var img = document.createElement('img');
-   img.src = d.url;
+   img.src = url;
    img.style.cssText = 'max-width:92vw;max-height:84vh;border-radius:8px;box-shadow:0 24px 64px rgba(0,0,0,.6)';
    content.appendChild(img);
   }
+  // v833: греем соседей — стрелка влево/вправо открывает следующий чек без ожидания
+  [list[idx - 1], list[idx + 1]].forEach(function(n){ if(n) payReceiptPrefetch(n.id); });
  } catch(e){
   content.textContent = 'Чек не открылся: ' + (e.message || e);
  }
