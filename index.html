@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v834</title>
+<title>SalesDoc — Финансовый Дашборд v835</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -34286,7 +34286,22 @@ var ROUTE_STAGES_ORDER = ['Новый','Настройка','Обучение','
 var ROUTE_OPERATORS = ['Айдос','Акбар','Самат','Нурай'];
 // v606: гарантируем, что текущее значение всегда в списке выбора — иначе select при открытии
 // молча перезапишет на первого по blur. base — операторы клиентов (НЕ интеграторы из routeOperators).
-function _routeOpChoices(cur){ var base=ROUTE_OPERATORS.slice(); if(cur && base.indexOf(cur)<0) base.push(cur); return base; }
+// v835: список ответственных — ПО СТРАНЕ клиента (KZ-хардкод показывал казахстанских
+// операторов на кыргызских картах). Источник — «Сотрудники» (role=operator, страна);
+// ROUTE_OPERATORS остаётся фолбэком для KZ и на случай незагруженных сотрудников.
+function _routeOpChoices(cur, country){
+ var cn = String(country || '').toUpperCase();
+ if(cn !== 'KZ' && cn !== 'KG') cn = ((typeof currentCountry !== 'undefined' && currentCountry) ? String(currentCountry) : 'KZ').toUpperCase();
+ var base = [];
+ try {
+  (employees || []).forEach(function(e){
+   if(e && String(e.role || '') === 'operator' && String(e.country || '').toUpperCase() === cn && e.name && base.indexOf(e.name) < 0) base.push(e.name);
+  });
+ } catch(_){}
+ if(!base.length) base = ROUTE_OPERATORS.slice();
+ if(cur && base.indexOf(cur) < 0) base.push(cur);
+ return base;
+}
 
 // v445: универсальная кнопка «Передать» с поповером. Используется в шапке карт Внедрения и Интеграции.
 // containerId — id <div> в шапке, currentOp — текущий оператор (или пусто), choices — массив строк,
@@ -34548,9 +34563,9 @@ function _routeRenderCardHead(){
  }
  // v445: кнопка «Передать» в шапке (только для реальных карт Внедрения, не синтетических)
  if(!isSynthetic){
-  _renderAssignButton('route-card-assign', card.operator, ROUTE_OPERATORS, function(newOp){
+  _renderAssignButton('route-card-assign', card.operator, _routeOpChoices(card.operator, card.country), function(newOp){
    _assignRouteOperator(card, newOp);
-  }, (typeof sdOpLoadCounts === 'function') ? sdOpLoadCounts() : null); // v820: нагрузка
+  }, (typeof sdOpLoadCounts === 'function') ? sdOpLoadCounts() : null); // v820: нагрузка; v835: операторы по стране карты
  } else {
   var b = document.getElementById('route-card-assign');
   if(b) b.replaceChildren();
@@ -35915,9 +35930,10 @@ async function _routeRenderAmo(){
 
  // Секция СДЕЛКА
  addSection('Сделка');
- addField('Ответственный', card.operator, { editable:true, entity:'card', field:'operator', type:'select', choices:_routeOpChoices(card.operator), rawValue:card.operator });
+ addField('Ответственный', card.operator, { editable:true, entity:'card', field:'operator', type:'select', choices:_routeOpChoices(card.operator, card.country), rawValue:card.operator });
  addField('Сумма оплаты', card.payment_amount ? Number(card.payment_amount).toLocaleString('ru-RU').replace(/,/g, ' ') + ' ' + ((card.country==='KG')?'сом':'₸') : null, { price:true, editable:true, entity:'card', field:'payment_amount', type:'number', rawValue:card.payment_amount });
- addField('Менеджер продаж', card.sales_manager, { editable:true, entity:'card', field:'sales_manager', type:'select', choices:['Мирзахит','Юлия','Айдос Хапез'], rawValue:card.sales_manager });
+ // v835: менеджеры — по стране карты (список из конфига оплат, он уже страно-зависимый)
+ addField('Менеджер продаж', card.sales_manager, { editable:true, entity:'card', field:'sales_manager', type:'select', choices:(function(){ var l = (typeof PAYBOT_CFG !== 'undefined' && PAYBOT_CFG[String(card.country||'KZ').toUpperCase()] && PAYBOT_CFG[String(card.country||'KZ').toUpperCase()].managers) || ['Мирзахит','Юлия','Айдос Хапез']; l = l.slice(); if(card.sales_manager && l.indexOf(card.sales_manager) < 0) l.push(card.sales_manager); return l; })(), rawValue:card.sales_manager });
  addField('Категория', _amoLabelCategory(card.payment_category), { editable:true, entity:'card', field:'payment_category', type:'select', choices:['Нов внедрение','Нов интеграция','абон. плата','доп. лицензии','новый клиент','доработка'], rawValue:card.payment_category });
  addField('Создана', card.created_at ? new Date(card.created_at).toLocaleDateString('ru-RU') : null);
 
@@ -35939,7 +35955,7 @@ async function _routeRenderAmo(){
  // v391: «Куратор внедрения» — тот кто закреплён за клиентом ПОСЛЕ активации (для продлений
  // в «Мои клиенты»). «Ответственный» (выше) — кто ведёт сейчас в Маршруте. Часто это один
  // человек, но могут отличаться (например брал Айдос, передаёт после внедрения Акбару).
- addField('Куратор после активации', cl.curator_operator, { canHide:true, editable:true, entity:'client', field:'curator_operator', type:'select', choices:_routeOpChoices(cl.curator_operator), rawValue:cl.curator_operator });
+ addField('Куратор после активации', cl.curator_operator, { canHide:true, editable:true, entity:'client', field:'curator_operator', type:'select', choices:_routeOpChoices(cl.curator_operator, cl.country || card.country), rawValue:cl.curator_operator });
  // Имя сервера (логин в биллинге) — связь с оттоком/биллингом по постоянному коду (v604).
  addField('Имя сервера', cl.billing_host, { canHide:true, editable:true, entity:'client', field:'billing_host', type:'text', rawValue:cl.billing_host });
 
