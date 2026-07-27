@@ -16,9 +16,10 @@ const BUCKET = 'payment-receipts';
 
 // Скрин после клиентского сжатия ~100-500КБ; 4МБ — щедрый потолок (лимит тела Vercel 4.5МБ)
 const MAX_BASE64_LEN = 4 * 1024 * 1024;
-const ALLOWED_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+// v826: + PDF — банки (МБанк и др.) отдают чеки PDF-файлами
+const ALLOWED_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' };
 // Путь строго нашего формата — защита от traversal при подписи ссылки
-const PATH_RE = /^(KZ|KG)\/\d{4}\/\d{2}\/[a-f0-9-]{36}\.(jpg|png|webp)$/;
+const PATH_RE = /^(KZ|KG)\/\d{4}\/\d{2}\/[a-f0-9-]{36}\.(jpg|png|webp|pdf)$/;
 
 async function readBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -51,7 +52,7 @@ export default async function handler(req, res) {
       const country = String(body.country || '').toUpperCase();
       if (country !== 'KZ' && country !== 'KG') return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
       const ext = ALLOWED_MIME[body.mime];
-      if (!ext) return res.status(400).json({ ok: false, error: 'формат должен быть JPEG/PNG/WebP' });
+      if (!ext) return res.status(400).json({ ok: false, error: 'формат должен быть JPEG/PNG/WebP/PDF' });
       const b64 = String(body.image || '');
       if (!b64) return res.status(400).json({ ok: false, error: 'нет изображения' });
       if (b64.length > MAX_BASE64_LEN) return res.status(413).json({ ok: false, error: 'чек слишком большой (после сжатия должен быть до ~3МБ)' });

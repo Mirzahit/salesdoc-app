@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v825</title>
+<title>SalesDoc — Финансовый Дашборд v826</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10726,7 +10726,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="form-row single"><div class="form-group full"><label class="form-label">Комментарий</label><input class="form-input" id="p-comment" placeholder="Примечание..."></div></div>
  <!-- v825: чек ОБЯЗАТЕЛЕН — бухгалтер сверяет оплату с банком по этому файлу (хранится только в программе) -->
  <div class="form-row single"><div class="form-group full"><label class="form-label">Чек основной оплаты — скрин перевода (обязательно)</label>
-  <input type="file" id="p-receipt-input" accept="image/*" style="display:none" onchange="payReceiptPick(this)">
+  <input type="file" id="p-receipt-input" accept="image/*,application/pdf" style="display:none" onchange="payReceiptPick(this)">
   <div id="p-receipt-box"></div>
  </div></div>
  </div>
@@ -17220,7 +17220,17 @@ async function saveRecord() {
  var colAll = payCollectAll();
  if(!colAll) return;
  var rows = colAll.rows;
- if(!window._payReceipt){ sdToast('Приложите чек — скрин перевода'); return; }
+ if(!window._payReceipt){
+  // v826: кнопку чека не находили — показываем где она: скролл + подсветка
+  sdToast('Приложите чек — скрин перевода');
+  var _rb = document.getElementById('p-receipt-box');
+  if(_rb){
+   _rb.scrollIntoView({ behavior: 'smooth', block: 'center' });
+   _rb.style.outline = '2px solid #EF4444'; _rb.style.outlineOffset = '3px'; _rb.style.borderRadius = '10px';
+   setTimeout(function(){ _rb.style.outline = ''; }, 2500);
+  }
+  return;
+ }
  if(window._paySavingNow) return;
  window._paySavingNow = true;
  // v823-qa: Apps Script может холодно стартовать 10-20 сек — блокируем кнопку с честным
@@ -39562,6 +39572,14 @@ function payRecalc(){
   + '<div class="ppb-formula">' + qty + ' лиц. × ' + payFmtN(unit) + ' × ' + mult + ' мес' + (manual > 0 ? ' · своя цена' : ' · прайс «' + (mode === 'old' ? 'старый' : 'новый') + '»') + '</div>';
  if(daysV) h += '<div class="ppb-formula">+ ' + daysV + ': ' + qty + ' × ' + payFmtN(daysUnit) + ' = ' + payFmtN(daysSum) + '</div>';
  if(exCnt) h += '<div class="ppb-formula">+ услуги: ' + exCnt + ' шт = ' + payFmtN(exSum) + '</div>';
+ // v826: при «другой сумме» показываем разницу с планом — опечатка в фактической сумме
+ // (кейс kutnan: ввели 180698 вместо 180700) станет видна сразу
+ var factV = parseFloat((document.getElementById('p-fact') || {}).value) || 0;
+ if(payChipVal('p-factmode') === 'other' && factV > 0){
+  var diffF = plan - factV;
+  h += '<div class="ppb-formula">факт за лицензии: ' + payFmtN(factV)
+    + (diffF > 0 ? ' · меньше плана на ' + payFmtN(diffF) : (diffF < 0 ? ' · больше плана на ' + payFmtN(-diffF) : ' · ровно по плану')) + '</div>';
+ }
  box.innerHTML = h;
 }
 
@@ -39697,7 +39715,7 @@ function payExtrasRender(){
     + cfg.banks.map(function(b){ return '<button type="button" class="pp-chip' + (ex.bank === b ? ' on' : '') + '" data-v="' + _escHtml(b) + '" onclick="payChip(this)">' + _escHtml(b) + '</button>'; }).join('')
     + '</div></div></div>';
   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Чек услуги</label>'
-    + '<input type="file" id="p-ex' + i + '-receipt-input" accept="image/*" style="display:none" onchange="payExtraReceiptPick(' + i + ',this)">'
+    + '<input type="file" id="p-ex' + i + '-receipt-input" accept="image/*,application/pdf" style="display:none" onchange="payExtraReceiptPick(' + i + ',this)">'
     + '<div id="p-ex' + i + '-receipt-box"></div>'
     + '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Если банк тот же, что у основной оплаты — можно не прикладывать, пойдёт общий чек. Если другой — приложите чек этого перевода.</div>'
     + '</div></div>';
@@ -39773,38 +39791,51 @@ function payCollectAll(){
 // ---------- Чек (скрин перевода) — обязателен, хранится в приватном бакете ----------
 window._payReceipt = null; // { b64, mime, preview, name, uploadedPath }
 
+// Миниатюра чека: картинка или бейдж «PDF» (v826)
+function payReceiptThumb(rc, size, onOpen){
+ if(rc.isPdf){
+  var pdf = document.createElement('div');
+  pdf.style.cssText = 'width:'+size+'px;height:'+size+'px;border-radius:6px;background:rgba(239,68,68,.12);color:#EF4444;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none';
+  pdf.textContent = 'PDF';
+  return pdf;
+ }
+ var img = document.createElement('img');
+ img.src = rc.preview; // dataURL, собран нами из canvas — безопасен
+ img.style.cssText = 'width:'+size+'px;height:'+size+'px;object-fit:cover;border-radius:6px;cursor:pointer;flex:none';
+ img.title = 'Открыть крупнее';
+ if(onOpen) img.onclick = onOpen;
+ return img;
+}
 function payReceiptRender(){
  var box = document.getElementById('p-receipt-box');
  if(!box) return;
  box.innerHTML = '';
  if(window._payReceipt){
+  var rc = window._payReceipt;
   var wrap = document.createElement('div');
   wrap.style.cssText = 'display:flex;align-items:center;gap:10px;border:1px solid var(--border-faint);border-radius:10px;padding:8px 10px';
-  var img = document.createElement('img');
-  img.src = window._payReceipt.preview; // dataURL, собран нами из canvas — безопасен
-  img.style.cssText = 'width:44px;height:44px;object-fit:cover;border-radius:6px;cursor:pointer;flex:none';
-  img.title = 'Открыть крупнее';
-  img.onclick = function(){ payReceiptPreviewOpen(window._payReceipt.preview); };
+  wrap.appendChild(payReceiptThumb(rc, 44, function(){ if(!rc.isPdf) payReceiptPreviewOpen(rc.preview); }));
   var name = document.createElement('span');
   name.style.cssText = 'font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1';
-  name.textContent = window._payReceipt.name || 'чек';
+  name.textContent = rc.name || 'чек';
   var del = document.createElement('button');
   del.type = 'button';
   del.style.cssText = 'border:none;background:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:2px 6px;flex:none';
   del.textContent = '×';
   del.title = 'Убрать чек';
   del.onclick = function(){ payReceiptClear(); };
-  wrap.appendChild(img); wrap.appendChild(name); wrap.appendChild(del);
+  wrap.appendChild(name); wrap.appendChild(del);
   box.appendChild(wrap);
  } else {
+  // v826: кнопку было не найти (мелкий чип) — теперь заметная зона на всю ширину
   var btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'pp-chip';
-  btn.textContent = 'Приложить чек';
+  btn.style.cssText = 'width:100%;padding:14px;border:1px dashed var(--accent, #5E6AD2);border-radius:10px;background:rgba(94,106,210,.08);color:var(--accent, #5E6AD2);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit';
+  btn.textContent = 'Приложить чек — фото, скрин или PDF';
   btn.onclick = function(){ var inp = document.getElementById('p-receipt-input'); if(inp) inp.click(); };
-  var hint = document.createElement('span');
-  hint.style.cssText = 'font-size:11px;color:var(--text-muted);margin-left:10px';
-  hint.textContent = 'или просто нажмите Ctrl+V, если скрин скопирован';
+  var hint = document.createElement('div');
+  hint.style.cssText = 'font-size:11px;color:var(--text-muted);margin-top:5px';
+  hint.textContent = 'Обязательно. Можно просто нажать Ctrl+V, если скрин скопирован.';
   box.appendChild(btn); box.appendChild(hint);
  }
 }
@@ -39821,7 +39852,15 @@ function payReceiptPick(input){
 // HEIC с айфона canvas не декодирует — честный тост «сохраните как JPG/скрин».
 // v825.1: общая для основного чека и чеков услуг; done(объект-чек) при успехе.
 function payReceiptProcessFile(file, done){
- if(!file || (file.type && !/^image\//.test(file.type))){ sdToast('Нужно изображение (JPG/PNG)'); return; }
+ // v826: PDF-чеки (МБанк и др. отдают PDF) — грузим как есть, без canvas
+ if(file && file.type === 'application/pdf'){
+  if(file.size > 3 * 1024 * 1024){ sdToast('PDF слишком большой — до 3 МБ'); return; }
+  var rPdf = new FileReader();
+  rPdf.onload = function(){ done({ b64: String(rPdf.result).split(',')[1], mime: 'application/pdf', preview: null, isPdf: true, name: file.name || 'чек.pdf', uploadedPath: null }); };
+  rPdf.readAsDataURL(file);
+  return;
+ }
+ if(!file || (file.type && !/^image\//.test(file.type))){ sdToast('Нужно изображение (JPG/PNG) или PDF'); return; }
  var reader = new FileReader();
  reader.onload = function(){
   var dataUrl = reader.result;
@@ -39871,10 +39910,7 @@ function payExtraReceiptRender(i){
  if(rc){
   var wrap = document.createElement('div');
   wrap.style.cssText = 'display:flex;align-items:center;gap:10px;border:1px solid var(--border-faint);border-radius:10px;padding:6px 10px';
-  var img = document.createElement('img');
-  img.src = rc.preview;
-  img.style.cssText = 'width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer;flex:none';
-  img.onclick = function(){ payReceiptPreviewOpen(rc.preview); };
+  wrap.appendChild(payReceiptThumb(rc, 36, function(){ if(!rc.isPdf) payReceiptPreviewOpen(rc.preview); }));
   var name = document.createElement('span');
   name.style.cssText = 'font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1';
   name.textContent = rc.name || 'чек';
@@ -39884,13 +39920,13 @@ function payExtraReceiptRender(i){
   del.textContent = '×';
   del.title = 'Убрать чек услуги';
   del.onclick = function(){ payExtraReceiptClear(i); };
-  wrap.appendChild(img); wrap.appendChild(name); wrap.appendChild(del);
+  wrap.appendChild(name); wrap.appendChild(del);
   box.appendChild(wrap);
  } else {
   var btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'pp-chip';
-  btn.textContent = 'Приложить чек услуги';
+  btn.style.cssText = 'width:100%;padding:10px;border:1px dashed var(--border);border-radius:10px;background:none;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+  btn.textContent = 'Приложить чек услуги — фото, скрин или PDF';
   btn.onclick = function(){ var inp = document.getElementById('p-ex' + i + '-receipt-input'); if(inp) inp.click(); };
   box.appendChild(btn);
  }
@@ -39909,7 +39945,7 @@ document.addEventListener('paste', function(e){
   }
  }
 });
-// Просмотр картинки поверх всего (и превью в форме, и чек из таблицы оплат)
+// Просмотр картинки поверх всего (превью в форме — одиночный, без листания)
 function payReceiptPreviewOpen(url, caption){
  var bg = document.createElement('div');
  bg.style.cssText = 'position:fixed;inset:0;z-index:1000020;background:rgba(0,0,0,.85);display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;cursor:zoom-out';
@@ -39926,17 +39962,88 @@ function payReceiptPreviewOpen(url, caption){
  bg.onclick = function(){ bg.remove(); };
  document.body.appendChild(bg);
 }
-// Чек из таблицы оплат: по id платежа получаем временную подписанную ссылку
-async function openPayReceipt(pid){
- var p = (typeof payments !== 'undefined' ? payments : []).filter(function(x){ return String(x.id) === String(pid); })[0];
- if(!p || !p.receiptPath){ sdToast('У этой оплаты нет чека'); return; }
+// v826: просмотрщик чеков для бухгалтера — листание стрелками (кнопки и клавиатура)
+// по всем строкам С ЧЕКАМИ в текущем виде таблицы. Сверка пачки переводов подряд,
+// не тыкая каждую строку отдельно. PDF показывается во фрейме.
+async function payReceiptViewerShow(list, idx){
+ var old = document.getElementById('pay-rv'); if(old) old.remove();
+ var p = list[idx];
+ if(!p) return;
+ var bg = document.createElement('div');
+ bg.id = 'pay-rv';
+ bg.style.cssText = 'position:fixed;inset:0;z-index:1000020;background:rgba(0,0,0,.88);display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center';
+ var content = document.createElement('div');
+ content.style.cssText = 'display:flex;align-items:center;justify-content:center;max-width:92vw;max-height:84vh;min-width:min(400px,80vw);min-height:200px';
+ content.textContent = 'Загружаю чек...';
+ content.style.color = 'rgba(255,255,255,.7)';
+ content.style.fontSize = '13px';
+ var cap = document.createElement('div');
+ cap.style.cssText = 'font-size:13px;color:rgba(255,255,255,.85);max-width:92vw;text-align:center';
+ cap.textContent = p.client + ' · ' + fmtFull(p.amount) + ' · ' + (p.bank || p.method || '—') + ' · ' + p.date;
+ var cap2 = document.createElement('div');
+ cap2.style.cssText = 'font-size:11px;color:rgba(255,255,255,.55);max-width:92vw;text-align:center';
+ cap2.textContent = 'Чек ' + (idx + 1) + ' из ' + list.length + (list.length > 1 ? ' — листайте стрелками' : '') + '. Чек может быть общим на несколько записей одной оплаты.';
+ function nav(delta){ var n = idx + delta; if(n >= 0 && n < list.length) payReceiptViewerShow(list, n); }
+ function mkArrow(txt, delta, side){
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = txt;
+  b.style.cssText = 'position:fixed;top:50%;transform:translateY(-50%);' + side + ':18px;width:44px;height:64px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.4);color:#fff;font-size:22px;cursor:pointer;z-index:1000021';
+  b.disabled = (delta < 0 && idx === 0) || (delta > 0 && idx === list.length - 1);
+  if(b.disabled) b.style.opacity = '.25';
+  b.onclick = function(e){ e.stopPropagation(); nav(delta); };
+  return b;
+ }
+ function keyHandler(e){
+  // stopPropagation: под оверлеем висят свои Esc-хендлеры (поиск, карточки) — не задеваем их;
+  // preventDefault на стрелках — чтобы не скроллилась страница под просмотрщиком
+  if(e.key === 'Escape'){ e.stopPropagation(); e.preventDefault(); cleanup(); }
+  else if(e.key === 'ArrowLeft'){ e.stopPropagation(); e.preventDefault(); nav(-1); }
+  else if(e.key === 'ArrowRight'){ e.stopPropagation(); e.preventDefault(); nav(1); }
+ }
+ function cleanup(){ document.removeEventListener('keydown', keyHandler, true); window._payRvKey = null; bg.remove(); }
+ // QA v826: при перелистывании payReceiptViewerShow вызывается заново — снимаем слушатель
+ // прошлого показа, иначе каждое нажатие стрелки плодит слушатели лавинообразно
+ if(window._payRvKey) document.removeEventListener('keydown', window._payRvKey, true);
+ window._payRvKey = keyHandler;
+ document.addEventListener('keydown', keyHandler, true);
+ bg.onclick = function(e){ if(e.target === bg || e.target === content) cleanup(); };
+ bg.appendChild(content); bg.appendChild(cap); bg.appendChild(cap2);
+ if(list.length > 1){ bg.appendChild(mkArrow('‹', -1, 'left')); bg.appendChild(mkArrow('›', 1, 'right')); }
+ document.body.appendChild(bg);
  try {
   var d = await sbFetch('/api/receipts?path=' + encodeURIComponent(p.receiptPath));
-  if(!d || !d.ok || !d.url){ sdToast('Чек не открылся' + ((d && d.error) ? (': ' + d.error) : '')); return; }
-  // UX v825: один чек может покрывать несколько записей одной оплаты (лицензия + услуги) —
-  // подписываем, чтобы бухгалтер не решил «суммы не бьются»
-  payReceiptPreviewOpen(d.url, p.client + ' — запись на ' + fmtFull(p.amount) + '. Чек может быть общим на несколько записей одной оплаты (лицензия + услуги).');
- } catch(e){ sdToast('Чек не открылся: ' + (e.message || e)); }
+  if(!d || !d.ok || !d.url) throw new Error((d && d.error) || 'нет ссылки');
+  content.textContent = '';
+  if(/\.pdf(\?|$)/.test(p.receiptPath)){
+   var fr = document.createElement('iframe');
+   fr.src = d.url; // signed URL от нашего API
+   fr.style.cssText = 'width:min(920px,92vw);height:84vh;border:none;border-radius:8px;background:#fff';
+   content.appendChild(fr);
+  } else {
+   var img = document.createElement('img');
+   img.src = d.url;
+   img.style.cssText = 'max-width:92vw;max-height:84vh;border-radius:8px;box-shadow:0 24px 64px rgba(0,0,0,.6)';
+   content.appendChild(img);
+  }
+ } catch(e){
+  content.textContent = 'Чек не открылся: ' + (e.message || e);
+ }
+}
+// Чек из таблицы оплат: собираем все строки с чеками в текущем виде таблицы и открываем листалку
+function openPayReceipt(pid){
+ var ids = Array.prototype.map.call(document.querySelectorAll('#all-payments tr[data-pay-id]'), function(tr){ return tr.getAttribute('data-pay-id'); });
+ var byId = {};
+ (typeof payments !== 'undefined' ? payments : []).forEach(function(x){ byId[String(x.id)] = x; });
+ var list = ids.map(function(id){ return byId[String(id)]; }).filter(function(p){ return p && p.receiptPath; });
+ var idx = -1;
+ for(var i = 0; i < list.length; i++){ if(String(list[i].id) === String(pid)){ idx = i; break; } }
+ if(idx < 0){
+  var p = byId[String(pid)];
+  if(!p || !p.receiptPath){ sdToast('У этой оплаты нет чека'); return; }
+  list = [p]; idx = 0;
+ }
+ payReceiptViewerShow(list, idx);
 }
 
 async function ttQaSave(){
