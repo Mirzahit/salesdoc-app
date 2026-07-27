@@ -26,7 +26,7 @@ const ALLOWED_PATCH_FIELDS = [
   'paid_at', 'company_name', 'client_id', 'category', 'category_raw',
   'amount', 'amount_planned', 'currency', 'qty', 'price', 'period_months',
   'bank', 'manager_name', 'tech_support', 'seated', 'activation_date',
-  'period_start_raw', 'comment', 'notes'
+  'period_start_raw', 'comment', 'notes', 'receipt_path'
 ];
 
 function _normName(s) {
@@ -444,7 +444,7 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
       const pageRows = await sbSelect('payments', {
         country: 'eq.' + country,
         source: 'eq.sheets_import',
-        select: 'id,sheet_id,sheet_tab,sheet_row,company_name,client_id,amount,seated,category,category_raw,paid_at,manager_name,bank,activation_date,period_months,qty,price,tech_support',
+        select: 'id,sheet_id,sheet_tab,sheet_row,company_name,client_id,amount,seated,category,category_raw,paid_at,manager_name,bank,activation_date,period_months,qty,price,tech_support,receipt_path',
         order: 'id.desc',
         limit: String(PAGE),
         offset: String(offset)
@@ -495,6 +495,15 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
       return { ok: false, error: 'нечего заливать (лист пуст или не прочитался) — пересборка отменена для безопасности' };
     }
     const rbDeleted = [], rbInserted = [], rbFailed = [];
+    // v825: пересборка удаляет и вставляет строки заново — чеки (receipt_path) привязаны к
+    // строкам базы, а лист про них не знает. Запоминаем чеки по натуральному ключу строки,
+    // чтобы после вставки вернуть их на место, иначе каждая пересборка месяца теряла бы чеки.
+    // Ключ позиционный — если строки листа сдвинулись, сверяем компанию и сумму, чтобы чек
+    // не прицепился к чужой оплате (чужой чек при сверке с банком хуже, чем никакого).
+    const receiptByKey = {};
+    for (const o of rebuildDelete) {
+      if (o.receipt_path) receiptByKey[`${o.sheet_tab}::${o.sheet_row}`] = { rp: o.receipt_path, company: o.company_name, amount: o.amount };
+    }
     for (const o of rebuildDelete) {
       try { await sbDelete('payments', { id: 'eq.' + o.id }); rbDeleted.push(o.id); }
       catch (e) { rbFailed.push({ id: o.id, op: 'delete', error: e.message }); }
@@ -509,6 +518,17 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
           catch (e2) { rbFailed.push({ company_name: row.company_name, paid_at: row.paid_at, error: e2.message }); }
         }
       }
+    }
+    // v825: возвращаем чеки на пересобранные строки (см. receiptByKey выше)
+    for (const p of rbInserted) {
+      const sv = receiptByKey[`${p.sheet_tab}::${p.sheet_row}`];
+      if (!sv) continue;
+      if (String(p.company_name) !== String(sv.company) || Number(p.amount) !== Number(sv.amount)) {
+        rbFailed.push({ id: p.id, op: 'receipt_orphan', error: 'строка листа сместилась (' + sv.company + ' → ' + p.company_name + ') — чек не перенесён' });
+        continue;
+      }
+      try { await sbUpdate('payments', { id: 'eq.' + p.id }, { receipt_path: sv.rp }); }
+      catch (e) { rbFailed.push({ id: p.id, op: 'receipt_restore', error: e.message }); }
     }
     // карты внедрения/интеграции для новых оплат — как в обычном импорте
     try { await _createBoardEntriesForPayments(rbInserted); } catch (e) {}
@@ -999,7 +1019,8 @@ async function handlePost(req, res) {
     sheet_tab: body.sheet_tab || null,
     sheet_row: body.sheet_row != null ? parseInt(body.sheet_row, 10) : null,
     created_by: body.created_by || req.headers['x-user-name'] || null,
-    notes: body.notes || null
+    notes: body.notes || null,
+    receipt_path: body.receipt_path || null // v825: чек (скрин перевода) — путь в бакете payment-receipts
   };
 
   try {
