@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v829</title>
+<title>SalesDoc — Финансовый Дашборд v830</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17444,6 +17444,49 @@ function confirmAction(opts){
 if(typeof _escHtml === 'undefined'){
  window._escHtml = function(s){ return String(s||'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
 }
+
+// ============================================================
+// v830: авто-обновление — вкладка сама замечает новый релиз и предлагает обновиться.
+// Причина: CEO видел старую версию несмотря на бампы SW (залипшие вкладки/профили).
+// Проверяем свежий sw.js (уникальный query — мимо всех кэшей) раз в 5 минут и при
+// возврате на вкладку; если версия на сервере новее — баннер с кнопкой «Обновить».
+// ============================================================
+(function(){
+ var CUR = parseInt((document.title.match(/v(\d{3,4})/) || [])[1] || '0', 10);
+ if(!CUR) return;
+ var shown = false;
+ async function sdVerCheck(){
+  if(shown || document.hidden) return;
+  try {
+   var r = await fetch('/sw.js?vchk=' + Date.now(), { cache: 'no-store' });
+   var t = await r.text();
+   var m = t.match(/salesdoc-v(\d{3,4})/);
+   if(!m || parseInt(m[1], 10) <= CUR) return;
+   shown = true;
+   var bar = document.createElement('div');
+   bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:1000030;background:var(--surface,#16171D);border:1px solid var(--accent,#5E6AD2);border-radius:12px;padding:10px 16px;display:flex;gap:14px;align-items:center;box-shadow:0 12px 32px rgba(0,0,0,.5);max-width:92vw';
+   var txt = document.createElement('span');
+   txt.style.cssText = 'font-size:13px;color:var(--text,#F7F8F8)';
+   txt.textContent = 'Вышла новая версия программы (v' + m[1] + ')';
+   var btn = document.createElement('button');
+   btn.style.cssText = 'padding:7px 16px;border-radius:8px;border:none;background:var(--accent,#5E6AD2);color:#fff;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit;flex:none';
+   btn.textContent = 'Обновить';
+   btn.onclick = function(){
+    try {
+     navigator.serviceWorker.getRegistration().then(function(reg){
+      if(reg && reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      location.reload();
+     }).catch(function(){ location.reload(); });
+    } catch(_){ location.reload(); }
+   };
+   bar.appendChild(txt); bar.appendChild(btn);
+   document.body.appendChild(bar);
+  } catch(_){}
+ }
+ setInterval(sdVerCheck, 5 * 60 * 1000);
+ document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(sdVerCheck, 800); });
+ setTimeout(sdVerCheck, 15000);
+})();
 
 // ============================================================
 // AUTH & INIT
