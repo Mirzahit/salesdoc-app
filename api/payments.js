@@ -856,11 +856,66 @@ async function handleImportSheets(req, res) {
   return res.status(200).json(result);
 }
 
+// v828: отметка «Посажена» из программы (раньше — только через бот).
+// Пишем В ОБА места: Supabase (мгновенно видно) и лист «Доходы» колонка L (источник истины —
+// иначе часовой крон-синк вернул бы старое значение через час и галка «отлипала» бы).
+// Если лист не записался — ОТКАТЫВАЕМ базу и возвращаем ошибку: честное «не получилось»
+// лучше галки, которая молча слетит.
+async function handleSetSeated(req, res) {
+  const body = await readBody(req);
+  const id = body.id;
+  const seated = !!body.seated;
+  if (!id) return res.status(400).json({ ok: false, error: 'нужен id платежа' });
+  const rows = await sbSelect('payments', { id: 'eq.' + id, limit: 1 });
+  if (!rows.length) return res.status(404).json({ ok: false, error: 'платёж не найден' });
+  const p = rows[0];
+  const prevSeated = !!p.seated;
+  await sbUpdate('payments', { id: 'eq.' + id }, { seated });
+  // Строки не из листа (manual без зеркала) — только база, синк их не трогает
+  if (!(p.sheet_id && p.sheet_tab && p.sheet_row)) {
+    return res.status(200).json({ ok: true, seated, sheet: { ok: true, skipped: 'без строки листа' } });
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25000);
+  let gasData = null;
+  try {
+    const resp = await fetch(APPEND_GS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      signal: ctrl.signal,
+      body: JSON.stringify({
+        action: 'setSeated',
+        spreadsheetId: p.sheet_id,
+        sheet: p.sheet_tab,
+        row: p.sheet_row,
+        company: p.company_name, // сверка на стороне GAS — защита от сдвига строк листа
+        value: seated ? 'Да' : 'Нет'
+      })
+    });
+    gasData = await resp.json().catch(() => null);
+  } catch (e) {
+    gasData = { ok: false, error: ctrl.signal.aborted ? 'Google-таблица не ответила за 25 секунд' : String((e && e.message) || e) };
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!gasData || gasData.ok !== true) {
+    // откат базы — галка не должна жить только до следующего синка
+    try { await sbUpdate('payments', { id: 'eq.' + id }, { seated: prevSeated }); } catch (e) {}
+    return res.status(502).json({
+      ok: false,
+      error: 'лист «Доходы» не обновился: ' + ((gasData && gasData.error) || 'экшен setSeated не задеплоен в Apps Script')
+    });
+  }
+  return res.status(200).json({ ok: true, seated, sheet: { ok: true, tab: p.sheet_tab, row: p.sheet_row } });
+}
+
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
     // v648: общий стор ручных привязок платежей к клиентам (видны всем, не только локально).
     if (req.query.action === 'pay_links') return await handlePayLinks(req, res);
+    // v828: отметка «Посажена» — база + колонка L листа
+    if (req.method === 'POST' && req.query.action === 'set_seated') return await handleSetSeated(req, res);
     if (req.method === 'POST' && req.query.action === 'import_sheets') {
       // v592 SEC: массовая вставка платежей (финансы) — только с админ-кодом
       const _g = checkAdminToken(req);
