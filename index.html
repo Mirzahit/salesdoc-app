@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v824</title>
+<title>SalesDoc — Финансовый Дашборд v825</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8014,6 +8014,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <th>Дата</th><th>Клиент</th><th>Сотрудник</th><th>Статья</th><th>Сумма</th><th>Способ</th>
  <th title="Оплата посажена в систему"> Посажена</th>
  <th title="Услуга выполнена и списана"> Услуга списана</th>
+ <th title="Скрин перевода — сверка с банком">Чек</th>
  <th>Комментарий</th><th></th>
  </tr></thead><tbody id="all-payments"></tbody></table>
  </div>
@@ -10716,8 +10717,18 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="form-row"><div class="form-group"><label class="form-label">Клиент</label><input class="form-input" id="p-client" placeholder="Выбрать из базы..." readonly style="cursor:pointer" onclick="payClientPickerOpen(this)"></div><div class="form-group"><label class="form-label">Дата оплаты</label><input class="form-input" id="p-date" type="date"></div></div>
  <div class="form-row"><div class="form-group"><label class="form-label">Менеджер</label><select class="form-select" id="p-employee"></select></div><div class="form-group"><label class="form-label">Статья</label><select class="form-select" id="p-category" onchange="payFlowRender()"></select></div></div>
  <div id="p-flow"></div>
- <div class="form-row single"><div class="form-group full"><label class="form-label">Банк</label><div class="pay-period-chips pay-chips-wrap" id="p-bank"></div></div></div>
+ <!-- v825: доп. услуги (внедрение/интеграция/боты/доработка...) — каждая уходит ОТДЕЛЬНОЙ строкой
+      в лист «Доходы» и отдельным платежом в базе, как это делает телеграм-бот -->
+ <div id="p-extras"></div>
+ <div class="form-row single"><div class="form-group full"><button type="button" class="pp-chip" id="p-extra-add" onclick="payExtraAdd()">+ Добавить услугу</button>
+ <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Дни и каждая услуга запишутся в таблицу «Доходы» отдельными записями — как это делает бот</div></div></div>
+ <div class="form-row single"><div class="form-group full"><label class="form-label">Банк основной оплаты</label><div class="pay-period-chips pay-chips-wrap" id="p-bank"></div></div></div>
  <div class="form-row single"><div class="form-group full"><label class="form-label">Комментарий</label><input class="form-input" id="p-comment" placeholder="Примечание..."></div></div>
+ <!-- v825: чек ОБЯЗАТЕЛЕН — бухгалтер сверяет оплату с банком по этому файлу (хранится только в программе) -->
+ <div class="form-row single"><div class="form-group full"><label class="form-label">Чек основной оплаты — скрин перевода (обязательно)</label>
+  <input type="file" id="p-receipt-input" accept="image/*" style="display:none" onchange="payReceiptPick(this)">
+  <div id="p-receipt-box"></div>
+ </div></div>
  </div>
  <div id="form-act" style="display:none">
  <div class="form-row"><div class="form-group"><label class="form-label">Клиент</label><input class="form-input" id="a-client" placeholder="ТОО Компания"></div><div class="form-group"><label class="form-label">Дата акта</label><input class="form-input" id="a-date" type="date"></div></div>
@@ -11921,6 +11932,7 @@ async function _loadPaymentsFromSupabase(){
     activationDate: r.activation_date || null,
     periodStart: r.period_start_raw || '',
     clientId: r.client_id || null,
+    receiptPath: r.receipt_path || null, // v825: чек (скрин перевода) — открывается через /api/receipts
     source: r.source || '',   // v700: manual | bot | sheets_import — для поиска/удаления дублей
     month: (function(){ var m = dateStr.match(/^\d{4}-(\d{2})/); return m ? (parseInt(m[1],10)-1) : 0; })()
    };
@@ -14727,10 +14739,13 @@ function renderAllPayments() {
  +'<td style="color:var(--text-muted)">'+sanitize( methodNames[p.method]||p.method||'—')+'</td>'
  +'<td>'+seatBtn+'</td>'
  +'<td>'+svcBtn+'</td>'
+ // v825: чек — путь в onclick не встраиваем, только id (паттерн _pid); ссылку подписывает /api/receipts.
+ // Кнопка нейтральная (зелёный у нас значит «посажена/списана», а чек — просто файл)
+ +'<td>'+(p.receiptPath ? '<button onclick="openPayReceipt(\''+_pid+'\')" style="font-size:10px;padding:2px 10px;border-radius:10px;border:1px solid var(--dark-border);background:none;color:var(--text-secondary);cursor:pointer" title="Открыть скрин перевода">Чек</button>' : '<span style="color:var(--text-muted)" title="Чек не требовался — оплата внесена не через программу">—</span>')+'</td>'
  +'<td style="color:var(--text-muted);font-size:11px">'+sanitize(p.comment||'—')+'</td>'
  +'<td><button onclick="inspectPayRow(\''+_pid+'\')" style="font-size:9px;padding:1px 6px;border-radius:10px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer" title="Просмотр сырых данных из таблицы"></button></td>'
  +'</tr>';
- }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px">Нет записей</td></tr>';
+ }).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px">Нет записей</td></tr>';
  finRenderHeader();
 }
 
@@ -17185,6 +17200,9 @@ function closeModal(){
   var pc = document.getElementById('p-client');
   if(pc){ pc.value=''; pc.dataset.clientId=''; }
   document.querySelectorAll('#p-period .pp-chip').forEach(function(b){ b.classList.toggle('on', b.dataset.v === '1'); });
+  // v825: сброс услуг и чека — иначе «переживут» закрытие и уедут в следующую оплату (как баг v823-qa с клиентом)
+  if(typeof payExtras !== 'undefined'){ payExtras = []; if(typeof payExtrasRender === 'function') payExtrasRender(); }
+  if(typeof payReceiptClear === 'function') payReceiptClear();
  } catch(_){}
 }
 function switchTab(t){ currentTab=t; document.getElementById('form-payment').style.display=t==='payment'?'block':'none'; document.getElementById('form-act').style.display=t==='act'?'block':'none'; document.getElementById('tab-payment').classList.toggle('active',t==='payment'); document.getElementById('tab-act').classList.toggle('active',t==='act'); }
@@ -17197,53 +17215,120 @@ async function saveRecord() {
  const client = clientInp.value.trim();
  const clientId = clientInp.dataset.clientId || '';
  if(!clientId){sdToast('Выберите клиента из базы — поле «Клиент»');return;}
- var col = payCollect();
- if(!col) return;
+ // v825: форма собирает ПАКЕТ строк (лицензия + строка дней + услуги) — как бот, который
+ // разносит услуги отдельными строками листа. Каждая строка = отдельный POST /api/payments.
+ var colAll = payCollectAll();
+ if(!colAll) return;
+ var rows = colAll.rows;
+ if(!window._payReceipt){ sdToast('Приложите чек — скрин перевода'); return; }
  if(window._paySavingNow) return;
  window._paySavingNow = true;
  // v823-qa: Apps Script может холодно стартовать 10-20 сек — блокируем кнопку с честным
  // текстом, иначе человек решит что зависло, обновит страницу и внесёт оплату второй раз
  var _submitBtn = document.querySelector('#modal .form-submit');
  var _submitOld = _submitBtn ? _submitBtn.textContent : null;
- if(_submitBtn){ _submitBtn.disabled = true; _submitBtn.textContent = 'СОХРАНЯЮ... (запись в базу и таблицу, до 20 сек)'; }
+ if(_submitBtn){ _submitBtn.disabled = true; }
+ var _btnText = function(t){ if(_submitBtn) _submitBtn.textContent = t; };
+ var _btnRestore = function(){ window._paySavingNow = false; if(_submitBtn){ _submitBtn.disabled = false; if(_submitOld !== null) _submitBtn.textContent = _submitOld; } };
  var mgrSel = document.getElementById('p-employee');
  var managerName = (mgrSel && mgrSel.value) || null;
  var paidAt = document.getElementById('p-date').value || taskLocalIso(new Date());
  var comment = document.getElementById('p-comment').value || null;
- var catMapped = (typeof mapCategoryFromSheet === 'function') ? mapCategoryFromSheet(col.catLabel) : null;
- var payload = {
-  country: (typeof currentCountry!=='undefined'?currentCountry:'KZ'),
-  paid_at: paidAt, company_name: client, client_id: clientId,
-  category: catMapped, category_raw: col.catLabel,
-  license_type: col.licType, period_label: col.tariff,
-  qty: col.qty, price: col.unit,
-  period_months: (col.months && col.months > 0) ? col.months : null,
-  amount: col.fact, amount_planned: col.plan,
-  manager_name: managerName, bank: col.bank, comment: comment,
-  source: 'manual', mirror_to_sheet: true,
-  created_by: (typeof currentUser!=='undefined'&&currentUser&&currentUser.name)||null
- };
- var res;
- try { res = await sbFetch('/api/payments', { method:'POST', body: JSON.stringify(payload) }); }
- catch(e){ res = null; }
- finally {
-  window._paySavingNow = false;
-  if(_submitBtn){ _submitBtn.disabled = false; if(_submitOld !== null) _submitBtn.textContent = _submitOld; }
+ var country = (typeof currentCountry!=='undefined'?currentCountry:'KZ');
+ var savedRows = [], mirrorFails = [], failedAt = -1, failErr = '';
+ var _rowLabel = function(r){ return r.catLabel + (r.tariff && r.tariff !== r.catLabel && r.tariff !== 'Услуга' ? ' ('+r.tariff+')' : ''); };
+ // QA v825: try/finally — любое неожиданное исключение не должно навсегда запереть кнопку
+ try {
+ // 1) Чек — один на весь пакет. Путь кэшируем: при повторе после ошибки сохранения
+ // тот же файл второй раз не грузим (не плодим сирот в хранилище).
+ var receiptPath = window._payReceipt.uploadedPath || null;
+ if(!receiptPath){
+  _btnText('ЗАГРУЖАЮ ЧЕК...');
+  var rup;
+  try { rup = await sbFetch('/api/receipts', { method:'POST', body: JSON.stringify({ image: window._payReceipt.b64, mime: window._payReceipt.mime, country: country }) }); }
+  catch(e){ rup = null; }
+  if(!rup || !rup.ok || !rup.path){
+   showNotif('Ошибка', 'Чек не загрузился. Оплата НЕ сохранена — нажмите «Сохранить» ещё раз.'+((rup&&rup.error)?(' ('+rup.error+')'):''));
+   return;
+  }
+  receiptPath = rup.path;
+  window._payReceipt.uploadedPath = receiptPath;
  }
- if(!res || !res.ok){ showNotif('Ошибка', (res&&res.error)||'Оплата не сохранилась. Попробуйте ещё раз.'); return; }
- // мгновенно показать в текущей сессии (источник правды — Supabase, подтянется при перезагрузке)
- payments.push({id:(res.payment&&res.payment.id)||('m'+Date.now()),client:client,date:paidAt,category:catMapped,categoryRaw:col.catLabel,amount:col.fact,qty:col.qty,periodMonths:payload.period_months,method:col.bank,managerName:managerName,comment:comment,seated:false,serviceWritten:false});
+ // 1б) Чеки услуг (v825.1: услуга на другой счёт = отдельный перевод со своим чеком).
+ // Грузим ВСЕ чеки до записи строк: упал чек → ничего не сохранено, повтор безопасен.
+ for(var e2 = 0; e2 < payExtras.length; e2++){
+  var er = payExtras[e2].receipt;
+  if(!er || er.uploadedPath) continue;
+  _btnText('ЗАГРУЖАЮ ЧЕК УСЛУГИ ' + (e2 + 1) + '...');
+  var rup2;
+  try { rup2 = await sbFetch('/api/receipts', { method:'POST', body: JSON.stringify({ image: er.b64, mime: er.mime, country: country }) }); }
+  catch(e){ rup2 = null; }
+  if(!rup2 || !rup2.ok || !rup2.path){
+   showNotif('Ошибка', 'Чек услуги ' + (e2 + 1) + ' не загрузился. Оплата НЕ сохранена — нажмите «Сохранить» ещё раз.'+((rup2&&rup2.error)?(' ('+rup2.error+')'):''));
+   return;
+  }
+  er.uploadedPath = rup2.path;
+ }
+ // 2) Строки пакета — строго ПОСЛЕДОВАТЕЛЬНО (порядок строк в листе + честный прогресс).
+ for(var k=0; k<rows.length; k++){
+  var r = rows[k];
+  _btnText(rows.length > 1 ? ('СОХРАНЯЮ ЗАПИСЬ '+(k+1)+' из '+rows.length+'... (каждая до 20 сек)') : 'СОХРАНЯЮ... (запись в базу и таблицу, до 20 сек)');
+  var catMapped = (typeof mapCategoryFromSheet === 'function') ? mapCategoryFromSheet(r.catLabel) : null;
+  // v825.1: у услуги со своим чеком — путь её чека, иначе общий чек внесения
+  var rowReceipt = (r.exIndex != null && payExtras[r.exIndex] && payExtras[r.exIndex].receipt && payExtras[r.exIndex].receipt.uploadedPath) || receiptPath;
+  var payload = {
+   country: country,
+   paid_at: paidAt, company_name: client, client_id: clientId,
+   category: catMapped, category_raw: r.catLabel,
+   license_type: r.licType, period_label: r.tariff,
+   qty: r.qty, price: r.unit,
+   period_months: (r.months && r.months > 0) ? r.months : null,
+   amount: r.fact, amount_planned: r.plan,
+   manager_name: managerName, bank: r.bank, comment: comment,
+   receipt_path: rowReceipt,
+   source: 'manual', mirror_to_sheet: true,
+   created_by: (typeof currentUser!=='undefined'&&currentUser&&currentUser.name)||null
+  };
+  var res;
+  try { res = await sbFetch('/api/payments', { method:'POST', body: JSON.stringify(payload) }); }
+  catch(e){ res = null; }
+  if(!res || !res.ok){ failedAt = k; failErr = (res&&res.error)||'нет ответа сервера'; break; }
+  savedRows.push(r);
+  // мгновенно показать в текущей сессии (источник правды — Supabase, подтянется при перезагрузке)
+  payments.push({id:(res.payment&&res.payment.id)||('m'+Date.now()+'_'+k),client:client,date:paidAt,category:catMapped,categoryRaw:r.catLabel,amount:r.fact,qty:r.qty,periodMonths:payload.period_months,method:r.bank,managerName:managerName,comment:comment,seated:false,serviceWritten:false,receiptPath:rowReceipt});
+  var _sm = res.sheet_mirror;
+  if(!(_sm && _sm.ok)) mirrorFails.push(_rowLabel(r) + ((_sm&&_sm.error)?(': '+_sm.error):''));
+ }
+ } finally {
+  _btnRestore();
+ }
+ if(failedAt === 0){
+  // Ничего не записано — модалку не закрываем, повтор безопасен (чек уже загружен и закэширован)
+  showNotif('Ошибка', 'Оплата не сохранилась ('+failErr+'). Ничего не записано — попробуйте ещё раз.');
+  return;
+ }
  clientInp.value=''; clientInp.dataset.clientId='';
  document.getElementById('p-comment').value='';
+ payExtras = []; payExtrasRender();
+ payReceiptClear();
  payFlowRender(); // v824: пересборка динамической части — все суммы/чипы к дефолтам
- var _planStr = (col.fact !== col.plan) ? (' (озвучено ' + payFmtN(col.plan) + ', факт ' + payFmtN(col.fact) + ')') : '';
- var _sm = res.sheet_mirror;
- if(_sm && _sm.ok){
-  showNotif('Оплата добавлена', client+' — '+fmtFull(col.fact)+_planStr+'. Записано в базу и в Google-таблицу («'+_sm.sheet_tab+'», строка '+_sm.row_index+').');
- } else {
+ if(failedAt > 0){
+  // Частичный сбой: часть записей УЖЕ в базе — повторное полное сохранение дало бы дубли.
+  // UX v825: такие инструкции показываем модалкой с кнопкой, а не тостом на 3.5 сек.
+  confirmAction({ title: 'Сохранилось не всё: '+savedRows.length+' из '+rows.length,
+   body: 'Не сохранились: '+rows.slice(failedAt).map(_rowLabel).join(', ')+' ('+failErr+').\n\nНЕ вносите всю оплату заново — иначе будут дубли. Добавьте только то, что не сохранилось, отдельной записью.',
+   confirmLabel: 'Понятно', hideCancel: true });
+ } else if(mirrorFails.length){
   // v823-qa: НИ В КОЕМ СЛУЧАЕ не просить «добавьте строку руками» — платёж УЖЕ в базе,
   // ручная строка в листе стала бы дублем после часового импорта
-  showNotif('Оплата сохранена в базе', client+' — '+fmtFull(col.fact)+'. В Google-таблицу не записалось'+((_sm&&_sm.error)?(' ('+_sm.error+')'):'')+'. Строку руками НЕ добавляйте — скажите администратору.');
+  confirmAction({ title: 'Оплата сохранена в базе',
+   body: client+' — '+fmtFull(rows.reduce(function(s,x){return s+x.fact;},0))+'.\n\nВ Google-таблицу не записались: '+mirrorFails.join('; ')+'.\n\nСтроки руками НЕ добавляйте — скажите администратору.',
+   confirmLabel: 'Понятно', hideCancel: true });
+ } else {
+  var _main = rows[0];
+  var _planStr = (_main.fact !== _main.plan) ? (' (озвучено ' + payFmtN(_main.plan) + ', факт ' + payFmtN(_main.fact) + ')') : '';
+  var _sumAll = rows.reduce(function(s,x){return s+x.fact;},0);
+  showNotif('Оплата добавлена', client+' — '+fmtFull(_sumAll)+(rows.length>1?(': '+rows.map(_rowLabel).join(' + ')):_planStr)+'. Записано в базу и в Google-таблицу.');
  }
  } else {
  const client=document.getElementById('a-client').value.trim(), amount=parseFloat(document.getElementById('a-amount').value);
@@ -17275,7 +17360,9 @@ function confirmAction(opts){
    + '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px;letter-spacing:-0.01em">'+ _escHtml(opts.title || 'Подтвердите действие') +'</div>'
    + '<div style="font-size:13px;color:var(--text-soft);margin-bottom:18px;line-height:1.45;white-space:pre-wrap">'+ _escHtml(opts.body || '') +'</div>'
    + '<div style="display:flex;justify-content:flex-end;gap:8px">'
-    + '<button class="cfa-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-soft);cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">'+ _escHtml(opts.cancelLabel || 'Отмена') +'</button>'
+    // v825: hideCancel — режим «важное сообщение с одной кнопкой» (длинные предупреждения,
+    // которые нельзя показывать исчезающим тостом)
+    + (opts.hideCancel ? '' : '<button class="cfa-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-soft);cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">'+ _escHtml(opts.cancelLabel || 'Отмена') +'</button>')
     + '<button class="cfa-confirm" style="padding:8px 16px;border-radius:8px;border:none;background:'+accentBg+';color:'+accentColor+';cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">'+ _escHtml(opts.confirmLabel || (danger ? 'Удалить' : 'OK')) +'</button>'
    + '</div>';
   bg.appendChild(box);
@@ -17290,7 +17377,8 @@ function confirmAction(opts){
    else if(e.key === 'Enter' || e.keyCode === 13){ e.stopPropagation(); cleanup(true); }
   }
   bg.addEventListener('click', function(e){ if(e.target === bg) cleanup(false); });
-  box.querySelector('.cfa-cancel').addEventListener('click', function(){ cleanup(false); });
+  var _cfaCancel = box.querySelector('.cfa-cancel');
+  if(_cfaCancel) _cfaCancel.addEventListener('click', function(){ cleanup(false); });
   box.querySelector('.cfa-confirm').addEventListener('click', function(){ cleanup(true); });
   document.addEventListener('keydown', escHandler, true);
   setTimeout(function(){ box.querySelector('.cfa-confirm').focus(); }, 0);
@@ -39371,6 +39459,8 @@ function payFormInit(){
    return '<button type="button" class="pp-chip' + (i === 0 ? ' on' : '') + '" data-v="' + _escHtml(b) + '" onclick="payChip(this)">' + _escHtml(b) + '</button>';
   }).join('');
  }
+ payExtrasRender(); // v825: услуги и чек
+ payReceiptRender();
  payFlowRender();
 }
 
@@ -39401,15 +39491,24 @@ function payFlowRender(){
   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Тариф</label><div class="pay-period-chips pay-chips-wrap" id="p-tariff">'
     + cfg.periods.map(function(p, i){ return '<button type="button" class="pp-chip' + (i === 0 ? ' on' : '') + '" data-v="' + _escHtml(p.l) + '" data-m="' + p.m + '" onclick="payChip(this)">' + _escHtml(p.l) + '</button>'; }).join('')
     + '</div></div></div>';
+  // v825: оплата «месяцы + дни» (например 3 месяца и 10 дней) — дни уходят ВТОРОЙ строкой
+  // в лист с тарифом «10/20 дней» и ценой из прайса, чтобы сводные формулы считали как обычно
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Плюс дни к оплате</label><div class="pay-period-chips" id="p-extradays">'
+    + '<button type="button" class="pp-chip on" data-v="" onclick="payChip(this)">Нет</button>'
+    + '<button type="button" class="pp-chip" data-v="10 дней" onclick="payChip(this)">+10 дней</button>'
+    + '<button type="button" class="pp-chip" data-v="20 дней" onclick="payChip(this)">+20 дней</button>'
+    + '</div></div></div>';
   h += '<div class="form-row"><div class="form-group"><label class="form-label">Прайс за 1 лицензию</label><div class="pay-period-chips" id="p-pricemode">'
     + '<button type="button" class="pp-chip on" data-v="new" onclick="payChip(this)">Новый клиент</button>'
     + '<button type="button" class="pp-chip" data-v="old" onclick="payChip(this)">Старый клиент</button>'
     + '</div></div><div class="form-group"><label class="form-label">Или своя цена</label><input class="form-input" id="p-price" type="number" min="0" placeholder="по прайсу" oninput="payRecalc()"></div></div>';
-  h += '<div class="pay-plan-box" id="p-plan-box">Озвучено клиенту: <b>—</b><div class="ppb-formula">введите количество</div></div>';
-  h += '<div class="form-row"><div class="form-group"><label class="form-label">Клиент заплатил</label><div class="pay-period-chips" id="p-factmode">'
+  h += '<div class="pay-plan-box" id="p-plan-box">Озвучено клиенту: <b>—</b><div class="ppb-formula">введите количество лицензий</div></div>';
+  // UX v825: факт относится ТОЛЬКО к лицензиям — дни и услуги всегда по своим суммам,
+  // иначе менеджер впишет сюда общий приход и суммы задвоятся
+  h += '<div class="form-row"><div class="form-group"><label class="form-label">Клиент заплатил за лицензии</label><div class="pay-period-chips" id="p-factmode">'
     + '<button type="button" class="pp-chip on" data-v="plan" onclick="payChip(this)">Столько же</button>'
     + '<button type="button" class="pp-chip" data-v="other" onclick="payChip(this)">Другую сумму</button>'
-    + '</div></div><div class="form-group"><label class="form-label">Фактически (' + cfg.currency + ')</label><input class="form-input" id="p-fact" type="number" min="0" placeholder="сколько пришло" oninput="payRecalc()" disabled></div></div>';
+    + '</div></div><div class="form-group"><label class="form-label">Фактически за лицензии (' + cfg.currency + ')</label><input class="form-input" id="p-fact" type="number" min="0" placeholder="сумма только за лицензии" oninput="payRecalc()" disabled></div></div>';
  } else if(cat.t === 'pkg'){
   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Пакет</label><div class="pay-period-chips pay-chips-wrap" id="p-package">'
     + cfg.packages.map(function(a, i){ return '<button type="button" class="pp-chip' + (i === 0 ? ' on' : '') + '" data-v="' + a + '" onclick="payChip(this)">Пакет ' + (i + 1) + ' — ' + payFmtN(a) + '</button>'; }).join('')
@@ -39452,8 +39551,18 @@ function payRecalc(){
   return;
  }
  var plan = unit * qty * mult;
- box.innerHTML = 'Озвучено клиенту: <b>' + payFmtN(plan) + ' ' + cfg.currency + '</b>'
+ // v825: строка дней («месяцы + дни») и услуги — считаем в общий итог, каждая пойдёт отдельной строкой
+ var daysV = payChipVal('p-extradays');
+ var daysUnit = daysV ? ((mode === 'old' ? cfg.pricesOld : cfg.pricesNew)[daysV] || 0) : 0;
+ var daysSum = daysV ? daysUnit * qty : 0;
+ var exSum = 0, exCnt = 0;
+ if(typeof payExtrasSum === 'function'){ var ex = payExtrasSum(); exSum = ex.sum; exCnt = ex.count; }
+ var total = plan + daysSum + exSum;
+ var h = (daysV || exCnt ? 'Озвучено клиенту (итого с допами): ' : 'Озвучено клиенту: ') + '<b>' + payFmtN(total) + ' ' + cfg.currency + '</b>'
   + '<div class="ppb-formula">' + qty + ' лиц. × ' + payFmtN(unit) + ' × ' + mult + ' мес' + (manual > 0 ? ' · своя цена' : ' · прайс «' + (mode === 'old' ? 'старый' : 'новый') + '»') + '</div>';
+ if(daysV) h += '<div class="ppb-formula">+ ' + daysV + ': ' + qty + ' × ' + payFmtN(daysUnit) + ' = ' + payFmtN(daysSum) + '</div>';
+ if(exCnt) h += '<div class="ppb-formula">+ услуги: ' + exCnt + ' шт = ' + payFmtN(exSum) + '</div>';
+ box.innerHTML = h;
 }
 
 // Сбор данных формы по ветке — вернёт null и покажет toast если что-то не заполнено
@@ -39505,6 +39614,329 @@ function payCollect(){
   r.plan = amtM; r.fact = amtM; r.unit = amtM;
  }
  return r;
+}
+
+// ============================================================
+// v825: доп. услуги в форме оплаты — каждая уходит отдельной строкой листа
+// и отдельным платежом в базе (как разносит телеграм-бот). Плюс чек (скрин
+// перевода, обязателен) и строка «+дни» для оплат «месяцы + дни».
+// ============================================================
+var payExtras = []; // [{cat, amount, package, botper, bank, receipt}] — состояние карточек услуг
+// bank: услуги часто приходят на ДРУГОЙ счёт, поэтому банк у каждой услуги свой и без
+// предвыбора — менеджер обязан нажать сам. receipt: свой чек услуги (обязателен, если банк
+// отличается от основного; иначе можно не прикладывать — пойдёт общий чек).
+
+// QA v825: перед ЛЮБОЙ пересборкой списка снять введённое из DOM в состояние —
+// иначе «+ Добавить услугу» стирал сумму/пакет уже заполненной услуги
+function payExtrasCapture(){
+ payExtras.forEach(function(ex, i){
+  var a = document.getElementById('p-ex' + i + '-amount');
+  if(a) ex.amount = a.value;
+  if(document.getElementById('p-ex' + i + '-package')) ex.package = payChipVal('p-ex' + i + '-package');
+  if(document.getElementById('p-ex' + i + '-botper')) ex.botper = payChipVal('p-ex' + i + '-botper');
+  if(document.getElementById('p-ex' + i + '-bank')) ex.bank = payChipVal('p-ex' + i + '-bank');
+ });
+}
+function payExtraAdd(){
+ var cfg = payBotCfg();
+ var first = cfg.categories.filter(function(c){ return c.t !== 'lic'; })[0];
+ if(!first) return;
+ payExtrasCapture();
+ payExtras.push({ cat: first.k });
+ payExtrasRender();
+ payRecalc();
+}
+function payExtraRemove(i){
+ payExtrasCapture();
+ payExtras.splice(i, 1);
+ payExtrasRender();
+ payRecalc();
+}
+function payExtraSetCat(i, key){
+ if(!payExtras[i]) return;
+ payExtrasCapture();
+ payExtras[i].cat = key;
+ payExtras[i].package = null; // тип статьи сменился — чипы к дефолтам, сумма остаётся
+ payExtras[i].botper = null;
+ payExtrasRender();
+ payRecalc();
+}
+function payExtrasRender(){
+ var host = document.getElementById('p-extras');
+ if(!host) return;
+ var cfg = payBotCfg();
+ host.innerHTML = payExtras.map(function(ex, i){
+  var cat = cfg.categories.filter(function(c){ return c.k === ex.cat; })[0] || cfg.categories[0];
+  var h = '<div style="border:1px solid var(--border-faint);border-radius:10px;padding:12px 12px 4px;margin:0 0 10px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    + '<span class="form-label" style="margin:0">Услуга ' + (i + 1) + '</span>'
+    + '<button type="button" onclick="payExtraRemove(' + i + ')" style="border:none;background:none;color:var(--text-muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px" title="Убрать услугу">&times;</button>'
+    + '</div>';
+  h += '<div class="form-row single"><div class="form-group full"><div class="pay-period-chips pay-chips-wrap">'
+    + cfg.categories.filter(function(c){ return c.t !== 'lic'; }).map(function(c){
+       return '<button type="button" class="pp-chip' + (c.k === cat.k ? ' on' : '') + '" onclick="payExtraSetCat(' + i + ',\'' + c.k + '\')">' + _escHtml(c.l) + '</button>';
+      }).join('')
+    + '</div></div></div>';
+  // Восстановление введённого (QA v825): сумма как value, выбранные чипы по состоянию
+  var amtVal = (ex.amount != null && ex.amount !== '' && isFinite(parseFloat(ex.amount))) ? parseFloat(ex.amount) : '';
+  if(cat.t === 'pkg'){
+   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Пакет</label><div class="pay-period-chips pay-chips-wrap" id="p-ex' + i + '-package">'
+     + cfg.packages.map(function(a, pi){ var on = ex.package != null && ex.package !== '' ? String(ex.package) === String(a) : pi === 0; return '<button type="button" class="pp-chip' + (on ? ' on' : '') + '" data-v="' + a + '" onclick="payChip(this)">Пакет ' + (pi + 1) + ' — ' + payFmtN(a) + '</button>'; }).join('')
+     + '</div></div></div>';
+   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Или своя сумма (' + cfg.currency + ')</label><input class="form-input" id="p-ex' + i + '-amount" type="number" min="0" placeholder="если не пакет" value="' + amtVal + '" oninput="payRecalc()"></div></div>';
+  } else if(cat.t === 'bot'){
+   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Период</label><div class="pay-period-chips pay-chips-wrap" id="p-ex' + i + '-botper">'
+     + cfg.botPeriods.map(function(p, pi){ var on = ex.botper ? ex.botper === p : pi === 0; return '<button type="button" class="pp-chip' + (on ? ' on' : '') + '" data-v="' + _escHtml(p) + '" onclick="payChip(this)">' + _escHtml(p) + '</button>'; }).join('')
+     + '</div></div></div>';
+   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Сумма (' + cfg.currency + ')</label><input class="form-input" id="p-ex' + i + '-amount" type="number" min="0" placeholder="15000" value="' + amtVal + '" oninput="payRecalc()"></div></div>';
+  } else {
+   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Сумма (' + cfg.currency + ')</label><input class="form-input" id="p-ex' + i + '-amount" type="number" min="0" placeholder="15000" value="' + amtVal + '" oninput="payRecalc()"></div></div>';
+  }
+  // v825.1: услуги часто идут на другой счёт — банк свой у каждой услуги, БЕЗ предвыбора
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Банк услуги</label><div class="pay-period-chips pay-chips-wrap" id="p-ex' + i + '-bank">'
+    + cfg.banks.map(function(b){ return '<button type="button" class="pp-chip' + (ex.bank === b ? ' on' : '') + '" data-v="' + _escHtml(b) + '" onclick="payChip(this)">' + _escHtml(b) + '</button>'; }).join('')
+    + '</div></div></div>';
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Чек услуги</label>'
+    + '<input type="file" id="p-ex' + i + '-receipt-input" accept="image/*" style="display:none" onchange="payExtraReceiptPick(' + i + ',this)">'
+    + '<div id="p-ex' + i + '-receipt-box"></div>'
+    + '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Если банк тот же, что у основной оплаты — можно не прикладывать, пойдёт общий чек. Если другой — приложите чек этого перевода.</div>'
+    + '</div></div>';
+  h += '</div>';
+  return h;
+ }).join('');
+ payExtras.forEach(function(_, i){ payExtraReceiptRender(i); });
+}
+// Сумма добавленных услуг для «Озвучено клиенту» (без валидации — только что заполнено)
+function payExtrasSum(){
+ var cfg = payBotCfg();
+ var sum = 0, count = 0;
+ payExtras.forEach(function(ex, i){
+  var cat = cfg.categories.filter(function(c){ return c.k === ex.cat; })[0];
+  if(!cat) return;
+  var own = parseFloat((document.getElementById('p-ex' + i + '-amount') || {}).value) || 0;
+  var amt = own;
+  if(cat.t === 'pkg' && own <= 0) amt = parseFloat(payChipVal('p-ex' + i + '-package')) || 0;
+  if(amt > 0){ sum += amt; count++; }
+ });
+ return { sum: sum, count: count };
+}
+// Сбор услуг с валидацией — null + toast если какая-то не заполнена.
+// v825.1: у каждой услуги СВОЙ банк (без предвыбора) и свой чек: банк отличается от
+// основного → чек этой услуги обязателен (это отдельный перевод на другой счёт).
+function payCollectExtras(mainBank){
+ var cfg = payBotCfg();
+ var out = [];
+ for(var i = 0; i < payExtras.length; i++){
+  var cat = cfg.categories.filter(function(c){ return c.k === payExtras[i].cat; })[0];
+  if(!cat){ sdToast('Услуга ' + (i + 1) + ': выберите статью'); return null; }
+  var own = parseFloat((document.getElementById('p-ex' + i + '-amount') || {}).value) || 0;
+  var amt = own;
+  if(cat.t === 'pkg' && own <= 0) amt = parseFloat(payChipVal('p-ex' + i + '-package')) || 0;
+  if(amt <= 0){ sdToast('Услуга ' + (i + 1) + ' (' + cat.l + '): ' + (cat.t === 'pkg' ? 'выберите пакет или введите сумму' : 'введите сумму')); return null; }
+  var exBank = payChipVal('p-ex' + i + '-bank');
+  if(!exBank){ sdToast('Услуга ' + (i + 1) + ' (' + cat.l + '): выберите банк услуги'); return null; }
+  if(exBank !== mainBank && !(payExtras[i].receipt)){
+   sdToast('Услуга ' + (i + 1) + ' (' + cat.l + '): оплата на другой счёт — приложите чек этой услуги');
+   return null;
+  }
+  var tariff = 'Услуга';
+  if(cat.t === 'bot') tariff = payChipVal('p-ex' + i + '-botper') || '';
+  out.push({ catKey: cat.k, catLabel: cat.l, bank: exBank, licType: 'Услуга', tariff: tariff, qty: null, unit: amt, months: null, plan: amt, fact: amt, exIndex: i });
+ }
+ return out;
+}
+// Полный пакет строк: основная оплата + строка дней (если «месяцы + дни») + услуги
+function payCollectAll(){
+ var main = payCollect();
+ if(!main) return null;
+ var rows = [main];
+ var cfg = payBotCfg();
+ var cat = cfg.categories.filter(function(c){ return c.k === main.catKey; })[0];
+ if(cat && cat.t === 'lic'){
+  var daysV = payChipVal('p-extradays');
+  if(daysV){
+   // Цена дней — из того же прайса и режима «новый/старый», что и основная строка.
+   // «Своя цена» на дни не действует: у 10/20 дней есть свой официальный прайс.
+   var mode = payChipVal('p-pricemode') || 'new';
+   var dUnit = (mode === 'old' ? cfg.pricesOld : cfg.pricesNew)[daysV] || 0;
+   if(dUnit <= 0){ sdToast('Нет цены для «' + daysV + '» в прайсе — скажите администратору'); return null; }
+   rows.push({ catKey: main.catKey, catLabel: main.catLabel, bank: main.bank, licType: main.licType,
+    tariff: daysV, qty: main.qty, unit: dUnit, months: 0, plan: dUnit * main.qty, fact: dUnit * main.qty });
+  }
+ }
+ var extras = payCollectExtras(main.bank);
+ if(extras === null) return null;
+ rows = rows.concat(extras);
+ return { rows: rows, main: main };
+}
+
+// ---------- Чек (скрин перевода) — обязателен, хранится в приватном бакете ----------
+window._payReceipt = null; // { b64, mime, preview, name, uploadedPath }
+
+function payReceiptRender(){
+ var box = document.getElementById('p-receipt-box');
+ if(!box) return;
+ box.innerHTML = '';
+ if(window._payReceipt){
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:10px;border:1px solid var(--border-faint);border-radius:10px;padding:8px 10px';
+  var img = document.createElement('img');
+  img.src = window._payReceipt.preview; // dataURL, собран нами из canvas — безопасен
+  img.style.cssText = 'width:44px;height:44px;object-fit:cover;border-radius:6px;cursor:pointer;flex:none';
+  img.title = 'Открыть крупнее';
+  img.onclick = function(){ payReceiptPreviewOpen(window._payReceipt.preview); };
+  var name = document.createElement('span');
+  name.style.cssText = 'font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1';
+  name.textContent = window._payReceipt.name || 'чек';
+  var del = document.createElement('button');
+  del.type = 'button';
+  del.style.cssText = 'border:none;background:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:2px 6px;flex:none';
+  del.textContent = '×';
+  del.title = 'Убрать чек';
+  del.onclick = function(){ payReceiptClear(); };
+  wrap.appendChild(img); wrap.appendChild(name); wrap.appendChild(del);
+  box.appendChild(wrap);
+ } else {
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'pp-chip';
+  btn.textContent = 'Приложить чек';
+  btn.onclick = function(){ var inp = document.getElementById('p-receipt-input'); if(inp) inp.click(); };
+  var hint = document.createElement('span');
+  hint.style.cssText = 'font-size:11px;color:var(--text-muted);margin-left:10px';
+  hint.textContent = 'или просто нажмите Ctrl+V, если скрин скопирован';
+  box.appendChild(btn); box.appendChild(hint);
+ }
+}
+function payReceiptClear(){
+ window._payReceipt = null;
+ payReceiptRender();
+}
+function payReceiptPick(input){
+ var f = input.files && input.files[0];
+ input.value = ''; // тот же файл можно выбрать повторно
+ if(f) payReceiptProcess(f);
+}
+// Сжатие на клиенте: длинная сторона до 1600px, JPEG q0.85 — скрин весит ~100-300КБ.
+// HEIC с айфона canvas не декодирует — честный тост «сохраните как JPG/скрин».
+// v825.1: общая для основного чека и чеков услуг; done(объект-чек) при успехе.
+function payReceiptProcessFile(file, done){
+ if(!file || (file.type && !/^image\//.test(file.type))){ sdToast('Нужно изображение (JPG/PNG)'); return; }
+ var reader = new FileReader();
+ reader.onload = function(){
+  var dataUrl = reader.result;
+  var img = new Image();
+  img.onload = function(){
+   var MAX = 1600;
+   var w = img.naturalWidth, hgt = img.naturalHeight;
+   var k = Math.min(1, MAX / Math.max(w, hgt));
+   var cv = document.createElement('canvas');
+   cv.width = Math.round(w * k); cv.height = Math.round(hgt * k);
+   cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+   var out = cv.toDataURL('image/jpeg', 0.85);
+   done({ b64: out.split(',')[1], mime: 'image/jpeg', preview: out, name: file.name || 'чек.jpg', uploadedPath: null });
+  };
+  img.onerror = function(){
+   // не декодировалось (HEIC и т.п.) — грузим оригинал, если формат принимает сервер и вес разумный
+   var okMime = { 'image/jpeg':1, 'image/png':1, 'image/webp':1 }[file.type];
+   if(okMime && file.size <= 3 * 1024 * 1024){
+    done({ b64: String(dataUrl).split(',')[1], mime: file.type, preview: dataUrl, name: file.name || 'чек', uploadedPath: null });
+   } else {
+    sdToast('Не удалось обработать изображение — сохраните чек как JPG или сделайте скрин');
+   }
+  };
+  img.src = dataUrl;
+ };
+ reader.readAsDataURL(file);
+}
+function payReceiptProcess(file){
+ payReceiptProcessFile(file, function(rc){ window._payReceipt = rc; payReceiptRender(); });
+}
+// Чек конкретной услуги — живёт в payExtras[i].receipt
+function payExtraReceiptPick(i, input){
+ var f = input.files && input.files[0];
+ input.value = '';
+ if(!f || !payExtras[i]) return;
+ payReceiptProcessFile(f, function(rc){ if(payExtras[i]){ payExtras[i].receipt = rc; payExtraReceiptRender(i); } });
+}
+function payExtraReceiptClear(i){
+ if(payExtras[i]) payExtras[i].receipt = null;
+ payExtraReceiptRender(i);
+}
+function payExtraReceiptRender(i){
+ var box = document.getElementById('p-ex' + i + '-receipt-box');
+ if(!box) return;
+ box.innerHTML = '';
+ var rc = payExtras[i] && payExtras[i].receipt;
+ if(rc){
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:10px;border:1px solid var(--border-faint);border-radius:10px;padding:6px 10px';
+  var img = document.createElement('img');
+  img.src = rc.preview;
+  img.style.cssText = 'width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer;flex:none';
+  img.onclick = function(){ payReceiptPreviewOpen(rc.preview); };
+  var name = document.createElement('span');
+  name.style.cssText = 'font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1';
+  name.textContent = rc.name || 'чек';
+  var del = document.createElement('button');
+  del.type = 'button';
+  del.style.cssText = 'border:none;background:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:2px 6px;flex:none';
+  del.textContent = '×';
+  del.title = 'Убрать чек услуги';
+  del.onclick = function(){ payExtraReceiptClear(i); };
+  wrap.appendChild(img); wrap.appendChild(name); wrap.appendChild(del);
+  box.appendChild(wrap);
+ } else {
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'pp-chip';
+  btn.textContent = 'Приложить чек услуги';
+  btn.onclick = function(){ var inp = document.getElementById('p-ex' + i + '-receipt-input'); if(inp) inp.click(); };
+  box.appendChild(btn);
+ }
+}
+// Ctrl+V скрина прямо в открытую форму оплаты
+document.addEventListener('paste', function(e){
+ var modal = document.getElementById('modal');
+ var formPay = document.getElementById('form-payment');
+ if(!modal || !modal.classList.contains('open') || !formPay || formPay.style.display === 'none') return;
+ var items = (e.clipboardData && e.clipboardData.items) || [];
+ for(var i = 0; i < items.length; i++){
+  if(items[i].kind === 'file' && /^image\//.test(items[i].type)){
+   var f = items[i].getAsFile();
+   if(f){ e.preventDefault(); payReceiptProcess(f); }
+   return;
+  }
+ }
+});
+// Просмотр картинки поверх всего (и превью в форме, и чек из таблицы оплат)
+function payReceiptPreviewOpen(url, caption){
+ var bg = document.createElement('div');
+ bg.style.cssText = 'position:fixed;inset:0;z-index:1000020;background:rgba(0,0,0,.85);display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;cursor:zoom-out';
+ var img = document.createElement('img');
+ img.style.cssText = 'max-width:92vw;max-height:86vh;border-radius:8px;box-shadow:0 24px 64px rgba(0,0,0,.6)';
+ img.src = url; // URL приходит от нашего API (signed) либо наш dataURL — в innerHTML не конкатенируем (XSS v699)
+ bg.appendChild(img);
+ if(caption){
+  var cap = document.createElement('div');
+  cap.style.cssText = 'font-size:12px;color:rgba(255,255,255,.75);max-width:92vw;text-align:center';
+  cap.textContent = caption;
+  bg.appendChild(cap);
+ }
+ bg.onclick = function(){ bg.remove(); };
+ document.body.appendChild(bg);
+}
+// Чек из таблицы оплат: по id платежа получаем временную подписанную ссылку
+async function openPayReceipt(pid){
+ var p = (typeof payments !== 'undefined' ? payments : []).filter(function(x){ return String(x.id) === String(pid); })[0];
+ if(!p || !p.receiptPath){ sdToast('У этой оплаты нет чека'); return; }
+ try {
+  var d = await sbFetch('/api/receipts?path=' + encodeURIComponent(p.receiptPath));
+  if(!d || !d.ok || !d.url){ sdToast('Чек не открылся' + ((d && d.error) ? (': ' + d.error) : '')); return; }
+  // UX v825: один чек может покрывать несколько записей одной оплаты (лицензия + услуги) —
+  // подписываем, чтобы бухгалтер не решил «суммы не бьются»
+  payReceiptPreviewOpen(d.url, p.client + ' — запись на ' + fmtFull(p.amount) + '. Чек может быть общим на несколько записей одной оплаты (лицензия + услуги).');
+ } catch(e){ sdToast('Чек не открылся: ' + (e.message || e)); }
 }
 
 async function ttQaSave(){
