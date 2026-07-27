@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v826</title>
+<title>SalesDoc — Финансовый Дашборд v827</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -7305,6 +7305,44 @@ body.light #ac-bulk-bar { box-shadow:0 12px 32px rgba(15,18,25,.18); }
 #ac-bulk-bar .abb-btn:hover { border-color:var(--accent,#5E6AD2); }
 #ac-bulk-bar .abb-clear { margin-left:auto; background:transparent; border:none; color:var(--text-soft); font-size:12px; cursor:pointer; font-family:inherit; }
 .ac-cb { width:15px; height:15px; accent-color:var(--accent,#5E6AD2); cursor:pointer; vertical-align:middle; }
+/* v827: «Действующие» — Linear-леджер. Только var(--...) — светлая тема без протечек. */
+.ac-toolbar { gap:8px; align-items:center; flex-wrap:wrap; }
+.ac-toolbar-sep { width:1px; height:18px; background:var(--border); margin:0 2px; flex:none; }
+.ac-search { margin-left:auto; padding:6px 11px; border-radius:9px; border:1px solid var(--border-faint); background:var(--surface-2); color:var(--text); font-size:12.5px; min-width:200px; font-family:inherit; }
+.ac-reset-btn { background:transparent; border:none; color:var(--text-soft); font-size:11.5px; font-weight:600; cursor:pointer; font-family:inherit; padding:6px 4px; }
+.ac-reset-btn:hover { color:var(--danger,#E5604D); }
+.intg-fchip .cnt-b { margin-left:5px; font-weight:700; color:var(--accent-text,#828FF7); }
+/* стат-строка (вместо крупных MRR-карточек и KPI-плиток) */
+.ac-statline { display:flex; align-items:baseline; gap:6px 20px; flex-wrap:wrap; padding:11px 16px; background:var(--surface); border:1px solid var(--border-faint); border-radius:12px; margin-bottom:14px; font-variant-numeric:tabular-nums; }
+.ac-stat { white-space:nowrap; }
+.ac-stat .n { font-size:16px; font-weight:600; color:var(--text); letter-spacing:-.02em; }
+.ac-stat .l { font-size:11px; color:var(--text-soft); margin-right:5px; }
+.ac-stat .d { font-size:11px; font-weight:600; margin-left:5px; }
+.ac-stat-sep { width:1px; height:16px; background:var(--border); align-self:center; flex:none; }
+.ac-seg-pill { cursor:pointer; font-size:12px; color:var(--text-2); font-weight:600; white-space:nowrap; user-select:none; }
+.ac-seg-pill:hover { color:var(--text); }
+.ac-seg-pill.is-on { color:var(--accent-text,#828FF7); }
+.ac-seg-pill .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; vertical-align:1px; }
+/* леджер: sticky-шапка требует overflow:visible по всей цепочке (sd-card режет — новый класс) */
+.ac-ledger-card { background:var(--surface); border:1px solid var(--border-faint); border-radius:12px; overflow:visible; }
+.ac-ledger-wrap { overflow:visible; }
+.ac-ledger { width:100%; border-collapse:collapse; }
+.ac-ledger th { position:sticky; top:60px; z-index:5; background:var(--surface); text-align:left; padding:8px 12px; font-size:10.5px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--text-soft); box-shadow:0 1px 0 var(--border); } /* box-shadow вместо border: при border-collapse граница sticky-шапки уезжает со скроллом */
+.ac-ledger th.num, .ac-ledger td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.ac-ledger td { padding:6px 12px; font-size:13px; height:38px; box-sizing:border-box; border-bottom:1px solid var(--border-faint); vertical-align:middle; }
+.ac-ledger tr:last-child td { border-bottom:none; }
+.ac-ledger tr.ac-row { cursor:pointer; }
+.ac-ledger tr.ac-row:hover td { background:var(--surface-2); }
+.ac-name { font-weight:500; color:var(--text); font-size:13px; line-height:1.25; }
+.ac-host { font-size:11.5px; color:var(--text-soft); line-height:1.25; }
+.ac-access { font-size:12.5px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.ac-access .sub { color:var(--text-soft); font-weight:400; }
+.ac-task-btn { opacity:0; transition:opacity .12s; }
+.ac-ledger tr.ac-row:hover .ac-task-btn { opacity:1; }
+@media (hover:none){ .ac-task-btn { opacity:1; } } /* на тач-экранах hover нет — кнопка видна всегда */
+.ac-more-head { font-size:11.5px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--text-soft); cursor:pointer; padding:10px 2px; user-select:none; }
+.ac-more-head:hover { color:var(--text-2); }
+@media (max-width:900px){ .ac-ledger-wrap { overflow-x:auto; } .ac-ledger th { position:static; } .ac-search { margin-left:0; flex:1 1 100%; } }
 /* v824: форма оплаты «как в боте» — чипы с переносом, плашка расчёта, кнопки прайса */
 .pay-chips-wrap { flex-wrap:wrap; }
 .pay-chips-wrap .pp-chip { flex:0 0 auto; padding:8px 14px; }
@@ -9905,46 +9943,35 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="sd-h1">Действующие клиенты</div>
  <div class="sd-sub">Активированные клиенты, риск отвала, абонплата, теги</div>
  </div>
- <div class="sd-filters">
- <input type="search" id="ac-filter-search" placeholder="Поиск по названию или имени сервера..." oninput="acSetSearch(this.value)" style="padding:7px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2);color:var(--text);font-size:13px;min-width:240px;flex:1 1 240px;font-family:inherit">
- <select class="sd-select" id="ac-filter-op" onchange="acSetOperator(this.value)">
- <option value="">Все операторы</option>
- <option value="__none">Без куратора</option><!-- v823: главная дыра KG — ничьи клиенты; отсюда их разбирают -->
- </select>
- <select class="sd-select" id="ac-filter-risk" onchange="acSetRisk(this.value)">
- <option value="">Все риски</option>
- <option value="high">Горит</option>
- <option value="med">На грани</option>
- <option value="low">Спокойно</option>
- </select>
- <select class="sd-select" id="ac-filter-segment" onchange="acSetSegment(this.value)">
- <option value="">Любой размер</option>
- <option value="A+">Очень крупные (50+ польз.)</option>
- <option value="A">Крупные (21-50)</option>
- <option value="B">Средние (11-20)</option>
- <option value="C">Небольшие (5-10)</option>
- <option value="D">Мелкие (1-4)</option>
- </select>
- <select class="sd-select" id="ac-filter-tag" onchange="acSetTag(this.value)">
- <option value="">Все теги</option>
- <option value="risk">Риск</option>
- <option value="problem">Проблема</option>
- <option value="working">В работе</option>
- <option value="ok">Норма</option>
- </select>
- <!-- v609: служебные галки/кнопки скрыты из основного ряда (по умолчанию показываем всех) — оператор включит при необходимости -->
- <label style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-churned" checked onchange="acSetShowChurned(this.checked)" style="margin:0"> Показать отвалившихся</label>
- <label style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--text-soft);cursor:pointer;user-select:none;padding:0 8px"><input type="checkbox" id="ac-filter-nosub" checked onchange="acSetShowNoSub(this.checked)" style="margin:0"> Показать без подписки</label>
- <!-- v549: кнопка «Сбросить фильтры» — появляется когда хоть один фильтр активен -->
- <button id="ac-filter-reset" onclick="acResetFilters()" style="display:none;padding:6px 12px;font-size:11px;font-weight:600;background:rgba(239,68,68,.10);color:#EF4444;border:1px solid rgba(239,68,68,.30);border-radius:6px;cursor:pointer">Сбросить фильтры</button>
+ <!-- v827: Linear-леджер — чипы вместо нативных select (правило проекта), быстрые сценарии
+      оператора: Мои / Горит / Без куратора. Тексты чипов рисует acFchipsRender(). -->
+ <div class="sd-filters ac-toolbar">
+ <button type="button" class="intg-fchip" id="ac-fchip-mine" onclick="acToggleMine()">Мои</button>
+ <button type="button" class="intg-fchip" id="ac-fchip-hot" onclick="acToggleExpiring()">Горит</button>
+ <button type="button" class="intg-fchip" id="ac-fchip-nocurator" onclick="acToggleNoCurator()">Без куратора</button>
+ <span class="ac-toolbar-sep"></span>
+ <button type="button" class="intg-fchip" id="ac-fchip-operator" onclick="acFilterDdOpen(event,'operator')"></button>
+ <button type="button" class="intg-fchip" id="ac-fchip-tag" onclick="acFilterDdOpen(event,'tag')"></button>
+ <button id="ac-filter-reset" class="ac-reset-btn" onclick="acResetFilters()" style="display:none">Сбросить</button>
+ <input type="search" id="ac-filter-search" class="ac-search" placeholder="Клиент или сервер..." oninput="acSetSearch(this.value)">
  <!-- v823: кураторы (операторы) вносят оплаты отсюда — страницу «Платежи» они не видят -->
  <button id="ac-add-payment-btn" class="add-btn" style="display:none;font-size:11px;padding:6px 14px" onclick="openModal('payment')">+ Оплата</button>
  <button onclick="acReloadPrior()" id="ac-reload-prior-btn" title="Перечитать подписки из «Доходы 2025». Нужно только если в таблице 2025 что-то добавили вручную." style="display:none;padding:6px 10px;font-size:11px;background:rgba(120,120,128,.08);color:var(--text-soft);border:1px solid var(--border-faint);border-radius:6px;cursor:pointer">Обновить из 2025</button>
  </div>
  </div>
- <!-- v295: MRR / ARR / Churn / NRR — north-star метрики SaaS -->
+ <!-- v827: компактная стат-строка (подписки/отвал/удержание + сегменты) — вместо крупных
+      карточек и KPI-плиток; рендерит acRenderMRRStrip -->
  <div id="ac-mrr-strip"></div>
- <div class="sd-kpis" id="ac-kpis"></div>
+ <div class="sd-section-title">Клиенты <span id="ac-count" style="color:var(--text-soft);font-weight:500;text-transform:none;letter-spacing:0;font-size:13px"></span></div>
+ <!-- v827: sticky-шапке нужен overflow:visible по всей цепочке — поэтому не sd-card/sd-table-wrap -->
+ <div class="ac-ledger-card"><div class="ac-ledger-wrap"><table class="ac-ledger" id="ac-table"></table></div></div>
+ <!-- v823: плавающая панель массового назначения куратора (появляется при выборе чекбоксами) -->
+ <div id="ac-bulk-bar"></div>
+
+ <!-- v827: аналитика и служебные инструменты — под таблицей, свёрнуты (главное на странице — список) -->
+ <div id="ac-more-section" style="margin-top:22px">
+ <div class="ac-more-head" onclick="acToggleMore()">Графики и проверка данных <span id="ac-more-badge"></span> <span id="ac-more-arrow">▾</span></div>
+ <div id="ac-more-body" style="display:none">
  <div class="sd-charts-row">
  <div class="sd-card sd-chart-card">
  <div class="sd-chart-head">
@@ -9961,11 +9988,10 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="sd-bars" id="ac-tags-bars"></div>
  </div>
  </div>
- <!-- v280: AI-виджет Customer Success на странице Действующие клиенты -->
+ <!-- v280: AI-виджет Customer Success -->
  <div id="ai-w-clients-container"></div>
-
  <!-- v277: несматченные платежи — ручное связывание -->
- <div id="ac-unmatched-section" style="display:none;margin-bottom:16px">
+ <div id="ac-unmatched-section" style="display:none;margin-bottom:16px;margin-top:14px">
  <div class="sd-card" style="padding:14px 16px;background:rgba(214,163,114,.04);border:1px solid rgba(214,163,114,.25)">
  <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="acToggleUnmatched()">
  <div>
@@ -9990,10 +10016,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div id="ac-prefix-list" style="display:none;margin-top:14px;border-top:1px solid var(--border-faint);padding-top:14px"></div>
  </div>
  </div>
- <div class="sd-section-title">Все клиенты <span id="ac-count" style="color:var(--text-soft);font-weight:500;text-transform:none;letter-spacing:0;font-size:13px"></span></div>
- <div class="sd-card"><div class="sd-table-wrap"><table class="sd-table" id="ac-table"></table></div></div>
- <!-- v823: плавающая панель массового назначения куратора (появляется при выборе чекбоксами) -->
- <div id="ac-bulk-bar"></div>
+ </div>
+ </div>
  </div>
  </div>
  <!-- /ACTIVECLIENTS VIEW -->
@@ -42381,7 +42405,7 @@ var AC_TAGS_KEY = 'crm_client_tags';
 var AC_KZ_CACHE = null;
 // v553: showChurned/showNoSub = true по умолчанию — чтобы видеть ВСЕХ клиентов сразу, без нажатия галок.
 // Если кому-то нужно отделить активных — пусть включит фильтр риска или галку выключит.
-var acState = { operator: '', risk: '', tag: '', segment: '', showChurned: true, showNoSub: true, search: '', selected: {} }; /* v823: selected = client_id→1 для массового назначения куратора */
+var acState = { operator: '', risk: '', tag: '', segment: '', expiring: false, showChurned: true, showNoSub: true, search: '', selected: {} }; /* v823: selected = client_id→1 для массового назначения куратора; v827: expiring = чип «Горит» */
 
 // v253: сегменты клиентов по кол-ву пользователей (qty)
 var AC_SEGMENTS = [
@@ -43018,6 +43042,105 @@ function acRiskLevelByDays(client, days, accessStatus, accessUntil){
 function acSetOperator(op){ acState.operator = op || ''; acRender(); }
 
 // ============================================================
+// v827: чипы-фильтры вместо нативных select (Linear-леджер).
+// Дропдауны — через общий _intgDdOpen (механизм Интеграций), свой не пишем.
+// ============================================================
+var AC_TAG_LABELS = { risk:'Риск', problem:'Проблема', working:'В работе', ok:'Норма' };
+// Список операторов текущей страны (KB_OP_COLORS — казахстанский хардкод + сотрудники страны)
+function acOperatorOptions(){
+ var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
+ try {
+  var _cn = (typeof currentCountry!=='undefined'&&currentCountry)||'KZ';
+  (employees||[]).forEach(function(e){
+   if(e && String(e.role||'')==='operator' && String(e.country||'').toUpperCase()===_cn && ops.indexOf(e.name)<0) ops.push(e.name);
+  });
+ } catch(_){}
+ return ops;
+}
+function acFilterDdOpen(ev, key){
+ ev.stopPropagation();
+ var anchor = ev.currentTarget || ev.target;
+ var opts, current;
+ if(key === 'operator'){
+  opts = [{value:'',label:'Все кураторы'},{value:'__none',label:'Без куратора'}]
+   .concat(acOperatorOptions().map(function(o){ return {value:o,label:o}; }));
+  current = acState.operator;
+ } else if(key === 'segment'){
+  opts = [{value:'',label:'Любой размер'}].concat(AC_SEGMENTS.map(function(s){ return {value:s.key, label:s.name+' · '+s.desc}; }));
+  current = acState.segment;
+ } else { // tag
+  opts = [{value:'',label:'Все теги'}].concat(Object.keys(AC_TAG_LABELS).map(function(t){ return {value:t,label:AC_TAG_LABELS[t]}; }));
+  current = acState.tag;
+ }
+ _intgDdOpen(anchor, opts, current, function(v){
+  if(key === 'operator') acState.operator = v;
+  else if(key === 'segment') acState.segment = v;
+  else acState.tag = v;
+  acRender();
+ });
+}
+// «Горит» — доступ просрочен (grace) или кончается в ближайшие 7 дней.
+// QA v827: floor как в строке таблицы — иначе клиент с «через 7 дн» не попадал в чип
+function acIsHot(c){
+ if(c.accessStatus === 'grace') return true;
+ if(c.accessStatus === 'active' && c.accessUntil){
+  return Math.floor((c.accessUntil - new Date()) / 86400000) <= 7;
+ }
+ return false;
+}
+function acToggleExpiring(){ acState.expiring = !acState.expiring; acRender(); }
+function acToggleNoCurator(){ acState.operator = acState.operator === '__none' ? '' : '__none'; acRender(); }
+// «Мои» — портфель текущего пользователя (ищем его имя в списке операторов по первому слову)
+function acToggleMine(){
+ var me = (typeof currentUser!=='undefined'&&currentUser&&currentUser.name) ? String(currentUser.name).trim() : '';
+ if(!me) return;
+ var first = me.split(/\s+/)[0].toLowerCase();
+ var match = acOperatorOptions().filter(function(o){ return o.toLowerCase().indexOf(first) === 0; })[0] || me;
+ acState.operator = (acState.operator === match) ? '' : match;
+ acRender();
+}
+// Тексты и подсветка чипов; counts = {hot, nocur} считает acRender по отскоупленному списку
+function acFchipsRender(counts){
+ counts = counts || window._acChipCounts || {};
+ var set = function(id, html, on){
+  var el = document.getElementById(id);
+  if(!el) return;
+  el.innerHTML = html;
+  el.classList.toggle('is-on', !!on);
+ };
+ var arrow = ' <span style="font-size:9px;opacity:.6">&#9662;</span>';
+ var lbl = function(name, val){ return '<span style="opacity:.65;font-weight:500">'+name+':</span> '+_escHtml(val)+arrow; };
+ var cnt = function(n){ return n > 0 ? '<span class="cnt-b">'+n+'</span>' : ''; };
+ // «Мои» — только если у пользователя реально есть свои клиенты (UX v827: у CEO без
+ // портфеля чип вёл в пустой список); роль operator и так отскоуплена — прячем
+ var mineEl = document.getElementById('ac-fchip-mine');
+ if(mineEl){
+  var isOp = (typeof currentUser!=='undefined'&&currentUser&&String(currentUser.role||'').toLowerCase()==='operator');
+  var hasName = !!(typeof currentUser!=='undefined'&&currentUser&&currentUser.name);
+  mineEl.style.display = (!isOp && hasName && (counts.mine || 0) > 0) ? '' : 'none';
+  var first = hasName ? String(currentUser.name).trim().split(/\s+/)[0].toLowerCase() : '';
+  mineEl.classList.toggle('is-on', !!(acState.operator && acState.operator !== '__none' && acState.operator.toLowerCase().indexOf(first) === 0));
+ }
+ set('ac-fchip-hot', 'Горит' + cnt(counts.hot), acState.expiring);
+ set('ac-fchip-nocurator', 'Без куратора' + cnt(counts.nocur), acState.operator === '__none');
+ set('ac-fchip-operator', lbl('Куратор', acState.operator === '__none' ? 'Без куратора' : (acState.operator || 'Все')), !!acState.operator);
+ set('ac-fchip-tag', lbl('Тег', acState.tag ? (AC_TAG_LABELS[acState.tag]||acState.tag) : 'Все'), !!acState.tag);
+ var resetBtn = document.getElementById('ac-filter-reset');
+ if(resetBtn){
+  var anyActive = !!(acState.operator || acState.risk || acState.tag || acState.segment || acState.search || acState.expiring);
+  resetBtn.style.display = anyActive ? 'inline-block' : 'none';
+ }
+}
+function acToggleMore(){
+ var body = document.getElementById('ac-more-body');
+ var arr = document.getElementById('ac-more-arrow');
+ if(!body) return;
+ var open = body.style.display === 'none';
+ body.style.display = open ? '' : 'none';
+ if(arr) arr.textContent = open ? '▴' : '▾';
+}
+
+// ============================================================
 // v823: массовое назначение куратора (Действующие)
 // Сценарий KG: 151 активный клиент без куратора → фильтр «Без куратора» →
 // Малика/Элиза (или руководитель) галочками разбирают клиентов по 10-20 штук.
@@ -43100,11 +43223,11 @@ function acSetSearch(s){ acState.search = (s || '').trim().toLowerCase(); acRend
 // v549: сброс всех фильтров одной кнопкой — если случайно поставил и не понимаешь почему пусто
 function acResetFilters(){
  acState.operator = ''; acState.risk = ''; acState.tag = ''; acState.segment = '';
- acState.showChurned = false; acState.showNoSub = false; acState.search = '';
- var ids = ['ac-filter-op','ac-filter-risk','ac-filter-tag','ac-filter-segment','ac-filter-search'];
- ids.forEach(function(id){ var el = document.getElementById(id); if(el) el.value = ''; });
- var c1 = document.getElementById('ac-filter-churned'); if(c1) c1.checked = false;
- var c2 = document.getElementById('ac-filter-nosub'); if(c2) c2.checked = false;
+ acState.expiring = false; acState.search = '';
+ // v827-fix: сброс возвращает ДЕФОЛТ (true, показываем всех) — раньше ставил false
+ // вопреки дефолту v553 и «Сбросить» прятал часть клиентов
+ acState.showChurned = true; acState.showNoSub = true;
+ var s = document.getElementById('ac-filter-search'); if(s) s.value = '';
  acRender();
 }
 // v304: ручная перезагрузка 2025 (на случай если что-то реально добавили)
@@ -43122,30 +43245,12 @@ function acReloadPrior(){
 }
 
 function acInit(){
- var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
- // v823: KB_OP_COLORS — казахстанский хардкод; добавляем операторов текущей страны из
- // «Сотрудников» (для KG это Malika/Eliza), иначе кураторов KG нет в фильтре.
- try {
-  var _cn = (typeof currentCountry!=='undefined'&&currentCountry)||'KZ';
-  (employees||[]).forEach(function(e){
-   if(e && String(e.role||'')==='operator' && String(e.country||'').toUpperCase()===_cn && ops.indexOf(e.name)<0) ops.push(e.name);
-  });
- } catch(_){}
- var sel = document.getElementById('ac-filter-op');
- // v823-qa: пересобираем список при каждом заходе — при переключении страны KZ→KG
- // старый guard оставлял казахстанских операторов и не показывал Малику/Элизу
- if(sel){
-  while(sel.children.length > 2) sel.removeChild(sel.lastChild); /* два статических: Все + Без куратора */
-  ops.forEach(function(op){
-   var opt = document.createElement('option');
-   opt.value = op; opt.textContent = op;
-   sel.appendChild(opt);
-  });
-  // если выбранного оператора больше нет в списке (сменили страну) — сбросить фильтр
-  if(acState.operator && acState.operator !== '__none' && ops.indexOf(acState.operator) < 0){
-   acState.operator = ''; sel.value = '';
-  } else { sel.value = acState.operator; }
+ // v827: список операторов теперь в acOperatorOptions() (чипы + дропдаун).
+ // v823-qa: при смене страны KZ→KG выбранного оператора может не быть — сбрасываем фильтр.
+ if(acState.operator && acState.operator !== '__none' && acOperatorOptions().indexOf(acState.operator) < 0){
+  acState.operator = '';
  }
+ acFchipsRender(); // QA v827: тексты чипов сразу, не дожидаясь сети (иначе пустые пилюли)
  // v257-fix: дождаться kbLoad чтобы операторы/этапы из канбана корректно
  // подтянулись в карточки клиентов (acGetActiveClients использует kbCards).
  var loadKb = (typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'
@@ -43163,12 +43268,6 @@ function acInit(){
 }
 
 function acRender(){
- // v549: показать кнопку «Сбросить фильтры» когда хоть один активен
- var resetBtn = document.getElementById('ac-filter-reset');
- if(resetBtn){
-  var anyActive = !!(acState.operator || acState.risk || acState.tag || acState.segment || acState.search || acState.showChurned || acState.showNoSub);
-  resetBtn.style.display = anyActive ? 'inline-block' : 'none';
- }
  var all = acGetActiveClients();
  // v733: роль «оператор» видит в «Действующие» ТОЛЬКО своих клиентов (по оператору/куратору).
  // CEO/руководитель/бухгалтер и т.д. — видят всех. Матч имени гибкий (регистр + первое слово,
@@ -43189,6 +43288,8 @@ function acRender(){
  if(acState.risk && c.risk !== acState.risk) return false;
  if(acState.tag && c.tags.indexOf(acState.tag) < 0) return false;
  if(acState.segment && c.segment !== acState.segment) return false;
+ // v827: чип «Горит» — просрочка или доступ кончается в ближайшие 7 дней
+ if(acState.expiring && !acIsHot(c)) return false;
  // v300: по умолчанию скрываем отвалившихся (доступ закончился >7 дн назад)
  if(!acState.showChurned && c.accessStatus === 'churned') return false;
  // v302: по умолчанию скрываем тех, у кого вообще не было подписочных платежей —
@@ -43206,7 +43307,13 @@ function acRender(){
  var cnt = document.getElementById('ac-count');
  if(cnt) cnt.textContent = '· ' + filtered.length + ' из ' + all.length;
 
- // v253: KPI по сегментам клиентов
+ // v827: счётчики для чипов «Горит»/«Без куратора» + сегменты для стат-строки
+ var _meFirst = (typeof currentUser!=='undefined'&&currentUser&&currentUser.name) ? String(currentUser.name).trim().split(/\s+/)[0].toLowerCase() : '';
+ window._acChipCounts = {
+  hot: all.filter(acIsHot).length,
+  nocur: all.filter(function(c){ return !c.operator; }).length,
+  mine: _meFirst ? all.filter(function(c){ return String(c.operator||'').trim().toLowerCase().indexOf(_meFirst) === 0; }).length : 0
+ };
  var segStats = {};
  AC_SEGMENTS.forEach(function(s){ segStats[s.key] = { count:0, sum:0, licenses:0 }; });
  all.forEach(function(c){
@@ -43216,21 +43323,9 @@ function acRender(){
    segStats[c.segment].licenses += c.monthlyQty || 0;
   }
  });
+ window._acLastSegStats = segStats; // читает стат-строка (acRenderMRRStrip)
  var fmtSum = function(n){ return Math.round(n).toLocaleString('ru-RU') + ' '+_CUR; };
- var kpisEl = document.getElementById('ac-kpis');
- if(kpisEl){
-  var khtml = '';
-  AC_SEGMENTS.forEach(function(s){
-   var st = segStats[s.key];
-   khtml += '<div class="sd-kpi" style="cursor:pointer" onclick="acSetSegment(acState.segment===\''+s.key+'\'?\'\':\''+s.key+'\');document.getElementById(\'ac-filter-segment\').value=acState.segment">'
-    + '<div class="sd-kpi-label" style="color:'+s.color+'"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+s.color+';margin-right:6px;vertical-align:middle"></span>'+s.label+'</div>'
-    + '<div class="sd-kpi-value">'+st.count+'</div>'
-    + '<div class="sd-kpi-foot">'+s.desc+' · '+st.licenses+' лиц.</div>'
-    + '<div class="sd-kpi-foot" style="margin-top:4px;font-weight:600;color:var(--text-2)">'+fmtSum(st.sum)+'/мес</div>'
-    + '</div>';
-  });
-  kpisEl.innerHTML = khtml;
- }
+ acFchipsRender(window._acChipCounts);
  // Risk счёты для бар-чарта
  var high = all.filter(function(c){return c.risk === 'high';}).length;
  var med = all.filter(function(c){return c.risk === 'med';}).length;
@@ -43243,7 +43338,7 @@ function acRender(){
  var maxR = Math.max(1, high, med, low);
  rb.innerHTML = ''
  /* v786: подписи врали — риск с v302 считается по «Доступ до», а не по дням без оплаты */
- + acRiskBar('Горит — доступ закончился', high, maxR, 'f-red')
+ + acRiskBar('Доступ закончился', high, maxR, 'f-red')
  + acRiskBar('Просрочка до 7 дней', med, maxR, 'f-warn')
  + acRiskBar('Доступ активен', low, maxR, 'f-done');
  var rsub = document.getElementById('ac-risk-sub');
@@ -43271,14 +43366,16 @@ function acRender(){
  // v823: массовое назначение куратора — чекбоксы видят все, кроме роли «оператор»
  // (оператор и так работает только со своими). Чекбокс только у строк из Supabase (_clientId).
  var _acCanBulk = !(typeof currentUser !== 'undefined' && currentUser && String(currentUser.role||'').toLowerCase() === 'operator');
- var _acColspan = _acCanBulk ? 10 : 9;
+ var _acColspan = _acCanBulk ? 8 : 7;
  if(tbl){
-  var thead = '<thead><tr>' + (_acCanBulk ? '<th style="width:26px"></th>' : '') + '<th>Клиент</th><th>Имя сервера</th><th class="num">Пользователей</th><th class="num">Абонплата</th><th>Ответственный</th><th>Доступ до</th><th>Риск</th><th>Теги</th><th>Действия</th></tr></thead><tbody>';
+  // v827: плоский леджер. Колонка «Риск» убрана — это дубль «Доступ до» (риск считается из той же
+  // даты); колонка «Имя сервера» ушла второй строкой в ячейку клиента.
+  var thead = '<thead><tr>' + (_acCanBulk ? '<th style="width:26px"></th>' : '') + '<th>Клиент</th><th>Доступ</th><th class="num">Абонплата</th><th>Куратор</th><th class="num" title="Сколько пользователей у клиента">Пользователи</th><th>Теги</th><th style="width:104px"></th></tr></thead><tbody>';
   if(!filtered.length){
    // v550: понятное сообщение вместо «Нет клиентов по фильтру».
    // Корень: данные платежей в коде статичны (январь-март 2026), апрель-май лежат в Supabase
    // (не читаются — Фаза 4 миграции). Все active-подписки истекли → showChurned=false режет их.
-   var anyFilterActive = !!(acState.operator || acState.risk || acState.tag || acState.segment || acState.search);
+   var anyFilterActive = !!(acState.operator || acState.risk || acState.tag || acState.segment || acState.search || acState.expiring); /* QA v827: без expiring чип «Горит» при пустоте показывал ложное «База пуста» */
    var msg;
    if(anyFilterActive){
     msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
@@ -43292,51 +43389,39 @@ function acRender(){
     var neverN = all.filter(function(c){ return c.accessStatus === 'never'; }).length;
     msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
         + '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Клиентов нет</div>'
-        + '<div style="font-size:12px;margin-bottom:14px;line-height:1.5">База пуста или данные не загрузились. Нажми ↻ в топбаре чтобы перезагрузить.</div>'
+        + '<div style="font-size:12px;margin-bottom:14px;line-height:1.5">База пуста или данные не загрузились. Нажми кнопку ↻ вверху страницы, чтобы перезагрузить.</div>'
         + '</div>';
    }
    tbl.innerHTML = thead + '<tr><td colspan="'+_acColspan+'" style="padding:0;background:transparent">' + msg + '</td></tr></tbody>';
   } else {
-   var groups = {};
-   AC_SEGMENTS.forEach(function(s){ groups[s.key] = []; });
-   filtered.forEach(function(c){
-    var k = c.segment || 'D';
-    if(!groups[k]) groups[k] = [];
-    groups[k].push(c);
-   });
-   var body = '';
-   AC_SEGMENTS.forEach(function(s){
-    var rows = groups[s.key] || [];
-    if(!rows.length) return;
-    var grpSum = rows.reduce(function(a,c){return a + (c.monthlySum||0);}, 0);
-    var grpLic = rows.reduce(function(a,c){return a + (c.monthlyQty||0);}, 0);
-    body += '<tr class="ac-seg-head"><td colspan="'+_acColspan+'">'
-     + '<div class="ac-seg-row">'
-     + '<div class="ac-seg-name" style="color:'+s.color+'"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+s.color+';margin-right:6px;vertical-align:middle"></span>'+s.name+' <span style="color:var(--text-soft);font-weight:500">· '+s.desc+'</span></div>'
-     + '<div class="ac-seg-stats">'+rows.length+' клиентов · '+grpLic+' лиц. · '+fmtSum(grpSum)+'/мес</div>'
-     + '</div></td></tr>';
-    rows.sort(function(a,b){
-     var ord = {high:0, med:1, low:2};
-     return (ord[a.risk] - ord[b.risk]) || ((b.monthlySum||0) - (a.monthlySum||0));
-    });
-    body += rows.map(function(c){
+   // v827: плоский список, отсортирован по срочности — главный сценарий оператора
+   // «у кого горит доступ — позвонить». Группировка по сегментам убрана: она прятала
+   // горящих мелких клиентов внизу; размер остался фильтром.
+   var sortKey = function(c){
+    if(c.accessStatus === 'grace') return -100 + (c.daysOverdue || 0);      // просроченные — первыми
+    if(c.accessStatus === 'active') return Math.floor((c.accessUntil - new Date()) / 86400000); // ближайшие к концу выше
+    if(c.accessStatus === 'churned') return 100000 + (c.daysOverdue || 0);  // отвалившиеся — вниз
+    return 200000;                                                          // без подписки — в самый низ
+   };
+   filtered.sort(function(a,b){ return (sortKey(a) - sortKey(b)) || ((b.monthlySum||0) - (a.monthlySum||0)); });
+   var _now = new Date();
+   var body = filtered.map(function(c){
      var opColor = (typeof KB_OP_COLORS !== 'undefined' && c.operator && KB_OP_COLORS[c.operator]) || '#888';
-     var riskCls = c.risk === 'high' ? 's-bad' : (c.risk === 'med' ? 's-mid' : 's-good');
-     var riskLabel = c.risk === 'high' ? 'Горит' : (c.risk === 'med' ? 'На грани' : 'Спокойно');
-     // v300: «Доступ до» вместо «Дн. без оплаты» — расчёт по последней подписочной оплате + period
+     // «Доступ»: главное — сколько осталось, дата — вторично. Цвет = срочность
+     // (риск-колонка убрана: это была та же информация вторым словом).
      var accessStr, accessColor;
-     var fmtDM = function(d){ return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear(); };
-     if(c.accessStatus === 'never'){ accessStr = '— нет подписки'; accessColor = 'var(--text-muted)'; }
+     var fmtDM = function(d){ return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0'); };
+     if(c.accessStatus === 'never'){ accessStr = 'нет подписки'; accessColor = 'var(--text-muted)'; }
      else if(c.accessStatus === 'active'){
-      var daysLeft = Math.floor((c.accessUntil - new Date()) / 86400000);
-      accessStr = 'до ' + fmtDM(c.accessUntil) + (daysLeft <= 7 ? ' <span style="color:#FFB340">(' + daysLeft + ' дн)</span>' : '');
-      accessColor = daysLeft <= 7 ? '#FFB340' : 'var(--success)';
+      var daysLeft = Math.floor((c.accessUntil - _now) / 86400000);
+      var main = daysLeft <= 0 ? 'сегодня' : (daysLeft === 1 ? 'завтра' : 'через ' + daysLeft + ' дн');
+      if(daysLeft > 30){ accessStr = 'до ' + fmtDM(c.accessUntil) + '.' + c.accessUntil.getFullYear(); accessColor = 'var(--text-2)'; }
+      else { accessStr = '<b>' + main + '</b> <span class="sub">· ' + fmtDM(c.accessUntil) + '</span>'; accessColor = daysLeft <= 3 ? 'var(--danger)' : (daysLeft <= 7 ? 'var(--warning,#E0A458)' : 'var(--text)'); }
      }
-     else if(c.accessStatus === 'grace'){ accessStr = 'просрочка ' + c.daysOverdue + ' дн'; accessColor = '#FFB340'; }
-     else { accessStr = 'отвалился ' + c.daysOverdue + ' дн'; accessColor = 'var(--text-muted)'; }
+     else if(c.accessStatus === 'grace'){ accessStr = '<b>просрочен ' + c.daysOverdue + ' дн</b>'; accessColor = 'var(--danger)'; }
+     else { accessStr = 'отвалился ' + c.daysOverdue + ' дн назад'; accessColor = 'var(--text-muted)'; }
      var tagsHtml = c.tags.map(function(t){
-      var labels = {risk:'Риск', problem:'Проблема', working:'В работе', ok:'Норма'};
-      return '<span class="ac-tag" title="'+t+'">'+(labels[t]||t)+'</span>';
+      return '<span class="ac-tag" title="'+t+'">'+(AC_TAG_LABELS[t]||t)+'</span>';
      }).join('');
      var clientEsc = (c.client || '').replace(/'/g, "\\'").replace(/"/g, '&quot;'); /* v786: двойная кавычка в названии (ТОО "Арай") рвала onclick */
      var hostEscBtn = (c.host || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -43344,22 +43429,21 @@ function acRender(){
      var cbTd = '';
      if(_acCanBulk){
       var cidEsc = String(c._clientId || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-      cbTd = '<td>' + (c._clientId ? ('<input type="checkbox" class="ac-cb" '+(acState.selected[c._clientId]?'checked ':'')+'onclick="event.stopPropagation()" onchange="acToggleSelect(\''+cidEsc+'\', this.checked)">') : '') + '</td>';
+      cbTd = '<td onclick="event.stopPropagation()">' + (c._clientId ? ('<input type="checkbox" class="ac-cb" '+(acState.selected[c._clientId]?'checked ':'')+'onclick="event.stopPropagation()" onchange="acToggleSelect(\''+cidEsc+'\', this.checked)">') : '') + '</td>';
      }
-     return '<tr>'
+     var host = c.billing_host || c.host || '';
+     // v827: кликабельна вся строка (карта клиента); кнопки внутри глушат всплытие
+     return '<tr class="ac-row" onclick="acOpenClientCard(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" title="Открыть карту клиента">'
       + cbTd
-      + '<td><b style="color:var(--accent-text,#4CB782);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="acOpenClientCard(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" title="Открыть карту клиента">'+kbEsc(c.client)+'</b></td>'
-      + '<td style="font-size:12px;color:var(--text-soft)" title="Имя сервера (код в биллинге) — по нему находим оплаты">'+kbEsc(c.billing_host||c.host||'—')+'</td>'
-      + '<td class="num">'+(c.monthlyQty||0)+'</td>'
-      + '<td class="num">'+(c.monthlySum?fmtSum(c.monthlySum):'—')+'</td>'
+      + '<td><div class="ac-name">'+kbEsc(c.client)+'</div>'+(host?('<div class="ac-host">'+kbEsc(host)+'</div>'):'')+'</td>'
+      + '<td class="ac-access" style="color:'+accessColor+'">'+accessStr+'</td>'
+      + '<td class="num">'+(c.monthlySum?fmtSum(c.monthlySum):'<span style="color:var(--text-muted)">—</span>')+'</td>'
       + '<td><div class="sd-op-cell"><span class="sd-op-dot" style="background:'+opColor+'"></span>'+kbEsc(c.operator || '—')+'</div></td>'
-      + '<td style="color:'+accessColor+';font-size:12px;white-space:nowrap">'+accessStr+'</td>'
-      + '<td><span class="sd-score '+riskCls+'">'+riskLabel+'</span></td>'
-      + '<td><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" onclick="acTagModal(\''+clientEsc+'\')">+</button></div></td>'
-      + '<td><button class="sd-risk-action" onclick="acOpenClientCardWithTask(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" style="background:rgba(52,199,122,.14);color:#4CB782;border-color:rgba(52,199,122,.32)">+ Задача</button></td>'
+      + '<td class="num" style="color:var(--text-2)">'+(c.monthlyQty||0)+'</td>'
+      + '<td onclick="event.stopPropagation()"><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" onclick="event.stopPropagation();acTagModal(\''+clientEsc+'\')">+</button></div></td>'
+      + '<td style="white-space:nowrap"><button class="sd-risk-action ac-task-btn" onclick="event.stopPropagation();acOpenClientCardWithTask(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" style="background:rgba(52,199,122,.14);color:#4CB782;border-color:rgba(52,199,122,.32)">+ Задача</button><span style="color:var(--text-muted);margin-left:8px;font-size:14px" title="Открыть карту клиента">›</span></td>'
       + '</tr>';
-    }).join('');
-   });
+   }).join('');
    tbl.innerHTML = thead + body + '</tbody>';
   }
  }
@@ -43367,6 +43451,13 @@ function acRender(){
  if(typeof acRenderUnmatched === 'function') acRenderUnmatched();
  // v303: диагностика префикс-матчей
  if(typeof acRenderPrefixMerged === 'function') acRenderPrefixMerged();
+ // UX v827: «Платежи без клиента» — рабочий долг, а не аналитика; пока он не разобран,
+ // счётчик виден прямо в заголовке свёрнутой секции
+ try {
+  var _umN = (window._acUnmatchedPays || []).length;
+  var _umB = document.getElementById('ac-more-badge');
+  if(_umB) _umB.innerHTML = _umN > 0 ? '<span style="color:#E0A458;font-weight:700">· платежи без клиента: ' + _umN + '</span>' : '';
+ } catch(_){}
  // v295: MRR / ARR / Churn / NRR
  try { acRenderMRRStrip(); } catch(_){}
  // v823: панель массового назначения куратора живёт поверх перерисовок
@@ -43460,7 +43551,10 @@ async function _acResolveClientId(clientName, host){
 
 async function acOpenClientCard(ev, clientName, host){
  // v555: event передаём явным параметром — иначе в async внутри inline onclick он undefined
- var btn = ev && ev.currentTarget;
+ // v827-fix: с леджера кликается ВСЯ <tr> — подменять textContent можно только у кнопки,
+ // у строки это сносило все ячейки (чекбокс, теги, кнопки) до следующего рендера
+ var tgt = ev && ev.currentTarget;
+ var btn = (tgt && tgt.tagName === 'BUTTON') ? tgt : null;
  var prev = btn ? btn.textContent : null;
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
@@ -43699,6 +43793,8 @@ function acComputeMRRMetrics(){
 }
 
 function acRenderMRRStrip(){
+ // v827: одна компактная стат-строка вместо четырёх крупных карточек + пяти KPI-плиток.
+ // Сегменты — кликабельные пилюли (тот же фильтр «Размер»). Без жаргона MRR/ARR/NRR.
  var el = document.getElementById('ac-mrr-strip');
  if (!el) return;
  var m = acComputeMRRMetrics();
@@ -43709,35 +43805,23 @@ function acRenderMRRStrip(){
  };
  var deltaSign = m.deltaMRR >= 0 ? '+' : '−';
  var deltaColor = m.deltaMRR >= 0 ? 'var(--success)' : 'var(--danger)';
- var nrrColor = m.nrr >= 100 ? 'var(--success)' : m.nrr >= 90 ? 'var(--warning)' : 'var(--danger)';
- var churnColor = m.churnRate <= 2 ? 'var(--success)' : m.churnRate <= 5 ? 'var(--warning)' : 'var(--danger)';
- var html = ''
- + '<div class="mrr-strip">'
- + ' <div class="mrr-card mrr-main">'
- + ' <div class="mrr-lbl">Абонплата в месяц</div>'
- + ' <div class="mrr-amount">' + fmtMoney(m.mrr) + ' <span class="mrr-unit">'+_CUR+'</span></div>'
- + ' <div class="mrr-sub">'
- + ' <span style="color:' + deltaColor + '">' + deltaSign + fmtMoney(Math.abs(m.deltaMRR)) + ' '+_CUR+' · ' + (m.deltaPct >= 0 ? '+' : '') + m.deltaPct + '%</span>'
- + ' <span class="mrr-sub-muted">к прошлому месяцу</span>'
- + ' </div>'
- + ' </div>'
- + ' <div class="mrr-card">'
- + ' <div class="mrr-lbl">Абонплата за год</div>'
- + ' <div class="mrr-val">' + fmtMoney(m.arr) + ' <span class="mrr-unit">'+_CUR+'</span></div>'
- + ' <div class="mrr-sub-muted">если темп сохранится</div>'
- + ' </div>'
- + ' <div class="mrr-card">'
- + ' <div class="mrr-lbl">Отвал за месяц</div>'
- + ' <div class="mrr-val" style="color:' + churnColor + '">' + m.churnRate + '%</div>'
- + ' <div class="mrr-sub-muted">' + m.churned + ' клиентов · −' + fmtMoney(m.churnedMRR) + ' '+_CUR+' в месяц</div>'
- + ' </div>'
- + ' <div class="mrr-card">'
- + ' <div class="mrr-lbl">Удержание выручки</div>'
- + ' <div class="mrr-val" style="color:' + nrrColor + '">' + m.nrr + '%</div>'
- + ' <div class="mrr-sub-muted">' + (m.nrr >= 100 ? 'растём без новых' : m.nrr >= 90 ? 'почти удерживаем' : 'теряем без новых') + '</div>'
- + ' </div>'
+ var nrrColor = m.nrr >= 100 ? 'var(--success)' : m.nrr >= 90 ? 'var(--warning,#E0A458)' : 'var(--danger)';
+ var churnColor = m.churnRate <= 2 ? 'var(--success)' : m.churnRate <= 5 ? 'var(--warning,#E0A458)' : 'var(--danger)';
+ var segStats = window._acLastSegStats || {};
+ var segPills = AC_SEGMENTS.map(function(s){
+  var st = segStats[s.key] || { count: 0 };
+  return '<span class="ac-seg-pill'+(acState.segment === s.key ? ' is-on' : '')+'" onclick="acSetSegment(acState.segment===\''+s.key+'\'?\'\':\''+s.key+'\')" title="'+s.name+' · '+s.desc+' — показать только их">'
+   + '<span class="dot" style="background:'+s.color+'"></span>'+s.label+' '+st.count+'</span>';
+ }).join('');
+ el.innerHTML = ''
+ + '<div class="ac-statline">'
+ + '<span class="ac-stat"><span class="l">Подписки/мес</span><span class="n">' + fmtMoney(m.mrr) + ' ' + _CUR + '</span><span class="d" style="color:' + deltaColor + '" title="К прошлому месяцу">' + deltaSign + m.deltaPct + '%</span></span>'
+ + '<span class="ac-stat" title="Прогноз: подписки за месяц × 12"><span class="l">×12 в год</span><span class="n">' + fmtMoney(m.arr) + '</span></span>'
+ + '<span class="ac-stat" title="Потеряно −' + fmtMoney(m.churnedMRR) + ' ' + _CUR + ' подписки в месяц"><span class="l">Отвал/мес</span><span class="n" style="color:' + churnColor + '">' + m.churnRate + '%</span><span class="d" style="color:var(--text-soft)">' + m.churned + ' кл.</span></span>'
+ + '<span class="ac-stat" title="Сколько прошломесячной подписки осталось в этом месяце"><span class="l">Удержание</span><span class="n" style="color:' + nrrColor + '">' + m.nrr + '%</span></span>'
+ + '<span class="ac-stat-sep"></span>'
+ + segPills
  + '</div>';
- el.innerHTML = html;
 }
 
 // ===========================================================
