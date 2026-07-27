@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v828</title>
+<title>SalesDoc — Финансовый Дашборд v829</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8497,6 +8497,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <button type="button" class="intg-fchip" id="intg-fchip-operator" onclick="_intgFilterDdOpen(event,'operator')"><span style="opacity:.65;font-weight:500">Оператор:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
  <button type="button" class="intg-fchip" id="intg-fchip-manager" onclick="_intgFilterDdOpen(event,'manager')"><span style="opacity:.65;font-weight:500">Менеджер:</span> Все <span style="font-size:9px;opacity:.6">&#9662;</span></button>
  <button type="button" class="intg-fchip" id="intg-fchip-client" onclick="_intgToggleNoClient()" title="Показать только карточки, не привязанные к клиенту">Без клиента</button>
+ <!-- v829: поиск по доске — раньше найти карточку можно было только глазами по колонкам -->
+ <input type="search" id="intg-search" class="ac-search" style="margin-left:0;min-width:170px" placeholder="Поиск: клиент..." oninput="_intgSetSearch(this.value)">
  </div>
  <div id="intg-status" style="font-size:11px;color:var(--text-muted)"></div>
  </div>
@@ -8508,7 +8510,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
   <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
    <div>
     <div style="font-size:13px;font-weight:600;color:var(--text)">Интеграции</div>
-    <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Все интеграции — текущие и архив. Источник: Supabase.</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Очередь и работа по клиентам. Карточка открывается кликом, перетаскивается между колонками.</div>
    </div>
    <div style="display:flex;align-items:center;gap:10px">
     <!-- v448: «Мои/Все» для интеграторов — как в Тикетах. Аян/Дулат/Абзал сразу видят свои. -->
@@ -26736,6 +26738,7 @@ function intgSbRerender(){
  var fOperator = window._intgFilters.operator || ''; // v810: кто внедряет ('__none' = не назначен)
  var fManager  = window._intgFilters.manager  || ''; // v810: кто продал
  var fClient   = window._intgFilters.client   || ''; // v820: '__none' = карточка без client_id
+ var fQ = String(window._intgFilters.q || '').trim().toLowerCase(); // v829: текстовый поиск
  function _intgWhoMatch(val, f){
   if(!f) return true;
   var v = String(val || '').trim();
@@ -26772,6 +26775,13 @@ function intgSbRerender(){
   if(!_intgWhoMatch(_intgOperOf(it), fOperator)) return false; // v810: оператор карточки или с внедрения клиента
   if(!_intgWhoMatch(it.manager, fManager)) return false;       // v810
   if(fClient === '__none' && it.client_id) return false;       // v820
+  // v829: поиск по компании/типу/пакету/людям. При поиске период НЕ режет выдачу:
+  // ищешь конкретного клиента — надо видеть и его завершённые карточки любого месяца.
+  if(fQ){
+   var hay = (String(it.company_name||'') + ' ' + String(it.type||'') + ' ' + String(it.package||'') + ' ' + String(_intgOperOf(it)||'') + ' ' + String(it.manager||'')).toLowerCase();
+   if(hay.indexOf(fQ) < 0) return false;
+   return true;
+  }
   // Активные — всегда
   if(ACTIVE_STAGES[it.status]) return true;
   // v820: при фильтре «Без клиента» показываем сирот целиком, без ограничения месяцем —
@@ -26800,7 +26810,8 @@ function intgSbRerender(){
    + (fPackage ? ' · ' + fPackage : '')
    + (fOperator ? ' · ' + (fOperator === '__none' ? 'без оператора' : fOperator) : '')  // v810
    + (fManager  ? ' · ' + (fManager  === '__none' ? 'без менеджера' : fManager)  : '')  // v810
-   + (fClient   ? ' · без клиента' : ''); // v820
+   + (fClient   ? ' · без клиента' : '') // v820
+   + (fQ        ? ' · поиск «' + fQ + '»' : ''); // v829
 }
 
 // v524: аналитика по Supabase-данным. Считает 3 блока: period stats (по типу),
@@ -27697,6 +27708,11 @@ var _INTG_FILTER_DEFS = {
 function _intgToggleNoClient(){
  window._intgFilters.client = window._intgFilters.client ? '' : '__none';
  _intgFchipsRender();
+ intgSbRerender();
+}
+// v829: живой поиск по доске (компания/тип/пакет/оператор/менеджер)
+function _intgSetSearch(v){
+ window._intgFilters.q = v || '';
  intgSbRerender();
 }
 // v810: эффективный оператор карточки — своё поле, а если пустое, подтягиваем
