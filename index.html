@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v827</title>
+<title>SalesDoc — Финансовый Дашборд v828</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -14984,13 +14984,33 @@ function quickFilterPayments(label) {
  renderAllPayments();
 }
 
-function togglePaySeated(pid) {
+// v828: раньше кнопка меняла галку ТОЛЬКО в памяти браузера (при обновлении слетала —
+// поэтому бухгалтер сажала через бот). Теперь пишет в базу и в лист «Доходы» (колонка L)
+// через /api/payments?action=set_seated; при ошибке листа сервер откатывает базу, мы — галку.
+async function togglePaySeated(pid) {
  var p = payments.find(function(x){ return x.id === pid; });
  if (!p) return;
- p.seated = !p.seated;
+ var target = !p.seated;
+ var sbId = p._sbId || (typeof p.id === 'string' && p.id.length > 20 ? p.id : null);
+ // оптимистично — бухгалтер сажает пачками, ждать 2-3 сек на каждую нельзя
+ p.seated = target;
  renderAllPayments();
- renderAll();
- showNotif(p.seated ? ' Оплата посажена' : 'Оплата снята с посадки', p.client);
+ if (!sbId) {
+  // старая локальная запись без id базы — как раньше, честно предупреждаем
+  renderAll();
+  showNotif(target ? 'Отмечено локально' : 'Снято локально', p.client + ' — у записи нет связи с базой, галка слетит при обновлении.');
+  return;
+ }
+ try {
+  var r = await sbFetch('/api/payments?action=set_seated', { method: 'POST', body: JSON.stringify({ id: sbId, seated: target }) });
+  if (!r || !r.ok) throw new Error((r && r.error) || 'нет ответа сервера');
+  renderAll();
+  showNotif(target ? 'Оплата посажена' : 'Посадка снята', p.client + ((r.sheet && r.sheet.skipped) ? ' — записано в базу.' : ' — записано в базу и Google-таблицу.'));
+ } catch (e) {
+  p.seated = !target;
+  renderAllPayments(); renderAll();
+  showNotif('Не сохранилось', 'Посадка не записалась: ' + (e.message || e) + '. Галка возвращена как было — попробуйте ещё раз.');
+ }
 }
 
 function togglePayService(pid) {
@@ -17329,7 +17349,7 @@ async function saveRecord() {
   if(!res || !res.ok){ failedAt = k; failErr = (res&&res.error)||'нет ответа сервера'; break; }
   savedRows.push(r);
   // мгновенно показать в текущей сессии (источник правды — Supabase, подтянется при перезагрузке)
-  payments.push({id:(res.payment&&res.payment.id)||('m'+Date.now()+'_'+k),client:client,date:paidAt,category:catMapped,categoryRaw:r.catLabel,amount:r.fact,qty:r.qty,periodMonths:payload.period_months,method:r.bank,managerName:managerName,comment:comment,seated:false,serviceWritten:false,receiptPath:rowReceipt});
+  payments.push({id:(res.payment&&res.payment.id)||('m'+Date.now()+'_'+k),_sbId:(res.payment&&res.payment.id)||null,client:client,date:paidAt,category:catMapped,categoryRaw:r.catLabel,amount:r.fact,qty:r.qty,periodMonths:payload.period_months,method:r.bank,managerName:managerName,comment:comment,seated:false,serviceWritten:false,receiptPath:rowReceipt});
   var _sm = res.sheet_mirror;
   if(!(_sm && _sm.ok)) mirrorFails.push(_rowLabel(r) + ((_sm&&_sm.error)?(': '+_sm.error):''));
  }
