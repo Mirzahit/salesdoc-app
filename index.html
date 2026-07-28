@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v835</title>
+<title>SalesDoc — Финансовый Дашборд v836</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -32164,14 +32164,20 @@ async function routeLoad(){
    c._checkDone = done;
    c._checkTotal = total;
   });
-  // Заполнить фильтр операторов
+  // Заполнить фильтр операторов.
+  // v836: по СТРАНЕ (как _routeOpChoices v835) и с пересборкой при каждой загрузке —
+  // раньше наполнялся один раз интеграторами без страны, на KG висели казахстанские имена
   var filterEl = document.getElementById('route-filter-op');
-  if(filterEl && filterEl.options.length <= 1){
-   routeOperators.forEach(o => {
+  if(filterEl){
+   var _fopCur = filterEl.value;
+   while(filterEl.options.length > 1) filterEl.remove(1);
+   _routeOpChoices('', (typeof currentCountry !== 'undefined' && currentCountry) || 'KZ').forEach(function(name){
     var opt = document.createElement('option');
-    opt.value = o.name; opt.textContent = o.name;
+    opt.value = name; opt.textContent = name;
     filterEl.appendChild(opt);
    });
+   filterEl.value = _fopCur;
+   if(filterEl.selectedIndex < 0) filterEl.value = ''; // выбранного больше нет (сменили страну)
   }
   if(st) st.textContent = 'Карточек: ' + routeCards.length;
   routeRender();
