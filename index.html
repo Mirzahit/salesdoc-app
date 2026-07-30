@@ -9956,7 +9956,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  .du-card .v{font-size:25px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;color:var(--text)}
  .du-card .d{font-size:11px;color:var(--text-muted);margin-top:5px}
  .du-card .v.red{color:#E5604D}.du-card .v.amb{color:#E0A458}.du-card .v.grn{color:#4CB782}
- .du-kan{display:grid;grid-template-columns:1.05fr 1fr 1fr;gap:14px;margin-top:16px;align-items:start}
+ .du-kan{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:16px;align-items:start}
  .du-col{background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;overflow:hidden}
  .du-h{padding:12px 14px 11px;border-bottom:1px solid var(--border-faint)}
  .du-h .t{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:8px;color:var(--text)}
@@ -9994,7 +9994,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  .du-age .am{width:120px;text-align:right;font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums}
  .du-note{font-size:11.5px;color:var(--text-muted);line-height:1.55;margin-top:12px}
  .du-empty{color:var(--text-muted);font-size:12px;text-align:center;padding:22px}
- @media(max-width:1100px){.du-kan{grid-template-columns:1fr}.du-strip{grid-template-columns:repeat(2,1fr)}.du-two{grid-template-columns:1fr}}
+ @media(max-width:1500px){.du-kan{grid-template-columns:repeat(2,1fr)}}
+ @media(max-width:900px){.du-kan{grid-template-columns:1fr}.du-strip{grid-template-columns:repeat(2,1fr)}.du-two{grid-template-columns:1fr}}
  </style>
  <div class="sd-page du-page">
  <div class="sd-head">
@@ -43973,6 +43974,9 @@ function _duesCurMk(){ var d = new Date(); return _duesMk(d.getFullYear(), d.get
 var _DUES_MON = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
 function _duesMkLabel(k){ return _DUES_MON[((k % 12) + 12) % 12] + ' ' + Math.floor(k / 12); }
 function _duesMoney(n){ return Math.round(Number(n) || 0).toLocaleString('ru-RU') + ' ' + _CUR; }
+// Сколько месяцев без оплаты клиент ещё считается «догоняемым» (решение CEO 30.07.2026).
+// Больше этого — считаем ушедшим: работа с ним другая, и деньги уже потеряны.
+var DUES_LOST_AFTER = 3;
 var DUES_REASONS = {
  churn:   { label: 'Отток',            hint: 'ушёл совсем',              color: '#E5604D' },
  decline: { label: 'Спад',             hint: 'сократил или пауза',       color: '#E0A458' },
@@ -44034,7 +44038,11 @@ function _duesCalc(){
  debt.sort(function(a, b){ return a.end - b.end; });
  due.sort(function(a, b){ return b.perMonth - a.perMonth; });
  ahead.sort(function(a, b){ return a.end - b.end; });
- return { debt: debt, due: due, ahead: ahead, noHist: noHist, cur: cur };
+ // v838: точка невозврата — 3 месяца (решение CEO). До 3 включительно клиента ещё
+ // реально вернуть, дальше это свершившийся отток: закрываем и считаем потерю.
+ var recover = debt.filter(function(r){ return r.months <= DUES_LOST_AFTER; });
+ var lost = debt.filter(function(r){ return r.months > DUES_LOST_AFTER; });
+ return { debt: debt, recover: recover, lost: lost, due: due, ahead: ahead, noHist: noHist, cur: cur };
 }
 
 function _duesAvatar(name){
@@ -44106,21 +44114,23 @@ function duesRender(){
  var sub = document.getElementById('dues-sub');
  if(sub) sub.textContent = 'Расчёт по календарным месяцам · текущий ' + _duesMkLabel(d.cur) + ' · ' + _duesState.clients.length + ' действующих';
 
- var debtSum = d.debt.reduce(function(s, r){ return s + r.perMonth; }, 0);
+ var recSum = d.recover.reduce(function(s, r){ return s + r.perMonth; }, 0);
+ var lostSum = d.lost.reduce(function(s, r){ return s + r.perMonth; }, 0);
  var dueSum = d.due.reduce(function(s, r){ return s + r.perMonth; }, 0);
  var noReason = d.debt.filter(function(r){ return !r.c.pay_reason; }).length;
  strip.innerHTML =
-  '<div class="du-card"><div class="l">Не продлили</div><div class="v red">' + d.debt.length + '</div>'
-   + '<div class="d">теряем ' + _duesMoney(debtSum) + ' в месяц · без причины ' + noReason + '</div></div>'
-  + '<div class="du-card"><div class="l">Платят сейчас</div><div class="v amb">' + d.due.length + '</div>'
+  '<div class="du-card"><div class="l">Догоняем</div><div class="v amb">' + d.recover.length + '</div>'
+   + '<div class="d">не платят до ' + DUES_LOST_AFTER + ' мес · теряем ' + _duesMoney(recSum) + '/мес</div></div>'
+  + '<div class="du-card"><div class="l">Похоже, ушли</div><div class="v red">' + d.lost.length + '</div>'
+   + '<div class="d">молчат дольше ' + DUES_LOST_AFTER + ' мес · потеряно ' + _duesMoney(lostSum) + '/мес</div></div>'
+  + '<div class="du-card"><div class="l">Платят сейчас</div><div class="v">' + d.due.length + '</div>'
    + '<div class="d">ждём ' + _duesMoney(dueSum) + '</div></div>'
   + '<div class="du-card"><div class="l">Оплачено вперёд</div><div class="v grn">' + d.ahead.length + '</div>'
-   + '<div class="d">срок дальше текущего месяца</div></div>'
-  + '<div class="du-card"><div class="l">Без истории оплат</div><div class="v">' + d.noHist + '</div>'
-   + '<div class="d">разобрать вручную</div></div>';
+   + '<div class="d">' + d.noHist + ' без истории оплат — разобрать</div></div>';
 
  kan.innerHTML =
-  _duesColHtml('Не продлили', 'Доступ кончился раньше ' + _duesMkLabel(d.cur) + ' — выяснить почему', 'red', d.debt, 'debt', 40)
+  _duesColHtml('Догоняем', 'Не платят до ' + DUES_LOST_AFTER + ' месяцев — ещё можно вернуть', 'amb', d.recover, 'debt', 40)
+  + _duesColHtml('Похоже, ушли', 'Молчат дольше ' + DUES_LOST_AFTER + ' месяцев — закрыть и посчитать потерю', 'red', d.lost, 'debt', 40)
   + _duesColHtml('Платят сейчас', _duesMkLabel(d.cur) + ' закрыт, следующий нет', 'amb', d.due, 'due', 40)
   + _duesColHtml('Оплачено вперёд', 'Срок дальше текущего месяца', 'grn', d.ahead, 'ahead', 40);
 
