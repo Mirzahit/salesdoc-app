@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v837</title>
+<title>SalesDoc — Финансовый Дашборд v838</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -7789,6 +7789,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
       не открывал; код view-my-clients/view-keyclients ЦЕЛ, вернуть = добавить кнопку обратно) -->
  <button class="cli-tab" data-clients-tab="route" onclick="clientsGoTab('route')">Внедрение</button>
  <button class="cli-tab" data-clients-tab="activeclients" onclick="clientsGoTab('activeclients')">Действующие</button>
+ <button class="cli-tab" data-clients-tab="dues" onclick="clientsGoTab('dues')">Оплаты и долги<span id="dues-tab-badge" class="cli-tab-badge" style="display:none"></span></button><!-- v838 -->
  <button class="cli-tab" data-clients-tab="tickets" onclick="clientsGoTab('tickets')">Поддержка<span id="tickets-tab-badge" class="cli-tab-badge" style="display:none"></span></button>
  <button class="cli-tab cli-tab-extra" data-clients-tab="integrations" onclick="clientsGoTab('integrations')" title="Очередь интеграции"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Интеграции</button>
  <button class="cli-tab" data-clients-tab="supportdash" onclick="clientsGoTab('supportdash')">Тех.поддержка</button><!-- v763: из подменю во вкладку -->
@@ -9940,6 +9941,76 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  </div>
  </div>
  <!-- /SUPPORTDASH VIEW -->
+
+ <!-- v838: Оплаты и долги — календарная модель биллинга.
+      Расчётный период = календарный месяц (не «с даты по дату»): оплата за N месяцев
+      закрывает доступ до конца N-го месяца. Доп.лицензии срок НЕ двигают (их выравнивают
+      отдельно), короткие тарифы 10/20 дней = выравнивание до конца месяца.
+      См. memory/project_billing_model.md -->
+ <div id="view-dues" style="display:none">
+ <style>
+ .du-page{padding:0 0 40px}
+ .du-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0 4px}
+ .du-card{background:var(--surface);border:1px solid var(--border-faint);border-radius:12px;padding:14px 16px}
+ .du-card .l{font-size:11px;color:var(--text-muted);margin-bottom:6px}
+ .du-card .v{font-size:25px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;color:var(--text)}
+ .du-card .d{font-size:11px;color:var(--text-muted);margin-top:5px}
+ .du-card .v.red{color:#E5604D}.du-card .v.amb{color:#E0A458}.du-card .v.grn{color:#4CB782}
+ .du-kan{display:grid;grid-template-columns:1.05fr 1fr 1fr;gap:14px;margin-top:16px;align-items:start}
+ .du-col{background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;overflow:hidden}
+ .du-h{padding:12px 14px 11px;border-bottom:1px solid var(--border-faint)}
+ .du-h .t{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:8px;color:var(--text)}
+ .du-h .cnt{font-size:11px;font-weight:700;background:var(--surface-2);border-radius:999px;padding:1px 8px;color:var(--text-soft)}
+ .du-h .s{font-size:10.5px;color:var(--text-muted);margin-top:3px}
+ .du-h .m{font-size:11.5px;margin-top:7px;color:var(--text-soft);font-variant-numeric:tabular-nums}
+ .du-h.red .t{color:#E5604D}.du-h.amb .t{color:#E0A458}.du-h.grn .t{color:#4CB782}
+ .du-body{padding:10px;display:flex;flex-direction:column;gap:8px;min-height:110px;max-height:640px;overflow-y:auto}
+ .du-c{background:var(--surface-2);border:1px solid var(--border-faint);border-radius:11px;padding:11px 12px;cursor:pointer}
+ .du-c:hover{border-color:var(--border-strong)}
+ .du-c .nm{font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .du-c .mid{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:8px}
+ .du-c .sum{font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text)}
+ .du-c .chip{font-size:10.5px;color:var(--text-soft);background:var(--surface);border:1px solid var(--border-faint);border-radius:5px;padding:1px 6px}
+ .du-c .bot{display:flex;align-items:center;gap:8px}
+ .du-c .dt{font-size:10.5px;color:var(--text-muted)}
+ .du-c .tag{font-size:10.5px;font-weight:600;margin-left:auto}
+ .du-c .tag.red{color:#E5604D}.du-c .tag.amb{color:#E0A458}.du-c .tag.dim{color:var(--text-muted);font-weight:500}
+ .du-av{width:21px;height:21px;border-radius:50%;background:var(--accent,#5E6AD2);color:#fff;font-size:9.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
+ .du-av.none{background:rgba(229,96,77,.16);color:#E5604D;border:1px dashed rgba(229,96,77,.5)}
+ .du-rsn{display:flex;align-items:center;gap:7px;margin-bottom:8px;padding:6px 8px;border-radius:7px;font-size:10.5px;cursor:pointer}
+ .du-rsn.empty{background:rgba(229,96,77,.06);border:1px dashed rgba(229,96,77,.28)}
+ .du-rsn.set{background:var(--surface);border:1px solid var(--border-faint)}
+ .du-rsn .rl{color:var(--text-muted)}
+ .du-rsn .rv{font-weight:600;margin-left:auto}
+ .du-rest{font-size:11.5px;color:var(--text-muted);text-align:center;padding:7px}
+ .du-two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+ .du-panel{background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:16px 18px}
+ .du-panel h3{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);margin-bottom:13px}
+ .du-age{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:12px}
+ .du-age .al{width:92px;color:var(--text-soft)}
+ .du-age .ab{flex:1;height:7px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+ .du-age .ab i{display:block;height:100%;background:#E5604D;opacity:.75}
+ .du-age .ac{width:26px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text);font-weight:600}
+ .du-age .am{width:120px;text-align:right;font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+ .du-note{font-size:11.5px;color:var(--text-muted);line-height:1.55;margin-top:12px}
+ .du-empty{color:var(--text-muted);font-size:12px;text-align:center;padding:22px}
+ @media(max-width:1100px){.du-kan{grid-template-columns:1fr}.du-strip{grid-template-columns:repeat(2,1fr)}.du-two{grid-template-columns:1fr}}
+ </style>
+ <div class="sd-page du-page">
+ <div class="sd-head">
+ <div>
+ <div class="sd-h1">Оплаты и долги</div>
+ <div class="sd-sub" id="dues-sub">Расчёт по календарным месяцам</div>
+ </div>
+ <div class="sd-filters">
+ <button type="button" class="intg-fchip" id="dues-refresh" onclick="duesInit(true)">Обновить</button>
+ </div>
+ </div>
+ <div class="du-strip" id="dues-strip"></div>
+ <div class="du-kan" id="dues-kan"></div>
+ <div class="du-two" id="dues-two"></div>
+ </div>
+ </div>
 
  <!-- v250: Действующие клиенты -->
  <div id="view-activeclients" style="display:none">
@@ -16235,7 +16306,7 @@ function showView(v) {
  if (v === 'clients') {
  var lastTab = null;
  try { lastTab = localStorage.getItem('sd_clients_last_tab'); } catch(_){}
- var allowedTabs = ['activeclients','route','tickets','integrations','supportdash']; // v762: скрытые убраны; v763: +supportdash
+ var allowedTabs = ['activeclients','route','tickets','integrations','supportdash','dues']; // v762: скрытые убраны; v763: +supportdash; v838: +dues
  if (!allowedTabs.indexOf || allowedTabs.indexOf(lastTab) < 0) lastTab = 'activeclients';
  v = lastTab;
  }
@@ -16257,14 +16328,14 @@ function showView(v) {
  v = defaultViewForUser(currentUser);
  }
  // v449: старые «Цель» и «4Д» объединены в одну кнопку «4D» (fdx). Внутри 5 вкладок.
- var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',mytasks:'view_mytasks',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',churn:'view_activeclients',botadmin:'view_botadmin',settings:'view_settings',fdx:'view_wig','my-clients':'view_activeclients',tickets:'view_kanban'}; // v762: my-clients и tickets раньше НЕ проверяли права — дыра закрыта
+ var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',mytasks:'view_mytasks',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',churn:'view_activeclients',botadmin:'view_botadmin',settings:'view_settings',fdx:'view_wig','my-clients':'view_activeclients',tickets:'view_kanban',dues:'view_activeclients'}; // v762: my-clients и tickets раньше НЕ проверяли права — дыра закрыта; v838: dues по праву «Действующие»
  var _need = _accessMap[v];
  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
  }
- ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','my-clients','tickets','statistics','planning','calendar','mytasks','supportdash','activeclients','newclients','churn','botadmin','fdx'].forEach(x=>{
+ ['morning','dashboard','payments','plan','keyclients','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','tests','knowledge','academy','reports','kanban','route','my-clients','tickets','statistics','planning','calendar','mytasks','supportdash','activeclients','newclients','churn','botadmin','fdx','dues'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ if(x===v){ el.style.display=x==='kanban'?'flex':'block'; } else { el.style.display='none'; } }
  });
@@ -16308,6 +16379,8 @@ function showView(v) {
  // v246: Дашборд тех.поддержки
  if (v === 'supportdash' && typeof supportInit === 'function') { try { supportInit(); } catch(_){} }
  if (v === 'activeclients' && typeof acInit === 'function') { try { acInit(); } catch(_){} }
+ // v838: «Оплаты и долги» — календарная модель биллинга (см. memory project_billing_model)
+ if (v === 'dues' && typeof duesInit === 'function') { try { duesInit(); } catch(_){} }
  if (v === 'newclients' && typeof ncInit === 'function') { try { ncInit(); } catch(_){} }
  // v369: Мои клиенты — витрина продлений
  if (v === 'my-clients' && typeof myClientsLoad === 'function') { try { myClientsLoad(); } catch(_){} }
@@ -43873,6 +43946,257 @@ function acRenderPrefixMerged(){
  });
  if(keys.length > 50) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:10px">...и ещё ' + (keys.length-50) + ' (показаны первые 50)</div>';
  listEl.innerHTML = html;
+}
+
+// ===========================================================
+// v838: ОПЛАТЫ И ДОЛГИ — календарная модель биллинга.
+// Правила (со слов CEO 30.07.2026, memory/project_billing_model.md):
+//  • расчётный период — КАЛЕНДАРНЫЙ месяц, схемы «с 17-го по 17-е» нет;
+//  • оплата за N месяцев закрывает доступ до конца N-го месяца от месяца оплаты;
+//  • короткие тарифы 10/20 дней (period=0) — выравнивание до конца ТЕКУЩЕГО месяца;
+//  • доп.лицензии срок НЕ двигают (их выравнивают отдельной доплатой);
+//  • бесплатный период (free_until) дарится — долгом не считается.
+// ===========================================================
+var _duesState = { clients: [], loading: false, loaded: false };
+
+function _duesNorm(s){ return String(s || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, ''); }
+// Продлевают доступ только абонплата / новый клиент / баланс. Написания KZ и KG различаются
+// («абон. плата» vs «абон.плата», «новый клиент» vs «Нов.клиент») — сравниваем нормализованно.
+function _duesIsRenewal(p){
+ var n = _duesNorm(p && (p.categoryRaw || p.category_raw));
+ if(!n) return false;
+ return n.indexOf('абон') === 0 || n.indexOf('новклиент') >= 0 || n.indexOf('новыйклиент') >= 0 || n === 'баланс';
+}
+function _duesMk(y, m){ return y * 12 + (m - 1); }              // ключ месяца
+function _duesCurMk(){ var d = new Date(); return _duesMk(d.getFullYear(), d.getMonth() + 1); }
+// именительный падеж — подпись читается как «оплачен по май 2026», а не «по мая»
+var _DUES_MON = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+function _duesMkLabel(k){ return _DUES_MON[((k % 12) + 12) % 12] + ' ' + Math.floor(k / 12); }
+function _duesMoney(n){ return Math.round(Number(n) || 0).toLocaleString('ru-RU') + ' ' + _CUR; }
+var DUES_REASONS = {
+ churn:   { label: 'Отток',            hint: 'ушёл совсем',              color: '#E5604D' },
+ decline: { label: 'Спад',             hint: 'сократил или пауза',       color: '#E0A458' },
+ debt:    { label: 'Долг',             hint: 'работает, обещал оплатить', color: '#5E6AD2' },
+ free:    { label: 'Бесплатный период', hint: 'подарен',                 color: '#4CB782' }
+};
+
+// Собирает по каждому клиенту: до какого месяца оплачено, сколько платит в месяц, лицензии.
+function _duesCalc(){
+ var cur = _duesCurMk();
+ var pays = (typeof payments !== 'undefined' && payments) ? payments : [];
+ var byId = {}, byName = {};
+ _duesState.clients.forEach(function(c){
+  byId[c.client_id] = c;
+  var n = _duesNorm(c.company_name);
+  if(n && !byName[n]) byName[n] = c;
+ });
+ var acc = {};
+ pays.forEach(function(p){
+  var c = (p.clientId && byId[p.clientId]) || byName[_duesNorm(p.client)];
+  if(!c || !p.date) return;
+  var rec = acc[c.client_id];
+  if(!rec){ rec = acc[c.client_id] = { c: c, end: null, perMonth: 0, lic: 0, lastPay: '', lastAmt: 0 }; }
+  var y = parseInt(String(p.date).slice(0, 4), 10), m = parseInt(String(p.date).slice(5, 7), 10);
+  if(!y || !m) return;
+  var per = Math.max(0, Math.round(Number(p.period) || 0));
+  var isRenew = _duesIsRenewal(p);
+  var isDop = _duesNorm(p.categoryRaw).indexOf('доп') === 0;
+  if(isRenew){
+   // per=0 (10/20 дней) → доступ до конца текущего месяца
+   var end = _duesMk(y, m) + Math.max(0, per - 1);
+   if(rec.end === null || end > rec.end){
+    rec.end = end; rec.lastPay = p.date; rec.lastAmt = Number(p.amount) || 0;
+   }
+  }
+  if(isRenew || isDop){
+   rec.lic += Math.max(0, Math.round(Number(p.qty) || 0));
+   var mm = Math.max(1, per);
+   var pm = Math.round((Number(p.amount) || 0) / mm);
+   if(pm > rec.perMonth) rec.perMonth = pm;   // ориентир «сколько в месяц»
+  }
+ });
+ var debt = [], due = [], ahead = [], noHist = 0;
+ _duesState.clients.forEach(function(c){
+  var rec = acc[c.client_id];
+  if(!rec || rec.end === null){ noHist++; return; }
+  // Бесплатный период закрывает долг до указанной даты
+  var freeOk = false;
+  if(c.free_until){
+   var fu = String(c.free_until).slice(0, 10);
+   freeOk = fu >= taskLocalIso(new Date());
+  }
+  var row = { c: c, end: rec.end, perMonth: rec.perMonth, lic: rec.lic,
+              lastPay: rec.lastPay, lastAmt: rec.lastAmt, months: cur - rec.end, free: freeOk };
+  if(freeOk || rec.end > cur) ahead.push(row);
+  else if(rec.end === cur) due.push(row);
+  else debt.push(row);
+ });
+ debt.sort(function(a, b){ return a.end - b.end; });
+ due.sort(function(a, b){ return b.perMonth - a.perMonth; });
+ ahead.sort(function(a, b){ return a.end - b.end; });
+ return { debt: debt, due: due, ahead: ahead, noHist: noHist, cur: cur };
+}
+
+function _duesAvatar(name){
+ var n = String(name || '').trim();
+ if(!n) return '<span class="du-av none" title="Ответственный не назначен">?</span>';
+ var ini = n.split(/\s+/).map(function(w){ return w[0]; }).join('').slice(0, 2).toUpperCase();
+ return '<span class="du-av" title="' + kbEsc(n) + '">' + kbEsc(ini) + '</span>';
+}
+
+function _duesCardHtml(r, kind){
+ var tag;
+ if(kind === 'debt'){
+  var m = r.months, word = (m === 1) ? 'месяц' : (m < 5 ? 'месяца' : 'месяцев');
+  tag = '<span class="tag red">долг ' + m + ' ' + word + '</span>';
+ } else if(kind === 'due'){
+  tag = '<span class="tag amb">' + kbEsc(_duesMkLabel(r.end + 1)) + ' не оплачен</span>';
+ } else {
+  tag = '<span class="tag dim">' + (r.free ? 'бесплатно' : ('оплачен по ' + kbEsc(_duesMkLabel(r.end)))) + '</span>';
+ }
+ var rsn = '';
+ if(kind === 'debt'){
+  var key = r.c.pay_reason;
+  var def = key && DUES_REASONS[key];
+  rsn = def
+   ? '<div class="du-rsn set" onclick="event.stopPropagation();duesReasonOpen(this,\'' + kbEsc(r.c.client_id) + '\')">'
+     + '<span class="rl">Причина</span><span class="rv" style="color:' + def.color + '">' + kbEsc(def.label) + '</span></div>'
+   : '<div class="du-rsn empty" onclick="event.stopPropagation();duesReasonOpen(this,\'' + kbEsc(r.c.client_id) + '\')">'
+     + '<span class="rl">Причина</span><span class="rv" style="color:#E5604D">не выяснена</span></div>';
+ }
+ var lic = r.lic ? '<span class="chip">' + r.lic + ' лиц.</span>' : '';
+ var last = r.lastPay ? ('посл. оплата ' + kbEsc(String(r.lastPay).slice(8, 10) + '.' + String(r.lastPay).slice(5, 7))) : '';
+ return '<div class="du-c" onclick="routeOpenClient(\'' + kbEsc(r.c.client_id) + '\')">'
+  + '<div class="nm">' + kbEsc(r.c.company_name || r.c.client_id) + '</div>'
+  + '<div class="mid"><span class="sum">' + _duesMoney(r.perMonth) + '/мес</span>' + lic + '</div>'
+  + rsn
+  + '<div class="bot"><span class="dt">' + last + '</span>' + tag + _duesAvatar(r.c.curator_operator) + '</div>'
+  + '</div>';
+}
+
+function _duesColHtml(title, sub, tone, items, kind, limit){
+ var total = items.reduce(function(s, r){ return s + (r.perMonth || 0); }, 0);
+ var shown = items.slice(0, limit);
+ var rest = items.length - shown.length;
+ return '<div class="du-col"><div class="du-h ' + tone + '">'
+  + '<div class="t">' + title + '<span class="cnt">' + items.length + '</span></div>'
+  + '<div class="s">' + sub + '</div>'
+  + '<div class="m">' + _duesMoney(total) + ' в месяц</div></div>'
+  + '<div class="du-body">'
+  + (shown.length ? shown.map(function(r){ return _duesCardHtml(r, kind); }).join('') : '<div class="du-empty">Пусто</div>')
+  + (rest > 0 ? '<div class="du-rest">и ещё ' + rest + '</div>' : '')
+  + '</div></div>';
+}
+
+function duesRender(){
+ var strip = document.getElementById('dues-strip');
+ var kan = document.getElementById('dues-kan');
+ var two = document.getElementById('dues-two');
+ if(!strip || !kan || !two) return;
+ if(_duesState.loading){ strip.innerHTML = ''; kan.innerHTML = '<div class="du-empty">Загрузка...</div>'; two.innerHTML = ''; return; }
+ var pays = (typeof payments !== 'undefined' && payments) ? payments : [];
+ if(!pays.length){
+  kan.innerHTML = '<div class="du-empty">Оплаты ещё не загрузились. Нажмите «Обновить» через пару секунд.</div>';
+  strip.innerHTML = ''; two.innerHTML = '';
+  return;
+ }
+ var d = _duesCalc();
+ var sub = document.getElementById('dues-sub');
+ if(sub) sub.textContent = 'Расчёт по календарным месяцам · текущий ' + _duesMkLabel(d.cur) + ' · ' + _duesState.clients.length + ' действующих';
+
+ var debtSum = d.debt.reduce(function(s, r){ return s + r.perMonth; }, 0);
+ var dueSum = d.due.reduce(function(s, r){ return s + r.perMonth; }, 0);
+ var noReason = d.debt.filter(function(r){ return !r.c.pay_reason; }).length;
+ strip.innerHTML =
+  '<div class="du-card"><div class="l">Должны</div><div class="v red">' + d.debt.length + '</div>'
+   + '<div class="d">' + _duesMoney(debtSum) + ' в месяц · без причины ' + noReason + '</div></div>'
+  + '<div class="du-card"><div class="l">Платят сейчас</div><div class="v amb">' + d.due.length + '</div>'
+   + '<div class="d">ждём ' + _duesMoney(dueSum) + '</div></div>'
+  + '<div class="du-card"><div class="l">Оплачено вперёд</div><div class="v grn">' + d.ahead.length + '</div>'
+   + '<div class="d">срок дальше текущего месяца</div></div>'
+  + '<div class="du-card"><div class="l">Без истории оплат</div><div class="v">' + d.noHist + '</div>'
+   + '<div class="d">разобрать вручную</div></div>';
+
+ kan.innerHTML =
+  _duesColHtml('Должны', 'Доступ кончился раньше ' + _duesMkLabel(d.cur), 'red', d.debt, 'debt', 40)
+  + _duesColHtml('Платят сейчас', _duesMkLabel(d.cur) + ' закрыт, следующий нет', 'amb', d.due, 'due', 40)
+  + _duesColHtml('Оплачено вперёд', 'Срок дальше текущего месяца', 'grn', d.ahead, 'ahead', 40);
+
+ // Давность долга
+ var byAge = {};
+ d.debt.forEach(function(r){ (byAge[r.months] = byAge[r.months] || []).push(r); });
+ var ages = Object.keys(byAge).map(Number).sort(function(a, b){ return a - b; });
+ var maxN = ages.reduce(function(m, k){ return Math.max(m, byAge[k].length); }, 1);
+ var ageHtml = ages.map(function(m){
+  var arr = byAge[m], w = Math.round(arr.length / maxN * 100);
+  var word = (m === 1) ? 'месяц' : (m < 5 ? 'месяца' : 'месяцев');
+  return '<div class="du-age"><span class="al">' + m + ' ' + word + '</span>'
+   + '<span class="ab"><i style="width:' + w + '%"></i></span>'
+   + '<span class="ac">' + arr.length + '</span>'
+   + '<span class="am">' + _duesMoney(arr.reduce(function(s, r){ return s + r.perMonth; }, 0)) + '</span></div>';
+ }).join('');
+ var reasonHtml = Object.keys(DUES_REASONS).map(function(k){
+  var def = DUES_REASONS[k];
+  var n = d.debt.filter(function(r){ return r.c.pay_reason === k; }).length;
+  return '<div class="du-age"><span class="al" style="color:' + def.color + ';font-weight:600">' + def.label + '</span>'
+   + '<span class="ab"><i style="width:' + (d.debt.length ? Math.round(n / d.debt.length * 100) : 0) + '%;background:' + def.color + '"></i></span>'
+   + '<span class="ac">' + n + '</span><span class="am">' + def.hint + '</span></div>';
+ }).join('');
+ two.innerHTML =
+  '<div class="du-panel"><h3>Давность долга</h3>' + (ageHtml || '<div class="du-empty">Долгов нет</div>')
+   + '<div class="du-note">Чем старше долг, тем меньше шанс вернуть. Верхние строки — свежие, с ними работают; нижние — скорее всего уже ушли.</div></div>'
+  + '<div class="du-panel"><h3>Причины — заполняет куратор</h3>' + reasonHtml
+   + '<div class="du-note">Нажмите «Причина» на карточке должника и выберите, что выяснили. Пока причина не выбрана — на карточке горит «не выяснена».</div></div>';
+}
+
+// Выбор причины — свой дропдаун (нативные select в проекте запрещены)
+window.duesReasonOpen = function(anchor, clientId){
+ if(typeof crmTasksOpenDropdown !== 'function'){ sdToast('Модуль списков не загружен'); return; }
+ var cl = _duesState.clients.find(function(c){ return c.client_id === clientId; });
+ var curKey = cl && cl.pay_reason;
+ var items = Object.keys(DUES_REASONS).map(function(k){
+  return { value: k, label: DUES_REASONS[k].label + ' — ' + DUES_REASONS[k].hint, selected: curKey === k };
+ });
+ if(curKey) items.push({ value: '', label: 'Снять причину' });
+ crmTasksOpenDropdown(anchor, items, function(v){ duesSetReason(clientId, v); });
+};
+
+async function duesSetReason(clientId, reason){
+ var cl = _duesState.clients.find(function(c){ return c.client_id === clientId; });
+ if(!cl) return;
+ var prev = cl.pay_reason || null;
+ cl.pay_reason = reason || null;   // оптимистично — экран отвечает сразу
+ duesRender();
+ try {
+  var r = await sbFetch('/api/clients?client_id=' + encodeURIComponent(clientId), {
+   method: 'PATCH', body: JSON.stringify({ pay_reason: reason || '' })
+  });
+  if(!r || !r.ok) throw new Error((r && r.error) || 'сервер не принял');
+  sdToast(reason ? ('Причина: ' + DUES_REASONS[reason].label) : 'Причина снята');
+ } catch(e){
+  cl.pay_reason = prev;            // откат — иначе экран врёт
+  duesRender();
+  sdToast('Не сохранилось: ' + (e.message || e));
+ }
+}
+
+async function duesInit(force){
+ var country = (typeof currentCountry !== 'undefined' && currentCountry) ? currentCountry : 'KZ';
+ if(_duesState.loaded && _duesState.country === country && !force){ duesRender(); return; }
+ _duesState.loading = true;
+ duesRender();
+ try {
+  var list = (typeof _acFetchSupabaseClients === 'function') ? await _acFetchSupabaseClients(country) : [];
+  _duesState.clients = (list || []).filter(function(c){ return String(c.status || '') === 'active'; });
+  _duesState.country = country;
+  _duesState.loaded = true;
+ } catch(e){
+  _duesState.clients = [];
+  sdToast('Не удалось загрузить клиентов: ' + (e.message || e));
+ } finally {
+  _duesState.loading = false;
+  duesRender();
+ }
 }
 
 // ===========================================================
