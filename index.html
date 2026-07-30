@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v836</title>
+<title>SalesDoc — Финансовый Дашборд v837</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -34667,7 +34667,11 @@ function taskDraftDefaults(){
  var u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : {};
  var rawName = (u.name || '').toString();
  var firstName = rawName.split(' ')[0];
- var ops = (typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators : ['Айдос','Акбар','Самат'];
+ // v837: операторы — по СТРАНЕ клиента карты (KG-карты показывали казахстанских Айдос/Акбар/Самат)
+ var _cc0 = (typeof _routeCurrentCard !== 'undefined' && _routeCurrentCard) || {};
+ var ops = (typeof _routeOpChoices === 'function')
+  ? _routeOpChoices('', _cc0.country || (_cc0.clients || {}).country)
+  : ((typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators : ['Айдос','Акбар','Самат']);
  var assignee;
  if(rawName && ops.indexOf(rawName) >= 0) assignee = rawName;
  else if(firstName && ops.indexOf(firstName) >= 0) assignee = firstName;
@@ -34951,7 +34955,11 @@ async function routeChatChipType(anchor){
 
 function routeChatChipAssignee(anchor){
  if(!window._routeChatTaskState) _routeChatInitTaskState();
- var ops = (typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators.slice() : ['Айдос','Акбар','Самат'];
+ // v837: по стране клиента карты, как v835 в полях «Ответственный»/«Куратор»
+ var _cc1 = (typeof _routeCurrentCard !== 'undefined' && _routeCurrentCard) || {};
+ var ops = (typeof _routeOpChoices === 'function')
+  ? _routeOpChoices(window._routeChatTaskState.assignee, _cc1.country || (_cc1.clients || {}).country)
+  : ((typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators.slice() : ['Айдос','Акбар','Самат']);
  var items = ops.map(function(op){
   return { value:op, label:op, selected: op === window._routeChatTaskState.assignee };
  });
