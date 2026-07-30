@@ -7789,7 +7789,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
       не открывал; код view-my-clients/view-keyclients ЦЕЛ, вернуть = добавить кнопку обратно) -->
  <button class="cli-tab" data-clients-tab="route" onclick="clientsGoTab('route')">Внедрение</button>
  <button class="cli-tab" data-clients-tab="activeclients" onclick="clientsGoTab('activeclients')">Действующие</button>
- <button class="cli-tab" data-clients-tab="dues" onclick="clientsGoTab('dues')">Оплаты и долги<span id="dues-tab-badge" class="cli-tab-badge" style="display:none"></span></button><!-- v838 -->
+ <button class="cli-tab" data-clients-tab="dues" onclick="clientsGoTab('dues')">Продления<span id="dues-tab-badge" class="cli-tab-badge" style="display:none"></span></button><!-- v838 -->
  <button class="cli-tab" data-clients-tab="tickets" onclick="clientsGoTab('tickets')">Поддержка<span id="tickets-tab-badge" class="cli-tab-badge" style="display:none"></span></button>
  <button class="cli-tab cli-tab-extra" data-clients-tab="integrations" onclick="clientsGoTab('integrations')" title="Очередь интеграции"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Интеграции</button>
  <button class="cli-tab" data-clients-tab="supportdash" onclick="clientsGoTab('supportdash')">Тех.поддержка</button><!-- v763: из подменю во вкладку -->
@@ -9999,7 +9999,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="sd-page du-page">
  <div class="sd-head">
  <div>
- <div class="sd-h1">Оплаты и долги</div>
+ <div class="sd-h1">Продления</div>
  <div class="sd-sub" id="dues-sub">Расчёт по календарным месяцам</div>
  </div>
  <div class="sd-filters">
@@ -43976,7 +43976,7 @@ function _duesMoney(n){ return Math.round(Number(n) || 0).toLocaleString('ru-RU'
 var DUES_REASONS = {
  churn:   { label: 'Отток',            hint: 'ушёл совсем',              color: '#E5604D' },
  decline: { label: 'Спад',             hint: 'сократил или пауза',       color: '#E0A458' },
- debt:    { label: 'Долг',             hint: 'работает, обещал оплатить', color: '#5E6AD2' },
+ debt:    { label: 'Долг',             hint: 'дали отсрочку, ждём деньги', color: '#5E6AD2' },
  free:    { label: 'Бесплатный период', hint: 'подарен',                 color: '#4CB782' }
 };
 
@@ -44047,8 +44047,10 @@ function _duesAvatar(name){
 function _duesCardHtml(r, kind){
  var tag;
  if(kind === 'debt'){
+  // v838: подписка предоплатная — не заплатил, значит доступ выключен и клиент нам
+  // НЕ должен. Это «не продлил», а долг — отдельная причина (договорились об отсрочке).
   var m = r.months, word = (m === 1) ? 'месяц' : (m < 5 ? 'месяца' : 'месяцев');
-  tag = '<span class="tag red">долг ' + m + ' ' + word + '</span>';
+  tag = '<span class="tag red">не платит ' + m + ' ' + word + '</span>';
  } else if(kind === 'due'){
   tag = '<span class="tag amb">' + kbEsc(_duesMkLabel(r.end + 1)) + ' не оплачен</span>';
  } else {
@@ -44108,8 +44110,8 @@ function duesRender(){
  var dueSum = d.due.reduce(function(s, r){ return s + r.perMonth; }, 0);
  var noReason = d.debt.filter(function(r){ return !r.c.pay_reason; }).length;
  strip.innerHTML =
-  '<div class="du-card"><div class="l">Должны</div><div class="v red">' + d.debt.length + '</div>'
-   + '<div class="d">' + _duesMoney(debtSum) + ' в месяц · без причины ' + noReason + '</div></div>'
+  '<div class="du-card"><div class="l">Не продлили</div><div class="v red">' + d.debt.length + '</div>'
+   + '<div class="d">теряем ' + _duesMoney(debtSum) + ' в месяц · без причины ' + noReason + '</div></div>'
   + '<div class="du-card"><div class="l">Платят сейчас</div><div class="v amb">' + d.due.length + '</div>'
    + '<div class="d">ждём ' + _duesMoney(dueSum) + '</div></div>'
   + '<div class="du-card"><div class="l">Оплачено вперёд</div><div class="v grn">' + d.ahead.length + '</div>'
@@ -44118,7 +44120,7 @@ function duesRender(){
    + '<div class="d">разобрать вручную</div></div>';
 
  kan.innerHTML =
-  _duesColHtml('Должны', 'Доступ кончился раньше ' + _duesMkLabel(d.cur), 'red', d.debt, 'debt', 40)
+  _duesColHtml('Не продлили', 'Доступ кончился раньше ' + _duesMkLabel(d.cur) + ' — выяснить почему', 'red', d.debt, 'debt', 40)
   + _duesColHtml('Платят сейчас', _duesMkLabel(d.cur) + ' закрыт, следующий нет', 'amb', d.due, 'due', 40)
   + _duesColHtml('Оплачено вперёд', 'Срок дальше текущего месяца', 'grn', d.ahead, 'ahead', 40);
 
@@ -44143,10 +44145,10 @@ function duesRender(){
    + '<span class="ac">' + n + '</span><span class="am">' + def.hint + '</span></div>';
  }).join('');
  two.innerHTML =
-  '<div class="du-panel"><h3>Давность долга</h3>' + (ageHtml || '<div class="du-empty">Долгов нет</div>')
-   + '<div class="du-note">Чем старше долг, тем меньше шанс вернуть. Верхние строки — свежие, с ними работают; нижние — скорее всего уже ушли.</div></div>'
+  '<div class="du-panel"><h3>Сколько не платят</h3>' + (ageHtml || '<div class="du-empty">Все продлили</div>')
+   + '<div class="du-note">Оплата у нас вперёд: не заплатил — лицензии не активированы, долга перед нами нет. Но чем дольше молчание, тем меньше шанс вернуть: верхние строки — свежие, их ещё можно догнать; нижние — почти наверняка ушли.</div></div>'
   + '<div class="du-panel"><h3>Причины — заполняет куратор</h3>' + reasonHtml
-   + '<div class="du-note">Нажмите «Причина» на карточке должника и выберите, что выяснили. Пока причина не выбрана — на карточке горит «не выяснена».</div></div>';
+   + '<div class="du-note">Нажмите «Причина» на карточке и выберите, что выяснили при разговоре. Пока причина не выбрана — на карточке горит «не выяснена». Долг ставим только если дали отсрочку и деньги реально ждём.</div></div>';
 }
 
 // Выбор причины — свой дропдаун (нативные select в проекте запрещены)
