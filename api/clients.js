@@ -19,10 +19,115 @@ const ALLOWED_PERIODS = [1, 3, 6, 12]; // месяцев подписки
 // v606: нормализация имени для анти-дубля (как _acNormForMerge на фронте / _normName в payments).
 function _normName(s) { return String(s || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, ''); }
 
+// v838: дата следующей оплаты из истории платежей.
+// Раньше next_billing_at писал ТОЛЬКО бот при оплате «абон.плата» — у клиентов,
+// пришедших из Sheets-импорта, поле пустое (в KG — 169 из 179 активных), поэтому
+// напоминания о продлениях (api/_reminders.js) и виджет утренней сводки молчали.
+// Правило совпадает с фронтом («Доступ до», index.html acGetActiveClients):
+// биллинг календарный — оплата 10 мая на 1 мес закрывает доступ по 31 мая,
+// значит следующая оплата 1 июня.
+const RECALC_CATEGORIES = ['subscription', 'license'];
+
+function _accessEndUTC(paidAt, periodMonths) {
+  const y = parseInt(String(paidAt).slice(0, 4), 10);
+  const m = parseInt(String(paidAt).slice(5, 7), 10); // 1-based
+  if (!y || !m) return null;
+  // день 0 следующего месяца = последний день месяца (m + period - 1)
+  return new Date(Date.UTC(y, m - 1 + periodMonths, 0));
+}
+
+export async function recalcBillingForCountry(country, dryRun) {
+  const cparams = {
+    status: 'eq.active',
+    select: 'client_id,company_name,country,next_billing_at,subscription_period_months',
+    limit: '5000'
+  };
+  const pparams = {
+    select: 'client_id,company_name,paid_at,category,period_months',
+    category: 'in.(' + RECALC_CATEGORIES.join(',') + ')',
+    order: 'paid_at.asc',
+    limit: '20000'
+  };
+  if (country) { cparams['country'] = 'eq.' + country; pparams['country'] = 'eq.' + country; }
+
+  const [clients, pays] = await Promise.all([sbSelect('clients', cparams), sbSelect('payments', pparams)]);
+
+  const byId = {}, byName = {};
+  clients.forEach(c => {
+    byId[c.client_id] = c;
+    const n = _normName(c.company_name);
+    if (n && !byName[n]) byName[n] = c; // при дублях имени берём первого — привязка по client_id важнее
+  });
+
+  // Максимальная дата окончания доступа по каждому клиенту
+  const endByClient = {}, perByClient = {};
+  pays.forEach(p => {
+    const per = Math.max(1, Math.round(Number(p.period_months) || 1));
+    if (!p.paid_at) return;
+    const cl = (p.client_id && byId[p.client_id]) || byName[_normName(p.company_name)];
+    if (!cl) return;
+    const end = _accessEndUTC(p.paid_at, per);
+    if (!end || isNaN(end.getTime())) return;
+    const k = cl.client_id;
+    if (!endByClient[k] || end > endByClient[k]) { endByClient[k] = end; perByClient[k] = per; }
+  });
+
+  const changes = [];
+  let unmatched = 0, kept = 0;
+  clients.forEach(c => {
+    const end = endByClient[c.client_id];
+    if (!end) { unmatched++; return; }
+    const next = new Date(end.getTime() + 86400000).toISOString().slice(0, 10); // первый неоплаченный день
+    const cur = c.next_billing_at ? String(c.next_billing_at).slice(0, 10) : null;
+    // Если в базе дата ПОЗЖЕ вычисленной — её поставил бот или человек вручную, не откатываем
+    if (cur && cur >= next) { kept++; return; }
+    changes.push({
+      client_id: c.client_id,
+      company_name: c.company_name,
+      from: cur,
+      to: next,
+      period_months: perByClient[c.client_id] || null
+    });
+  });
+
+  if (!dryRun) {
+    for (const ch of changes) {
+      const patch = { next_billing_at: ch.to, updated_at: new Date().toISOString() };
+      if (ch.period_months && ALLOWED_PERIODS.includes(ch.period_months)) patch.subscription_period_months = ch.period_months;
+      await sbUpdate('clients', { client_id: 'eq.' + ch.client_id }, patch);
+    }
+  }
+
+  const today = almatyIso();
+  return {
+    ok: true,
+    dry_run: !!dryRun,
+    country: country || 'ALL',
+    active_clients: clients.length,
+    updated: changes.length,
+    already_ok: kept,
+    no_payments: unmatched,
+    overdue_after: changes.filter(c => c.to < today).length,
+    due_30d_after: changes.filter(c => c.to >= today && c.to <= almatyIso(Date.now() + 30 * 86400000)).length,
+    sample: changes.slice(0, 20)
+  };
+}
+
+async function handleRecalcBilling(req, res) {
+  const country = String(req.query.country || '').toUpperCase();
+  if (country && !ALLOWED_COUNTRIES.includes(country)) {
+    return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+  }
+  const dryRun = String(req.query.dry_run || '') === '1';
+  const result = await recalcBillingForCountry(country, dryRun);
+  return res.status(200).json(result);
+}
+
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
     if (req.method === 'POST' && req.query.action === 'link_hosts') return await handleLinkHosts(req, res);
+    if (req.method === 'POST' && req.query.action === 'recalc_billing') return await handleRecalcBilling(req, res);
     if (req.method === 'GET') {
       const { client_id, status, curator, search, country, renewal_within, limit } = req.query || {};
       const params = { order: 'updated_at.desc' };
@@ -155,11 +260,26 @@ export default async function handler(req, res) {
       // и от опечаток имени поля (Supabase молча отказал бы или вернул 500 от PostgREST).
       // v420: добавлен implementation_contact (JSONB) — «Ответственный со стороны клиента
       // по внедрению». Структура: { name, position, phone, email }.
-      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months','implementation_contact','billing_host'];
+      // v838: pay_reason/pay_reason_note/free_until — причина неоплаты и подаренный период
+      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months','implementation_contact','billing_host','pay_reason','pay_reason_note','free_until'];
       const body = {};
       Object.keys(rawBody).forEach(k => {
         if (ALLOWED_PATCH_FIELDS.includes(k)) body[k] = rawBody[k];
       });
+      // v838: причина ставится только из списка; пустая строка = снять причину
+      if (body.pay_reason !== undefined) {
+        const PAY_REASONS = ['churn', 'decline', 'debt', 'free'];
+        if (body.pay_reason === '' || body.pay_reason === null) {
+          body.pay_reason = null;
+          body.pay_reason_at = null;
+          body.pay_reason_by = null;
+        } else if (!PAY_REASONS.includes(body.pay_reason)) {
+          return res.status(400).json({ ok: false, error: 'pay_reason должен быть один из: ' + PAY_REASONS.join(', ') });
+        } else {
+          body.pay_reason_at = new Date().toISOString();
+          body.pay_reason_by = String(req.headers['x-user-name'] || '').trim() || null;
+        }
+      }
       body.updated_at = new Date().toISOString();
       if (body.status && !ALLOWED_STATUS.includes(body.status)) {
         return res.status(400).json({ ok: false, error: 'status должен быть один из: ' + ALLOWED_STATUS.join(', ') });

@@ -10,6 +10,7 @@
 // ENV: CRON_SECRET (защита от внешних curl; Vercel Cron шлёт его автоматически).
 
 import { importSheetsForCountry } from './payments.js';
+import { recalcBillingForCountry } from './clients.js';
 
 // Импорт тянет листы из медленного Apps Script — без этого функция обрывалась по
 // дефолтному таймауту, не дойдя до вставки новых строк (Supabase замерзал — v594).
@@ -42,6 +43,20 @@ export default async function handler(req, res) {
     ran.push({ country, error: String((e && e.message) || e) });
   }
 
+  // v838: после импорта пересчитываем даты следующей оплаты из истории платежей —
+  // иначе next_billing_at заполняется только ботом и напоминания о продлениях
+  // молчат по всей старой базе. Падение пересчёта не должно валить импорт.
+  let billing = null;
+  try {
+    billing = await recalcBillingForCountry(country, false);
+  } catch (e) {
+    billing = { ok: false, error: String((e && e.message) || e) };
+  }
+
   const totalInserted = ran.reduce((s, r) => s + (r.inserted || 0), 0);
-  return res.status(200).json({ ok: true, country, total_inserted: totalInserted, ran });
+  return res.status(200).json({
+    ok: true, country, total_inserted: totalInserted, ran,
+    billing_dates_updated: billing && billing.updated,
+    billing: billing
+  });
 }
