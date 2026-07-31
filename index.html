@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v842</title>
+<title>SalesDoc — Финансовый Дашборд v843</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11821,11 +11821,40 @@ let profile={name:'',role:'',email:'',company:'SalesDoc'};
 // ============================================================
 // AUTH
 // ============================================================
+// v843: какому пункту меню какое право соответствует.
+// v180: фильтруем И обычные пункты, И solo-кнопки (Дашборд, Настройки).
+// v261: calendar/supportdash/activeclients/botadmin раньше НЕ скрывались — оператор видел «Telegram-бот».
+// v449: «4D» (fdx) видна всем у кого view_wig; редактирование внутри — isWigEditorAllowed.
+const NAV_VIEW_MAP = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',settings:'view_settings',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',fdx:'view_wig',dues:'view_activeclients'};
+
+// Скрывает пункты меню по правам. Права берём с фолбэком на набор роли: если объект прав
+// ещё не доехал (гонка загрузки), сотрудник НЕ должен увидеть лишние разделы.
+function _applyNavVisibility(u){
+ if(!u) return;
+ var acc = u.access;
+ if(!acc || typeof acc !== 'object') acc = ROLE_DEFAULTS[u.role] || ROLE_DEFAULTS.viewer || {};
+ document.querySelectorAll('.nav-item[data-view],.nav-item-solo[data-view]').forEach(function(el){
+  var view = el.dataset.view;
+  if(view === 'assistant'){
+   el.classList.toggle('hidden', !(typeof isAssistantAllowed === 'function' && isAssistantAllowed(u)));
+   return;
+  }
+  var key = NAV_VIEW_MAP[view];
+  var allowed = key ? (acc[key] === 1 || acc[key] === true) : true;
+  el.classList.toggle('hidden', !allowed);
+ });
+}
+
 function applyUserAccess() {
  if (!currentUser) return;
  const u=currentUser;
  // v180: операторы (Айдос/Самат/Акбар) дашборд НЕ видят, даже если флаг где-то остался выставленным
  if (u.role === 'operator' && u.access) { u.access.view_dashboard = 0; }
+ // v843: скрытие пунктов меню делаем ПЕРВЫМ делом и с фолбэком на права роли.
+ // Раньше блок стоял ниже подписей профиля: любая осечка выше (или u.access === undefined
+ // из-за гонки загрузки прав) обрывала функцию, и сотрудник видел ВСЕ пункты, включая
+ // «Настройки» — клик по ним отбрасывал его на «Клиенты» и выглядел как поломка.
+ try { _applyNavVisibility(u); } catch(e){ console.error('[applyUserAccess] nav:', e); }
  document.getElementById('ub-name').textContent=u.name.split(' ')[0]+' '+(u.name.split(' ')[1]||'');
  document.getElementById('ub-role').textContent=(ROLE_LABELS||{})[u.role]||{admin:'Администратор',head:'Руководитель',rop:'РОП',manager:'Менеджер',operator:'Оператор',accountant:'Бухгалтер',viewer:'Просмотр'}[u.role]||u.role;
  document.getElementById('ub-avatar').textContent=u.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
@@ -11833,22 +11862,8 @@ function applyUserAccess() {
  document.getElementById('cab-display-name').textContent=u.name;
  document.getElementById('cab-display-role').textContent=u.pos+' · '+profile.company;
 
- // Show/hide nav items
- // v180: фильтруем И обычные пункты, И solo-кнопку «Дашборд» (она `nav-item-solo`).
- // v261: добавлены отсутствовавшие view (calendar/supportdash/activeclients/botadmin) — раньше
- // эти пункты НЕ скрывались в навигации, например оператор видел «Telegram-бот».
- // v449: «4D» (fdx) видна всем у кого view_wig. Внутри редактирование защищено отдельно через isWigEditorAllowed.
- const viewMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',settings:'view_settings',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',fdx:'view_wig'};
- document.querySelectorAll('.nav-item[data-view],.nav-item-solo[data-view]').forEach(el=>{
- const view=el.dataset.view;
- if (view === 'assistant') {
- el.classList.toggle('hidden', !isAssistantAllowed(u));
- return;
- }
- const key=viewMap[view];
- const hide = key ? !u.access[key] : false;
- el.classList.toggle('hidden', hide);
- });
+ // Пункты меню уже скрыты выше (_applyNavVisibility) — до подписей профиля,
+ // чтобы осечка в них не оставила сотруднику лишние разделы.
  // topbar add btn
  // Кнопка Добавить скрыта
  document.querySelector('.add-btn').style.display = 'none';
