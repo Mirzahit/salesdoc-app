@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v844</title>
+<title>SalesDoc — Финансовый Дашборд v845</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10014,6 +10014,33 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  .du-age .am{width:120px;text-align:right;font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums}
  .du-note{font-size:11.5px;color:var(--text-muted);line-height:1.55;margin-top:12px}
  .du-empty{color:var(--text-muted);font-size:12px;text-align:center;padding:22px}
+ /* v845: панель деталей справа */
+ .du-split{display:flex;gap:16px;align-items:flex-start}
+ .du-main{flex:1 1 auto;min-width:0}
+ .du-side{flex:0 0 0;width:0;overflow:hidden}
+ .du-split.open .du-side{flex:0 0 360px;width:360px;position:sticky;top:14px;max-height:calc(100vh - 90px);overflow-y:auto;background:var(--surface);border:1px solid var(--border-faint);border-radius:14px}
+ .du-sd-h{display:flex;align-items:flex-start;gap:10px;padding:15px 16px 12px;border-bottom:1px solid var(--border-faint)}
+ .du-sd-h .nm{font-size:14.5px;font-weight:700;color:var(--text);line-height:1.3;flex:1;min-width:0;word-break:break-word}
+ .du-sd-h .id{font-size:10.5px;color:var(--text-muted);margin-top:3px;font-family:ui-monospace,Menlo,monospace}
+ .du-sd-x{background:none;border:none;color:var(--text-muted);font-size:20px;line-height:1;cursor:pointer;padding:0 2px;flex:none}
+ .du-sd-x:hover{color:var(--text)}
+ .du-sd-b{padding:13px 16px 16px}
+ .du-sd-st{font-size:12px;font-weight:600;margin-bottom:12px}
+ .du-sd-r{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-faint);font-size:12px}
+ .du-sd-r:last-of-type{border-bottom:none}
+ .du-sd-r .k{color:var(--text-muted);flex:0 0 132px}
+ .du-sd-r .v{color:var(--text);flex:1;min-width:0;text-align:right;font-variant-numeric:tabular-nums}
+ .du-sd-sec{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);margin:16px 0 8px}
+ .du-sd-pay{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-faint);font-size:11.5px}
+ .du-sd-pay:last-child{border-bottom:none}
+ .du-sd-pay .d{color:var(--text-muted);flex:none}
+ .du-sd-pay .c{color:var(--text-soft);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .du-sd-pay .a{color:var(--text);font-variant-numeric:tabular-nums;flex:none;font-weight:600}
+ .du-sd-btn{width:100%;margin-top:14px;padding:9px;border-radius:9px;border:1px solid var(--border-faint);background:var(--surface-2);color:var(--text-soft);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}
+ .du-sd-btn:hover{color:var(--text);border-color:var(--border-strong)}
+ .du-sd-btn.main{background:rgba(94,106,210,.14);border-color:rgba(94,106,210,.32);color:#AEB6FF}
+ .du-c.sel{border-color:var(--accent,#5E6AD2)}
+ @media(max-width:1200px){.du-split.open .du-side{position:fixed;right:12px;top:70px;z-index:1000;box-shadow:0 20px 50px rgba(0,0,0,.45);max-height:calc(100vh - 90px)}}
  @media(max-width:1500px){.du-kan{grid-template-columns:repeat(2,1fr)}}
  @media(max-width:900px){.du-kan{grid-template-columns:1fr}.du-strip{grid-template-columns:repeat(2,1fr)}.du-two{grid-template-columns:1fr}}
  </style>
@@ -10027,9 +10054,16 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <button type="button" class="intg-fchip" id="dues-refresh" onclick="duesInit(true)">Обновить</button>
  </div>
  </div>
+ <!-- v845: список слева + детали справа. Клик по карточке не уводит с экрана —
+      куратор идёт по списку сверху вниз, не теряя место. -->
+ <div class="du-split" id="dues-split">
+ <div class="du-main">
  <div class="du-strip" id="dues-strip"></div>
  <div class="du-kan" id="dues-kan"></div>
  <div class="du-two" id="dues-two"></div>
+ </div>
+ <aside class="du-side" id="dues-side"></aside>
+ </div>
  </div>
  </div>
 
@@ -44182,8 +44216,10 @@ function _duesCardHtml(r, kind){
  var drag = (kind === 'debt')
   ? ' draggable="true" ondragstart="duesDragStart(event,\'' + kbEsc(r.c.client_id) + '\')" ondragend="duesDragEnd()"'
   : '';
- return '<div class="du-c' + (kind === 'debt' ? ' can-drag' : '') + '"' + drag
-  + ' onclick="routeOpenClient(\'' + kbEsc(r.c.client_id) + '\')">'
+ // v845: клик открывает панель справа, а не уводит на другой экран
+ var sel = (window._duesSelected === r.c.client_id) ? ' sel' : '';
+ return '<div class="du-c' + (kind === 'debt' ? ' can-drag' : '') + sel + '"' + drag
+  + ' onclick="duesOpenSide(\'' + kbEsc(r.c.client_id) + '\')">'
   + '<div class="nm">' + kbEsc(r.c.company_name || r.c.client_id) + '</div>'
   + '<div class="mid"><span class="sum">' + _duesMoney(r.perMonth) + '/мес</span>' + lic + '</div>'
   + rsn
@@ -44274,6 +44310,98 @@ function duesRender(){
    + '<div class="du-note">Оплата у нас вперёд: не заплатил — лицензии не активированы, долга перед нами нет. Но чем дольше молчание, тем меньше шанс вернуть: верхние строки — свежие, их ещё можно догнать; нижние — почти наверняка ушли.</div></div>'
   + '<div class="du-panel"><h3>Причины — заполняет куратор</h3>' + reasonHtml
    + '<div class="du-note">Нажмите «Причина» на карточке и выберите, что выяснили при разговоре. Пока причина не выбрана — на карточке горит «не выяснена». Долг ставим только если дали отсрочку и деньги реально ждём.</div></div>';
+
+ // v845: если панель деталей открыта — обновляем и её (например, после смены причины)
+ if(window._duesSelected && typeof _duesRenderSide === 'function'){
+  try { _duesRenderSide(window._duesSelected); } catch(e){ console.error('[dues] side:', e); }
+ }
+}
+
+// ── v845: панель деталей справа ──
+// Куратор идёт по списку сверху вниз и не теряет место: клик показывает всё нужное
+// для звонка — сколько платил, когда, чем пользуется, кто ведёт.
+window._duesSelected = null;
+window.duesCloseSide = function(){
+ window._duesSelected = null;
+ var sp = document.getElementById('dues-split');
+ if(sp) sp.classList.remove('open');
+ var sd = document.getElementById('dues-side');
+ if(sd) sd.innerHTML = '';
+ duesRender();
+};
+window.duesOpenSide = function(clientId){
+ window._duesSelected = clientId;
+ var sp = document.getElementById('dues-split');
+ if(sp) sp.classList.add('open');
+ duesRender();          // подсветит выбранную карточку
+ _duesRenderSide(clientId);
+};
+
+function _duesRenderSide(clientId){
+ var el = document.getElementById('dues-side');
+ if(!el) return;
+ var d = _duesCalc();
+ var row = null, col = '';
+ [['recover', 'Догоняем', '#E0A458'], ['lost', 'Похоже, ушли', '#E5604D'],
+  ['due', 'Платят сейчас', '#E0A458'], ['ahead', 'Оплачено вперёд', '#4CB782']].forEach(function(pair){
+  if(row) return;
+  var found = (d[pair[0]] || []).find(function(r){ return r.c.client_id === clientId; });
+  if(found){ row = found; col = '<span style="color:' + pair[2] + '">' + pair[1] + '</span>'; }
+ });
+ var c = (row && row.c) || _duesState.clients.find(function(x){ return x.client_id === clientId; });
+ if(!c){ el.innerHTML = ''; return; }
+
+ // История оплат клиента — из уже загруженного массива, без запросов к серверу
+ var pays = (typeof payments !== 'undefined' && payments) ? payments : [];
+ var mine = pays.filter(function(p){
+  return (p.clientId && p.clientId === clientId) || (!p.clientId && _duesNorm(p.client) === _duesNorm(c.company_name));
+ }).sort(function(a, b){ return String(b.date).localeCompare(String(a.date)); }).slice(0, 8);
+
+ function rowHtml(k, v){
+  return '<div class="du-sd-r"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
+ }
+ var reasonDef = c.pay_reason && DUES_REASONS[c.pay_reason];
+ var reasonHtml = reasonDef
+  ? '<span style="color:' + reasonDef.color + ';cursor:pointer" onclick="duesReasonOpen(this,\'' + kbEsc(clientId) + '\')">' + kbEsc(reasonDef.label) + '</span>'
+  : '<span style="color:var(--text-muted);cursor:pointer" onclick="duesReasonOpen(this,\'' + kbEsc(clientId) + '\')">указать причину</span>';
+
+ var html = '<div class="du-sd-h"><div style="flex:1;min-width:0">'
+  + '<div class="nm">' + kbEsc(c.company_name || clientId) + '</div>'
+  + '<div class="id">' + kbEsc(clientId) + '</div></div>'
+  + '<button class="du-sd-x" onclick="duesCloseSide()" title="Закрыть">&times;</button></div>'
+  + '<div class="du-sd-b">'
+  + (col ? '<div class="du-sd-st">' + col + '</div>' : '');
+
+ if(row){
+  html += rowHtml('Оплачено по', kbEsc(_duesMkLabel(row.end)));
+  if(row.months > 0){
+   var w = (row.months === 1) ? 'месяц' : (row.months < 5 ? 'месяца' : 'месяцев');
+   html += rowHtml('Не платит', '<span style="color:#E5604D">' + row.months + ' ' + w + '</span>');
+  }
+  html += rowHtml('Платит в месяц', _duesMoney(row.perMonth));
+  if(row.lic) html += rowHtml('Лицензий', row.lic);
+ }
+ html += rowHtml('Ответственный', c.curator_operator ? kbEsc(c.curator_operator) : '<span style="color:#E5604D">не назначен</span>');
+ html += rowHtml('Телефон', c.main_phone ? kbEsc(c.main_phone) : '<span style="color:var(--text-muted)">не указан</span>');
+ if(c.billing_host) html += rowHtml('Сервер', kbEsc(c.billing_host));
+ if(c.free_until) html += rowHtml('Бесплатно до', kbEsc(String(c.free_until).slice(0, 10)));
+ html += rowHtml('Причина', reasonHtml);
+
+ html += '<div class="du-sd-sec">Последние оплаты</div>';
+ if(mine.length){
+  mine.forEach(function(p){
+   var dt = String(p.date || '');
+   html += '<div class="du-sd-pay"><span class="d">' + kbEsc(dt.slice(8, 10) + '.' + dt.slice(5, 7) + '.' + dt.slice(2, 4)) + '</span>'
+    + '<span class="c">' + kbEsc(p.categoryRaw || '') + '</span>'
+    + '<span class="a">' + _duesMoney(p.amount) + '</span></div>';
+  });
+ } else {
+  html += '<div style="font-size:11.5px;color:var(--text-muted);padding:4px 0">Оплат не найдено</div>';
+ }
+
+ html += '<button class="du-sd-btn main" onclick="routeOpenClient(\'' + kbEsc(clientId) + '\')">Открыть карту клиента</button>';
+ html += '</div>';
+ el.innerHTML = html;
 }
 
 // ── v840: перетаскивание карточек между «Догоняем» и «Похоже, ушли» ──
