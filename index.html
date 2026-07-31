@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v850</title>
+<title>SalesDoc — Финансовый Дашборд v851</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11991,6 +11991,8 @@ function switchCountry(code) {
  LEADS_SHEET_ID = cfg.LEADS_SHEET_ID;
  kpiSheetId = cfg.kpiSheetId;
  LTV_2025_ID = cfg.LTV_ID;
+ // v850: операторы поддержки свои в каждой стране — перечитываем список при переключении
+ if (typeof _ticketsOpsLoaded !== 'undefined') { _ticketsOpsLoaded = false; _TICKETS_OPERATOR_ROWS = []; _TICKETS_BADGE_OPERATORS = []; }
  // Clear data
  payments.length = 0;
  if (typeof expensesData !== 'undefined') expensesData = [];
@@ -33066,7 +33068,9 @@ var ticketsList = [];
 // добавленные в operators в БД) не получали «Мои(N)» счётчик. Теперь список загружается
 // динамически из /api/sb-ping в ticketsLoad() и пишется в window._TICKETS_BADGE_OPERATORS.
 // Фолбэк для случая когда ticketsLoad ещё не выполнился (первая отрисовка).
-var _TICKETS_BADGE_OPERATORS = ['Айдос','Акбар','Самат','Нурай'];
+// v850: пустой до загрузки. Раньше здесь лежали четыре казахстанских имени — в KG
+// выпадашка «Ответственный» показывала чужих людей, а сервер их же и отвергал.
+var _TICKETS_BADGE_OPERATORS = [];
 // v614: флаг — реальные операторы уже подтянуты из /api/sb-ping (а не дефолтная заглушка выше).
 var _ticketsOpsLoaded = false;
 
@@ -33074,12 +33078,30 @@ var _ticketsOpsLoaded = false;
 // Нужно, когда модалку «Новый тикет» или карточку тикета открывают из карточки клиента
 // (или по прямой ссылке) ДО того как отработал ticketsLoad() — иначе выпадашка
 // «Ответственный/Исполнитель» либо пуста, либо показывает устаревшие имена-заглушки.
+// v850: список берём из «Сотрудников» с учётом страны, а не из таблицы operators.
+// В operators лежали только три казахстанских имени кириллицей — из-за этого кыргызских
+// кураторов нельзя было назначить, а операторов KZ программа не узнавала (в сотрудниках
+// они латиницей: Samat, а в обращениях — Самат). Заодно помним email каждого: по нему
+// теперь определяется «я», имя для этого больше не используется.
+var _TICKETS_OPERATOR_ROWS = [];
+var _TICKETS_SUPPORT_ROLES = ['operator','rop','head','admin'];
 async function _ticketsEnsureOperators(){
  if(_ticketsOpsLoaded) return;
  try {
-  var r = await authFetch('/api/sb-ping').then(function(x){ return x.json(); }).catch(function(){ return null; });
-  var ops = (r && r.operators ? r.operators : []).filter(function(o){ return o.role === 'integrator' && o.active; }).map(function(o){ return o.name; });
-  if(ops.length){ _TICKETS_BADGE_OPERATORS = ops; _ticketsOpsLoaded = true; }
+  var r = await authFetch('/api/employees').then(function(x){ return x.json(); }).catch(function(){ return null; });
+  var all = (r && r.employees) ? r.employees : [];
+  var cc = String((typeof currentCountry !== 'undefined' ? currentCountry : 'KZ') || '').toUpperCase();
+  var rows = all.filter(function(e){
+   if(e.active === false) return false;
+   if(_TICKETS_SUPPORT_ROLES.indexOf(String(e.role || '').toLowerCase()) < 0) return false;
+   var ec = String(e.country || '').trim().toUpperCase();
+   return !ec || ec === cc; // пустая страна (директор) — доступен в обеих
+  });
+  if(rows.length){
+   _TICKETS_OPERATOR_ROWS = rows;
+   _TICKETS_BADGE_OPERATORS = rows.map(function(e){ return e.name; }).filter(Boolean);
+   _ticketsOpsLoaded = true;
+  }
  } catch(_){}
 }
 
@@ -33097,19 +33119,29 @@ function _ticketsFillOperatorSelect(sel){
 // v418: вернуть имя оператора если текущий пользователь — оператор поддержки.
 // null если CEO/админ/не залогинен. Сверяем по первому слову currentUser.name
 // (в базе операторы — одно имя, в профиле может быть «Айдос Хапез»).
+// v850: узнаём человека по ЛОГИНУ (email), а не по написанию имени. Раньше сравнивались
+// имена: в «Сотрудниках» Samat, в обращениях Самат — совпадения не было никогда. Из-за
+// этого у оператора наверху висели нули, а на доске показывались чужие обращения
+// (фильтр «мои» молча не применялся). Имя оставлено запасным вариантом.
 function _ticketsCurrentOperatorName(){
- if(typeof currentUser === 'undefined' || !currentUser || !currentUser.name) return null;
- var raw = String(currentUser.name).trim();
- var firstWord = raw.split(/\s+/)[0];
- // v461: дополнительно матчим полное имя (на случай если оператор записан как «Айдос Хапез»
- // в operators), и first-word. Пробуем все варианты против динамически загруженного списка.
+ if(typeof currentUser === 'undefined' || !currentUser) return null;
+ var mail = String(currentUser.email || '').trim().toLowerCase();
+ var rows = _TICKETS_OPERATOR_ROWS || [];
+ if(mail){
+  for(var i = 0; i < rows.length; i++){
+   if(String(rows[i].email || '').trim().toLowerCase() === mail) return rows[i].name;
+  }
+ }
+ // запасной путь: пока список сотрудников ещё не загрузился — сверяем по имени
+ var raw = String(currentUser.name || '').trim();
+ if(!raw) return null;
+ var firstWord = raw.split(/\s+/)[0].toLowerCase();
  var ops = _TICKETS_BADGE_OPERATORS || [];
- if(ops.indexOf(raw) >= 0) return raw;
- if(ops.indexOf(firstWord) >= 0) return firstWord;
- // v461: дополнительно — точный матч имени из operators, нечувствительный к регистру
- for(var i = 0; i < ops.length; i++){
-  if(ops[i] && ops[i].toLowerCase() === raw.toLowerCase()) return ops[i];
-  if(ops[i] && ops[i].toLowerCase() === firstWord.toLowerCase()) return ops[i];
+ for(var j = 0; j < ops.length; j++){
+  var n = String(ops[j] || '').trim();
+  if(!n) continue;
+  if(n.toLowerCase() === raw.toLowerCase()) return n;
+  if(n.split(/\s+/)[0].toLowerCase() === firstWord) return n;
  }
  return null;
 }
@@ -33133,13 +33165,13 @@ function _ticketsScopeKey(){
  return 'tickets_scope_' + String(uid).replace(/[^a-zA-Zа-яА-Я0-9_-]/g,'_');
 }
 // v467: жёсткий признак «это оператор поддержки». Используем для запрета scope='all'
-// — оператор не должен видеть чужие тикеты вообще. Проверяем И role в employees,
-// И матч имени против operators (любой положительный — оператор).
+// — оператор не должен видеть чужие тикеты вообще.
+// v850: только по роли. Раньше вторым условием шёл матч имени против списка операторов,
+// но теперь в этом списке есть и руководители с директором — они оказались бы заперты
+// в «своих» обращениях и перестали видеть работу отдела.
 function _ticketsIsSupportOperator(){
  if(typeof currentUser === 'undefined' || !currentUser) return false;
- if(String(currentUser.role||'').toLowerCase() === 'operator') return true;
- if(_ticketsCurrentOperatorName()) return true;
- return false;
+ return String(currentUser.role||'').toLowerCase() === 'operator';
 }
 function _ticketsGetScope(){
  // v467: операторы поддержки — всегда «Мои», localStorage игнорируем.
@@ -33233,15 +33265,10 @@ async function ticketsLoadBadgeOnly(){
  try {
   // v461: загружаем тикеты И список операторов параллельно — иначе бейдж покажет
   // 0 для оператора, не попавшего в захардкоженный fallback.
-  var [d, opsRes] = await Promise.all([
+  var [d] = await Promise.all([
    sbFetch('/api/cards?entity=ticket'),
-   authFetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators:[] }; })
+   _ticketsEnsureOperators() // v850: операторы из «Сотрудников» страны
   ]);
-  var opsList = ((opsRes && opsRes.operators) || []).filter(o=>o.role==='integrator' && o.active);
-  if(opsList.length){
-   _TICKETS_BADGE_OPERATORS = opsList.map(function(o){ return o.name; });
-   _ticketsOpsLoaded = true; // v614
-  }
   if(d && d.ok){
    ticketsList = d.tickets || [];
    _ticketsRenderBadge();
@@ -33255,22 +33282,16 @@ async function ticketsLoad(){
  try {
   // Тянем тикеты + операторов + ВСЕХ клиентов (для модалки — операторы хотят
   // создавать тикеты и на внедряющихся, не только на активных).
-  var [tRes, opsRes, clRes] = await Promise.all([
+  var [tRes, , clRes] = await Promise.all([
    sbFetch('/api/cards?entity=ticket'),
-   authFetch('/api/sb-ping').then(r=>r.json()).catch(function(){ return { operators:[] }; }),
+   _ticketsEnsureOperators(), // v850: операторы из «Сотрудников» страны, а не из таблицы operators
    sbFetch('/api/clients')
   ]);
   if(!tRes.ok) throw new Error(tRes.error || 'tickets load failed');
   ticketsList = tRes.tickets || [];
   // Заполняем выпадашку операторов (один раз)
   var filt = document.getElementById('tickets-filter-op');
-  var opsList = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
-  // v461: динамически обновляем _TICKETS_BADGE_OPERATORS из активных операторов поддержки.
-  // Это позволяет любому добавленному в operators оператору сразу видеть счётчик «Мои».
-  if(opsList.length){
-   _TICKETS_BADGE_OPERATORS = opsList.map(function(o){ return o.name; });
-   _ticketsOpsLoaded = true; // v614
-  }
+  var opsList = (_TICKETS_OPERATOR_ROWS || []).map(function(e){ return { name: e.name }; });
   if(filt && filt.options.length <= 1){
    opsList.forEach(function(o){ var opt = document.createElement('option'); opt.value=o.name; opt.textContent=o.name; filt.appendChild(opt); });
   }

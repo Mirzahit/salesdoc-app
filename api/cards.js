@@ -24,6 +24,7 @@
 import { sbSelect, sbInsert, sbUpdate } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { almatyIso } from './_dates.js';
+import { canonOperator, operatorNames } from './_operators.js'; // v850: операторы из «Сотрудников», а не из кода
 
 // v364: whitelist разрешённых стадий — иначе мусорный stage сохранится молча
 const ALLOWED_STAGES = ['Новый','Настройка','Обучение','Тестирование','Активация','Архив'];
@@ -47,9 +48,10 @@ const TICKET_STATUSES = ['new','in_progress','waiting_client','solved','closed',
 const TICKET_PRIORITIES = ['low','normal','high','critical'];
 const TICKET_CHANNELS = ['whatsapp','email','phone','form','manual'];
 const TICKET_CATEGORIES = ['bug','question','training','feature_request','other'];
-// v413: whitelist операторов — раньше можно было через curl вписать любое имя.
-// null/'' разрешён — означает «не назначен».
-const TICKET_OPERATORS = ['Айдос','Акбар','Самат','Нурай'];
+// v850: список операторов больше НЕ зашит в код — он берётся из «Сотрудников»
+// с учётом страны (см. api/_operators.js). Раньше здесь лежали четыре казахстанских
+// имени, и Кыргызстан не мог назначить своего человека на обращение вообще.
+// Проверка «кто угодно через curl» при этом сохранена: имя обязано найтись в базе.
 // v848: срок ПЕРВОГО ОТВЕТА в РАБОЧИХ минутах (решение CEO 30.07.2026):
 // «стало/не работает» — 30 минут, обычный вопрос — 2 часа. Часы работы Пн-Пт 9:00-18:00.
 // Раньше считалось круглосуточно и календарно: обращение в 17:59 «нарушалось» ночью,
@@ -517,8 +519,13 @@ async function handleTicketsRoute(req, res) {
     if (channel === 'manual' && (!body.operator || !String(body.operator).trim())) {
       return res.status(400).json({ ok: false, error: 'operator обязателен при ручном создании тикета (нельзя создать без ответственного)' });
     }
-    if (body.operator && !TICKET_OPERATORS.includes(body.operator)) {
-      return res.status(400).json({ ok: false, error: 'operator должен быть один из: ' + TICKET_OPERATORS.join(', ') });
+    let operatorName = null;
+    if (body.operator && String(body.operator).trim()) {
+      operatorName = await canonOperator(body.operator, country);
+      if (!operatorName) {
+        const known = await operatorNames(country);
+        return res.status(400).json({ ok: false, error: 'Такого оператора нет в сотрудниках ' + country + '. Доступны: ' + (known.join(', ') || 'никого — заведите оператора в Настройках') });
+      }
     }
 
     const ticket = {
@@ -530,7 +537,7 @@ async function handleTicketsRoute(req, res) {
       priority: priority,
       channel: channel,
       category: body.category || null,
-      operator: body.operator || null,
+      operator: operatorName,
       sla_due_at: calculateTicketSLA(priority, country) // v848: в рабочих часах страны
     };
     const result = await sbInsert('tickets', ticket);
@@ -552,16 +559,28 @@ async function handleTicketsRoute(req, res) {
     if (body.category && !TICKET_CATEGORIES.includes(body.category)) {
       return res.status(400).json({ ok: false, error: 'category: ' + TICKET_CATEGORIES.join(', ') });
     }
-    // v413: PATCH тоже валидирует operator — раньше можно было через curl записать любое имя.
-    // null разрешён (сброс назначения).
-    if (body.operator && !TICKET_OPERATORS.includes(body.operator)) {
-      return res.status(400).json({ ok: false, error: 'operator: ' + TICKET_OPERATORS.join(', ') });
+    // v850: оператор проверяется по «Сотрудникам» страны самого обращения (не по query —
+    // страна там может не совпадать), имя приводится к тому виду, как человек записан в базе.
+    let patchOperator;
+    if (body.operator !== undefined) {
+      if (!body.operator || !String(body.operator).trim()) {
+        patchOperator = null; // сброс назначения
+      } else {
+        const own = await sbSelect('tickets', { id: 'eq.' + id, select: 'country', limit: '1' });
+        const tCountry = (own.length && own[0].country) || 'KZ';
+        patchOperator = await canonOperator(body.operator, tCountry);
+        if (!patchOperator) {
+          const known = await operatorNames(tCountry);
+          return res.status(400).json({ ok: false, error: 'Такого оператора нет в сотрудниках ' + tCountry + '. Доступны: ' + (known.join(', ') || 'никого — заведите оператора в Настройках') });
+        }
+      }
     }
 
     const patch = { updated_at: new Date().toISOString() };
-    ['status','priority','category','operator','title','description'].forEach(k => {
+    ['status','priority','category','title','description'].forEach(k => {
       if (body[k] !== undefined) patch[k] = body[k];
     });
+    if (body.operator !== undefined) patch.operator = patchOperator;
     // v404: tags TEXT[] — массив коротких меток. Принимаем только массив строк,
     // обрезаем по 32 символа, дедуплицируем, максимум 12 тегов.
     if (body.tags !== undefined) {
