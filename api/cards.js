@@ -434,9 +434,13 @@ async function handleTicketCommentsRoute(req, res) {
     // v848: первый ответ сотрудника отмечаем автоматически — это главная метрика поддержки.
     // Раньше поле first_response_at не заполнял никто, и скорость ответа посчитать было нельзя.
     // Ошибка отметки не должна ронять сам комментарий — он уже сохранён.
+    // v850: заметка для своих (channel=internal) ответом клиенту НЕ считается — иначе
+    // оператор пишет себе «посмотреть завтра», а метрика скорости ответа рисует красивую
+    // цифру без единого ответа клиенту.
+    const isReplyToClient = row.channel !== 'internal';
     try {
       const t = await sbSelect('tickets', { id: 'eq.' + body.ticket_id, select: 'first_response_at,status', limit: '1' });
-      if (t.length && !t[0].first_response_at) {
+      if (isReplyToClient && t.length && !t[0].first_response_at) {
         const patch = { first_response_at: new Date().toISOString(), updated_at: new Date().toISOString() };
         // Новое обращение, на которое ответили, автоматически становится «в работе»
         if (t[0].status === 'new') patch.status = 'in_progress';
