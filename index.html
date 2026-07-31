@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v852</title>
+<title>SalesDoc — Финансовый Дашборд v853</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -44350,6 +44350,30 @@ function _duesColHtml(title, sub, tone, items, kind, limit, bucket){
   + '</div></div>';
 }
 
+// v853: оплаты грузятся в общем потоке приложения и могут прийти позже, чем человек
+// откроет раздел. Ждём их сами и дорисовываем без единого клика. Через 40 секунд
+// сдаёмся и честно говорим, что не загрузилось.
+var _duesPayWaitTimer = null;
+var _duesPayGaveUp = false;
+function _duesWaitPayments(){
+ if(_duesPayWaitTimer || _duesPayGaveUp) return;
+ var tries = 0;
+ _duesPayWaitTimer = setInterval(function(){
+  tries++;
+  var pays = (typeof payments !== 'undefined' && payments) ? payments : [];
+  if(pays.length){
+   clearInterval(_duesPayWaitTimer); _duesPayWaitTimer = null;
+   duesRender();
+   return;
+  }
+  if(tries > 80){ // ~40 секунд
+   clearInterval(_duesPayWaitTimer); _duesPayWaitTimer = null;
+   _duesPayGaveUp = true;
+   duesRender();
+  }
+ }, 500);
+}
+
 function duesRender(){
  var strip = document.getElementById('dues-strip');
  var kan = document.getElementById('dues-kan');
@@ -44359,7 +44383,12 @@ function duesRender(){
  if(_duesState.loading){ strip.innerHTML = ''; kan.innerHTML = '<div class="du-empty">Загрузка...</div>'; two.innerHTML = ''; return; }
  var pays = (typeof payments !== 'undefined' && payments) ? payments : [];
  if(!pays.length){
-  kan.innerHTML = '<div class="du-empty">Оплаты ещё не загрузились. Нажмите «Обновить» через пару секунд.</div>';
+  // v853: раньше здесь просили человека нажать «Обновить» — раздел открывался раньше,
+  // чем доезжали оплаты, и стоял пустым, пока не ткнёшь кнопку. Теперь ждём сами.
+  _duesWaitPayments();
+  kan.innerHTML = '<div class="du-empty">' + (_duesPayGaveUp
+   ? 'Оплаты не загрузились. Нажмите «Обновить».'
+   : 'Загружаем оплаты…') + '</div>';
   strip.innerHTML = ''; two.innerHTML = '';
   return;
  }
@@ -44629,6 +44658,7 @@ async function duesSetReason(clientId, reason, freeUntil){
 
 async function duesInit(force){
  var country = (typeof currentCountry !== 'undefined' && currentCountry) ? currentCountry : 'KZ';
+ if(force) _duesPayGaveUp = false; // v853: «Обновить» даёт ожиданию оплат второй шанс
  if(_duesState.loaded && _duesState.country === country && !force){ duesRender(); return; }
  _duesState.loading = true;
  duesRender();
