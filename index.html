@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v839</title>
+<title>SalesDoc — Финансовый Дашборд v840</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5353,8 +5353,14 @@ body.light .route-col-amo .rc .act.go{color:#4651B5}
 #view-route .rt-seg button:hover{color:var(--text,#E7EAF0)}
 #view-route .rt-seg button.on{background:rgba(90,167,240,.14);color:#5AA7F0}
 #view-route .rt-seg .cnt{font-weight:400;opacity:.7;font-variant-numeric:tabular-nums}
-#view-route .rt-kb{display:flex;gap:0;border:1px solid var(--border,#23272f);border-bottom:none;border-radius:12px 12px 0 0;background:var(--surface,#16181d);overflow:hidden;height:calc(100vh - 230px);min-height:480px} /* v742: доска впритык к низу экрана, без нижней рамки (CEO: «нигде не должно быть пустоты») */
-#view-route .rt-col{flex:1 1 0;min-width:0;border-right:1px solid var(--border-faint,#14171d);display:flex;flex-direction:column;min-height:0}
+/* v840: overflow-x:auto вместо hidden — при 6+ этапах последние колонки уезжали за край
+   и добраться до них было нельзя (ни скролла, ни автопрокрутки при перетаскивании). */
+#view-route .rt-kb{display:flex;gap:0;border:1px solid var(--border,#23272f);border-bottom:none;border-radius:12px 12px 0 0;background:var(--surface,#16181d);overflow-x:auto;overflow-y:hidden;height:calc(100vh - 230px);min-height:480px;scrollbar-width:thin} /* v742: доска впритык к низу экрана, без нижней рамки (CEO: «нигде не должно быть пустоты») */
+#view-route .rt-kb::-webkit-scrollbar{height:9px}
+#view-route .rt-kb::-webkit-scrollbar-thumb{background:var(--border-strong,rgba(255,255,255,.18));border-radius:5px}
+#view-route .rt-kb::-webkit-scrollbar-thumb:hover{background:var(--text-muted,#8A93A2)}
+/* flex:1 0 260px — колонки растягиваются, если место есть, но не сжимаются уже 260px */
+#view-route .rt-col{flex:1 0 260px;min-width:260px;border-right:1px solid var(--border-faint,#14171d);display:flex;flex-direction:column;min-height:0}
 #view-route .rt-col:last-child{border-right:none}
 #view-route .rt-col.s1{--top:var(--rk-stage-1,#8A909C)}
 #view-route .rt-col.s2{--top:var(--rk-stage-2,#5AA7F0)}
@@ -9956,7 +9962,9 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  .du-card .v{font-size:25px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;color:var(--text)}
  .du-card .d{font-size:11px;color:var(--text-muted);margin-top:5px}
  .du-card .v.red{color:#E5604D}.du-card .v.amb{color:#E0A458}.du-card .v.grn{color:#4CB782}
- .du-kan{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:16px;align-items:start}
+ .du-kan{display:grid;grid-template-columns:repeat(4,minmax(240px,1fr));gap:14px;margin-top:16px;align-items:start;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+ .du-kan::-webkit-scrollbar{height:9px}
+ .du-kan::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:5px}
  .du-col{background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;overflow:hidden}
  .du-h{padding:12px 14px 11px;border-bottom:1px solid var(--border-faint)}
  .du-h .t{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:8px;color:var(--text)}
@@ -9967,6 +9975,11 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  .du-body{padding:10px;display:flex;flex-direction:column;gap:8px;min-height:110px;max-height:640px;overflow-y:auto}
  .du-c{background:var(--surface-2);border:1px solid var(--border-faint);border-radius:11px;padding:11px 12px;cursor:pointer}
  .du-c:hover{border-color:var(--border-strong)}
+ /* v840: карточку неплательщика можно перетащить в соседнюю колонку */
+ .du-c.can-drag{cursor:grab}
+ .du-c.can-drag:active{cursor:grabbing}
+ .du-col.du-over{outline:2px dashed var(--accent,#5E6AD2);outline-offset:-4px}
+ .du-col.du-over .du-body{background:rgba(94,106,210,.06)}
  .du-c .nm{font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  .du-c .mid{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:8px}
  .du-c .sum{font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text)}
@@ -9977,11 +9990,11 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  .du-c .tag.red{color:#E5604D}.du-c .tag.amb{color:#E0A458}.du-c .tag.dim{color:var(--text-muted);font-weight:500}
  .du-av{width:21px;height:21px;border-radius:50%;background:var(--accent,#5E6AD2);color:#fff;font-size:9.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
  .du-av.none{background:rgba(229,96,77,.16);color:#E5604D;border:1px dashed rgba(229,96,77,.5)}
- .du-rsn{display:flex;align-items:center;gap:7px;margin-bottom:8px;padding:6px 8px;border-radius:7px;font-size:10.5px;cursor:pointer}
- .du-rsn.empty{background:rgba(229,96,77,.06);border:1px dashed rgba(229,96,77,.28)}
- .du-rsn.set{background:var(--surface);border:1px solid var(--border-faint)}
- .du-rsn .rl{color:var(--text-muted)}
- .du-rsn .rv{font-weight:600;margin-left:auto}
+ /* v840: без рамок и подложек — тихая строка в общем стиле карточки */
+ .du-rsn{display:inline-flex;align-items:center;gap:6px;margin-bottom:9px;font-size:11px;cursor:pointer;color:var(--text-soft)}
+ .du-rsn:hover{color:var(--text)}
+ .du-rsn .rdot{width:6px;height:6px;border-radius:50%;flex:none}
+ .du-rsn.empty{color:var(--text-muted);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
  .du-rest{font-size:11.5px;color:var(--text-muted);text-align:center;padding:7px}
  .du-two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
  .du-panel{background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:16px 18px}
@@ -32418,9 +32431,32 @@ function _routeUpdateStats(){
  }
 }
 
+// v840: автопрокрутка доски, когда карточку тащат к её краю. Без этого с 6+ этапами
+// перетащить в последнюю колонку было невозможно: она за краем, а руками доску во время
+// перетаскивания не прокрутить. Вешается один раз на контейнер (флаг _dragScrollOn).
+function sdEnableDragScroll(el){
+ if(!el || el._dragScrollOn) return;
+ el._dragScrollOn = true;
+ var timer = null, speed = 0;
+ function stop(){ if(timer){ clearInterval(timer); timer = null; } speed = 0; }
+ el.addEventListener('dragover', function(e){
+  var r = el.getBoundingClientRect();
+  var edge = 100;                                  // зона у края, где начинается прокрутка
+  var x = e.clientX;
+  if(x < r.left + edge) speed = -Math.ceil((r.left + edge - x) / 5);
+  else if(x > r.right - edge) speed = Math.ceil((x - (r.right - edge)) / 5);
+  else speed = 0;
+  if(speed && !timer) timer = setInterval(function(){ el.scrollLeft += speed; }, 16);
+  if(!speed) stop();
+ });
+ ['dragleave', 'drop', 'dragend'].forEach(function(ev){ el.addEventListener(ev, stop); });
+ document.addEventListener('dragend', stop);
+}
+
 function routeRender(){
  var board = document.getElementById('route-board');
  if(!board) return;
+ sdEnableDragScroll(board);
  var filterOp = (document.getElementById('route-filter-op')||{}).value || '';
  var filterQ = ((document.getElementById('route-search')||{}).value || '').trim().toLowerCase(); // v738: поиск по имени клиента
  // v445: «без оператора» — toggle-фильтр (кликом по бейджу в шапке колонки)
@@ -44040,9 +44076,20 @@ function _duesCalc(){
  ahead.sort(function(a, b){ return a.end - b.end; });
  // v838: точка невозврата — 3 месяца (решение CEO). До 3 включительно клиента ещё
  // реально вернуть, дальше это свершившийся отток: закрываем и считаем потерю.
- var recover = debt.filter(function(r){ return r.months <= DUES_LOST_AFTER; });
- var lost = debt.filter(function(r){ return r.months > DUES_LOST_AFTER; });
+ // v840: решение человека сильнее расчёта по датам — поэтому карточку можно перетащить.
+ // «Отток» уводит в «ушли» даже с долгом в месяц; «Долг»/«Спад» держат в «Догоняем»,
+ // даже если молчит полгода (значит с ним работают).
+ var recover = debt.filter(function(r){ return _duesBucket(r) === 'recover'; });
+ var lost = debt.filter(function(r){ return _duesBucket(r) === 'lost'; });
  return { debt: debt, recover: recover, lost: lost, due: due, ahead: ahead, noHist: noHist, cur: cur };
+}
+
+// В какую колонку попадает неплательщик: решение куратора важнее срока (v840)
+function _duesBucket(r){
+ var rs = (r.c && r.c.pay_reason) || '';
+ if(rs === 'churn') return 'lost';
+ if(rs === 'debt' || rs === 'decline') return 'recover';
+ return r.months <= DUES_LOST_AFTER ? 'recover' : 'lost';
 }
 
 function _duesAvatar(name){
@@ -44069,14 +44116,19 @@ function _duesCardHtml(r, kind){
   var key = r.c.pay_reason;
   var def = key && DUES_REASONS[key];
   rsn = def
-   ? '<div class="du-rsn set" onclick="event.stopPropagation();duesReasonOpen(this,\'' + kbEsc(r.c.client_id) + '\')">'
-     + '<span class="rl">Причина</span><span class="rv" style="color:' + def.color + '">' + kbEsc(def.label) + '</span></div>'
+   ? '<div class="du-rsn" onclick="event.stopPropagation();duesReasonOpen(this,\'' + kbEsc(r.c.client_id) + '\')">'
+     + '<span class="rdot" style="background:' + def.color + '"></span>' + kbEsc(def.label) + '</div>'
    : '<div class="du-rsn empty" onclick="event.stopPropagation();duesReasonOpen(this,\'' + kbEsc(r.c.client_id) + '\')">'
-     + '<span class="rl">Причина</span><span class="rv" style="color:#E5604D">не выяснена</span></div>';
+     + 'указать причину</div>';
  }
  var lic = r.lic ? '<span class="chip">' + r.lic + ' лиц.</span>' : '';
  var last = r.lastPay ? ('посл. оплата ' + kbEsc(String(r.lastPay).slice(8, 10) + '.' + String(r.lastPay).slice(5, 7))) : '';
- return '<div class="du-c" onclick="routeOpenClient(\'' + kbEsc(r.c.client_id) + '\')">'
+ // v840: карточку неплательщика можно перетащить между «Догоняем» и «Похоже, ушли»
+ var drag = (kind === 'debt')
+  ? ' draggable="true" ondragstart="duesDragStart(event,\'' + kbEsc(r.c.client_id) + '\')" ondragend="duesDragEnd()"'
+  : '';
+ return '<div class="du-c' + (kind === 'debt' ? ' can-drag' : '') + '"' + drag
+  + ' onclick="routeOpenClient(\'' + kbEsc(r.c.client_id) + '\')">'
   + '<div class="nm">' + kbEsc(r.c.company_name || r.c.client_id) + '</div>'
   + '<div class="mid"><span class="sum">' + _duesMoney(r.perMonth) + '/мес</span>' + lic + '</div>'
   + rsn
@@ -44084,11 +44136,18 @@ function _duesCardHtml(r, kind){
   + '</div>';
 }
 
-function _duesColHtml(title, sub, tone, items, kind, limit){
+function _duesColHtml(title, sub, tone, items, kind, limit, bucket){
  var total = items.reduce(function(s, r){ return s + (r.perMonth || 0); }, 0);
  var shown = items.slice(0, limit);
  var rest = items.length - shown.length;
- return '<div class="du-col"><div class="du-h ' + tone + '">'
+ // v840: принимают карточки только две колонки — они про решение человека.
+ // «Платят сейчас» и «Оплачено вперёд» — это факт оплаты, его перетаскиванием не создать.
+ var drop = bucket
+  ? ' ondragover="event.preventDefault();this.classList.add(\'du-over\')"'
+    + ' ondragleave="this.classList.remove(\'du-over\')"'
+    + ' ondrop="this.classList.remove(\'du-over\');duesDrop(event,\'' + bucket + '\')"'
+  : ' ondragover="event.preventDefault()" ondrop="duesDropRefuse(event)"';
+ return '<div class="du-col"' + drop + '><div class="du-h ' + tone + '">'
   + '<div class="t">' + title + '<span class="cnt">' + items.length + '</span></div>'
   + '<div class="s">' + sub + '</div>'
   + '<div class="m">' + _duesMoney(total) + ' в месяц</div></div>'
@@ -44103,6 +44162,7 @@ function duesRender(){
  var kan = document.getElementById('dues-kan');
  var two = document.getElementById('dues-two');
  if(!strip || !kan || !two) return;
+ if(typeof sdEnableDragScroll === 'function') sdEnableDragScroll(kan); // v840: автопрокрутка при перетаскивании
  if(_duesState.loading){ strip.innerHTML = ''; kan.innerHTML = '<div class="du-empty">Загрузка...</div>'; two.innerHTML = ''; return; }
  var pays = (typeof payments !== 'undefined' && payments) ? payments : [];
  if(!pays.length){
@@ -44129,10 +44189,10 @@ function duesRender(){
    + '<div class="d">' + d.noHist + ' без истории оплат — разобрать</div></div>';
 
  kan.innerHTML =
-  _duesColHtml('Догоняем', 'Не платят до ' + DUES_LOST_AFTER + ' месяцев — ещё можно вернуть', 'amb', d.recover, 'debt', 40)
-  + _duesColHtml('Похоже, ушли', 'Молчат дольше ' + DUES_LOST_AFTER + ' месяцев — закрыть и посчитать потерю', 'red', d.lost, 'debt', 40)
-  + _duesColHtml('Платят сейчас', _duesMkLabel(d.cur) + ' закрыт, следующий нет', 'amb', d.due, 'due', 40)
-  + _duesColHtml('Оплачено вперёд', 'Срок дальше текущего месяца', 'grn', d.ahead, 'ahead', 40);
+  _duesColHtml('Догоняем', 'Не платят до ' + DUES_LOST_AFTER + ' месяцев — ещё можно вернуть', 'amb', d.recover, 'debt', 40, 'recover')
+  + _duesColHtml('Похоже, ушли', 'Молчат дольше ' + DUES_LOST_AFTER + ' месяцев — закрыть и посчитать потерю', 'red', d.lost, 'debt', 40, 'lost')
+  + _duesColHtml('Платят сейчас', _duesMkLabel(d.cur) + ' закрыт, следующий нет', 'amb', d.due, 'due', 40, '')
+  + _duesColHtml('Оплачено вперёд', 'Срок дальше текущего месяца', 'grn', d.ahead, 'ahead', 40, '');
 
  // Давность долга
  var byAge = {};
@@ -44161,6 +44221,43 @@ function duesRender(){
    + '<div class="du-note">Нажмите «Причина» на карточке и выберите, что выяснили при разговоре. Пока причина не выбрана — на карточке горит «не выяснена». Долг ставим только если дали отсрочку и деньги реально ждём.</div></div>';
 }
 
+// ── v840: перетаскивание карточек между «Догоняем» и «Похоже, ушли» ──
+// Колонки считаются по датам оплат, поэтому просто «переложить» карточку нельзя —
+// бросок означает решение куратора и сохраняется как причина. Иначе при следующей
+// загрузке карточка вернулась бы на место, и это выглядело бы как поломка.
+window._duesDragId = null;
+window.duesDragStart = function(e, clientId){
+ window._duesDragId = clientId;
+ try { e.dataTransfer.setData('text/plain', clientId); e.dataTransfer.effectAllowed = 'move'; } catch(_){}
+};
+window.duesDragEnd = function(){ window._duesDragId = null; };
+window.duesDrop = function(e, bucket){
+ e.preventDefault();
+ var id = window._duesDragId;
+ if(!id){ try { id = e.dataTransfer.getData('text/plain'); } catch(_){} }
+ window._duesDragId = null;
+ if(!id) return;
+ var cl = _duesState.clients.find(function(c){ return c.client_id === id; });
+ if(!cl) return;
+ if(bucket === 'lost'){
+  if(cl.pay_reason === 'churn') return;             // уже там — ничего не делаем
+  duesSetReason(id, 'churn');
+  return;
+ }
+ // Вернули в работу — уточняем, что именно выяснили
+ if(typeof crmTasksOpenDropdown !== 'function'){ duesSetReason(id, 'debt'); return; }
+ crmTasksOpenDropdown(e.currentTarget, [
+  { value: 'debt',    label: 'Долг — дали отсрочку, ждём деньги' },
+  { value: 'decline', label: 'Спад — сократил лицензии или пауза' },
+  { value: '',        label: 'Просто вернуть в работу' }
+ ], function(v){ duesSetReason(id, v); });
+};
+window.duesDropRefuse = function(e){
+ e.preventDefault();
+ window._duesDragId = null;
+ sdToast('Сюда перетащить нельзя: колонка считается по оплатам. Если деньги пришли — внесите оплату.');
+};
+
 // Выбор причины — свой дропдаун (нативные select в проекте запрещены)
 window.duesReasonOpen = function(anchor, clientId){
  if(typeof crmTasksOpenDropdown !== 'function'){ sdToast('Модуль списков не загружен'); return; }
@@ -44170,23 +44267,56 @@ window.duesReasonOpen = function(anchor, clientId){
   return { value: k, label: DUES_REASONS[k].label + ' — ' + DUES_REASONS[k].hint, selected: curKey === k };
  });
  if(curKey) items.push({ value: '', label: 'Снять причину' });
- crmTasksOpenDropdown(anchor, items, function(v){ duesSetReason(clientId, v); });
+ crmTasksOpenDropdown(anchor, items, function(v){
+  // v840: у бесплатного периода обязательно спрашиваем срок — без даты он ни на что
+  // не влияет (расчёт смотрит free_until, а не саму причину)
+  if(v === 'free'){ _duesFreeUntilPick(anchor, function(until){ duesSetReason(clientId, 'free', until); }); return; }
+  duesSetReason(clientId, v);
+ });
 };
 
-async function duesSetReason(clientId, reason){
+// До какого числа подарен доступ. Считаем концом календарного месяца — биллинг календарный.
+function _duesFreeUntilPick(anchor, cb){
+ var now = new Date();
+ function endOfMonth(add){
+  var d = new Date(now.getFullYear(), now.getMonth() + add + 1, 0);
+  return taskLocalIso(d);
+ }
+ var items = [
+  { value: endOfMonth(0), label: 'До конца текущего месяца' },
+  { value: endOfMonth(1), label: 'Плюс месяц' },
+  { value: endOfMonth(2), label: 'Плюс два месяца' },
+  { value: endOfMonth(3), label: 'Плюс три месяца' }
+ ];
+ if(typeof crmTasksOpenDropdown !== 'function'){ cb(endOfMonth(0)); return; }
+ crmTasksOpenDropdown(anchor, items, cb);
+}
+
+async function duesSetReason(clientId, reason, freeUntil){
  var cl = _duesState.clients.find(function(c){ return c.client_id === clientId; });
  if(!cl) return;
  var prev = cl.pay_reason || null;
+ var prevFree = cl.free_until || null;
+ var body = { pay_reason: reason || '' };
+ // v840: бесплатный период живёт в free_until; снятие причины его тоже убирает,
+ // иначе клиент навсегда завис бы в «оплачено вперёд»
+ if(reason === 'free' && freeUntil){ body.free_until = freeUntil; cl.free_until = freeUntil; }
+ if(!reason){ body.free_until = null; cl.free_until = null; }
  cl.pay_reason = reason || null;   // оптимистично — экран отвечает сразу
  duesRender();
  try {
   var r = await sbFetch('/api/clients?client_id=' + encodeURIComponent(clientId), {
-   method: 'PATCH', body: JSON.stringify({ pay_reason: reason || '' })
+   method: 'PATCH', body: JSON.stringify(body)
   });
   if(!r || !r.ok) throw new Error((r && r.error) || 'сервер не принял');
-  sdToast(reason ? ('Причина: ' + DUES_REASONS[reason].label) : 'Причина снята');
+  var msg = reason ? ('Причина: ' + DUES_REASONS[reason].label) : 'Причина снята';
+  if(reason === 'free' && freeUntil){
+   msg += ' до ' + freeUntil.slice(8, 10) + '.' + freeUntil.slice(5, 7);
+  }
+  sdToast(msg);
  } catch(e){
   cl.pay_reason = prev;            // откат — иначе экран врёт
+  cl.free_until = prevFree;
   duesRender();
   sdToast('Не сохранилось: ' + (e.message || e));
  }
