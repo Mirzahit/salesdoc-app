@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v843</title>
+<title>SalesDoc — Финансовый Дашборд v844</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8398,6 +8398,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="setnav-card" onclick="settingsOpen('params')"><span class="cico" style="background:rgba(224,164,88,.15);color:#E0A458">ПА</span><span class="setnav-tx"><span class="setnav-nm">Параметры</span><span class="setnav-ds">Курс доллара, оплата таргетологу</span></span><span class="setnav-car">&#9656;</span></div>
  <div class="setnav-card" onclick="settingsOpen('profile')"><span class="cico" style="background:rgba(120,120,128,.15);color:var(--text-soft)">ПР</span><span class="setnav-tx"><span class="setnav-nm">Мой профиль</span><span class="setnav-ds">Сменить свой пароль</span></span><span class="setnav-car">&#9656;</span></div>
  </div>
+ <!-- v844: подпись для сотрудников без прав на настройки компании -->
+ <div id="set-personal-hint" style="display:none;margin-top:14px;font-size:12px;color:var(--text-muted);line-height:1.55">Здесь ваши личные настройки. Настройки компании — сотрудники, подключения, параметры — доступны руководителю.</div>
  <div style="font-size:11px;color:var(--text-muted);margin-top:12px">Планы компании переехали в раздел &laquo;Планы&raquo; в меню.</div>
  </div>
  <div id="set-backbar" style="display:none;align-items:center;gap:12px;margin-bottom:14px">
@@ -11825,7 +11827,9 @@ let profile={name:'',role:'',email:'',company:'SalesDoc'};
 // v180: фильтруем И обычные пункты, И solo-кнопки (Дашборд, Настройки).
 // v261: calendar/supportdash/activeclients/botadmin раньше НЕ скрывались — оператор видел «Telegram-бот».
 // v449: «4D» (fdx) видна всем у кого view_wig; редактирование внутри — isWigEditorAllowed.
-const NAV_VIEW_MAP = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',settings:'view_settings',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',fdx:'view_wig',dues:'view_activeclients'};
+// v844: «Настройки» видны ВСЕМ (решение CEO). У кого нет права view_settings —
+// открывается личная часть: профиль и смена пароля. Раньше клик отбрасывал на «Клиентов».
+const NAV_VIEW_MAP = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',fdx:'view_wig',dues:'view_activeclients'};
 
 // Скрывает пункты меню по правам. Права берём с фолбэком на набор роли: если объект прав
 // ещё не доехал (гонка загрузки), сотрудник НЕ должен увидеть лишние разделы.
@@ -16362,7 +16366,7 @@ function showView(v) {
  v = defaultViewForUser(currentUser);
  }
  // v449: старые «Цель» и «4Д» объединены в одну кнопку «4D» (fdx). Внутри 5 вкладок.
- var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',mytasks:'view_mytasks',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',churn:'view_activeclients',botadmin:'view_botadmin',settings:'view_settings',fdx:'view_wig','my-clients':'view_activeclients',tickets:'view_kanban',dues:'view_activeclients'}; // v762: my-clients и tickets раньше НЕ проверяли права — дыра закрыта; v838: dues по праву «Действующие»
+ var _accessMap = {morning:'view_dashboard',dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',mytasks:'view_mytasks',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',churn:'view_activeclients',botadmin:'view_botadmin',fdx:'view_wig','my-clients':'view_activeclients',tickets:'view_kanban',dues:'view_activeclients'}; // v844: settings убран — раздел открыт всем, внутри режется по правам // v762: my-clients и tickets раньше НЕ проверяли права — дыра закрыта; v838: dues по праву «Действующие»
  var _need = _accessMap[v];
  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
@@ -16415,6 +16419,8 @@ function showView(v) {
  if (v === 'activeclients' && typeof acInit === 'function') { try { acInit(); } catch(_){} }
  // v838: «Оплаты и долги» — календарная модель биллинга (см. memory project_billing_model)
  if (v === 'dues' && typeof duesInit === 'function') { try { duesInit(); } catch(_){} }
+ // v844: настройки открыты всем — но сотруднику показываем только личную часть
+ if (v === 'settings' && typeof settingsApplyRole === 'function') { try { settingsApplyRole(); } catch(_){} }
  if (v === 'newclients' && typeof ncInit === 'function') { try { ncInit(); } catch(_){} }
  // v369: Мои клиенты — витрина продлений
  if (v === 'my-clients' && typeof myClientsLoad === 'function') { try { myClientsLoad(); } catch(_){} }
@@ -18809,6 +18815,11 @@ var _SET_SECTIONS = { users:'Сотрудники', connections:'Подключ�
 
 function settingsOpen(section){
  if(!_SET_SECTIONS[section]) section = 'users';
+ // v844: без права на настройки компании доступен только свой профиль
+ if(!settingsHasFullAccess() && _SET_ADMIN_SECTIONS.indexOf(section) >= 0){
+  if(typeof sdToast === 'function') sdToast('Этот раздел настроек доступен только руководителю');
+  section = 'profile';
+ }
  var root = document.getElementById('view-settings');
  if(!root) return;
  var home = document.getElementById('set-home');
@@ -18833,6 +18844,29 @@ function settingsBack(){
  if(root) root.querySelectorAll('.cab-tab-panel').forEach(function(p){ p.classList.remove('active'); });
  settingsHome();
 }
+// v844: у кого нет права на настройки компании — видит только личные.
+// Раздел открыт всем, поэтому режем содержимое, а не вход.
+var _SET_ADMIN_SECTIONS = ['users', 'connections', 'notify', 'params'];
+function settingsHasFullAccess(){
+ var u = (typeof currentUser !== 'undefined') ? currentUser : null;
+ if(!u) return false;
+ var a = u.access || {};
+ return a.view_settings === 1 || a.view_settings === true;
+}
+function settingsApplyRole(){
+ var full = settingsHasFullAccess();
+ var home = document.getElementById('set-home');
+ if(!home) return;
+ home.querySelectorAll('.setnav-card').forEach(function(card){
+  var m = String(card.getAttribute('onclick') || '').match(/settingsOpen\('([a-z]+)'\)/);
+  var sec = m ? m[1] : '';
+  var adminOnly = _SET_ADMIN_SECTIONS.indexOf(sec) >= 0;
+  card.style.display = (adminOnly && !full) ? 'none' : '';
+ });
+ var hint = document.getElementById('set-personal-hint');
+ if(hint) hint.style.display = full ? 'none' : '';
+}
+
 function settingsHome(){
  var root = document.getElementById('view-settings');
  if(root) root.querySelectorAll('.cab-tab-panel').forEach(function(p){ p.classList.remove('active'); });
@@ -18840,6 +18874,7 @@ function settingsHome(){
  if(home) home.style.display = 'block';
  var bb = document.getElementById('set-backbar');
  if(bb) bb.style.display = 'none';
+ settingsApplyRole();
  // счётчик сотрудников на карточке
  var sub = document.getElementById('setnav-users-sub');
  if(sub && typeof employees !== 'undefined' && employees && employees.length){
