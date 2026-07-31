@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v851</title>
+<title>SalesDoc — Финансовый Дашборд v852</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -29261,6 +29261,61 @@ if('serviceWorker' in navigator){
  });
  }).catch(function(){});
 }
+
+// v852: слежение за версией в ДОЛГО ОТКРЫТОЙ вкладке.
+// Раньше версия сверялась только при загрузке страницы. Вкладка, открытая с утра,
+// оставалась на старом коде сколько угодно релизов — человек видел старый интерфейс и
+// справедливо говорил «ничего не поменялось». Теперь раз в 10 минут сверяемся с сервером
+// и, если вышла новая версия, показываем полосу «Вышла новая версия» с кнопкой.
+(function _sdWatchVersion(){
+ var known = null;
+ function verOf(txt){ var m = String(txt).match(/CACHE_NAME\s*=\s*['"]salesdoc-v(\d+)['"]/); return m ? parseInt(m[1], 10) : 0; }
+ function showBar(v){
+  if(document.getElementById('sd-newver-bar')) return;
+  var bar = document.createElement('div');
+  bar.id = 'sd-newver-bar';
+  bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:99200;background:#1C1C1E;color:#FFF;border:1px solid rgba(255,255,255,.12);box-shadow:0 16px 48px rgba(0,0,0,.5);border-radius:12px;padding:12px 14px 12px 18px;display:flex;align-items:center;gap:14px;font-family:Inter,sans-serif;font-size:13px';
+  var msg = document.createElement('span');
+  msg.textContent = 'Вышла новая версия программы';
+  var btn = document.createElement('button');
+  btn.textContent = 'Обновить';
+  btn.style.cssText = 'background:#5E6AD2;color:#FFF;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+  btn.onclick = async function(){
+   btn.disabled = true; btn.textContent = 'Обновляем…';
+   try {
+    if('serviceWorker' in navigator){
+     var regs = await navigator.serviceWorker.getRegistrations();
+     for(var i = 0; i < regs.length; i++){ try { await regs[i].unregister(); } catch(_){} }
+    }
+    if('caches' in window){
+     var keys = await caches.keys();
+     for(var j = 0; j < keys.length; j++){ try { await caches.delete(keys[j]); } catch(_){} }
+    }
+    try { localStorage.setItem('sd_last_sw_ver', String(v)); } catch(_){}
+   } catch(_){}
+   location.reload();
+  };
+  var close = document.createElement('span');
+  close.textContent = '×';
+  close.style.cssText = 'cursor:pointer;color:rgba(255,255,255,.5);font-size:18px;line-height:1;padding:0 4px';
+  close.onclick = function(){ bar.remove(); };
+  bar.appendChild(msg); bar.appendChild(btn); bar.appendChild(close);
+  document.body.appendChild(bar);
+ }
+ async function check(){
+  try {
+   var r = await fetch('/sw.js?cb=' + Date.now(), { cache: 'no-store' });
+   var v = verOf(await r.text());
+   if(!v) return;
+   if(known === null){ known = v; return; }   // первая сверка — просто запоминаем
+   if(v > known) showBar(v);
+  } catch(_){}
+ }
+ check();
+ setInterval(check, 10 * 60 * 1000);
+ // и сразу при возврате на вкладку — человек ушёл на час, вернулся, обновление уже ждёт
+ document.addEventListener('visibilitychange', function(){ if(!document.hidden) check(); });
+})();
 
 // === EXPORT CSV ===
 function exportPaymentsCSV(){
