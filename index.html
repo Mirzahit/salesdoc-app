@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v849</title>
+<title>SalesDoc — Финансовый Дашборд v850</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -14790,7 +14790,7 @@ function finRenderHeader(){
   var cats=Object.keys(catMap).map(function(k){return {name:k,val:catMap[k]};}).sort(function(a,b){return b.val-a.val;});
   var maxCat=(cats[0]&&cats[0].val)||1, op=[1,.78,.6,.48,.38];
   var ce=document.getElementById('fin-exp-cats');
-  if(ce) ce.innerHTML = cats.length ? cats.slice(0,5).map(function(c,i){ var pct=expense>0?Math.round(c.val/expense*100):0; var w=Math.round(c.val/maxCat*100); return '<div class="exp"><span class="en">'+c.name+'</span><span class="et"><i style="width:'+w+'%;opacity:'+(op[i]||.32)+'"></i></span><span class="ev">'+f(c.val)+'</span><span class="ep">'+pct+'%</span></div>'; }).join('') : '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">Нет данных по расходам</div>';
+  if(ce) ce.innerHTML = cats.length ? cats.slice(0,5).map(function(c,i){ var pct=expense>0?Math.round(c.val/expense*100):0; var w=Math.round(c.val/maxCat*100); return '<div class="exp"><span class="en">'+sanitize(c.name)+'</span><span class="et"><i style="width:'+w+'%;opacity:'+(op[i]||.32)+'"></i></span><span class="ev">'+f(c.val)+'</span><span class="ep">'+pct+'%</span></div>'; }).join('') : '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">Нет данных по расходам</div>';
   var et=document.getElementById('fin-exp-total'); if(et) et.textContent=f(expense)+' '+cur;
   // оплаты по неделям
   var wk={}; ps.forEach(function(p){ var w=Math.min(4,Math.max(1,Math.ceil(finDay(p.date)/7))); wk[w]=(wk[w]||0)+(p.amount||0); });
@@ -28810,7 +28810,7 @@ async function loadExpenses() {
  var sheetName = months[si].name;
  var mi = months[si].mi;
  try {
- var url = EXP_GS + '?action=getSheet&sheet=' + encodeURIComponent(sheetName) + '&spreadsheetId=' + EXPENSES_SHEET_ID + '&range=A1:E100';
+ var url = EXP_GS + '?action=getSheet&sheet=' + encodeURIComponent(sheetName) + '&spreadsheetId=' + EXPENSES_SHEET_ID + '&range=A1:E1000'; // v850: было E100 — расходы ниже сотой строки молча не читались
  var resp = await fetch(url);
  var json = await resp.json();
  if (!json.rows || json.rows.length < 2) continue;
@@ -34156,7 +34156,9 @@ async function ticketCommentSend(){
  try {
   var d = await sbFetch('/api/cards?entity=ticket_comment', {
    method:'POST',
-   body: JSON.stringify({ ticket_id: _ticketCurrentTicket.id, text: text, author: ((typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'оператор'), channel: 'internal' })
+   /* v850: это поле ответа клиенту, поэтому channel='reply'. Заметки для своих
+      появятся отдельной кнопкой — они не должны засчитываться как ответ клиенту. */
+   body: JSON.stringify({ ticket_id: _ticketCurrentTicket.id, text: text, author: ((typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'оператор'), channel: 'reply' })
   });
   if(!d.ok) throw new Error(d.error || 'comment POST failed');
   input.value = '';
@@ -45111,8 +45113,12 @@ function kbQuickOpDropdown(cardId, anchorEl){
  dd.innerHTML = html;
  document.body.appendChild(dd);
  // Закрыть при клике вне
+ // v850 FIX: раньше слушатель снимался только если клик был вне списка. Когда оператора
+ // выбирали, kbQuickOpSet удалял список из страницы, dd.contains() продолжал давать true —
+ // и слушатель оставался висеть навсегда. После 30 назначений вкладка начинала тормозить.
  setTimeout(function(){
  document.addEventListener('click', function closeFn(e){
+ if(!document.body.contains(dd)){ document.removeEventListener('click', closeFn); return; }
  if(!dd.contains(e.target)){ dd.remove(); document.removeEventListener('click', closeFn); }
  });
  }, 50);
@@ -45563,7 +45569,7 @@ function kbOpenCardPage(card) {
  var checked = card.checklist && card.checklist[it.globalIdx] ? 1 : 0;
  html += '<div class="kbc-check-item" onclick="kbToggleCheck(\''+card.id+'\','+it.globalIdx+')">';
  html += '<div class="kbc-check-box'+(checked?' checked':'')+'">'; if(checked) html += '<span style="color:#4CB782;font-size:13px;font-weight:700">OK</span>'; html += '</div>';
- html += '<span class="kbc-check-label'+(checked?' checked':'')+'">'+it.name+'</span>';
+ html += '<span class="kbc-check-label'+(checked?' checked':'')+'">'+kbEsc(it.name)+'</span>';
  html += '</div>';
  });
  html += '</div></div>';
@@ -47338,6 +47344,13 @@ function crmContactsForClient(client){
  return crmContactsAll().filter(function(c){ return c.client === client; });
 }
 
+// v850 FIX: в названиях 30 клиентов есть двойные кавычки (ТОО "Вкусвилл Казахстан").
+// Экранировалась только одинарная — двойная рвала атрибут onclick="..." и все кнопки
+// контактов у таких клиентов молча не работали. Тот же фикс, что в v786 для оплат.
+function _crmAttrJs(s){
+ return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
 function crmContactsRender(client){
  var pane = document.getElementById('crm-pane-contacts');
  if(!pane) return;
@@ -47360,14 +47373,14 @@ function crmContactsRender(client){
  + '<div class="crm-contact-role">' + kbEsc(c.role || '') + (phoneText ? ' · ' + kbEsc(phoneText) : '') + '</div>'
  + '</div>'
  + '<div class="crm-contact-actions">'
- + '<button class="crm-contact-edit" onclick="crmContactOpenModal(\'' + (client||'').replace(/'/g,"\\'") + '\',\'' + c.id + '\')" title="Редактировать"></button>'
- + '<button class="crm-contact-del" onclick="crmContactDelete(\'' + c.id + '\',\'' + (client||'').replace(/'/g,"\\'") + '\')" title="Удалить">×</button>'
+ + '<button class="crm-contact-edit" onclick="crmContactOpenModal(\'' + _crmAttrJs(client) + '\',\'' + c.id + '\')" title="Редактировать"></button>'
+ + '<button class="crm-contact-del" onclick="crmContactDelete(\'' + c.id + '\',\'' + _crmAttrJs(client) + '\')" title="Удалить">×</button>'
  + '</div>'
  + '</div>';
  });
  html += '</div>';
  }
- html += '<button class="crm-contacts-add" onclick="crmContactOpenModal(\'' + (client||'').replace(/'/g,"\\'") + '\')">+ Добавить контакт</button>';
+ html += '<button class="crm-contacts-add" onclick="crmContactOpenModal(\'' + _crmAttrJs(client) + '\')">+ Добавить контакт</button>';
  pane.innerHTML = html;
 }
 
@@ -47392,7 +47405,7 @@ function crmContactOpenModal(client, contactId){
  + '<div class="crm-field"><label>Заметки</label><textarea id="cnt-notes" rows="2">' + kbEsc(c.notes || '') + '</textarea></div>'
  + '<div class="crm-modal-actions">'
  + '<button class="crm-action outline" onclick="this.closest(\'.crm-modal-bg\').remove()">Отмена</button>'
- + '<button class="crm-action" onclick="crmContactSave(\'' + (client||'').replace(/'/g,"\\'") + '\',' + (contactId ? '\'' + contactId + '\'' : 'null') + ')">Сохранить</button>'
+ + '<button class="crm-action" onclick="crmContactSave(\'' + _crmAttrJs(client) + '\',' + (contactId ? '\'' + contactId + '\'' : 'null') + ')">Сохранить</button>'
  + '</div>'
  + '</div>';
  bg.innerHTML = modalHtml;
