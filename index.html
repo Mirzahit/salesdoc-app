@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v847</title>
+<title>SalesDoc — Финансовый Дашборд v849</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10030,7 +10030,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  .du-main{flex:1 1 auto;min-width:0}
  .du-side{flex:0 0 0;width:0;overflow:hidden}
  .du-split.open .du-side{flex:0 0 360px;width:360px;position:sticky;top:14px;max-height:calc(100vh - 90px);overflow-y:auto;background:var(--surface);border:1px solid var(--border-faint);border-radius:14px}
- .du-sd-h{display:flex;align-items:flex-start;gap:10px;padding:15px 16px 12px;border-bottom:1px solid var(--border-faint)}
+ /* v849: шапка закреплена — при прокрутке видно, чья это карточка */
+ .du-sd-h{display:flex;align-items:flex-start;gap:10px;padding:15px 16px 12px;border-bottom:1px solid var(--border-faint);position:sticky;top:0;background:var(--surface);z-index:2;border-radius:14px 14px 0 0}
  .du-sd-h .nm{font-size:14.5px;font-weight:700;color:var(--text);line-height:1.3;flex:1;min-width:0;word-break:break-word}
  .du-sd-h .id{font-size:10.5px;color:var(--text-muted);margin-top:3px;font-family:ui-monospace,Menlo,monospace}
  .du-sd-x{background:none;border:none;color:var(--text-muted);font-size:20px;line-height:1;cursor:pointer;padding:0 2px;flex:none}
@@ -10047,9 +10048,12 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  .du-sd-pay .d{color:var(--text-muted);flex:none}
  .du-sd-pay .c{color:var(--text-soft);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  .du-sd-pay .a{color:var(--text);font-variant-numeric:tabular-nums;flex:none;font-weight:600}
- .du-sd-btn{width:100%;margin-top:14px;padding:9px;border-radius:9px;border:1px solid var(--border-faint);background:var(--surface-2);color:var(--text-soft);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}
+ .du-sd-btn{width:100%;padding:10px;border-radius:9px;border:1px solid var(--border-faint);background:var(--surface-2);color:var(--text-soft);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
  .du-sd-btn:hover{color:var(--text);border-color:var(--border-strong)}
- .du-sd-btn.main{background:rgba(94,106,210,.14);border-color:rgba(94,106,210,.32);color:#AEB6FF}
+ /* v849: главное действие — настоящая заливная кнопка, а не бледная ссылка внизу пустоты */
+ .du-sd-btn.main{background:#5E6AD2;border-color:#5E6AD2;color:#fff}
+ .du-sd-btn.main:hover{background:#6E79DC;border-color:#6E79DC;color:#fff}
+ .du-sd-f{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border-faint);padding:12px 16px;border-radius:0 0 14px 14px}
  .du-c.sel{border-color:var(--accent,#5E6AD2)}
  @media(max-width:1200px){.du-split.open .du-side{position:fixed;right:12px;top:70px;z-index:1000;box-shadow:0 20px 50px rgba(0,0,0,.45);max-height:calc(100vh - 90px)}}
  @media(max-width:1500px){.du-kan{grid-template-columns:repeat(2,1fr)}}
@@ -44435,9 +44439,13 @@ function _duesRenderSide(clientId){
   html += '<div style="font-size:11.5px;color:var(--text-muted);padding:4px 0">Оплат не найдено</div>';
  }
 
- html += '<button class="du-sd-btn main" onclick="routeOpenClient(\'' + kbEsc(clientId) + '\')">Открыть карту клиента</button>';
- html += '</div>';
+ html += '</div>'; // конец прокручиваемого тела
+ // v849: кнопка живёт в закреплённом низу панели — видна всегда, где бы ни была прокрутка
+ html += '<div class="du-sd-f"><button class="du-sd-btn main" onclick="routeOpenClient(\'' + kbEsc(clientId) + '\')">Открыть карту клиента</button></div>';
  el.innerHTML = html;
+ // v849: браузер сохраняет прокрутку контейнера при смене содержимого — открыв другого
+ // клиента, человек видел хвост прошлого списка и пустоту. Всегда показываем сверху.
+ try { el.scrollTop = 0; } catch(_){}
 }
 
 // ── v840: перетаскивание карточек между «Догоняем» и «Похоже, ушли» ──
