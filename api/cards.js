@@ -50,11 +50,42 @@ const TICKET_CATEGORIES = ['bug','question','training','feature_request','other'
 // v413: whitelist операторов — раньше можно было через curl вписать любое имя.
 // null/'' разрешён — означает «не назначен».
 const TICKET_OPERATORS = ['Айдос','Акбар','Самат','Нурай'];
-// SLA в часах по приоритету. Дедлайн ответа = created_at + N часов.
-const TICKET_SLA_HOURS = { critical: 2, high: 4, normal: 24, low: 72 };
-function calculateTicketSLA(priority) {
-  const hours = TICKET_SLA_HOURS[priority] || TICKET_SLA_HOURS.normal;
-  return new Date(Date.now() + hours * 3600 * 1000).toISOString();
+// v848: срок ПЕРВОГО ОТВЕТА в РАБОЧИХ минутах (решение CEO 30.07.2026):
+// «стало/не работает» — 30 минут, обычный вопрос — 2 часа. Часы работы Пн-Пт 9:00-18:00.
+// Раньше считалось круглосуточно и календарно: обращение в 17:59 «нарушалось» ночью,
+// цифрам никто не верил. Секундомер стоит вечером, ночью и в выходные.
+const TICKET_SLA_MINUTES = { critical: 30, high: 30, normal: 120, low: 240 };
+const TICKET_WORK_START = 9;   // локального времени
+const TICKET_WORK_END = 18;
+function _ticketTzOffsetMs(country) {
+  // KZ — Алматы (UTC+5), KG — Бишкек (UTC+6)
+  return (String(country || '').toUpperCase() === 'KG' ? 6 : 5) * 3600 * 1000;
+}
+function calculateTicketSLA(priority, country, fromISO) {
+  let left = TICKET_SLA_MINUTES[priority] || TICKET_SLA_MINUTES.normal;
+  const off = _ticketTzOffsetMs(country);
+  // Работаем в «локальном» времени: сдвигаем метку и считаем как в UTC
+  let cur = (fromISO ? new Date(fromISO).getTime() : Date.now()) + off;
+  const startOfWorkday = (ms) => {
+    const d = new Date(ms);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), TICKET_WORK_START, 0, 0);
+  };
+  const endOfWorkday = (ms) => {
+    const d = new Date(ms);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), TICKET_WORK_END, 0, 0);
+  };
+  const isWeekend = (ms) => { const g = new Date(ms).getUTCDay(); return g === 0 || g === 6; };
+  let guard = 0;
+  while (left > 0 && guard++ < 500) {
+    if (isWeekend(cur)) { cur = startOfWorkday(cur + 86400000); continue; }
+    const s = startOfWorkday(cur), e = endOfWorkday(cur);
+    if (cur < s) cur = s;
+    if (cur >= e) { cur = startOfWorkday(cur + 86400000); continue; }
+    const availableMin = Math.floor((e - cur) / 60000);
+    if (availableMin >= left) { cur += left * 60000; left = 0; }
+    else { left -= availableMin; cur = startOfWorkday(e + 86400000); }
+  }
+  return new Date(cur - off).toISOString();
 }
 
 export default async function handler(req, res) {
@@ -400,6 +431,20 @@ async function handleTicketCommentsRoute(req, res) {
       attachment_url: body.attachment_url || null
     };
     const result = await sbInsert('ticket_comments', row);
+    // v848: первый ответ сотрудника отмечаем автоматически — это главная метрика поддержки.
+    // Раньше поле first_response_at не заполнял никто, и скорость ответа посчитать было нельзя.
+    // Ошибка отметки не должна ронять сам комментарий — он уже сохранён.
+    try {
+      const t = await sbSelect('tickets', { id: 'eq.' + body.ticket_id, select: 'first_response_at,status', limit: '1' });
+      if (t.length && !t[0].first_response_at) {
+        const patch = { first_response_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+        // Новое обращение, на которое ответили, автоматически становится «в работе»
+        if (t[0].status === 'new') patch.status = 'in_progress';
+        await sbUpdate('tickets', { id: 'eq.' + body.ticket_id }, patch);
+      }
+    } catch (e) {
+      console.error('[ticket first_response]', e.message || e);
+    }
     return res.status(201).json({ ok: true, comment: result[0] });
   }
   return res.status(405).json({ ok: false, error: 'method not allowed' });
@@ -482,7 +527,7 @@ async function handleTicketsRoute(req, res) {
       channel: channel,
       category: body.category || null,
       operator: body.operator || null,
-      sla_due_at: calculateTicketSLA(priority)
+      sla_due_at: calculateTicketSLA(priority, country) // v848: в рабочих часах страны
     };
     const result = await sbInsert('tickets', ticket);
     return res.status(201).json({ ok: true, ticket: result[0] });
@@ -588,9 +633,11 @@ async function handleTicketsRoute(req, res) {
     // v413: сравниваем со старым — внешние интеграции (бот) могут шлёт тот же priority,
     // и тогда счётчик SLA не должен сбрасываться.
     if (body.priority) {
-      const existingPrio = await sbSelect('tickets', { id: 'eq.' + id, select: 'priority' });
+      // v848: пересчёт срока в рабочих часах — от создания обращения, а не от «сейчас»,
+      // иначе смена приоритета давала бы лишнее время
+      const existingPrio = await sbSelect('tickets', { id: 'eq.' + id, select: 'priority,country,created_at' });
       if (existingPrio.length && existingPrio[0].priority !== body.priority) {
-        patch.sla_due_at = calculateTicketSLA(body.priority);
+        patch.sla_due_at = calculateTicketSLA(body.priority, existingPrio[0].country, existingPrio[0].created_at);
       }
     }
 
