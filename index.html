@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v845</title>
+<title>SalesDoc — Финансовый Дашборд v846</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10014,6 +10014,17 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  .du-age .am{width:120px;text-align:right;font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums}
  .du-note{font-size:11.5px;color:var(--text-muted);line-height:1.55;margin-top:12px}
  .du-empty{color:var(--text-muted);font-size:12px;text-align:center;padding:22px}
+ /* v846: свёрнутая колонка «Оплачено вперёд» и плотный режим */
+ .du-kan.ahead-off{grid-template-columns:repeat(3,minmax(240px,1fr)) 210px}
+ .du-col-min .du-body{min-height:0;padding:12px}
+ .du-showall{width:100%;padding:8px;border-radius:9px;border:1px solid var(--border-faint);background:var(--surface-2);color:var(--text-soft);font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer}
+ .du-showall:hover{color:var(--text);border-color:var(--border-strong)}
+ .du-kan.dense .du-c{padding:7px 10px;border-radius:9px}
+ .du-kan.dense .du-c .nm{margin-bottom:4px;font-size:12px}
+ .du-kan.dense .du-c .mid{margin-bottom:5px}
+ .du-kan.dense .du-rsn{margin-bottom:5px}
+ .du-kan.dense .du-body{gap:5px;padding:8px}
+ .du-kan.dense .du-h{padding:10px 12px 9px}
  /* v845: панель деталей справа */
  .du-split{display:flex;gap:16px;align-items:flex-start}
  .du-main{flex:1 1 auto;min-width:0}
@@ -10051,6 +10062,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="sd-sub" id="dues-sub">Расчёт по календарным месяцам</div>
  </div>
  <div class="sd-filters">
+ <button type="button" class="intg-fchip" id="dues-dense" onclick="duesToggleDense()">Плотнее</button><!-- v846 -->
  <button type="button" class="intg-fchip" id="dues-refresh" onclick="duesInit(true)">Обновить</button>
  </div>
  </div>
@@ -44173,6 +44185,18 @@ function _duesCalc(){
  return { debt: debt, recover: recover, lost: lost, due: due, ahead: ahead, noHist: noHist, cur: cur };
 }
 
+// v846: плотность списка и свёрнутая колонка «Оплачено вперёд» — помнятся между заходами
+function _duesDense(){ try { return localStorage.getItem('sd_dues_dense') === '1'; } catch(e){ return false; } }
+function _duesAheadOpen(){ try { return localStorage.getItem('sd_dues_ahead') === '1'; } catch(e){ return false; } }
+window.duesToggleDense = function(){
+ try { localStorage.setItem('sd_dues_dense', _duesDense() ? '0' : '1'); } catch(e){}
+ duesRender();
+};
+window.duesToggleAhead = function(){
+ try { localStorage.setItem('sd_dues_ahead', _duesAheadOpen() ? '0' : '1'); } catch(e){}
+ duesRender();
+};
+
 // В какую колонку попадает неплательщик: решение куратора важнее срока (v840)
 function _duesBucket(r){
  var rs = (r.c && r.c.pay_reason) || '';
@@ -44264,6 +44288,8 @@ function duesRender(){
  var d = _duesCalc();
  var sub = document.getElementById('dues-sub');
  if(sub) sub.textContent = 'Расчёт по календарным месяцам · текущий ' + _duesMkLabel(d.cur) + ' · ' + _duesState.clients.length + ' действующих';
+ var dnb = document.getElementById('dues-dense');
+ if(dnb){ dnb.textContent = _duesDense() ? 'Просторнее' : 'Плотнее'; dnb.classList.toggle('is-on', _duesDense()); }
 
  var recSum = d.recover.reduce(function(s, r){ return s + r.perMonth; }, 0);
  var lostSum = d.lost.reduce(function(s, r){ return s + r.perMonth; }, 0);
@@ -44279,11 +44305,25 @@ function duesRender(){
   + '<div class="du-card"><div class="l">Оплачено вперёд</div><div class="v grn">' + d.ahead.length + '</div>'
    + '<div class="d">' + d.noHist + ' без истории оплат — разобрать</div></div>';
 
+ // v846: «Оплачено вперёд» по умолчанию свёрнута — сто карточек, с которыми делать
+ // нечего, занимали четверть экрана. Раскрывается по клику, состояние запоминается.
+ if(kan.classList){
+  kan.classList.toggle('dense', _duesDense());
+  kan.classList.toggle('ahead-off', !_duesAheadOpen());
+ }
+ var aheadCol = _duesAheadOpen()
+  ? _duesColHtml('Оплачено вперёд', 'Срок дальше текущего месяца', 'grn', d.ahead, 'ahead', 40, '')
+  : '<div class="du-col du-col-min"><div class="du-h grn">'
+    + '<div class="t">Оплачено вперёд<span class="cnt">' + d.ahead.length + '</span></div>'
+    + '<div class="s">С ними всё в порядке</div>'
+    + '<div class="m">' + _duesMoney(d.ahead.reduce(function(s, r){ return s + r.perMonth; }, 0)) + ' в месяц</div></div>'
+    + '<div class="du-body"><button class="du-showall" onclick="duesToggleAhead()">Показать список</button></div></div>';
+
  kan.innerHTML =
   _duesColHtml('Догоняем', 'Не платят до ' + DUES_LOST_AFTER + ' месяцев — ещё можно вернуть', 'amb', d.recover, 'debt', 40, 'recover')
   + _duesColHtml('Похоже, ушли', 'Молчат дольше ' + DUES_LOST_AFTER + ' месяцев — закрыть и посчитать потерю', 'red', d.lost, 'debt', 40, 'lost')
   + _duesColHtml('Платят сейчас', _duesMkLabel(d.cur) + ' закрыт, следующий нет', 'amb', d.due, 'due', 40, '')
-  + _duesColHtml('Оплачено вперёд', 'Срок дальше текущего месяца', 'grn', d.ahead, 'ahead', 40, '');
+  + aheadCol;
 
  // Давность долга
  var byAge = {};
