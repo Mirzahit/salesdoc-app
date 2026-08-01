@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v856</title>
+<title>SalesDoc — Финансовый Дашборд v857</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10318,7 +10318,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
     <div class="amocard-chat-input">
      <!-- v855: раньше поле было подписано «Заметка ... клиент это НЕ увидит», а отправка
           засчитывалась как ответ клиенту. Теперь два разных действия с разными кнопками. -->
-     <span class="amocard-chat-select" style="display:inline-flex;align-items:center;gap:8px"><b>Ответ клиенту</b><button type="button" id="ticket-ai-btn" onclick="ticketAiAsk()" title="Попросить AI подсказать ответ клиенту" style="padding:4px 10px;font-size:11px;font-weight:600;background:rgba(120,80,255,.12);color:#9E7BFF;border:1px solid rgba(120,80,255,.30);border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/></svg>Подсказать</button></span>
+     <span class="amocard-chat-select" style="display:inline-flex;align-items:center;gap:8px"><b>Ответ клиенту</b><button type="button" id="ticket-ai-btn" onclick="ticketAiAsk()" title="Попросить подсказать ответ клиенту" style="padding:4px 10px;font-size:11px;font-weight:600;background:rgba(120,80,255,.12);color:#9E7BFF;border:1px solid rgba(120,80,255,.30);border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/></svg>Подсказать</button></span>
      <textarea id="ticket-comment-text" rows="2" placeholder="Что вы ответили клиенту. Ctrl+Enter — отправить" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();ticketCommentSend();}" style="resize:vertical;min-height:36px;max-height:200px;font-family:inherit"></textarea>
      <button id="ticket-comment-send" class="amocard-send" onclick="ticketCommentSend()" title="Отправить (Ctrl+Enter)">&rarr;</button>
     </div>
@@ -10337,7 +10337,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
       То же, что фикс v575 для .modal-overlay, но #tickets-modal — отдельный div, его не покрыло. -->
  <div id="tickets-modal" style="display:none;position:fixed;inset:0;z-index:1000001;background:rgba(0,0,0,.55);align-items:center;justify-content:center" onclick="if(event.target===this)ticketsCloseNew()">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:min(480px,92vw);box-shadow:0 24px 64px rgba(0,0,0,.5)">
-   <div style="font-size:18px;font-weight:700;margin-bottom:18px;color:var(--text);letter-spacing:-0.02em">Новый тикет</div>
+   <div style="font-size:18px;font-weight:700;margin-bottom:18px;color:var(--text);letter-spacing:-0.02em">Новое обращение</div>
    <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Клиент *</label>
    <select id="tickets-new-client" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:13px">
     <option value="">— выберите —</option>
@@ -33266,8 +33266,11 @@ function _ticketsRenderScopeToggle(){
  toggle.style.display = 'inline-flex';
  var scope = _ticketsGetScope();
  var me = _ticketsCurrentOperatorName();
- var mineCount = me ? ticketsList.filter(function(t){ return t.operator === me; }).length : 0;
- var allCount = ticketsList.length;
+ // v857: считаем только незакрытые — иначе «Открыто 9» и рядом «Все 12» на одном
+ // экране: человек складывает в уме, не сходится, идёт искать «пропавшие».
+ var openList = ticketsList.filter(function(t){ return ['solved','closed'].indexOf(t.status) < 0; });
+ var mineCount = me ? openList.filter(function(t){ return t.operator === me; }).length : 0;
+ var allCount = openList.length;
  var btns = toggle.querySelectorAll('button[data-scope]');
  for(var i = 0; i < btns.length; i++){
   var btn = btns[i];
@@ -33283,10 +33286,13 @@ function _ticketsRenderScopeToggle(){
 // Если пользователь не оператор (CEO) — считаем общее число висящих.
 // API /api/cards?entity=ticket по умолчанию уже отдаёт только не-closed тикеты.
 function _ticketsCountForBadge(){
+ // v857: раньше человеку без опознанного имени (директор, бухгалтер) кружок показывал
+ // всю очередь отдела, а оператору считал вместе с решёнными — он не гас никогда и его
+ // перестали замечать. Теперь это только незакрытые обращения на мне.
  var me = _ticketsCurrentOperatorName();
- if(!me) return ticketsList.length;
+ if(!me) return 0;
  return ticketsList.filter(function(t){
-  return t.operator === me; // v855: куратор клиента не используется — там имена продавцов из amoCRM
+  return t.operator === me && ['solved','closed'].indexOf(t.status) < 0;
  }).length;
 }
 
@@ -33388,29 +33394,49 @@ async function ticketsLoad(){
 }
 
 function ticketsUpdateStats(){
- // v856: наверху ровно две цифры — размер очереди и сколько горит. Обе всегда по всему
- // отделу, а не по одному человеку: «Открыто» отвечает на вопрос «сколько работы у
- // поддержки», личное число живёт на переключателе «Мои». Раньше у оператора, чьё имя
- // программа не опознала, наверху висели ровные нули при полной очереди.
- var live = ticketsList.filter(function(t){ return ['solved','closed'].indexOf(t.status) < 0; });
- var overdue = live.filter(_ticketsIsOverdue).length;
- var setText = function(id, val){ var el = document.getElementById(id); if(el) el.textContent = val; };
- setText('tickets-open', live.length);
- setText('tickets-overdue', overdue);
- var sub = document.getElementById('tickets-head-sub');
- if(sub){
-  var stuck = live.filter(function(t){ return _ticketsIdleDays(t) >= 3; }).length;
-  sub.textContent = stuck ? ('\u00b7 без движения дольше трёх дней: ' + stuck) : '\u00b7 всё в движении';
- }
+ // v857: цифры считаются внутри ticketsRender по тому же набору строк, что показан.
+ ticketsRender();
 }
+
+// v857: раздел, вся суть которого — обратный отсчёт, не тикал. Данные тянулись один раз
+// при входе на вкладку: оператор держит её открытой весь день, а «ответить до 11:00»
+// так и висит, обращение уходит в просрочку — на экране ничего не меняется.
+// Раз в минуту пересчитываем подписи по уже загруженным данным (без запросов),
+// раз в три минуты подтягиваем новые обращения. Только пока вкладка реально открыта.
+(function _ticketsAutoRefresh(){
+ var ticks = 0;
+ setInterval(function(){
+  var view = document.getElementById('view-tickets');
+  if(!view || view.style.display === 'none') return;      // раздел закрыт — не трогаем
+  if(document.hidden) return;                             // вкладка браузера в фоне
+  ticks++;
+  try {
+   if(ticks % 3 === 0 && typeof ticketsLoad === 'function') ticketsLoad();
+   else if(typeof ticketsRender === 'function') ticketsRender();
+  } catch(_){}
+ }, 60 * 1000);
+})();
 
 // v856: сколько дней обращение без движения. Считаем по последнему сообщению в переписке,
 // а не по updated_at: тот двигает любая правка (сменил приоритет — счётчик обнулился).
 var _ticketsLastMsg = {};
 function _ticketsIdleDays(t){
- var last = _ticketsLastMsg[t.id] ? _ticketsLastMsg[t.id].at : (t.first_response_at || t.created_at);
+ // v857: движение — это НАШ ответ клиенту. Заметку для себя не считаем: иначе счётчик
+ // обнуляется записью «посмотрю завтра». Считаем в рабочих днях, иначе каждый
+ // понедельник половина списка краснела из-за выходных.
+ var m = _ticketsLastMsg[t.id];
+ var last = (m && m.channel !== 'internal') ? m.at : (t.first_response_at || t.created_at);
  if(!last) return 0;
- return Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+ var from = new Date(last), to = new Date();
+ var days = 0;
+ var cur = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+ var end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+ while(cur < end){
+  cur.setDate(cur.getDate() + 1);
+  var wd = cur.getDay();
+  if(wd !== 0 && wd !== 6) days++;
+ }
+ return days;
 }
 
 // Показывать только просроченные — переключается кликом по красной цифре.
@@ -33457,56 +33483,90 @@ function ticketsRender(){
  var scope = _ticketsGetScope();
  var fSearch = ((document.getElementById('tickets-search')||{}).value || '').trim().toLowerCase();
 
- var rows = ticketsList.filter(function(t){
-  if(scope === 'mine' && me && t.operator !== me) return false;
-  if(_ticketsOnlyOverdue && !_ticketsIsOverdue(t)) return false;
+ // v857: «Мои» без опознанного человека раньше молча показывали ВСЮ очередь — человек
+ // видел «Мои 0» и под ним чужие строки. Теперь честно объясняем, что не так.
+ var unknownMe = (scope === 'mine' && !me);
+
+ var rows = unknownMe ? [] : ticketsList.filter(function(t){
+  if(scope === 'mine' && t.operator !== me) return false;
   if(fSearch){
    var cl = t.clients || {};
-   var hay = ((t.title||'') + ' ' + (t.description||'') + ' ' + (cl.company_name||'') + ' ' + ((t.tags||[]).join(' '))).toLowerCase();
+   var hay = ((t.title||'') + ' ' + (t.description||'') + ' ' + (cl.company_name||'')
+    + ' ' + (t.operator||'') + ' ' + ((t.tags||[]).join(' '))).toLowerCase();
    if(hay.indexOf(fSearch) === -1) return false;
   }
   return true;
  });
 
- // Порядок: сначала то, где мы должны клиенту ответ, потом то, что дольше всех стоит.
- // Решённые уходят вниз и по умолчанию свёрнуты.
- var solved = rows.filter(function(t){ return ['solved','closed'].indexOf(t.status) >= 0; });
+ // v857: цифры наверху считаем по ТОМУ ЖЕ набору, что показан. Раньше «Просрочено 3»
+ // считалось по всему отделу, а клик фильтровал уже урезанный «Моими» список — экран
+ // отвечал «просроченных нет», опровергая собственную цифру в один клик.
  var live = rows.filter(function(t){ return ['solved','closed'].indexOf(t.status) < 0; });
- var free = (scope === 'all') ? live.filter(function(t){ return !t.operator; }) : [];
- var mine = live.filter(function(t){ return free.indexOf(t) < 0; });
-
- function order(a, b){
-  var ao = _ticketsIsOverdue(a) ? 0 : (a.first_response_at ? 2 : 1);
-  var bo = _ticketsIsOverdue(b) ? 0 : (b.first_response_at ? 2 : 1);
-  if(ao !== bo) return ao - bo;
-  if(ao < 2) return String(a.sla_due_at||'').localeCompare(String(b.sla_due_at||''));  // раньше срок — выше
-  return _ticketsIdleDays(b) - _ticketsIdleDays(a);                                     // дольше стоит — выше
+ var overdueCount = live.filter(_ticketsIsOverdue).length;
+ var setText = function(id, val){ var el = document.getElementById(id); if(el) el.textContent = val; };
+ setText('tickets-open', live.length);
+ setText('tickets-overdue', overdueCount);
+ var sub = document.getElementById('tickets-head-sub');
+ if(sub){
+  var stuck = live.filter(function(t){ return _ticketsIdleDays(t) >= 3; }).length;
+  sub.textContent = stuck ? ('\u00b7 без движения дольше трёх рабочих дней: ' + stuck) : '\u00b7 всё в движении';
  }
- free.sort(order); mine.sort(order);
+
+ var shown = _ticketsOnlyOverdue ? rows.filter(_ticketsIsOverdue) : rows;
+ var solved = shown.filter(function(t){ return ['solved','closed'].indexOf(t.status) >= 0; });
+ var waiting = shown.filter(function(t){ return t.status === 'waiting_client'; });
+ var active = shown.filter(function(t){ return ['solved','closed','waiting_client'].indexOf(t.status) < 0; });
+ var free = (scope === 'all') ? active.filter(function(t){ return !t.operator; }) : [];
+ var work = active.filter(function(t){ return free.indexOf(t) < 0; });
+
+ // Сверху то, где ход за нами: просроченные без ответа, потом ждущие первого ответа
+ // (у кого срок раньше), потом остальное по давности движения. Обращения без срока —
+ // в конец: раньше пустая дата сортировалась раньше любой, и самая непонятная строка
+ // занимала самое видное место.
+ function order(a, b){
+  var ao = _ticketsIsOverdue(a) ? 0 : (a.first_response_at ? 2 : (a.sla_due_at ? 1 : 3));
+  var bo = _ticketsIsOverdue(b) ? 0 : (b.first_response_at ? 2 : (b.sla_due_at ? 1 : 3));
+  if(ao !== bo) return ao - bo;
+  if(ao < 2) return String(a.sla_due_at||'').localeCompare(String(b.sla_due_at||''));
+  return _ticketsIdleDays(b) - _ticketsIdleDays(a);
+ }
+ free.sort(order); work.sort(order);
+ waiting.sort(function(a, b){ return _ticketsIdleDays(b) - _ticketsIdleDays(a); });
  solved.sort(function(a, b){ return String(b.solved_at||'').localeCompare(String(a.solved_at||'')); });
 
  var html = '';
- if(free.length){
-  html += '<div class="sup-group">Никто не взял · ' + free.length + '</div>' + free.map(_ticketsRowHtml).join('');
- }
- if(mine.length){
-  if(free.length) html += '<div class="sup-group">В работе</div>';
-  html += mine.map(_ticketsRowHtml).join('');
- }
- if(!free.length && !mine.length){
-  html += '<div class="sup-empty">' + (_ticketsOnlyOverdue
-   ? 'Просроченных обращений нет.'
-   : (scope === 'mine' ? 'На вас сейчас ничего не висит. Загляните в «Все» — там общая очередь.' : 'Обращений нет.')) + '</div>';
- }
- if(solved.length){
-  html += '<div class="sup-group click" onclick="_ticketsToggleSolved()">Решено · ' + solved.length
-   + ' <span style="font-weight:500;text-transform:none;letter-spacing:0">' + (_ticketsSolvedOpen ? 'скрыть' : 'показать') + '</span></div>';
-  if(_ticketsSolvedOpen) html += solved.map(_ticketsRowHtml).join('');
+ if(unknownMe){
+  html = '<div class="sup-empty">Вас нет в списке операторов поддержки этой страны.<br>'
+   + '<span style="font-size:12px;opacity:.75">Попросите добавить вас в Настройках, в разделе «Сотрудники». Пока можно смотреть общую очередь — переключитесь на «Все».</span></div>';
+ } else {
+  if(free.length) html += '<div class="sup-group">Никто не взял · ' + free.length + '</div>' + free.map(_ticketsRowHtml).join('');
+  if(work.length){
+   if(free.length) html += '<div class="sup-group">В работе · ' + work.length + '</div>';
+   html += work.map(_ticketsRowHtml).join('');
+  }
+  // Ждём клиента — ход не за нами, поэтому ниже работы и отдельной группой. Раньше
+  // такие обращения всплывали выше свежих, потому что дольше всех стояли.
+  if(waiting.length) html += '<div class="sup-group">Ждём клиента · ' + waiting.length + '</div>' + waiting.map(_ticketsRowHtml).join('');
+  if(!free.length && !work.length && !waiting.length){
+   html += '<div class="sup-empty">' + (_ticketsOnlyOverdue
+    ? 'Просроченных обращений нет.'
+    : (scope === 'mine'
+       ? 'На вас сейчас ничего не висит. Загляните в «Все» — там общая очередь.'
+       : 'Обращений пока нет.<br><span style="font-size:12px;opacity:.75">Заводите сюда то, что приходит в WhatsApp: так видно, кому не ответили, и работа не теряется, когда человек в отпуске.</span>')) + '</div>';
+  }
+  if(solved.length){
+   html += '<div class="sup-group click" onclick="_ticketsToggleSolved()">Решено · ' + solved.length
+    + ' <span style="font-weight:500;text-transform:none;letter-spacing:0">' + (_ticketsSolvedOpen ? 'скрыть' : 'показать') + '</span></div>';
+   if(_ticketsSolvedOpen) html += solved.map(_ticketsRowHtml).join('');
+  }
  }
  listEl.innerHTML = html;
 
  var chip = document.getElementById('tickets-overdue-chip');
- if(chip) chip.classList.toggle('is-on', _ticketsOnlyOverdue);
+ if(chip){
+  chip.classList.toggle('is-on', _ticketsOnlyOverdue);
+  chip.disabled = (overdueCount === 0 && !_ticketsOnlyOverdue);
+ }
  _ticketsRenderScopeToggle();
 }
 
@@ -33528,7 +33588,7 @@ function _ticketsIsOverdue(t){
 function _ticketsFmtSLA(t, detailed){
  if(['solved','closed'].indexOf(t.status) >= 0) return null;
  if(t.status === 'waiting_client') return { label:'ждём клиента', color:'#C2410C', bg:'rgba(251,146,60,.18)' };
- if(!t.sla_due_at) return { label: TICKET_STATUS_LABELS[t.status] || 'в работе', color:'var(--rk-text-soft)', bg:'rgba(120,120,128,.16)' };
+ if(!t.sla_due_at) return { label:'срок не задан', color:'var(--rk-text-soft)', bg:'rgba(120,120,128,.16)' };
  var due = new Date(t.sla_due_at);
  if(t.first_response_at){
   if(!detailed) return { label:'в работе', color:'var(--rk-text-soft)', bg:'rgba(120,120,128,.16)' };
@@ -33537,16 +33597,18 @@ function _ticketsFmtSLA(t, detailed){
    ? { label:'ответили с опозданием', color:'#C2410C', bg:'rgba(251,146,60,.18)' }
    : { label:'ответили в срок', color:'var(--rk-text-soft)', bg:'rgba(76,183,130,.16)' };
  }
- var mins = (due.getTime() - Date.now()) / 60000; // минут до срока первого ответа
- function human(m){
-  m = Math.abs(Math.round(m));
-  if(m < 60) return m + ' мин';
-  if(m < 60*24) return Math.round(m/60) + ' ч';
-  return Math.round(m/60/24) + ' дн';
- }
- if(mins < 0) return { label:'просрочено на ' + human(mins), color:'#fff', bg:'#EF4444' };
- if(mins < 60) return { label:'ответить за ' + human(mins), color:'#fff', bg:'#F59E0B' };
- return { label:'ответить за ' + human(mins), color:'#92400E', bg:'rgba(245,158,11,.16)' };
+ // v857: раньше писали «просрочено на 62 ч», считая календарные часы, тогда как сервер
+ // отмеряет срок рабочими часами: пропустили в пятницу вечером — в понедельник экран
+ // пугал двумя сутками, хотя рабочего времени прошло два часа. Показываем сам срок.
+ var wd = ['вс','пн','вт','ср','чт','пт','сб'][due.getDay()];
+ var hh = String(due.getHours()).padStart(2,'0') + ':' + String(due.getMinutes()).padStart(2,'0');
+ var today = new Date();
+ var sameDay = due.toDateString() === today.toDateString();
+ var when = sameDay ? hh : (wd + ' ' + hh);
+ var mins = (due.getTime() - Date.now()) / 60000;
+ if(mins < 0) return { label:'просрочено с ' + when, color:'#fff', bg:'#EF4444' };
+ if(mins < 60) return { label:'ответить до ' + when + ' (' + Math.round(mins) + ' мин)', color:'#fff', bg:'#F59E0B' };
+ return { label:'ответить до ' + when, color:'#92400E', bg:'rgba(245,158,11,.16)' };
 }
 
 // v540: hint про критерии приоритета в модалке нового тикета
@@ -33649,7 +33711,7 @@ async function ticketsCreate(){
      body: JSON.stringify({
       client_id: client_id,
       event_type: 'system',
-      text: 'Заведён тикет: ' + title,
+      text: 'Заведено обращение: ' + title,
       attachment_url: 'ticket:' + d.ticket.id
      })
     });
@@ -33674,7 +33736,7 @@ async function ticketsCreate(){
       client_id: client_id,
       contact_name: _clientName || null,
       type_id: 1,
-      text: 'Тикет: ' + title,
+      text: 'Обращение: ' + title,
       deadline_at: d.ticket.sla_due_at || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
       is_all_day: false,
       assignee_operator: (typeof crmOpCanon === 'function') ? crmOpCanon(operator) : operator,
@@ -33913,19 +33975,20 @@ function _ticketRenderFields(){
   r.appendChild(l); r.appendChild(v); body.appendChild(r);
  }
  addTimeRow('Создан', t.created_at ? new Date(t.created_at).toLocaleString('ru-RU', {dateStyle:'short', timeStyle:'short'}) : null);
- addTimeRow('SLA до', t.sla_due_at ? new Date(t.sla_due_at).toLocaleString('ru-RU', {dateStyle:'short', timeStyle:'short'}) : null);
+ addTimeRow('Ответить до', t.sla_due_at ? new Date(t.sla_due_at).toLocaleString('ru-RU', {dateStyle:'short', timeStyle:'short'}) : null);
  if(t.first_response_at) addTimeRow('Первый ответ', new Date(t.first_response_at).toLocaleString('ru-RU', {dateStyle:'short', timeStyle:'short'}));
  if(t.solved_at) addTimeRow('Решён', new Date(t.solved_at).toLocaleString('ru-RU', {dateStyle:'short', timeStyle:'short'}));
 
- // Закрыть тикет / плашка «закрыт»
- if(t.status === 'closed'){
+ // v857: один конец у обращения — «Решено». Кнопка «Закрыть» прятала обращение из
+ // раздела навсегда, и три четверти истории стали недоступны.
+ if(['solved','closed'].indexOf(t.status) >= 0){
   var closedBox = document.createElement('div'); closedBox.className = 'tk-closed-box';
-  closedBox.textContent = 'Тикет закрыт' + (t.updated_at ? ' ' + new Date(t.updated_at).toLocaleDateString('ru-RU') : '');
+  closedBox.textContent = 'Обращение решено' + (t.solved_at ? ' ' + new Date(t.solved_at).toLocaleDateString('ru-RU') : '');
   body.appendChild(closedBox);
  } else {
   var closeBtn = document.createElement('button'); closeBtn.className = 'tk-close-btn';
-  closeBtn.textContent = 'Закрыть тикет';
-  closeBtn.addEventListener('click', _ticketCloseAndArchive);
+  closeBtn.textContent = 'Вопрос решён';
+  closeBtn.addEventListener('click', _ticketMarkSolved);
   body.appendChild(closeBtn);
  }
 }
@@ -34081,20 +34144,21 @@ function _ticketRenderTagsField(parent, t){
  f.appendChild(l); f.appendChild(box); parent.appendChild(f);
 }
 
-async function _ticketCloseAndArchive(){
+async function _ticketMarkSolved(){
  if(!_ticketCurrentTicket) return;
- if(!confirm('Закрыть тикет «' + (_ticketCurrentTicket.title || '') + '»?\n\nТикет уйдёт в архив, перестанет показываться в Канбане Поддержки. Открыть заново можно только вручную сменив статус через БД.')) return;
+ if(!confirm('Отметить обращение «' + (_ticketCurrentTicket.title || '') + '» решённым?\n\nОно уйдёт вниз списка, в свёрнутую группу «Решено». Если клиент вернётся с тем же вопросом, обращение можно снова перевести в работу.')) return;
  try {
-  var d = await sbFetch('/api/cards?entity=ticket&id=' + _ticketCurrentTicket.id, { method:'DELETE' });
-  if(!d.ok) throw new Error(d.error || 'close failed');
-  // Удалить из in-memory списка
-  ticketsList = ticketsList.filter(function(x){ return x.id !== _ticketCurrentTicket.id; });
-  // Закрыть страницу и перерисовать Канбан
+  var d = await sbFetch('/api/cards?entity=ticket&id=' + _ticketCurrentTicket.id, {
+   method:'PATCH', body: JSON.stringify({ status:'solved' })
+  });
+  if(!d.ok) throw new Error(d.error || 'не удалось отметить');
+  _ticketCurrentTicket.status = 'solved';
+  if(d.ticket && d.ticket.solved_at) _ticketCurrentTicket.solved_at = d.ticket.solved_at;
   ticketCloseCard();
-  if(typeof ticketsRender === 'function') ticketsRender();
-  if(typeof ticketsUpdateStats === 'function') ticketsUpdateStats();
+  ticketsLoad();
+  sdToast('Обращение решено');
  } catch(e){
-  sdToast('Не удалось закрыть тикет: ' + e.message);
+  sdToast('Не получилось: ' + (e.message || e));
  }
 }
 
