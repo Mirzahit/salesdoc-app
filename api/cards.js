@@ -600,6 +600,15 @@ async function handleTicketsRoute(req, res) {
     }
 
     const patch = { updated_at: new Date().toISOString() };
+    // v857: сменили срочность — пересчитываем срок первого ответа. Раньше срочность
+    // менялась, а срок оставался старым: на карточке «срочное», а горит по-старому.
+    // Пересчитываем только пока ответа нет — после ответа срок своё отработал.
+    if (body.priority) {
+      const cur0 = await sbSelect('tickets', { id: 'eq.' + id, select: 'first_response_at,country,created_at', limit: '1' });
+      if (cur0.length && !cur0[0].first_response_at) {
+        patch.sla_due_at = calculateTicketSLA(body.priority, cur0[0].country || 'KZ', cur0[0].created_at);
+      }
+    }
     ['status','priority','category','title','description'].forEach(k => {
       if (body[k] !== undefined) patch[k] = body[k];
     });
@@ -625,51 +634,13 @@ async function handleTicketsRoute(req, res) {
       patch.solved_at = new Date().toISOString();
     }
 
-    // v460: пауза SLA в стадии «Ждём ответ от клиента».
-    // Logic:
-    //  → moving INTO waiting_client: сохраняем момент начала ожидания
-    //  → moving OUT of waiting_client: считаем сколько ждали, пушим sla_due_at вперёд на это время,
-    //    добавляем к waiting_total_seconds, обнуляем waiting_started_at
-    // v643: graceful degradation — колонки waiting_started_at/waiting_total_seconds могут
-    // отсутствовать в проде (миграция 2026-05-25-tickets-waiting-pause.sql не применена).
-    // Тогда SELECT/UPDATE с ними падает (42703) и тикет вообще нельзя переместить. Оборачиваем
-    // паузу SLA в try/catch: нет колонок → просто пропускаем паузу, перемещение работает.
-    // Применят миграцию — фича включится сама без правок кода.
-    if (body.status && body.status !== undefined) {
-      try {
-        const cur = await sbSelect('tickets', { id: 'eq.' + id, select: 'status,sla_due_at,waiting_started_at,waiting_total_seconds' });
-        if (cur.length) {
-          const oldStatus = cur[0].status;
-          const newStatus = body.status;
-          if (newStatus === 'waiting_client' && oldStatus !== 'waiting_client') {
-            // Вход в ожидание — фиксируем момент
-            patch.waiting_started_at = new Date().toISOString();
-          } else if (oldStatus === 'waiting_client' && newStatus !== 'waiting_client') {
-            // Выход из ожидания — пушим SLA вперёд на длительность паузы
-            if (cur[0].waiting_started_at) {
-              const pauseStart = new Date(cur[0].waiting_started_at).getTime();
-              const pauseMs = Date.now() - pauseStart;
-              if (pauseMs > 0) {
-                // Пушим sla_due_at вперёд на pauseMs миллисекунд
-                if (cur[0].sla_due_at) {
-                  const newDue = new Date(new Date(cur[0].sla_due_at).getTime() + pauseMs);
-                  patch.sla_due_at = newDue.toISOString();
-                }
-                // Накопленный счётчик пауз
-                patch.waiting_total_seconds = (cur[0].waiting_total_seconds || 0) + Math.round(pauseMs / 1000);
-              }
-              patch.waiting_started_at = null;
-            }
-          }
-        }
-      } catch (e) {
-        // Нет колонок паузы SLA — не блокируем перемещение тикета. На всякий случай чистим patch.
-        if (/waiting_started_at|waiting_total_seconds|42703/i.test(String((e && e.message) || ''))) {
-          delete patch.waiting_started_at;
-          delete patch.waiting_total_seconds;
-        } else { throw e; }
-      }
-    }
+    // v857: пауза срока ответа на «Ждём клиента» УДАЛЕНА.
+    // Во-первых, колонок waiting_started_at/waiting_total_seconds в базе нет — блок был
+    // мёртвым с мая. Во-вторых, он чинил то, что не ломается: sla_due_at — это срок
+    // ПЕРВОГО ответа, а попасть в «Ждём клиента» без единого сообщения клиенту можно было
+    // только руками, и тогда пауза просто стирала просрочку: поставил «Ждём клиента»,
+    // назавтра вернул в работу — красное погасло, хотя клиенту так и не ответили.
+    // Сколько обращение стоит без движения, экран считает по переписке.
     // Смена приоритета пересчитывает SLA (от текущего момента).
     // v413: сравниваем со старым — внешние интеграции (бот) могут шлёт тот же priority,
     // и тогда счётчик SLA не должен сбрасываться.
