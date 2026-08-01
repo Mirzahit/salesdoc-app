@@ -166,6 +166,9 @@ export default async function handler(req, res) {
       if (country) params['country'] = 'eq.' + country;
       if (stage) params['stage'] = 'eq.' + stage;
       else params['stage'] = 'neq.Архив';
+      // v862: завершённые внедрения уходят с доски. Раньше отбор шёл только по этапу
+      // «Архив», поэтому 22 карточки, доехавшие до «Активации», продолжали висеть.
+      if (!req.query.archived) params['archived_at'] = 'is.null';
       const data = await sbSelect('kanban_cards', params);
       return res.status(200).json({ ok: true, count: data.length, cards: data });
     }
