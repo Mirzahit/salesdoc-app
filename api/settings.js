@@ -19,7 +19,10 @@ import { checkAuth } from './_auth.js';
 //   override поверх плана из Светофора (пустая ячейка = берём Светофор/дефолт).
 // plan_history (v801): история изменений планов — МАССИВ (typeof 'object' — валидацию ниже проходит),
 //   новые сверху, фронт держит cap 50 записей.
-const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'tg_digest', 'company_plans', 'plan_history'];
+// route_stages (v861): этапы доски Внедрения — {stages:['Новый','Настройка',...]}.
+// Раньше список был зашит в код двумя массивами, и добавить этап мог только программист.
+// Этапы общие для всех, как воронка в amoCRM: доска у всех одинаковая, цифры сравнимы.
+const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'tg_digest', 'company_plans', 'plan_history', 'route_stages'];
 
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;

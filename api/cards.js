@@ -27,7 +27,53 @@ import { almatyIso } from './_dates.js';
 import { canonOperator, operatorNames } from './_operators.js'; // v850: операторы из «Сотрудников», а не из кода
 
 // v364: whitelist разрешённых стадий — иначе мусорный stage сохранится молча
+// v861: этапы задаёт руководитель (app_settings.route_stages). Здесь — запасной список
+// на случай, если настройка ещё не заведена.
 const ALLOWED_STAGES = ['Новый','Настройка','Обучение','Тестирование','Активация','Архив'];
+
+let _stagesCache = null;
+let _stagesAt = 0;
+// Список этапов и ПОСЛЕДНИЙ этап (после него клиент уходит с доски в «Действующие»).
+async function routeStagesCfg() {
+  const now = Date.now();
+  if (_stagesCache && (now - _stagesAt) < 60000) return _stagesCache;
+  let stages = null;
+  try {
+    const rows = await sbSelect('app_settings', { key: 'eq.route_stages', limit: '1' });
+    const v = rows.length ? rows[0].value : null;
+    if (v && Array.isArray(v.stages) && v.stages.length) {
+      stages = v.stages.map(x => String(x || '').trim()).filter(Boolean);
+    }
+  } catch (e) {
+    console.error('[route stages]', e.message || e);
+  }
+  if (!stages) stages = ALLOWED_STAGES.filter(x => x !== 'Архив');
+  _stagesCache = { stages: stages, final: stages[stages.length - 1] };
+  _stagesAt = now;
+  return _stagesCache;
+}
+
+// v862: клиент доехал до последнего этапа — внедрение закончено. Карточка уходит с доски,
+// клиент становится действующим и закрепляется за тем, кто его внедрял. Раньше конца у доски
+// не было: 22 карточки из 32 стояли в «Активации», часть по два месяца, и никто этого не видел.
+async function finishImplementation(card) {
+  try {
+    if (!card || !card.client_id) return;
+    const country = card.country || 'KZ';
+    const patch = { status: 'active' };
+    const cur = await sbSelect('clients', { client_id: 'eq.' + card.client_id, select: 'support_operator,activation_date', limit: '1' });
+    const cl = cur[0] || {};
+    if (!cl.support_operator && card.operator) {
+      const who = await canonOperator(card.operator, country);
+      if (who) patch.support_operator = who;
+    }
+    if (!cl.activation_date) patch.activation_date = new Date().toISOString().slice(0, 10);
+    await sbUpdate('clients', { client_id: 'eq.' + card.client_id }, patch);
+  } catch (e) {
+    // не валим перемещение карточки: клиента можно поправить руками, а работу оператора рвать нельзя
+    console.error('[finish implementation]', e.message || e);
+  }
+}
 const ALLOWED_COUNTRIES = ['KZ','KG'];
 // v370: категории Доходов которые создают карточку в Маршруте (от payment_bot)
 // v414: 'Нов интеграция' убрана из IMPLEMENTATION_CATEGORIES — она шла в Google-таблицу.
@@ -161,12 +207,20 @@ export default async function handler(req, res) {
       if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
       const body = await readBody(req);
       const patch = {};
+      let finishing = false;
       if (body.stage) {
-        if (!ALLOWED_STAGES.includes(body.stage)) {
-          return res.status(400).json({ ok: false, error: 'stage должен быть один из: ' + ALLOWED_STAGES.join(', ') });
+        const cfg = await routeStagesCfg();
+        const known = cfg.stages.concat(['Архив']);
+        if (!known.includes(body.stage)) {
+          return res.status(400).json({ ok: false, error: 'stage должен быть один из: ' + known.join(', ') });
         }
         patch.stage = body.stage;
         patch.stage_entered_at = new Date().toISOString();
+        // v862: последний этап = внедрение завершено. Карточка уходит с доски.
+        if (body.stage === cfg.final) {
+          finishing = true;
+          patch.archived_at = new Date().toISOString();
+        }
       }
       if (body.operator !== undefined) patch.operator = body.operator;
       if (body.tariff !== undefined) patch.tariff = body.tariff;
@@ -179,7 +233,8 @@ export default async function handler(req, res) {
       if (!Object.keys(patch).length) return res.status(400).json({ ok: false, error: 'нечего обновлять' });
       const result = await sbUpdate('kanban_cards', { id: 'eq.' + id }, patch);
       if (!result.length) return res.status(404).json({ ok: false, error: 'карточка не найдена' });
-      return res.status(200).json({ ok: true, card: result[0] });
+      if (finishing) await finishImplementation(result[0]);
+      return res.status(200).json({ ok: true, card: result[0], finished: finishing });
     }
 
     if (req.method === 'DELETE') {
