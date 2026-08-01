@@ -11,6 +11,7 @@
 import { sbSelect, sbInsert, sbUpdate } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 import { almatyIso } from './_dates.js';
+import { canonOperator, operatorNames } from './_operators.js'; // v859: операторы из «Сотрудников»
 
 const ALLOWED_STATUS = ['lead','sale','onboarding','active','paused','churned'];
 const ALLOWED_COUNTRIES = ['KZ','KG'];
@@ -261,11 +262,30 @@ export default async function handler(req, res) {
       // v420: добавлен implementation_contact (JSONB) — «Ответственный со стороны клиента
       // по внедрению». Структура: { name, position, phone, email }.
       // v838: pay_reason/pay_reason_note/free_until — причина неоплаты и подаренный период
-      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months','implementation_contact','billing_host','pay_reason','pay_reason_note','free_until'];
+      // v859: support_operator — кто ВЕДЁТ клиента. curator_operator отвечает на другой вопрос,
+      // «кто продал»: там имена продавцов из amoCRM, и у 452 действующих клиентов из 538 пусто.
+      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','support_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months','implementation_contact','billing_host','pay_reason','pay_reason_note','free_until'];
       const body = {};
       Object.keys(rawBody).forEach(k => {
         if (ALLOWED_PATCH_FIELDS.includes(k)) body[k] = rawBody[k];
       });
+      // v859: оператора поддержки принимаем только из «Сотрудников» нужной страны и
+      // приводим к тому написанию, как человек записан в базе. Пустая строка — снять.
+      if (body.support_operator !== undefined) {
+        const raw = String(body.support_operator || '').trim();
+        if (!raw) {
+          body.support_operator = null;
+        } else {
+          const own = await sbSelect('clients', { client_id: 'eq.' + id, select: 'country', limit: '1' });
+          const cCountry = (own.length && own[0].country) || 'KZ';
+          const canon = await canonOperator(raw, cCountry);
+          if (!canon) {
+            const known = await operatorNames(cCountry);
+            return res.status(400).json({ ok: false, error: 'Такого оператора нет в сотрудниках ' + cCountry + '. Доступны: ' + (known.join(', ') || 'никого') });
+          }
+          body.support_operator = canon;
+        }
+      }
       // v838: причина ставится только из списка; пустая строка = снять причину
       if (body.pay_reason !== undefined) {
         const PAY_REASONS = ['churn', 'decline', 'debt', 'free'];
