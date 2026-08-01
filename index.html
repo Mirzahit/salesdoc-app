@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v858</title>
+<title>SalesDoc — Финансовый Дашборд v862</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10209,12 +10209,33 @@ body.light .mt-filter-section-title { color:#8A90A0; }
    </div>
    <div class="rt-chip" id="route-op-chip" onclick="routeOpFilterChip(this)">Оператор: <b id="route-op-chip-val">Все</b> <span class="car">&#9662;</span></div>
    <div class="rt-chip" id="route-unassigned-chip" onclick="_routeToggleUnassigned()">Без оператора</div>
+   <!-- v861: этапы доски настраивает руководитель, список общий для всех -->
+   <div class="rt-chip" id="route-stages-chip" onclick="routeStagesOpen()" style="display:none">Этапы</div>
    <!-- скрытый select: routeLoad наполняет options, routeRender читает value — логика не менялась, чип лишь управляет им -->
    <select id="route-filter-op" onchange="routeRender()" style="display:none">
     <option value="">Все операторы</option>
    </select>
   </div>
   <div id="route-board" class="rt-kb"></div>
+
+  <!-- v861: окно настройки этапов. Этапы общие для всех: доска у каждого одинаковая,
+       поэтому цифры «где застряли клиенты» можно сравнивать между операторами. -->
+  <div id="route-stages-modal" style="display:none;position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.55);align-items:center;justify-content:center">
+   <div style="background:var(--surface);border:1px solid var(--border-faint);border-radius:16px;padding:20px;width:min(600px,92vw);max-height:86vh;overflow:auto">
+    <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px">Этапы внедрения</div>
+    <div style="font-size:12px;color:var(--text-muted);line-height:1.5;margin-bottom:14px">Список общий для всех операторов. Порядок этапов — это порядок колонок на доске. <b>Последний этап означает, что внедрение закончено:</b> карточка уходит с доски, клиент становится действующим и закрепляется за тем, кто его внедрял. Этап с карточками убрать нельзя: сначала перенесите клиентов.</div>
+    <div id="route-stages-list"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+     <input class="form-input" id="route-stage-new" placeholder="Название нового этапа" style="flex:1;font-size:13px" onkeydown="if(event.key==='Enter'){event.preventDefault();routeStagesAdd();}">
+     <button class="rtbtn" onclick="routeStagesAdd()">Добавить</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:18px">
+     <button class="rtbtn" onclick="routeStagesClose()">Отмена</button>
+     <div style="flex:1"></div>
+     <button class="rtbtn primary" onclick="routeStagesSave()">Сохранить для всех</button>
+    </div>
+   </div>
+  </div>
  </div>
 
  <!-- v393: Поддержка — Канбан тикетов (обращения от активированных клиентов).
@@ -32372,7 +32393,38 @@ async function sbFetch(path, options){
  return d;
 }
 
+// v861: этапы доски Внедрения настраиваются руководителем и общие для всех, как воронка
+// в amoCRM: доска у каждого одинаковая, поэтому цифры «где застряли» сравнимы между людьми.
+// Здесь — только запасной список на случай, если настройка ещё не загрузилась.
 var ROUTE_STAGES = ['Новый','Настройка','Обучение','Тестирование','Активация'];
+var _routeStagesLoaded = false;
+
+// Подтягиваем настроенные этапы. Зовём при входе в раздел; ошибка не критична —
+// останется запасной список, доска не сломается.
+async function routeStagesLoad(force){
+ if(_routeStagesLoaded && !force) return ROUTE_STAGES;
+ try {
+  var d = await sbFetch('/api/settings?key=route_stages');
+  var arr = (d && d.ok && d.value && Array.isArray(d.value.stages)) ? d.value.stages : null;
+  if(arr && arr.length){
+   ROUTE_STAGES.length = 0;
+   arr.forEach(function(x){ var v = String(x || '').trim(); if(v) ROUTE_STAGES.push(v); });
+  }
+  _routeStagesLoaded = true;
+ } catch(_){}
+ return ROUTE_STAGES;
+}
+
+// Этапы для показа = настроенные + те, что реально встречаются в карточках. Иначе после
+// удаления этапа карточки, стоящие на нём, молча исчезли бы с доски.
+function routeStagesForBoard(cards){
+ var out = ROUTE_STAGES.slice();
+ (cards || []).forEach(function(c){
+  var st = String((c && c.stage) || '').trim();
+  if(st && out.indexOf(st) < 0) out.push(st);
+ });
+ return out;
+}
 var ROUTE_STAGE_COLORS = {
  'Новый':'#94A3B8',
  'Настройка':'#5E6AD2',
@@ -32387,6 +32439,7 @@ var routeDragCardId = null;
 async function routeLoad(){
  var st = document.getElementById('route-status');
  if(st) st.textContent = 'Загрузка...';
+ try { await routeStagesLoad(); } catch(_){} // v861: этапы задаёт руководитель, тянем перед отрисовкой
  // v734: скелетоны на первом заходе (пока доска пустая); при «Обновить» живую доску не мигаем
  var _b = document.getElementById('route-board');
  if(_b && !_b.querySelector('.rt-c')){
@@ -32636,6 +32689,92 @@ function sdEnableDragScroll(el){
  document.addEventListener('dragend', stop);
 }
 
+// v861: настройка этапов доски. Меняет руководитель, список общий для всех — как воронка
+// в amoCRM. Личных колонок сознательно нет: доска у всех должна выглядеть одинаково,
+// иначе разговор «клиент застрял на обучении» перестаёт быть общим.
+function routeStagesCanEdit(){
+ var r = String((typeof currentUser !== 'undefined' && currentUser && currentUser.role) || '').toLowerCase();
+ return ['admin','head','rop'].indexOf(r) >= 0;
+}
+
+var _routeStagesDraft = null;
+function routeStagesOpen(){
+ if(!routeStagesCanEdit()){ sdToast('Этапы меняет руководитель'); return; }
+ _routeStagesDraft = ROUTE_STAGES.slice();
+ _routeStagesRender();
+ var m = document.getElementById('route-stages-modal');
+ if(m) m.style.display = 'flex';
+}
+function routeStagesClose(){
+ var m = document.getElementById('route-stages-modal');
+ if(m) m.style.display = 'none';
+}
+function _routeStagesCount(name){
+ return (typeof routeCards !== 'undefined' ? routeCards : []).filter(function(c){ return c.stage === name; }).length;
+}
+function _routeStagesRender(){
+ var box = document.getElementById('route-stages-list');
+ if(!box) return;
+ box.replaceChildren();
+ _routeStagesDraft.forEach(function(name, i){
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-faint)';
+  var num = document.createElement('span');
+  num.style.cssText = 'flex:0 0 22px;color:var(--text-muted);font-size:12px';
+  num.textContent = (i + 1) + '.';
+  var inp = document.createElement('input');
+  inp.className = 'form-input';
+  inp.value = name;
+  inp.style.cssText = 'flex:1;font-size:13px';
+  inp.oninput = function(){ _routeStagesDraft[i] = inp.value; };
+  var cnt = document.createElement('span');
+  cnt.style.cssText = 'flex:0 0 86px;color:var(--text-muted);font-size:11.5px;text-align:right';
+  var n = _routeStagesCount(name);
+  cnt.textContent = n ? (n + ' карточек') : 'пусто';
+  var up = document.createElement('button');
+  up.className = 'rtbtn'; up.textContent = 'вверх'; up.style.cssText = 'padding:4px 9px;font-size:11px';
+  up.onclick = function(){ if(i > 0){ var t = _routeStagesDraft[i-1]; _routeStagesDraft[i-1] = _routeStagesDraft[i]; _routeStagesDraft[i] = t; _routeStagesRender(); } };
+  var del = document.createElement('button');
+  del.className = 'rtbtn'; del.textContent = 'убрать'; del.style.cssText = 'padding:4px 9px;font-size:11px';
+  del.onclick = function(){
+   if(n){ sdToast('Сначала перенесите ' + n + ' карточек с этапа «' + name + '»'); return; }
+   _routeStagesDraft.splice(i, 1); _routeStagesRender();
+  };
+  row.appendChild(num); row.appendChild(inp); row.appendChild(cnt); row.appendChild(up); row.appendChild(del);
+  box.appendChild(row);
+ });
+}
+function routeStagesAdd(){
+ var inp = document.getElementById('route-stage-new');
+ var v = (inp && inp.value || '').trim();
+ if(!v){ sdToast('Впишите название этапа'); return; }
+ if(_routeStagesDraft.indexOf(v) >= 0){ sdToast('Такой этап уже есть'); return; }
+ if(_routeStagesDraft.length >= 12){ sdToast('Больше двенадцати этапов доска не выдержит'); return; }
+ _routeStagesDraft.push(v);
+ if(inp) inp.value = '';
+ _routeStagesRender();
+}
+async function routeStagesSave(){
+ var clean = [];
+ _routeStagesDraft.forEach(function(x){
+  var v = String(x || '').trim().slice(0, 40);
+  if(v && clean.indexOf(v) < 0) clean.push(v);
+ });
+ if(!clean.length){ sdToast('Хотя бы один этап нужен'); return; }
+ // Этап, на котором стоят карточки, нельзя потерять при переименовании: предупреждаем.
+ var lost = ROUTE_STAGES.filter(function(old){ return clean.indexOf(old) < 0 && _routeStagesCount(old) > 0; });
+ if(lost.length && !confirm('На этих этапах есть карточки: ' + lost.join(', ')
+  + '.\nОни останутся на доске отдельными колонками, пока вы их не перенесёте. Сохранить?')) return;
+ try {
+  var d = await sbFetch('/api/settings', { method:'PATCH', body: JSON.stringify({ key:'route_stages', value:{ stages: clean } }) });
+  if(!d.ok) throw new Error(d.error || 'не сохранилось');
+  await routeStagesLoad(true);
+  routeStagesClose();
+  routeRender();
+  sdToast('Этапы обновлены у всех');
+ } catch(e){ sdToast('Не получилось сохранить: ' + (e.message || e)); }
+}
+
 function routeRender(){
  var board = document.getElementById('route-board');
  if(!board) return;
@@ -32661,9 +32800,13 @@ function routeRender(){
    });
   }
  }
+ var _stChip = document.getElementById('route-stages-chip');
+ if(_stChip) _stChip.style.display = routeStagesCanEdit() ? '' : 'none';
  _routeUpdateStats();
  var html = '';
- ROUTE_STAGES.forEach(function(stage){
+ // v861: показываем настроенные этапы и те, что встречаются в карточках, — иначе после
+ // удаления этапа стоящие на нём карточки молча исчезли бы с доски.
+ routeStagesForBoard(routeCards).forEach(function(stage){
   var stageCards = routeCards.filter(function(c){
    if(c.stage !== stage) return false;
    if(filterOp && c.operator !== filterOp) return false;
@@ -32838,6 +32981,13 @@ async function routeAdvanceStage(cardId){
   var d = await sbFetch('/api/cards?id=' + cardId, { method: 'PATCH', body: JSON.stringify({ stage: newStage }) });
   if(!d.ok) throw new Error(d.error);
   await _routeMaybeActivate(card, newStage);
+  // v862: последний этап — внедрение закончено. Карточка уходит с доски, клиент становится
+  // действующим и закрепляется за тем, кто его внедрял. Перезагружаем, чтобы доска очистилась.
+  if(d.finished){
+   sdToast('Внедрение завершено: клиент передан в Действующие');
+   routeLoad();
+   return;
+  }
  } catch(e) {
   console.error('routeAdvanceStage:', e);
   if(typeof kbShowToast === 'function') kbShowToast('Не получилось сохранить перенос — проверьте интернет'); else sdToast('Не получилось сохранить перенос');
@@ -34726,7 +34876,7 @@ function routeCloseCard(){
 // v380: amo-style карточка — заполняем шапку (имя/ID), pipeline (5 стадий), стадию.
 // Старый innerHTML в #route-card-head больше не используется — мы пишем напрямую
 // в новые элементы по ID. Это безопаснее от XSS (textContent вместо innerHTML).
-var ROUTE_STAGES_ORDER = ['Новый','Настройка','Обучение','Тестирование','Активация'];
+var ROUTE_STAGES_ORDER = ROUTE_STAGES; // v861: один список на всю программу, не копия
 // v445: единый список операторов Маршрута (раньше дублировался в 2 местах _routeRenderAmo)
 var ROUTE_OPERATORS = ['Айдос','Акбар','Самат','Нурай'];
 // v606: гарантируем, что текущее значение всегда в списке выбора — иначе select при открытии
