@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v862</title>
+<title>SalesDoc — Финансовый Дашборд v863</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -46139,9 +46139,12 @@ function kbOpenCardPage(card) {
  kbRenderHistory(card);
 
  // v226: обновить counter контактов сразу при открытии карточки
- if(typeof crmContactsForClient === 'function'){
- var cn = document.getElementById('crm-cnt-cn');
- if(cn) cn.textContent = crmContactsForClient(card.client).length;
+ // v863: счётчик контактов — по данным из базы
+ if(typeof crmContactsLoad === 'function'){
+ crmContactsLoad(card.client).then(function(list){
+  var cn = document.getElementById('crm-cnt-cn');
+  if(cn) cn.textContent = (list || []).length;
+ }).catch(function(){});
  }
 
  // Sidebar: activity feed
@@ -46173,7 +46176,11 @@ function crmActivateTab(btn){
  document.querySelectorAll('.crm-tabs .crm-tab').forEach(function(t){ t.classList.toggle('active', t === btn); });
  document.querySelectorAll('.crm-tab-pane').forEach(function(p){ p.hidden = p.dataset.pane !== tab; });
  var card = window._kbCurrentCard; if(!card) return;
- if(tab === 'contacts'){ crmContactsRender(card.client); }
+ // v863: контакты приходят из базы — сначала тянем, потом рисуем
+ if(tab === 'contacts'){
+  crmContactsRender(card.client);
+  crmContactsLoad(card.client).then(function(){ crmContactsRender(card.client); }).catch(function(){});
+ }
  // v232: Календарь для конкретного клиента
  if(tab === 'calendar' && typeof crmRenderClientCalendar === 'function'){ crmRenderClientCalendar(card.client); }
  // v452: Задачи — модуль follow-up из Supabase
@@ -47736,18 +47743,52 @@ if(typeof window.kbEsc !== 'function'){
  window.kbEsc = function(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); };
 }
 
-function crmContactsAll(){
- try { return JSON.parse(localStorage.getItem(CRM_CONTACTS_KEY) || '[]') || []; }
- catch(e){ return []; }
+// v863: контакты клиента живут в базе, а не в браузере. Раньше их видел только тот, кто
+// внёс, а чистка кэша стирала навсегда. Здесь — память текущей страницы; наполняется
+// с сервера в crmContactsLoad().
+var _crmContacts = [];
+var _crmContactsFor = null;
+
+function crmContactsAll(){ return _crmContacts; }
+
+// Разовый перенос: если у человека в браузере остались старые контакты — отправляем их
+// в базу и чистим. Иначе они просто пропали бы при переходе.
+async function _crmContactsMigrate(client){
+ var old = [];
+ try { old = JSON.parse(localStorage.getItem(CRM_CONTACTS_KEY) || '[]') || []; } catch(_){ old = []; }
+ var mine = old.filter(function(c){ return c && c.client === client; });
+ if(!mine.length) return;
+ for(var i = 0; i < mine.length; i++){
+  var c = mine[i];
+  try {
+   await sbFetch('/api/cards?entity=contact', { method:'POST', body: JSON.stringify({
+    client_id: client, name: c.name, role: c.role, phone: c.phone, email: c.email,
+    note: [c.notes, c.whatsapp ? ('WhatsApp: ' + c.whatsapp) : '', c.telegram ? ('Telegram: ' + c.telegram) : '']
+     .filter(Boolean).join(' · ')
+   }) });
+  } catch(_){}
+ }
+ try {
+  var rest = old.filter(function(c){ return !c || c.client !== client; });
+  localStorage.setItem(CRM_CONTACTS_KEY, JSON.stringify(rest));
+ } catch(_){}
+ sdToast('Контакты этого клиента перенесены в общую базу');
 }
 
-function crmContactsSaveAll(arr){
- try { localStorage.setItem(CRM_CONTACTS_KEY, JSON.stringify(arr)); return true; }
- catch(e){ if(typeof kbShowToast==='function') kbShowToast('Ошибка сохранения (localStorage переполнен?)'); return false; }
+async function crmContactsLoad(client){
+ _crmContactsFor = client;
+ await _crmContactsMigrate(client);
+ try {
+  var d = await sbFetch('/api/cards?entity=contact&client_id=' + encodeURIComponent(client));
+  _crmContacts = (d && d.ok) ? (d.contacts || []) : [];
+ } catch(_){ _crmContacts = []; }
+ return _crmContacts;
 }
+
+
 
 function crmContactsForClient(client){
- return crmContactsAll().filter(function(c){ return c.client === client; });
+ return (_crmContactsFor === client) ? _crmContacts : [];
 }
 
 // v850 FIX: в названиях 30 клиентов есть двойные кавычки (ТОО "Вкусвилл Казахстан").
@@ -47819,51 +47860,46 @@ function crmContactOpenModal(client, contactId){
  setTimeout(function(){ var inp = document.getElementById('cnt-name'); if(inp) inp.focus(); }, 50);
 }
 
-function crmContactSave(client, contactId){
+async function crmContactSave(client, contactId){
  var name = (document.getElementById('cnt-name').value || '').trim();
- if(!name){ if(typeof kbShowToast==='function') kbShowToast('Заполните ФИО'); return; }
- var data = {
- id: contactId || ('c_' + Date.now() + '_' + Math.random().toString(36).slice(2,5)),
- client: client,
- name: name,
- role: document.getElementById('cnt-role').value,
- phone: (document.getElementById('cnt-phone').value || '').trim(),
- whatsapp: (document.getElementById('cnt-whatsapp').value || '').trim(),
- telegram: (document.getElementById('cnt-telegram').value || '').trim(),
- email: (document.getElementById('cnt-email').value || '').trim(),
- notes: (document.getElementById('cnt-notes').value || '').trim(),
- created_at: contactId ? undefined : new Date().toISOString(),
- created_by: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || 'unknown'
+ if(!name){ sdToast('Заполните имя'); return; }
+ var extra = [
+  (document.getElementById('cnt-notes').value || '').trim(),
+  (document.getElementById('cnt-whatsapp').value || '').trim() ? ('WhatsApp: ' + document.getElementById('cnt-whatsapp').value.trim()) : '',
+  (document.getElementById('cnt-telegram').value || '').trim() ? ('Telegram: ' + document.getElementById('cnt-telegram').value.trim()) : ''
+ ].filter(Boolean).join(' · ');
+ var payload = {
+  name: name,
+  role: document.getElementById('cnt-role').value,
+  phone: (document.getElementById('cnt-phone').value || '').trim(),
+  email: (document.getElementById('cnt-email').value || '').trim(),
+  note: extra
  };
- var all = crmContactsAll();
- if(contactId){
- var idx = all.findIndex(function(x){ return x.id === contactId; });
- if(idx >= 0){
- var existing = all[idx];
- data.created_at = existing.created_at;
- data.created_by = existing.created_by || data.created_by;
- all[idx] = data;
- } else {
- all.push(data);
- }
- } else {
- all.push(data);
- }
- if(crmContactsSaveAll(all)){
- if(typeof kbShowToast === 'function') kbShowToast(contactId ? 'Контакт обновлён' : 'Контакт добавлен');
- var bg = document.querySelector('.crm-modal-bg'); if(bg) bg.remove();
- crmContactsRender(client);
- }
+ try {
+  var d;
+  if(contactId){
+   d = await sbFetch('/api/cards?entity=contact&id=' + encodeURIComponent(contactId), { method:'PATCH', body: JSON.stringify(payload) });
+  } else {
+   payload.client_id = client;
+   d = await sbFetch('/api/cards?entity=contact', { method:'POST', body: JSON.stringify(payload) });
+  }
+  if(!d.ok) throw new Error(d.error || 'не сохранилось');
+  await crmContactsLoad(client);
+  var bg = document.querySelector('.crm-modal-bg'); if(bg) bg.remove();
+  crmContactsRender(client);
+  sdToast(contactId ? 'Контакт обновлён' : 'Контакт добавлен');
+ } catch(e){ sdToast('Не получилось сохранить: ' + (e.message || e)); }
 }
 
 async function crmContactDelete(id, client){
- var ok = await confirmAction({ title:'Удалить контакт?', body:'Контакт будет удалён. Это нельзя отменить.', danger:true, confirmLabel:'Удалить' });
- if(!ok) return;
- var all = crmContactsAll().filter(function(c){ return c.id !== id; });
- if(crmContactsSaveAll(all)){
- if(typeof kbShowToast === 'function') kbShowToast('Контакт удалён');
- crmContactsRender(client);
- }
+ if(!confirm('Удалить контакт?')) return;
+ try {
+  var d = await sbFetch('/api/cards?entity=contact&id=' + encodeURIComponent(id), { method:'DELETE' });
+  if(!d.ok) throw new Error(d.error || 'не удалилось');
+  await crmContactsLoad(client);
+  crmContactsRender(client);
+  sdToast('Контакт удалён');
+ } catch(e){ sdToast('Не получилось удалить: ' + (e.message || e)); }
 }
 
 function kbRenderCardFeed(card) {

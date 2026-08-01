@@ -21,7 +21,7 @@
 // PATCH /api/cards?entity=ticket&id=UUID         → изменить (status, operator, priority, ...)
 // DELETE /api/cards?entity=ticket&id=UUID        → закрыть (status='closed')
 
-import { sbSelect, sbInsert, sbUpdate, sbUpsert } from './_supabase.js';
+import { sbSelect, sbInsert, sbUpdate, sbUpsert, sbDelete } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { almatyIso } from './_dates.js';
 import { canonOperator, operatorNames } from './_operators.js'; // v850: операторы из «Сотрудников», а не из кода
@@ -151,6 +151,9 @@ export default async function handler(req, res) {
     }
     if (entity === 'ticket_comment') {
       return await handleTicketCommentsRoute(req, res);
+    }
+    if (entity === 'contact') {
+      return await handleContactsRoute(req, res);
     }
     if (entity === 'board_layout') {
       return await handleBoardLayoutRoute(req, res);
@@ -552,6 +555,64 @@ function addMonthsISO(date, months) {
 
 // v378: CRUD тикет-системы. Вызывается когда в /api/cards пришёл ?entity=ticket.
 // Поддерживает GET (список/один), POST (создать), PATCH (изменить), DELETE (закрыть).
+// v863: контакты клиента — директор, бухгалтер, IT, супервайзер.
+// Раньше лежали в localStorage браузера: коллега их не видел, а чистка кэша стирала
+// навсегда. Теперь общие для всех, как и положено данным клиента.
+//
+// GET    /api/cards?entity=contact&client_id=SD-...  → список
+// POST   /api/cards?entity=contact                    → создать
+// PATCH  /api/cards?entity=contact&id=UUID            → изменить
+// DELETE /api/cards?entity=contact&id=UUID            → удалить
+async function handleContactsRoute(req, res) {
+  const clean = (v, max) => (v == null ? null : String(v).trim().slice(0, max) || null);
+
+  if (req.method === 'GET') {
+    const { client_id } = req.query || {};
+    if (!client_id) return res.status(400).json({ ok: false, error: 'нужен ?client_id=' });
+    const rows = await sbSelect('client_contacts', { client_id: 'eq.' + client_id, order: 'created_at.asc' });
+    return res.status(200).json({ ok: true, count: rows.length, contacts: rows });
+  }
+
+  if (req.method === 'POST') {
+    const body = await readBody(req);
+    if (!body.client_id) return res.status(400).json({ ok: false, error: 'нужен client_id' });
+    if (!body.name || !String(body.name).trim()) return res.status(400).json({ ok: false, error: 'имя обязательно' });
+    const row = {
+      client_id: String(body.client_id).slice(0, 64),
+      name: clean(body.name, 120),
+      role: clean(body.role, 60),
+      phone: clean(body.phone, 60),
+      email: clean(body.email, 120),
+      note: clean(body.note, 500),
+      author_email: String(req.headers['x-user-email'] || '').trim().toLowerCase() || null
+    };
+    const result = await sbInsert('client_contacts', row);
+    return res.status(201).json({ ok: true, contact: result[0] });
+  }
+
+  if (req.method === 'PATCH') {
+    const { id } = req.query || {};
+    if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
+    const body = await readBody(req);
+    const patch = { updated_at: new Date().toISOString() };
+    ['name', 'role', 'phone', 'email', 'note'].forEach(k => {
+      if (body[k] !== undefined) patch[k] = clean(body[k], k === 'note' ? 500 : 120);
+    });
+    if (patch.name === null) return res.status(400).json({ ok: false, error: 'имя обязательно' });
+    const result = await sbUpdate('client_contacts', { id: 'eq.' + id }, patch);
+    if (!result.length) return res.status(404).json({ ok: false, error: 'контакт не найден' });
+    return res.status(200).json({ ok: true, contact: result[0] });
+  }
+
+  if (req.method === 'DELETE') {
+    const { id } = req.query || {};
+    if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
+    await sbDelete('client_contacts', { id: 'eq.' + id });
+    return res.status(200).json({ ok: true });
+  }
+  return res.status(405).json({ ok: false, error: 'method not allowed' });
+}
+
 // v860: личная раскладка доски Внедрения. Оператор заводит СВОИ колонки и раскладывает
 // по ним карточки; настоящий этап клиента при этом не меняется, поэтому общие цифры
 // («сколько застряло на обучении», отчёт по операторам) остаются честными.
