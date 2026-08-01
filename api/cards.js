@@ -441,11 +441,17 @@ async function handleTicketCommentsRoute(req, res) {
     // цифру без единого ответа клиенту.
     const isReplyToClient = row.channel !== 'internal';
     try {
-      const t = await sbSelect('tickets', { id: 'eq.' + body.ticket_id, select: 'first_response_at,status', limit: '1' });
+      const t = await sbSelect('tickets', { id: 'eq.' + body.ticket_id, select: 'first_response_at,status,operator,country', limit: '1' });
       if (isReplyToClient && t.length && !t[0].first_response_at) {
         const patch = { first_response_at: new Date().toISOString(), updated_at: new Date().toISOString() };
         // Новое обращение, на которое ответили, автоматически становится «в работе»
         if (t[0].status === 'new') patch.status = 'in_progress';
+        // v855: кто первым ответил клиенту — тот и ведёт обращение. В общей очереди
+        // иначе непонятно, кто занимается, и двое могут отвечать одновременно.
+        if (!t[0].operator && row.author) {
+          const who = await canonOperator(row.author, t[0].country || 'KZ');
+          if (who) patch.operator = who;
+        }
         await sbUpdate('tickets', { id: 'eq.' + body.ticket_id }, patch);
       }
     } catch (e) {
@@ -478,9 +484,13 @@ async function handleTicketsRoute(req, res) {
     if (client_id) params['client_id'] = 'eq.' + client_id;
     if (country) params['country'] = 'eq.' + country;
     if (priority) params['priority'] = 'eq.' + priority;
-    // sla_overdue=1 → просроченные тикеты в работе (sla_due_at < now AND status НЕ закрыт)
+    // sla_overdue=1 → просроченные обращения.
+    // v855: sla_due_at — срок ПЕРВОГО ОТВЕТА, поэтому просрочка возможна только пока
+    // ответа нет. Раньше проверки на first_response_at не было, и обращение, на которое
+    // ответили с опозданием, числилось просроченным вечно.
     if (sla_overdue === '1' || sla_overdue === 'true') {
       params['sla_due_at'] = 'lt.' + new Date().toISOString();
+      params['first_response_at'] = 'is.null';
       // v663: явный фильтр по status имеет приоритет; SLA-дефолт только если status не задан
       if (!status) params['status'] = 'in.(new,in_progress,waiting_client,reopened)';
     }
@@ -514,11 +524,9 @@ async function handleTicketsRoute(req, res) {
     if (body.category && !TICKET_CATEGORIES.includes(body.category)) {
       return res.status(400).json({ ok: false, error: 'category должен быть один из: ' + TICKET_CATEGORIES.join(', ') });
     }
-    // v460: для manual-создания требуем ответственного. Auto-creation из бота (channel=whatsapp/phone/email/form)
-    // может приходить без оператора — будет назначен позже вручную.
-    if (channel === 'manual' && (!body.operator || !String(body.operator).trim())) {
-      return res.status(400).json({ ok: false, error: 'operator обязателен при ручном создании тикета (нельзя создать без ответственного)' });
-    }
+    // v855: ответственный больше НЕ обязателен. Работаем общей очередью: обращение можно
+    // завести за десять секунд, а взять его на себя — отдельным действием. Раньше сервер
+    // отвечал 400 без оператора, и завести обращение «на разбор» было нельзя.
     let operatorName = null;
     if (body.operator && String(body.operator).trim()) {
       operatorName = await canonOperator(body.operator, country);
@@ -594,15 +602,10 @@ async function handleTicketsRoute(req, res) {
         .slice(0, 12);
     }
 
-    // Авто-метки времени:
-    // - при первом переводе в in_progress (взяли в работу) фиксируем first_response_at
-    // - при переводе в solved фиксируем solved_at
-    if (body.status === 'in_progress') {
-      const existing = await sbSelect('tickets', { id: 'eq.' + id, select: 'first_response_at' });
-      if (existing.length && !existing[0].first_response_at) {
-        patch.first_response_at = new Date().toISOString();
-      }
-    }
+    // v855: смена статуса на «В работе» БОЛЬШЕ НЕ отмечает ответ клиенту.
+    // Раньше отмечала: выбрал статус в списке — секундомер остановлен, красное погасло,
+    // а клиенту не написали ни слова. Срок первого ответа накручивался двумя кликами.
+    // Отметку ставит только реальная отправка ответа клиенту (см. handleTicketCommentsRoute).
     if (body.status === 'solved') {
       patch.solved_at = new Date().toISOString();
     }

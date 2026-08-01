@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v854</title>
+<title>SalesDoc — Финансовый Дашборд v855</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10311,9 +10311,15 @@ body.light .mt-filter-section-title { color:#8A90A0; }
     </div>
     <!-- v539: input → textarea для нормального многострочного комментария. Ctrl/Cmd+Enter — отправить. Shift+Enter — новая строка. Author = currentUser.name (не «оператор» строкой). -->
     <div class="amocard-chat-input">
-     <span class="amocard-chat-select" style="display:inline-flex;align-items:center;gap:8px"><b>Заметка</b><button type="button" id="ticket-ai-btn" onclick="ticketAiAsk()" title="Попросить AI подсказать ответ клиенту" style="padding:4px 10px;font-size:11px;font-weight:600;background:rgba(120,80,255,.12);color:#9E7BFF;border:1px solid rgba(120,80,255,.30);border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/></svg>Подсказать</button></span>
-     <textarea id="ticket-comment-text" rows="2" placeholder="Внутренняя заметка — клиент это НЕ увидит. Ctrl+Enter — отправить" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();ticketCommentSend();}" style="resize:vertical;min-height:36px;max-height:200px;font-family:inherit"></textarea>
+     <!-- v855: раньше поле было подписано «Заметка ... клиент это НЕ увидит», а отправка
+          засчитывалась как ответ клиенту. Теперь два разных действия с разными кнопками. -->
+     <span class="amocard-chat-select" style="display:inline-flex;align-items:center;gap:8px"><b>Ответ клиенту</b><button type="button" id="ticket-ai-btn" onclick="ticketAiAsk()" title="Попросить AI подсказать ответ клиенту" style="padding:4px 10px;font-size:11px;font-weight:600;background:rgba(120,80,255,.12);color:#9E7BFF;border:1px solid rgba(120,80,255,.30);border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/></svg>Подсказать</button></span>
+     <textarea id="ticket-comment-text" rows="2" placeholder="Что вы ответили клиенту. Ctrl+Enter — отправить" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();ticketCommentSend();}" style="resize:vertical;min-height:36px;max-height:200px;font-family:inherit"></textarea>
      <button id="ticket-comment-send" class="amocard-send" onclick="ticketCommentSend()" title="Отправить (Ctrl+Enter)">&rarr;</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 2px 0;font-size:11.5px;color:var(--text-muted)">
+     <span>Отметит, что клиенту ответили, и остановит отсчёт срока ответа.</span>
+     <button type="button" class="tt-mode-btn" style="margin-left:auto;padding:5px 12px;font-size:11px" onclick="ticketCommentSend('internal')" title="Запись для своих — на срок ответа не влияет">Записать как заметку</button>
     </div>
    </section>
    <aside id="ticket-card-body" class="tk-sidebar"></aside>
@@ -10335,19 +10341,21 @@ body.light .mt-filter-section-title { color:#8A90A0; }
    <input id="tickets-new-title" type="text" placeholder="Например: «Не работает синхронизация»" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:13px">
    <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Описание</label>
    <textarea id="tickets-new-desc" placeholder="Подробности, шаги воспроизведения..." rows="3" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:13px;font-family:inherit;resize:vertical"></textarea>
-   <!-- v460: обязательное поле «Ответственный» — нельзя создать тикет без оператора. -->
-   <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Ответственный *</label>
+   <!-- v855: ответственный необязателен — работаем общей очередью. -->
+   <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Кто ведёт</label>
    <select id="tickets-new-operator" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);margin-bottom:12px;box-sizing:border-box;font-size:13px">
-    <option value="">— выберите оператора —</option>
+    <option value="">Пока никто — в общую очередь</option>
    </select>
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
     <div>
      <label style="display:block;font-size:12px;color:var(--text-soft);margin-bottom:4px">Срочность (через сколько ответить)</label>
      <select id="tickets-new-prio" onchange="_ticketsNewPrioHint(this.value)" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);box-sizing:border-box;font-size:13px">
-      <option value="low">Низкий (3 дня)</option>
-      <option value="normal" selected>Обычный (1 день)</option>
-      <option value="high">Высокий (4 часа)</option>
-      <option value="critical">Критичный (2 часа)</option>
+      <!-- v855: сроки приведены к тому, что реально считает сервер: рабочие минуты,
+           Пн-Пт 9:00-18:00 по времени страны. Раньше тут были выдуманные 3 дня / 1 день. -->
+      <option value="low">Низкий — ответить за 4 рабочих часа</option>
+      <option value="normal" selected>Обычный — ответить за 2 рабочих часа</option>
+      <option value="high">Высокий — ответить за 30 минут</option>
+      <option value="critical">Срочный — ответить за 30 минут</option>
      </select>
      <!-- v540: критерии когда какой приоритет ставить — снимает разнобой между операторами -->
      <div id="tickets-new-prio-hint" style="font-size:10.5px;color:var(--text-muted);margin-top:4px;line-height:1.4;min-height:28px">Клиент работает, есть вопрос или мелкая неудобность</div>
@@ -33234,17 +33242,17 @@ function _ticketsIsSupportOperator(){
  return String(currentUser.role||'').toLowerCase() === 'operator';
 }
 function _ticketsGetScope(){
- // v467: операторы поддержки — всегда «Мои», localStorage игнорируем.
- if(_ticketsIsSupportOperator()) return 'mine';
+ // v855: оператору снова можно смотреть «Все». Раньше он был жёстко заперт в «Мои», а
+ // «мои» = назначенные на него. С общей очередью это значит, что обращение без
+ // ответственного не видел вообще никто, кроме директора — и брать его было некому.
+ // По умолчанию оператор всё так же открывает раздел на «Моих».
  var saved = null;
  try { saved = localStorage.getItem(_ticketsScopeKey()); } catch(_){}
  if(saved === 'mine' || saved === 'all') return saved;
- return 'all';
+ return _ticketsIsSupportOperator() ? 'mine' : 'all';
 }
 function _ticketsSetScope(scope){
  if(scope !== 'mine' && scope !== 'all') return;
- // v467: операторам менять scope запрещено — у них всегда «Мои».
- if(_ticketsIsSupportOperator()) return;
  try { localStorage.setItem(_ticketsScopeKey(), scope); } catch(_){}
  try { localStorage.removeItem('tickets_scope'); } catch(_){}
  if(scope === 'mine'){
@@ -33270,9 +33278,7 @@ function _ticketsRenderScopeToggle(){
  var scope = _ticketsGetScope();
  var me = _ticketsCurrentOperatorName();
  var mineCount = me ? ticketsList.filter(function(t){
-  if(t.operator === me) return true;
-  if(t.clients && t.clients.curator_operator === me) return true;
-  return false;
+  return t.operator === me; // v855: куратор клиента не используется — там имена продавцов из amoCRM
  }).length : 0;
  var allCount = ticketsList.length;
  var btns = toggle.querySelectorAll('button[data-scope]');
@@ -33298,9 +33304,7 @@ function _ticketsCountForBadge(){
  var me = _ticketsCurrentOperatorName();
  if(!me) return ticketsList.length;
  return ticketsList.filter(function(t){
-  if(t.operator === me) return true;
-  if(t.clients && t.clients.curator_operator === me) return true;
-  return false;
+  return t.operator === me; // v855: куратор клиента не используется — там имена продавцов из amoCRM
  }).length;
 }
 
@@ -33407,7 +33411,7 @@ function ticketsUpdateStats(){
  var src = ticketsList;
  if(_ticketsIsSupportOperator() && me){
   src = ticketsList.filter(function(t){
-   return (t.operator === me) || (t.clients && t.clients.curator_operator === me);
+   return t.operator === me; // v855: только назначенный оператор
   });
  } else if(_ticketsIsSupportOperator()){
   // оператор по роли, но имя в operators не найдено — пустой набор лучше, чем общий
@@ -33418,7 +33422,7 @@ function ticketsUpdateStats(){
  var todayStart = new Date(); todayStart.setHours(0,0,0,0);
  var weekAgo = new Date(Date.now() - 7*86400000);
  src.forEach(function(t){
-  if(t.sla_due_at && new Date(t.sla_due_at) < new Date() && ['new','in_progress','reopened'].indexOf(t.status) >= 0) overdue++;
+  if(_ticketsIsOverdue(t)) overdue++; // v855: одно правило на всю программу
   if(t.priority === 'critical') critical++;
   if(t.created_at && new Date(t.created_at) >= todayStart) todayCount++;
   if(t.status === 'solved' && t.solved_at && new Date(t.solved_at) >= weekAgo) solvedWeek++;
@@ -33445,7 +33449,7 @@ function ticketsRender(){
  // v445: пустое состояние «все мои тикеты решены» — показываем над board вместо четырёх «Пусто».
  if(scope === 'mine' && me){
   var totalMine = ticketsList.filter(function(t){
-   return (t.operator === me) || (t.clients && t.clients.curator_operator === me);
+   return t.operator === me; // v855: только назначенный оператор
   }).length;
   if(totalMine === 0){
    // v467: безопасная отрисовка пустого состояния через DOM (без innerHTML).
@@ -33481,7 +33485,7 @@ function ticketsRender(){
    if(_st !== stage.key) return false;
    // v445: scope «Мои» — оператор или куратор клиента = me
    if(scope === 'mine' && me){
-    var isMine = (t.operator === me) || (t.clients && t.clients.curator_operator === me);
+    var isMine = (t.operator === me); // v855: только назначенный оператор
     if(!isMine) return false;
    }
    if(fOp && t.operator !== fOp) return false;
@@ -33560,36 +33564,55 @@ function ticketsRender(){
  _ticketsRenderScopeToggle(); // v445: обновить счётчики Мои/Все
 }
 
+// v855: ЕДИНОЕ правило просрочки на всю программу.
+// sla_due_at — это срок ПЕРВОГО ОТВЕТА клиенту. Значит просрочка возможна только пока
+// ответа нет. Раньше проверки не было: обращение, на которое ответили с опозданием,
+// горело красным вечно. Живой пример — «Баг на SD Audit»: срок 13.06, ответ 24.06,
+// в списке до сих пор «просрочен».
+function _ticketsIsOverdue(t){
+ if(!t || !t.sla_due_at) return false;
+ if(t.first_response_at) return false;                       // ответили — секундомер остановлен
+ if(['solved','closed'].indexOf(t.status) >= 0) return false; // закрытые не горят
+ return new Date(t.sla_due_at) < new Date();
+}
+
 function _ticketsFmtSLA(t){
  if(!t.sla_due_at || ['solved','closed'].indexOf(t.status) >= 0) return null;
- // v460: в стадии «Ждём ответ от клиента» SLA приостановлен — показываем «ждём N дней»
- // вместо «просрочен» (это не наша вина что клиент молчит).
+ // Ответ клиенту уже дан — показываем факт, а не срок. Это честнее: срок первого
+ // ответа своё отработал, дальше обращение живёт по статусам.
+ if(t.first_response_at){
+  var late = new Date(t.first_response_at) > new Date(t.sla_due_at);
+  return late
+   ? { label:'ответили с опозданием', color:'#C2410C', bg:'rgba(251,146,60,.18)' }
+   : { label:'ответили в срок', color:'var(--rk-text-soft)', bg:'rgba(76,183,130,.16)' };
+ }
+ // v855: в стадии «Ждём ответ от клиента» показываем, сколько нет движения. Раньше
+ // считали по waiting_started_at — колонки с таким именем в базе нет, и подпись всегда
+ // была сухое «ждём».
  if(t.status === 'waiting_client'){
-  if(!t.waiting_started_at) return { label:'ждём', color:'var(--rk-text-soft)', bg:'rgba(251,146,60,.18)' };
-  var waitMs = Date.now() - new Date(t.waiting_started_at).getTime();
-  var waitDays = Math.floor(waitMs / 86400000);
-  var waitHours = Math.floor((waitMs % 86400000) / 3600000);
-  var label;
-  if(waitDays > 0) label = 'ждём ' + waitDays + ' дн';
-  else if(waitHours > 0) label = 'ждём ' + waitHours + ' ч';
-  else label = 'ждём';
-  return { label: label, color:'#C2410C', bg:'rgba(251,146,60,.20)' };
+  var since = t.updated_at ? new Date(t.updated_at) : null;
+  if(!since) return { label:'ждём клиента', color:'var(--rk-text-soft)', bg:'rgba(251,146,60,.18)' };
+  var days = Math.floor((Date.now() - since.getTime()) / 86400000);
+  return { label: days > 0 ? ('без движения ' + days + ' дн') : 'ждём клиента',
+           color:'#C2410C', bg:'rgba(251,146,60,.20)' };
  }
  var due = new Date(t.sla_due_at);
- var diff = (due.getTime() - Date.now()) / 1000 / 60; // минут до дедлайна
+ var diff = (due.getTime() - Date.now()) / 1000 / 60; // минут до срока ответа
  if(diff < 0) return { label:'просрочен', color:'#fff', bg:'#EF4444' };
- if(diff < 60) return { label:Math.round(diff) + ' мин', color:'#fff', bg:'#F59E0B' };
- if(diff < 60*4) return { label:Math.round(diff/60) + ' ч', color:'#92400E', bg:'rgba(245,158,11,.16)' };
+ if(diff < 60) return { label:'ответить за ' + Math.round(diff) + ' мин', color:'#fff', bg:'#F59E0B' };
+ if(diff < 60*4) return { label:'ответить за ' + Math.round(diff/60) + ' ч', color:'#92400E', bg:'rgba(245,158,11,.16)' };
  return { label:Math.round(diff/60/24) + ' дн', color:'var(--rk-text-soft)', bg:'rgba(120,120,128,.16)' };
 }
 
 // v540: hint про критерии приоритета в модалке нового тикета
 function _ticketsNewPrioHint(v){
+ // v855: сроки — рабочие часы Пн-Пт 9:00-18:00 по времени страны. Вечером и в выходные
+ // секундомер стоит: обращение в 17:59 не «нарушается» ночью.
  var hints = {
-  critical: '1С/банк/отчёты не работают, клиент НЕ МОЖЕТ работать. Жжёт.',
-  high: 'Часть функционала сломана, есть обходной путь. Ответить за 4 часа.',
-  normal: 'Клиент работает, есть вопрос или мелкая неудобность.',
-  low: 'Хотелка или вопрос «когда будет?» Можно завтра.'
+  critical: 'Программа не работает, клиент не может продавать. Ответить за 30 минут.',
+  high: 'Часть сломана, но работать можно в обход. Ответить за 30 минут.',
+  normal: 'Клиент работает, есть вопрос или мелкое неудобство. Ответить за 2 рабочих часа.',
+  low: 'Пожелание или вопрос «когда будет?». Ответить за 4 рабочих часа.'
  };
  var el = document.getElementById('tickets-new-prio-hint');
  if(el) el.textContent = hints[v] || '';
@@ -33692,7 +33715,8 @@ async function ticketsCreate(){
  var operator = (document.getElementById('tickets-new-operator')||{}).value || '';
  if(!client_id){ sdToast('Выберите клиента'); return; }
  if(!title){ sdToast('Опишите тему обращения'); return; }
- if(!operator){ sdToast('Выберите ответственного оператора'); return; }
+ // v855: ответственный необязателен — обращение можно завести в общую очередь,
+ // а взять его на себя отдельным действием. Кто первым ответит клиенту, тот и ведёт.
  try {
   var d = await sbFetch('/api/cards?entity=ticket', {
    method:'POST',
@@ -33725,8 +33749,12 @@ async function ticketsCreate(){
    } catch(_){ /* история не критична — тикет уже создан, не валим UI */ }
    // v787: тикет автоматически рождает ЗАДАЧУ на оператора со сроком по приоритету (SLA) —
    // тикет виден в календаре, «Моих задачах» и в Google-подписке. Не критично — не валим UI.
-   try {
-    var _slaH = { critical: 2, high: 4, normal: 24, low: 72 }[priority] || 24;
+   // v855: без ответственного задачу не заводим — задача «ни на кого» только мусорит календарь.
+   if(operator) try {
+    // v855: срок задачи берём тот же, что посчитал сервер (рабочие часы страны).
+    // Раньше здесь стоял свой расчёт 2/4/24/72 календарных часа — на карточке
+    // обращения был один срок, а в календаре по той же работе другой, и люди верили
+    // календарю. Один источник правды: sla_due_at с сервера.
     var _clientName = '';
     try {
      var _selOpt = document.getElementById('tickets-new-client').selectedOptions[0];
@@ -33740,7 +33768,7 @@ async function ticketsCreate(){
       contact_name: _clientName || null,
       type_id: 1,
       text: 'Тикет: ' + title,
-      deadline_at: new Date(Date.now() + _slaH * 3600 * 1000).toISOString(),
+      deadline_at: d.ticket.sla_due_at || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
       is_all_day: false,
       assignee_operator: (typeof crmOpCanon === 'function') ? crmOpCanon(operator) : operator,
       eisenhower: priority === 'critical' ? 'red' : (priority === 'high' ? 'yellow' : null)
@@ -33799,6 +33827,25 @@ function ticketCloseCard(){
 }
 
 // v401: шапка в Zendesk-стиле — тема + клиент · SLA. Статус ушёл в правый sidebar.
+// v855: взять обращение из общей очереди на себя. Пока никто не взял, его видно всем;
+// как только взял — в списке видно имя, и второй человек не полезет отвечать параллельно.
+async function ticketTakeMine(){
+ var t = _ticketCurrentTicket; if(!t) return;
+ var me = _ticketsCurrentOperatorName();
+ if(!me){ sdToast('Вас нет в списке операторов поддержки этой страны'); return; }
+ try {
+  var d = await sbFetch('/api/cards?entity=ticket&id=' + t.id, {
+   method:'PATCH', body: JSON.stringify({ operator: me })
+  });
+  if(!d.ok) throw new Error(d.error || 'не удалось назначить');
+  _ticketCurrentTicket.operator = (d.ticket && d.ticket.operator) || me;
+  _ticketRenderHead();
+  _ticketRenderFields();
+  sdToast('Обращение теперь на вас');
+  ticketsLoad();
+ } catch(e){ sdToast('Не получилось взять: ' + (e.message || e)); }
+}
+
 function _ticketRenderHead(){
  var t = _ticketCurrentTicket; if(!t) return;
  var cl = t.clients || {};
@@ -33808,8 +33855,27 @@ function _ticketRenderHead(){
  if(clientEl) clientEl.textContent = cl.company_name || t.client_id || '—';
  var slaEl = document.getElementById('ticket-card-sla');
  if(slaEl){
+  // v855: «SLA» — жаргон, в интерфейсе так писать нельзя. Показываем понятную подпись
+  // и сразу видно, кто ведёт обращение: в общей очереди иначе двое отвечают одновременно.
   var slaInfo = _ticketsFmtSLA(t);
-  slaEl.textContent = slaInfo ? 'SLA: ' + slaInfo.label : 'без SLA';
+  var me = _ticketsCurrentOperatorName();
+  slaEl.textContent = '';
+  var lab = document.createElement('span');
+  lab.textContent = slaInfo ? slaInfo.label : 'срок ответа не задан';
+  slaEl.appendChild(lab);
+  var whoEl = document.createElement('span');
+  whoEl.style.cssText = 'margin-left:10px;color:var(--text-muted)';
+  whoEl.textContent = t.operator ? ('ведёт ' + t.operator) : 'никто не взял';
+  slaEl.appendChild(whoEl);
+  if(!t.operator && me){
+   var take = document.createElement('button');
+   take.type = 'button';
+   take.className = 'tt-mode-btn';
+   take.style.cssText = 'margin-left:10px;padding:4px 12px;font-size:11px';
+   take.textContent = 'Беру себе';
+   take.onclick = function(){ ticketTakeMine(); };
+   slaEl.appendChild(take);
+  }
  }
  // Описание тикета — отдельный блок над лентой
  var descEl = document.getElementById('ticket-card-desc-box');
@@ -34142,11 +34208,19 @@ async function _ticketLoadComments(){
   }
   items.forEach(function(c){
    var note = document.createElement('div'); note.className = 'amocard-note';
+   // v855: ответ клиенту и запись для своих должны отличаться с одного взгляда —
+   // иначе через неделю не понять, что клиент видел, а что нет.
+   var isInternal = String(c.channel || '') === 'internal';
    var ic = document.createElement('div'); ic.className = 'amocard-feed-icon amocard-ic-note';
-   ic.textContent = '✎';
+   ic.textContent = isInternal ? '·' : '→';
    note.appendChild(ic);
    var body = document.createElement('div'); body.className = 'amocard-feed-body';
    var meta = document.createElement('div'); meta.className = 'amocard-feed-meta';
+   var kindEl = document.createElement('span');
+   kindEl.textContent = isInternal ? 'для своих' : 'ответ клиенту';
+   kindEl.style.cssText = 'font-weight:600;color:' + (isInternal ? 'var(--text-muted)' : '#AEB6FF');
+   meta.appendChild(kindEl);
+   meta.appendChild(Object.assign(document.createElement('span'), { className: 'amocard-dot' }));
    var dt = document.createElement('span'); dt.textContent = _fmtFeedDate(c.created_at); meta.appendChild(dt);
    if(c.author){
     var dot = document.createElement('span'); dot.className = 'amocard-dot'; meta.appendChild(dot);
@@ -34225,7 +34299,9 @@ function ticketAiHide(){
  if(box) box.style.display = 'none';
 }
 
-async function ticketCommentSend(){
+// v855: kind='internal' — запись для своих (на срок ответа не влияет),
+// по умолчанию — ответ клиенту (останавливает отсчёт срока первого ответа).
+async function ticketCommentSend(kind){
  var input = document.getElementById('ticket-comment-text');
  var btn = document.getElementById('ticket-comment-send');
  if(!input || !_ticketCurrentTicket) return;
@@ -34237,9 +34313,7 @@ async function ticketCommentSend(){
  try {
   var d = await sbFetch('/api/cards?entity=ticket_comment', {
    method:'POST',
-   /* v850: это поле ответа клиенту, поэтому channel='reply'. Заметки для своих
-      появятся отдельной кнопкой — они не должны засчитываться как ответ клиенту. */
-   body: JSON.stringify({ ticket_id: _ticketCurrentTicket.id, text: text, author: ((typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'оператор'), channel: 'reply' })
+   body: JSON.stringify({ ticket_id: _ticketCurrentTicket.id, text: text, author: ((typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'оператор'), channel: (kind === 'internal' ? 'internal' : 'reply') })
   });
   if(!d.ok) throw new Error(d.error || 'comment POST failed');
   input.value = '';
