@@ -44,7 +44,9 @@ function _normCategory(c) { return String(c || '').toLowerCase().replace(/[^a-z�
 function _catIn(list, cat) { const n = _normCategory(cat); return list.some(x => _normCategory(x) === n); }
 
 // v378: Тикет-система поддержки
-const TICKET_STATUSES = ['new','in_progress','waiting_client','solved','closed','reopened'];
+// v858: 'dev' — ошибка передана разработчикам. Отдельное состояние, потому что такие
+// обращения висят неделями не по вине оператора и не должны портить его картину.
+const TICKET_STATUSES = ['new','in_progress','waiting_client','dev','solved','closed','reopened'];
 const TICKET_PRIORITIES = ['low','normal','high','critical'];
 const TICKET_CHANNELS = ['whatsapp','email','phone','form','manual'];
 const TICKET_CATEGORIES = ['bug','question','training','feature_request','other'];
