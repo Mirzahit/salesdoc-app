@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v855</title>
+<title>SalesDoc — Финансовый Дашборд v856</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10220,60 +10220,65 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <!-- v393: Поддержка — Канбан тикетов (обращения от активированных клиентов).
       4 колонки: Новое / В работе / Ждём клиента / Решено. Бэк /api/cards?entity=ticket. -->
  <div id="view-tickets" style="display:none;min-height:calc(100vh - 70px);padding-top:18px">
+ <style>
+  /* v856: стили списка обращений. Префикс sup- обязателен: CSS в проекте общий,
+     короткое имя класса перебивается правилами приложения (см. историю с .main). */
+  .sup-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 14px}
+  .sup-nums{display:flex;align-items:center;gap:14px;font-size:13px;color:var(--text-soft)}
+  .sup-nums b{color:var(--text);font-size:15px;font-variant-numeric:tabular-nums;margin-left:4px}
+  .sup-ov{background:none;border:none;font:inherit;color:var(--text-soft);cursor:pointer;padding:2px 0}
+  .sup-ov b{color:#E5604D}
+  .sup-ov.is-on{color:#E5604D;text-decoration:underline;text-underline-offset:4px}
+  .sup-seg{display:inline-flex;gap:0;padding:2px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border-faint)}
+  .sup-seg button{border:none;padding:6px 12px;background:transparent;color:var(--text-soft);font-size:12px;font-weight:600;border-radius:6px;cursor:pointer;font-family:inherit}
+  .sup-seg button.is-on{background:var(--surface);color:var(--text)}
+  .sup-seg .cnt{margin-left:5px;opacity:.65;font-weight:500}
+  .sup-search{min-width:220px;flex:0 1 260px;padding:7px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);font-size:12.5px;font-family:inherit}
+  .sup-grow{flex:1 1 auto}
+  .sup-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2);color:var(--text-soft);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
+  .sup-btn:hover{color:var(--text)}
+  .sup-btn-main{color:#AEB6FF}
+  .sup-group{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);margin:18px 0 6px;display:flex;align-items:center;gap:8px}
+  .sup-group.click{cursor:pointer}
+  .sup-list{padding-bottom:40px}
+  .sup-row{display:grid;grid-template-columns:186px 1fr 128px 132px;gap:12px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border-faint);cursor:pointer}
+  .sup-row:hover{background:var(--surface-2)}
+  .sup-row .sup-t{font-size:13px;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sup-row .sup-c{font-size:11.5px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sup-row .sup-who{font-size:12px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sup-row .sup-who.none{color:#E0A458}
+  .sup-row .sup-idle{font-size:11.5px;color:var(--text-muted);text-align:right;font-variant-numeric:tabular-nums}
+  .sup-row .sup-idle.warn{color:#E5604D}
+  .sup-badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+  .sup-chip{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600;background:rgba(229,96,77,.16);color:#E5604D;vertical-align:middle}
+  .sup-empty{padding:36px 12px;text-align:center;color:var(--text-soft);font-size:13px;line-height:1.6}
+  @media(max-width:900px){
+   .sup-row{grid-template-columns:1fr;gap:4px}
+   .sup-row .sup-idle{text-align:left}
+  }
+ </style>
   <div class="route-head-bar">
    <div class="route-head-title">Поддержка клиентов</div>
    <div class="route-head-sub" id="tickets-head-sub">&middot; загрузка&hellip;</div>
   </div>
-  <div class="route-stats">
-   <div class="route-stat-card">
-    <div class="route-stat-label">Тикетов</div>
-    <div class="route-stat-value" id="tickets-stat-total">&mdash;</div>
-    <div class="route-stat-sub">всего открытых</div>
+  <!-- v856: список вместо доски. Главный вопрос оператора — «кому я не ответил»,
+       на доске из четырёх колонок горящее обращение могло лежать в любой. Пять плиток
+       со сводкой убраны: читали из них от силы одну. -->
+  <div class="sup-bar">
+   <div class="sup-nums">
+    <span>Открыто <b id="tickets-open">&mdash;</b></span>
+    <button type="button" id="tickets-overdue-chip" class="sup-ov" onclick="_ticketsToggleOverdue()" title="Показать только просроченные">Просрочено <b id="tickets-overdue">&mdash;</b></button>
    </div>
-   <div class="route-stat-card">
-    <div class="route-stat-label">Просроченных</div>
-    <div class="route-stat-value red" id="tickets-stat-overdue">&mdash;</div>
-    <div class="route-stat-sub">срок ответа истёк</div>
+   <div id="tickets-scope-toggle" class="sup-seg">
+    <button data-scope="mine" onclick="_ticketsSetScope('mine')">Мои<span class="cnt"></span></button>
+    <button data-scope="all" onclick="_ticketsSetScope('all')">Все<span class="cnt"></span></button>
    </div>
-   <div class="route-stat-card">
-    <div class="route-stat-label">Критичных</div>
-    <div class="route-stat-value red" id="tickets-stat-critical">&mdash;</div>
-    <div class="route-stat-sub">срочные обращения</div>
-   </div>
-   <div class="route-stat-card">
-    <div class="route-stat-label">Сегодня</div>
-    <div class="route-stat-value amber" id="tickets-stat-today">&mdash;</div>
-    <div class="route-stat-sub">новых обращений</div>
-   </div>
-   <div class="route-stat-card">
-    <div class="route-stat-label">Решено</div>
-    <div class="route-stat-value green" id="tickets-stat-solved">&mdash;</div>
-    <div class="route-stat-sub">за последние 7 дней</div>
-   </div>
+   <input id="tickets-search" type="search" placeholder="Поиск по теме или клиенту" oninput="ticketsRender()" class="sup-search">
+   <div class="sup-grow"></div>
+   <button onclick="ticketsOpenNew()" class="sup-btn sup-btn-main">Новое обращение</button>
+   <button onclick="ticketsLoad()" class="sup-btn">Обновить</button>
   </div>
-  <div class="route-filter-row">
-   <span class="route-count">Тикетов: <b id="tickets-count">&mdash;</b></span>
-   <!-- v445: сегментированный переключатель «Мои/Все» — операторам сразу видны их тикеты -->
-   <div id="tickets-scope-toggle" style="display:inline-flex;gap:0;padding:2px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border-faint)">
-    <button data-scope="mine" onclick="_ticketsSetScope('mine')" style="border:none;padding:6px 12px;background:transparent;color:var(--text-soft);font-size:12px;font-weight:600;border-radius:6px;cursor:pointer">Мои<span class="cnt"></span></button>
-    <button data-scope="all" onclick="_ticketsSetScope('all')" style="border:none;padding:6px 12px;background:transparent;color:var(--text-soft);font-size:12px;font-weight:600;border-radius:6px;cursor:pointer">Все<span class="cnt"></span></button>
-   </div>
-   <input id="tickets-search" type="search" placeholder="Поиск по теме, клиенту, тегу…" oninput="ticketsRender()" class="route-select" style="min-width:240px;flex:0 1 280px">
-   <div class="route-spacer"></div>
-   <select id="tickets-filter-op" class="route-select" onchange="ticketsRender()">
-    <option value="">Все операторы</option>
-   </select>
-   <select id="tickets-filter-prio" class="route-select" onchange="ticketsRender()">
-    <option value="">Все приоритеты</option>
-    <option value="critical">Критичные</option>
-    <option value="high">Высокие</option>
-    <option value="normal">Обычные</option>
-    <option value="low">Низкие</option>
-   </select>
-   <button onclick="ticketsOpenNew()" class="route-btn route-btn-primary">+&nbsp;Новый тикет</button>
-   <button onclick="ticketsLoad()" title="Обновить" class="route-btn route-btn-icon">&#8635;</button>
-  </div>
-  <div id="tickets-board" class="route-kanban" style="grid-template-columns:repeat(4,minmax(280px,1fr))"></div>
+  <div id="tickets-list" class="sup-list"></div>
  </div>
 
  <!-- v394: Полноэкранная страница тикета. Открывается из Канбана Поддержки и
@@ -33124,12 +33129,8 @@ var mycUrgency = 'all'; // 'all' | 'soon' | 'overdue'
 
 // v393: Поддержка — Канбан тикетов от активированных клиентов. Бэк готов (v378).
 // 4 колонки: new / in_progress / waiting_client / solved. closed скрыты по умолчанию.
-var TICKETS_STAGES = [
- { key:'new', label:'Новое', desc:'Только что поступило, никто не взял', color:'#3B82F6' },
- { key:'in_progress', label:'В работе', desc:'Оператор разбирается с проблемой', color:'#8B5CF6' },
- { key:'waiting_client', label:'Ждём ответ от клиента', desc:'Запросили инфу, ждём ответа', color:'#FB923C' },
- { key:'solved', label:'Решено', desc:'Проблема решена, скоро закроем', color:'#2C9466' }
-];
+// v856: подписи состояний для списка (сам список колонок больше не рисуем).
+var TICKET_STATUS_LABELS = { new:'новое', in_progress:'в работе', waiting_client:'ждём клиента', solved:'решено', closed:'в архиве', reopened:'повторное' };
 var ticketsList = [];
 
 // v418+v461: операторы поддержки. Раньше захардкожено — новые операторы (например,
@@ -33255,44 +33256,25 @@ function _ticketsSetScope(scope){
  if(scope !== 'mine' && scope !== 'all') return;
  try { localStorage.setItem(_ticketsScopeKey(), scope); } catch(_){}
  try { localStorage.removeItem('tickets_scope'); } catch(_){}
- if(scope === 'mine'){
-  var fOp = document.getElementById('tickets-filter-op');
-  if(fOp) fOp.value = '';
- }
  ticketsRender();
 }
 function _ticketsRenderScopeToggle(){
  var toggle = document.getElementById('tickets-scope-toggle');
  if(!toggle) return;
- // v467: оператор поддержки видит ТОЛЬКО свои тикеты — переключатель и
- // фильтр «Все операторы» прячем целиком, чтобы не было соблазна и пути к чужим.
- if(_ticketsIsSupportOperator()){
-  toggle.style.display = 'none';
-  var fOpHide = document.getElementById('tickets-filter-op');
-  if(fOpHide) fOpHide.style.display = 'none';
-  return;
- }
+ // v856: переключатель виден всем, включая операторов. Раньше оператору его прятали,
+ // и общая очередь была для него недоступна — брать нераспределённые обращения было некому.
  toggle.style.display = 'inline-flex';
- var fOpShow = document.getElementById('tickets-filter-op');
- if(fOpShow) fOpShow.style.display = '';
  var scope = _ticketsGetScope();
  var me = _ticketsCurrentOperatorName();
- var mineCount = me ? ticketsList.filter(function(t){
-  return t.operator === me; // v855: куратор клиента не используется — там имена продавцов из amoCRM
- }).length : 0;
+ var mineCount = me ? ticketsList.filter(function(t){ return t.operator === me; }).length : 0;
  var allCount = ticketsList.length;
  var btns = toggle.querySelectorAll('button[data-scope]');
  for(var i = 0; i < btns.length; i++){
   var btn = btns[i];
-  var s = btn.getAttribute('data-scope');
-  var isActive = s === scope;
-  btn.style.background = isActive ? 'var(--accent, #5E6AD2)' : 'transparent';
-  btn.style.color = isActive ? '#fff' : 'var(--text-soft)';
+  var sKey = btn.getAttribute('data-scope');
+  btn.classList.toggle('is-on', sKey === scope);
   var cntEl = btn.querySelector('.cnt');
-  if(cntEl){
-   var n = s === 'mine' ? mineCount : allCount;
-   cntEl.textContent = ' (' + n + ')';
-  }
+  if(cntEl) cntEl.textContent = ' ' + (sKey === 'mine' ? mineCount : allCount);
  }
 }
 
@@ -33353,13 +33335,14 @@ async function ticketsLoad(){
   ]);
   if(!tRes.ok) throw new Error(tRes.error || 'tickets load failed');
   ticketsList = tRes.tickets || [];
-  // Заполняем выпадашку операторов (один раз)
-  var filt = document.getElementById('tickets-filter-op');
+  // v856: когда по каждому обращению было последнее сообщение — для честного
+  // «без движения N дней». Список маленький, одним запросом на весь раздел.
+  try {
+   var lastRes = await sbFetch('/api/cards?entity=ticket_comment&last=1');
+   if(lastRes && lastRes.ok) _ticketsLastMsg = lastRes.last || {};
+  } catch(_){ _ticketsLastMsg = {}; }
   var opsList = (_TICKETS_OPERATOR_ROWS || []).map(function(e){ return { name: e.name }; });
-  if(filt && filt.options.length <= 1){
-   opsList.forEach(function(o){ var opt = document.createElement('option'); opt.value=o.name; opt.textContent=o.name; filt.appendChild(opt); });
-  }
-  // v460: операторы в модалке нового тикета (для обязательного назначения)
+  // v460: операторы в модалке нового тикета
   var opNewSel = document.getElementById('tickets-new-operator');
   if(opNewSel && opNewSel.options.length <= 1){
    opsList.forEach(function(o){ var opt = document.createElement('option'); opt.value=o.name; opt.textContent=o.name; opNewSel.appendChild(opt); });
@@ -33405,163 +33388,126 @@ async function ticketsLoad(){
 }
 
 function ticketsUpdateStats(){
- // v467: для операторов поддержки статистика считается ТОЛЬКО по их тикетам —
- // иначе сверху висит общее число (например, «Всего 47»), хотя в канбане у него 3.
- var me = _ticketsCurrentOperatorName();
- var src = ticketsList;
- if(_ticketsIsSupportOperator() && me){
-  src = ticketsList.filter(function(t){
-   return t.operator === me; // v855: только назначенный оператор
-  });
- } else if(_ticketsIsSupportOperator()){
-  // оператор по роли, но имя в operators не найдено — пустой набор лучше, чем общий
-  src = [];
- }
- var total = src.length;
- var overdue = 0, critical = 0, todayCount = 0, solvedWeek = 0;
- var todayStart = new Date(); todayStart.setHours(0,0,0,0);
- var weekAgo = new Date(Date.now() - 7*86400000);
- src.forEach(function(t){
-  if(_ticketsIsOverdue(t)) overdue++; // v855: одно правило на всю программу
-  if(t.priority === 'critical') critical++;
-  if(t.created_at && new Date(t.created_at) >= todayStart) todayCount++;
-  if(t.status === 'solved' && t.solved_at && new Date(t.solved_at) >= weekAgo) solvedWeek++;
- });
+ // v856: наверху ровно две цифры — размер очереди и сколько горит. Обе всегда по всему
+ // отделу, а не по одному человеку: «Открыто» отвечает на вопрос «сколько работы у
+ // поддержки», личное число живёт на переключателе «Мои». Раньше у оператора, чьё имя
+ // программа не опознала, наверху висели ровные нули при полной очереди.
+ var live = ticketsList.filter(function(t){ return ['solved','closed'].indexOf(t.status) < 0; });
+ var overdue = live.filter(_ticketsIsOverdue).length;
  var setText = function(id, val){ var el = document.getElementById(id); if(el) el.textContent = val; };
- setText('tickets-stat-total', total);
- setText('tickets-stat-overdue', overdue);
- setText('tickets-stat-critical', critical);
- setText('tickets-stat-today', todayCount);
- setText('tickets-stat-solved', solvedWeek);
- setText('tickets-count', total);
+ setText('tickets-open', live.length);
+ setText('tickets-overdue', overdue);
+ var sub = document.getElementById('tickets-head-sub');
+ if(sub){
+  var stuck = live.filter(function(t){ return _ticketsIdleDays(t) >= 3; }).length;
+  sub.textContent = stuck ? ('\u00b7 без движения дольше трёх дней: ' + stuck) : '\u00b7 всё в движении';
+ }
+}
+
+// v856: сколько дней обращение без движения. Считаем по последнему сообщению в переписке,
+// а не по updated_at: тот двигает любая правка (сменил приоритет — счётчик обнулился).
+var _ticketsLastMsg = {};
+function _ticketsIdleDays(t){
+ var last = _ticketsLastMsg[t.id] ? _ticketsLastMsg[t.id].at : (t.first_response_at || t.created_at);
+ if(!last) return 0;
+ return Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+}
+
+// Показывать только просроченные — переключается кликом по красной цифре.
+var _ticketsOnlyOverdue = false;
+function _ticketsToggleOverdue(){
+ _ticketsOnlyOverdue = !_ticketsOnlyOverdue;
+ ticketsRender();
+}
+var _ticketsSolvedOpen = false;
+function _ticketsToggleSolved(){
+ _ticketsSolvedOpen = !_ticketsSolvedOpen;
+ ticketsRender();
+}
+
+function _ticketsRowHtml(t){
+ var cl = t.clients || {};
+ var sla = _ticketsFmtSLA(t);
+ var badge = sla
+  ? '<span class="sup-badge" style="background:' + sla.bg + ';color:' + sla.color + '">' + kbEsc(sla.label) + '</span>'
+  : '<span class="sup-badge" style="background:rgba(120,120,128,.16);color:var(--text-muted)">' + kbEsc(TICKET_STATUS_LABELS[t.status] || t.status || '') + '</span>';
+ var reopened = (t.status === 'reopened') ? '<span class="sup-chip">повторно</span>' : '';
+ var who = t.operator
+  ? '<div class="sup-who">' + kbEsc(t.operator) + '</div>'
+  : '<div class="sup-who none">никто не взял</div>';
+ var idle = _ticketsIdleDays(t);
+ var idleTxt = '';
+ if(['solved','closed'].indexOf(t.status) < 0 && idle >= 1){
+  idleTxt = 'без движения ' + idle + ' дн';
+ }
+ var idleCls = idle >= 3 ? 'sup-idle warn' : 'sup-idle';
+ return '<div class="sup-row" onclick="ticketsOpen(\'' + kbEsc(t.id) + '\')">'
+  + '<div>' + badge + '</div>'
+  + '<div><div class="sup-t">' + kbEsc(t.title || '(без темы)') + reopened + '</div>'
+  + '<div class="sup-c">' + kbEsc(cl.company_name || t.client_id || '') + '</div></div>'
+  + who
+  + '<div class="' + idleCls + '">' + kbEsc(idleTxt) + '</div>'
+  + '</div>';
 }
 
 function ticketsRender(){
- var board = document.getElementById('tickets-board');
- if(!board) return;
- // v445: «Мои/Все» scope. Если оператор и есть свои — фильтруем по нему.
+ var listEl = document.getElementById('tickets-list');
+ if(!listEl) return;
  var me = _ticketsCurrentOperatorName();
  var scope = _ticketsGetScope();
- var fOp = (document.getElementById('tickets-filter-op')||{}).value || '';
- var fPrio = (document.getElementById('tickets-filter-prio')||{}).value || '';
- // v404: поиск по теме, описанию, имени клиента, тегам. Регистронезависимо.
  var fSearch = ((document.getElementById('tickets-search')||{}).value || '').trim().toLowerCase();
- // v445: пустое состояние «все мои тикеты решены» — показываем над board вместо четырёх «Пусто».
- if(scope === 'mine' && me){
-  var totalMine = ticketsList.filter(function(t){
-   return t.operator === me; // v855: только назначенный оператор
-  }).length;
-  if(totalMine === 0){
-   // v467: безопасная отрисовка пустого состояния через DOM (без innerHTML).
-   // Для операторов «Глянуть общую очередь» убираем — нет доступа к чужим тикетам.
-   while(board.firstChild) board.removeChild(board.firstChild);
-   var emptyBox = document.createElement('div');
-   emptyBox.style.cssText = 'grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-soft);font-size:14px;line-height:1.6';
-   emptyBox.appendChild(document.createTextNode('Все ваши тикеты решены.'));
-   emptyBox.appendChild(document.createElement('br'));
-   if(_ticketsIsSupportOperator()){
-    var hintSpan = document.createElement('span');
-    hintSpan.style.cssText = 'font-size:12px;opacity:.75';
-    hintSpan.textContent = 'Новые тикеты появятся здесь, когда их назначат на вас.';
-    emptyBox.appendChild(hintSpan);
-   } else {
-    var linkA = document.createElement('a');
-    linkA.style.cssText = 'color:var(--accent, #5E6AD2);cursor:pointer;text-decoration:underline';
-    linkA.textContent = 'Глянуть общую очередь';
-    linkA.onclick = function(){ _ticketsSetScope('all'); };
-    emptyBox.appendChild(linkA);
-   }
-   board.appendChild(emptyBox);
-   _ticketsRenderScopeToggle();
-   return;
-  }
- }
- var html = '';
- TICKETS_STAGES.forEach(function(stage, sIdx){
-  var stageTickets = ticketsList.filter(function(t){
-   // v817: статус reopened не имел своей колонки — тикет пропадал с доски, но горел в просрочке.
-   // Показываем переоткрытые в «Новое» (им нужно внимание как новым) с бейджем «Повторно».
-   var _st = (t.status === 'reopened') ? 'new' : t.status;
-   if(_st !== stage.key) return false;
-   // v445: scope «Мои» — оператор или куратор клиента = me
-   if(scope === 'mine' && me){
-    var isMine = (t.operator === me); // v855: только назначенный оператор
-    if(!isMine) return false;
-   }
-   if(fOp && t.operator !== fOp) return false;
-   if(fPrio && t.priority !== fPrio) return false;
-   if(fSearch){
-    var cl = t.clients || {};
-    var hay = ((t.title||'') + ' ' + (t.description||'') + ' ' + (cl.company_name||'') + ' ' + ((t.tags||[]).join(' '))).toLowerCase();
-    if(hay.indexOf(fSearch) === -1) return false;
-   }
-   return true;
-  });
-  // v398: drop-зона на колонке — позволяет перетащить тикет из другой колонки сюда
-  html += '<div class="route-col-amo route-col s' + (sIdx + 1) + '" data-ticket-stage="' + stage.key + '" ondragover="event.preventDefault();this.style.background=\'rgba(120,120,128,.06)\'" ondragleave="this.style.background=\'transparent\'" ondrop="this.style.background=\'transparent\';_ticketsDrop(event,\'' + stage.key + '\')" style="--route-col-color:' + stage.color + '">';
-  html += '<div class="route-col-amo-head" style="border-top-color:' + stage.color + '">';
-  html += '<div class="route-col-amo-title-row"><div class="route-col-amo-title">' + stage.label + '</div><div class="route-col-amo-count">' + stageTickets.length + '</div></div>';
-  html += '<div class="route-col-amo-desc">' + stage.desc + '</div>';
-  html += '</div>';
-  html += '<div class="route-col-amo-body">';
-  if(stageTickets.length === 0){
-   html += '<div class="route-col-amo-empty">Перетащите карточку сюда</div>';
-  }
-  stageTickets.forEach(function(t){
+
+ var rows = ticketsList.filter(function(t){
+  if(scope === 'mine' && me && t.operator !== me) return false;
+  if(_ticketsOnlyOverdue && !_ticketsIsOverdue(t)) return false;
+  if(fSearch){
    var cl = t.clients || {};
-   var clientName = cl.company_name || t.client_id || '—';
-   var slaInfo = _ticketsFmtSLA(t);
-   var prioInfo = _ticketsFmtPriority(t.priority);
-   // v539: цветная левая полоска приоритета — critical=красный, high=янтарный, остальное прозрачное
-   var prioStripeColor = t.priority === 'critical' ? '#EF4444' : (t.priority === 'high' ? '#F59E0B' : 'transparent');
-   // v539: возраст тикета (мин/ч/дн) — главный сигнал срочности для оператора. Для new>30мин — красный.
-   var ageHtml = '';
-   if(t.created_at){
-    var ageMs = Date.now() - new Date(t.created_at).getTime();
-    var ageMin = Math.floor(ageMs / 60000);
-    var ageStr = '';
-    if(ageMin < 1) ageStr = 'только что';
-    else if(ageMin < 60) ageStr = ageMin + ' мин';
-    else if(ageMin < 60 * 24) ageStr = Math.floor(ageMin / 60) + ' ч';
-    else ageStr = Math.floor(ageMin / 60 / 24) + ' дн';
-    var ageAlert = (t.status === 'new' && ageMin > 30);
-    ageHtml = '<span style="font-size:10.5px;color:' + (ageAlert ? '#EF4444' : 'var(--rk-text-faint)') + ';font-weight:' + (ageAlert ? '700' : '400') + '">' + ageStr + '</span>';
-   }
-   // v678: тикет в единый вид .rc (заголовок+аватар, клиент, возраст + приоритет/SLA). Без border-left и эмодзи.
-   var _tini = t.operator ? t.operator.trim().split(/\s+/).map(function(w){return w.charAt(0);}).join('').slice(0,2).toUpperCase() : '';
-   var _tav = t.operator ? '<span class="av" title="' + _escHtml(t.operator) + '">' + _escHtml(_tini) + '</span>' : '<span class="av none" title="не назначен">+</span>';
-   var _tover = (slaInfo && /просроч/i.test(slaInfo.label || '')) ? ' over' : '';
-   html += '<div class="rc' + _tover + '" draggable="true" ondragstart="_ticketsDragStart(event,\'' + _escHtml(String(t.id)) + '\')" ondragend="this.style.opacity=1" onclick="ticketsOpen(\'' + _escHtml(String(t.id)) + '\')" style="cursor:grab">';
-   html += '<div class="r1"><span class="cl" title="' + _escHtml(t.title || '') + '">' + _escHtml(t.title || '(без темы)') + '</span>' + _tav + '</div>';
-   html += '<div class="r2">' + _escHtml(clientName) + '</div>';
-   if(t.status === 'waiting_client' && t.waiting_started_at){
-    var ws = new Date(t.waiting_started_at);
-    var wsLabel = String(ws.getDate()).padStart(2,'0') + '.' + String(ws.getMonth()+1).padStart(2,'0') + ' ' + String(ws.getHours()).padStart(2,'0') + ':' + String(ws.getMinutes()).padStart(2,'0');
-    html += '<div style="font-size:10px;color:#E0A458;margin-top:4px">Передано клиенту: ' + wsLabel + '</div>';
-   }
-   html += '<div class="r3">' + (ageHtml || '<span class="age"></span>');
-   var _tbadges = '';
-   if(t.status === 'reopened') _tbadges += '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:rgba(239,68,68,.14);color:#EF4444">Повторно</span>'; // v817
-   if(t.priority === 'critical' || t.priority === 'high') _tbadges += '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:' + prioInfo.bg + ';color:' + prioInfo.color + '">' + prioInfo.label + '</span>';
-   if(slaInfo) _tbadges += '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:' + slaInfo.bg + ';color:' + slaInfo.color + ';margin-left:4px">' + slaInfo.label + '</span>';
-   if(_tbadges) html += '<span style="margin-left:auto;display:flex;gap:4px;align-items:center">' + _tbadges + '</span>';
-   html += '</div>';
-   html += '</div>';
-  });
-  html += '</div>'; // /col-body
-  html += '</div>'; // /col
+   var hay = ((t.title||'') + ' ' + (t.description||'') + ' ' + (cl.company_name||'') + ' ' + ((t.tags||[]).join(' '))).toLowerCase();
+   if(hay.indexOf(fSearch) === -1) return false;
+  }
+  return true;
  });
- // v540: сохраняем скролл колонок перед innerHTML, восстанавливаем после — иначе после
- // PATCH тикета или drag&drop вся доска возвращается в начало, теряя позицию оператора.
- var _scrolls = {};
- board.querySelectorAll('[data-ticket-stage] .route-col-amo-body').forEach(function(b, i){
-  _scrolls[i] = b.scrollTop;
- });
- board.innerHTML = html;
- board.querySelectorAll('[data-ticket-stage] .route-col-amo-body').forEach(function(b, i){
-  if(_scrolls[i]) b.scrollTop = _scrolls[i];
- });
- _ticketsRenderScopeToggle(); // v445: обновить счётчики Мои/Все
+
+ // Порядок: сначала то, где мы должны клиенту ответ, потом то, что дольше всех стоит.
+ // Решённые уходят вниз и по умолчанию свёрнуты.
+ var solved = rows.filter(function(t){ return ['solved','closed'].indexOf(t.status) >= 0; });
+ var live = rows.filter(function(t){ return ['solved','closed'].indexOf(t.status) < 0; });
+ var free = (scope === 'all') ? live.filter(function(t){ return !t.operator; }) : [];
+ var mine = live.filter(function(t){ return free.indexOf(t) < 0; });
+
+ function order(a, b){
+  var ao = _ticketsIsOverdue(a) ? 0 : (a.first_response_at ? 2 : 1);
+  var bo = _ticketsIsOverdue(b) ? 0 : (b.first_response_at ? 2 : 1);
+  if(ao !== bo) return ao - bo;
+  if(ao < 2) return String(a.sla_due_at||'').localeCompare(String(b.sla_due_at||''));  // раньше срок — выше
+  return _ticketsIdleDays(b) - _ticketsIdleDays(a);                                     // дольше стоит — выше
+ }
+ free.sort(order); mine.sort(order);
+ solved.sort(function(a, b){ return String(b.solved_at||'').localeCompare(String(a.solved_at||'')); });
+
+ var html = '';
+ if(free.length){
+  html += '<div class="sup-group">Никто не взял · ' + free.length + '</div>' + free.map(_ticketsRowHtml).join('');
+ }
+ if(mine.length){
+  if(free.length) html += '<div class="sup-group">В работе</div>';
+  html += mine.map(_ticketsRowHtml).join('');
+ }
+ if(!free.length && !mine.length){
+  html += '<div class="sup-empty">' + (_ticketsOnlyOverdue
+   ? 'Просроченных обращений нет.'
+   : (scope === 'mine' ? 'На вас сейчас ничего не висит. Загляните в «Все» — там общая очередь.' : 'Обращений нет.')) + '</div>';
+ }
+ if(solved.length){
+  html += '<div class="sup-group click" onclick="_ticketsToggleSolved()">Решено · ' + solved.length
+   + ' <span style="font-weight:500;text-transform:none;letter-spacing:0">' + (_ticketsSolvedOpen ? 'скрыть' : 'показать') + '</span></div>';
+  if(_ticketsSolvedOpen) html += solved.map(_ticketsRowHtml).join('');
+ }
+ listEl.innerHTML = html;
+
+ var chip = document.getElementById('tickets-overdue-chip');
+ if(chip) chip.classList.toggle('is-on', _ticketsOnlyOverdue);
+ _ticketsRenderScopeToggle();
 }
 
 // v855: ЕДИНОЕ правило просрочки на всю программу.
@@ -33576,32 +33522,31 @@ function _ticketsIsOverdue(t){
  return new Date(t.sla_due_at) < new Date();
 }
 
-function _ticketsFmtSLA(t){
- if(!t.sla_due_at || ['solved','closed'].indexOf(t.status) >= 0) return null;
- // Ответ клиенту уже дан — показываем факт, а не срок. Это честнее: срок первого
- // ответа своё отработал, дальше обращение живёт по статусам.
+// detailed=true — для карточки обращения, там нужен факт «ответили в срок / с опозданием».
+// В списке факт опоздания не показываем: он повторяется почти у всех строк и забивает
+// собой то, ради чего человек смотрит список — состояние и что горит.
+function _ticketsFmtSLA(t, detailed){
+ if(['solved','closed'].indexOf(t.status) >= 0) return null;
+ if(t.status === 'waiting_client') return { label:'ждём клиента', color:'#C2410C', bg:'rgba(251,146,60,.18)' };
+ if(!t.sla_due_at) return { label: TICKET_STATUS_LABELS[t.status] || 'в работе', color:'var(--rk-text-soft)', bg:'rgba(120,120,128,.16)' };
+ var due = new Date(t.sla_due_at);
  if(t.first_response_at){
-  var late = new Date(t.first_response_at) > new Date(t.sla_due_at);
+  if(!detailed) return { label:'в работе', color:'var(--rk-text-soft)', bg:'rgba(120,120,128,.16)' };
+  var late = new Date(t.first_response_at) > due;
   return late
    ? { label:'ответили с опозданием', color:'#C2410C', bg:'rgba(251,146,60,.18)' }
    : { label:'ответили в срок', color:'var(--rk-text-soft)', bg:'rgba(76,183,130,.16)' };
  }
- // v855: в стадии «Ждём ответ от клиента» показываем, сколько нет движения. Раньше
- // считали по waiting_started_at — колонки с таким именем в базе нет, и подпись всегда
- // была сухое «ждём».
- if(t.status === 'waiting_client'){
-  var since = t.updated_at ? new Date(t.updated_at) : null;
-  if(!since) return { label:'ждём клиента', color:'var(--rk-text-soft)', bg:'rgba(251,146,60,.18)' };
-  var days = Math.floor((Date.now() - since.getTime()) / 86400000);
-  return { label: days > 0 ? ('без движения ' + days + ' дн') : 'ждём клиента',
-           color:'#C2410C', bg:'rgba(251,146,60,.20)' };
+ var mins = (due.getTime() - Date.now()) / 60000; // минут до срока первого ответа
+ function human(m){
+  m = Math.abs(Math.round(m));
+  if(m < 60) return m + ' мин';
+  if(m < 60*24) return Math.round(m/60) + ' ч';
+  return Math.round(m/60/24) + ' дн';
  }
- var due = new Date(t.sla_due_at);
- var diff = (due.getTime() - Date.now()) / 1000 / 60; // минут до срока ответа
- if(diff < 0) return { label:'просрочен', color:'#fff', bg:'#EF4444' };
- if(diff < 60) return { label:'ответить за ' + Math.round(diff) + ' мин', color:'#fff', bg:'#F59E0B' };
- if(diff < 60*4) return { label:'ответить за ' + Math.round(diff/60) + ' ч', color:'#92400E', bg:'rgba(245,158,11,.16)' };
- return { label:Math.round(diff/60/24) + ' дн', color:'var(--rk-text-soft)', bg:'rgba(120,120,128,.16)' };
+ if(mins < 0) return { label:'просрочено на ' + human(mins), color:'#fff', bg:'#EF4444' };
+ if(mins < 60) return { label:'ответить за ' + human(mins), color:'#fff', bg:'#F59E0B' };
+ return { label:'ответить за ' + human(mins), color:'#92400E', bg:'rgba(245,158,11,.16)' };
 }
 
 // v540: hint про критерии приоритета в модалке нового тикета
@@ -33641,45 +33586,7 @@ function _ticketsFmtPriority(p){
  return map[p] || map.normal;
 }
 
-// v398: drag-drop тикета между колонками Канбана Поддержки.
-var _ticketDragId = null;
-function _ticketsDragStart(ev, ticketId){
- _ticketDragId = ticketId;
- if(ev.target && ev.target.style) ev.target.style.opacity = 0.5;
- if(ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
-}
-async function _ticketsDrop(ev, newStage){
- ev.preventDefault();
- var col = ev.target.closest('.route-col-amo');
- if(col) col.style.background = 'transparent';
- if(!_ticketDragId) return;
- var t = ticketsList.find(function(x){ return x.id === _ticketDragId; });
- if(!t){ _ticketDragId = null; return; }
- if(t.status === newStage){ _ticketDragId = null; return; }
- var oldStage = t.status;
- // Оптимистично обновляем
- t.status = newStage;
- ticketsRender();
- try {
-  var d = await sbFetch('/api/cards?entity=ticket&id=' + t.id, {
-   method:'PATCH', body: JSON.stringify({ status: newStage })
-  });
-  if(!d.ok) throw new Error(d.error || 'save failed');
-  // Обновляем объект из ответа (там может быть пересчитан first_response_at / solved_at)
-  var idx = ticketsList.findIndex(function(x){ return x.id === t.id; });
-  if(idx >= 0) ticketsList[idx] = d.ticket;
-  ticketsUpdateStats();
-  _ticketsRenderBadge(); // v606: обновить кружок-счётчик на табе после переноса
-  ticketsRender();
- } catch(e){
-  // Откатываем оптимистичное обновление
-  t.status = oldStage;
-  ticketsRender();
-  sdToast('Не удалось переместить тикет: ' + e.message);
- } finally {
-  _ticketDragId = null;
- }
-}
+// v856: перетаскивание карточек убрано вместе с доской — состояние меняется в карточке обращения.
 
 function ticketsOpenNew(){
  document.getElementById('tickets-new-title').value = '';
@@ -33857,7 +33764,7 @@ function _ticketRenderHead(){
  if(slaEl){
   // v855: «SLA» — жаргон, в интерфейсе так писать нельзя. Показываем понятную подпись
   // и сразу видно, кто ведёт обращение: в общей очереди иначе двое отвечают одновременно.
-  var slaInfo = _ticketsFmtSLA(t);
+  var slaInfo = _ticketsFmtSLA(t, true);
   var me = _ticketsCurrentOperatorName();
   slaEl.textContent = '';
   var lab = document.createElement('span');
