@@ -413,7 +413,22 @@ async function handlePaymentBotSync(body, res) {
 // v394: CRUD комментариев к тикетам. Таблица ticket_comments создана миграцией v378.
 async function handleTicketCommentsRoute(req, res) {
   if (req.method === 'GET') {
-    const { ticket_id } = req.query || {};
+    const { ticket_id, last } = req.query || {};
+    // v856: ?last=1 — когда по каждому обращению было последнее сообщение. Нужно списку,
+    // чтобы честно показывать «без движения N дней»: updated_at для этого не годится,
+    // его двигает любая правка (сменил приоритет, поправил тему — счётчик обнулился).
+    if (!ticket_id && (last === '1' || last === 'true')) {
+      const rows = await sbSelect('ticket_comments', {
+        select: 'ticket_id,created_at,channel',
+        order: 'created_at.desc',
+        limit: '5000'
+      });
+      const map = {};
+      for (const r of rows) {
+        if (!map[r.ticket_id]) map[r.ticket_id] = { at: r.created_at, channel: r.channel };
+      }
+      return res.status(200).json({ ok: true, last: map });
+    }
     if (!ticket_id) return res.status(400).json({ ok: false, error: 'нужен ?ticket_id=UUID' });
     const items = await sbSelect('ticket_comments', {
       ticket_id: 'eq.' + ticket_id,
