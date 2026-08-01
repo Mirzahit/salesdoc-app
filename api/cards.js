@@ -21,7 +21,7 @@
 // PATCH /api/cards?entity=ticket&id=UUID         → изменить (status, operator, priority, ...)
 // DELETE /api/cards?entity=ticket&id=UUID        → закрыть (status='closed')
 
-import { sbSelect, sbInsert, sbUpdate } from './_supabase.js';
+import { sbSelect, sbInsert, sbUpdate, sbUpsert } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { almatyIso } from './_dates.js';
 import { canonOperator, operatorNames } from './_operators.js'; // v850: операторы из «Сотрудников», а не из кода
@@ -105,6 +105,9 @@ export default async function handler(req, res) {
     }
     if (entity === 'ticket_comment') {
       return await handleTicketCommentsRoute(req, res);
+    }
+    if (entity === 'board_layout') {
+      return await handleBoardLayoutRoute(req, res);
     }
     if (entity === 'integration') {
       return await handleIntegrationsRoute(req, res);
@@ -491,6 +494,44 @@ function addMonthsISO(date, months) {
 
 // v378: CRUD тикет-системы. Вызывается когда в /api/cards пришёл ?entity=ticket.
 // Поддерживает GET (список/один), POST (создать), PATCH (изменить), DELETE (закрыть).
+// v860: личная раскладка доски Внедрения. Оператор заводит СВОИ колонки и раскладывает
+// по ним карточки; настоящий этап клиента при этом не меняется, поэтому общие цифры
+// («сколько застряло на обучении», отчёт по операторам) остаются честными.
+// Раскладка привязана к почте сотрудника, а не к браузеру: сел за другой компьютер — всё на месте.
+//
+// GET   /api/cards?entity=board_layout&board=route   → { columns:[], cards:{} }
+// PUT   /api/cards?entity=board_layout&board=route   → сохранить целиком
+async function handleBoardLayoutRoute(req, res) {
+  const email = String(req.headers['x-user-email'] || '').trim().toLowerCase();
+  if (!email) return res.status(400).json({ ok: false, error: 'не понятно, чья раскладка: нет x-user-email' });
+  const board = String((req.query || {}).board || 'route').slice(0, 32);
+
+  if (req.method === 'GET') {
+    const rows = await sbSelect('board_layouts', { user_email: 'eq.' + email, board: 'eq.' + board, limit: '1' });
+    const row = rows[0] || { columns: [], cards: {} };
+    return res.status(200).json({ ok: true, columns: row.columns || [], cards: row.cards || {} });
+  }
+
+  if (req.method === 'PUT' || req.method === 'POST') {
+    const body = await readBody(req);
+    const columns = Array.isArray(body.columns)
+      ? body.columns.map(c => String(c).trim().slice(0, 40)).filter(Boolean).slice(0, 12)
+      : [];
+    const cards = (body.cards && typeof body.cards === 'object' && !Array.isArray(body.cards)) ? body.cards : {};
+    // карточек в раскладке не больше тысячи — защита от мусора, а не бизнес-правило
+    const clean = {};
+    Object.keys(cards).slice(0, 1000).forEach(k => {
+      const v = String(cards[k] || '').slice(0, 40);
+      if (v && columns.indexOf(v) >= 0) clean[String(k).slice(0, 64)] = v;
+    });
+    await sbUpsert('board_layouts', {
+      user_email: email, board: board, columns: columns, cards: clean, updated_at: new Date().toISOString()
+    }, 'user_email,board');
+    return res.status(200).json({ ok: true, columns: columns, cards: clean });
+  }
+  return res.status(405).json({ ok: false, error: 'method not allowed' });
+}
+
 async function handleTicketsRoute(req, res) {
   if (req.method === 'GET') {
     const { id, status, operator, client_id, country, priority, sla_overdue } = req.query || {};
