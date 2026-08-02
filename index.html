@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v866</title>
+<title>SalesDoc — Финансовый Дашборд v867</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10474,6 +10474,9 @@ body.light .mt-filter-section-title { color:#8A90A0; }
     <button id="route-tab-check" class="amocard-tab" onclick="routeCardTab('check')">Чек-лист</button>
     <button id="route-tab-history" class="amocard-tab" onclick="routeCardTab('history')" style="display:none">История</button>
     <button id="route-tab-contact" class="amocard-tab" onclick="routeCardTab('contact')">Контакт</button>
+    <!-- v867: договоры, АВР и ТЗ клиента. Файлы лежат в закрытом хранилище, привязаны
+         к клиенту, а не к карточке: карточка уйдёт с доски, документы останутся. -->
+    <button id="route-tab-docs" class="amocard-tab" onclick="routeCardTab('docs')">Документы</button>
    </div>
    <div id="route-card-body" class="amocard-fields"></div>
   </section>
@@ -35720,7 +35723,7 @@ async function routeActivateClient(){
 function routeCardTab(tab){
  _routeCurrentTab = tab;
  // v380: переключение через класс .active на .amocard-tab (вместо inline-стилей).
- ['amo','check','history','contact'].forEach(function(t){
+ ['amo','check','history','contact','docs'].forEach(function(t){
   var btn = document.getElementById('route-tab-' + t);
   if(!btn) return;
   btn.classList.toggle('active', t === tab);
@@ -35735,6 +35738,7 @@ function routeCardTab(tab){
  if(tab === 'check') _routeRenderChecklist();
  if(tab === 'history') _routeRenderHistory();
  if(tab === 'contact') _routeRenderContact();
+ if(tab === 'docs') _routeRenderDocs();
  if(tab === 'amo') _routeRenderAmo();
 }
 
@@ -35989,6 +35993,148 @@ function _routeRenderContact(){
  listBlock.style.cssText = 'padding:10px 0';
  contactsWrap.appendChild(listBlock);
  _routeRenderContacts(listBlock, cl.company_name);
+}
+
+// v867: документы клиента — договор, АВР, ТЗ. Загружать может любой оператор,
+// удалять — только руководитель: договор, стёртый по ошибке, восстановить неоткуда.
+var DOC_KIND_LABELS = { contract:'Договор', act:'АВР', spec:'ТЗ', other:'Прочее' };
+
+function _routeDocsClientId(){
+ var c = _routeCurrentCard || {};
+ return c.client_id || ((c.clients || {}).client_id) || null;
+}
+
+async function _routeRenderDocs(){
+ var body = document.getElementById('route-card-body');
+ if(!body) return;
+ body.replaceChildren();
+ var clientId = _routeDocsClientId();
+ if(!clientId){
+  var w = document.createElement('div');
+  w.style.cssText = 'font-size:13px;color:var(--text-muted);padding:12px 0';
+  w.textContent = 'У этой карточки нет привязанного клиента — документы прикрепить некуда.';
+  body.appendChild(w);
+  return;
+ }
+
+ var head = document.createElement('div');
+ head.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap';
+ var kindWrap = document.createElement('div');
+ kindWrap.style.cssText = 'display:flex;gap:6px';
+ var chosenKind = 'contract';
+ ['contract','act','spec','other'].forEach(function(k){
+  var chip = document.createElement('button');
+  chip.textContent = DOC_KIND_LABELS[k];
+  chip.style.cssText = 'padding:5px 12px;border-radius:999px;border:1px solid var(--border-faint);background:var(--surface-2);color:var(--text-soft);font-size:12px;cursor:pointer;font-family:inherit';
+  if(k === chosenKind){ chip.style.borderColor = '#5E6AD2'; chip.style.color = '#AEB6FF'; }
+  chip.onclick = function(){
+   chosenKind = k;
+   kindWrap.querySelectorAll('button').forEach(function(b){ b.style.borderColor = 'var(--border-faint)'; b.style.color = 'var(--text-soft)'; });
+   chip.style.borderColor = '#5E6AD2'; chip.style.color = '#AEB6FF';
+  };
+  kindWrap.appendChild(chip);
+ });
+ head.appendChild(kindWrap);
+
+ var file = document.createElement('input');
+ file.type = 'file';
+ file.accept = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png';
+ file.style.display = 'none';
+ var upBtn = document.createElement('button');
+ upBtn.textContent = 'Загрузить документ';
+ upBtn.style.cssText = 'margin-left:auto;padding:6px 14px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface-2);color:#AEB6FF;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit';
+ upBtn.onclick = function(){ file.click(); };
+ head.appendChild(upBtn);
+ head.appendChild(file);
+ body.appendChild(head);
+
+ var listBox = document.createElement('div');
+ body.appendChild(listBox);
+
+ file.onchange = async function(){
+  var f = file.files && file.files[0];
+  if(!f) return;
+  if(f.size > 10 * 1024 * 1024){ sdToast('Файл больше 10 МБ — сожмите или разбейте'); return; }
+  upBtn.disabled = true; upBtn.textContent = 'Загружаем…';
+  try {
+   var b64 = await new Promise(function(resolve, reject){
+    var fr = new FileReader();
+    fr.onload = function(){ resolve(String(fr.result).split(',')[1] || ''); };
+    fr.onerror = reject;
+    fr.readAsDataURL(f);
+   });
+   var d = await sbFetch('/api/cards?entity=document', { method:'POST', body: JSON.stringify({
+    client_id: clientId, kind: chosenKind, title: f.name, mime: f.type, file: b64
+   }) });
+   if(!d.ok) throw new Error(d.error || 'не загрузилось');
+   sdToast('Документ загружен');
+   _routeDocsList(listBox, clientId);
+  } catch(e){ sdToast('Не получилось: ' + (e.message || e)); }
+  finally { upBtn.disabled = false; upBtn.textContent = 'Загрузить документ'; file.value = ''; }
+ };
+
+ _routeDocsList(listBox, clientId);
+}
+
+async function _routeDocsList(box, clientId){
+ box.replaceChildren();
+ var loading = document.createElement('div');
+ loading.style.cssText = 'font-size:12px;color:var(--text-muted)';
+ loading.textContent = 'Загрузка…';
+ box.appendChild(loading);
+ var docs = [];
+ try {
+  var d = await sbFetch('/api/cards?entity=document&client_id=' + encodeURIComponent(clientId));
+  docs = (d && d.ok) ? (d.documents || []) : [];
+ } catch(_){}
+ box.replaceChildren();
+ if(!docs.length){
+  var em = document.createElement('div');
+  em.style.cssText = 'font-size:12.5px;color:var(--text-muted);padding:10px 0;line-height:1.6';
+  em.textContent = 'Документов пока нет. Сюда складывайте договор, АВР и техзадание — они останутся с клиентом навсегда, даже когда карточка уйдёт с доски.';
+  box.appendChild(em);
+  return;
+ }
+ docs.forEach(function(doc){
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-faint);font-size:12.5px';
+  var kind = document.createElement('span');
+  kind.style.cssText = 'flex:0 0 62px;color:#AEB6FF;font-weight:600';
+  kind.textContent = DOC_KIND_LABELS[doc.kind] || 'Прочее';
+  var name = document.createElement('a');
+  name.textContent = doc.title;
+  name.href = '#';
+  name.style.cssText = 'flex:1;color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+  name.onclick = async function(e){
+   e.preventDefault();
+   try {
+    var r = await sbFetch('/api/cards?entity=document&path=' + encodeURIComponent(doc.path));
+    if(!r.ok) throw new Error(r.error || 'нет ссылки');
+    window.open(r.url, '_blank');
+   } catch(err){ sdToast('Не получилось открыть: ' + (err.message || err)); }
+  };
+  var meta = document.createElement('span');
+  meta.style.cssText = 'flex:0 0 130px;color:var(--text-muted);font-size:11.5px;text-align:right';
+  meta.textContent = new Date(doc.created_at).toLocaleDateString('ru-RU')
+   + (doc.size_bytes ? (' · ' + Math.max(1, Math.round(doc.size_bytes / 1024)) + ' КБ') : '');
+  row.appendChild(kind); row.appendChild(name); row.appendChild(meta);
+  var role = String((typeof currentUser !== 'undefined' && currentUser && currentUser.role) || '').toLowerCase();
+  if(['admin','head','rop'].indexOf(role) >= 0){
+   var del = document.createElement('button');
+   del.textContent = 'удалить';
+   del.style.cssText = 'background:none;border:none;color:var(--text-muted);font-size:11.5px;cursor:pointer;font-family:inherit';
+   del.onclick = async function(){
+    if(!confirm('Удалить «' + doc.title + '»? Восстановить будет неоткуда.')) return;
+    try {
+     var r = await sbFetch('/api/cards?entity=document&id=' + doc.id, { method:'DELETE' });
+     if(!r.ok) throw new Error(r.error || 'не удалилось');
+     _routeDocsList(box, clientId);
+    } catch(err){ sdToast('Не получилось: ' + (err.message || err)); }
+   };
+   row.appendChild(del);
+  }
+  box.appendChild(row);
+ });
 }
 
 // v866: перерисовать список контактов в карточке Внедрения, если она открыта. Форма

@@ -21,6 +21,7 @@
 // PATCH /api/cards?entity=ticket&id=UUID         → изменить (status, operator, priority, ...)
 // DELETE /api/cards?entity=ticket&id=UUID        → закрыть (status='closed')
 
+import crypto from 'crypto';
 import { sbSelect, sbInsert, sbUpdate, sbUpsert, sbDelete } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { almatyIso } from './_dates.js';
@@ -151,6 +152,9 @@ export default async function handler(req, res) {
     }
     if (entity === 'ticket_comment') {
       return await handleTicketCommentsRoute(req, res);
+    }
+    if (entity === 'document') {
+      return await handleDocumentsRoute(req, res);
     }
     if (entity === 'contact') {
       return await handleContactsRoute(req, res);
@@ -555,6 +559,115 @@ function addMonthsISO(date, months) {
 
 // v378: CRUD тикет-системы. Вызывается когда в /api/cards пришёл ?entity=ticket.
 // Поддерживает GET (список/один), POST (создать), PATCH (изменить), DELETE (закрыть).
+// v867: документы клиента — договор, АВР, ТЗ. Сам файл лежит в закрытом хранилище
+// client-docs, публичных ссылок на него не существует: скачивание идёт по временной
+// ссылке на час, которую выдаёт этот эндпоинт вошедшему в программу.
+// Документ привязан к клиенту, а не к карточке внедрения: карточка уйдёт с доски после
+// активации, а договор должен остаться навсегда.
+//
+// GET    ?entity=document&client_id=SD-...   → список
+// GET    ?entity=document&path=...           → временная ссылка на скачивание
+// POST   ?entity=document                    → загрузить (body: client_id, kind, title, file, mime)
+// DELETE ?entity=document&id=UUID            → удалить (только руководители)
+const DOC_KINDS = ['contract', 'act', 'spec', 'other'];
+const DOC_MIME = {
+  'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx'
+};
+const DOC_BUCKET = 'client-docs';
+const DOC_PATH_RE = /^[A-Za-z0-9_-]{1,64}\/[a-f0-9-]{36}\.[a-z]{2,4}$/;
+
+async function _docCanDelete(email) {
+  if (!email) return false;
+  try {
+    const rows = await sbSelect('employees', { email: 'eq.' + String(email).toLowerCase(), select: 'role', limit: '1' });
+    const role = String((rows[0] || {}).role || '').toLowerCase();
+    return ['admin', 'head', 'rop'].includes(role);
+  } catch (e) { return false; }
+}
+
+async function handleDocumentsRoute(req, res) {
+  const SB_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+  const SB_KEY = process.env.SUPABASE_SECRET_KEY || '';
+  const email = String(req.headers['x-user-email'] || '').trim().toLowerCase();
+
+  if (req.method === 'GET') {
+    const { client_id, path } = req.query || {};
+    if (path) {
+      if (!DOC_PATH_RE.test(String(path))) return res.status(400).json({ ok: false, error: 'некорректный путь' });
+      const r = await fetch(`${SB_URL}/storage/v1/object/sign/${DOC_BUCKET}/${path}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SB_KEY}`, 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expiresIn: 3600 })
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.signedURL) return res.status(502).json({ ok: false, error: 'не удалось выдать ссылку' });
+      return res.status(200).json({ ok: true, url: SB_URL + '/storage/v1' + j.signedURL });
+    }
+    if (!client_id) return res.status(400).json({ ok: false, error: 'нужен ?client_id=' });
+    const rows = await sbSelect('client_documents', { client_id: 'eq.' + client_id, order: 'created_at.desc' });
+    return res.status(200).json({ ok: true, count: rows.length, documents: rows });
+  }
+
+  if (req.method === 'POST') {
+    const body = await readBody(req);
+    if (!body.client_id) return res.status(400).json({ ok: false, error: 'нужен client_id' });
+    if (!body.title || !String(body.title).trim()) return res.status(400).json({ ok: false, error: 'название обязательно' });
+    const kind = DOC_KINDS.includes(body.kind) ? body.kind : 'other';
+    const ext = DOC_MIME[body.mime];
+    if (!ext) return res.status(400).json({ ok: false, error: 'такой тип файла не принимаем: только pdf, word, excel, jpg, png' });
+    const b64 = String(body.file || '');
+    if (!b64) return res.status(400).json({ ok: false, error: 'файл пустой' });
+    if (b64.length > 10 * 1024 * 1024) return res.status(413).json({ ok: false, error: 'файл больше 10 МБ' });
+
+    const safeClient = String(body.client_id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'unknown';
+    const path = `${safeClient}/${crypto.randomUUID()}.${ext}`;
+    const bin = Buffer.from(b64, 'base64');
+    const up = await fetch(`${SB_URL}/storage/v1/object/${DOC_BUCKET}/${path}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${SB_KEY}`, 'apikey': SB_KEY, 'Content-Type': body.mime },
+      body: bin
+    });
+    if (!up.ok) {
+      const t = await up.text().catch(() => '');
+      console.error('[client doc upload]', up.status, t);
+      return res.status(502).json({ ok: false, error: 'не удалось сохранить файл' });
+    }
+    const row = await sbInsert('client_documents', {
+      client_id: String(body.client_id).slice(0, 64),
+      kind: kind,
+      title: String(body.title).trim().slice(0, 200),
+      path: path,
+      mime: body.mime,
+      size_bytes: bin.length,
+      uploaded_by: email || null
+    });
+    return res.status(201).json({ ok: true, document: row[0] });
+  }
+
+  if (req.method === 'DELETE') {
+    const { id } = req.query || {};
+    if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
+    // Договор, удалённый по ошибке, восстановить неоткуда — поэтому удаляют только руководители.
+    if (!(await _docCanDelete(email))) {
+      return res.status(403).json({ ok: false, error: 'Удалять документы может только руководитель' });
+    }
+    const rows = await sbSelect('client_documents', { id: 'eq.' + id, limit: '1' });
+    if (!rows.length) return res.status(404).json({ ok: false, error: 'документ не найден' });
+    try {
+      await fetch(`${SB_URL}/storage/v1/object/${DOC_BUCKET}/${rows[0].path}`, {
+        method: 'DELETE', headers: { 'Authorization': `Bearer ${SB_KEY}`, 'apikey': SB_KEY }
+      });
+    } catch (e) { console.error('[client doc delete file]', e.message || e); }
+    await sbDelete('client_documents', { id: 'eq.' + id });
+    return res.status(200).json({ ok: true });
+  }
+  return res.status(405).json({ ok: false, error: 'method not allowed' });
+}
+
 // v863: контакты клиента — директор, бухгалтер, IT, супервайзер.
 // Раньше лежали в localStorage браузера: коллега их не видел, а чистка кэша стирала
 // навсегда. Теперь общие для всех, как и положено данным клиента.
