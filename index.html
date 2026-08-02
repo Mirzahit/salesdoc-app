@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v863</title>
+<title>SalesDoc — Финансовый Дашборд v864</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13379,7 +13379,7 @@ async function cfLoadHistoricalExpenses(monthsBack){
  for(var n=0; n<2 && !found; n++){
  var name = n===0 ? label : altLabel;
  try {
- var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(name) + '&spreadsheetId=' + sheetId + '&range=A1:E100';
+ var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(name) + '&spreadsheetId=' + sheetId + '&range=A1:E1000'; // v864: было E100 — расходы ниже сотой строки молча пропадали
  var resp = await fetch(url);
  var json = await resp.json();
  if(json.rows && json.rows.length >= 2) found = json.rows;
@@ -26694,7 +26694,7 @@ async function expLoad() {
  } catch(_) {}
  var tab = EXP_TABS[expTabIdx] || EXP_TABS[0];
  var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(tab.name) + '&spreadsheetId=' + EXP_SHEET_ID + '&range=A1:E100';
+ var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(tab.name) + '&spreadsheetId=' + EXP_SHEET_ID + '&range=A1:E1000'; // v864: было E100 — расходы ниже сотой строки молча пропадали
  try {
  var resp = await fetch(url);
  var json = await resp.json();
@@ -26712,8 +26712,13 @@ async function expLoad() {
  var amount = typeof row[3] === 'number' ? row[3] : parseFloat(String(row[3]).replace(/[^0-9.,]/g,'').replace(',','.'));
  if (!amount || amount <= 0) return;
  var dateStr = parseDateFromSheet(row[0]);
+ // v864: раньше непонятная дата («12,07», «б/д», формула) подменялась на 1 января:
+ // расход на сотни тысяч исчезал из своего месяца и всплывал в январе, прибыль врала
+ // в обе стороны, и никакой ошибки на экране не было. Теперь такие строки помечаем
+ // и показываем отдельно — пусть бухгалтер поправит дату в таблице.
  expData.push({
- date: dateStr || '2026-01-01',
+ date: dateStr || null,
+ noDate: !dateStr,
  category: String(row[1] || 'Прочее').trim(),
  note: String(row[2] || '').trim(),
  amount: amount,
@@ -26729,7 +26734,10 @@ async function expLoad() {
 
 function expRender() {
  // v822: переносы между счетами не считаем расходом
- var expReal = expData.filter(function(e){ return !expIsTransfer(e); });
+ var expReal = expData.filter(function(e){ return !expIsTransfer(e) && !e.noDate; });
+ // v864: строки, где дату не удалось прочитать, в суммы не берём — иначе они молча
+ // искажали бы месяц. Показываем их отдельной строкой, чтобы поправили в таблице.
+ var _noDate = expData.filter(function(e){ return e.noDate && !expIsTransfer(e); });
  var total = expReal.reduce(function(s,e){ return s + e.amount; }, 0);
  // Группируем по категориям
  var catMap = {};
@@ -26747,7 +26755,15 @@ function expRender() {
  var curEl = document.getElementById('exp-hero-cur'); if(curEl) curEl.textContent = ' ' + _CUR;
  var avg = expReal.length ? Math.round(total / expReal.length) : 0;
  var _trCnt = expData.length - expReal.length; // v822: переносы между счетами
- var ctxEl = document.getElementById('exp-hero-ctx'); if(ctxEl) ctxEl.innerHTML = expReal.length + ' операций · средний чек <b>' + _ef(avg) + ' ' + _CUR + '</b>' + (_trCnt ? ' · переносов между счетами: ' + _trCnt : '');
+ var ctxEl = document.getElementById('exp-hero-ctx');
+ if(ctxEl){
+  // v864: строки без понятной даты показываем прямо здесь — иначе про них никто не узнает,
+  // а сумма месяца будет тихо неполной.
+  var _ndSum = _noDate.reduce(function(a, e){ return a + e.amount; }, 0);
+  ctxEl.innerHTML = expReal.length + ' операций · средний чек <b>' + _ef(avg) + ' ' + _CUR + '</b>'
+   + (_trCnt ? ' · переносов между счетами: ' + _trCnt : '')
+   + (_noDate.length ? ' · <span style="color:#E5604D">не разобрана дата у ' + _noDate.length + ' строк на ' + _ef(_ndSum) + ' ' + _CUR + ' — поправьте в таблице</span>' : '');
+ }
  var catsTotEl = document.getElementById('exp-cats-tot'); if(catsTotEl) catsTotEl.textContent = _ef(total) + ' ' + _CUR;
  var catsEl = document.getElementById('exp-cats');
  if(catsEl){
@@ -26806,6 +26822,7 @@ function expRenderBarChart() {
 
  expData.forEach(function(e) {
  if (expIsTransfer(e)) return; // v822: переносы между счетами — не расход
+ if (e.noDate) return;         // v864: без даты — не знаем, в какую неделю класть
  var d = new Date(e.date + 'T00:00:00');
  var day = d.getDate();
  var wn = Math.ceil(day / 7);
@@ -26970,7 +26987,7 @@ async function expLoadPrevTotal(currentTotal){
  if(!prevTab){ hide(); return; }
  try {
   var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
-  var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(prevTab.name) + '&spreadsheetId=' + EXP_SHEET_ID + '&range=A1:E100';
+  var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(prevTab.name) + '&spreadsheetId=' + EXP_SHEET_ID + '&range=A1:E1000'; // v864: было E100 — расходы ниже сотой строки молча пропадали
   var resp = await fetch(url);
   var json = await resp.json();
   if(!json.rows) throw new Error('no data');
