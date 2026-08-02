@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v867</title>
+<title>SalesDoc — Финансовый Дашборд v868</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -36095,34 +36095,34 @@ async function _routeDocsList(box, clientId){
   box.appendChild(em);
   return;
  }
+ var role = String((typeof currentUser !== 'undefined' && currentUser && currentUser.role) || '').toLowerCase();
+ var canDelete = ['admin','head','rop'].indexOf(role) >= 0;
+
  docs.forEach(function(doc){
+  // v868: панель карточки узкая, и в одну строку название схлопывалось в ноль ширины —
+  // нажимать было не на что. Две строки: сверху имя файла, снизу тип, дата и размер.
   var row = document.createElement('div');
-  row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-faint);font-size:12.5px';
-  var kind = document.createElement('span');
-  kind.style.cssText = 'flex:0 0 62px;color:#AEB6FF;font-weight:600';
-  kind.textContent = DOC_KIND_LABELS[doc.kind] || 'Прочее';
-  var name = document.createElement('a');
+  row.style.cssText = 'padding:10px 0;border-bottom:1px solid var(--border-faint)';
+
+  var name = document.createElement('div');
   name.textContent = doc.title;
-  name.href = '#';
-  name.style.cssText = 'flex:1;color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-  name.onclick = async function(e){
-   e.preventDefault();
-   try {
-    var r = await sbFetch('/api/cards?entity=document&path=' + encodeURIComponent(doc.path));
-    if(!r.ok) throw new Error(r.error || 'нет ссылки');
-    window.open(r.url, '_blank');
-   } catch(err){ sdToast('Не получилось открыть: ' + (err.message || err)); }
-  };
-  var meta = document.createElement('span');
-  meta.style.cssText = 'flex:0 0 130px;color:var(--text-muted);font-size:11.5px;text-align:right';
-  meta.textContent = new Date(doc.created_at).toLocaleDateString('ru-RU')
+  name.title = 'Открыть документ';
+  name.style.cssText = 'font-size:13px;color:#AEB6FF;cursor:pointer;word-break:break-word;line-height:1.35';
+  name.onclick = function(){ _routeDocOpen(doc); };
+  row.appendChild(name);
+
+  var meta = document.createElement('div');
+  meta.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:4px;font-size:11.5px;color:var(--text-muted)';
+  var kind = document.createElement('span');
+  kind.textContent = DOC_KIND_LABELS[doc.kind] || 'Прочее';
+  var dt = document.createElement('span');
+  dt.textContent = new Date(doc.created_at).toLocaleDateString('ru-RU')
    + (doc.size_bytes ? (' · ' + Math.max(1, Math.round(doc.size_bytes / 1024)) + ' КБ') : '');
-  row.appendChild(kind); row.appendChild(name); row.appendChild(meta);
-  var role = String((typeof currentUser !== 'undefined' && currentUser && currentUser.role) || '').toLowerCase();
-  if(['admin','head','rop'].indexOf(role) >= 0){
-   var del = document.createElement('button');
+  meta.appendChild(kind); meta.appendChild(dt);
+  if(canDelete){
+   var del = document.createElement('span');
    del.textContent = 'удалить';
-   del.style.cssText = 'background:none;border:none;color:var(--text-muted);font-size:11.5px;cursor:pointer;font-family:inherit';
+   del.style.cssText = 'margin-left:auto;cursor:pointer';
    del.onclick = async function(){
     if(!confirm('Удалить «' + doc.title + '»? Восстановить будет неоткуда.')) return;
     try {
@@ -36131,10 +36131,28 @@ async function _routeDocsList(box, clientId){
      _routeDocsList(box, clientId);
     } catch(err){ sdToast('Не получилось: ' + (err.message || err)); }
    };
-   row.appendChild(del);
+   meta.appendChild(del);
   }
+  row.appendChild(meta);
   box.appendChild(row);
  });
+}
+
+// v868: открыть документ. Вкладку открываем СРАЗУ по клику — если сделать это после
+// запроса ссылки, браузер считает её всплывающим окном и блокирует. Ссылку получаем
+// следом и подставляем в уже открытую вкладку.
+async function _routeDocOpen(doc){
+ var w = null;
+ try { w = window.open('', '_blank'); } catch(_){}
+ try {
+  var r = await sbFetch('/api/cards?entity=document&path=' + encodeURIComponent(doc.path));
+  if(!r.ok || !r.url) throw new Error(r.error || 'ссылку не выдали');
+  if(w && !w.closed) w.location.href = r.url;
+  else window.location.href = r.url; // вкладку заблокировали — открываем здесь
+ } catch(err){
+  if(w && !w.closed) w.close();
+  sdToast('Не получилось открыть: ' + (err.message || err));
+ }
 }
 
 // v866: перерисовать список контактов в карточке Внедрения, если она открыта. Форма
