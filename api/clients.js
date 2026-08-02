@@ -277,7 +277,7 @@ export default async function handler(req, res) {
         if (!raw) {
           body.support_operator = null;
         } else {
-          const own = await sbSelect('clients', { client_id: 'eq.' + id, select: 'country', limit: '1' });
+          const own = await sbSelect('clients', { client_id: 'eq.' + client_id, select: 'country', limit: '1' });
           const cCountry = (own.length && own[0].country) || 'KZ';
           const canon = await canonOperator(raw, cCountry);
           if (!canon) {
@@ -288,7 +288,7 @@ export default async function handler(req, res) {
           // v870: человек должен узнать, что ему передали клиента, а не обнаружить это
           // случайно через неделю. Уведомление не должно ронять саму передачу.
           try {
-            const prev = await sbSelect('clients', { client_id: 'eq.' + id, select: 'company_name,support_operator', limit: '1' });
+            const prev = await sbSelect('clients', { client_id: 'eq.' + client_id, select: 'company_name,support_operator', limit: '1' });
             const wasName = (prev[0] || {}).support_operator || null;
             if (canon !== wasName) {
               const toEmail = await opEmailByName(canon);
@@ -296,11 +296,11 @@ export default async function handler(req, res) {
                 await notifCreate({
                   user_email: toEmail,
                   type: 'client_transferred',
-                  title: 'Вам передали клиента: ' + ((prev[0] || {}).company_name || id),
+                  title: 'Вам передали клиента: ' + ((prev[0] || {}).company_name || client_id),
                   body: wasName ? ('Раньше вёл ' + wasName) : 'Раньше ответственного не было',
                   entity_type: 'client',
-                  entity_id: id,
-                  client_id: id,
+                  entity_id: client_id,
+                  client_id: client_id,
                   actor: String(req.headers['x-user-name'] || '').trim() || null
                 });
               }
