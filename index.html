@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v864</title>
+<title>SalesDoc — Финансовый Дашборд v865</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -44551,10 +44551,12 @@ function _duesCalc(){
    if(pm > rec.perMonth) rec.perMonth = pm;   // ориентир «сколько в месяц»
   }
  });
- var debt = [], due = [], ahead = [], noHist = 0;
+ var debt = [], due = [], ahead = [], noHist = 0, noHistList = [];
  _duesState.clients.forEach(function(c){
   var rec = acc[c.client_id];
-  if(!rec || rec.end === null){ noHist++; return; }
+  // v865: раньше такие клиенты только считались — 94 человека из 359 не показывались
+  // нигде, и открыть их из программы было нельзя. Теперь собираем список.
+  if(!rec || rec.end === null){ noHist++; noHistList.push({ c: c, perMonth: 0, months: 0, end: null }); return; }
   // Бесплатный период закрывает долг до указанной даты
   var freeOk = false;
   if(c.free_until){
@@ -44577,7 +44579,7 @@ function _duesCalc(){
  // даже если молчит полгода (значит с ним работают).
  var recover = debt.filter(function(r){ return _duesBucket(r) === 'recover'; });
  var lost = debt.filter(function(r){ return _duesBucket(r) === 'lost'; });
- return { debt: debt, recover: recover, lost: lost, due: due, ahead: ahead, noHist: noHist, cur: cur };
+ return { debt: debt, recover: recover, lost: lost, due: due, ahead: ahead, noHist: noHist, noHistList: noHistList, cur: cur };
 }
 
 // v846: плотность списка и свёрнутая колонка «Оплачено вперёд» — помнятся между заходами
@@ -44646,7 +44648,16 @@ function _duesCardHtml(r, kind){
   + '</div>';
 }
 
+// v865: сколько карточек показывать в колонке. Раньше жёстко сорок, а «и ещё 121» было
+// просто надписью — до этих клиентов нельзя было добраться из программы вообще.
+var _duesExpanded = {};
+function duesShowAll(kind){
+ _duesExpanded[kind] = true;
+ duesRender();
+}
+
 function _duesColHtml(title, sub, tone, items, kind, limit, bucket){
+ if(_duesExpanded[kind]) limit = items.length;
  var total = items.reduce(function(s, r){ return s + (r.perMonth || 0); }, 0);
  var shown = items.slice(0, limit);
  var rest = items.length - shown.length;
@@ -44663,7 +44674,7 @@ function _duesColHtml(title, sub, tone, items, kind, limit, bucket){
   + '<div class="m">' + _duesMoney(total) + ' в месяц</div></div>'
   + '<div class="du-body">'
   + (shown.length ? shown.map(function(r){ return _duesCardHtml(r, kind); }).join('') : '<div class="du-empty">Пусто</div>')
-  + (rest > 0 ? '<div class="du-rest">и ещё ' + rest + '</div>' : '')
+  + (rest > 0 ? '<div class="du-rest" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="duesShowAll(\'' + kind + '\')">показать ещё ' + rest + '</div>' : '')
   + '</div></div>';
 }
 
@@ -44727,7 +44738,7 @@ function duesRender(){
   + '<div class="du-card"><div class="l">Платят сейчас</div><div class="v">' + d.due.length + '</div>'
    + '<div class="d">ждём ' + _duesMoney(dueSum) + '</div></div>'
   + '<div class="du-card"><div class="l">Оплачено вперёд</div><div class="v grn">' + d.ahead.length + '</div>'
-   + '<div class="d">' + d.noHist + ' без истории оплат — разобрать</div></div>';
+   + '<div class="d">срок дальше текущего месяца</div></div>';
 
  // v846: «Оплачено вперёд» по умолчанию свёрнута — сто карточек, с которыми делать
  // нечего, занимали четверть экрана. Раскрывается по клику, состояние запоминается.
@@ -44744,7 +44755,12 @@ function duesRender(){
     + '<div class="du-body"><button class="du-showall" onclick="duesToggleAhead()">Показать список</button></div></div>';
 
  kan.innerHTML =
-  _duesColHtml('Догоняем', 'Не платят до ' + DUES_LOST_AFTER + ' месяцев — ещё можно вернуть', 'amb', d.recover, 'debt', 40, 'recover')
+  // v865: клиенты без истории оплат — отдельной колонкой. Их 94 из 359, и раньше они
+  // были видны только цифрой на чужой плитке: ни открыть, ни разобрать.
+  (d.noHistList && d.noHistList.length
+   ? _duesColHtml('Нет истории оплат', 'Оплат не нашли — проверьте, тот ли это клиент', 'amb', d.noHistList, 'nohist', 40, '')
+   : '')
+  + _duesColHtml('Догоняем', 'Не платят до ' + DUES_LOST_AFTER + ' месяцев — ещё можно вернуть', 'amb', d.recover, 'debt', 40, 'recover')
   + _duesColHtml('Похоже, ушли', 'Молчат дольше ' + DUES_LOST_AFTER + ' месяцев — закрыть и посчитать потерю', 'red', d.lost, 'debt', 40, 'lost')
   + _duesColHtml('Платят сейчас', _duesMkLabel(d.cur) + ' закрыт, следующий нет', 'amb', d.due, 'due', 40, '')
   + aheadCol;
