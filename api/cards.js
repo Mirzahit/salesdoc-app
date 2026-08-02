@@ -25,7 +25,8 @@ import crypto from 'crypto';
 import { sbSelect, sbInsert, sbUpdate, sbUpsert, sbDelete } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { almatyIso } from './_dates.js';
-import { canonOperator, operatorNames } from './_operators.js'; // v850: операторы из «Сотрудников», а не из кода
+import { notifCreate } from './_notify.js'; // v871: новый клиент от продаж
+import { canonOperator, operatorNames, supportOperators } from './_operators.js'; // v850: операторы из «Сотрудников», а не из кода
 
 // v364: whitelist разрешённых стадий — иначе мусорный stage сохранится молча
 // v861: этапы задаёт руководитель (app_settings.route_stages). Здесь — запасной список
@@ -392,6 +393,30 @@ export async function ensureBoardEntryForPayment(opts) {
     payment_category: opts.category || null, stage_entered_at: new Date().toISOString(),
     sheet_row: sheet_row, sheet_month: sheet_month
   });
+  // v871: о новом клиенте узнают все операторы страны — карточка приходит ничьей,
+  // и без уведомления о ней никто не знает, пока случайно не откроет доску.
+  // Решение CEO: «всем операторам, потом кто свободен тот и возьмёт».
+  try {
+    const ops = await supportOperators(country);
+    const rows = ops
+      .filter(e => String(e.role || '').toLowerCase() === 'operator')
+      .map(e => ({
+        user_email: String(e.email || '').toLowerCase(),
+        type: 'client_new',
+        title: 'Новый клиент на внедрение: ' + (company || clientId),
+        body: (opts.tariff ? ('Тариф ' + opts.tariff + ' · ') : '')
+          + (opts.amount ? (opts.amount + ' · ') : '')
+          + 'карточку пока никто не взял',
+        entity_type: 'client', entity_id: clientId, client_id: clientId,
+        actor: (opts.manager || '').trim() || null,
+        dedup_key: 'client_new:' + clientId
+      }))
+      .filter(r => r.user_email);
+    if (rows.length) await notifCreate(rows);
+  } catch (e) {
+    // уведомление не должно мешать приёму оплаты
+    console.error('[new client notify]', e.message || e);
+  }
   return { action: 'card_created', card_id: card[0].id, client_id: clientId };
 }
 

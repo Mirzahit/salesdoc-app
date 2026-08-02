@@ -55,6 +55,7 @@ const TG_LABEL = {
   // v819: удержание клиентов
   renewal_due: 'Продление подписки', billing_overdue: 'Оплата просрочена',
   client_transferred: 'Передали клиента', // v870
+  client_new: 'Новый клиент', // v871
 
   pay_drop: 'Платёж меньше обычного', renewals_summary: 'Продления недели'
 };
