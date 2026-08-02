@@ -11,7 +11,8 @@
 import { sbSelect, sbInsert, sbUpdate } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 import { almatyIso } from './_dates.js';
-import { canonOperator, operatorNames } from './_operators.js'; // v859: операторы из «Сотрудников»
+import { canonOperator, operatorNames } from './_operators.js';
+import { notifCreate, opEmailByName } from './_notify.js'; // v870: уведомление о передаче клиента // v859: операторы из «Сотрудников»
 
 const ALLOWED_STATUS = ['lead','sale','onboarding','active','paused','churned'];
 const ALLOWED_COUNTRIES = ['KZ','KG'];
@@ -284,6 +285,29 @@ export default async function handler(req, res) {
             return res.status(400).json({ ok: false, error: 'Такого оператора нет в сотрудниках ' + cCountry + '. Доступны: ' + (known.join(', ') || 'никого') });
           }
           body.support_operator = canon;
+          // v870: человек должен узнать, что ему передали клиента, а не обнаружить это
+          // случайно через неделю. Уведомление не должно ронять саму передачу.
+          try {
+            const prev = await sbSelect('clients', { client_id: 'eq.' + id, select: 'company_name,support_operator', limit: '1' });
+            const wasName = (prev[0] || {}).support_operator || null;
+            if (canon !== wasName) {
+              const toEmail = await opEmailByName(canon);
+              if (toEmail) {
+                await notifCreate({
+                  user_email: toEmail,
+                  type: 'client_transferred',
+                  title: 'Вам передали клиента: ' + ((prev[0] || {}).company_name || id),
+                  body: wasName ? ('Раньше вёл ' + wasName) : 'Раньше ответственного не было',
+                  entity_type: 'client',
+                  entity_id: id,
+                  client_id: id,
+                  actor: String(req.headers['x-user-name'] || '').trim() || null
+                });
+              }
+            }
+          } catch (e) {
+            console.error('[client transfer notify]', e.message || e);
+          }
         }
       }
       // v838: причина ставится только из списка; пустая строка = снять причину

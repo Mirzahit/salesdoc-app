@@ -54,6 +54,8 @@ const TG_LABEL = {
   impl_stuck: 'Внедрение зависло', mention: 'Упоминание', task_assigned: 'Новая задача',
   // v819: удержание клиентов
   renewal_due: 'Продление подписки', billing_overdue: 'Оплата просрочена',
+  client_transferred: 'Передали клиента', // v870
+
   pay_drop: 'Платёж меньше обычного', renewals_summary: 'Продления недели'
 };
 

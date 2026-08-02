@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v869</title>
+<title>SalesDoc — Финансовый Дашборд v870</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -42084,11 +42084,44 @@ async function ntfPoll(){
  if(_ntf.lastToastAt){
   var fresh = _ntf.items.filter(function(n){ return !n.is_read && n.created_at > _ntf.lastToastAt; });
   fresh.slice(0, 3).forEach(function(n, i){ ntfShowToast(n, i); });
+  if(fresh.length) ntfSound(); // v870: короткий сигнал — иначе уведомление замечают через час
  }
  var mx = _ntf.lastToastAt || new Date(0).toISOString();
  _ntf.items.forEach(function(n){ if(n.created_at > mx) mx = n.created_at; });
  _ntf.lastToastAt = mx || new Date().toISOString();
  if(_ntf.open) ntfPanelDraw();
+}
+
+// v870: звук уведомления. Файл не подключаем — короткий сигнал синтезируется браузером,
+// это пара строк и ноль лишних запросов. Звук можно выключить в шапке колокольчика:
+// человек за одним столом с коллегами не должен пикать на весь офис.
+function ntfSoundOn(){
+ try { return localStorage.getItem('sd_ntf_sound') !== 'off'; } catch(_){ return true; }
+}
+function ntfSoundToggle(){
+ try { localStorage.setItem('sd_ntf_sound', ntfSoundOn() ? 'off' : 'on'); } catch(_){}
+ if(ntfSoundOn()) ntfSound();
+ if(_ntf.open) ntfPanelDraw();
+}
+function ntfSound(){
+ if(!ntfSoundOn()) return;
+ try {
+  var Ctx = window.AudioContext || window.webkitAudioContext;
+  if(!Ctx) return;
+  var ctx = new Ctx();
+  var osc = ctx.createOscillator();
+  var gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(880, ctx.currentTime);
+  osc.frequency.setValueAtTime(1175, ctx.currentTime + 0.09);
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.3);
+  setTimeout(function(){ try { ctx.close(); } catch(_){} }, 600);
+ } catch(_){}
 }
 
 function ntfBadgeDraw(){
@@ -42151,7 +42184,9 @@ function ntfPanelDraw(){
  var p = document.createElement('div');
  p.id = 'ntf-panel';
  p.className = 'ntf-panel';
+ // v870: переключатель звука — человек в опенспейсе должен уметь его выключить
  var head = '<div class="nh"><span class="t">Уведомления</span>'
+  + '<span class="rd" onclick="ntfSoundToggle()" title="Звук нового уведомления">' + (ntfSoundOn() ? 'звук включён' : 'звук выключен') + '</span>'
   + (_ntf.unread ? '<span class="rd" onclick="ntfMarkAll()">Прочитать все</span>' : '') + '</div>';
  var list = '';
  if(!_ntf.items.length){
