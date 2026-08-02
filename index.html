@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v868</title>
+<title>SalesDoc — Финансовый Дашборд v869</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -35921,7 +35921,7 @@ function _routeRenderContact(){
  var rows = [
   ['Компания', cl.company_name],
   ['Телефон', cl.main_phone],
-  ['Куратор', cl.curator_operator || _routeCurrentCard.operator],
+  ['Кто продал', cl.curator_operator || _routeCurrentCard.operator], // v869: это поле про продажу, а не про ведение
   ['Тариф', _routeCurrentCard.tariff],
   ['Лицензий', _routeCurrentCard.licenses_count],
   ['Этап', _routeCurrentCard.stage],
@@ -35941,6 +35941,26 @@ function _routeRenderContact(){
   rowEl.appendChild(lab); rowEl.appendChild(val);
   body.appendChild(rowEl);
  });
+
+ // v869: кто ведёт клиента, и передача другому прямо отсюда. Раньше поменять
+ // ответственного можно было только в базе: человек уходил в отпуск или увольнялся,
+ // а его клиенты оставались на нём.
+ (function(){
+  var rowEl = document.createElement('div');
+  rowEl.style.cssText = 'display:flex;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-faint);font-size:13px';
+  var lab = document.createElement('div');
+  lab.style.cssText = 'flex:0 0 130px;color:var(--text-soft)';
+  lab.textContent = 'Ведёт клиента';
+  var val = document.createElement('div');
+  val.style.cssText = 'flex:1;color:' + (cl.support_operator ? 'var(--text)' : '#E0A458');
+  val.textContent = cl.support_operator || 'не назначен';
+  var btn = document.createElement('button');
+  btn.textContent = cl.support_operator ? 'Передать' : 'Назначить';
+  btn.style.cssText = 'background:none;border:1px solid var(--border-faint);border-radius:8px;color:var(--text-soft);font-size:11.5px;padding:4px 10px;cursor:pointer;font-family:inherit';
+  btn.onclick = function(ev){ _routeTransferOpen(ev, cl); };
+  rowEl.appendChild(lab); rowEl.appendChild(val); rowEl.appendChild(btn);
+  body.appendChild(rowEl);
+ })();
 
  // ── 2) Контейнер для контактов: основной (amo) + ответственный по внедрению
  var contactsWrap = document.createElement('div');
@@ -35993,6 +36013,55 @@ function _routeRenderContact(){
  listBlock.style.cssText = 'padding:10px 0';
  contactsWrap.appendChild(listBlock);
  _routeRenderContacts(listBlock, cl.company_name);
+}
+
+// v869: передать клиента другому оператору. Список — только сотрудники страны клиента
+// (сервер это тоже проверяет). Передача пишется в ленту клиента, чтобы потом было видно,
+// когда и кто его передал: иначе «а почему он у меня» превращается в спор.
+async function _routeTransferOpen(ev, cl){
+ var country = cl.country || (_routeCurrentCard && _routeCurrentCard.country) || 'KZ';
+ var rows = [];
+ try {
+  var r = await authFetch('/api/employees').then(function(x){ return x.json(); });
+  var all = (r && r.employees) ? r.employees : [];
+  rows = all.filter(function(e){
+   if(e.active === false) return false;
+   if(['operator','rop','head','admin'].indexOf(String(e.role || '').toLowerCase()) < 0) return false;
+   var ec = String(e.country || '').trim().toUpperCase();
+   return !ec || ec === String(country).toUpperCase();
+  });
+ } catch(_){}
+ if(!rows.length){ sdToast('Не удалось загрузить список сотрудников'); return; }
+ var opts = rows.map(function(e){ return { value: e.name, label: e.name }; });
+ opts.push({ value: '', label: 'Снять ответственного' });
+ _intgDdOpen(ev.target, opts, cl.support_operator || null, function(who){
+  _routeTransferDo(cl, who);
+ });
+}
+
+async function _routeTransferDo(cl, who){
+ var clientId = cl.client_id || (_routeCurrentCard && _routeCurrentCard.client_id);
+ if(!clientId){ sdToast('У карточки нет клиента'); return; }
+ var was = cl.support_operator || 'никого';
+ try {
+  var d = await sbFetch('/api/clients?client_id=' + encodeURIComponent(clientId), {
+   method:'PATCH', body: JSON.stringify({ support_operator: who || '' })
+  });
+  if(!d.ok) throw new Error(d.error || 'не сохранилось');
+  cl.support_operator = who || null;
+  if(_routeCurrentCard && _routeCurrentCard.clients) _routeCurrentCard.clients.support_operator = who || null;
+  // след в ленте клиента — кто, когда и кому передал
+  try {
+   await sbFetch('/api/history', { method:'POST', body: JSON.stringify({
+    client_id: clientId,
+    event_type: 'system',
+    text: who ? ('Клиент передан: ' + was + ' → ' + who) : ('Ответственный снят (был ' + was + ')')
+   }) });
+  } catch(_){}
+  _routeRenderAmo();
+  if(typeof _routeRenderHistory === 'function' && _routeCurrentTab === 'history') _routeRenderHistory();
+  sdToast(who ? ('Клиент передан: ' + who) : 'Ответственный снят');
+ } catch(e){ sdToast('Не получилось передать: ' + (e.message || e)); }
 }
 
 // v867: документы клиента — договор, АВР, ТЗ. Загружать может любой оператор,
