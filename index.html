@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v865</title>
+<title>SalesDoc — Финансовый Дашборд v866</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -35979,6 +35979,71 @@ function _routeRenderContact(){
  implBlock.style.cssText = 'padding:10px 0;border-bottom:1px solid var(--border-faint)';
  contactsWrap.appendChild(implBlock);
  _routeRenderImplContact(implBlock, cl.implementation_contact);
+
+ // v866: здесь можно было записать только одного человека — «ответственного по внедрению».
+ // А у клиента их несколько: директор, бухгалтер, IT, супервайзеры. Показываем общий
+ // список контактов клиента, тот же самый, что в карточке Действующих — он живёт в базе,
+ // так что записанное здесь видят все.
+ var listBlock = document.createElement('div');
+ listBlock.id = 'route-contacts-list';
+ listBlock.style.cssText = 'padding:10px 0';
+ contactsWrap.appendChild(listBlock);
+ _routeRenderContacts(listBlock, cl.company_name);
+}
+
+// v866: перерисовать список контактов в карточке Внедрения, если она открыта. Форма
+// контактов общая, а карточек две — без этого добавленный контакт появлялся только в одной.
+function _routeContactsRefresh(clientName){
+ var box = document.getElementById('route-contacts-list');
+ if(box && typeof _routeRenderContacts === 'function') _routeRenderContacts(box, clientName);
+}
+
+// v866: список контактов клиента в карточке Внедрения.
+function _routeRenderContacts(box, clientName){
+ if(!box) return;
+ box.replaceChildren();
+ var head = document.createElement('div');
+ head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px';
+ var lab = document.createElement('div');
+ lab.style.cssText = 'font-size:11px;color:var(--text-muted)';
+ lab.textContent = 'Люди со стороны клиента';
+ var add = document.createElement('button');
+ add.textContent = '+ Добавить';
+ add.style.cssText = 'background:none;border:1px solid var(--border-faint);border-radius:8px;color:var(--text-soft);font-size:11.5px;padding:4px 10px;cursor:pointer;font-family:inherit';
+ add.addEventListener('click', function(){
+  if(typeof crmContactOpenModal === 'function') crmContactOpenModal(clientName);
+  else sdToast('Форма контактов недоступна');
+ });
+ head.appendChild(lab); head.appendChild(add);
+ box.appendChild(head);
+
+ var listEl = document.createElement('div');
+ box.appendChild(listEl);
+ var draw = function(list){
+  listEl.replaceChildren();
+  if(!list || !list.length){
+   var em = document.createElement('div');
+   em.style.cssText = 'font-size:12px;color:var(--text-muted)';
+   em.textContent = 'Контактов пока нет. Добавьте директора, бухгалтера, IT.';
+   listEl.appendChild(em);
+   return;
+  }
+  list.forEach(function(c){
+   var row = document.createElement('div');
+   row.style.cssText = 'display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-faint);font-size:12.5px';
+   var left = document.createElement('div');
+   left.textContent = c.name + (c.role ? (' · ' + c.role) : '');
+   var right = document.createElement('div');
+   right.style.cssText = 'color:var(--text-muted)';
+   right.textContent = c.phone || c.email || '';
+   row.appendChild(left); row.appendChild(right);
+   listEl.appendChild(row);
+  });
+ };
+ draw(typeof crmContactsForClient === 'function' ? crmContactsForClient(clientName) : []);
+ if(typeof crmContactsLoad === 'function'){
+  crmContactsLoad(clientName).then(draw).catch(function(){});
+ }
 }
 
 // v420: подтянуть основной контакт из amoCRM по lead_id (если есть).
@@ -47920,6 +47985,7 @@ async function crmContactSave(client, contactId){
   await crmContactsLoad(client);
   var bg = document.querySelector('.crm-modal-bg'); if(bg) bg.remove();
   crmContactsRender(client);
+  _routeContactsRefresh(client); // v866: обновить список и в карточке Внедрения
   sdToast(contactId ? 'Контакт обновлён' : 'Контакт добавлен');
  } catch(e){ sdToast('Не получилось сохранить: ' + (e.message || e)); }
 }
@@ -47931,6 +47997,7 @@ async function crmContactDelete(id, client){
   if(!d.ok) throw new Error(d.error || 'не удалилось');
   await crmContactsLoad(client);
   crmContactsRender(client);
+  _routeContactsRefresh(client); // v866
   sdToast('Контакт удалён');
  } catch(e){ sdToast('Не получилось удалить: ' + (e.message || e)); }
 }
