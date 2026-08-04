@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v871</title>
+<title>SalesDoc — Финансовый Дашборд v872</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -42262,12 +42262,18 @@ function ntfShowToast(n, idx){
 var _mnDd = { open: false, taId: null, idx: 0, items: [] };
 
 function mnRoster(){
+ // v872: показываем только сотрудников СВОЕЙ страны. Раньше кыргызский оператор видел
+ // в подсказке весь Казахстан и мог упомянуть человека, который к его клиенту отношения
+ // не имеет. Сотрудник без страны (директор) виден в обеих — он работает по обеим.
+ var cc = String((typeof currentCountry !== 'undefined' ? currentCountry : '') || '').toUpperCase();
  var out = [];
  try {
   (employees || []).forEach(function(e){
    if(e.active === false || !e.name) return;
+   var ec = String(e.country || '').trim().toUpperCase();
+   if(cc && ec && ec !== cc) return;
    var nm = String(e.name).trim();
-   out.push({ name: nm, first: nm.split(/\s+/)[0] });
+   out.push({ name: nm, first: nm.split(/\s+/)[0], role: e.pos || e.role || '' });
   });
  } catch(_){}
  return out;
@@ -42287,7 +42293,7 @@ function mnInputCheck(ta){
  var pref = m[2].toLowerCase();
  var items = mnRoster().filter(function(r){ return !pref || r.first.toLowerCase().indexOf(pref) === 0; });
  if(!items.length){ mnDdClose(); return; }
- _mnDd.items = items.slice(0, 6);
+ _mnDd.items = items.slice(0, 12); // v872: список прокручивается, обрезать до шести незачем
  _mnDd.idx = 0;
  _mnDd.taId = ta.id;
  _mnDd.open = true;
@@ -42303,16 +42309,25 @@ function mnDdDraw(ta){
  _mnDd.items.forEach(function(it, i){
   var el = document.createElement('div');
   el.className = 'mi' + (i === _mnDd.idx ? ' on' : '');
-  el.innerHTML = '<span class="av">' + sanitize(it.first.slice(0, 2).toUpperCase()) + '</span>' + sanitize(it.name);
+  el.innerHTML = '<span class="av">' + sanitize(it.first.slice(0, 2).toUpperCase()) + '</span>' + sanitize(it.name)
+   + (it.role ? '<span class="rl">' + sanitize(it.role) + '</span>' : '');
   el.onmousedown = function(e){ e.preventDefault(); mnPick(i); }; // mousedown — раньше blur textarea
   dd.appendChild(el);
  });
  document.body.appendChild(dd);
+ // v872: раньше список всегда открывался вверх и упирался в край карточки — верхние
+ // строки оказывались за пределами видимой области, и выбрать их было нельзя.
+ // Теперь открываем в ту сторону, где больше места, и ограничиваем высоту этим местом:
+ // список сам прокручивается внутри и всегда помещается целиком.
  var dr = dd.getBoundingClientRect();
- var top = r.top - dr.height - 6;
- if(top < 8) top = r.bottom + 6;
+ var spaceAbove = r.top - 16;
+ var spaceBelow = window.innerHeight - r.bottom - 16;
+ var openUp = spaceAbove > spaceBelow;
+ var room = Math.max(120, Math.min(240, openUp ? spaceAbove : spaceBelow));
+ dd.style.maxHeight = room + 'px';
+ dr = dd.getBoundingClientRect();
  dd.style.left = Math.max(12, Math.min(r.left, window.innerWidth - dr.width - 12)) + 'px';
- dd.style.top = top + 'px';
+ dd.style.top = (openUp ? Math.max(8, r.top - dr.height - 6) : Math.min(window.innerHeight - dr.height - 8, r.bottom + 6)) + 'px';
 }
 function mnDdClose(){
  _mnDd.open = false;
