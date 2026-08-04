@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v873</title>
+<title>SalesDoc — Финансовый Дашборд v874</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -39479,10 +39479,39 @@ async function cal2LoadPayments(){
 }
 // Команда = известные операторы канбана + все встреченные в событиях
 function cal2Ops(){
- var set = {};
- if(typeof KB_OP_COLORS !== 'undefined') Object.keys(KB_OP_COLORS).forEach(function(n){ set[n] = 1; });
- cal2AllEvents().forEach(function(e){ if(e.operator) set[e.operator] = 1; });
- return Object.keys(set).sort();
+ // v874: список «Команда» собирался из операторов Внедрения (казахстанские имена
+ // кириллицей) плюс всех имён из событий — без учёта страны. В Кыргызстане в списке
+ // висели Айдос с Акбаром, а Aidos и Айдос показывались как два разных человека.
+ // Теперь: сотрудники своей страны из справочника (человек без страны виден в обеих),
+ // плюс имена из событий, если это не сотрудник другой страны — чужие задачи из
+ // календаря пропасть не должны.
+ var cc = String((typeof currentCountry !== 'undefined' ? currentCountry : '') || '').toUpperCase();
+ var canon = function(n){
+  var first = String(n || '').trim().split(/\s+/)[0];
+  return (typeof crmOpCanon === 'function' ? String(crmOpCanon(first) || first) : first).toLowerCase();
+ };
+ // Сотрудников различаем по логину, а не по имени: Aidos из поддержки и Aidos Hapez
+ // из продаж — разные люди, по первому слову имени они бы склеились в одного.
+ var mine = {}, byCanon = {}, foreign = {};
+ try {
+  (employees || []).forEach(function(e){
+   if(e.active === false || !e.name) return;
+   var ec = String(e.country || '').trim().toUpperCase();
+   var k = canon(e.name);
+   if(cc && ec && ec !== cc) { foreign[k] = 1; return; }
+   var key = String(e.email || e.name).toLowerCase();
+   if(!mine[key]) mine[key] = String(e.name).trim();
+   if(!byCanon[k]) byCanon[k] = key;
+  });
+ } catch(_){}
+ cal2AllEvents().forEach(function(e){
+  if(!e.operator) return;
+  var k = canon(e.operator);
+  if(byCanon[k] || foreign[k]) return;    // уже есть в справочнике или это сотрудник другой страны
+  var evKey = 'ev:' + k;
+  if(!mine[evKey]) mine[evKey] = String(e.operator).trim(); // не из справочника — оставляем, иначе его задачи не отфильтруешь
+ });
+ return Object.keys(mine).map(function(k){ return mine[k]; }).sort();
 }
 function cal2WeekBounds(){
  var base = crmCalState.viewDate ? new Date(crmCalState.viewDate + 'T00:00:00') : new Date();
