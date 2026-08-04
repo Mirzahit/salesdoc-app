@@ -1088,7 +1088,22 @@ async function handlePost(req, res) {
     }
   }
 
+  // v878: номер операции приходит от программы ДО отправки. Если такая оплата уже
+  // проведена (человек нажал «Сохранить» второй раз, сеть подвисла, браузер переслал
+  // запрос) — возвращаем ту же запись вместо создания второй. Сравнение по
+  // «клиент+дата+сумма» для этого не годится: клиент может честно заплатить дважды
+  // в один день одинаковыми суммами, и такую оплату нельзя терять.
+  const opId = String(body.op_id || '').trim().slice(0, 64) || null;
+  if (opId) {
+    const already = await sbSelect('payments', { op_id: 'eq.' + opId, limit: '1' });
+    if (already.length) {
+      return res.status(200).json({ ok: true, payment: already[0], duplicate: true,
+        note: 'Эта оплата уже сохранена — повтор не создал вторую запись' });
+    }
+  }
+
   const row = {
+    op_id: opId,
     country,
     paid_at: body.paid_at,
     company_name: companyName,
