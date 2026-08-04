@@ -1251,11 +1251,39 @@ async function handleDelete(req, res) {
   // Защита: автоматические записи (бот / sheets) удалять нельзя — только manual
   const rows = await sbSelect('payments', { id: 'eq.' + id, limit: 1 });
   if (!rows.length) return res.status(404).json({ ok: false, error: 'платёж не найден' });
-  if (rows[0].source !== 'manual') {
-    return res.status(403).json({ ok: false, error: 'автоматические платежи (' + rows[0].source + ') нельзя удалить через API. Используйте PATCH с notes' });
+  // v879: раньше удалять можно было только внесённые вручную. Но в базе копятся
+  // «призраки» — записи о строках, которые в таблице уже удалили: их удалять и нужно,
+  // и безопасно. А вот запись, за которой строка в таблице ЕСТЬ, удалять бессмысленно:
+  // ближайший импорт вернёт её обратно. Поэтому сверяемся с самим листом.
+  const p = rows[0];
+  if (p.source !== 'manual') {
+    if (!p.sheet_tab || p.sheet_row == null) {
+      return res.status(403).json({ ok: false, error: 'у записи нет строки в таблице — удаление недоступно' });
+    }
+    let sheetHasRow = null; // null = не смогли проверить
+    try {
+      const cfg = SHEET_CONFIG[p.country];
+      const url = cfg.gs_url + '?action=getSheet&sheet=' + encodeURIComponent(p.sheet_tab)
+        + '&spreadsheetId=' + cfg.sheet_id + '&range=A1:M' + Math.max(50, p.sheet_row + 2);
+      const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+      const j = await r.json();
+      const row = (j.rows || [])[p.sheet_row - 1] || [];
+      const filled = row.map(x => String(x == null ? '' : x).trim()).filter(Boolean);
+      sheetHasRow = filled.length >= 3; // дата+клиент+статья — значит строка на месте
+    } catch (e) {
+      console.error('[payment delete check]', e.message || e);
+    }
+    if (sheetHasRow === true) {
+      return res.status(409).json({ ok: false, sheet_row_exists: true,
+        error: 'Эта оплата есть в таблице: лист «' + p.sheet_tab + '», строка ' + p.sheet_row
+             + '. Удалите строку там — иначе ближайший импорт вернёт запись обратно.' });
+    }
+    if (sheetHasRow === null) {
+      return res.status(503).json({ ok: false, error: 'Не удалось проверить таблицу — попробуйте ещё раз через минуту' });
+    }
   }
   await sbDelete('payments', { id: 'eq.' + id });
-  return res.status(200).json({ ok: true });
+  return res.status(200).json({ ok: true, was_ghost: p.source !== 'manual' });
 }
 
 async function readBody(req) {

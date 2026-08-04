@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v878</title>
+<title>SalesDoc — Финансовый Дашборд v879</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -15019,7 +15019,7 @@ function finFindDuplicates(){
   html = '<div class="findup-empty">Дублей не найдено — каждый платёж уникален (клиент + сумма + дата).</div>';
  } else {
   html = '<div class="findup-sum">Найдено <b>'+dupGroups.length+'</b> групп · <b>'+extraCount+'</b> лишних записей на <b>'+fmtFull(Math.round(extraSum))+'</b>'
-       + '<div class="findup-hint">В каждой группе первую оставляем, остальные — дубли. Ручные можно удалить здесь; ботовые/sheets — в Google-таблице (синк уберёт из базы).</div></div>';
+       + '<div class="findup-hint">В каждой группе первую оставляем, остальные — дубли. Нажмите «Удалить» — программа сама проверит таблицу. Если строка там ещё есть, она скажет, какую именно убрать: удалять в программе бесполезно, импорт вернёт запись обратно.</div></div>';
   html += dupGroups.map(function(g){
    var head = '<div class="fd-ghead">'+sanitize(g[0].client)+' · '+fmtFull(g[0].amount)+' · '+sanitize(String(g[0].date).slice(0,10))+' <span class="fd-cnt">'+g.length+' записи</span></div>';
    var rows = g.map(function(p,i){
@@ -15027,8 +15027,7 @@ function finFindDuplicates(){
     var badge = '<span class="fd-src fd-src-'+(src==='manual'?'m':'a')+'">'+(src==='manual'?'ручной':'авто'+(src?' · '+sanitize(src):''))+'</span>';
     var act;
     if(i===0) act='<span class="fd-keep">оставить</span>';
-    else if(src==='manual') act='<button class="fd-del" onclick="finDeleteDup(\''+String(p._sbId).replace(/'/g,"\\'").replace(/"/g,'')+'\')">Удалить</button>'; /* v786: JSON.stringify рвал атрибут двойными кавычками — кнопка была мёртвой всегда */
-    else act='<span class="fd-note">удалить в таблице</span>';
+    else act='<button class="fd-del" onclick="finDeleteDup(\''+String(p._sbId).replace(/'/g,"\\'").replace(/"/g,'')+'\')">Удалить</button>'; /* v786: JSON.stringify рвал атрибут двойными кавычками — кнопка была мёртвой всегда */
     return '<div class="fd-row"><span class="fd-mgr">'+sanitize(p.managerName||'—')+'</span>'+badge+act+'</div>';
    }).join('');
    return '<div class="fd-group">'+head+rows+'</div>';
@@ -15044,6 +15043,8 @@ window.finFindDuplicates = finFindDuplicates;
 function finDeleteDup(sbId){
  if(!sbId){ showNotif('Ошибка','нет id записи'); return; }
  if(!confirm('Удалить эту запись платежа? Действие необратимо.')) return;
+ // v879: сервер сверяется с таблицей: если строка там ещё есть — удалять бесполезно,
+ // импорт вернёт запись через час. Тогда показываем, какую именно строку убрать.
  sbFetch('/api/payments?id='+encodeURIComponent(sbId), {method:'DELETE'}).then(function(r){
   if(r && r.ok){
    showNotif('Удалено','дубль платежа удалён');
@@ -15051,7 +15052,9 @@ function finDeleteDup(sbId){
    try { renderAllPayments(); } catch(_){}
    var ov=document.getElementById('findup-overlay'); if(ov) ov.remove();
    finFindDuplicates();
-  } else { showNotif('Не удалось', (r&&r.error)||'ботовые/sheets платежи удаляются только в таблице'); }
+  } else if(r && r.sheet_row_exists){
+   showNotif('Сначала уберите строку в таблице', r.error);
+  } else { showNotif('Не удалось', (r&&r.error)||'не получилось удалить'); }
  }).catch(function(e){ showNotif('Ошибка', e.message||'сбой запроса'); });
 }
 window.finDeleteDup = finDeleteDup;
