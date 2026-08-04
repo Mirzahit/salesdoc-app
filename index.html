@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v877</title>
+<title>SalesDoc — Финансовый Дашборд v878</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17565,6 +17565,15 @@ async function saveRecord() {
   }
   er.uploadedPath = rup2.path;
  }
+ // v878: номер операции на каждую строку пакета. Создаётся ОДИН раз и живёт до успеха:
+ // если человек нажмёт «Сохранить» ещё раз после подвисания, уйдёт тот же номер, и
+ // сервер вернёт уже сохранённую оплату вместо второй записи.
+ if(!window._payOpIds || window._payOpIds.length !== rows.length){
+  window._payOpIds = rows.map(function(){
+   return (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+    : ('op-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10));
+  });
+ }
  // 2) Строки пакета — строго ПОСЛЕДОВАТЕЛЬНО (порядок строк в листе + честный прогресс).
  for(var k=0; k<rows.length; k++){
   var r = rows[k];
@@ -17573,6 +17582,7 @@ async function saveRecord() {
   // v825.1: у услуги со своим чеком — путь её чека, иначе общий чек внесения
   var rowReceipt = (r.exIndex != null && payExtras[r.exIndex] && payExtras[r.exIndex].receipt && payExtras[r.exIndex].receipt.uploadedPath) || receiptPath;
   var payload = {
+   op_id: (window._payOpIds || [])[k] || null, // v878: повтор не создаст вторую оплату
    country: country,
    paid_at: paidAt, company_name: client, client_id: clientId,
    category: catMapped, category_raw: r.catLabel,
@@ -17603,6 +17613,7 @@ async function saveRecord() {
   showNotif('Ошибка', 'Оплата не сохранилась ('+failErr+'). Ничего не записано — попробуйте ещё раз.');
   return;
  }
+ window._payOpIds = null; // v878: пакет сохранён — следующая оплата получит свои номера
  clientInp.value=''; clientInp.dataset.clientId='';
  document.getElementById('p-comment').value='';
  payExtras = []; payExtrasRender();
