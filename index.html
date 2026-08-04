@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v875</title>
+<title>SalesDoc — Финансовый Дашборд v876</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -42097,8 +42097,15 @@ var _ntf = { items: [], unread: 0, lastToastAt: null, open: false, timer: null }
 
 function ntfPollStart(){
  if(_ntf.timer) clearInterval(_ntf.timer);
- _ntf.timer = setInterval(ntfPoll, 120000);
- setTimeout(ntfPoll, 3000);
+ // v876: было раз в две минуты — человек упоминал коллегу, тот смотрел сразу и ничего
+ // не видел, потому что проверка ещё не наступила. Раз в 20 секунд плюс сразу при
+ // возврате на вкладку: запрос лёгкий, а ждать две минуты своего уведомления нельзя.
+ _ntf.timer = setInterval(ntfPoll, 20000);
+ setTimeout(ntfPoll, 2000);
+ if(!window._ntfVisBound){
+  window._ntfVisBound = true;
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) ntfPoll(); });
+ }
  // v813: @-подсказка в композерах заметок (карта клиента и карта интеграции)
  if(typeof mnAttach === 'function'){ mnAttach('route-chat-text'); mnAttach('intg-compose-text'); }
 }
@@ -42186,6 +42193,9 @@ function ntfSound(){
   var Ctx = window.AudioContext || window.webkitAudioContext;
   if(!Ctx) return;
   var ctx = new Ctx();
+  // v876: браузер держит звук выключенным, пока на странице не было действия человека —
+  // без этого первый сигнал мог просто не прозвучать.
+  if(ctx.state === 'suspended' && ctx.resume) ctx.resume();
   var osc = ctx.createOscillator();
   var gain = ctx.createGain();
   osc.type = 'sine';
