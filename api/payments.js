@@ -542,11 +542,49 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
     };
   }
 
+  // v877: оплата, внесённая в программе, зеркалится строкой в лист, и запись в базе
+  // помечается номером этой строки. Но Apps Script отвечает медленно: при таймауте ответ
+  // до программы не доходил, строка в листе при этом появлялась, а запись оставалась
+  // «ручной» и без номера строки. Через час крон видел строку как новую и заводил ВТОРУЮ
+  // оплату — уже без чека. Отсюда жалоба «одна с чеком, одна без».
+  // Теперь перед вставкой ищем свою же ручную запись (страна, клиент, дата, сумма) и
+  // просто дописываем ей номер строки: дубль не появляется, чек сохраняется.
+  const manualRows = await sbSelect('payments', {
+    country: 'eq.' + country,
+    sheet_row: 'is.null',
+    select: 'id,company_name,paid_at,amount,category_raw,receipt_path',
+    limit: '2000'
+  });
+  const manualKey = (r) => [
+    String(r.company_name || '').trim().toLowerCase(),
+    String(r.paid_at || '').slice(0, 10),
+    Math.round(parseFloat(r.amount || 0))
+  ].join('::');
+  const manualMap = new Map();
+  manualRows.forEach(r => { if (!manualMap.has(manualKey(r))) manualMap.set(manualKey(r), r); });
+
   const toInsert = [];
   const toUpdate = []; // { id, patch }
+  let mergedManual = 0;
   for (const row of cleanRows) {
     const ex = existingMap.get(`${row.sheet_id}::${row.sheet_tab}::${row.sheet_row}`);
-    if (!ex) { toInsert.push(row); continue; }
+    if (!ex) {
+      const mine = manualMap.get(manualKey(row));
+      if (mine) {
+        manualMap.delete(manualKey(row)); // одна строка листа — одна ручная запись
+        const patch = { sheet_id: row.sheet_id, sheet_tab: row.sheet_tab, sheet_row: row.sheet_row, source: 'sheets_import' };
+        for (const f of CMP) {
+          // чек в листе не хранится — не затираем его тем, что пришло из таблицы
+          if (f === 'receipt_path') continue;
+          if (nrm(f, row[f]) !== nrm(f, mine[f])) patch[f] = row[f];
+        }
+        toUpdate.push({ id: mine.id, patch });
+        mergedManual++;
+        continue;
+      }
+      toInsert.push(row);
+      continue;
+    }
     const patch = {};
     for (const f of CMP) {
       if (nrm(f, row[f]) !== nrm(f, ex[f])) patch[f] = row[f];
@@ -650,6 +688,7 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
     country,
     inserted_count: inserted.length,
     updated_count: updated.length,
+    merged_manual_count: mergedManual, // v877: сколько строк листа склеено с ручными записями вместо дублей
     delete_enabled: DELETE_ENABLED,
     deleted_count: deleted.length,
     would_delete_count: toDelete.length,
