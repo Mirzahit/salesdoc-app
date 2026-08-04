@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v879</title>
+<title>SalesDoc — Финансовый Дашборд v880</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -14995,13 +14995,106 @@ function renderAllPayments() {
  /* v831: кнопку «Чек» было не разглядеть (мелкий контур) — теперь заметный индиго-бейдж в размере «Посажена» */
  +'<td>'+(p.receiptPath ? '<button onclick="openPayReceipt(\''+_pid+'\')" onmouseenter="payReceiptPrefetch(\''+_pid+'\')" class="seated-badge" style="background:rgba(94,106,210,.16);color:#828FF7;border:1px solid rgba(94,106,210,.4)" title="Открыть чек — скрин перевода">Чек</button>' : '<span style="color:var(--text-muted)" title="Чек не требовался — оплата внесена не через программу">—</span>')+'</td>'
  +'<td style="color:var(--text-muted);font-size:11px">'+sanitize(p.comment||'—')+'</td>'
- +'<td><button onclick="inspectPayRow(\''+_pid+'\')" style="font-size:9px;padding:1px 6px;border-radius:10px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer" title="Просмотр сырых данных из таблицы"></button></td>'
+ +'<td><button onclick="payRowMenu(event,\''+_pid+'\')" style="font-size:15px;line-height:1;padding:2px 8px;border-radius:8px;border:1px solid var(--dark-border);background:none;color:var(--text-muted);cursor:pointer" title="Действия с оплатой">\u22EF</button></td>'
  +'</tr>';
  }).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--text-muted);padding:24px">Нет записей</td></tr>';
  finRenderHeader();
  // v834: греем подписанные ссылки всех видимых чеков — клик по «Чек» открывается сразу,
  // без ожидания холодного сервера (чеков в выдаче единицы, трафик копеечный)
  try { ps.filter(function(p){ return p.receiptPath; }).slice(0, 30).forEach(function(p){ payReceiptPrefetch(p.id); }); } catch(_){}
+}
+
+// v880: меню оплаты — изменить или удалить. Раньше в конце строки была служебная
+// кнопка просмотра сырых данных, а удалить оплату можно было только через экран дублей.
+function payRowMenu(ev, pid){
+ ev.stopPropagation();
+ var p = (typeof payments !== 'undefined' ? payments : []).find(function(x){ return String(x.id) === String(pid); });
+ if(!p){ showNotif('Ошибка', 'запись не найдена'); return; }
+ var items = [
+  { value:'edit', label:'Изменить' },
+  { value:'raw', label:'Показать как в таблице' },
+  { value:'del', label:'Удалить' }
+ ];
+ _intgDdOpen(ev.currentTarget || ev.target, items, null, function(v){
+  if(v === 'raw'){ inspectPayRow(pid); return; }
+  if(v === 'del'){ finDeleteDup(p._sbId || pid); return; }
+  if(v === 'edit') payRowEdit(p);
+ });
+}
+
+// Правим то, что программа хранит сама. Сумму, дату и статью правят в таблице «Доходы»:
+// оттуда они приезжают каждый час и перезаписали бы правку в программе.
+function payRowEdit(p){
+ // источник записи известен из данных: sheets_import и bot приезжают из таблицы
+ var fromSheet = (p.source === 'sheets_import' || p.source === 'bot');
+ var box = document.createElement('div');
+ box.className = 'crm-modal-bg';
+ box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999999;display:flex;align-items:center;justify-content:center';
+ var card = document.createElement('div');
+ card.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:16px;padding:20px;width:min(460px,92vw)';
+ card.innerHTML = '<div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:4px">'
+   + sanitize(p.client || '') + '</div>'
+   + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">'
+   + sanitize(String(p.date || '').slice(0,10)) + ' · ' + sanitize(String(p.categoryRaw || '')) + ' · '
+   + fmtFull(p.amount || 0) + '</div>';
+
+ var mk = function(label, value, ph){
+  var w = document.createElement('div');
+  w.style.cssText = 'margin-bottom:10px';
+  var l = document.createElement('div');
+  l.style.cssText = 'font-size:11.5px;color:var(--text-soft);margin-bottom:4px';
+  l.textContent = label;
+  var i = document.createElement('input');
+  i.className = 'form-input';
+  i.value = value || '';
+  i.placeholder = ph || '';
+  i.style.cssText = 'width:100%;font-size:13px';
+  w.appendChild(l); w.appendChild(i);
+  card.appendChild(w);
+  return i;
+ };
+ var comment = mk('Комментарий', p.comment, 'например: оплата за две точки');
+ var bank = mk('Банк', p.method, 'МБизнес, Халык…');
+ var manager = mk('Менеджер', p.managerName, '');
+
+ var note = document.createElement('div');
+ note.style.cssText = 'font-size:11.5px;color:var(--text-muted);line-height:1.5;margin:6px 0 14px';
+ note.textContent = fromSheet
+  ? 'Сумму, дату и статью правьте в таблице «Доходы» — они приходят оттуда каждый час и перезапишут правку в программе.'
+  : 'Эта оплата в таблицу не попадала — правки останутся здесь.';
+ card.appendChild(note);
+
+ var row = document.createElement('div');
+ row.style.cssText = 'display:flex;gap:8px';
+ var cancel = document.createElement('button');
+ cancel.className = 'rtbtn'; cancel.textContent = 'Отмена';
+ cancel.onclick = function(){ box.remove(); };
+ var save = document.createElement('button');
+ save.className = 'rtbtn primary'; save.textContent = 'Сохранить';
+ save.style.marginLeft = 'auto';
+ save.onclick = async function(){
+  save.disabled = true; save.textContent = 'Сохраняю…';
+  try {
+   var d = await sbFetch('/api/payments?id=' + encodeURIComponent(p._sbId || p.id), {
+    method:'PATCH',
+    body: JSON.stringify({ comment: comment.value.trim(), bank: bank.value.trim(), manager_name: manager.value.trim() })
+   });
+   if(!d.ok) throw new Error(d.error || 'не сохранилось');
+   p.comment = comment.value.trim(); p.method = bank.value.trim(); p.managerName = manager.value.trim();
+   box.remove();
+   if(typeof renderAllPayments === 'function') renderAllPayments();
+   showNotif('Сохранено', 'оплата обновлена');
+  } catch(e){
+   save.disabled = false; save.textContent = 'Сохранить';
+   showNotif('Ошибка', e.message || 'не получилось сохранить');
+  }
+ };
+ row.appendChild(cancel); row.appendChild(save);
+ card.appendChild(row);
+ box.appendChild(card);
+ box.onclick = function(e){ if(e.target === box) box.remove(); };
+ document.body.appendChild(box);
+ comment.focus();
 }
 
 // v700: поиск и удаление дублей платежей (один платёж дважды: клиент + сумма + дата)
