@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v872</title>
+<title>SalesDoc — Финансовый Дашборд v873</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1504,7 +1504,7 @@ body.light #view-calendar .cal2-allday > .lbl{background:#FFFFFF}
 .tcard-wrap .tc-cm-input input::placeholder{color:#646B78}
 .tcard-wrap .tc-cm-send{width:42px;border-radius:10px;border:none;background:#4CC2C0;color:#0f1115;font-size:16px;font-weight:800;cursor:pointer;flex:none;font-family:inherit}
 .tcard-wrap .tc-cm-send:disabled{opacity:.4;cursor:default}
-.tcard-wrap .mention-dd{position:absolute;bottom:42px;left:0;width:190px;background:#20242e;border:1px solid #3a3f4d;border-radius:10px;padding:4px 0;box-shadow:0 12px 32px rgba(0,0,0,.5);z-index:5}
+.tcard-wrap .mention-dd{position:absolute;bottom:42px;left:0;width:190px;max-height:220px;overflow-y:auto;background:#20242e;border:1px solid #3a3f4d;border-radius:10px;padding:4px 0;box-shadow:0 12px 32px rgba(0,0,0,.5);z-index:5}
 .tcard-wrap .mention-dd .mi{display:flex;align-items:center;gap:9px;padding:7px 12px;cursor:pointer;font-size:12.5px}
 .tcard-wrap .mention-dd .mi:hover{background:rgba(255,255,255,.05)}
 /* тост «вас отметили» */
@@ -41846,10 +41846,22 @@ function tcardCommentEditStart(ci){
  inp.onblur = save;
 }
 function tcardMentionNames(){
- var set = {};
- ((typeof kbOperators !== 'undefined' && kbOperators.length) ? kbOperators : ['Айдос','Акбар','Самат']).forEach(function(n){ set[crmOpCanon(n)] = 1; });
- try { (employees || []).forEach(function(e){ if(e.active !== false && e.name) set[crmOpCanon(e.name)] = 1; }); } catch(_){}
- return Object.keys(set);
+ // v873: список брался из операторов Внедрения (казахстанские имена кириллицей) плюс
+ // запасной хардкод «Айдос, Акбар, Самат» — кыргызских операторов там не было в принципе,
+ // а в Кыргызстане предлагался чужой Казахстан. Берём «Сотрудников» своей страны,
+ // как в подсказке карточки клиента: человек без страны (директор) виден в обеих.
+ var cc = String((typeof currentCountry !== 'undefined' ? currentCountry : '') || '').toUpperCase();
+ var out = [];
+ try {
+  (employees || []).forEach(function(e){
+   if(e.active === false || !e.name) return;
+   var ec = String(e.country || '').trim().toUpperCase();
+   if(cc && ec && ec !== cc) return;
+   var nm = String(e.name).trim();
+   if(nm && out.indexOf(nm) < 0) out.push(nm);
+  });
+ } catch(_){}
+ return out;
 }
 function tcardMentionHint(){
  var inp = document.getElementById('tc-cm-text');
@@ -41859,7 +41871,7 @@ function tcardMentionHint(){
  var m = upto.match(/@([\wа-яА-ЯёЁ-]*)$/);
  if(!m){ dd.style.display = 'none'; return; }
  var q = (m[1] || '').toLowerCase();
- var names = tcardMentionNames().filter(function(n){ return !q || n.toLowerCase().indexOf(q) === 0; }).slice(0, 6);
+ var names = tcardMentionNames().filter(function(n){ return !q || n.toLowerCase().indexOf(q) === 0; }).slice(0, 12); // v873: список прокручивается
  if(!names.length){ dd.style.display = 'none'; return; }
  dd.innerHTML = names.map(function(n){
   return '<div class="mi" data-n="' + kbEsc(n) + '"><span class="tc-av" style="background:' + tcardAvColor(n) + '">' + kbEsc(cal2Initials(n)) + '</span>' + kbEsc(n) + '</div>';
