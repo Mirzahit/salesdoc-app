@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v874</title>
+<title>SalesDoc — Финансовый Дашборд v875</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -42113,7 +42113,9 @@ window.mnPollStart = ntfPollStart; // алиасы для старых точе�
 window.mnPollStop = ntfPollStop;
 
 async function ntfPoll(){
- if(document.hidden) return;
+ // v875: раньше проверка шла только на активной вкладке. Человек уходил в другую
+ // вкладку или сворачивал программу — и не узнавал ни о чём, пока не вернётся; звук
+ // при возврате уже не играл, потому что уведомление к тому моменту считалось старым.
  if(typeof currentUser === 'undefined' || !currentUser || !currentUser.email) return;
  var d;
  try { d = await sbFetch('/api/notifications'); } catch(_){ return; }
@@ -42124,7 +42126,9 @@ async function ntfPoll(){
  // Тост о новых непрочитанных (появившихся после прошлого тика)
  if(_ntf.lastToastAt){
   var fresh = _ntf.items.filter(function(n){ return !n.is_read && n.created_at > _ntf.lastToastAt; });
-  fresh.slice(0, 3).forEach(function(n, i){ ntfShowToast(n, i); });
+  // Вкладка активна — показываем свою полоску; человек в другом месте — системное окно.
+  if(!document.hidden) fresh.slice(0, 3).forEach(function(n, i){ ntfShowToast(n, i); });
+  else fresh.slice(0, 3).forEach(function(n){ ntfSystemNote(n); });
   if(fresh.length) ntfSound(); // v870: короткий сигнал — иначе уведомление замечают через час
  }
  var mx = _ntf.lastToastAt || new Date(0).toISOString();
@@ -42136,6 +42140,38 @@ async function ntfPoll(){
 // v870: звук уведомления. Файл не подключаем — короткий сигнал синтезируется браузером,
 // это пара строк и ноль лишних запросов. Звук можно выключить в шапке колокольчика:
 // человек за одним столом с коллегами не должен пикать на весь офис.
+// v875: системное окно уведомления — то самое, что вылезает поверх всех программ.
+// Показываем только когда вкладка не на виду: если человек и так смотрит в программу,
+// хватает полоски внутри неё.
+function ntfCanSystem(){
+ try { return ('Notification' in window) && Notification.permission === 'granted'; } catch(_){ return false; }
+}
+function ntfAskSystem(){
+ try {
+  if(!('Notification' in window)){ sdToast('Браузер не умеет показывать такие уведомления'); return; }
+  Notification.requestPermission().then(function(p){
+   if(p === 'granted'){ sdToast('Готово — уведомления будут приходить, даже когда вы в другой вкладке'); ntfSound(); }
+   else sdToast('Разрешение не выдано. Его можно включить в настройках сайта в браузере');
+   if(_ntf.open) ntfPanelDraw();
+  });
+ } catch(_){}
+}
+function ntfSystemNote(n){
+ if(!ntfCanSystem()) return;
+ try {
+  var note = new Notification(String(n.title || 'SalesDoc'), {
+   body: String(n.body || ''),
+   tag: 'sd-' + n.id,        // одно и то же уведомление не показываем дважды
+   icon: '/icon-192.svg'
+  });
+  note.onclick = function(){
+   try { window.focus(); } catch(_){}
+   try { ntfClickItem(n.id); } catch(_){}
+   note.close();
+  };
+ } catch(_){}
+}
+
 function ntfSoundOn(){
  try { return localStorage.getItem('sd_ntf_sound') !== 'off'; } catch(_){ return true; }
 }
@@ -42228,6 +42264,7 @@ function ntfPanelDraw(){
  // v870: переключатель звука — человек в опенспейсе должен уметь его выключить
  var head = '<div class="nh"><span class="t">Уведомления</span>'
   + '<span class="rd" onclick="ntfSoundToggle()" title="Звук нового уведомления">' + (ntfSoundOn() ? 'звук включён' : 'звук выключен') + '</span>'
+  + (ntfCanSystem() ? '' : '<span class="rd" onclick="ntfAskSystem()" title="Показывать уведомления поверх других программ">включить уведомления</span>')
   + (_ntf.unread ? '<span class="rd" onclick="ntfMarkAll()">Прочитать все</span>' : '') + '</div>';
  var list = '';
  if(!_ntf.items.length){
