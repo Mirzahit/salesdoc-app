@@ -1199,10 +1199,12 @@ async function handleSheetsImport(req, res) {
   const year = new Date().getFullYear();
   const nextNumByCountry = { KZ: 1, KG: 1 };
   for (const cn of ['KZ','KG']) {
+    // v882: тот же изъян, что в api/clients.js — номер брали у последнего СОЗДАННОГО
+    // клиента, а номера не всегда идут в порядке создания. Берём максимальный за год.
     const last = await sbSelect('clients', {
       select: 'client_id',
-      country: 'eq.' + cn,
-      order: 'created_at.desc',
+      client_id: 'like.SD-' + cn + '-' + year + '-%',
+      order: 'client_id.desc',
       limit: '1'
     });
     if (last.length) {
