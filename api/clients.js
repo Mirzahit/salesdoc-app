@@ -198,21 +198,25 @@ export default async function handler(req, res) {
       if (!body.client_id) {
         // v364: авто-генерация с префиксом страны: SD-KZ-2026-NNNN / SD-KG-2026-NNNN
         // Уменьшает риск гонки (хотя UNIQUE-индекс в БД всё равно нужен).
-        const existing = await sbSelect('clients', {
-          select: 'client_id',
-          country: 'eq.' + country,
-          order: 'created_at.desc',
-          limit: '1'
-        });
+        // v882: раньше номер брали у ПОСЛЕДНЕГО СОЗДАННОГО клиента и прибавляли единицу.
+        // Но номера не всегда идут в порядке создания: у KG последний созданный был
+        // 00210, а самый большой существующий — 00214, поэтому программа предлагала
+        // 00211 и падала с «такой номер уже есть». Берём максимальный номер года.
         const year = new Date().getFullYear();
         const prefix = 'SD-' + country + '-' + year + '-';
+        const existing = await sbSelect('clients', {
+          select: 'client_id',
+          client_id: 'like.' + prefix + '%',
+          order: 'client_id.desc',
+          limit: '1'
+        });
         let nextNum = 1;
         if (existing.length) {
-          const last = existing[0].client_id || '';
-          const m = last.match(/SD-[A-Z]{2}-\d{4}-(\d+)/);
+          const m = String(existing[0].client_id || '').match(/-(\d+)$/);
           if (m) nextNum = parseInt(m[1], 10) + 1;
         }
         body.client_id = prefix + String(nextNum).padStart(5, '0');
+        body._idAuto = { prefix, nextNum }; // для повтора при столкновении, снимем перед вставкой
       }
       if (!body.company_name) return res.status(400).json({ ok: false, error: 'company_name обязателен' });
       if (body.status && !ALLOWED_STATUS.includes(body.status)) {
@@ -223,7 +227,32 @@ export default async function handler(req, res) {
       // никогда не работал. Снимаем перед вставкой, значение запоминаем для логики ниже.
       const skipAutoTask = body.skip_auto_task === true;
       delete body.skip_auto_task;
-      const result = await sbInsert('clients', body);
+      // v882: если номер всё же заняли между проверкой и вставкой (двое заводят клиента
+      // одновременно) — пробуем следующие. Без этого человек видел техническую ошибку
+      // про duplicate key и не понимал, что делать.
+      const idAuto = body._idAuto || null;
+      delete body._idAuto;
+      // v882: вставка с повтором — если номер успели занять, берём следующий свободный.
+      let result;
+      let attempt = 0;
+      while (true) {
+        try {
+          result = await sbInsert('clients', body);
+          break;
+        } catch (e) {
+          const msg = String((e && e.message) || e);
+          const isDup = msg.includes('23505') || msg.toLowerCase().includes('duplicate key');
+          if (!isDup || !idAuto || attempt >= 20) {
+            if (isDup) {
+              return res.status(409).json({ ok: false,
+                error: 'Клиент с таким номером уже есть. Обновите страницу и попробуйте ещё раз.' });
+            }
+            throw e;
+          }
+          attempt++;
+          body.client_id = idAuto.prefix + String(idAuto.nextNum + attempt).padStart(5, '0');
+        }
+      }
 
       // v452: авто-задача «Связаться» при создании клиента (spec §8 п.2).
       // Запускается всегда, кроме случая когда явно отключено body.skip_auto_task=true.
