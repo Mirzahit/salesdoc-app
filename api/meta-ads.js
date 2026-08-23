@@ -13,6 +13,13 @@
 import { checkAuth } from './_auth.js';
 
 const META_API_VERSION = 'v21.0';
+// v885: вся реклама обеих стран крутится в ОДНОМ рекламном кабинете — это подтвердил CEO,
+// показав аккаунт, из которого идёт таргет на Кыргызстан. Отдельный кабинет KG из env
+// заброшен, его токен протух 17.07.2026: он только рисовал плашку «кабинет не отвечает»
+// и ломал Meta-блоки при переключении страны на KG.
+// Страны теперь делятся по стране аудитории (breakdowns=country), а не по кабинету.
+// Появится второй ЖИВОЙ кабинет — поставить false и заполнить env с суффиксом _KG.
+const SINGLE_CABINET = true;
 const ALLOWED_PERIODS = new Set([
   'today','yesterday','this_month','last_month','this_quarter','maximum',
   'last_3d','last_7d','last_14d','last_28d','last_30d','last_90d','last_year','this_year'
@@ -130,7 +137,7 @@ async function metaFetchAllPages(pathOrUrl, params, token, maxPages) {
 // v883: кабинет по коду страны — нужен для разреза по гео, где мы можем опросить оба
 // кабинета сразу (KG-кампании физически лежат в кабинете KZ).
 function resolveCabinet(code) {
-  if (String(code).toUpperCase() === 'KG') {
+  if (!SINGLE_CABINET && String(code).toUpperCase() === 'KG') {
     return {
       code: 'KG',
       account: (process.env.META_AD_ACCOUNT_ID_KG || '').trim(),
@@ -192,7 +199,7 @@ export default async function handler(req, res) {
   // .trim() убирает невидимые пробелы при копи-паст в Vercel UI.
   const country = String(req.query.country || 'KZ').toUpperCase();
   let TOKEN, ACCOUNT;
-  if (country === 'KG') {
+  if (!SINGLE_CABINET && country === 'KG') {
     ACCOUNT = (process.env.META_AD_ACCOUNT_ID_KG || '').trim();
     // Если отдельного KG-токена нет, используем общий (если оба кабинета под одним Business Manager)
     TOKEN = (process.env.META_ACCESS_TOKEN_KG || process.env.META_ACCESS_TOKEN || '').trim();
@@ -403,7 +410,7 @@ export default async function handler(req, res) {
       // scope=all — опрашиваем оба кабинета и складываем; упавший кабинет не роняет ответ.
       const daily = endpoint === 'geo_daily';
       const scope = String(req.query.scope || 'all').toLowerCase();
-      const codes = scope === 'all' ? ['KZ', 'KG'] : [country];
+      const codes = (scope === 'all' && !SINGLE_CABINET) ? ['KZ', 'KG'] : [SINGLE_CABINET ? 'KZ' : country];
       const cabinets = [];
       const rows = [];
       // Один и тот же аккаунт может стоять в env обеих стран (вся реклама крутится в одном
@@ -496,7 +503,7 @@ export default async function handler(req, res) {
       // v884: кампании × страна аудитории. Берём insights уровня кампании с breakdowns=country,
       // а не /campaigns?fields=insights — иначе разбивки по странам не получить.
       const scope = String(req.query.scope || 'all').toLowerCase();
-      const codes = scope === 'all' ? ['KZ', 'KG'] : [country];
+      const codes = (scope === 'all' && !SINGLE_CABINET) ? ['KZ', 'KG'] : [SINGLE_CABINET ? 'KZ' : country];
       const cabinets = [];
       const rows = [];
       const seenAccounts = new Set();
