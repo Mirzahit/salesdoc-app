@@ -936,8 +936,15 @@ export default async function handler(req, res){
       const isLossStatus = (st) => Number(st.id) === 143 || Number(st.sort) === 11000 || /закрыт.*не.*реализ|не реализ/i.test(String(st.name||''));
       const isWonStatus  = (st) => Number(st.id) === 142 || Number(st.sort) === 10000 || /успешн.*реализ/i.test(String(st.name||''));
       const flow = p.statuses.filter(st => !isLossStatus(st) && !isWonStatus(st)).sort((a,b) => a.sort - b.sort);
+      // Карта «этап → насколько далеко по воронке». Отказные этапы (sort 11000) НЕ значат,
+      // что лид прошёл всю воронку — их reach берём только из истории смен статуса.
+      // «Успешно реализовано» наоборот засчитываем как пройденную воронку целиком.
+      const maxFlowSort = flow.length ? Number(flow[flow.length - 1].sort) : 0;
       const sortById = {};
-      p.statuses.forEach(st => { sortById[st.id] = Number(st.sort); });
+      p.statuses.forEach(st => {
+        if(isLossStatus(st)) return;
+        sortById[st.id] = isWonStatus(st) ? maxFlowSort : Number(st.sort);
+      });
 
       const pick = (re) => flow.find(st => re.test(String(st.name||'').toLowerCase()));
       const stMeeting = pick(/назначен.*встреч|встреч.*назначен/);
