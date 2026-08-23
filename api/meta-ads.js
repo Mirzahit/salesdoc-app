@@ -396,6 +396,94 @@ export default async function handler(req, res) {
       });
       result = { period, account_id: ACCOUNT, ads, truncated };
 
+    } else if (endpoint === 'geo' || endpoint === 'geo_daily') {
+      // v883: разрез по СТРАНЕ АУДИТОРИИ, а не по рекламному кабинету.
+      // Зачем: кыргызские кампании крутятся внутри казахстанского кабинета, поэтому
+      // переключатель KZ/KG показывал не то. Meta умеет breakdowns=country — берём оттуда.
+      // scope=all — опрашиваем оба кабинета и складываем; упавший кабинет не роняет ответ.
+      const daily = endpoint === 'geo_daily';
+      const scope = String(req.query.scope || 'all').toLowerCase();
+      const codes = scope === 'all' ? ['KZ', 'KG'] : [country];
+      const cabinets = [];
+      const rows = [];
+      for (const code of codes) {
+        const cab = resolveCabinet(code);
+        if (!cab.account || !cab.token) {
+          cabinets.push({ code: code, account: cab.account || null, ok: false, error: 'кабинет не настроен в Vercel env' });
+          continue;
+        }
+        try {
+          const data = await metaFetchAllPages(`/${cab.account}/insights`, {
+            fields: 'spend,impressions,clicks,inline_link_clicks,ctr,reach,actions,cost_per_action_type,account_currency,date_start,date_stop',
+            date_preset: period,
+            level: 'account',
+            breakdowns: 'country',
+            limit: daily ? 500 : 200,
+            ...(daily ? { time_increment: 1 } : {})
+          }, cab.token, daily ? 40 : 10);
+          cabinets.push({ code: code, account: cab.account, ok: true, rows: data.length });
+          rows.push(...data);
+        } catch (e) {
+          cabinets.push({ code: code, account: cab.account, ok: false, error: e.message || String(e) });
+        }
+      }
+      if (!rows.length && !cabinets.some(c => c.ok)) {
+        return res.status(502).json({ error: 'Meta не отдала данные ни по одному кабинету', cabinets });
+      }
+      const currency = (rows.find(r => r.account_currency) || {}).account_currency || 'USD';
+      if (daily) {
+        const byDate = new Map();
+        const seenCountries = new Set();
+        rows.forEach(r => {
+          const date = r.date_start;
+          const cc = String(r.country || '??').toUpperCase();
+          seenCountries.add(cc);
+          if (!byDate.has(date)) byDate.set(date, {});
+          const slot = byDate.get(date);
+          const leads = summarizeLeads(r.actions, r.cost_per_action_type);
+          const prev = slot[cc] || { spend: 0, leads: 0, impressions: 0, clicks: 0 };
+          slot[cc] = {
+            spend: prev.spend + Number(r.spend || 0),
+            leads: prev.leads + (leads.count || 0),
+            impressions: prev.impressions + Number(r.impressions || 0),
+            clicks: prev.clicks + Number(r.clicks || 0)
+          };
+        });
+        const days = [...byDate.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)
+          .map(([date, by_country]) => ({ date, by_country }));
+        result = { period, currency, days, countries: [...seenCountries].sort(), cabinets };
+      } else {
+        const agg = new Map();
+        rows.forEach(r => {
+          const cc = String(r.country || '??').toUpperCase();
+          const leads = summarizeLeads(r.actions, r.cost_per_action_type);
+          const prev = agg.get(cc) || { code: cc, spend: 0, leads: 0, impressions: 0, clicks: 0, link_clicks: 0, reach: 0 };
+          prev.spend += Number(r.spend || 0);
+          prev.leads += leads.count || 0;
+          prev.impressions += Number(r.impressions || 0);
+          prev.clicks += Number(r.clicks || 0);
+          prev.link_clicks += Number(r.inline_link_clicks || 0);
+          prev.reach += Number(r.reach || 0);
+          agg.set(cc, prev);
+        });
+        const countries = [...agg.values()].map(c => ({
+          ...c,
+          spend: Math.round(c.spend * 100) / 100,
+          cpl: c.leads > 0 ? Math.round((c.spend / c.leads) * 100) / 100 : null,
+          ctr: c.impressions > 0 ? Math.round((c.clicks / c.impressions) * 10000) / 100 : 0
+        })).sort((a, b) => b.spend - a.spend);
+        const totalSpend = countries.reduce((a, c) => a + c.spend, 0);
+        const totalLeads = countries.reduce((a, c) => a + c.leads, 0);
+        result = {
+          period, currency, countries, cabinets,
+          total: {
+            spend: Math.round(totalSpend * 100) / 100,
+            leads: totalLeads,
+            cpl: totalLeads > 0 ? Math.round((totalSpend / totalLeads) * 100) / 100 : null
+          }
+        };
+      }
+
     } else {
       return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info','geo','geo_daily'] });
     }
