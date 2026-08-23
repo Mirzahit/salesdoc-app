@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v884</title>
+<title>SalesDoc — Финансовый Дашборд v885</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -20356,8 +20356,16 @@ function _mkdCountryCards(t){
 function _mkdCampCountries(c){
  return Object.keys(c.by_country || {}).sort(function(a, b){ return c.by_country[b].spend - c.by_country[a].spend; });
 }
+// Русское склонение: 1 переписка, 2-4 переписки, 5+ переписок.
+function _mkdPlural(n, one, few, many){
+ var a = Math.abs(n) % 100, b = a % 10;
+ if(a > 10 && a < 20) return many;
+ if(b > 1 && b < 5) return few;
+ if(b === 1) return one;
+ return many;
+}
 function _mkdVerdict(c, avgCpl){
- if(c.leads === 0 && c.msgs > 0) return { cls:'hold', t: c.msgs + ' переписок' };
+ if(c.leads === 0 && c.msgs > 0) return { cls:'hold', t: c.msgs + ' ' + _mkdPlural(c.msgs, 'переписка', 'переписки', 'переписок') };
  if(c.leads === 0 && c.spend > 20) return { cls:'bad', t:'убрать' };
  if(c.leads === 0) return { cls:'norm', t:'ждём' };
  if(avgCpl > 0 && c.cpl != null && c.cpl <= avgCpl*0.85) return { cls:'good', t:'масштабировать' };
