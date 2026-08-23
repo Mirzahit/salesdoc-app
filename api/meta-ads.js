@@ -492,8 +492,110 @@ export default async function handler(req, res) {
         };
       }
 
+    } else if (endpoint === 'campaigns_geo') {
+      // v884: кампании × страна аудитории. Берём insights уровня кампании с breakdowns=country,
+      // а не /campaigns?fields=insights — иначе разбивки по странам не получить.
+      const scope = String(req.query.scope || 'all').toLowerCase();
+      const codes = scope === 'all' ? ['KZ', 'KG'] : [country];
+      const cabinets = [];
+      const rows = [];
+      const seenAccounts = new Set();
+      for (const code of codes) {
+        const cab = resolveCabinet(code);
+        if (!cab.account || !cab.token) { cabinets.push({ code: code, ok: false, error: 'кабинет не настроен' }); continue; }
+        if (seenAccounts.has(cab.account)) { cabinets.push({ code: code, account: cab.account, ok: true, rows: 0, note: 'тот же кабинет' }); continue; }
+        seenAccounts.add(cab.account);
+        try {
+          const data = await metaFetchAllPages(`/${cab.account}/insights`, {
+            fields: 'campaign_id,campaign_name,spend,impressions,clicks,actions,cost_per_action_type,account_currency',
+            date_preset: period,
+            level: 'campaign',
+            breakdowns: 'country',
+            limit: 400
+          }, cab.token, 20);
+          cabinets.push({ code: code, account: cab.account, ok: true, rows: data.length });
+          rows.push(...data);
+        } catch (e) {
+          cabinets.push({ code: code, account: cab.account, ok: false, error: e.message || String(e) });
+        }
+      }
+      const byCamp = new Map();
+      const seenCountries = new Set();
+      rows.forEach(r => {
+        const id = r.campaign_id;
+        const cc = String(r.country || '??').toUpperCase();
+        seenCountries.add(cc);
+        const leads = summarizeLeads(r.actions, r.cost_per_action_type);
+        const msgs = Array.isArray(r.actions)
+          ? r.actions.filter(a => a.action_type === 'onsite_conversion.messaging_conversation_started_7d')
+              .reduce((sum, a) => sum + (parseFloat(a.value) || 0), 0)
+          : 0;
+        if (!byCamp.has(id)) byCamp.set(id, { id: id, name: r.campaign_name || '(без названия)', spend: 0, leads: 0, msgs: 0, by_country: {} });
+        const c = byCamp.get(id);
+        c.spend += Number(r.spend || 0);
+        c.leads += leads.count || 0;
+        c.msgs += msgs;
+        const prev = c.by_country[cc] || { spend: 0, leads: 0, msgs: 0 };
+        c.by_country[cc] = { spend: prev.spend + Number(r.spend || 0), leads: prev.leads + (leads.count || 0), msgs: prev.msgs + msgs };
+      });
+      const campaigns = [...byCamp.values()].map(c => ({
+        ...c,
+        spend: Math.round(c.spend * 100) / 100,
+        cpl: c.leads > 0 ? Math.round((c.spend / c.leads) * 100) / 100 : null
+      })).sort((a, b) => b.spend - a.spend);
+      result = {
+        period,
+        currency: (rows.find(r => r.account_currency) || {}).account_currency || 'USD',
+        campaigns, countries: [...seenCountries].sort(), cabinets
+      };
+
+    } else if (endpoint === 'campaign_detail') {
+      // v884: одна кампания — по дням (с разбивкой по странам) плюс её объявления.
+      // Для проваливания из дашборда: «что эта кампания давала день за днём».
+      const campaignId = String(req.query.campaign_id || '').replace(/[^0-9]/g, '');
+      if (!campaignId) return res.status(400).json({ error: 'Нужен campaign_id' });
+      const daysRaw = await metaFetchAllPages(`/${campaignId}/insights`, {
+        fields: 'spend,impressions,clicks,actions,cost_per_action_type,date_start',
+        date_preset: period,
+        breakdowns: 'country',
+        time_increment: 1,
+        limit: 500
+      }, TOKEN, 20).catch(() => []);
+      const byDate = new Map();
+      const seen = new Set();
+      daysRaw.forEach(r => {
+        const cc = String(r.country || '??').toUpperCase();
+        seen.add(cc);
+        if (!byDate.has(r.date_start)) byDate.set(r.date_start, {});
+        const leads = summarizeLeads(r.actions, r.cost_per_action_type);
+        const slot = byDate.get(r.date_start);
+        const prev = slot[cc] || { spend: 0, leads: 0 };
+        slot[cc] = { spend: prev.spend + Number(r.spend || 0), leads: prev.leads + (leads.count || 0) };
+      });
+      const days = [...byDate.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([date, by_country]) => ({ date, by_country }));
+      let ads = [];
+      try {
+        const adData = await metaFetch(`/${campaignId}/ads`, {
+          fields: `id,name,status,insights.date_preset(${period}){spend,impressions,clicks,ctr,actions,cost_per_action_type}`,
+          limit: 100
+        }, TOKEN);
+        ads = (adData.data || []).map(a => {
+          const ins = (a.insights && a.insights.data && a.insights.data[0]) || null;
+          const leads = ins ? summarizeLeads(ins.actions, ins.cost_per_action_type) : { count: 0 };
+          const spend = ins ? Number(ins.spend || 0) : 0;
+          return {
+            id: a.id, name: a.name, status: a.status,
+            spend: Math.round(spend * 100) / 100,
+            leads: leads.count || 0,
+            ctr: ins ? parseFloat(ins.ctr || 0) : 0,
+            cpl: leads.count > 0 ? Math.round((spend / leads.count) * 100) / 100 : null
+          };
+        }).filter(a => a.spend > 0).sort((a, b) => b.spend - a.spend);
+      } catch (e) { ads = []; }
+      result = { period, campaign_id: campaignId, days, countries: [...seen].sort(), ads };
+
     } else {
-      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info','geo','geo_daily'] });
+      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info','geo','geo_daily','campaigns_geo','campaign_detail'] });
     }
 
     // v442: метка страны в ответе — для отладки в DevTools Network видно какой кабинет ответил.
