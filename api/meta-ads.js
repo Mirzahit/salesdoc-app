@@ -406,12 +406,20 @@ export default async function handler(req, res) {
       const codes = scope === 'all' ? ['KZ', 'KG'] : [country];
       const cabinets = [];
       const rows = [];
+      // Один и тот же аккаунт может стоять в env обеих стран (вся реклама крутится в одном
+      // кабинете) — опрашиваем его один раз, иначе расход и лиды удвоятся.
+      const seenAccounts = new Set();
       for (const code of codes) {
         const cab = resolveCabinet(code);
         if (!cab.account || !cab.token) {
           cabinets.push({ code: code, account: cab.account || null, ok: false, error: 'кабинет не настроен в Vercel env' });
           continue;
         }
+        if (seenAccounts.has(cab.account)) {
+         cabinets.push({ code: code, account: cab.account, ok: true, rows: 0, note: 'тот же кабинет, уже посчитан' });
+         continue;
+        }
+        seenAccounts.add(cab.account);
         try {
           const data = await metaFetchAllPages(`/${cab.account}/insights`, {
             fields: 'spend,impressions,clicks,inline_link_clicks,ctr,reach,actions,cost_per_action_type,account_currency,date_start,date_stop',
