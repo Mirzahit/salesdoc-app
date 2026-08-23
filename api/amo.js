@@ -920,6 +920,101 @@ export default async function handler(req, res){
         _subdomain: env.AMO_SUBDOMAIN
       });
     }
+    if(action === 'geo_quals'){
+      // v883: квалы по стране за период — для дашборда «Страны» в Маркетинге.
+      // Лид считается дошедшим до этапа, если он СЕЙЧАС на этом этапе или дальше,
+      // ЛИБО когда-то на нём был (история смен статуса) — иначе слитые лиды теряются,
+      // а их в воронке большинство, и конверсия получалась бы втрое ниже реальной.
+      const fromTs = req.query.from ? Number(req.query.from) : null;
+      const toTs = req.query.to ? Number(req.query.to) : null;
+      if(!fromTs) return bad(res, 400, 'Need ?from=<unix> (&to=<unix>)');
+
+      const pipelines = await getPipelines(env);
+      const p = pipelines.find(x => /^лид/i.test(x.name || '')) || pipelines.find(x => x.is_main) || pipelines[0];
+      if(!p) return bad(res, 500, 'no pipelines found');
+
+      const isLossStatus = (st) => Number(st.id) === 143 || Number(st.sort) === 11000 || /закрыт.*не.*реализ|не реализ/i.test(String(st.name||''));
+      const isWonStatus  = (st) => Number(st.id) === 142 || Number(st.sort) === 10000 || /успешн.*реализ/i.test(String(st.name||''));
+      const flow = p.statuses.filter(st => !isLossStatus(st) && !isWonStatus(st)).sort((a,b) => a.sort - b.sort);
+      const sortById = {};
+      p.statuses.forEach(st => { sortById[st.id] = Number(st.sort); });
+
+      const pick = (re) => flow.find(st => re.test(String(st.name||'').toLowerCase()));
+      const stMeeting = pick(/назначен.*встреч|встреч.*назначен/);
+      const stInvoice = pick(/сч[еёe]т.*выставл|выставл.*сч[еёe]т/);
+
+      // 1) лиды, созданные в периоде
+      let dateFilter = `&filter[created_at][from]=${fromTs}`;
+      if(toTs) dateFilter += `&filter[created_at][to]=${toTs}`;
+      const leads = [];
+      let truncated = false;
+      for(let page = 1; page <= 8; page++){
+        const data = await amoFetch(`/leads?filter[pipeline_id]=${p.id}${dateFilter}&limit=250&page=${page}`, env);
+        if(!data) break;
+        const batch = (data._embedded && data._embedded.leads) || [];
+        if(!batch.length) break;
+        leads.push(...batch);
+        if(batch.length < 250) break;
+        if(page === 8) truncated = true;
+      }
+      const leadIds = new Set(leads.map(l => l.id));
+
+      // 2) история смен статуса с начала периода — чтобы поймать тех, кто прошёл этап и слился
+      const reachedSort = new Map(); // lead_id → максимальный sort этапа, где лид когда-либо был
+      leads.forEach(l => {
+        const st = sortById[l.status_id];
+        if(st !== undefined) reachedSort.set(l.id, st);
+      });
+      let eventsScanned = 0, eventsTruncated = false, eventsError = null;
+      try {
+        for(let page = 1; page <= 40; page++){
+          const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&limit=100&page=${page}`, env);
+          if(!ev) break;
+          const batch = (ev._embedded && ev._embedded.events) || [];
+          if(!batch.length) break;
+          eventsScanned += batch.length;
+          batch.forEach(e => {
+            const id = Number(e.entity_id);
+            if(!leadIds.has(id)) return;
+            const after = (e.value_after && e.value_after[0] && e.value_after[0].lead_status) || null;
+            if(!after) return;
+            const st = sortById[after.id];
+            if(st === undefined) return;
+            const prev = reachedSort.get(id);
+            if(prev === undefined || st > prev) reachedSort.set(id, st);
+          });
+          if(batch.length < 100) break;
+          if(page === 40) eventsTruncated = true;
+        }
+      } catch(e){ eventsError = e.message || String(e); }
+
+      // 3) считаем: «дошёл до этапа» = максимальный достигнутый sort >= sort этапа.
+      // «Успешно реализовано» (sort 10000) проходит все этапы автоматически.
+      const countReached = (st) => {
+        if(!st) return null;
+        let n = 0;
+        reachedSort.forEach(v => { if(v >= Number(st.sort)) n++; });
+        return n;
+      };
+      const wonIds = new Set(p.statuses.filter(isWonStatus).map(st => st.id));
+      const wonLeads = leads.filter(l => wonIds.has(l.status_id));
+
+      return res.status(200).json({
+        country: country,
+        pipeline: { id: p.id, name: p.name },
+        from: fromTs, to: toTs || null,
+        leads: leads.length,
+        truncated: truncated,
+        stages: {
+          meeting: stMeeting ? { id: stMeeting.id, name: stMeeting.name, sort: stMeeting.sort, count: countReached(stMeeting) } : null,
+          invoice: stInvoice ? { id: stInvoice.id, name: stInvoice.name, sort: stInvoice.sort, count: countReached(stInvoice) } : null
+        },
+        won: { count: wonLeads.length, sum: wonLeads.reduce((a,l) => a + Number(l.price||0), 0) },
+        flow: flow.map(st => ({ id: st.id, name: st.name, sort: st.sort })),
+        events: { scanned: eventsScanned, truncated: eventsTruncated, error: eventsError },
+        _subdomain: env.AMO_SUBDOMAIN
+      });
+    }
     if(action === 'phone_lookup'){
       // v317: debug — поиск контакта/лида в amo по конкретному телефону, в разных форматах
       const phone = String(req.query.phone || '').replace(/\D/g, '');

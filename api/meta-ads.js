@@ -110,6 +110,40 @@ async function metaFetch(pathOrUrl, params, token) {
   return json;
 }
 
+// v883: постраничная выборка insights. Meta отдаёт по 25 строк по умолчанию, а с
+// разбивкой (breakdowns) строк становится «дни × страны» — без пагинации данные обрываются.
+async function metaFetchAllPages(pathOrUrl, params, token, maxPages) {
+  const out = [];
+  let url = null;
+  for (let page = 0; page < (maxPages || 20); page++) {
+    const json = page === 0
+      ? await metaFetch(pathOrUrl, params, token)
+      : await metaFetch(url, null, token);
+    if (json && Array.isArray(json.data)) out.push(...json.data);
+    const next = json && json.paging && json.paging.next;
+    if (!next) break;
+    url = next;
+  }
+  return out;
+}
+
+// v883: кабинет по коду страны — нужен для разреза по гео, где мы можем опросить оба
+// кабинета сразу (KG-кампании физически лежат в кабинете KZ).
+function resolveCabinet(code) {
+  if (String(code).toUpperCase() === 'KG') {
+    return {
+      code: 'KG',
+      account: (process.env.META_AD_ACCOUNT_ID_KG || '').trim(),
+      token: (process.env.META_ACCESS_TOKEN_KG || process.env.META_ACCESS_TOKEN || '').trim()
+    };
+  }
+  return {
+    code: 'KZ',
+    account: (process.env.META_AD_ACCOUNT_ID || '').trim(),
+    token: (process.env.META_ACCESS_TOKEN || '').trim()
+  };
+}
+
 function validatePeriod(p) {
   return p && ALLOWED_PERIODS.has(p) ? p : 'last_30d';
 }
@@ -363,7 +397,7 @@ export default async function handler(req, res) {
       result = { period, account_id: ACCOUNT, ads, truncated };
 
     } else {
-      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info'] });
+      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info','geo','geo_daily'] });
     }
 
     // v442: метка страны в ответе — для отладки в DevTools Network видно какой кабинет ответил.
