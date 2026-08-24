@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v886</title>
+<title>SalesDoc — Финансовый Дашборд v887</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -15375,8 +15375,11 @@ function _initialViewAfterLogin(){
 }
 function defaultViewForUser(u){
  if (!u || !u.access) return 'dashboard';
- var preferred = ['dashboard','kanban','planning','knowledge','cabinet'];
- var keyMap = {dashboard:'view_dashboard',kanban:'view_kanban',planning:'view_planning',knowledge:'view_knowledge',cabinet:'view_cabinet'};
+ // v886-hotfix: возвращаем 'route', а НЕ 'kanban' — экран view-kanban удалён в v886, и операторы
+ // (у них дефолт как раз канбан) получали пустую страницу: подстановка ниже по showView идёт ПОСЛЕ
+ // строки редиректа kanban→route, поэтому редирект её уже не ловил. Право осталось view_kanban.
+ var preferred = ['dashboard','route','planning','knowledge','cabinet'];
+ var keyMap = {dashboard:'view_dashboard',route:'view_kanban',planning:'view_planning',knowledge:'view_knowledge',cabinet:'view_cabinet'};
  for (var i = 0; i < preferred.length; i++) {
  var k = keyMap[preferred[i]];
  if (u.access[k] === 1 || u.access[k] === true) return preferred[i];
@@ -15431,6 +15434,13 @@ function showView(v) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
  v = defaultViewForUser(currentUser);
  }
+ }
+ // v886-hotfix: страховка от пустого экрана. Если v указывает на несуществующий экран (удалённый
+ // раздел, опечатка, старая ссылка), цикл ниже скрыл бы ВСЁ и не показал ничего. Подставляем рабочий.
+ if (!document.getElementById('view-' + v)) {
+ var _fb = (currentUser && currentUser.access && (currentUser.access.view_dashboard === 1 || currentUser.access.view_dashboard === true)) ? 'dashboard' : 'route';
+ try { console.warn('[showView] экран view-' + v + ' не найден, открываю ' + _fb); } catch(_){}
+ v = _fb;
  }
  ['dashboard','payments','plan','assistant','cabinet','settings','marketing','expenses','cashflow','integrations','knowledge','academy','reports','route','tickets','planning','calendar','mytasks','supportdash','activeclients','churn','botadmin','fdx','dues'].forEach(x=>{
  const el=document.getElementById('view-'+x);
@@ -15505,7 +15515,8 @@ function showView(v) {
  // v359: Hide route card fullscreen page
  var rtCard = document.getElementById('view-route-card');
  if(rtCard) { rtCard.style.display='none'; document.body.style.overflow=''; }
- const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Планы',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',integrations:'Клиенты',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',calendar:'Задачи',supportdash:'Тех.поддержка',activeclients:'Клиенты',route:'Клиенты',tickets:'Клиенты',planning:'Планёрки'};
+ // v886-hotfix: добавлены dues/mytasks/cashflow/fdx/churn — без них в шапке светился техничный id («dues»)
+ const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Планы',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',cashflow:'Прогноз денег',integrations:'Клиенты',knowledge:'База знаний',academy:'Академия',reports:'Отчёты',calendar:'Задачи',mytasks:'Мои задачи',supportdash:'Тех.поддержка',activeclients:'Клиенты',route:'Клиенты',tickets:'Клиенты',dues:'Клиенты',churn:'Отток и спады',fdx:'Цели',planning:'Планёрки'};
  document.getElementById('page-title').textContent=titles[v]||v;
  // Подсветка активного пункта в nav
  document.querySelectorAll('.nav-item[data-view]').forEach(function(el){
