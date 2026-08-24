@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v894</title>
+<title>SalesDoc — Финансовый Дашборд v895</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -14147,8 +14147,8 @@ function renderAllPayments() {
  }
 
  // v894: свои дропдауны вместо системных списков (менеджер, банк) — после наполнения опций
- try { sdSelectChip('filter-employee'); sdSelectChipSync('filter-employee'); } catch(_){}
- try { sdSelectChip('filter-bank'); sdSelectChipSync('filter-bank'); } catch(_){}
+ try { sdSelectChip('filter-employee', {compact:true}); sdSelectChipSync('filter-employee'); } catch(_){}
+ try { sdSelectChip('filter-bank', {compact:true}); sdSelectChipSync('filter-bank'); } catch(_){}
 
  document.getElementById('all-payments').innerHTML = ps.map(function(p) {
  // v786: JSON.stringify строкового id давал ДВОЙНЫЕ кавычки внутри onclick="..." — атрибут рвался,
@@ -25329,8 +25329,8 @@ function expRender() {
  }
 
  // v894: свои дропдауны вместо системных списков — вызываем после наполнения опций
- try { sdSelectChip('exp-filter-cat'); sdSelectChipSync('exp-filter-cat'); } catch(_){}
- try { sdSelectChip('exp-filter-bank'); sdSelectChipSync('exp-filter-bank'); } catch(_){}
+ try { sdSelectChip('exp-filter-cat', {compact:true}); sdSelectChipSync('exp-filter-cat'); } catch(_){}
+ try { sdSelectChip('exp-filter-bank', {compact:true}); sdSelectChipSync('exp-filter-bank'); } catch(_){}
 
  // Table
  expRenderTable();
@@ -43650,14 +43650,18 @@ async function crmTasksUpdateCount(client_id){
 // v894: превращает системный <select> в свой дропдаун (правило проекта — никаких списков ОС).
 // Сам select остаётся источником правды: прячем его, рядом рисуем чип, по клику открываем
 // crmTasksOpenDropdown. Выбор пишем в select и дёргаем его onchange — вся логика форм цела.
-function sdSelectChip(selectId){
+// opts.compact — фильтр в строке (по ширине содержимого); по умолчанию поле формы на всю ширину
+function sdSelectChip(selectId, opts){
  var sel = document.getElementById(selectId);
  if(!sel || sel.dataset.sdChip === '1') return;
+ opts = opts || {};
  sel.dataset.sdChip = '1';
  sel.style.display = 'none';
  var chip = document.createElement('div');
  chip.className = 'sd-chip-select';
- chip.style.cssText = 'width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);box-sizing:border-box;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;gap:8px';
+ chip.style.cssText = opts.compact
+  ? 'display:inline-flex;width:auto;padding:5px 10px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);box-sizing:border-box;font-size:11px;cursor:pointer;align-items:center;justify-content:space-between;user-select:none;gap:8px;white-space:nowrap'
+  : 'width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);box-sizing:border-box;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;gap:8px';
  var label = document.createElement('span');
  var caret = document.createElement('span');
  caret.style.cssText = 'color:var(--text-muted);font-size:10px;flex:none';
