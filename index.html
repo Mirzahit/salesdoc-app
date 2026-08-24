@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v888</title>
+<title>SalesDoc — Финансовый Дашборд v889</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11696,6 +11696,18 @@ function switchCountry(code) {
  // v886-qa: сводки дашборда (Внедрение/Маркетинг) — сбросить троттлинг, иначе до 5 минут цифры старой страны
  window._dashSumTs = 0;
  try { var _vd = document.getElementById('view-dashboard'); if(_vd && _vd.style.display !== 'none' && typeof dashLoadSummaries === 'function') dashLoadSummaries(true); } catch(_){}
+ // v889 FIX: план Светофора СВОЙ на страну. Без сброса на KZ показывались цифры KG (и наоборот):
+ // и «План месяца» в герое, и «План по менеджерам» — с чужими людьми и чужими суммами.
+ planLastData = null;
+ window._planLoadingForDash = false;
+ try { if(typeof renderMgrPlanRows === 'function') renderMgrPlanRows(); } catch(_){}
+ try {
+  if(typeof planInit === 'function') planInit();
+  if(typeof planLoad === 'function') planLoad().then(function(){
+   try { if(typeof renderMgrPlanRows === 'function') renderMgrPlanRows(); } catch(_){}
+   try { if(typeof renderAll === 'function') renderAll(); } catch(_){}
+  }).catch(function(){});
+ } catch(_){}
  // v360: если открыт Маркетинг или Воронка — перезагрузить Meta-данные новой страны
  try {
   var vm = document.getElementById('view-marketing');
@@ -13142,11 +13154,14 @@ function renderMgrPlanRows(){
  }
  var rows = [];
  planLastData.agents.forEach(function(a){
+ // v889: «Новый менеджер» — незаполненный слот в Светофоре, не человек. В блок не берём.
+ var nm = String(a.name||'').trim();
+ if(!nm || /^нов(ый|ая)\s+менеджер$/i.test(nm)) return;
  var plan = 0, fact = 0;
  (a.kpis || []).forEach(function(k){
  if(String(k.name||'').toLowerCase().indexOf('продаж') >= 0){ plan += Number(k.plan)||0; fact += Number(k.fact)||0; }
  });
- if(plan > 0) rows.push({ name: a.name, plan: plan, fact: fact, pct: Math.round(fact/plan*100) });
+ if(plan > 0) rows.push({ name: nm, plan: plan, fact: fact, pct: Math.round(fact/plan*100) });
  });
  if(!rows.length){
  el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:6px 0">В Светофоре нет планов продаж по менеджерам на этот месяц.</div>';
@@ -13202,16 +13217,17 @@ function dashLoadSummaries(force){
  })();
  if(mktEl) (async function(){
  try {
- var r = await authFetch('/api/meta-ads?endpoint=account_summary&period=last_7d&country=' + currentCountry);
+ // v889: разрез по СТРАНЕ АУДИТОРИИ (endpoint=geo), а не по кабинету. Кабинет один на обе
+ // страны, поэтому account_summary давал одинаковые цифры для KZ и KG — неправда для страны.
+ var r = await authFetch('/api/meta-ads?endpoint=geo&period=last_7d&scope=all&country=' + currentCountry);
  if(!r.ok) throw new Error('http ' + r.status);
  var data = await r.json();
  if(data.error) throw new Error(data.error);
- var s = data.summary || {};
- var sym = '$';
- try { var ir = await authFetch('/api/meta-ads?endpoint=account_info&country=' + currentCountry); if(ir.ok){ var info = await ir.json(); if(info && info.currency === 'KZT') sym = '₸'; } } catch(_){}
- var spend = parseFloat(s.spend||0);
- var leads = Math.round(parseFloat(s.leads_count||0));
- var cpl = leads > 0 ? spend / leads : null;
+ var mine = (data.countries || []).filter(function(c){ return c.code === currentCountry; })[0] || { spend:0, leads:0, cpl:null };
+ var sym = (data.currency === 'KZT') ? '₸' : (data.currency === 'USD' ? '$' : (data.currency || ''));
+ var spend = parseFloat(mine.spend||0);
+ var leads = Math.round(parseFloat(mine.leads||0));
+ var cpl = (mine.cpl != null) ? mine.cpl : (leads > 0 ? spend / leads : null);
  function cell(label, val){
  return '<div><div style="font-size:11px;color:var(--text-muted);margin-bottom:2px">' + label + '</div><div style="font-size:20px;font-weight:700;color:var(--text-light)">' + val + '</div></div>';
  }
