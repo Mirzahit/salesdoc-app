@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v891</title>
+<title>SalesDoc — Финансовый Дашборд v892</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10553,7 +10553,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="modal" style="max-width:520px"><div id="kb-card-detail"></div></div>
  </div>
 
- </div><!-- /content -->
+ </div><!-- v892: этот тег ничего не закрывает (.content закрыт выше) — оставлен, чтобы не двигать
+      структуру, но ориентироваться на него нельзя: именно такой врущий комментарий стоил нам v888 -->
 </main>
 
 <!-- ADD RECORD MODAL -->
@@ -15289,7 +15290,7 @@ function planGoalsHistoryPush(entry){
 
 // Profile
 function toggleProfileEdit(){ const p=document.getElementById('profile-edit-panel'); const show=p.style.display!=='none'; p.style.display=show?'none':'block'; if(!show&&currentUser){document.getElementById('prof-name').value=currentUser.name;document.getElementById('prof-role').value=currentUser.pos;document.getElementById('prof-email').value=currentUser.email;document.getElementById('prof-company').value=profile.company;} }
-function saveProfile(){ if(currentUser){currentUser.name=document.getElementById('prof-name').value||currentUser.name;currentUser.pos=document.getElementById('prof-role').value||currentUser.pos;} profile.company=document.getElementById('prof-company').value||profile.company; document.getElementById('cab-display-name').textContent=currentUser?.name||''; document.getElementById('cab-display-role').textContent=(currentUser?.pos||'')+' · '+profile.company; document.getElementById('profile-edit-panel').style.display='none'; showNotif('Профиль сохранён',''); }
+function saveProfile(){ if(currentUser){currentUser.name=document.getElementById('prof-name').value||currentUser.name;currentUser.pos=document.getElementById('prof-role').value||currentUser.pos;} profile.company=document.getElementById('prof-company').value||profile.company; document.getElementById('cab-display-name').textContent=currentUser?.name||''; document.getElementById('cab-display-role').textContent=(currentUser?.pos||'')+' · '+profile.company; var _pep=document.getElementById('profile-edit-panel'); if(_pep) _pep.style.display='none'; /* v892: панели нет в разметке — падало ровно перед тостом, и «Сохранить» выглядело как «не сработало» */ showNotif('Профиль сохранён',''); }
 
 // Avatar upload — со сжатием для надёжного сохранения
 function uploadAvatar(input) {
@@ -17557,15 +17558,8 @@ function asstBuildContext(){
  if(typeof acComputeMRRMetrics === 'function'){
  mrrView = acComputeMRRMetrics();
  }
- if(typeof ncComputeMetrics === 'function'){
- var nc = ncComputeMetrics();
- newClientsView = {
- count_this_month: nc.count, count_prev_month: nc.countPrev,
- sum_first_payments: nc.sum, avg_check: nc.avgCheck,
- avg_days_to_activation: nc.avgActivDays,
- activated: nc.activated, waiting: nc.notActivated
- };
- }
+ // v892: блок «новые клиенты» убран — ncComputeMetrics удалена вместе с разделом в v886,
+ // ветка была недостижима и создавала иллюзию, что данные подмешиваются.
  if(window._acUnmatchedPays){
  unmatchedView = {
  count: window._acUnmatchedPays.length,
@@ -35476,7 +35470,7 @@ function _kbLoadChecklistLocal(){
 }
 
 function kbLoad() {
- document.getElementById('kb-status').textContent = 'Загрузка...';
+ kbSetStatus('Загрузка...');
 
  // Настройки и лог — из таблицы Внедрения
  var settingsUrl = 'https://docs.google.com/spreadsheets/d/' + KB_SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Настройки');
@@ -35636,13 +35630,13 @@ function kbLoad() {
  }
 
  console.log('[Kanban] payments:', payments.length, 'implementation:', payments.filter(function(p){return p.category==='implementation'}).length, 'with activDate:', Object.keys(clientActivMap).length, '=> kbCards:', kbCards.length);
- document.getElementById('kb-status').textContent = kbCards.length + ' клиентов';
+ kbSetStatus(kbCards.length + ' клиентов');
  kbFillFilters();
  kbRenderBoard();
  kbRenderSummary();
  })
  .catch(function(e){
- document.getElementById('kb-status').textContent = 'Ошибка загрузки';
+ kbSetStatus('Ошибка загрузки');
  console.error('KB load error:', e);
  });
 }
@@ -42995,7 +42989,7 @@ function kbSaveLocal(card) {
 
 function kbSaveToSheet(card, oldStage, newStage) {
  kbSaveLocal(card); // localStorage fallback
- if(!KB_SCRIPT_URL) { document.getElementById('kb-status').textContent = 'Только просмотр'; return; }
+ if(!KB_SCRIPT_URL) { kbSetStatus('Только просмотр'); return; }
 
  var payload = {
  action: card._row ? 'moveCard' : 'upsertCard',
@@ -43018,11 +43012,11 @@ function kbSaveToSheet(card, oldStage, newStage) {
  body: JSON.stringify(payload)
  }).then(function(r){ return r.json(); }).then(function(res){
  if(res && res.row) card._row = res.row; // update row after insert
- document.getElementById('kb-status').textContent = 'Сохранено';
- setTimeout(function(){ document.getElementById('kb-status').textContent = kbCards.length + ' клиентов'; }, 2000);
+ kbSetStatus('Сохранено');
+ setTimeout(function(){ kbSetStatus(kbCards.length + ' клиентов'); }, 2000);
  }).catch(function(e){
  console.error('KB save error:', e);
- document.getElementById('kb-status').textContent = 'Ошибка сохранения';
+ kbSetStatus('Ошибка сохранения');
  });
 }
 
@@ -45380,8 +45374,8 @@ function kbFieldChanged(cardId, fieldKey, value) {
  fetch(KB_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'},
  body:JSON.stringify({action:'updateFields',sheetId:KB_SHEET_ID,row:card._row,client:card.client,fields:card.fields})
  }).then(function(){
- document.getElementById('kb-status').textContent = 'Сохранено';
- setTimeout(function(){ document.getElementById('kb-status').textContent = kbCards.length + ' клиентов'; }, 1500);
+ kbSetStatus('Сохранено');
+ setTimeout(function(){ kbSetStatus(kbCards.length + ' клиентов'); }, 1500);
  }).catch(function(e){ console.error('KB field save error:', e); kbShowToast('Изменение не сохранилось — проверьте интернет', 'err'); }); // v817
  }
 }
@@ -45661,6 +45655,10 @@ function kbMoveCard(card, newStage) {
  kbSaveToSheet(card, oldStage, newStage);
 }
 
+// v892 FIX: элемент #kb-status жил в старой доске Внедрения, удалённой в v886. Первая же строка
+// kbLoad() падала на нём (Cannot set properties of null), ошибку глотал try/catch — и kbCards
+// оставался пустым. От этого молча пустели «Действующие», «Тех.поддержка» и «Прогноз денег».
+function kbSetStatus(txt){ var el = document.getElementById('kb-status'); if(el) el.textContent = txt; }
 function kbShowToast(msg, kind) {
  var t = document.getElementById('kb-toast');
  t.textContent = msg;
@@ -46029,9 +46027,8 @@ function amoBuildUnifiedFunnel(amoData, metaData, period){
  var lastStage = (typeof kbColumns !== 'undefined' && kbColumns && kbColumns.length) ? kbColumns[kbColumns.length-1] : 'Активация';
  implemented = kbCards.filter(function(c){ return c.stage === lastStage; }).length;
  }
- if(implemented === 0 && typeof ncComputeMetrics === 'function'){
- try { implemented = ncComputeMetrics().activated || 0; } catch(_){}
- }
+ // v892: запасной путь через ncComputeMetrics убран — функция удалена вместе с разделом
+ // «Новые клиенты» в v886. Основной путь (kbCards) снова работает после фикса kbSetStatus.
  flow.push({ label: 'Внедрены', count: implemented, source: 'kanban' });
 
  // Период в человеческом виде
