@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v889</title>
+<title>SalesDoc — Финансовый Дашборд v890</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11700,6 +11700,7 @@ function switchCountry(code) {
  // и «План месяца» в герое, и «План по менеджерам» — с чужими людьми и чужими суммами.
  planLastData = null;
  window._planLoadingForDash = false;
+ window._planLoadError = null; // v889: сообщение об ошибке от прошлой страны не должно висеть
  try { if(typeof renderMgrPlanRows === 'function') renderMgrPlanRows(); } catch(_){}
  try {
   if(typeof planInit === 'function') planInit();
@@ -13149,7 +13150,20 @@ function renderMgrPlanRows(){
  if(mEl && typeof PLAN_TABS !== 'undefined' && PLAN_TABS[planTabIdx]) mEl.textContent = '· ' + PLAN_TABS[planTabIdx].label;
  } catch(_){}
  if(typeof planLastData === 'undefined' || !planLastData || !planLastData.agents || !planLastData.agents.length){
+ // v889: различаем «ещё грузится» и «загрузка упала» — раньше в обоих случаях висело
+ // «План загружается…», хотя листа за месяц могло вообще не быть в Светофоре.
+ var err = window._planLoadError;
+ if(err){
+ var month = (typeof PLAN_TABS !== 'undefined' && PLAN_TABS[planTabIdx]) ? PLAN_TABS[planTabIdx].label : 'этот месяц';
+ var noSheet = /not found|не нашёл лист/i.test(String(err));
+ el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:6px 0;line-height:1.6">'
+ + (noSheet
+   ? 'В таблице планов (Светофор) нет листа за <b>' + sanitize(month) + '</b> для ' + sanitize(currentCountry) + '.<br>Заведите лист — и план по людям появится здесь сам.'
+   : 'План не загрузился: ' + sanitize(String(err).slice(0,120)))
+ + '</div>';
+ } else {
  el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:6px 0">План загружается — цифры появятся через пару секунд.</div>';
+ }
  return;
  }
  var rows = [];
@@ -25257,6 +25271,7 @@ async function planLoad() {
  });
  var data = parsePlanData(rows);
  planLastData = data;
+ window._planLoadError = null; // v889
  planRender(data);
  // v886: обновляем «План по менеджерам» на дашборде из свежих данных Светофора
  try { renderMgrPlanRows(); } catch(e) {}
@@ -25264,7 +25279,11 @@ async function planLoad() {
  try { if(typeof renderAll === 'function' && document.getElementById('view-dashboard').style.display !== 'none') renderAll(); } catch(e) {}
  if (st) st.textContent = '';
  } catch(e) {
+ // v889: запоминаем причину — дашборд иначе вечно показывал «План загружается…»,
+ // хотя загрузка уже упала (например, в Светофоре нет листа за этот месяц).
+ window._planLoadError = e.message || String(e);
  if (st) st.textContent = ' Ошибка: ' + e.message;
+ try { renderMgrPlanRows(); } catch(_) {}
  }
  if (btn) { btn.disabled = false; btn.classList.remove('btn-loading'); }
 }
