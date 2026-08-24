@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v893</title>
+<title>SalesDoc — Финансовый Дашборд v894</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -7782,7 +7782,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="nav-popup-title">Команда</div>
  <div class="nav-item" data-view="planning" onclick="showView('planning')">Планёрки</div>
  <div class="nav-item" data-view="mytasks" onclick="showView('mytasks')">Мои задачи</div>
- <div class="nav-item" data-view="fdx" onclick="showView('fdx')">4D</div>
+ <div class="nav-item" data-view="fdx" onclick="showView('fdx')">Цели</div><!-- v894: было «4D» -->
  <div class="nav-item" data-view="academy" onclick="showView('academy')">Академия</div>
  <div class="nav-item" data-view="knowledge" onclick="showView('knowledge')">База знаний</div>
  <div class="nav-item" data-view="reports" onclick="showView('reports')">Отчёты</div>
@@ -8158,11 +8158,17 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
  <div style="display:flex;align-items:center;gap:10px">
  <div class="panel-title" style="margin:0">Все оплаты</div>
- <button onclick="showSheetColumns()" class="fin-ghost-btn">Колонки</button>
  <button onclick="exportPaymentsCSV()" class="fin-ghost-btn">Экспорт</button>
+ <!-- v894: «Найти дубли», «Сверить с таблицей», «Пересобрать месяц» и «Колонки» — админские
+      операции. Раньше стояли в один ряд с обычными: бухгалтеру страшно, что будет по нажатию.
+      Теперь под кнопкой «Служебное», раскрывается по клику. -->
+ <button onclick="finToggleAdmin(this)" class="fin-ghost-btn" id="fin-admin-toggle">Служебное</button>
+ <span id="fin-admin-tools" style="display:none;gap:8px;align-items:center">
+ <button onclick="showSheetColumns()" class="fin-ghost-btn">Колонки</button>
  <button onclick="finFindDuplicates()" class="fin-ghost-btn fin-dup-btn">Найти дубли</button>
  <button onclick="finSyncCheck()" class="fin-ghost-btn fin-sync-btn">Сверить с таблицей</button>
  <button onclick="finRebuildMonth()" class="fin-ghost-btn fin-rebuild-btn">Пересобрать месяц</button>
+ </span>
  </div>
  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
  <div class="fsearch"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--text-muted)"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg><input id="fin-search" oninput="renderAllPayments()" placeholder="Поиск по клиенту…"></div>
@@ -8669,8 +8675,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
   <!-- Шапка с переключателем вкладок -->
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
    <div>
-    <div style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.3px">4D — Дисциплины исполнения</div>
-    <div style="font-size:12px;color:var(--text-muted);margin-top:3px">Главная цель, опережающие действия, планёрки, аналитика</div>
+    <div style="font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.3px">Цели компании</div><!-- v894: было «4D — Дисциплины исполнения» — название-загадка -->
+    <div style="font-size:12px;color:var(--text-muted);margin-top:3px">Главная цель, действия, которые её двигают, планёрки и итоги</div>
    </div>
    <div id="fdx-edit-hint" style="font-size:11px;color:var(--text-muted);display:none">Редактирование доступно CEO</div>
   </div>
@@ -8679,7 +8685,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
   <div id="fdx-tabbar" style="display:flex;gap:4px;padding:4px;background:var(--surface-2);border-radius:10px;border:1px solid var(--border-faint);margin-bottom:18px;overflow-x:auto;flex-wrap:wrap">
    <button data-fdx-tab="board" onclick="fdxSwitchTab('board')" style="border:none;padding:8px 14px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap">Табло</button>
    <button data-fdx-tab="goals" onclick="fdxSwitchTab('goals')" style="border:none;padding:8px 14px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap">Цели</button>
-   <button data-fdx-tab="metrics" onclick="fdxSwitchTab('metrics')" style="border:none;padding:8px 14px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap">Опережающие</button>
+   <button data-fdx-tab="metrics" onclick="fdxSwitchTab('metrics')" style="border:none;padding:8px 14px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap">Что двигает цель</button><!-- v894: было «Опережающие» -->
    <button data-fdx-tab="sessions" onclick="fdxSwitchTab('sessions')" style="border:none;padding:8px 14px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap">Планёрки</button>
    <button data-fdx-tab="analytics" onclick="fdxSwitchTab('analytics')" style="border:none;padding:8px 14px;background:transparent;color:var(--text-soft);font-size:13px;font-weight:600;border-radius:8px;cursor:pointer;white-space:nowrap">Аналитика</button>
   </div>
@@ -8692,7 +8698,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
    <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px">Скоро — Цели (иерархия Год → Квартал → Месяц → Неделя)</div>
   </div>
   <div id="fdx-pane-metrics" style="display:none">
-   <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px">Скоро — Опережающие действия со светофором</div>
+   <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px">Скоро — действия, которые двигают цель, со светофором</div>
   </div>
   <div id="fdx-pane-sessions" style="display:none">
    <div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px">Скоро — Планёрки с режимом «идёт сейчас»</div>
@@ -13507,36 +13513,7 @@ function renderBarChart(ps) {
 
 // v886: renderDonut удалена — элементов d1/d2/d3/donut-legend нет в DOM, вызовов не было
 
-function renderPlanBars(l,s,i,integ) {
- try {
- const plan=plans[currentPeriod];
-
- // Факт/план из Светофора (если загружен)
- var callsFact = typeof _svetoforSum==='function' ? _svetoforSum('звонк','fact') : 0;
- var callsPlan = (typeof _svetoforSum==='function' ? _svetoforSum('звонк','plan') : 0) || plan.calls || 0;
- var meetFact = typeof _svetoforSum==='function' ? _svetoforSum('встреч','fact') : 0;
- var meetPlan = (typeof _svetoforSum==='function' ? _svetoforSum('встреч','plan') : 0) || plan.meetings || 0;
- var actFact = typeof _svetoforSum==='function' ? _svetoforSum('лицензи','fact') : 0;
- var actPlan = (typeof _svetoforSum==='function' ? _svetoforSum('лицензи','plan') : 0) || plan.activations || 0;
-
- var items = [
- {label:'Новые продажи',actual:l+i+(integ||0),plan:plan.new_sales,color:'var(--gold-bright)',money:true},
- {label:'Абон. платы',actual:s,plan:plan.subscription,color:'#5E6AD2',money:true}
- ];
- // Показываем звонки/встречи/активации только если есть данные Светофора
- if (callsPlan > 0 || meetPlan > 0 || actPlan > 0) {
- items.push({label:'Звонки',actual:callsFact,plan:callsPlan,color:'#4CB782',money:false});
- items.push({label:'Встречи',actual:meetFact,plan:meetPlan,color:'#CE93D8',money:false});
- items.push({label:'Активация лиц.',actual:actFact,plan:actPlan,color:'#FBBF77',money:false});
- }
-
- document.getElementById('plan-bars').innerHTML=items.map(function(it){
- var pct=it.plan>0?Math.min(Math.round((it.actual/it.plan)*100),100):0;
- var valStr=it.money?(fmtFull(it.actual)+' / '+fmtFull(it.plan)):(Math.round(it.actual)+' / '+Math.round(it.plan));
- return'<div class="plan-item"><div class="plan-item-header"><span class="plan-item-label">'+it.label+'</span><span class="plan-item-value">'+pct+'% — '+valStr+'</span></div><div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%;background:linear-gradient(90deg,'+it.color+'88,'+it.color+')"></div></div></div>';
- }).join('');
- } catch(e) { console.log('[renderPlanBars] error:', e.message); }
-}
+// v894: renderPlanBars удалена — вызовов нет, элемента plan-bars нет в разметке
 
 // v656: Структура доходов на Дашборде (кольцевая диаграмма по категориям за период).
 // Заменила виджет «Выполнение плана» (он есть отдельной страницей в меню).
@@ -13991,6 +13968,15 @@ function finSeg(btn,val){
   }catch(e){}
 }
 // v833: сегмент «Посадка» — пишет в скрытый #filter-seated (его читают renderAllPayments и отчёты)
+// v894: «Служебное» — сворачивает админские операции Оплат (дубли, сверка, пересборка, колонки),
+// чтобы они не стояли в одном ряду с обычными кнопками и не пугали бухгалтера.
+function finToggleAdmin(btn){
+ var box = document.getElementById('fin-admin-tools');
+ if(!box) return;
+ var open = box.style.display !== 'none';
+ box.style.display = open ? 'none' : 'inline-flex';
+ if(btn) btn.textContent = open ? 'Служебное' : 'Служебное ×';
+}
 function finSegSeat(btn,val){
   try{ var seg=document.getElementById('fin-seg-seat'); if(seg){ Array.prototype.forEach.call(seg.querySelectorAll('button'),function(b){b.classList.remove('on');}); btn.classList.add('on'); }
     var fs=document.getElementById('filter-seated'); if(fs) fs.value=val; renderAllPayments();
@@ -14159,6 +14145,10 @@ function renderAllPayments() {
  bankKeys.forEach(function(b){ bankSelectEl.innerHTML += '<option value="'+b+'">'+b+' ('+fmtNum(bankMap[b])+')</option>'; });
  bankSelectEl.value = curBankVal;
  }
+
+ // v894: свои дропдауны вместо системных списков (менеджер, банк) — после наполнения опций
+ try { sdSelectChip('filter-employee'); sdSelectChipSync('filter-employee'); } catch(_){}
+ try { sdSelectChip('filter-bank'); sdSelectChipSync('filter-bank'); } catch(_){}
 
  document.getElementById('all-payments').innerHTML = ps.map(function(p) {
  // v786: JSON.stringify строкового id давал ДВОЙНЫЕ кавычки внутри onclick="..." — атрибут рвался,
@@ -14490,6 +14480,7 @@ function quickFilterPayments(label) {
   if (fSvc) fSvc.value='all';
   var fe=document.getElementById('filter-employee'); if (fe) fe.value='';
   var fb=document.getElementById('filter-bank'); if (fb) fb.value='';
+  try { sdSelectChipSync('filter-employee'); sdSelectChipSync('filter-bank'); } catch(_){} // v894: обновить подпись чипов при сбросе
  }
  else if (label === 'Посажено') { fSeat.value='yes'; fSvc.value='all'; }
  else if (label === 'Не посажено') { fSeat.value='no'; fSvc.value='all'; }
@@ -16280,121 +16271,10 @@ function calOutsideClick(e) {
  if (!dd.contains(e.target) && (!trigger || !trigger.contains(e.target))) closeCalDropdown();
 }
 
-function renderCalPresets() {
- var html = '';
- CAL_PRESETS.forEach(function(p) {
- var cls = calActivePreset === p.id ? 'cal-preset active' : 'cal-preset';
- html += '<button class="'+cls+'" onclick="calSelectPreset(\''+p.id+'\')">'+p.label+'</button>';
- });
- document.getElementById('cal-presets').innerHTML = html;
-}
-
-function calSelectPreset(id) {
- var preset = CAL_PRESETS.find(function(p){return p.id===id;});
- if (!preset) return;
- var range = preset.fn();
- calRangeFrom = stripTime(range.from);
- calRangeTo = stripTime(range.to);
- calActivePreset = id;
- calViewYear = calRangeFrom.getFullYear();
- calViewMonth = calRangeFrom.getMonth();
- renderCalPresets();
- renderCalGrid();
- updateCalRangeDisplay();
-}
-
-function calNavMonth(dir) {
- calViewMonth += dir;
- if (calViewMonth > 11) { calViewMonth = 0; calViewYear++; }
- if (calViewMonth < 0) { calViewMonth = 11; calViewYear--; }
- renderCalGrid();
-}
-
-function renderCalGrid() {
- document.getElementById('cal-nav-title').textContent = MONTHS_RU[calViewMonth] + ' ' + calViewYear;
- var firstDay = new Date(calViewYear, calViewMonth, 1);
- var lastDay = new Date(calViewYear, calViewMonth + 1, 0);
- var startDow = (firstDay.getDay() + 6) % 7; // 0=Mon
- var today = stripTime(new Date());
-
- var html = '';
- // Day headers
- DAYS_RU.forEach(function(d) {
- html += '<div class="cal-day-header">'+d+'</div>';
- });
- // Leading blanks from prev month
- var prevLast = new Date(calViewYear, calViewMonth, 0);
- for (var i = startDow - 1; i >= 0; i--) {
- var dd = new Date(calViewYear, calViewMonth, -i);
- html += calDayBtn(dd, true);
- }
- // This month
- for (var d = 1; d <= lastDay.getDate(); d++) {
- var dd = new Date(calViewYear, calViewMonth, d);
- html += calDayBtn(dd, false);
- }
- // Trailing blanks
- var totalCells = startDow + lastDay.getDate();
- var remainder = totalCells % 7;
- if (remainder > 0) {
- for (var i = 1; i <= 7 - remainder; i++) {
- var dd = new Date(calViewYear, calViewMonth + 1, i);
- html += calDayBtn(dd, true);
- }
- }
- document.getElementById('cal-grid').innerHTML = html;
-}
-
-function calDayBtn(d, isOther) {
- var today = stripTime(new Date());
- var isToday = sameDay(d, today);
- var isWeekend = (d.getDay() === 0 || d.getDay() === 6);
- var isStart = sameDay(d, calRangeFrom);
- var isEnd = sameDay(d, calRangeTo);
- var isInRange = inRange(d, calRangeFrom, calRangeTo) && !isStart && !isEnd;
-
- var cls = 'cal-day';
- if (isOther) cls += ' other-month';
- if (isWeekend && !isOther) cls += ' weekend';
- if (isToday) cls += ' today';
- if (isStart || isEnd) cls += isStart ? ' range-start' : '';
- if (isStart || isEnd) cls += isEnd ? ' range-end' : '';
- if (isInRange) cls += ' in-range';
-
- var iso = dateISO(d);
- return '<div class="'+cls+'" onclick="calClickDay(\''+iso+'\')" title="'+dateStr(d)+'">'+d.getDate()+'</div>';
-}
-
-// Click day in calendar — range selection logic
-let calClickCount = 0;
-function calClickDay(isoStr) {
- var d = new Date(isoStr + 'T00:00:00');
- calActivePreset = null; // custom range
-
- if (!calRangeFrom || calRangeTo && calRangeFrom) {
- // Start new selection
- calRangeFrom = d;
- calRangeTo = null;
- calClickCount = 1;
- } else if (calClickCount === 1) {
- // Second click — set end
- if (d < calRangeFrom) {
- calRangeTo = calRangeFrom;
- calRangeFrom = d;
- } else {
- calRangeTo = d;
- }
- calClickCount = 0;
- }
- renderCalPresets();
- renderCalGrid();
- updateCalRangeDisplay();
-}
-
-function updateCalRangeDisplay() {
- document.getElementById('cal-range-from').textContent = calRangeFrom ? dateStr(calRangeFrom) : '—';
- document.getElementById('cal-range-to').textContent = calRangeTo ? dateStr(calRangeTo) : '—';
-}
+// v894: второй, мёртвый календарь (renderCalPresets/calSelectPreset/calNavMonth/renderCalGrid/
+// calDayBtn/calClickDay/updateCalRangeDisplay) удалён — его разметки (cal-presets, cal-grid,
+// cal-range-from/to) нет с давних пор, функции звали только друг друга. Живой выбор периода —
+// это calChangeYear/calApply + cal-year-label/cal-month-grid, он не тронут.
 
 function updateTriggerLabel() {
  var label = '';
@@ -18675,12 +18555,12 @@ function setChip(id, cur, prev, prevLabel) {
  var prevEl = el.querySelector('.kpi-chip-prev');
 
  if (!hasPrev) {
- el.className = 'kpi-chip chip-flat';
- if (valEl) valEl.textContent = '—';
- if (subEl) subEl.textContent = 'нет ' + prevLabel;
- if (prevEl) prevEl.textContent = '';
+ // v894: сравнивать не с чем — прячем чип целиком. Раньше в каждой из 8 карточек висели
+ // два серых прочерка «— / нет к Июл», и на дашборде получалось 16 пустых плашек шума.
+ el.style.display = 'none';
  return;
  }
+ el.style.display = '';
 
  var diff = cur - prev;
  var pct = calcPct(cur, prev);
@@ -19121,11 +19001,11 @@ function _mkdCountryCards(t){
    +  '<div class="mkd-share">' + (total > 0 ? Math.round(c.spend/total*100) : 0) + '% расхода</div></div>'
    + '<div class="mkd-m">'
    +  '<div><div class="l">Расход</div><div class="v">' + _mkdUsd(c.spend) + '</div></div>'
-   +  '<div><div class="l">Лиды</div><div class="v' + (c.leads ? '' : ' dim') + '">' + (c.leads || 0) + '</div></div>'
-   +  '<div><div class="l">Цена лида</div><div class="v' + (c.cpl != null ? '' : ' dim') + '">' + _mkdUsd(c.cpl) + '</div></div>'
+   +  '<div><div class="l">Заявки</div><div class="v' + (c.leads ? '' : ' dim') + '">' + (c.leads || 0) + '</div></div>'
+   +  '<div><div class="l">Цена заявки</div><div class="v' + (c.cpl != null ? '' : ' dim') + '">' + _mkdUsd(c.cpl) + '</div></div>'
    + '</div>'
    + '<div class="mkd-fn">'
-   +  row('Лиды с рекламы', c.leads || 0, '')
+   +  row('Заявки с рекламы', c.leads || 0, '')
    +  row('Попало в amo', amo, '')
    +  row('Назначена встреча', meet, _mkdPct(meet, amo))
    +  row('Счёт выставлен', inv, _mkdPct(inv, meet))
@@ -19178,7 +19058,7 @@ function _mkdRenderCamps(){
  var max = Math.max.apply(null, list.map(function(c){ return c.spend; }));
  var withCpl = list.filter(function(c){ return c.cpl != null; });
  var avg = withCpl.length ? withCpl.reduce(function(s, c){ return s + c.cpl; }, 0)/withCpl.length : 0;
- el.innerHTML = '<div class="mkd-ch"><span>Кампания</span><span>Расход</span><span>Лиды</span><span>Цена лида</span><span>Вывод</span></div>'
+ el.innerHTML = '<div class="mkd-ch"><span>Кампания</span><span>Расход</span><span>Заявки</span><span>Цена заявки</span><span>Вывод</span></div>'
   + list.map(function(c){
    var ccs = _mkdCampCountries(c);
    var v = _mkdVerdict(c, avg);
@@ -19412,7 +19292,7 @@ function _mkdOpenFunnel(){
  }).join('');
  var first = t.list.length ? q[t.list[0].code] : null;
  var stages = first ? first.stages : null;
- var html = '<table class="mkd-t"><thead><tr><th>Страна</th><th>Лиды</th><th>В amo</th><th>Встречи</th><th>Счета</th><th>Квал стоит</th></tr></thead>'
+ var html = '<table class="mkd-t"><thead><tr><th>Страна</th><th>Заявки</th><th>В amo</th><th>Встречи</th><th>Счета</th><th>Цена встречи</th><!-- v894: было «Квал стоит» — внутренний сленг --></tr></thead>'
   + '<tbody>' + rows + '<tr class="tot"><td>Всего</td><td>' + t.leads + '</td><td>—</td><td>' + (t.meet == null ? '—' : t.meet) + '</td>'
   + '<td>' + (t.inv == null ? '—' : t.inv) + '</td><td>' + _mkdUsd(t.qcost) + '</td></tr></tbody></table>'
   + '<div class="mkd-note">Встреча — этап amo «' + (stages && stages.meeting ? sanitize(stages.meeting.name) : 'Назначена встреча')
@@ -19440,7 +19320,7 @@ window.mkdOpenCamp = async function(id){
  if(det && det.days && det.days.length && dcc.length){
   html += '<div class="mkd-card" style="margin-bottom:14px">' + _mkdLineChart(det.days, dcc, 'spend', 640, 180, 'mkd-chart-camp')
    + '<div class="mkd-lg">' + dcc.map(function(cc){ return '<span><i style="background:' + _mkdCol(cc) + '"></i>' + sanitize(_mkdName(cc)) + '</span>'; }).join('') + '</div></div>';
-  html += '<table class="mkd-t"><thead><tr><th>День</th><th>Расход</th><th>Лиды</th><th>Цена лида</th></tr></thead><tbody>'
+  html += '<table class="mkd-t"><thead><tr><th>День</th><th>Расход</th><th>Заявки</th><th>Цена заявки</th></tr></thead><tbody>'
    + det.days.map(function(day){
       var sp = 0, ld = 0;
       dcc.forEach(function(cc){ var b = day.by_country[cc]; if(b){ sp += b.spend; ld += b.leads; } });
@@ -19453,7 +19333,7 @@ window.mkdOpenCamp = async function(id){
  }
  if(det && det.ads && det.ads.length){
   html += '<div class="mkd-sh" style="margin:22px 0 8px"><div class="n">Объявления</div></div>'
-   + '<table class="mkd-t"><thead><tr><th>Объявление</th><th>Расход</th><th>Лиды</th><th>Цена лида</th></tr></thead><tbody>'
+   + '<table class="mkd-t"><thead><tr><th>Объявление</th><th>Расход</th><th>Заявки</th><th>Цена заявки</th></tr></thead><tbody>'
    + det.ads.map(function(a){
       return '<tr><td>' + sanitize(a.name) + '</td><td>' + _mkdUsd(a.spend) + '</td><td>' + a.leads + '</td><td>' + _mkdUsd(a.cpl) + '</td></tr>';
      }).join('') + '</tbody></table>';
@@ -19837,7 +19717,7 @@ function _fdxBuildMetricsBlock(lights){
  wrap.style.cssText = 'max-width:1100px;margin:0 auto 24px';
  var head = document.createElement('div');
  head.style.cssText = 'font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-bottom:10px;padding:0 4px';
- head.textContent = 'Опережающие действия (неделя)';
+ head.textContent = 'Действия, которые двигают цель (неделя)';
  wrap.appendChild(head);
  var grid = document.createElement('div');
  grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px';
@@ -19897,7 +19777,7 @@ function _fdxBuildOnboarding(){
 
  var steps = [
   { n:'1', t:'Поставьте главную цель года', d:'Это «Дико Важная Цель» — то на чём команда сфокусируется. Например «MRR 7 миллионов к декабрю». Декомпозируйте на кварталы и недели.', btn:'Перейти к Целям', tab:'goals' },
-  { n:'2', t:'Добавьте опережающие действия', d:'Это что мы будем делать каждую неделю чтобы дойти до цели. Например «10 встреч в неделю», «50 звонков в день». На них светофор зелёный/жёлтый/красный.', btn:'Перейти к Опережающим', tab:'metrics' },
+  { n:'2', t:'Добавьте действия, которые двигают цель', d:'Это что мы будем делать каждую неделю чтобы дойти до цели. Например «10 встреч в неделю», «50 звонков в день». На них светофор зелёный/жёлтый/красный.', btn:'Перейти к действиям', tab:'metrics' },
   { n:'3', t:'Запланируйте первую планёрку', d:'Раз в неделю команда собирается на 20 минут: что было обещано, где мы по цели, что обещаем на следующую неделю.', btn:'Перейти к Планёркам', tab:'sessions' }
  ];
  steps.forEach(function(s){
@@ -20345,7 +20225,7 @@ async function fdxRenderMetricsPane(){
  head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap';
  var ttl = document.createElement('div');
  ttl.style.cssText = 'font-size:14px;font-weight:600;color:var(--text)';
- ttl.textContent = 'Опережающие действия (страна ' + (currentCountry || 'KZ') + ')';
+ ttl.textContent = 'Действия, которые двигают цель (страна ' + (currentCountry || 'KZ') + ')';
  head.appendChild(ttl);
  if(_fdxCanEdit()){
   var addBtn = document.createElement('button');
@@ -20362,8 +20242,8 @@ async function fdxRenderMetricsPane(){
   var empty = document.createElement('div');
   empty.style.cssText = 'padding:60px 20px;text-align:center;color:var(--text-muted);font-size:13px';
   empty.textContent = _fdxCanEdit()
-   ? 'Опережающих ещё нет. Это действия которые ведут к цели — например «10 встреч в неделю», «50 звонков в день».'
-   : 'Опережающие действия ещё не заданы.';
+   ? 'Пока не заданы. Это действия, которые ведут к цели — например «10 встреч в неделю», «50 звонков в день».'
+   : 'Действия, которые двигают цель, ещё не заданы.';
   pane.appendChild(empty);
   return;
  }
@@ -21128,7 +21008,7 @@ async function fdxRenderAnalyticsPane(){
  w2.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:12px;padding:18px';
  var h2 = document.createElement('div');
  h2.style.cssText = 'font-size:14px;color:var(--text);font-weight:600;margin-bottom:4px';
- h2.textContent = 'Опережающие действия — статус сейчас';
+ h2.textContent = 'Действия, которые двигают цель — как идут сейчас';
  w2.appendChild(h2);
  var sub2 = document.createElement('div');
  sub2.style.cssText = 'font-size:11.5px;color:var(--text-muted);margin-bottom:14px';
@@ -21138,7 +21018,7 @@ async function fdxRenderAnalyticsPane(){
  var trows = (traffic && traffic.rows) || [];
  if(!trows.length){
   var p2 = document.createElement('div'); p2.style.cssText = 'color:var(--text-muted);font-size:13px;padding:20px 0;text-align:center';
-  p2.textContent = 'Опережающих ещё нет.';
+  p2.textContent = 'Действия к цели пока не заданы.';
   w2.appendChild(p2);
  } else {
   // Сортировка: красные сверху, зелёные снизу
@@ -25448,6 +25328,10 @@ function expRender() {
  bankFilterEl.value = curBank;
  }
 
+ // v894: свои дропдауны вместо системных списков — вызываем после наполнения опций
+ try { sdSelectChip('exp-filter-cat'); sdSelectChipSync('exp-filter-cat'); } catch(_){}
+ try { sdSelectChip('exp-filter-bank'); sdSelectChipSync('exp-filter-bank'); } catch(_){}
+
  // Table
  expRenderTable();
 }
@@ -25546,47 +25430,7 @@ function expRenderBarChart() {
  });
 }
 
-function expRenderDonut(cats, catMap, total) {
- var circ = 2 * Math.PI * 58;
- var prev = 0;
- var ids = ['exp-d1','exp-d2','exp-d3','exp-d4','exp-d5','exp-d6'];
- ids.forEach(function(id){ var el=document.getElementById(id); if(el){el.setAttribute('stroke-dasharray','0 '+circ);el.style.cursor='default';el.onmouseenter=null;el.onmouseleave=null;} });
- var topCats = cats.slice(0, 6);
- var accumulated = 0;
- topCats.forEach(function(cat, i) {
- var el = document.getElementById(ids[i]);
- if (!el) return;
- var val = catMap[cat];
- var dash = (val / total) * circ;
- var offset = circ * 0.25 - (accumulated / total) * circ;
- el.setAttribute('stroke', expColor(cat));
- el.setAttribute('stroke-dasharray', dash + ' ' + (circ - dash));
- el.setAttribute('stroke-dashoffset', offset);
- accumulated += val;
- // Тултип на сегмент
- el.style.cursor = 'pointer';
- el.onmouseenter = (function(c, v, t) { return function(e) {
- var pct = Math.round(v / t * 100);
- var tip = document.getElementById('chart-tooltip');
- tip.innerHTML = '<div class="chart-tooltip-title" style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;border-radius:50%;background:'+expColor(c)+'"></div>'+c.toUpperCase()+'</div>' +
- '<div class="chart-tooltip-row"><div class="chart-tooltip-label">Сумма</div><div class="chart-tooltip-val">'+fmtFull(v)+'</div></div>' +
- '<div class="chart-tooltip-row"><div class="chart-tooltip-label">Доля</div><div class="chart-tooltip-val" style="color:'+expColor(c)+'">'+pct+'%</div></div>' +
- '<div class="chart-tooltip-row"><div class="chart-tooltip-label">Операций</div><div class="chart-tooltip-val">'+expData.filter(function(x){return x.category===c;}).length+'</div></div>';
- tip.classList.add('visible');
- }; })(cat, val, total);
- el.onmousemove = function(e) {
- var tip = document.getElementById('chart-tooltip');
- tip.style.left = Math.min(e.clientX+12, window.innerWidth-240)+'px';
- tip.style.top = (e.clientY-10)+'px';
- };
- el.onmouseleave = function() { document.getElementById('chart-tooltip').classList.remove('visible'); };
- });
- var topPct = cats.length > 0 ? Math.round(catMap[cats[0]] / total * 100) : 0;
- document.getElementById('exp-donut-pct').textContent = topPct + '%';
- document.getElementById('exp-donut-legend').innerHTML = topCats.map(function(cat) {
- return '<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:6px"><div style="display:flex;align-items:center;gap:6px"><div style="width:8px;height:8px;border-radius:50%;background:'+expColor(cat)+'"></div><span style="color:var(--text-muted)">'+cat+'</span></div><span style="font-weight:700;color:var(--text-light)">'+fmtNum(catMap[cat])+' '+_CUR+'</span></div>';
- }).join('');
-}
+// v894: expRenderDonut удалена — вызовов нет, элементов exp-donut-* нет в разметке
 
 function expRenderTable() {
  var filterCat = document.getElementById('exp-filter-cat').value;
@@ -31069,6 +30913,10 @@ function ticketsOpenNew(){
   }
  }
  document.getElementById('tickets-modal').style.display = 'flex';
+ // v894: свои дропдауны вместо системных списков (клиент/оператор/срочность/канал)
+ ['tickets-new-client','tickets-new-operator','tickets-new-prio','tickets-new-channel'].forEach(function(id){
+  try { sdSelectChip(id); sdSelectChipSync(id); } catch(_){}
+ });
 }
 function ticketsCloseNew(){
  document.getElementById('tickets-modal').style.display = 'none';
@@ -35819,11 +35667,7 @@ function kbRenderSummary() {
 
 // --- KANBAN SEARCH ---
 var kbSearchQuery = '';
-function kbSearchFilter() {
- kbSearchQuery = (document.getElementById('kb-search-input').value || '').toLowerCase().trim();
- kbUpdateFilterDot();
- kbRenderBoard();
-}
+// v894: kbSearchFilter удалена — вызовов нет, поле kb-search-input жило в старой доске
 
 // v886: старые дропдаун-фильтры канбана (kbToggleFilterDD/kbSelectFilter) удалены —
 // кнопок kb-op-filter-btn/kb-mg-filter-btn давно нет, фильтры живут в панели kb-panel-*.
@@ -43257,12 +43101,11 @@ function kbOpenCardPage(card) {
  if(kbOperators.length) {
  var opClr = KB_OP_COLORS[card.operator] || 'var(--text-muted)';
  html += '<div class="kbc-section"><div class="kbc-section-title">Оператор</div>';
- html += '<select onchange="kbSetOperatorPage(\''+card.id+'\',this.value)" style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid '+(card.operator?opClr:'var(--dark-border)')+';background:var(--dark-panel);color:'+(card.operator?opClr:'var(--text-muted)')+';font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;outline:none;appearance:auto">';
- html += '<option value=""'+(card.operator?'':' selected')+'>Не назначен</option>';
- kbOperators.forEach(function(op){
- html += '<option value="'+op+'"'+(op===card.operator?' selected':'')+'>'+op+'</option>';
- });
- html += '</select>';
+ // v894: был системный <select> (чужеродный тёмный список ОС) — заменён своим дропдауном,
+ // тем же, что в «Новой карточке» Внедрения: показывает и нагрузку оператора.
+ html += '<div onclick="kbOpChipPick(this,\''+sanitize(card.id)+'\')" style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid '+(card.operator?opClr:'var(--dark-border)')+';background:var(--dark-panel);color:'+(card.operator?opClr:'var(--text-muted)')+';font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;outline:none;display:flex;align-items:center;justify-content:space-between;user-select:none;box-sizing:border-box">'
+   + '<span>' + (card.operator ? sanitize(card.operator) : 'Не назначен') + '</span>'
+   + '<span style="color:var(--text-muted);font-size:10px">&#9662;</span></div>';
  html += '</div>';
  }
 
@@ -43804,6 +43647,47 @@ async function crmTasksUpdateCount(client_id){
 // ============================================================================
 // Дропдауны для формы — выбор типа, даты, времени, ответственного
 // ============================================================================
+// v894: превращает системный <select> в свой дропдаун (правило проекта — никаких списков ОС).
+// Сам select остаётся источником правды: прячем его, рядом рисуем чип, по клику открываем
+// crmTasksOpenDropdown. Выбор пишем в select и дёргаем его onchange — вся логика форм цела.
+function sdSelectChip(selectId){
+ var sel = document.getElementById(selectId);
+ if(!sel || sel.dataset.sdChip === '1') return;
+ sel.dataset.sdChip = '1';
+ sel.style.display = 'none';
+ var chip = document.createElement('div');
+ chip.className = 'sd-chip-select';
+ chip.style.cssText = 'width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-faint);background:var(--surface);color:var(--text);box-sizing:border-box;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;gap:8px';
+ var label = document.createElement('span');
+ var caret = document.createElement('span');
+ caret.style.cssText = 'color:var(--text-muted);font-size:10px;flex:none';
+ caret.innerHTML = '&#9662;';
+ chip.appendChild(label); chip.appendChild(caret);
+ function sync(){
+  var opt = sel.options[sel.selectedIndex];
+  label.textContent = opt ? opt.textContent : '';
+  label.style.color = (sel.value === '' ) ? 'var(--text-muted)' : '';
+ }
+ chip.onclick = function(){
+  if(typeof crmTasksOpenDropdown !== 'function') return;
+  var items = [];
+  for(var i=0; i<sel.options.length; i++){
+   items.push({ label: sel.options[i].textContent, value: sel.options[i].value, selected: sel.value === sel.options[i].value });
+  }
+  crmTasksOpenDropdown(chip, items, function(v){
+   sel.value = v; sync();
+   try { sel.dispatchEvent(new Event('change', { bubbles:true })); } catch(_){ if(sel.onchange) sel.onchange(); }
+  });
+ };
+ sel.parentNode.insertBefore(chip, sel.nextSibling);
+ sel._sdSync = sync;
+ sync();
+}
+// Пересинхронизировать чип, когда значение select меняют из кода
+function sdSelectChipSync(selectId){
+ var sel = document.getElementById(selectId);
+ if(sel && typeof sel._sdSync === 'function') sel._sdSync();
+}
 function crmTasksCloseDropdowns(){
  document.querySelectorAll('.ct-dd').forEach(function(el){ el.remove(); });
 }
@@ -45271,6 +45155,21 @@ function kbMoveFromPage(cardId, newStage) {
  kbOpenCardPage(card);
 }
 
+// v894: свой дропдаун выбора оператора в карточке (вместо системного select).
+// Рядом с именем показываем нагрузку — сколько карточек уже в работе у человека.
+function kbOpChipPick(anchor, cardId){
+ if(typeof crmTasksOpenDropdown !== 'function') return;
+ var card = (typeof kbCards !== 'undefined' && kbCards) ? kbCards.find(function(c){ return String(c.id) === String(cardId); }) : null;
+ var cur = card ? (card.operator || '') : '';
+ var counts = (typeof sdOpLoadCounts === 'function') ? sdOpLoadCounts() : null;
+ var items = [{ label:'Не назначен', value:'', selected: !cur }];
+ (typeof kbOperators !== 'undefined' ? kbOperators : []).forEach(function(op){
+  items.push({ label: op, value: op, selected: op === cur,
+   meta: counts ? String(counts[String(op).trim()] || 0) : '',
+   icon: true, color: (typeof KB_OP_COLORS !== 'undefined' && KB_OP_COLORS[op]) ? KB_OP_COLORS[op] : '#c5cad1' });
+ });
+ crmTasksOpenDropdown(anchor, items, function(v){ kbSetOperatorPage(cardId, v); });
+}
 function kbSetOperatorPage(cardId, operator) {
  var card = kbCards.find(function(c){ return c.id === cardId; });
  if(!card || card.operator === operator) return;
