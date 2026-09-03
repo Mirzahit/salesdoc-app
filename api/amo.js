@@ -330,6 +330,161 @@ async function readBody(req){
   });
 }
 
+// ── v897: полный отчёт по лидам за период — этапы, менеджеры, деньги ────────
+// Зачем: Маркетинг раньше считал лиды из Meta, а Meta не видит заявки из переписок
+// и с сайта тех стран, где кампании крутятся на трафик (KZ: расход есть, лидов 0).
+// Источник правды по лидам — amo. Отчёт отдаёт: список лидов с текущим этапом,
+// сколько дошло до каждого этапа, разрез по менеджерам и сумму успешных сделок.
+const _lrCache = new Map();
+const LR_TTL_MS = 10 * 60 * 1000;
+function _lrGet(k){
+  const e = _lrCache.get(k);
+  if(!e) return null;
+  if(Date.now() - e.t > LR_TTL_MS){ _lrCache.delete(k); return null; }
+  return e.v;
+}
+function _lrSet(k, v){ _lrCache.set(k, { t: Date.now(), v }); }
+
+async function buildLeadReport(env, fromTs, toTs){
+  const pipelines = await getPipelines(env);
+  const p = pipelines.find(x => /^лид/i.test(x.name || '')) || pipelines.find(x => x.is_main) || pipelines[0];
+  if(!p) return { error: 'no pipelines found' };
+
+  const isLossStatus = (st) => Number(st.id) === 143 || Number(st.sort) === 11000 || /закрыт.*не.*реализ|не реализ/i.test(String(st.name||''));
+  const isWonStatus  = (st) => Number(st.id) === 142 || Number(st.sort) === 10000 || /успешн.*реализ/i.test(String(st.name||''));
+  // «Живые» этапы по порядку. Отказ и успех в этот список не входят: отказ не значит
+  // «прошёл всю воронку», успех наоборот засчитываем как пройденную воронку целиком.
+  const flow = p.statuses.filter(st => !isLossStatus(st) && !isWonStatus(st)).sort((a,b) => a.sort - b.sort);
+  const maxFlowSort = flow.length ? Number(flow[flow.length - 1].sort) : 0;
+  const sortById = {}, nameById = {};
+  p.statuses.forEach(st => {
+    nameById[st.id] = st.name;
+    if(isLossStatus(st)) return;
+    sortById[st.id] = isWonStatus(st) ? maxFlowSort : Number(st.sort);
+  });
+
+  // менеджеры (id → имя)
+  const userNameById = {};
+  try {
+    for(let up = 1; up <= 5; up++){
+      const ud = await amoFetch(`/users?limit=250&page=${up}`, env);
+      const arr = (ud && ud._embedded && ud._embedded.users) || [];
+      arr.forEach(u => { userNameById[u.id] = u.name; });
+      if(arr.length < 250) break;
+    }
+  } catch(_){}
+
+  // 1) лиды, созданные в периоде
+  let dateFilter = `&filter[created_at][from]=${fromTs}`;
+  if(toTs) dateFilter += `&filter[created_at][to]=${toTs}`;
+  const raw = [];
+  let truncated = false;
+  for(let page = 1; page <= 12; page++){
+    const data = await amoFetch(`/leads?filter[pipeline_id]=${p.id}${dateFilter}&limit=250&page=${page}`, env);
+    if(!data) break;
+    const batch = (data._embedded && data._embedded.leads) || [];
+    if(!batch.length) break;
+    raw.push(...batch);
+    if(batch.length < 250) break;
+    if(page === 12) truncated = true;
+  }
+  const known = new Set(raw.map(l => l.id));
+
+  // 2) история смен этапа — иначе лид, который дошёл до встречи и слился, теряется
+  const reached = new Map();
+  raw.forEach(l => { const s = sortById[l.status_id]; if(s !== undefined) reached.set(l.id, s); });
+  let eventsScanned = 0, eventsTruncated = false, eventsError = null;
+  try {
+    for(let page = 1; page <= 40; page++){
+      const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&limit=100&page=${page}`, env);
+      if(!ev) break;
+      const batch = (ev._embedded && ev._embedded.events) || [];
+      if(!batch.length) break;
+      eventsScanned += batch.length;
+      batch.forEach(e => {
+        const id = Number(e.entity_id);
+        if(!known.has(id)) return;
+        const after = (e.value_after && e.value_after[0] && e.value_after[0].lead_status) || null;
+        if(!after) return;
+        const s = sortById[after.id];
+        if(s === undefined) return;
+        const prev = reached.get(id);
+        if(prev === undefined || s > prev) reached.set(id, s);
+      });
+      if(batch.length < 100) break;
+      if(page === 40) eventsTruncated = true;
+    }
+  } catch(e){ eventsError = e.message || String(e); }
+
+  const wonIds = new Set(p.statuses.filter(isWonStatus).map(st => st.id));
+  const lostIds = new Set(p.statuses.filter(isLossStatus).map(st => st.id));
+  const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+
+  const leads = raw.map(l => {
+    const r = reached.has(l.id) ? reached.get(l.id) : null;
+    let deepest = null;
+    if(r != null) for(const st of flow){ if(Number(st.sort) <= r) deepest = st; }
+    // v897: откуда лид. Поля «Источник сделки» в кыргызском amo нет, теги почти никто
+    // не ставит, поэтому единственный честный признак — кто создал сделку:
+    // created_by = 0 значит её завела интеграция (форма, сайт, бот), иначе — менеджер руками.
+    const byRobot = !Number(l.created_by);
+    const tags = ((l._embedded && l._embedded.tags) || []).map(t => t.name).filter(Boolean);
+    return {
+      id: l.id,
+      name: l.name || '(без названия)',
+      created: l.created_at,
+      manager: userNameById[l.responsible_user_id] || '—',
+      origin: byRobot ? 'auto' : 'manual',
+      created_by: l.created_by || 0,
+      created_by_name: byRobot ? 'интеграция' : (userNameById[l.created_by] || ('id ' + l.created_by)),
+      tags: tags,
+      status_id: l.status_id,
+      stage: nameById[l.status_id] || '—',
+      is_won: wonIds.has(l.status_id),
+      is_lost: lostIds.has(l.status_id),
+      reached_sort: r,
+      reached_stage: deepest ? deepest.name : null,
+      price: Number(l.price) || 0,
+      url: `https://${sub}.amocrm.ru/leads/detail/${l.id}`
+    };
+  }).sort((a, b) => b.created - a.created);
+
+  const countReached = (sort) => leads.filter(x => x.reached_sort != null && x.reached_sort >= sort).length;
+  const stages = flow.map(st => ({ id: st.id, name: st.name, sort: Number(st.sort), reached: countReached(Number(st.sort)) }));
+
+  // разрез по менеджерам: сколько его лидов дошло до каждого этапа
+  const mgr = new Map();
+  leads.forEach(l => {
+    if(!mgr.has(l.manager)) mgr.set(l.manager, { name: l.manager, leads: 0, won: 0, won_sum: 0, lost: 0, reached: {} });
+    const m = mgr.get(l.manager);
+    m.leads++;
+    if(l.is_won){ m.won++; m.won_sum += l.price; }
+    if(l.is_lost) m.lost++;
+    if(l.reached_sort == null) return;
+    flow.forEach(st => { if(l.reached_sort >= Number(st.sort)) m.reached[st.id] = (m.reached[st.id] || 0) + 1; });
+  });
+  const managers = [...mgr.values()].sort((a, b) => b.leads - a.leads);
+
+  const wonLeads = leads.filter(l => l.is_won);
+  const origins = { auto: 0, manual: 0 };
+  const byCreator = {};
+  leads.forEach(l => {
+    origins[l.origin]++;
+    byCreator[l.created_by_name] = (byCreator[l.created_by_name] || 0) + 1;
+  });
+  return {
+    pipeline: { id: p.id, name: p.name },
+    origins, by_creator: byCreator,
+    from: fromTs, to: toTs || null,
+    leads_total: leads.length,
+    stages, leads, managers,
+    won: { count: wonLeads.length, sum: wonLeads.reduce((a, l) => a + l.price, 0) },
+    lost: { count: leads.filter(l => l.is_lost).length },
+    truncated,
+    events: { scanned: eventsScanned, truncated: eventsTruncated, error: eventsError }
+  };
+}
+
 export default async function handler(req, res){
   // v376: разрешаем POST для двусторонней синхронизации SD→amo (update_status, add_note).
   if(req.method !== 'GET' && req.method !== 'POST'){ return bad(res, 405, 'Only GET/POST'); }
@@ -919,6 +1074,24 @@ export default async function handler(req, res){
         // v447: subdomain для корректных ссылок на контакты KZ vs KG
         _subdomain: env.AMO_SUBDOMAIN
       });
+    }
+    if(action === 'lead_report'){
+      // v897: отчёт по лидам за период — для экрана «Маркетинг».
+      // ?slim=1 — без списка лидов (нужен для сравнения с прошлым месяцем).
+      const fromTs = req.query.from ? Number(req.query.from) : null;
+      const toTs = req.query.to ? Number(req.query.to) : null;
+      if(!fromTs) return bad(res, 400, 'Need ?from=<unix> (&to=<unix>)');
+      const slim = String(req.query.slim || '') === '1';
+      const key = country + '|' + fromTs + '|' + (toTs || 0);
+      let data = _lrGet(key);
+      if(!data){
+        data = await buildLeadReport(env, fromTs, toTs);
+        if(!data.error) _lrSet(key, data);
+      }
+      if(data.error) return bad(res, 500, data.error);
+      const out = Object.assign({ country: country }, data, { _subdomain: env.AMO_SUBDOMAIN });
+      if(slim){ out.leads = []; out.leads_omitted = true; }
+      return res.status(200).json(out);
     }
     if(action === 'geo_quals'){
       // v883: квалы по стране за период — для дашборда «Страны» в Маркетинге.

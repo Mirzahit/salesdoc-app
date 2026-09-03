@@ -188,6 +188,22 @@ function previousRangeFor(p) {
   return null;
 }
 
+// v897: произвольный период — ?since=YYYY-MM-DD&until=YYYY-MM-DD.
+// Раньше экран умел только «Неделя»/«Этот месяц» (пресеты Meta), а CEO нужен конкретный
+// месяц и любой диапазон. Если даты валидны — они главнее date_preset.
+function customRange(query) {
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  const since = String((query && query.since) || '').slice(0, 10);
+  const until = String((query && query.until) || '').slice(0, 10);
+  if (!re.test(since) || !re.test(until)) return null;
+  if (since > until) return null;
+  return { since, until };
+}
+// Параметры времени для insights: либо time_range, либо пресет.
+function timeParams(range, period) {
+  return range ? { time_range: JSON.stringify(range) } : { date_preset: period };
+}
+
 export default async function handler(req, res) {
   // v626 SEC: эндпоинт same-origin. Убран wildcard CORS '*' (раньше любой сайт мог читать
   // рекламные бюджеты/эффективность кампаний). Добавлена проверка x-app-token (checkAuth).
@@ -222,6 +238,7 @@ export default async function handler(req, res) {
 
   const endpoint = String(req.query.endpoint || 'account_summary');
   const period = validatePeriod(String(req.query.period || 'last_30d'));
+  const range = customRange(req.query);
   // v442: country явно префиксом — раньше попадал внутрь req.query, но порядок ключей
   // в JSON.stringify не гарантирован, что давало риск смешения кэша KZ и KG.
   // v786: country в верхний регистр — 'kz' и 'KZ' раньше плодили два кэша (двойные запросы к Meta)
@@ -240,7 +257,7 @@ export default async function handler(req, res) {
       const prevRange = previousRangeFor(period);
       const currentReq = metaFetch(`/${ACCOUNT}/insights`, {
         fields: INSIGHT_FIELDS,
-        date_preset: period,
+        ...timeParams(range, period),
         level: 'account'
       }, TOKEN);
       const prevReq = prevRange ? metaFetch(`/${ACCOUNT}/insights`, {
@@ -274,7 +291,7 @@ export default async function handler(req, res) {
       // на 25-м дне (недельная динамика в Маркетинге показывала апрель вместо июля).
       const data = await metaFetch(`/${ACCOUNT}/insights`, {
         fields: INSIGHT_FIELDS,
-        date_preset: period,
+        ...timeParams(range, period),
         level: 'account',
         time_increment: 1,
         limit: 100
@@ -430,7 +447,7 @@ export default async function handler(req, res) {
         try {
           const data = await metaFetchAllPages(`/${cab.account}/insights`, {
             fields: 'spend,impressions,clicks,inline_link_clicks,ctr,reach,actions,cost_per_action_type,account_currency,date_start,date_stop',
-            date_preset: period,
+            ...timeParams(range, period),
             level: 'account',
             breakdowns: 'country',
             limit: daily ? 500 : 200,
@@ -515,7 +532,7 @@ export default async function handler(req, res) {
         try {
           const data = await metaFetchAllPages(`/${cab.account}/insights`, {
             fields: 'campaign_id,campaign_name,spend,impressions,clicks,actions,cost_per_action_type,account_currency',
-            date_preset: period,
+            ...timeParams(range, period),
             level: 'campaign',
             breakdowns: 'country',
             limit: 400
@@ -563,7 +580,7 @@ export default async function handler(req, res) {
       if (!campaignId) return res.status(400).json({ error: 'Нужен campaign_id' });
       const daysRaw = await metaFetchAllPages(`/${campaignId}/insights`, {
         fields: 'spend,impressions,clicks,actions,cost_per_action_type,date_start',
-        date_preset: period,
+        ...timeParams(range, period),
         breakdowns: 'country',
         time_increment: 1,
         limit: 500
@@ -583,7 +600,7 @@ export default async function handler(req, res) {
       let ads = [];
       try {
         const adData = await metaFetch(`/${campaignId}/ads`, {
-          fields: `id,name,status,insights.date_preset(${period}){spend,impressions,clicks,ctr,actions,cost_per_action_type}`,
+          fields: `id,name,status,insights.${range ? `time_range({'since':'${range.since}','until':'${range.until}'})` : `date_preset(${period})`}{spend,impressions,clicks,ctr,actions,cost_per_action_type}`,
           limit: 100
         }, TOKEN);
         ads = (adData.data || []).map(a => {
