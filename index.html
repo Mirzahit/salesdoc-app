@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v901</title>
+<title>SalesDoc — Финансовый Дашборд v902</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6032,6 +6032,10 @@ body.light .ct-dd._mktper input[type=date]{color-scheme:light}
 .ct-dd._mktsrc .mktsrc-i span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ct-dd._mktsrc .mktsrc-i i{font-style:normal;font-size:10.5px;color:var(--text-muted);font-variant-numeric:tabular-nums}
 .ct-dd._mktsrc .mktsrc-go{width:100%;margin-top:9px;padding:8px;border:0;border-radius:8px;background:var(--accent-bg);color:var(--accent-text);font-size:12px;font-weight:650;cursor:pointer;font-family:inherit}
+#view-marketing .mkd-fr.clk{cursor:pointer;border-radius:7px;margin:0 -6px;padding-left:6px;padding-right:6px}
+#view-marketing .mkd-fr.clk:hover{background:rgba(120,120,128,.07)}
+#view-marketing table.mkd-mt td.clk{cursor:pointer}
+#view-marketing table.mkd-mt td.clk:hover{background:rgba(120,120,128,.08);color:var(--accent-text)}
 #view-marketing .mkd-gap{background:rgba(94,106,210,.07);border:1px solid rgba(94,106,210,.22);border-radius:11px;padding:11px 14px;font-size:12px;color:var(--text-soft);line-height:1.6;margin:0 0 18px}
 #view-marketing .mkd-gap b{color:var(--text-primary);font-weight:700}
 #view-marketing .mkd-fun{border-top:1px solid var(--border-faint);padding-top:12px}
@@ -6077,6 +6081,14 @@ body.light #view-marketing .mkd-osw b,body.light .mkt-perbtn{background:#FFFFFF}
 body.light #view-marketing .mkd-lq{background:#F2F3F7}
 
 /* подсказка при наведении и панель деталей живут в body, поэтому без #view-marketing */
+.mkd-sheet .mkd-scroll{overflow-x:auto;max-width:100%}
+.mkd-sheet table.mkd-lt{min-width:560px}
+.mkd-sheet table.mkd-lt td:first-child{color:var(--text-primary);font-weight:600}
+.mkd-sheet table.mkd-lt tr.clk{cursor:pointer}
+.mkd-sheet table.mkd-lt tr.clk:hover td{background:rgba(120,120,128,.06)}
+.mkd-sheet table.mkd-lt tr.won td.sum{color:#4CB782}
+.mkd-sheet table.mkd-lt td.sum{font-weight:700;white-space:nowrap}
+.mkd-sheet table.mkd-lt tr.lost td{color:var(--text-muted)}
 .mkd-tip{position:fixed;pointer-events:none;z-index:10050;background:var(--surface,#1A1D26);border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:12px;color:var(--text-primary);box-shadow:0 10px 30px rgba(0,0,0,.35);opacity:0;transition:opacity .1s;min-width:150px}
 .mkd-tip .dt{font-size:10.5px;color:var(--text-muted);font-weight:600;letter-spacing:.3px;margin-bottom:7px}
 .mkd-tip .r{display:flex;align-items:center;gap:8px;justify-content:space-between;margin-top:4px}
@@ -6086,7 +6098,7 @@ body.light #view-marketing .mkd-lq{background:#F2F3F7}
 .mkd-tip .r.tot .nm{color:var(--text-primary)}
 .mkd-ovl{position:fixed;inset:0;background:rgba(8,9,13,.6);opacity:0;pointer-events:none;transition:opacity .16s;z-index:10010}
 .mkd-ovl.on{opacity:1;pointer-events:auto}
-.mkd-sheet{position:fixed;right:0;top:0;bottom:0;width:min(660px,94vw);background:var(--bg,#0F1116);border-left:1px solid var(--border);z-index:10020;transform:translateX(102%);transition:transform .2s cubic-bezier(.3,.8,.4,1);overflow-y:auto;padding:22px 24px 40px;color:var(--text-primary)}
+.mkd-sheet{position:fixed;right:0;top:0;bottom:0;width:min(860px,96vw);background:var(--bg,#0F1116);border-left:1px solid var(--border);z-index:10020;transform:translateX(102%);transition:transform .2s cubic-bezier(.3,.8,.4,1);overflow-y:auto;padding:22px 24px 40px;color:var(--text-primary)}
 .mkd-sheet.on{transform:translateX(0)}
 .mkd-sheet .hd{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px}
 .mkd-sheet .hd .t{font-size:17px;font-weight:700;letter-spacing:-.3px}
@@ -19392,11 +19404,11 @@ function _mkdRender(){
  else if(_mkdSrc) base = 'источник «' + _mkdSrc + '»';
  var kpis = [
   { l:'Потрачено', v:_mkdUsd(cur.spend), h:'реклама, доллары', d:'spend', dl:_mkdDl(cur.spend, prv.spend, _mkdFUsd, 'neutral') },
-  { l:'Сделок', v:String(cur.leads), h:base, d:'leads', dl:_mkdDl(cur.leads, prv.has ? prv.leads : null, _mkdFInt, false) },
+  { l:'Сделок', v:String(cur.leads), h:base, d:'list:all', dl:_mkdDl(cur.leads, prv.has ? prv.leads : null, _mkdFInt, false) },
   { l:'Цена сделки', v:_mkdUsd(cur.cpl), h:'потрачено ÷ ' + base, d:'cpl', dl:_mkdDl(cur.cpl, prv.cpl, _mkdFUsd, true) },
-  { l:'Назначено встреч', v:String(cur.meet), h:_mkdShare(cur.meet, cur.leads) + ' от них', d:'funnel', dl:_mkdDl(cur.meet, prv.has ? prv.meet : null, _mkdFInt, false) },
-  { l:'Счетов выставлено', v:String(cur.inv), h:_mkdShare(cur.inv, cur.leads) + ' от них', d:'funnel', dl:_mkdDl(cur.inv, prv.has ? prv.inv : null, _mkdFInt, false) },
-  { l:'Продаж', v:String(cur.won), h:_mkdShare(cur.won, cur.leads) + ' от них', d:'funnel', dl:_mkdDl(cur.won, prv.has ? prv.won : null, _mkdFInt, false) },
+  { l:'Назначено встреч', v:String(cur.meet), h:_mkdShare(cur.meet, cur.leads) + ' от них', d:'list:meet', dl:_mkdDl(cur.meet, prv.has ? prv.meet : null, _mkdFInt, false) },
+  { l:'Счетов выставлено', v:String(cur.inv), h:_mkdShare(cur.inv, cur.leads) + ' от них', d:'list:inv', dl:_mkdDl(cur.inv, prv.has ? prv.inv : null, _mkdFInt, false) },
+  { l:'Продаж', v:String(cur.won), h:_mkdShare(cur.won, cur.leads) + ' от них', d:'list:won', dl:_mkdDl(cur.won, prv.has ? prv.won : null, _mkdFInt, false) },
   { l:'Заработали', v:(cur.has ? _mkdUsd(cur.revUsd) : '—'), h:_mkdRevHint(cur), d:'funnel', dl:_mkdDl(cur.has ? cur.revUsd : null, prv.has ? prv.revUsd : null, _mkdFUsd, false) },
   { l:'Окупаемость', v:(cur.roi == null ? '—' : '×' + cur.roi.toFixed(1)), h:'заработали ÷ потратили', d:'funnel', dl:_mkdDl(cur.roi, prv.roi, function(n){ return Number(n).toFixed(1); }, false, _mkdFX) }
  ];
@@ -19627,7 +19639,8 @@ function _mkdFunnelCards(){
   };
   var rows = a.stages.map(function(st){
    var share = base > 0 ? st.reached/base*100 : 0;
-   return '<div class="mkd-fr"><div class="nm">' + sanitize(st.name) + '</div>'
+   return '<div class="mkd-fr clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;stage&quot;,' + st.sort + ',&quot;&quot;,&quot;'
+    + sanitize(st.name) + '&quot;)"><div class="nm">' + sanitize(st.name) + '</div>'
     + '<div class="bar"><i style="width:' + Math.max(share, st.reached ? 1.5 : 0) + '%;background:' + col + '"></i></div>'
     + '<div class="ct">' + st.reached + '</div>'
     + '<div class="pc">' + (base > 0 ? Math.round(share) + '%' : '—') + '</div>'
@@ -19638,11 +19651,11 @@ function _mkdFunnelCards(){
    + '<div class="mkd-top"><div class="mkd-name"><span class="mkd-dot" style="background:' + col + '"></span>' + sanitize(_mkdName(cc)) + '</div>'
    + '<div class="mkd-share">' + base + ' лид' + _mkdPlural(base, '', 'а', 'ов') + (pv ? ' · было ' + prevBase : '') + '</div></div>'
    + '<div class="mkd-fun">' + rows
-   + '<div class="mkd-fr won"><div class="nm">Продажа</div>'
+   + '<div class="mkd-fr won clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;won&quot;,0,&quot;&quot;,&quot;Продажи&quot;)"><div class="nm">Продажа</div>'
    +  '<div class="bar"><i style="width:' + Math.max(wonShare, a.won.count ? 1.5 : 0) + '%;background:#4CB782"></i></div>'
    +  '<div class="ct">' + a.won.count + '</div><div class="pc">' + (base > 0 ? Math.round(wonShare) + '%' : '—') + '</div>'
    +  '<div class="dl">' + (pv && prevBase ? pp(wonShare, pv.won.count) : '') + '</div></div>'
-   + '<div class="mkd-fr lost"><div class="nm">Слились</div>'
+   + '<div class="mkd-fr lost clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;lost&quot;,0,&quot;&quot;,&quot;Слились&quot;)"><div class="nm">Слились</div>'
    +  '<div class="bar"><i style="width:' + (base > 0 ? Math.max(a.lost/base*100, a.lost ? 1.5 : 0) : 0) + '%;background:#E5604D"></i></div>'
    +  '<div class="ct">' + a.lost + '</div><div class="pc">' + _mkdShare(a.lost, base) + '</div><div class="dl"></div></div>'
    + '</div>'
@@ -19720,23 +19733,91 @@ function _mkdManagerBlocks(){
    var was = prevConv[m.name];
    var dl = (was == null) ? '' : '<span class="mkd-dl ' + (conv === was ? 'flat' : (conv > was ? 'up' : 'down')) + '">'
     + (conv > was ? '+' : (conv < was ? '−' : '')) + Math.abs(conv - was) + ' п.п.</span>';
-   return '<tr><td>' + sanitize(m.name) + '</td><td>' + m.leads + '</td>'
+   return '<tr><td>' + sanitize(m.name) + '</td>'
+    + '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;all&quot;,0,&quot;' + encodeURIComponent(m.name) + '&quot;,&quot;Все сделки менеджера&quot;)">' + m.leads + '</td>'
     + ks.map(function(st){
        var c = m.reached[st.id] || 0;
-       return '<td>' + c + '<span class="sub">' + (m.leads > 0 ? Math.round(c/m.leads*100) + '%' : '—') + '</span></td>';
+       return '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;stage&quot;,' + st.sort + ',&quot;'
+        + encodeURIComponent(m.name) + '&quot;,&quot;' + sanitize(st.name) + '&quot;)">'
+        + c + '<span class="sub">' + (m.leads > 0 ? Math.round(c/m.leads*100) + '%' : '—') + '</span></td>';
       }).join('')
-    + '<td>' + m.won + '</td>'
+    + '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;won&quot;,0,&quot;' + encodeURIComponent(m.name) + '&quot;,&quot;Продажи&quot;)">' + m.won + '</td>'
     + '<td class="' + (conv >= teamConv ? 'ok' : 'lo') + '">' + conv + '%' + dl + '</td>'
     + '<td class="wk">' + (mw ? sanitize(mw.s.from) + ' → ' + sanitize(mw.s.to) + ' <span class="sub">' + Math.round(mw.s.rate*100) + '%</span>' : '—') + '</td></tr>';
   }).join('');
-  var totalRow = '<tr class="tot"><td>Весь отдел</td><td>' + a.leads_total + '</td>'
-   + ks.map(function(st){ return '<td>' + st.reached + '<span class="sub">' + _mkdShare(st.reached, a.leads_total) + '</span></td>'; }).join('')
-   + '<td>' + a.won.count + '</td><td>' + teamConv + '%</td><td>—</td></tr>';
+  var totalRow = '<tr class="tot"><td>Весь отдел</td>'
+   + '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;all&quot;,0,&quot;&quot;,&quot;Все сделки&quot;)">' + a.leads_total + '</td>'
+   + ks.map(function(st){ return '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;stage&quot;,' + st.sort + ',&quot;&quot;,&quot;' + sanitize(st.name) + '&quot;)">'
+      + st.reached + '<span class="sub">' + _mkdShare(st.reached, a.leads_total) + '</span></td>'; }).join('')
+   + '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;won&quot;,0,&quot;&quot;,&quot;Продажи&quot;)">' + a.won.count + '</td>'
+   + '<td>' + teamConv + '%</td><td>—</td></tr>';
   return '<div class="mkd-card" style="margin-bottom:12px;overflow-x:auto">' + head + alert
    + '<table class="mkd-t mkd-mt"><thead>' + th + '</thead><tbody>' + rows + totalRow + '</tbody></table></div>';
  }).join('');
  return out || '<div class="mkd-empty">За период лидов нет.</div>';
 }
+
+// ── v902: за любой цифрой — список этих самых клиентов ──────────────────────
+// «Амир закрыл 6» без имён бесполезно: непонятно, кого именно. Любое число в
+// воронке, у менеджера и в своде открывает панель со списком сделок, а оттуда
+// одним кликом — путь конкретной сделки.
+function _mkdPickLeads(cc, kind, val, mgr){
+ var out = [];
+ var codes = cc ? [cc] : Object.keys(_mkdA);
+ codes.forEach(function(k){
+  var a = _mkdA[k]; if(!a) return;
+  var sort = null;
+  if(kind === 'stage') sort = Number(val);
+  if(kind === 'meet' || kind === 'inv'){
+   var st = _mkdPickStage(a, kind === 'meet' ? _RE_MEET : _RE_INV);
+   if(!st) return;
+   sort = Number(st.sort);
+  }
+  a.leads.forEach(function(l){
+   if(mgr && l.manager !== mgr) return;
+   if(kind === 'won'){ if(!l.is_won) return; }
+   else if(kind === 'lost'){ if(!l.is_lost) return; }
+   else if(sort != null){ if(l.reached_sort == null || l.reached_sort < sort) return; }
+   out.push(Object.assign({ cc: k }, l));
+  });
+ });
+ return out.sort(function(a, b){ return b.created - a.created; });
+}
+function _mkdPickStage(a, re){
+ var found = null;
+ (a.stages || []).forEach(function(st){ if(!found && re.test(String(st.name).toLowerCase())) found = st; });
+ return found;
+}
+window.mkdOpenList = function(cc, kind, val, mgr, title){
+ mgr = mgr ? decodeURIComponent(mgr) : '';
+ var list = _mkdPickLeads(cc || '', kind, val, mgr);
+ var multi = Object.keys(_mkdA).length > 1 && !cc;
+ var sub = _mkdPeriodLabel() + ' · ' + list.length + ' ' + _mkdPlural(list.length, 'сделка', 'сделки', 'сделок');
+ if(mgr) sub += ' · ' + mgr;
+ if(!list.length){
+  _mkdOpenSheet(sanitize(title || 'Сделки'), sub, '<div class="mkd-empty">Таких сделок за период нет.</div>');
+  return;
+ }
+ var html = '<div class="mkd-scroll"><table class="mkd-t mkd-lt"><thead><tr><th>Клиент</th>'
+  + (multi ? '<th>Страна</th>' : '')
+  + '<th>Сумма</th><th>Создан</th>' + (mgr ? '' : '<th>Менеджер</th>')
+  + '<th>Этап сейчас</th><th>Дальше всего дошёл</th></tr></thead><tbody>'
+  + list.map(function(l){
+     var d = new Date(l.created * 1000);
+     var cls = l.is_won ? ' won' : (l.is_lost ? ' lost' : '');
+     return '<tr class="clk' + cls + '" onclick="mkdOpenLead(' + l.id + ',&quot;' + l.cc + '&quot;)">'
+      + '<td>' + sanitize(l.name) + '</td>'
+      + (multi ? '<td>' + sanitize(_mkdName(l.cc)) + '</td>' : '')
+      + '<td class="sum">' + (l.price ? _mkdLoc(l.price, l.cc) : '—') + '</td>'
+      + '<td>' + d.getDate() + ' ' + _MKT_MONTHS_ROD[d.getMonth()] + '</td>'
+      + (mgr ? '' : '<td>' + sanitize(l.manager) + '</td>')
+      + '<td>' + sanitize(l.stage) + '</td>'
+      + '<td>' + (l.is_won ? 'Продажа' : sanitize(l.reached_stage || '—')) + '</td></tr>';
+    }).join('')
+  + '</tbody></table></div>'
+  + '<div class="mkd-note">Клик по строке открывает путь этой сделки.</div>';
+ _mkdOpenSheet(sanitize(title || 'Сделки'), sub, html);
+};
 
 // ── v897: список лидов ──────────────────────────────────────────────────────
 var _mkdLeadF = { stage:'', mgr:'', q:'', limit:60 };
@@ -19876,7 +19957,7 @@ function _mkdRenderLeads(keepFocus){
           return o === 'auto' ? 'заявка' : (o === 'call' ? 'звонок' : 'завёл ' + sanitize(l.created_by_name)); })() + '</td>'
       + '<td>' + sanitize(l.manager) + '</td>'
       + '<td>' + sanitize(l.stage) + '</td>'
-      + '<td>' + sanitize(l.reached_stage || '—') + '</td>'
+      + '<td>' + (l.is_won ? 'Продажа' : sanitize(l.reached_stage || '—')) + '</td>'
       + '<td>' + (l.price ? _mkdLoc(l.price, l.cc) : '—') + '</td></tr>';
     }).join('')
   + '</tbody></table>'
@@ -20183,6 +20264,12 @@ function _mkdOpenSheet(title, sub, html){
 window.mkdOpenKpi = function(kind){
  if(!_mkdData) return;
  if(kind === 'funnel'){ _mkdOpenFunnel(); return; }
+ if(String(kind).indexOf('list:') === 0){
+  var k = String(kind).slice(5);
+  var titles = { all:'Все сделки', meet:'Дошли до встречи', inv:'Дошли до счёта', won:'Продажи' };
+  mkdOpenList('', k, 0, '', titles[k] || 'Сделки');
+  return;
+ }
  var d = _mkdData.daily || {}, days = d.days || [];
  var ccs = (d.countries || []).filter(function(c){ return !_mkdHidden[c]; });
  var m = kind;
