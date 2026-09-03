@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v903</title>
+<title>SalesDoc — Финансовый Дашборд v904</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6015,6 +6015,11 @@ body.light .ct-dd._mktper input[type=date]{color-scheme:light}
 #view-marketing .mkd-tg-camps .r .n{color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #view-marketing .mkd-tg-camps .r .s,#view-marketing .mkd-tg-camps .r .l{text-align:right;color:var(--text-primary);font-weight:650;font-variant-numeric:tabular-nums}
 #view-marketing .mkd-tg-camps .more{font-size:10.5px;color:var(--text-muted);padding:5px 0}
+#view-marketing .mkd-excl{background:rgba(120,120,128,.08);border:1px solid var(--border-faint);border-radius:10px;padding:9px 13px;font-size:11.5px;color:var(--text-soft);line-height:1.6;margin:0 0 12px}
+#view-marketing .mkd-excl b{color:var(--text-primary);font-weight:700}
+#view-marketing .mkd-excl button{background:transparent;border:0;color:var(--text-muted);font-size:11.5px;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:3px;padding:0 2px}
+#view-marketing .mkd-excl button:hover{color:var(--text-primary)}
+#view-marketing .mkd-excl.off{border-style:dashed}
 #view-marketing .mkd-srcrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 16px}
 #view-marketing .mkd-srcrow .lb{font-size:11.5px;color:var(--text-muted);margin-right:2px}
 #view-marketing .mkd-srcrow b{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:5px 10px;border-radius:7px;border:1px solid var(--border-faint);color:var(--text-soft);cursor:pointer;user-select:none;white-space:nowrap}
@@ -18917,18 +18922,21 @@ window.mktOpenPeriodPicker = function(ev){
 // v797: настройки маркетинга (план лидов + курс/гонорар таргетолога) из app_settings
 window.mktSettingsLoad = async function(force){
  if(window._mktSettings && !force) return window._mktSettings;
- var out = { plan: {}, costs: {}, targ: {}, ads: [] };
+ // v904: по умолчанию не учитываем рекламу мастер-класса — она не про продукт.
+ var out = { plan: {}, costs: {}, targ: {}, ads: [], excl: ['МК'] };
  try {
   var rs = await Promise.all([
    sbFetch('/api/settings?key=mkt_lead_plan'),
    sbFetch('/api/settings?key=mkt_costs'),
    sbFetch('/api/settings?key=mkt_targetologs'),
-   sbFetch('/api/settings?key=mkt_ad_sources')
+   sbFetch('/api/settings?key=mkt_ad_sources'),
+   sbFetch('/api/settings?key=mkt_exclude_ads')
   ]);
   if(rs[0] && rs[0].ok && rs[0].value) out.plan = rs[0].value;
   if(rs[1] && rs[1].ok && rs[1].value) out.costs = rs[1].value;
   if(rs[2] && rs[2].ok && rs[2].value) out.targ = rs[2].value;
   if(rs[3] && rs[3].ok && Array.isArray(rs[3].value)) out.ads = rs[3].value;
+  if(rs[4] && rs[4].ok && Array.isArray(rs[4].value)) out.excl = rs[4].value;
  } catch(_){}
  window._mktSettings = out;
  return out;
@@ -19093,13 +19101,22 @@ window.mktLoadOverview = async function(force){
  var el = document.getElementById('mkt-dash'); if(!el) return;
  var seq = ++_mkdSeq;
  var r = _mktSelRange(_mktSel), pr = _mktPrevRange(_mktSel);
- var q = 'since=' + r.since + '&until=' + r.until;
- var qp = 'since=' + pr.since + '&until=' + pr.until;
+ var st0 = window._mktSettings || {};
+ var exclArr = Array.isArray(st0.excl) ? st0.excl : ['МК'];
+ var ex = exclArr.length ? '&exclude=' + encodeURIComponent(exclArr.join(',')) : '';
+ var q = 'since=' + r.since + '&until=' + r.until + ex;
+ var qp = 'since=' + pr.since + '&until=' + pr.until + ex;
  mktSyncPeriodBtn();
  el.innerHTML = '<div class="mkd-empty">Собираем отчёт: расход из рекламного кабинета и лиды из amoCRM за выбранный период и за предыдущий. Это занимает 10–40 секунд.</div>';
  try {
+  await mktSettingsLoad(force);
+  var st = window._mktSettings || {};
+  var exclNow = Array.isArray(st.excl) ? st.excl : ['МК'];
+  var exNow = exclNow.length ? '&exclude=' + encodeURIComponent(exclNow.join(',')) : '';
+  q = 'since=' + r.since + '&until=' + r.until + exNow;
+  qp = 'since=' + pr.since + '&until=' + pr.until + exNow;
   var res = await Promise.all([
-   mktSettingsLoad(force),
+   Promise.resolve(st),
    authFetch('/api/meta-ads?endpoint=geo&scope=all&' + q).then(function(x){ return x.json(); }),
    authFetch('/api/meta-ads?endpoint=geo_daily&scope=all&' + q).then(function(x){ return x.json(); }).catch(function(){ return null; }),
    authFetch('/api/meta-ads?endpoint=campaigns_geo&scope=all&' + q).then(function(x){ return x.json(); }).catch(function(){ return null; }),
@@ -19214,6 +19231,39 @@ function _mkdTotals(){
 // «Завели руками» — сделку создал менеджер. Это НЕ значит «не с рекламы»:
 // менеджер мог перенести заявку из переписки. Но и не значит, что с рекламы, —
 // поэтому честная цена лида считается только по тем, кто пришёл сам.
+// ── v904: что не учитываем в рекламе ────────────────────────────────────────
+// Реклама мастер-класса шла в тех же кампаниях, но к продукту отношения не
+// имеет. Отсекаем её по названию группы объявлений и пишем на экране, сколько
+// отсекли — чтобы деньги не пропадали молча.
+function _mkdExclList(){
+ var a = ((_mkdData || {}).settings || {}).excl;
+ return Array.isArray(a) ? a : [];
+}
+window.mkdToggleExcl = function(){
+ var on = _mkdExclList().length > 0;
+ var next = on ? [] : ['МК'];
+ _mkdData.settings.excl = next;
+ if(window._mktSettings) window._mktSettings.excl = next;
+ _mktSaveSetting('mkt_exclude_ads', next);
+ mktLoadOverview();
+};
+function _mkdExclRow(){
+ var list = _mkdExclList();
+ var ex = ((_mkdData.geo || {}).excluded) || null;
+ if(!list.length){
+  return '<div class="mkd-excl off">Считается вся реклама, включая мастер-класс. '
+   + '<button onclick="mkdToggleExcl()">не учитывать мастер-класс</button></div>';
+ }
+ if(!ex || !ex.spend){
+  return '<div class="mkd-excl">Реклама мастер-класса не учитывается. За этот период её не было. '
+   + '<button onclick="mkdToggleExcl()">учитывать</button></div>';
+ }
+ return '<div class="mkd-excl">Реклама мастер-класса не учитывается: <b>' + _mkdUsd(ex.spend) + '</b>'
+  + (ex.leads ? ' и <b>' + ex.leads + '</b> ' + _mkdPlural(ex.leads, 'заявка', 'заявки', 'заявок') : '')
+  + ' за период. Группы: ' + sanitize((ex.names || []).join(', ')) + '. '
+  + '<button onclick="mkdToggleExcl()">учитывать</button></div>';
+}
+
 // v901: разрез по источнику сделки. Поле «Источник сделки» в amo есть, но
 // заполняют его не всегда, а часть значений к рекламе отношения не имеет —
 // Lalafo, рекомендации, холодная база. Что считать рекламой, задаёт CEO.
@@ -19406,6 +19456,7 @@ function _mkdRender(){
   + 'не записан — их завели руками. Пока это так, цена заявки и окупаемость считаются только по тем '
   + 'сделкам, где источник проставлен: включите «С рекламы» в строке ниже.</div></div>';
 
+ html += _mkdExclRow();
  html += _mkdSrcRow();
 
  var base = _MKD_ORIGIN_L[_mkdOrigin];
