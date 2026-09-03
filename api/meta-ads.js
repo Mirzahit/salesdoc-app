@@ -209,6 +209,36 @@ function customRange(query) {
   if (since > until) return null;
   return { since, until };
 }
+// v904: часть кампаний к продукту отношения не имеет — например реклама
+// мастер-класса. Считать её в цене заявки на программу нельзя. Что исключать,
+// приходит с фронта: ?exclude=МК — сравниваем с названием группы и кампании.
+// Поэтому данные тянем на уровне ГРУПП объявлений: внутри одной кампании
+// «WhatsApp» живут и мастер-класс, и программа.
+function excludeList(query) {
+  const raw = String((query && query.exclude) || '').trim();
+  if (!raw) return [];
+  return raw.split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
+}
+function isExcluded(row, list) {
+  if (!list.length) return false;
+  const hay = (String(row.adset_name || '') + ' ' + String(row.campaign_name || '')).toLowerCase();
+  return list.some(x => hay.indexOf(x) >= 0);
+}
+// Свод по отсечённым строкам — чтобы на экране было видно, сколько убрали.
+function excludedSummary(rows, list) {
+  const out = { spend: 0, leads: 0, names: [] };
+  const seen = {};
+  rows.forEach(r => {
+    if (!isExcluded(r, list)) return;
+    out.spend += Number(r.spend || 0);
+    out.leads += summarizeLeads(r.actions, r.cost_per_action_type).count || 0;
+    const n = r.adset_name || r.campaign_name;
+    if (n && !seen[n]) { seen[n] = 1; out.names.push(n); }
+  });
+  out.spend = Math.round(out.spend * 100) / 100;
+  return out;
+}
+
 // Параметры времени для insights: либо time_range, либо пресет.
 function timeParams(range, period) {
   return range ? { time_range: JSON.stringify(range) } : { date_preset: period };
@@ -249,6 +279,7 @@ export default async function handler(req, res) {
   const endpoint = String(req.query.endpoint || 'account_summary');
   const period = validatePeriod(String(req.query.period || 'last_30d'));
   const range = customRange(req.query);
+  const excl = excludeList(req.query);
   // v442: country явно префиксом — раньше попадал внутрь req.query, но порядок ключей
   // в JSON.stringify не гарантирован, что давало риск смешения кэша KZ и KG.
   // v786: country в верхний регистр — 'kz' и 'KZ' раньше плодили два кэша (двойные запросы к Meta)
@@ -438,20 +469,20 @@ export default async function handler(req, res) {
       const daily = endpoint === 'geo_daily';
       const accounts = await resolveAccounts(TOKEN);
       const cabinets = [];
-      const rows = [];
+      let rows = [];
       if (!accounts.length) {
         return res.status(502).json({ error: 'Ни одного рекламного кабинета не доступно этому токену', cabinets });
       }
       for (const acc of accounts) {
         try {
           const data = await metaFetchAllPages(`/${acc.id}/insights`, {
-            fields: 'spend,impressions,clicks,inline_link_clicks,ctr,reach,actions,cost_per_action_type,account_currency,date_start,date_stop',
+            fields: 'campaign_name,adset_name,spend,impressions,clicks,inline_link_clicks,ctr,reach,actions,cost_per_action_type,account_currency,date_start,date_stop',
             ...timeParams(range, period),
-            level: 'account',
+            level: excl.length ? 'adset' : 'account',
             breakdowns: 'country',
-            limit: daily ? 500 : 200,
+            limit: 500,
             ...(daily ? { time_increment: 1 } : {})
-          }, TOKEN, daily ? 40 : 10);
+          }, TOKEN, 40);
           cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: true, rows: data.length });
           // v899: каждая строка помнит свой кабинет — по нему считаем работу таргетологов,
           // у каждого свой рекламный аккаунт.
@@ -461,7 +492,10 @@ export default async function handler(req, res) {
           cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: false, error: e.message || String(e) });
         }
       }
-      if (!rows.length && !cabinets.some(c => c.ok)) {
+      const excluded = excludedSummary(rows, excl);
+      const allRows = rows;
+      rows = rows.filter(r => !isExcluded(r, excl));
+      if (!allRows.length && !cabinets.some(c => c.ok)) {
         return res.status(502).json({ error: 'Реклама не отдала данные ни по одному кабинету', cabinets });
       }
       const currency = (rows.find(r => r.account_currency) || {}).account_currency || 'USD';
@@ -485,7 +519,7 @@ export default async function handler(req, res) {
         });
         const days = [...byDate.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)
           .map(([date, by_country]) => ({ date, by_country }));
-        result = { period, currency, days, countries: [...seenCountries].sort(), cabinets };
+        result = { period, currency, days, countries: [...seenCountries].sort(), cabinets, excluded };
       } else {
         const agg = new Map();
         rows.forEach(r => {
@@ -535,7 +569,7 @@ export default async function handler(req, res) {
         const totalSpend = countries.reduce((a, c) => a + c.spend, 0);
         const totalLeads = countries.reduce((a, c) => a + c.leads, 0);
         result = {
-          period, currency, countries, cabinets, accounts,
+          period, currency, countries, cabinets, accounts, excluded,
           total: {
             spend: Math.round(totalSpend * 100) / 100,
             leads: totalLeads,
@@ -549,16 +583,16 @@ export default async function handler(req, res) {
       // а не /campaigns?fields=insights — иначе разбивки по странам не получить.
       const accounts = await resolveAccounts(TOKEN);
       const cabinets = [];
-      const rows = [];
+      let rows = [];
       for (const acc of accounts) {
         try {
           const data = await metaFetchAllPages(`/${acc.id}/insights`, {
-            fields: 'campaign_id,campaign_name,spend,impressions,clicks,actions,cost_per_action_type,account_currency',
+            fields: 'campaign_id,campaign_name,adset_name,spend,impressions,clicks,actions,cost_per_action_type,account_currency',
             ...timeParams(range, period),
-            level: 'campaign',
+            level: excl.length ? 'adset' : 'campaign',
             breakdowns: 'country',
-            limit: 400
-          }, TOKEN, 20);
+            limit: 500
+          }, TOKEN, 30);
           cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: true, rows: data.length });
           data.forEach(r => { r._acct = acc.id; r._acct_name = acc.name || acc.id; });
           rows.push(...data);
@@ -566,6 +600,8 @@ export default async function handler(req, res) {
           cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: false, error: e.message || String(e) });
         }
       }
+      const excluded = excludedSummary(rows, excl);
+      rows = rows.filter(r => !isExcluded(r, excl));
       const byCamp = new Map();
       const seenCountries = new Set();
       rows.forEach(r => {
@@ -593,7 +629,7 @@ export default async function handler(req, res) {
       result = {
         period,
         currency: (rows.find(r => r.account_currency) || {}).account_currency || 'USD',
-        campaigns, countries: [...seenCountries].sort(), cabinets
+        campaigns, countries: [...seenCountries].sort(), cabinets, excluded
       };
 
     } else if (endpoint === 'campaign_detail') {

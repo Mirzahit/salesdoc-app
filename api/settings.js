@@ -24,7 +24,7 @@ import { checkAuth } from './_auth.js';
 // Этапы общие для всех, как воронка в amoCRM: доска у всех одинаковая, цифры сравнимы.
 // v899: mkt_targetologs — кто ведёт какой рекламный кабинет { 'act_123': 'Имя' }.
 // v901: mkt_ad_sources — какие значения поля «Источник сделки» считаются рекламой.
-const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_ad_sources', 'tg_digest', 'company_plans', 'plan_history', 'route_stages'];
+const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_ad_sources', 'mkt_exclude_ads', 'tg_digest', 'company_plans', 'plan_history', 'route_stages'];
 
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
