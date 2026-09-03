@@ -1075,6 +1075,82 @@ export default async function handler(req, res){
         _subdomain: env.AMO_SUBDOMAIN
       });
     }
+    if(action === 'lead_path'){
+      // v897: полный путь одной сделки — когда завели, кто вёл, через какие этапы прошла
+      // и сколько на каждом просидела. Нужен для экрана «Маркетинг»: CEO хочет открыть
+      // лид по названию и увидеть его историю, а не только текущий этап.
+      const leadId = Number(req.query.id || 0);
+      if(!leadId) return bad(res, 400, 'Need ?id=LEAD_ID');
+      const lead = await amoFetch(`/leads/${leadId}`, env);
+      if(!lead || !lead.id) return bad(res, 404, 'Сделка не найдена');
+
+      const pipelines = await getPipelines(env);
+      const pipe = pipelines.find(x => x.id === lead.pipeline_id) || null;
+      const stName = {};
+      pipelines.forEach(pl => pl.statuses.forEach(st => { stName[st.id] = st.name; }));
+
+      const userNameById = {};
+      try {
+        for(let up = 1; up <= 5; up++){
+          const ud = await amoFetch(`/users?limit=250&page=${up}`, env);
+          const arr = (ud && ud._embedded && ud._embedded.users) || [];
+          arr.forEach(u => { userNameById[u.id] = u.name; });
+          if(arr.length < 250) break;
+        }
+      } catch(_){}
+
+      const steps = [];
+      let eventsError = null;
+      try {
+        for(let page = 1; page <= 10; page++){
+          const ev = await amoFetch(`/events?filter[entity]=lead&filter[entity_id][]=${leadId}&filter[type][]=lead_status_changed&limit=100&page=${page}`, env);
+          if(!ev) break;
+          const batch = (ev._embedded && ev._embedded.events) || [];
+          if(!batch.length) break;
+          batch.forEach(e => {
+            const before = (e.value_before && e.value_before[0] && e.value_before[0].lead_status) || null;
+            const after = (e.value_after && e.value_after[0] && e.value_after[0].lead_status) || null;
+            if(!after) return;
+            steps.push({
+              at: e.created_at,
+              from: before ? (stName[before.id] || null) : null,
+              to: stName[after.id] || String(after.id),
+              by: userNameById[e.created_by] || (e.created_by ? ('id ' + e.created_by) : 'программа')
+            });
+          });
+          if(batch.length < 100) break;
+        }
+      } catch(e){ eventsError = e.message || String(e); }
+      steps.sort((a, b) => a.at - b.at);
+      // Сколько сделка просидела на каждом этапе: до следующего шага, а последний — до сих пор.
+      const now = Math.floor(Date.now()/1000);
+      steps.forEach((st, i) => { st.held = (i + 1 < steps.length ? steps[i+1].at : now) - st.at; });
+
+      const byRobot = !Number(lead.created_by);
+      const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+      return res.status(200).json({
+        country: country,
+        lead: {
+          id: lead.id,
+          name: lead.name || '(без названия)',
+          price: Number(lead.price) || 0,
+          created: lead.created_at,
+          updated: lead.updated_at,
+          closed: lead.closed_at || null,
+          manager: userNameById[lead.responsible_user_id] || '—',
+          created_by_name: byRobot ? 'интеграция' : (userNameById[lead.created_by] || ('id ' + lead.created_by)),
+          origin: byRobot ? 'auto' : 'manual',
+          stage: stName[lead.status_id] || '—',
+          is_won: Number(lead.status_id) === 142,
+          is_lost: Number(lead.status_id) === 143,
+          pipeline: pipe ? pipe.name : null,
+          tags: ((lead._embedded && lead._embedded.tags) || []).map(t => t.name).filter(Boolean),
+          url: `https://${sub}.amocrm.ru/leads/detail/${lead.id}`
+        },
+        steps: steps,
+        events_error: eventsError
+      });
+    }
     if(action === 'lead_report'){
       // v897: отчёт по лидам за период — для экрана «Маркетинг».
       // ?slim=1 — без списка лидов (нужен для сравнения с прошлым месяцем).
