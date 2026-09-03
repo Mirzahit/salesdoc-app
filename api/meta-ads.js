@@ -453,6 +453,9 @@ export default async function handler(req, res) {
             ...(daily ? { time_increment: 1 } : {})
           }, TOKEN, daily ? 40 : 10);
           cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: true, rows: data.length });
+          // v899: каждая строка помнит свой кабинет — по нему считаем работу таргетологов,
+          // у каждого свой рекламный аккаунт.
+          data.forEach(r => { r._acct = acc.id; r._acct_name = acc.name || acc.id; });
           rows.push(...data);
         } catch (e) {
           cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: false, error: e.message || String(e) });
@@ -503,10 +506,36 @@ export default async function handler(req, res) {
           cpl: c.leads > 0 ? Math.round((c.spend / c.leads) * 100) / 100 : null,
           ctr: c.impressions > 0 ? Math.round((c.clicks / c.impressions) * 10000) / 100 : 0
         })).sort((a, b) => b.spend - a.spend);
+        // v899: свод по кабинетам — экран сопоставляет кабинет с таргетологом.
+        const accMap = new Map();
+        rows.forEach(r => {
+          const id = r._acct || 'unknown';
+          const cc = String(r.country || '??').toUpperCase();
+          const leads = summarizeLeads(r.actions, r.cost_per_action_type);
+          const msgs = Array.isArray(r.actions)
+            ? r.actions.filter(a => a.action_type === 'onsite_conversion.messaging_conversation_started_7d')
+                .reduce((sum, a) => sum + (parseFloat(a.value) || 0), 0)
+            : 0;
+          if (!accMap.has(id)) accMap.set(id, { id, name: r._acct_name || id, spend: 0, leads: 0, msgs: 0, impressions: 0, clicks: 0, by_country: {} });
+          const acc = accMap.get(id);
+          acc.spend += Number(r.spend || 0);
+          acc.leads += leads.count || 0;
+          acc.msgs += msgs;
+          acc.impressions += Number(r.impressions || 0);
+          acc.clicks += Number(r.clicks || 0);
+          const prevC = acc.by_country[cc] || { spend: 0, leads: 0 };
+          acc.by_country[cc] = { spend: prevC.spend + Number(r.spend || 0), leads: prevC.leads + (leads.count || 0) };
+        });
+        const accounts = [...accMap.values()].map(a => ({
+          ...a,
+          spend: Math.round(a.spend * 100) / 100,
+          cpl: a.leads > 0 ? Math.round((a.spend / a.leads) * 100) / 100 : null,
+          ctr: a.impressions > 0 ? Math.round((a.clicks / a.impressions) * 10000) / 100 : 0
+        })).sort((a, b) => b.spend - a.spend);
         const totalSpend = countries.reduce((a, c) => a + c.spend, 0);
         const totalLeads = countries.reduce((a, c) => a + c.leads, 0);
         result = {
-          period, currency, countries, cabinets,
+          period, currency, countries, cabinets, accounts,
           total: {
             spend: Math.round(totalSpend * 100) / 100,
             leads: totalLeads,
@@ -531,6 +560,7 @@ export default async function handler(req, res) {
             limit: 400
           }, TOKEN, 20);
           cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: true, rows: data.length });
+          data.forEach(r => { r._acct = acc.id; r._acct_name = acc.name || acc.id; });
           rows.push(...data);
         } catch (e) {
           cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: false, error: e.message || String(e) });
@@ -547,7 +577,7 @@ export default async function handler(req, res) {
           ? r.actions.filter(a => a.action_type === 'onsite_conversion.messaging_conversation_started_7d')
               .reduce((sum, a) => sum + (parseFloat(a.value) || 0), 0)
           : 0;
-        if (!byCamp.has(id)) byCamp.set(id, { id: id, name: r.campaign_name || '(без названия)', spend: 0, leads: 0, msgs: 0, by_country: {} });
+        if (!byCamp.has(id)) byCamp.set(id, { id: id, name: r.campaign_name || '(без названия)', account: r._acct || null, spend: 0, leads: 0, msgs: 0, by_country: {} });
         const c = byCamp.get(id);
         c.spend += Number(r.spend || 0);
         c.leads += leads.count || 0;
