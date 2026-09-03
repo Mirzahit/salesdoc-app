@@ -6036,8 +6036,15 @@ body.light .ct-dd._mktper input[type=date]{color-scheme:light}
 #view-marketing .mkd-fr.clk:hover{background:rgba(120,120,128,.07)}
 #view-marketing table.mkd-mt td.clk{cursor:pointer}
 #view-marketing table.mkd-mt td.clk:hover{background:rgba(120,120,128,.08);color:var(--accent-text)}
-#view-marketing .mkd-gap{background:rgba(94,106,210,.07);border:1px solid rgba(94,106,210,.22);border-radius:11px;padding:11px 14px;font-size:12px;color:var(--text-soft);line-height:1.6;margin:0 0 18px}
-#view-marketing .mkd-gap b{color:var(--text-primary);font-weight:700}
+#view-marketing .mkd-gap{display:grid;grid-template-columns:1fr 1fr;gap:12px;background:transparent;border:0;padding:0;margin:0 0 18px}
+@media(max-width:820px){#view-marketing .mkd-gap{grid-template-columns:1fr}}
+#view-marketing .mkd-gap .ok,#view-marketing .mkd-gap .no{border-radius:11px;padding:11px 14px;font-size:11.5px;line-height:1.6;color:var(--text-soft)}
+#view-marketing .mkd-gap .ok{background:rgba(76,183,130,.07);border:1px solid rgba(76,183,130,.22)}
+#view-marketing .mkd-gap .no{background:rgba(224,164,88,.07);border:1px solid rgba(224,164,88,.22)}
+#view-marketing .mkd-gap b{display:block;font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;margin-bottom:6px}
+#view-marketing .mkd-gap .ok b{color:#4CB782}
+#view-marketing .mkd-gap .no b{color:#E0A458}
+#view-marketing .mkd-kpi .v.dim{color:var(--text-muted)}
 #view-marketing .mkd-fun{border-top:1px solid var(--border-faint);padding-top:12px}
 #view-marketing .mkd-fr{display:grid;grid-template-columns:minmax(96px,1.1fr) 1fr 34px 40px 62px;align-items:center;gap:9px;padding:4px 0}
 #view-marketing .mkd-fr .nm{font-size:11.5px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -19388,13 +19395,16 @@ function _mkdRender(){
     }).join('')
   + '<span class="hint">«Заявка» — сделку завела интеграция: форма или сайт. «Звонок» — её создала телефония. '
   + '«Завёл менеджер» — сделку создал человек, и откуда пришёл клиент, программа не знает.</span></div>';
- // Главная нестыковка: реклама насчитала одно, а в amoCRM само попало другое.
- if(cur.metaLeads > 0 || oAuto > 0){
-  html += '<div class="mkd-gap">Реклама насчитала <b>' + cur.metaLeads + '</b> заявок, '
-   + 'в amoCRM автоматически попало <b>' + oAuto + '</b>, ещё <b>' + oManual + '</b> сделок менеджеры завели руками. '
-   + 'Пока источник у ручных сделок нигде не записан, точную цену заявки с рекламы посчитать не из чего — '
-   + 'цифры ниже считаются по выбранной сверху корзине.</div>';
- }
+ // v903: не сводим в одну строку счётчик рекламы и сделки amo — связи между ними
+ // нет, и такое соседство читается как воронка, хотя это два разных счётчика.
+ // Пишем прямо: что доказано записью, а чего программа не знает.
+ html += '<div class="mkd-gap"><div class="ok"><b>Доказано записями</b>'
+  + 'Расход, показы и клики — из рекламного кабинета. Сделки, этапы, менеджеры, суммы и продажи — '
+  + 'из amoCRM. Любую цифру можно открыть и увидеть поимённо, каждую сделку — в amoCRM.</div>'
+  + '<div class="no"><b>Программа не знает</b>'
+  + 'Пришла ли сделка с рекламы. У ' + oManual + ' из ' + oAll + ' сделок за период источник в amoCRM '
+  + 'не записан — их завели руками. Пока это так, цена заявки и окупаемость считаются только по тем '
+  + 'сделкам, где источник проставлен: включите «С рекламы» в строке ниже.</div></div>';
 
  html += _mkdSrcRow();
 
@@ -19405,16 +19415,21 @@ function _mkdRender(){
  var kpis = [
   { l:'Потрачено', v:_mkdUsd(cur.spend), h:'реклама, доллары', d:'spend', dl:_mkdDl(cur.spend, prv.spend, _mkdFUsd, 'neutral') },
   { l:'Сделок', v:String(cur.leads), h:base, d:'list:all', dl:_mkdDl(cur.leads, prv.has ? prv.leads : null, _mkdFInt, false) },
-  { l:'Цена сделки', v:_mkdUsd(cur.cpl), h:'потрачено ÷ ' + base, d:'cpl', dl:_mkdDl(cur.cpl, prv.cpl, _mkdFUsd, true) },
+  (_mkdSrc === '__ads__'
+   ? { l:'Цена заявки', v:_mkdUsd(cur.cpl), h:'потрачено ÷ заявки с рекламы', d:'cpl', dl:_mkdDl(cur.cpl, prv.cpl, _mkdFUsd, true) }
+   : { l:'Цена заявки', v:'—', v_dim:1, h:'нужен фильтр «С рекламы»', d:'cpl', dl:'' }),
   { l:'Назначено встреч', v:String(cur.meet), h:_mkdShare(cur.meet, cur.leads) + ' от них', d:'list:meet', dl:_mkdDl(cur.meet, prv.has ? prv.meet : null, _mkdFInt, false) },
   { l:'Счетов выставлено', v:String(cur.inv), h:_mkdShare(cur.inv, cur.leads) + ' от них', d:'list:inv', dl:_mkdDl(cur.inv, prv.has ? prv.inv : null, _mkdFInt, false) },
   { l:'Продаж', v:String(cur.won), h:_mkdShare(cur.won, cur.leads) + ' от них', d:'list:won', dl:_mkdDl(cur.won, prv.has ? prv.won : null, _mkdFInt, false) },
-  { l:'Заработали', v:(cur.has ? _mkdUsd(cur.revUsd) : '—'), h:_mkdRevHint(cur), d:'funnel', dl:_mkdDl(cur.has ? cur.revUsd : null, prv.has ? prv.revUsd : null, _mkdFUsd, false) },
-  { l:'Окупаемость', v:(cur.roi == null ? '—' : '×' + cur.roi.toFixed(1)), h:'заработали ÷ потратили', d:'funnel', dl:_mkdDl(cur.roi, prv.roi, function(n){ return Number(n).toFixed(1); }, false, _mkdFX) }
+  { l:'Заработали', v:(cur.has ? _mkdUsd(cur.revUsd) : '—'), h:_mkdRevHint(cur) + ' · по курсу из Настроек', d:'list:won', dl:_mkdDl(cur.has ? cur.revUsd : null, prv.has ? prv.revUsd : null, _mkdFUsd, false) },
+  (_mkdSrc === '__ads__'
+   ? { l:'Окупаемость', v:(cur.roi == null ? '—' : '×' + cur.roi.toFixed(1)), h:'заработали ÷ потратили', d:'list:won',
+       dl:_mkdDl(cur.roi, prv.roi, function(n){ return Number(n).toFixed(1); }, false, _mkdFX) }
+   : { l:'Окупаемость', v:'—', v_dim:1, h:'нужен фильтр «С рекламы»', d:'list:won', dl:'' })
  ];
  html += '<div class="mkd-sec"><div class="mkd-kpis">' + kpis.map(function(x){
   return '<div class="mkd-kpi" onclick="mkdOpenKpi(&quot;' + x.d + '&quot;)"><div class="l">' + x.l + '</div>'
-   + '<div class="v">' + x.v + '</div><div class="h">' + sanitize(x.h) + '</div>'
+   + '<div class="v' + (x.v_dim ? ' dim' : '') + '">' + x.v + '</div><div class="h">' + sanitize(x.h) + '</div>'
    + (x.dl ? '<div class="dlr">' + x.dl + '</div>' : '') + '</div>';
  }).join('') + '</div></div>';
 
