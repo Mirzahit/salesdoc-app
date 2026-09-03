@@ -134,21 +134,31 @@ async function metaFetchAllPages(pathOrUrl, params, token, maxPages) {
   return out;
 }
 
-// v883: кабинет по коду страны — нужен для разреза по гео, где мы можем опросить оба
-// кабинета сразу (KG-кампании физически лежат в кабинете KZ).
-function resolveCabinet(code) {
-  if (!SINGLE_CABINET && String(code).toUpperCase() === 'KG') {
-    return {
-      code: 'KG',
-      account: (process.env.META_AD_ACCOUNT_ID_KG || '').trim(),
-      token: (process.env.META_ACCESS_TOKEN_KG || process.env.META_ACCESS_TOKEN || '').trim()
-    };
+// v898: список ВСЕХ рекламных кабинетов, к которым у токена есть доступ.
+// Зачем: кыргызская реклама крутится в отдельном кабинете (act_2015030666031082),
+// а дашборд знал только про тот, что лежит в META_AD_ACCOUNT_ID — и половина денег
+// в отчёт не попадала. Теперь берём все кабинеты токена, чтобы новый кабинет
+// подхватывался сам, как только владелец выдаст доступ.
+// META_AD_ACCOUNT_IDS (через запятую) перекрывает автоопределение, если нужно
+// ограничить список вручную.
+let _acctCache = null, _acctCacheAt = 0;
+async function resolveAccounts(token) {
+  const manual = String(process.env.META_AD_ACCOUNT_IDS || '').trim();
+  if (manual) {
+    return manual.split(',').map(x => x.trim()).filter(Boolean)
+      .map(id => ({ id: id.startsWith('act_') ? id : 'act_' + id, name: null }));
   }
-  return {
-    code: 'KZ',
-    account: (process.env.META_AD_ACCOUNT_ID || '').trim(),
-    token: (process.env.META_ACCESS_TOKEN || '').trim()
-  };
+  if (_acctCache && Date.now() - _acctCacheAt < CACHE_TTL_MS) return _acctCache;
+  let list = [];
+  try {
+    const r = await metaFetch('/me/adaccounts', { fields: 'account_id,name,account_status', limit: 100 }, token);
+    list = ((r && r.data) || []).map(a => ({ id: a.id || ('act_' + a.account_id), name: a.name || null }));
+  } catch (_) { list = []; }
+  // Кабинет из env добавляем всегда: если /me/adaccounts не ответил, отчёт не должен опустеть.
+  const fallback = (process.env.META_AD_ACCOUNT_ID || '').trim();
+  if (fallback && !list.some(a => a.id === fallback)) list.unshift({ id: fallback, name: null });
+  if (list.length) { _acctCache = list; _acctCacheAt = Date.now(); }
+  return list;
 }
 
 function validatePeriod(p) {
@@ -426,41 +436,30 @@ export default async function handler(req, res) {
       // переключатель KZ/KG показывал не то. Meta умеет breakdowns=country — берём оттуда.
       // scope=all — опрашиваем оба кабинета и складываем; упавший кабинет не роняет ответ.
       const daily = endpoint === 'geo_daily';
-      const scope = String(req.query.scope || 'all').toLowerCase();
-      const codes = (scope === 'all' && !SINGLE_CABINET) ? ['KZ', 'KG'] : [SINGLE_CABINET ? 'KZ' : country];
+      const accounts = await resolveAccounts(TOKEN);
       const cabinets = [];
       const rows = [];
-      // Один и тот же аккаунт может стоять в env обеих стран (вся реклама крутится в одном
-      // кабинете) — опрашиваем его один раз, иначе расход и лиды удвоятся.
-      const seenAccounts = new Set();
-      for (const code of codes) {
-        const cab = resolveCabinet(code);
-        if (!cab.account || !cab.token) {
-          cabinets.push({ code: code, account: cab.account || null, ok: false, error: 'кабинет не настроен в Vercel env' });
-          continue;
-        }
-        if (seenAccounts.has(cab.account)) {
-         cabinets.push({ code: code, account: cab.account, ok: true, rows: 0, note: 'тот же кабинет, уже посчитан' });
-         continue;
-        }
-        seenAccounts.add(cab.account);
+      if (!accounts.length) {
+        return res.status(502).json({ error: 'Ни одного рекламного кабинета не доступно этому токену', cabinets });
+      }
+      for (const acc of accounts) {
         try {
-          const data = await metaFetchAllPages(`/${cab.account}/insights`, {
+          const data = await metaFetchAllPages(`/${acc.id}/insights`, {
             fields: 'spend,impressions,clicks,inline_link_clicks,ctr,reach,actions,cost_per_action_type,account_currency,date_start,date_stop',
             ...timeParams(range, period),
             level: 'account',
             breakdowns: 'country',
             limit: daily ? 500 : 200,
             ...(daily ? { time_increment: 1 } : {})
-          }, cab.token, daily ? 40 : 10);
-          cabinets.push({ code: code, account: cab.account, ok: true, rows: data.length });
+          }, TOKEN, daily ? 40 : 10);
+          cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: true, rows: data.length });
           rows.push(...data);
         } catch (e) {
-          cabinets.push({ code: code, account: cab.account, ok: false, error: e.message || String(e) });
+          cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: false, error: e.message || String(e) });
         }
       }
       if (!rows.length && !cabinets.some(c => c.ok)) {
-        return res.status(502).json({ error: 'Meta не отдала данные ни по одному кабинету', cabinets });
+        return res.status(502).json({ error: 'Реклама не отдала данные ни по одному кабинету', cabinets });
       }
       const currency = (rows.find(r => r.account_currency) || {}).account_currency || 'USD';
       if (daily) {
@@ -519,28 +518,22 @@ export default async function handler(req, res) {
     } else if (endpoint === 'campaigns_geo') {
       // v884: кампании × страна аудитории. Берём insights уровня кампании с breakdowns=country,
       // а не /campaigns?fields=insights — иначе разбивки по странам не получить.
-      const scope = String(req.query.scope || 'all').toLowerCase();
-      const codes = (scope === 'all' && !SINGLE_CABINET) ? ['KZ', 'KG'] : [SINGLE_CABINET ? 'KZ' : country];
+      const accounts = await resolveAccounts(TOKEN);
       const cabinets = [];
       const rows = [];
-      const seenAccounts = new Set();
-      for (const code of codes) {
-        const cab = resolveCabinet(code);
-        if (!cab.account || !cab.token) { cabinets.push({ code: code, ok: false, error: 'кабинет не настроен' }); continue; }
-        if (seenAccounts.has(cab.account)) { cabinets.push({ code: code, account: cab.account, ok: true, rows: 0, note: 'тот же кабинет' }); continue; }
-        seenAccounts.add(cab.account);
+      for (const acc of accounts) {
         try {
-          const data = await metaFetchAllPages(`/${cab.account}/insights`, {
+          const data = await metaFetchAllPages(`/${acc.id}/insights`, {
             fields: 'campaign_id,campaign_name,spend,impressions,clicks,actions,cost_per_action_type,account_currency',
             ...timeParams(range, period),
             level: 'campaign',
             breakdowns: 'country',
             limit: 400
-          }, cab.token, 20);
-          cabinets.push({ code: code, account: cab.account, ok: true, rows: data.length });
+          }, TOKEN, 20);
+          cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: true, rows: data.length });
           rows.push(...data);
         } catch (e) {
-          cabinets.push({ code: code, account: cab.account, ok: false, error: e.message || String(e) });
+          cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: false, error: e.message || String(e) });
         }
       }
       const byCamp = new Map();
