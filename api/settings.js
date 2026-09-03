@@ -23,7 +23,8 @@ import { checkAuth } from './_auth.js';
 // Раньше список был зашит в код двумя массивами, и добавить этап мог только программист.
 // Этапы общие для всех, как воронка в amoCRM: доска у всех одинаковая, цифры сравнимы.
 // v899: mkt_targetologs — кто ведёт какой рекламный кабинет { 'act_123': 'Имя' }.
-const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'tg_digest', 'company_plans', 'plan_history', 'route_stages'];
+// v901: mkt_ad_sources — какие значения поля «Источник сделки» считаются рекламой.
+const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_ad_sources', 'tg_digest', 'company_plans', 'plan_history', 'route_stages'];
 
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
