@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v900</title>
+<title>SalesDoc — Финансовый Дашборд v901</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6015,6 +6015,23 @@ body.light .ct-dd._mktper input[type=date]{color-scheme:light}
 #view-marketing .mkd-tg-camps .r .n{color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #view-marketing .mkd-tg-camps .r .s,#view-marketing .mkd-tg-camps .r .l{text-align:right;color:var(--text-primary);font-weight:650;font-variant-numeric:tabular-nums}
 #view-marketing .mkd-tg-camps .more{font-size:10.5px;color:var(--text-muted);padding:5px 0}
+#view-marketing .mkd-srcrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 16px}
+#view-marketing .mkd-srcrow .lb{font-size:11.5px;color:var(--text-muted);margin-right:2px}
+#view-marketing .mkd-srcrow b{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:5px 10px;border-radius:7px;border:1px solid var(--border-faint);color:var(--text-soft);cursor:pointer;user-select:none;white-space:nowrap}
+#view-marketing .mkd-srcrow b i{font-style:normal;font-weight:700;opacity:.6;font-variant-numeric:tabular-nums}
+#view-marketing .mkd-srcrow b.on{border-color:var(--border-strong);background:var(--accent-bg);color:var(--accent-text)}
+#view-marketing .mkd-srcrow b.ads{border-color:rgba(76,183,130,.35);color:#4CB782}
+#view-marketing .mkd-srcrow b.ads.on{background:rgba(76,183,130,.14);border-color:rgba(76,183,130,.5);color:#4CB782}
+#view-marketing .mkd-srcrow b.isad{border-style:solid;border-color:rgba(76,183,130,.25)}
+#view-marketing .mkd-srcrow b.dim{color:var(--text-muted);border-style:dashed}
+#view-marketing .mkd-srcrow .cfg{background:transparent;border:0;color:var(--text-muted);font-size:11px;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:3px;padding:5px 4px}
+#view-marketing .mkd-srcrow .cfg:hover{color:var(--text-primary)}
+.ct-dd._mktsrc .h{font-size:10.5px;font-weight:700;color:var(--text-muted);margin-bottom:8px}
+.ct-dd._mktsrc .mktsrc-i{display:flex;align-items:center;gap:9px;padding:6px 4px;font-size:12.5px;color:var(--text-primary);cursor:pointer;border-radius:6px}
+.ct-dd._mktsrc .mktsrc-i:hover{background:rgba(120,120,128,.10)}
+.ct-dd._mktsrc .mktsrc-i span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ct-dd._mktsrc .mktsrc-i i{font-style:normal;font-size:10.5px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.ct-dd._mktsrc .mktsrc-go{width:100%;margin-top:9px;padding:8px;border:0;border-radius:8px;background:var(--accent-bg);color:var(--accent-text);font-size:12px;font-weight:650;cursor:pointer;font-family:inherit}
 #view-marketing .mkd-gap{background:rgba(94,106,210,.07);border:1px solid rgba(94,106,210,.22);border-radius:11px;padding:11px 14px;font-size:12px;color:var(--text-soft);line-height:1.6;margin:0 0 18px}
 #view-marketing .mkd-gap b{color:var(--text-primary);font-weight:700}
 #view-marketing .mkd-fun{border-top:1px solid var(--border-faint);padding-top:12px}
@@ -18881,16 +18898,18 @@ window.mktOpenPeriodPicker = function(ev){
 // v797: настройки маркетинга (план лидов + курс/гонорар таргетолога) из app_settings
 window.mktSettingsLoad = async function(force){
  if(window._mktSettings && !force) return window._mktSettings;
- var out = { plan: {}, costs: {}, targ: {} };
+ var out = { plan: {}, costs: {}, targ: {}, ads: [] };
  try {
   var rs = await Promise.all([
    sbFetch('/api/settings?key=mkt_lead_plan'),
    sbFetch('/api/settings?key=mkt_costs'),
-   sbFetch('/api/settings?key=mkt_targetologs')
+   sbFetch('/api/settings?key=mkt_targetologs'),
+   sbFetch('/api/settings?key=mkt_ad_sources')
   ]);
   if(rs[0] && rs[0].ok && rs[0].value) out.plan = rs[0].value;
   if(rs[1] && rs[1].ok && rs[1].value) out.costs = rs[1].value;
   if(rs[2] && rs[2].ok && rs[2].value) out.targ = rs[2].value;
+  if(rs[3] && rs[3].ok && Array.isArray(rs[3].value)) out.ads = rs[3].value;
  } catch(_){}
  window._mktSettings = out;
  return out;
@@ -19176,6 +19195,86 @@ function _mkdTotals(){
 // «Завели руками» — сделку создал менеджер. Это НЕ значит «не с рекламы»:
 // менеджер мог перенести заявку из переписки. Но и не значит, что с рекламы, —
 // поэтому честная цена лида считается только по тем, кто пришёл сам.
+// v901: разрез по источнику сделки. Поле «Источник сделки» в amo есть, но
+// заполняют его не всегда, а часть значений к рекламе отношения не имеет —
+// Lalafo, рекомендации, холодная база. Что считать рекламой, задаёт CEO.
+var _mkdSrc = '';
+function _mkdAdSources(){ var a = ((_mkdData || {}).settings || {}).ads; return Array.isArray(a) ? a : []; }
+function _mkdIsAdSource(src){ return !!src && _mkdAdSources().indexOf(src) >= 0; }
+function _mkdSrcPass(l){
+ if(!_mkdSrc) return true;
+ if(_mkdSrc === '__ads__') return _mkdIsAdSource(l.source);
+ if(_mkdSrc === '__empty__') return !l.source;
+ return l.source === _mkdSrc;
+}
+window.mkdSetSrc = function(raw){ var v = decodeURIComponent(raw); _mkdSrc = (_mkdSrc === v) ? '' : v; _mkdLeadF.limit = 60; _mkdRender(); };
+function _mkdRawLeads(){
+ var out = [];
+ _mkdAmoCodes().forEach(function(cc){
+  var rp = (_mkdData.rep || {})[cc];
+  if(rp) (rp.leads || []).forEach(function(l){ out.push(l); });
+ });
+ return out;
+}
+// Экран «какие источники считать рекламой» — свои галочки, без системных списков.
+window.mkdEditAdSources = function(ev){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ document.querySelectorAll('.ct-dd._mktsrc').forEach(function(d){ d.remove(); });
+ var seen = {};
+ _mkdRawLeads().forEach(function(l){ if(l.source) seen[l.source] = (seen[l.source] || 0) + 1; });
+ _mkdAdSources().forEach(function(x){ if(!seen[x]) seen[x] = 0; });
+ var names = Object.keys(seen).sort(function(a, b){ return seen[b] - seen[a]; });
+ var rect = ev.target.getBoundingClientRect();
+ var dd = document.createElement('div');
+ dd.className = 'ct-dd _mktsrc';
+ dd.style.cssText += ';padding:10px 12px;min-width:300px;max-height:420px;overflow:auto';
+ var picked = _mkdAdSources().slice();
+ dd.innerHTML = '<div class="h">Какие источники считать рекламой</div>'
+  + names.map(function(n, i){
+     return '<label class="mktsrc-i"><input type="checkbox" data-i="' + i + '"' + (picked.indexOf(n) >= 0 ? ' checked' : '') + '>'
+      + '<span>' + sanitize(n) + '</span><i>' + seen[n] + '</i></label>';
+    }).join('')
+  + '<button class="mktsrc-go">Сохранить</button>';
+ document.body.appendChild(dd);
+ dd.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - dd.offsetWidth - 12)) + 'px';
+ dd.style.top = Math.min(rect.bottom + 6, window.innerHeight - dd.offsetHeight - 12) + 'px';
+ dd.querySelector('.mktsrc-go').addEventListener('click', function(){
+  var out = [];
+  [].forEach.call(dd.querySelectorAll('input[type=checkbox]'), function(c){
+   if(c.checked) out.push(names[Number(c.getAttribute('data-i'))]);
+  });
+  dd.remove();
+  _mkdData.settings.ads = out;
+  if(window._mktSettings) window._mktSettings.ads = out;
+  _mktSaveSetting('mkt_ad_sources', out);
+  _mkdRender();
+ });
+ setTimeout(function(){
+  document.addEventListener('mousedown', function closer(e2){
+   if(!dd.contains(e2.target)){ dd.remove(); document.removeEventListener('mousedown', closer, true); }
+  }, true);
+ }, 50);
+};
+function _mkdSrcRow(){
+ var raw = _mkdRawLeads();
+ if(!raw.length) return '';
+ var by = {}, ads = 0, empty = 0;
+ raw.forEach(function(l){
+  if(!l.source){ empty++; return; }
+  by[l.source] = (by[l.source] || 0) + 1;
+  if(_mkdIsAdSource(l.source)) ads++;
+ });
+ var names = Object.keys(by).sort(function(a, b){ return by[b] - by[a]; });
+ var chip = function(val, label, n, cls){
+  return '<b class="' + (_mkdSrc === val ? 'on ' : '') + (cls || '') + '" onclick="mkdSetSrc(&quot;' + encodeURIComponent(val) + '&quot;)">'
+   + sanitize(label) + '<i>' + n + '</i></b>';
+ };
+ return '<div class="mkd-srcrow"><span class="lb">Источник:</span>'
+  + chip('__ads__', 'С рекламы', ads, 'ads')
+  + names.map(function(n){ return chip(n, n, by[n], _mkdIsAdSource(n) ? 'isad' : ''); }).join('')
+  + (empty ? chip('__empty__', 'Не заполнен', empty, 'dim') : '')
+  + '<button class="cfg" onclick="mkdEditAdSources(event)">что считать рекламой</button></div>';
+}
 var _mkdOrigin = 'all';
 var _MKD_ORIGIN_L = { all:'все сделки', auto:'заявки', call:'звонки', manual:'сделки, заведённые вручную' };
 // Сделки, созданные телефонией, тоже приходят «от программы», но это не заявка:
@@ -19189,7 +19288,10 @@ window.mkdSetOrigin = function(v){ _mkdOrigin = v; _mkdLeadF.limit = 60; _mkdRen
 
 function _mkdAgg(rp){
  var all = (rp && rp.leads) || [];
- var leads = all.filter(function(l){ return _mkdOrigin === 'all' || _mkdOriginOf(l) === _mkdOrigin; });
+ var leads = all.filter(function(l){
+  if(_mkdOrigin !== 'all' && _mkdOriginOf(l) !== _mkdOrigin) return false;
+  return _mkdSrcPass(l);
+ });
  var stages = ((rp && rp.stages) || []).map(function(st){
   var n = 0;
   leads.forEach(function(l){ if(l.reached_sort != null && l.reached_sort >= st.sort) n++; });
@@ -19282,7 +19384,12 @@ function _mkdRender(){
    + 'цифры ниже считаются по выбранной сверху корзине.</div>';
  }
 
+ html += _mkdSrcRow();
+
  var base = _MKD_ORIGIN_L[_mkdOrigin];
+ if(_mkdSrc === '__ads__') base = 'сделки с рекламы';
+ else if(_mkdSrc === '__empty__') base = 'сделки без источника';
+ else if(_mkdSrc) base = 'источник «' + _mkdSrc + '»';
  var kpis = [
   { l:'Потрачено', v:_mkdUsd(cur.spend), h:'реклама, доллары', d:'spend', dl:_mkdDl(cur.spend, prv.spend, _mkdFUsd, 'neutral') },
   { l:'Сделок', v:String(cur.leads), h:base, d:'leads', dl:_mkdDl(cur.leads, prv.has ? prv.leads : null, _mkdFInt, false) },
@@ -19434,37 +19541,56 @@ window.mkdEditTarg = function(ev, accId, current){
 };
 function _mkdTargBlock(cur, prv){
  var accs = ((_mkdData.geo || {}).accounts || []).filter(function(a){ return a.spend > 0; });
+ if(!accs.length) return '';
  if(accs.length < 2) return '';
  var prevById = {};
  (((_mkdData.geoPrev) || {}).accounts || []).forEach(function(a){ prevById[a.id] = a; });
- var total = accs.reduce(function(x, a){ return x + a.spend; }, 0);
+ // v901: считаем только по включённым странам — иначе карточка таргетолога
+ // спорит со сводом наверху, где скрытый Казахстан не учитывается.
+ function vis(a){
+  var sp = 0, ld = 0, off = 0;
+  Object.keys(a.by_country || {}).forEach(function(cc){
+   var b = a.by_country[cc];
+   if(_mkdHidden[cc]){ off += b.spend; return; }
+   sp += b.spend; ld += b.leads;
+  });
+  return { spend: Math.round(sp*100)/100, leads: ld, off: Math.round(off*100)/100,
+           cpl: ld > 0 ? Math.round(sp/ld*100)/100 : null };
+ }
+ var total = accs.reduce(function(x, a){ return x + vis(a).spend; }, 0);
  var camps = (((_mkdData.camps) || {}).campaigns || []);
  var cards = accs.map(function(a){
   var name = _mkdTargName(a);
-  var pv = prevById[a.id] || null;
-  var off = 0;
-  Object.keys(a.by_country || {}).forEach(function(cc){ if(cc !== 'KG') off += a.by_country[cc].spend; });
-  var mine = camps.filter(function(c){ return c.account === a.id && c.spend > 0; })
-                  .sort(function(x, y){ return y.spend - x.spend; });
+  var pv = prevById[a.id] ? vis(prevById[a.id]) : null;
+  var v = vis(a);
+  var off = v.off;
+  var mine = camps.filter(function(c){ return c.account === a.id; }).map(function(c){
+   var sp = 0, ld = 0;
+   Object.keys(c.by_country || {}).forEach(function(cc){
+    if(_mkdHidden[cc]) return;
+    sp += c.by_country[cc].spend; ld += c.by_country[cc].leads;
+   });
+   return { id: c.id, name: c.name, spend: Math.round(sp*100)/100, leads: ld };
+  }).filter(function(c){ return c.spend > 0; }).sort(function(x, y){ return y.spend - x.spend; });
   return '<div class="mkd-card mkd-tg">'
    + '<div class="mkd-tg-top">'
    +  '<div class="mkd-tg-name" onclick="mkdEditTarg(event,&quot;' + a.id + '&quot;,&quot;' + sanitize(name) + '&quot;)" title="Нажмите, чтобы вписать имя">'
    +   (name ? sanitize(name) : '<span class="none">Вписать имя</span>') + '</div>'
-   +  '<div class="mkd-tg-acc">' + sanitize(String(a.id).replace(/^act_/, '')) + ' · ' + (total > 0 ? Math.round(a.spend/total*100) : 0) + '% расхода</div>'
+   +  '<div class="mkd-tg-acc">' + sanitize(String(a.id).replace(/^act_/, '')) + ' · ' + (total > 0 ? Math.round(v.spend/total*100) : 0) + '% расхода</div>'
    + '</div>'
    + '<div class="mkd-tg-m">'
-   +  '<div><div class="l">Потрачено</div><div class="v">' + _mkdUsd(a.spend) + '</div>'
-   +   '<div class="d">' + _mkdDl(a.spend, pv ? pv.spend : null, _mkdFUsd, 'neutral') + '</div></div>'
-   +  '<div><div class="l">Заявки</div><div class="v' + (a.leads ? '' : ' dim') + '">' + a.leads + '</div>'
-   +   '<div class="d">' + _mkdDl(a.leads, pv ? pv.leads : null, _mkdFInt, false) + '</div></div>'
-   +  '<div><div class="l">Цена заявки</div><div class="v' + (a.cpl != null ? '' : ' dim') + '">' + _mkdUsd(a.cpl) + '</div>'
-   +   '<div class="d">' + _mkdDl(a.cpl, (pv && pv.cpl != null) ? pv.cpl : null, _mkdFUsd, true) + '</div></div>'
+   +  '<div><div class="l">Потрачено</div><div class="v">' + _mkdUsd(v.spend) + '</div>'
+   +   '<div class="d">' + _mkdDl(v.spend, pv ? pv.spend : null, _mkdFUsd, 'neutral') + '</div></div>'
+   +  '<div><div class="l">Заявки</div><div class="v' + (v.leads ? '' : ' dim') + '">' + v.leads + '</div>'
+   +   '<div class="d">' + _mkdDl(v.leads, pv ? pv.leads : null, _mkdFInt, false) + '</div></div>'
+   +  '<div><div class="l">Цена заявки</div><div class="v' + (v.cpl != null ? '' : ' dim') + '">' + _mkdUsd(v.cpl) + '</div>'
+   +   '<div class="d">' + _mkdDl(v.cpl, (pv && pv.cpl != null) ? pv.cpl : null, _mkdFUsd, true) + '</div></div>'
    + '</div>'
    + '<div class="mkd-tg-chips">'
    +  '<b>Переписки <i>' + Math.round(a.msgs) + '</i></b>'
    +  '<b>Клики <i>' + Math.round(a.clicks) + '</i></b>'
    +  '<b>CTR <i>' + a.ctr + '%</i></b>'
-   +  (off > 0 ? '<b class="warn">Не на Кыргызстан <i>' + _mkdUsd(off) + '</i></b>' : '')
+   +  (off > 0 ? '<b class="warn">Мимо Кыргызстана <i>' + _mkdUsd(off) + '</i></b>' : '')
    + '</div>'
    + (mine.length
       ? '<div class="mkd-tg-camps">' + mine.slice(0, 6).map(function(c){
@@ -19479,7 +19605,8 @@ function _mkdTargBlock(cur, prv){
   + '<div class="s">у каждого свой рекламный кабинет · имя вписывается кликом</div></div>'
   + '<div class="mkd-grid">' + cards + '</div>'
   + '<div class="mkd-note">Сравниваются только рекламные цифры: сколько потратил, сколько заявок насчитала реклама и по какой цене. '
-  + 'Кто из них доводит клиента до продажи — программа сказать не может: в amoCRM у сделки не записывается, из какого она кабинета.</div></div>';
+  + 'Кто из них доводит клиента до продажи — программа сказать не может: в amoCRM у сделки не записывается, из какого она кабинета.<br>'
+  + 'Имя привязано к кабинету, а не к месяцу: если за выбранный период кабинет вёл другой человек, тут всё равно будет нынешнее имя.</div></div>';
 }
 
 // ── v897: воронка по этапам ─────────────────────────────────────────────────
