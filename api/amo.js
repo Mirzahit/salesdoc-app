@@ -424,9 +424,18 @@ async function buildLeadReport(env, fromTs, toTs){
     const r = reached.has(l.id) ? reached.get(l.id) : null;
     let deepest = null;
     if(r != null) for(const st of flow){ if(Number(st.sort) <= r) deepest = st; }
-    // v897: откуда лид. Поля «Источник сделки» в кыргызском amo нет, теги почти никто
-    // не ставит, поэтому единственный честный признак — кто создал сделку:
-    // created_by = 0 значит её завела интеграция (форма, сайт, бот), иначе — менеджер руками.
+    // v900: поле «Источник сделки» в amo ЕСТЬ (в KG это field_id 2640473) — просто
+    // заполняют его не всегда. Читаем по названию поля, а не по id, чтобы работало
+    // и в казахстанском кабинете, где id другой.
+    const cf = l.custom_fields_values || [];
+    let source = '';
+    for(const f of cf){
+      if(/источник/i.test(String(f.field_name || ''))){
+        const v = (f.values || [])[0];
+        if(v && v.value){ source = String(v.value).trim(); break; }
+      }
+    }
+    // Кто завёл сделку: created_by = 0 значит интеграция (форма, сайт, бот), иначе менеджер.
     const byRobot = !Number(l.created_by);
     const tags = ((l._embedded && l._embedded.tags) || []).map(t => t.name).filter(Boolean);
     return {
@@ -435,6 +444,7 @@ async function buildLeadReport(env, fromTs, toTs){
       created: l.created_at,
       manager: userNameById[l.responsible_user_id] || '—',
       origin: byRobot ? 'auto' : 'manual',
+      source: source,
       created_by: l.created_by || 0,
       created_by_name: byRobot ? 'интеграция' : (userNameById[l.created_by] || ('id ' + l.created_by)),
       tags: tags,
@@ -468,13 +478,19 @@ async function buildLeadReport(env, fromTs, toTs){
   const wonLeads = leads.filter(l => l.is_won);
   const origins = { auto: 0, manual: 0 };
   const byCreator = {};
+  const bySource = {};
+  let withSource = 0;
   leads.forEach(l => {
     origins[l.origin]++;
     byCreator[l.created_by_name] = (byCreator[l.created_by_name] || 0) + 1;
+    const k = l.source || '(не заполнен)';
+    bySource[k] = (bySource[k] || 0) + 1;
+    if(l.source) withSource++;
   });
   return {
     pipeline: { id: p.id, name: p.name },
     origins, by_creator: byCreator,
+    by_source: bySource, source_filled: withSource,
     from: fromTs, to: toTs || null,
     leads_total: leads.length,
     stages, leads, managers,
