@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v910</title>
+<title>SalesDoc — Финансовый Дашборд v912</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1429,7 +1429,7 @@ body.light #view-calendar .cal2-allday > .lbl{background:#FFFFFF}
 #view-calendar .cal2-ev.late{outline:2px solid #FF5C8A;outline-offset:1px}
 #view-calendar .cal2-ev.late .m{color:#FFC2D4;font-weight:600}
 /* месяц */
-#view-calendar .cal2-month{flex:1;min-height:0;display:flex;flex-direction:column}
+#view-calendar .cal2-month{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
 #view-calendar .cal2-mo-head{display:grid;grid-template-columns:repeat(7,1fr);flex:none;border-bottom:1px solid rgba(255,255,255,.10)}
 #view-calendar .cal2-mo-head div{padding:9px 12px;font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#5F6674;border-left:1px solid rgba(255,255,255,.06)}
 /* v910: на невысоком экране 6 недель не влезали — нижняя строка обрезалась, и прокрутить её было нечем
@@ -1439,7 +1439,17 @@ body.light #view-calendar .cal2-allday > .lbl{background:#FFFFFF}
 #view-calendar .cal2-mo-cell{border-left:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06);padding:7px 8px;min-height:0;overflow:hidden;cursor:pointer;transition:background .1s;min-width:0}
 #view-calendar .cal2-mo-cell:hover{background:rgba(255,255,255,.025)}
 #view-calendar .cal2-mo-cell.wknd{background:rgba(0,0,0,.18)}
-#view-calendar .cal2-mo-cell .dn{font-size:12px;font-weight:600;color:#9AA3B2;font-variant-numeric:tabular-nums;margin-bottom:5px}
+#view-calendar .cal2-mo-cell .dn{font-size:12px;font-weight:600;color:#9AA3B2;font-variant-numeric:tabular-nums;margin-bottom:5px;white-space:nowrap}
+/* v912: граница месяца видна сразу — ступенька сверху и слева от 1-го числа (как в Штурме),
+   само 1-е подписано месяцем и горит акцентом */
+#view-calendar .cal2-mo-cell.mstart{border-top:2px solid rgba(122,133,242,.55);border-left:2px solid rgba(122,133,242,.55)}
+#view-calendar .cal2-mo-cell.mstart .dn{color:#9AA4FF;font-weight:800;letter-spacing:.2px}
+body.light #view-calendar .cal2-mo-cell.mstart{border-top-color:rgba(85,96,212,.45);border-left-color:rgba(85,96,212,.45)}
+body.light #view-calendar .cal2-mo-cell.mstart .dn{color:#4A55C8}
+/* v912: при прокрутке ленты всплывает крупное имя месяца — 1:1 приём Штурма (st-mflash) */
+#view-calendar .cal2-mflash{position:absolute;left:26px;top:34%;z-index:30;pointer-events:none;opacity:0;padding:10px 20px;border-radius:12px;background:rgba(24,26,36,.82);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 12px 32px rgba(0,0,0,.45);font-size:26px;font-weight:600;color:#F2F4F8;white-space:nowrap}
+body.light #view-calendar .cal2-mflash{background:rgba(255,255,255,.92);color:#141824;box-shadow:0 12px 32px rgba(15,18,25,.18)}
+@keyframes cal2-mflash{0%{opacity:0;transform:scale(.96)}12%{opacity:1;transform:scale(1)}70%{opacity:1}100%{opacity:0}}
 #view-calendar .cal2-mo-cell.dim .dn{color:#5F6674;opacity:.4}
 #view-calendar .cal2-mo-cell.today{background:linear-gradient(180deg, rgba(110,121,224,.10), rgba(110,121,224,.03));box-shadow:inset 0 0 0 1px rgba(110,121,224,.35)}
 #view-calendar .cal2-mo-cell.today .dn{display:inline-flex;background:linear-gradient(135deg,#7A85F2,#5560D4);color:#fff;font-weight:800;border-radius:7px;padding:1px 8px;box-shadow:0 3px 10px rgba(110,121,224,.45)}
@@ -37196,7 +37206,7 @@ var CRM_EVENTS_KEY = 'crm_events';
 // v745: новое состояние — мульти-фильтры (люди/слои/типы/статус/клиент), дефолтный вид Неделя.
 // Легаси operator/typeFilter удалены (operator был одиночным, typeFilter не работал в сетках).
 var crmCalState = {
- list: 'today', selectedId: null, viewMode: 'week', viewDate: null, miniYM: null,
+ list: 'today', selectedId: null, viewMode: 'week', viewDate: null, miniYM: null, moAnchor: null,
  operators: {},                       // {имя:false} = скрыт; отсутствие ключа = показан
  layers: { task: true, team: true, pay: true },  // task = синк из /api/tasks, team = нативные, pay = оплаты клиентов (v750)
  types: { call: true, meeting: true, training: true, deadline: true },
@@ -37632,6 +37642,7 @@ function cal2RenderToolbar(){
 // v745: воскресенье ВОЗВРАЩЕНО — все v531-обходы (skipSunday) удалены, неделя 7 дней Пн-Вс
 window.crmCalSetViewMode = function(mode){
  crmCalState.viewMode = mode;
+ crmCalState.moAnchor = null; // v911: вход в Месяц — всегда с начала текущего месяца
  if((mode === 'month' || mode === 'day') && !crmCalState.viewDate){
   crmCalState.viewDate = crmDateStr(new Date());
  }
@@ -37639,15 +37650,17 @@ window.crmCalSetViewMode = function(mode){
 };
 window.crmCalSetViewDate = function(date){
  crmCalState.viewDate = date;
+ crmCalState.moAnchor = null; // v911: и ленту месяцев — на выбранный месяц
  crmCalState.freeStart = null; // v790: «Сегодня»/мини-календарь возвращают обычную неделю
  crmCalState.miniYM = null; // мини-календарь следует за основным видом
  crmCalRender();
 };
 window.crmCalNavMonth = function(delta){
  var d = crmCalState.viewDate ? new Date(crmCalState.viewDate+'T00:00:00') : new Date();
- d.setMonth(d.getMonth() + delta);
- crmCalState.viewDate = crmDateStr(d);
+ // v911: считаем от 1-го числа — иначе 31 января + месяц даёт 3 марта (перелив дней в JS)
+ crmCalState.viewDate = crmDateStr(new Date(d.getFullYear(), d.getMonth() + delta, 1));
  crmCalState.miniYM = null;
+ crmCalState.moAnchor = null; // стрелка ставит ленту на начало выбранного месяца
  crmCalRender();
 };
 window.crmCalNavDay = function(delta){
@@ -37737,46 +37750,122 @@ function crmCalEmptyState(extraHint){
 }
 
 // v745: Месяц cal2 — 7 колонок Пн-Вс, единые фильтры, цвет плашки по исполнителю
+// v911: МЕСЯЦ СТАЛ НЕПРЕРЫВНОЙ ЛЕНТОЙ НЕДЕЛЬ (CEO: «стоит сентябрь, я плавно хочу увидеть конец
+// августа — он не даёт»). Раньше рисовались ровно 6 недель одного месяца, и выйти за его край можно
+// было только стрелками. Теперь рендерим буфер 24 недели (8 до опорной + 16 после), лента
+// прокручивается нативно, заголовок следует за видимым окном, у краёв буфер тихо перецентровывается —
+// тот же приём, что в пиксельном скольжении недели (v791).
+var CAL2_MO_WEEKS = 24, CAL2_MO_BEFORE = 8, CAL2_MO_VIS = 6, CAL2_MO_ROW_MIN = 112;
+var CAL2_MO_ABBR = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+// опорная неделя ленты: либо та, на которой человек остановился (moAnchor), либо неделя с 1-м числом
+function cal2MoAnchor(){
+ if(crmCalState.moAnchor) return new Date(crmCalState.moAnchor + 'T00:00:00');
+ var base = crmCalState.viewDate ? new Date(crmCalState.viewDate + 'T00:00:00') : new Date();
+ var first = new Date(base.getFullYear(), base.getMonth(), 1);
+ var mon = new Date(first);
+ mon.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+ return mon;
+}
 function crmCalRenderMonth(){
  var listEl = document.getElementById('tt-list');
  if(!listEl) return;
- var base = crmCalState.viewDate ? new Date(crmCalState.viewDate+'T00:00:00') : new Date();
- var y = base.getFullYear(), m = base.getMonth();
- var first = new Date(y, m, 1);
- var startDay = (first.getDay() + 6) % 7;
+ var anchor = cal2MoAnchor();
+ var bufStart = new Date(anchor);
+ bufStart.setDate(anchor.getDate() - CAL2_MO_BEFORE * 7);
  var today = crmDateStr(new Date());
  var byDay = {};
  _calApplyFilters(cal2AllEvents()).forEach(function(e){
   if(!e.date) return;
   (byDay[e.date] = byDay[e.date] || []).push(e);
  });
- var html = '<div class="cal2-month"><div class="cal2-mo-head"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div><div class="cal2-mo-grid">';
- var d = 1 - startDay;
- for(var row = 0; row < 6; row++){
-  for(var col = 0; col < 7; col++){
-   var date = new Date(y, m, d);
-   var ds = crmDateStr(date);
-   var cls = [];
-   if(date.getMonth() !== m) cls.push('dim');
-   if(ds === today) cls.push('today');
-   if(col >= 5) cls.push('wknd');
-   var evs = (byDay[ds] || []).slice().sort(function(a,b){ return (a.time_start||'99').localeCompare(b.time_start||'99'); }); // v746: топ-3 по времени
-   html += '<div class="cal2-mo-cell ' + cls.join(' ') + '" ondragover="event.preventDefault()" ondrop="event.preventDefault();crmCalDropOnDate(\'' + ds + '\',event)" onclick="crmCalSetViewDate(\'' + ds + '\');crmCalSetViewMode(\'day\')"><div class="dn">' + date.getDate() + '</div>';
-   evs.slice(0, 3).forEach(function(e){
-    var color = e._pay_layer ? 'green' : cal2EvColorCls(e); // v750; v771: флажок красит плашку
-    var mdrg = e._pay_layer ? '' : ' draggable="true" ondragstart="event.stopPropagation();crmCalDragStartTask(event,\'' + e.id + '\')"';
-    html += '<div class="cal2-mo-ev c-' + color + (e.status === 'done' ? ' done' : '') + cal2SelCls(e) + '"' + mdrg + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
-     + (e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\'' + e.client_id + '\')"' : '') + '>'
-     + (e._pay_layer ? '₸ ' : '') + kbEsc((e.title || '').slice(0, 26)) + '</div>'; /* v771: точка убрана — плашка в цвете флажка */
-   });
-   if(evs.length > 3) html += '<div class="cal2-mo-more">ещё ' + (evs.length - 3) + '</div>';
-   html += '</div>';
-   d++;
-  }
+ var html = '<div class="cal2-month"><div class="cal2-mo-head"><div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div></div><div class="cal2-mo-grid" id="cal2-mo-grid">';
+ var d = new Date(bufStart);
+ for(var i = 0; i < CAL2_MO_WEEKS * 7; i++){
+  var ds = crmDateStr(d);
+  var col = i % 7;
+  var cls = [];
+  if(ds === today) cls.push('today');
+  if(col >= 5) cls.push('wknd');
+  // в ленте нет «чужих» дней — границу месяца показывает ступенька-разделитель,
+  // а 1-е число подписано месяцем, чтобы не терять ориентацию при прокрутке
+  if(d.getDate() === 1) cls.push('mstart');
+  var dnum = d.getDate() === 1 ? ('1 ' + CAL2_MO_ABBR[d.getMonth()] + '.') : String(d.getDate());
+  var evs = (byDay[ds] || []).slice().sort(function(a,b){ return (a.time_start||'99').localeCompare(b.time_start||'99'); }); // v746: топ-3 по времени
+  html += '<div class="cal2-mo-cell ' + cls.join(' ') + '" ondragover="event.preventDefault()" ondrop="event.preventDefault();crmCalDropOnDate(\'' + ds + '\',event)" onclick="crmCalSetViewDate(\'' + ds + '\');crmCalSetViewMode(\'day\')"><div class="dn">' + dnum + '</div>';
+  evs.slice(0, 3).forEach(function(e){
+   var color = e._pay_layer ? 'green' : cal2EvColorCls(e); // v750; v771: флажок красит плашку
+   var mdrg = e._pay_layer ? '' : ' draggable="true" ondragstart="event.stopPropagation();crmCalDragStartTask(event,\'' + e.id + '\')"';
+   html += '<div class="cal2-mo-ev c-' + color + (e.status === 'done' ? ' done' : '') + cal2SelCls(e) + '"' + mdrg + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
+    + (e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\'' + e.client_id + '\')"' : '') + '>'
+    + (e._pay_layer ? '₸ ' : '') + kbEsc((e.title || '').slice(0, 26)) + '</div>'; /* v771: точка убрана — плашка в цвете флажка */
+  });
+  if(evs.length > 3) html += '<div class="cal2-mo-more">ещё ' + (evs.length - 3) + '</div>';
+  html += '</div>';
+  d.setDate(d.getDate() + 1);
  }
  html += '</div></div>';
  listEl.innerHTML = html;
+ cal2MoScrollInit(crmDateStr(bufStart));
 }
+// v911: прокрутка ленты месяцев — заголовок за видимым окном, перецентровка буфера у краёв
+function cal2MoScrollInit(bufStartStr){
+ var grid = document.getElementById('cal2-mo-grid');
+ if(!grid) return;
+ // строка недели: шесть недель ровно на экран, но не мельче минимума — иначе задачи не влезают
+ var avail = grid.clientHeight || 600;
+ var rowH = Math.max(CAL2_MO_ROW_MIN, Math.floor(avail / CAL2_MO_VIS));
+ grid.style.gridAutoRows = rowH + 'px';
+ var frac = window._cal2MoFrac || 0;
+ window._cal2MoFrac = 0;
+ grid.scrollTop = CAL2_MO_BEFORE * rowH + frac;
+ // v912: имя месяца всплывает ПРЯМО ВО ВРЕМЯ прокрутки (как в Штурме), а не после остановки —
+ // поэтому смена месяца считается на каждом событии, а тяжёлое (панель, перецентровка) — после паузы
+ function midOf(idx){
+  var mid = new Date(bufStartStr + 'T00:00:00');
+  mid.setDate(mid.getDate() + (idx + 2) * 7 + 3); // четверг третьей видимой недели — середина окна
+  return mid;
+ }
+ var m0 = midOf(CAL2_MO_BEFORE), lastMon = m0.getFullYear() + '-' + m0.getMonth();
+ var t = null;
+ grid.onscroll = function(){
+  var idx0 = Math.round(grid.scrollTop / rowH);
+  var mid0 = midOf(idx0), key = mid0.getFullYear() + '-' + mid0.getMonth();
+  if(key !== lastMon){
+   lastMon = key;
+   crmCalState.viewDate = crmDateStr(mid0);
+   crmCalState.miniYM = null;
+   cal2RenderToolbar(); // заголовок следует за лентой, саму сетку не трогаем
+   cal2MoFlash(mid0);
+  }
+  clearTimeout(t);
+  t = setTimeout(function(){
+   if(!grid.isConnected) return; // ленту перерисовали, пока таймер ждал — ловушка v792
+   var idx = Math.round(grid.scrollTop / rowH);
+   var topMon = new Date(bufStartStr + 'T00:00:00');
+   topMon.setDate(topMon.getDate() + idx * 7);
+   crmCalState.moAnchor = crmDateStr(topMon); // на этой неделе человек остановился
+   var q = document.querySelector('#cal2-side input');
+   if(!q || document.activeElement !== q) cal2RenderSide(); // мини-календарь догоняет, но не отбирая фокус у поиска
+   // близко к краю буфера — перецентровать; остаток пикселей переносим, иначе рывок (как в v908)
+   if(idx <= 2 || idx >= CAL2_MO_WEEKS - CAL2_MO_VIS - 2){
+    window._cal2MoFrac = grid.scrollTop - idx * rowH;
+    crmCalRenderMonth();
+   }
+  }, 260);
+ };
+}
+// v912: крупная плашка с именем месяца на 1,1 с — чтобы при быстрой прокрутке было видно, где ты
+function cal2MoFlash(d){
+ var host = document.querySelector('#view-calendar .cal2-month');
+ if(!host) return;
+ var el = host.querySelector('.cal2-mflash');
+ if(!el){ el = document.createElement('div'); el.className = 'cal2-mflash'; host.appendChild(el); }
+ el.textContent = d.toLocaleDateString('ru-RU', { month:'long', year:'numeric' }).replace(' г.', '');
+ el.style.animation = 'none';
+ void el.offsetWidth; // перезапуск анимации на том же элементе
+ el.style.animation = 'cal2-mflash 1.1s ease forwards';
+}
+
 
 // v746: старый табличный «День» удалён — День теперь та же cal2-сетка (одна колонка), см. crmCalRenderDay ниже
 
