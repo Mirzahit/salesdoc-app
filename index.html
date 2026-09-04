@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v908</title>
+<title>SalesDoc — Финансовый Дашборд v909</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -37654,9 +37654,8 @@ window.crmCalNavDay = function(delta){
  crmCalRender();
 };
 // v789: листание периодов как в TickTick — колесо мыши/трекпад и свайп по сетке.
-// Месяц: вертикальное колесо листает месяцы (сетка месяца не скроллится).
-// Неделя/День: вертикальное колесо по-прежнему скроллит часы, листает ГОРИЗОНТАЛЬНЫЙ жест
-// (трекпад-свайп / Shift+колесо даёт deltaX). Тач-свайп работает во всех видах.
+// v909: период листает ТОЛЬКО боковой жест (трекпад вбок / Shift+колесо даёт deltaX) — в Месяце
+// тоже. Обычная вертикальная прокрутка период не трогает никогда. Тач-свайп работает во всех видах.
 (function(){
  if(window._cal2SwipeOn) return;
  window._cal2SwipeOn = true;
@@ -37672,10 +37671,12 @@ window.crmCalNavDay = function(delta){
   // v791: неделя листается НАТИВНЫМ горизонтальным скроллом сетки (пиксельная плавность,
   // cal2HScrollInit) — здесь её не трогаем, иначе глушили бы инерцию
  }
- // v908: раньше ОДНО деление колеса (или чуть дрогнувший палец на трекпаде) сразу перебрасывало
- // на другой месяц/день — вид «прыгал» сам собой. Теперь копим прокрутку и листаем только когда
- // человек проехал заметное расстояние; пауза в 400 мс обнуляет накопленное.
+ // v909: обычная прокрутка колесом в Месяце БОЛЬШЕ НЕ ЛИСТАЕТ месяцы (CEO: «делаю скролл — сразу
+ // прыгает на другой месяц»). Порога накопления (v908) не хватило: у мыши одно деление даёт
+ // ~100 px, и два-три деления всё равно перекидывали период. Месяц листается стрелками, кнопкой
+ // «Сегодня», мини-календарём и БОКОВЫМ жестом (трекпад вбок / Shift+колесо) — это осознанное движение.
  var _acc = 0, _accAt = 0;
+ function wheelPx(v, mode){ return mode === 1 ? v * 16 : mode === 2 ? v * 400 : v; } // строки/страницы → пиксели
  function accumStep(delta, need){
   var now = Date.now();
   if(now - _accAt > 400) _acc = 0;
@@ -37689,16 +37690,11 @@ window.crmCalNavDay = function(delta){
   if(!view || view.style.display === 'none') return;
   if(!e.target.closest || !e.target.closest('#tt-list')) return;
   var mode = crmCalState.viewMode || 'week';
-  if(mode === 'month'){
-   var d1 = e.deltaY || e.deltaX;
-   if(Math.abs(d1) < 8) return;
-   e.preventDefault(); // сетка месяца сама не скроллится — гасим прокрутку страницы в любом случае
-   accumStep(d1, 240);
-  } else if(mode === 'day'){
-   if(Math.abs(e.deltaX) <= Math.abs(e.deltaY) || Math.abs(e.deltaX) < 12) return;
-   e.preventDefault();
-   accumStep(e.deltaX, 180);
-  }
+  if(mode !== 'month' && mode !== 'day') return;
+  var dx = wheelPx(e.deltaX, e.deltaMode), dy = wheelPx(e.deltaY, e.deltaMode);
+  if(Math.abs(dx) <= Math.abs(dy) || Math.abs(dx) < 12) return; // вертикальная прокрутка период не трогает
+  e.preventDefault();
+  accumStep(dx, mode === 'month' ? 220 : 180);
  }, { passive:false });
  var _sx = null, _sy = null;
  document.addEventListener('touchstart', function(e){
