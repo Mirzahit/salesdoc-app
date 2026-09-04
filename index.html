@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v906</title>
+<title>SalesDoc — Финансовый Дашборд v907</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1391,6 +1391,15 @@ body.light #view-calendar .cal2-allday > .lbl{background:#FFFFFF}
 #view-calendar .cal2-ev.done:hover{opacity:.62}
 #view-calendar .cal2-ev .t{padding-left:19px} /* место под галочку слева от названия */
 #view-calendar .cal2-ev.stack{padding-bottom:4px}
+/* v907: широкая плашка (день, редкая неделя) — две колонки вместо сжатого столбика у левого края:
+   слева название и компания, справа время и ответственный, аватар прижат к правому краю */
+#view-calendar .cal2-ev.stack.wide{display:grid;grid-template-columns:1fr auto auto;grid-template-areas:"t m who" "cl op who";align-content:center;align-items:center;column-gap:16px;row-gap:2px;padding:8px 12px;line-height:1.35}
+#view-calendar .cal2-ev.stack.wide .t{grid-area:t;font-size:13px;padding-left:24px;padding-right:0}
+#view-calendar .cal2-ev.stack.wide .m{grid-area:m;font-size:11.5px;text-align:right;margin-top:0}
+#view-calendar .cal2-ev.stack.wide .cl{grid-area:cl;font-size:11.5px;padding-left:24px}
+#view-calendar .cal2-ev.stack.wide .op{grid-area:op;font-size:11.5px;text-align:right}
+#view-calendar .cal2-ev.stack.wide .who{grid-area:who;position:static;width:24px;height:24px;border-radius:7px;font-size:9.5px;justify-self:end}
+#view-calendar .cal2-ev.stack.wide .chk{left:11px;top:50%;transform:translateY(-50%);width:16px;height:16px;border-radius:5px} /* содержимое по центру — галочка тоже, иначе висит над текстом */
 #view-calendar .cal2-ev .who{position:absolute;right:6px;top:6px;width:17px;height:17px;border-radius:6px;display:grid;place-items:center;font-size:7.5px;font-weight:800;color:#fff;box-shadow:0 2px 5px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.3)}
 /* v770: точка-флажок Эйзенхауэра на плашках (точка, НЕ полоса) */
 #view-calendar .cal2-ev .fdot{position:absolute;right:27px;top:10px;width:8px;height:8px;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.25)} /* v770-qa: рядом с аватаром, не ниже — короткие плашки с overflow:hidden обрезали точку */
@@ -40494,6 +40503,9 @@ function cal2RenderTimeGrid(days, opts){
  });
  var SLOT = CAL2_SLOT;
  var N = days.length;
+ // v907: ширина одной плашки — чтобы на широких (день, редкая неделя) разложить содержимое в две колонки,
+ // а не жать всё в левый край, оставляя половину плашки пустой
+ var _colW = _dayW || Math.max(0, (listEl.clientWidth - 56 - 12) / N);
  var gridCols = _dayW
   ? ' style="grid-template-columns:56px repeat(' + N + ',' + _dayW + 'px)"'
   : ' style="grid-template-columns:56px repeat(' + N + ',1fr)"';
@@ -40550,6 +40562,7 @@ function cal2RenderTimeGrid(days, opts){
    var opName = e.operator ? cal2ShortName(e.operator) : '';
    // 63px — реальная высота четырёх плотных строк с полями и рамкой; ниже строки резало пополам
    var stack = height >= 61;
+   var wide = stack && (_colW / (it.laneCount || 1) - 8) >= 230;
    var body;
    if(stack){
     body = (timeTxt ? '<div class="m">' + kbEsc(timeTxt) + '</div>' : '')
@@ -40573,7 +40586,7 @@ function cal2RenderTimeGrid(days, opts){
     var lw = 100 / it.laneCount;
     laneStyle = ';left:calc(' + (it.lane * lw).toFixed(2) + '% + 4px);width:calc(' + lw.toFixed(2) + '% - 8px)';
    }
-   html += '<div class="cal2-ev c-' + color + (e.status === 'done' ? ' done' : '') + (isLate ? ' late' : '') + (stack ? ' stack' : '') + cal2SelCls(e) + '"'
+   html += '<div class="cal2-ev c-' + color + (e.status === 'done' ? ' done' : '') + (isLate ? ' late' : '') + (stack ? ' stack' : '') + (wide ? ' wide' : '') + cal2SelCls(e) + '"'
     + ' draggable="true" ondragstart="crmCalDragStartTask(event,\'' + e.id + '\')"'
     + ' style="top:' + top.toFixed(0) + 'px;height:' + height.toFixed(0) + 'px' + laneStyle + '"'
     + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
