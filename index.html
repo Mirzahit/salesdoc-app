@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v907</title>
+<title>SalesDoc — Финансовый Дашборд v908</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -37664,12 +37664,25 @@ window.crmCalNavDay = function(delta){
  function navBy(delta){
   var mode = crmCalState.viewMode || 'week';
   var now = Date.now();
-  if(now - lastNav < (mode === 'day' ? 130 : 350)) return;
+  if(now - lastNav < (mode === 'day' ? 130 : 350)) return false; // v908: вернуть отказ — накопленное не теряем
   lastNav = now;
   if(mode === 'month') crmCalNavMonth(delta);
   else if(mode === 'day') crmCalNavDay(delta);
+  return true;
   // v791: неделя листается НАТИВНЫМ горизонтальным скроллом сетки (пиксельная плавность,
   // cal2HScrollInit) — здесь её не трогаем, иначе глушили бы инерцию
+ }
+ // v908: раньше ОДНО деление колеса (или чуть дрогнувший палец на трекпаде) сразу перебрасывало
+ // на другой месяц/день — вид «прыгал» сам собой. Теперь копим прокрутку и листаем только когда
+ // человек проехал заметное расстояние; пауза в 400 мс обнуляет накопленное.
+ var _acc = 0, _accAt = 0;
+ function accumStep(delta, need){
+  var now = Date.now();
+  if(now - _accAt > 400) _acc = 0;
+  _accAt = now;
+  _acc += delta;
+  if(Math.abs(_acc) < need) return;
+  if(navBy(_acc > 0 ? 1 : -1)) _acc = 0; // не пролистнулось (пауза между листаниями) — накопленное держим
  }
  document.addEventListener('wheel', function(e){
   var view = document.getElementById('view-calendar');
@@ -37679,12 +37692,12 @@ window.crmCalNavDay = function(delta){
   if(mode === 'month'){
    var d1 = e.deltaY || e.deltaX;
    if(Math.abs(d1) < 8) return;
-   e.preventDefault();
-   navBy(d1 > 0 ? 1 : -1);
+   e.preventDefault(); // сетка месяца сама не скроллится — гасим прокрутку страницы в любом случае
+   accumStep(d1, 240);
   } else if(mode === 'day'){
    if(Math.abs(e.deltaX) <= Math.abs(e.deltaY) || Math.abs(e.deltaX) < 12) return;
    e.preventDefault();
-   navBy(e.deltaX > 0 ? 1 : -1);
+   accumStep(e.deltaX, 180);
   }
  }, { passive:false });
  var _sx = null, _sy = null;
@@ -40534,7 +40547,9 @@ function cal2RenderTimeGrid(days, opts){
   html += '</div>';
  });
  html += '</div>';
- html += '<div class="cal2-wgrid" id="cal2-wgrid"><div class="cal2-wgrid-in"' + gridCols + '><div>';
+ // v908: data-minh — чтобы следующая перерисовка знала, с какого часа начиналась сетка,
+ // и вернула человека на ТО ЖЕ ВРЕМЯ, а не отбросила наверх
+ html += '<div class="cal2-wgrid" id="cal2-wgrid" data-minh="' + minH + '"><div class="cal2-wgrid-in"' + gridCols + '><div>';
  for(var h = minH; h <= maxH; h++){
   html += '<div class="cal2-hcell">' + (h > minH ? '<span>' + String(h).padStart(2,'0') + ':00</span>' : '') + '</div>';
  }
@@ -40603,13 +40618,25 @@ function cal2RenderTimeGrid(days, opts){
   html += '<div class="cal2-nowline" id="cal2-nowline" style="display:none"><span class="pill" id="cal2-nowpill"></span></div>';
  }
  html += '</div></div></div>';
+ // v908: где человек стоял по времени ДО перерисовки. Раньше любая перерисовка (фильтр,
+ // догрузка задач, перецентровка буфера недели) сбрасывала вертикаль на 9:00 — это и был «прыжок».
+ var _oldGrid = document.getElementById('cal2-wgrid');
+ var _keepMin = null;
+ if(_oldGrid && _oldGrid.dataset.minh != null){
+  _keepMin = (parseInt(_oldGrid.dataset.minh, 10) || 0) * 60 + _oldGrid.scrollTop / SLOT * 60;
+ }
  listEl.innerHTML = html;
  cal2NowTick(minH, maxH, SLOT);
  cal2SyncHeadPad(); // v752: выровнять шапку под скроллбар сетки
  var grid = document.getElementById('cal2-wgrid');
  if(grid){
-  var nl = document.getElementById('cal2-nowline');
-  grid.scrollTop = (nl && nl.style.display !== 'none') ? Math.max(0, parseInt(nl.style.top || '0', 10) - 180) : Math.max(0, (9 - minH) * SLOT);
+  if(_keepMin != null){
+   // сетка могла начаться с другого часа (в новых днях есть ранняя задача) — считаем от времени, не от пикселей
+   grid.scrollTop = Math.max(0, (_keepMin - minH * 60) / 60 * SLOT);
+  } else {
+   var nl = document.getElementById('cal2-nowline');
+   grid.scrollTop = (nl && nl.style.display !== 'none') ? Math.max(0, parseInt(nl.style.top || '0', 10) - 180) : Math.max(0, (9 - minH) * SLOT);
+  }
  }
  if(_dayW) cal2HScrollInit(_dayW, crmDateStr(days[0]), opts.startIndex || 0, opts.visible, N);
 }
@@ -40621,7 +40648,11 @@ function cal2HScrollInit(dayW, bufStartStr, startIndex, visible, total){
  var head = document.querySelector('#tt-list .cal2-whead');
  var allday = document.querySelector('#tt-list .cal2-allday');
  if(!grid) return;
- grid.scrollLeft = startIndex * dayW;
+ // v908: перецентровка буфера раньше округляла позицию до целого дня — если человек стоял
+ // между днями, картинка рывком доезжала до края колонки. Переносим остаток пикселей как есть.
+ var _frac = window._cal2ScrollFrac || 0;
+ window._cal2ScrollFrac = 0;
+ grid.scrollLeft = startIndex * dayW + _frac;
  if(head) head.scrollLeft = grid.scrollLeft;
  if(allday) allday.scrollLeft = grid.scrollLeft;
  var t = null;
@@ -40643,9 +40674,10 @@ function cal2HScrollInit(dayW, bufStartStr, startIndex, visible, total){
    }
    // близко к краю буфера — перецентровать (рендер идентичного окна, визуально без прыжка)
    if(idx <= 3 || idx >= total - visible - 3){
+    window._cal2ScrollFrac = grid.scrollLeft - idx * dayW; // v908: остаток внутри дня — иначе рывок
     crmCalRenderWeek();
    }
-  }, 160);
+  }, 260); // v908: было 160 — перерисовка успевала влезть в паузу между рывками трекпада
  };
 }
 // v745: Неделя = сетка 7 дней от понедельника
@@ -40654,11 +40686,15 @@ function crmCalRenderWeek(){
  // v791: ПИКСЕЛЬНОЕ скольжение — рендерим буфер 24 дня (9 до + 6 видимых + 9 после),
  // горизонтальный скролл нативный с инерцией, остановка на любых датах; у краёв буфер
  // тихо перецентровывается (cal2HScrollInit). Стрелки/«Сегодня» возвращают неделю от понедельника.
+ // v908: буфер расширен 24 → 30 дней (12 до + 6 видимых + 12 после). Перецентровка (единственное
+ // место, где сетка перерисовывается прямо во время прокрутки) теперь наступает не через 6 дней
+ // скольжения, а через 9 — за один жест почти не достаётся. Больше не берём: высота сетки считается
+ // по самой ранней/поздней задаче буфера, и слишком широкое окно растянуло бы часы на весь экран.
  var start = crmCalState.freeStart ? new Date(crmCalState.freeStart + 'T00:00:00') : cal2WeekBounds().mon;
  var buf = [];
- var bufStart = new Date(start); bufStart.setDate(start.getDate() - 9);
- for(var i = 0; i < 24; i++){ var dd = new Date(bufStart); dd.setDate(bufStart.getDate() + i); buf.push(dd); }
- cal2RenderTimeGrid(buf, { visible: 6, startIndex: 9 });
+ var bufStart = new Date(start); bufStart.setDate(start.getDate() - 12);
+ for(var i = 0; i < 30; i++){ var dd = new Date(bufStart); dd.setDate(bufStart.getDate() + i); buf.push(dd); }
+ cal2RenderTimeGrid(buf, { visible: 6, startIndex: 12 });
 }
 // v746: День = та же сетка, одна колонка (старый табличный вид удалён)
 function crmCalRenderDay(){
