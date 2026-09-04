@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v904</title>
+<title>SalesDoc — Финансовый Дашборд v906</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1374,6 +1374,23 @@ body.light #view-calendar .cal2-allday > .lbl{background:#FFFFFF}
 #view-calendar .cal2-ev:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.15);z-index:5}
 #view-calendar .cal2-ev .t{font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px}
 #view-calendar .cal2-ev .m{color:rgba(255,255,255,.85);font-size:11px;font-weight:500;font-family:ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px} /* v755: время на плашке крупнее */
+/* v906: компания и ответственный — отдельными строками, чтобы не съедались троеточием вместе со временем */
+#view-calendar .cal2-ev .cl{color:#fff;font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px}
+#view-calendar .cal2-ev .op{color:rgba(255,255,255,.78);font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-calendar .cal2-ev .t{padding-right:20px} /* v906: угол занят аватаром/галочкой — название под них не залезает */
+/* .stack — плашка от 45 минут: четыре строки должны влезть без обрезки, поэтому строки плотнее */
+#view-calendar .cal2-ev.stack{line-height:1.2}
+#view-calendar .cal2-ev.stack .m{font-size:10px;margin-top:0}
+/* v906: галочка «выполнено» прямо на плашке — при наведении встаёт на место аватара, чтобы не отнимать ширину у названия */
+#view-calendar .cal2-ev .chk{position:absolute;left:7px;top:7px;width:14px;height:14px;border-radius:4px;display:grid;place-items:center;box-sizing:border-box;background:rgba(0,0,0,.22);border:1.5px solid rgba(255,255,255,.7);cursor:pointer;z-index:6}
+#view-calendar .cal2-ev .chk svg{display:none}
+#view-calendar .cal2-ev .chk:hover{background:rgba(255,255,255,.30);border-color:#fff}
+#view-calendar .cal2-ev .chk:hover svg{display:block}
+#view-calendar .cal2-ev.done .chk{background:#2BB577;border-color:#2BB577}
+#view-calendar .cal2-ev.done .chk svg{display:block}
+#view-calendar .cal2-ev.done:hover{opacity:.62}
+#view-calendar .cal2-ev .t{padding-left:19px} /* место под галочку слева от названия */
+#view-calendar .cal2-ev.stack{padding-bottom:4px}
 #view-calendar .cal2-ev .who{position:absolute;right:6px;top:6px;width:17px;height:17px;border-radius:6px;display:grid;place-items:center;font-size:7.5px;font-weight:800;color:#fff;box-shadow:0 2px 5px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.3)}
 /* v770: точка-флажок Эйзенхауэра на плашках (точка, НЕ полоса) */
 #view-calendar .cal2-ev .fdot{position:absolute;right:27px;top:10px;width:8px;height:8px;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.25)} /* v770-qa: рядом с аватаром, не ниже — короткие плашки с overflow:hidden обрезали точку */
@@ -37221,6 +37238,12 @@ function cal2Initials(name){
  var p = String(name || '').trim().split(/\s+/);
  return ((p[0] || '').slice(0,1) + (p[1] ? p[1].slice(0,1) : (p[0] || '').slice(1,2))).toUpperCase();
 }
+// v906: имя ответственного для плашки — «Малика А.»: коротко, но два Айдоса не сливаются в одного
+function cal2ShortName(name){
+ var p = String(name || '').trim().split(/\s+/);
+ if(!p[0]) return '';
+ return p[1] ? (p[0] + ' ' + p[1].slice(0,1).toUpperCase() + '.') : p[0];
+}
 // v770: флажки Эйзенхауэра — цвета и точка-индикатор на плашках (точка, НЕ полоса — правило CEO)
 var CAL2_FLAG_COLORS = { red:'#f37575', yellow:'#FF9F0A', green:'#2BB577', gray:'#6b7280' };
 var CAL2_FLAG_LABELS = { red:'Срочно и важно', yellow:'Важно, не срочно', green:'Срочно, не важно', gray:'Не срочно и не важно' };
@@ -40517,25 +40540,46 @@ function cal2RenderTimeGrid(days, opts){
   items.forEach(function(it){
    var e = it.e;
    var top = (it.startMin - minH * 60) / 60 * SLOT;
-   var height = Math.max(26, (it.endMin - it.startMin) / 60 * SLOT);
+   var height = Math.max(24, (it.endMin - it.startMin) / 60 * SLOT - 2); // v906: -2px — задачи встык не слипаются краями
    var color = cal2EvColorCls(e); // v771: флажок красит плашку
    var isLate = e.date < today && e.status !== 'done';
-   var meta = [];
-   if(e.time_start) meta.push(e.time_start + (e.time_end ? '–' + e.time_end : ''));
-   if(e.client && e.client !== '—') meta.push(e.client);
+   // v906: ответственный и компания читаемо, а не одной строкой с временем (её резало троеточием).
+   // Высокая плашка (от 40 минут) — три строки: время, компания, ответственный. Короткая — всё в строку.
+   var timeTxt = e.time_start ? (e.time_start + (e.time_end ? '–' + e.time_end : '')) : '';
+   var clName = (e.client && e.client !== '—') ? String(e.client) : '';
+   var opName = e.operator ? cal2ShortName(e.operator) : '';
+   // 63px — реальная высота четырёх плотных строк с полями и рамкой; ниже строки резало пополам
+   var stack = height >= 61;
+   var body;
+   if(stack){
+    body = (timeTxt ? '<div class="m">' + kbEsc(timeTxt) + '</div>' : '')
+     + (clName ? '<div class="cl">' + kbEsc(clName) + '</div>' : '')
+     + (opName ? '<div class="op">' + kbEsc(opName) + '</div>' : '');
+   } else {
+    // Коротким плашкам хватает одной строки: компания важнее имени, а кто ответственный видно по аватару
+    var meta = [];
+    if(timeTxt) meta.push(timeTxt);
+    if(clName) meta.push(clName);
+    if(opName) meta.push(opName);
+    body = meta.length ? '<div class="m">' + kbEsc(meta.join(' · ')) + '</div>' : '';
+   }
    var who = e.operator ? '<span class="who av-' + cal2OpColor(e.operator) + '">' + kbEsc(cal2Initials(e.operator)) + '</span>' : '';
+   // v906: галочка закрывает задачу без открытия карточки. Оплаты закрывать нечем — у них галочки нет.
+   var chk = e._pay_layer ? '' : '<span class="chk" title="' + (e.status === 'done' ? 'Вернуть в работу' : 'Отметить выполненной') + '"'
+    + ' onclick="event.stopPropagation();crmEventToggleDone(\'' + e.id + '\')">'
+    + '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></span>';
    var laneStyle = '';
    if(it.laneCount > 1){
     var lw = 100 / it.laneCount;
     laneStyle = ';left:calc(' + (it.lane * lw).toFixed(2) + '% + 4px);width:calc(' + lw.toFixed(2) + '% - 8px)';
    }
-   html += '<div class="cal2-ev c-' + color + (e.status === 'done' ? ' done' : '') + (isLate ? ' late' : '') + cal2SelCls(e) + '"'
+   html += '<div class="cal2-ev c-' + color + (e.status === 'done' ? ' done' : '') + (isLate ? ' late' : '') + (stack ? ' stack' : '') + cal2SelCls(e) + '"'
     + ' draggable="true" ondragstart="crmCalDragStartTask(event,\'' + e.id + '\')"'
     + ' style="top:' + top.toFixed(0) + 'px;height:' + height.toFixed(0) + 'px' + laneStyle + '"'
     + ' onclick="event.stopPropagation();cal2ShowDetail(\'' + e.id + '\', event)"'
     + (e.client_id ? ' ondblclick="event.stopPropagation();crmCalOpenClient(\'' + e.client_id + '\')"' : '') + '>'
-    + who + '<div class="t">' + kbEsc(e.title || '') + '</div>' /* v771: точка убрана — плашка сама в цвете флажка */
-    + (meta.length ? '<div class="m">' + kbEsc(meta.join(' · ')) + '</div>' : '')
+    + who + chk + '<div class="t">' + kbEsc(e.title || '') + '</div>' /* v771: точка убрана — плашка сама в цвете флажка */
+    + body
     + '<span class="rsz" draggable="false" onmousedown="cal2ResizeStart(event,\'' + e.id + '\')"></span>'
     + '</div>';
   });
