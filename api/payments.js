@@ -12,6 +12,14 @@
 
 import { sbSelect, sbInsert, sbUpdate, sbDelete, sbUpsert } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
+import { requirePermSoft, PAYMENTS_KEYS } from './_perm.js';
+
+// v924 SEC: Apps Script закрывается секретом (см. docs/APPS_SCRIPT_SECURE.md) — серверные
+// вызовы должны его нести, иначе импорт из «Доходов» перестанет работать после закрытия скрипта.
+function _gsToken() {
+  const t = (process.env.SHEETS_TOKEN || '').trim();
+  return t ? '&token=' + encodeURIComponent(t) : '';
+}
 import { ensureBoardEntryForPayment } from './cards.js';
 
 // Импорт из Sheets последовательно дёргает медленный Apps Script (cold-start 11-19с)
@@ -305,7 +313,7 @@ function _parseRow(row, headerIdx, hdrRow, cfg, monthName, monthIdx, sheetRowAbs
 
 async function _fetchSheet(sheetName, cfg) {
   const tryOnce = async (name) => {
-    const url = cfg.gs_url + '?action=getSheet&sheet=' + encodeURIComponent(name) + '&spreadsheetId=' + cfg.sheet_id;
+    const url = cfg.gs_url + '?action=getSheet&sheet=' + encodeURIComponent(name) + '&spreadsheetId=' + cfg.sheet_id + _gsToken();
     const resp = await fetch(url);
     if (!resp.ok) throw new Error('Sheets fetch failed: ' + resp.status);
     const json = await resp.json();
@@ -968,7 +976,14 @@ export default async function handler(req, res) {
       if (!_g.ok) return res.status(_g.unconfigured ? 503 : 403).json({ ok: false, error: _g.unconfigured ? 'Бэкфилл недоступен: не настроен ADMIN_TOKEN' : 'Нужен админ-код', needAdminToken: !_g.unconfigured });
       return await handleBackfillBoards(req, res);
     }
-    if (req.method === 'GET')    return await handleGet(req, res);
+    if (req.method === 'GET') {
+      // v924 SEC: оплаты — деньги компании. Сотруднику без права «Оплаты» (оператор) больше
+      // не отдаём, даже если он подобрал прямой адрес. Безличные служебные вызовы (бот, крон)
+      // проходят как раньше — у них нет учётки, только общий токен.
+      const _g = await requirePermSoft(req, res, PAYMENTS_KEYS);
+      if (!_g.ok) return;
+      return await handleGet(req, res);
+    }
     if (req.method === 'POST')   return await handlePost(req, res);
     if (req.method === 'PATCH')  return await handlePatch(req, res);
     if (req.method === 'DELETE') return await handleDelete(req, res);
@@ -1265,7 +1280,7 @@ async function handleDelete(req, res) {
     try {
       const cfg = SHEET_CONFIG[p.country];
       const url = cfg.gs_url + '?action=getSheet&sheet=' + encodeURIComponent(p.sheet_tab)
-        + '&spreadsheetId=' + cfg.sheet_id + '&range=A1:M' + Math.max(50, p.sheet_row + 2);
+        + '&spreadsheetId=' + cfg.sheet_id + '&range=A1:M' + Math.max(50, p.sheet_row + 2) + _gsToken();
       const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
       const j = await r.json();
       const row = (j.rows || [])[p.sheet_row - 1] || [];

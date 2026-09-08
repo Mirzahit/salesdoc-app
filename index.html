@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v923</title>
+<title>SalesDoc — Финансовый Дашборд v924</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8751,7 +8751,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="conn-card-status" id="conn-gs-status" style="color:#4CB782;font-size:11px;font-weight:700"><span class="conn-dot"></span>подключено</div>
  </div>
  <div class="conn-card-detail" id="conn-gs-detail" style="display:none">
- <input class="conn-input" id="gs-url" placeholder="URL веб-приложения Apps Script" value="https://script.google.com/macros/s/AKfycbzKz7c6eUD9UZ-foL5BQJmhyh93nN9GbBAUoIxvvrQtIrwbQX_UKFo48Q_8jlo7qcSWxQ/exec">
+ <input class="conn-input" id="gs-url" placeholder="URL веб-приложения Apps Script">
  <button class="conn-save-btn" onclick="connectSheets()">Сохранить</button>
  </div>
  </div>
@@ -11306,46 +11306,14 @@ function initEmployees(_attempt){
  });
 }
 
-// v587 LEGACY: загрузка из GAS-листа Users. Оставлена как fallback на один релиз, если /api/employees недоступен.
+// v924 SEC: legacy-загрузка сотрудников из GAS-листа Users УДАЛЕНА. Она читала лист
+// с колонкой pass_hash через анонимный Apps Script — то есть хеши паролей всех сотрудников
+// мог скачать любой человек по ссылке из этого файла. Единственный источник теперь
+// /api/employees (Supabase). Имя функции сохранено: на неё падает retry в initEmployees.
 function _initEmployeesFromSheet(){
- var url = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- var _ac = (typeof AbortController!=='undefined') ? new AbortController() : null;
- var _to = setTimeout(function(){ try{ if(_ac) _ac.abort(); }catch(_){} }, 25000);
- return fetch(url + '?action=getSheet&sheet=Users&spreadsheetId=' + ACADEMY_SHEET_ID, _ac?{signal:_ac.signal}:undefined)
- .then(function(r){ clearTimeout(_to); return r.json();})
- .then(function(data){
- var rows = data.rows || data;
- if(!rows || rows.length < 2) { _initFallbackEmployees(); return; }
- employees = [];
- for(var i=1;i<rows.length;i++){
- var r = rows[i];
- if(!r || !r[0]) continue;
- var role = (r[5]||'viewer').toLowerCase();
- employees.push({
- id: parseInt(r[0])||i,
- name: r[1]||'',
- pos: r[2]||'',
- email: r[3]||'',
- pass_hash: r[4]||'',
- role: role,
- bonus: parseInt(r[6])||0,
- active: !['false','0','нет','no','disabled','уволен'].includes(String(r[7]==null?'':r[7]).trim().toLowerCase()),
- access: Object.assign({}, ROLE_DEFAULTS[role] || ROLE_DEFAULTS.viewer),
- country: r[8]||'',
- is_temp: ['true','1','да','yes'].includes(String(r[9]==null?'':r[9]).trim().toLowerCase()),
- _row: i+1
- });
- }
- nextEmpId = employees.length + 1;
- _employeesLoaded = true;
- console.log('Employees loaded from Sheet (fallback): ' + employees.length);
- if(typeof _afterEmployeesLoaded==='function') _afterEmployeesLoaded();
- })
- .catch(function(e){
- clearTimeout(_to);
- console.error('Sheet fallback failed:', e);
+ console.warn('[employees] Supabase недоступен — работаем на минимальном наборе');
  _initFallbackEmployees();
- });
+ return Promise.resolve();
 }
 
 function _initFallbackEmployees(){
@@ -11370,13 +11338,12 @@ const COUNTRY_CONFIG = {
  months:['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'],
  expMonths:['Январь 2026','Февраль 2026','Март 2026','Апрель 2026','Май 2026','Июнь 2026','Июль 2026','Август 2026','Сентябрь 2026','Октябрь 2026','Ноябрь 2026','Декабрь 2026'],
  SHEET_ID:'1WJJRqPvQ_i9jVhQgNc2Kuuynneu9jjTJwMGijCZKHbo',
- gsUrl:'https://script.google.com/macros/s/AKfycbzKz7c6eUD9UZ-foL5BQJmhyh93nN9GbBAUoIxvvrQtIrwbQX_UKFo48Q_8jlo7qcSWxQ/exec',
+ gsUrl:'', // v924 SEC: ссылка на анонимный Apps Script убрана из бандла
  EXP_SHEET_ID:'1TQSgd1rBHmF4mIktKf8Sk3C3OGxfownysqgQwu0IzWM',
  INTG_SHEET_ID:'11ZnhVoLvIJRHeeJk0u-fZI2G5crWNHIpV9RDOVtDQJ4',
  LEADS_SHEET_ID:'19etQHubOqYtqobzGjVhWE-3ClCrQyZJ0zD2jklikO7A',
  kpiSheetId:'1dA_NypMBj2LbmSOn6GuZXcCNCUqN7lmBAs9S5FbgjzU',
- LTV_ID:'11ErpSR9fJ_T0ggWBrHjRB35cMs4yl84HedSO1Tf4Z08',
- GS_URL2:'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec'
+ LTV_ID:'11ErpSR9fJ_T0ggWBrHjRB35cMs4yl84HedSO1Tf4Z08'
  },
  KG: {
  label:'\u041A\u044B\u0440\u0433\u044B\u0437\u0441\u0442\u0430\u043D', flag:'\u{1F1F0}\u{1F1EC}', currency:'\u0441\u043E\u043C',
@@ -11384,13 +11351,12 @@ const COUNTRY_CONFIG = {
  expMonths:['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'],
  dateCorrection:1,
  SHEET_ID:'1RbnGDy0rZJj7Ek-j1y3FkAToCSXXtR8F-5a7ga67O2Q',
- gsUrl:'https://script.google.com/macros/s/AKfycbzKz7c6eUD9UZ-foL5BQJmhyh93nN9GbBAUoIxvvrQtIrwbQX_UKFo48Q_8jlo7qcSWxQ/exec',
+ gsUrl:'', // v924 SEC: ссылка на анонимный Apps Script убрана из бандла
  EXP_SHEET_ID:'1wJaSorA_jLG7YJJaTT2XXV6j5SSjufutVFOuKsK1tdY',
  INTG_SHEET_ID:'11ZnhVoLvIJRHeeJk0u-fZI2G5crWNHIpV9RDOVtDQJ4',
  LEADS_SHEET_ID:'19etQHubOqYtqobzGjVhWE-3ClCrQyZJ0zD2jklikO7A',
  kpiSheetId:'1PJvpQbcWAV4TbkNgXvnlkIQhOgsbleM42oIBkWzqh10',
- LTV_ID:'1e34EE4DKuj2tzatlX1qBFEAEX7aDtky02R2HA2KE7_M',
- GS_URL2:'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec'
+ LTV_ID:'1e34EE4DKuj2tzatlX1qBFEAEX7aDtky02R2HA2KE7_M'
  }
 };
 
@@ -11400,13 +11366,21 @@ var _CUR = COUNTRY_CONFIG[currentCountry].currency;
 // ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ ИЗ GOOGLE SHEETS (gviz API)
 let SHEET_ID = COUNTRY_CONFIG[currentCountry].SHEET_ID;
 
+// v924 SEC: единственная дверь браузера к Google-таблицам — серверный прокси /api/sheets.
+// Прямые вызовы Apps Script из фронта убраны: ссылка на скрипт лежала в этом файле, а сам
+// скрипт отвечает анонимно — по ней кто угодно скачивал расходы (с зарплатами) и лист Users
+// с хешами паролей. Теперь ссылка и секрет живут на сервере, и он же проверяет права.
+async function gsFetchSheet(spreadsheetId, sheetName, range) {
+ var q = '/api/sheets?action=getSheet&spreadsheetId=' + encodeURIComponent(spreadsheetId)
+       + '&sheet=' + encodeURIComponent(sheetName);
+ if (range) q += '&range=' + encodeURIComponent(range);
+ return sbFetch(q);
+}
+
 async function loadSheetData(sheetName) {
- // Apps Script URL — используем standalone скрипт с spreadsheetId
- var scriptUrl = COUNTRY_CONFIG[currentCountry].GS_URL2 || gsUrl;
- if (scriptUrl) {
+ { // блок оставлен как был: ниже по функции есть fallback на gviz, если прокси не отдал строки
  try {
- const resp = await fetch(scriptUrl + '?action=getSheet&sheet=' + encodeURIComponent(sheetName) + '&spreadsheetId=' + SHEET_ID);
- const json = await resp.json();
+ const json = await gsFetchSheet(SHEET_ID, sheetName);
  // Коррекция часового пояса: standalone скрипт UTC+5, KG таблица UTC+6 → даты -1 день
  var dc = COUNTRY_CONFIG[currentCountry].dateCorrection || 0;
  if (dc && json && json.rows) {
@@ -11805,7 +11779,12 @@ let profile={name:'',role:'',email:'',company:'SalesDoc'};
 // v449: «4D» (fdx) видна всем у кого view_wig; редактирование внутри — isWigEditorAllowed.
 // v844: «Настройки» видны ВСЕМ (решение CEO). У кого нет права view_settings —
 // открывается личная часть: профиль и смена пароля. Раньше клик отбрасывал на «Клиентов».
-const NAV_VIEW_MAP = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',fdx:'view_wig',dues:'view_activeclients'};
+const NAV_VIEW_MAP = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',mytasks:'view_mytasks',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',fdx:'view_wig',dues:'view_activeclients'};
+// v924 SEC: разделы, открытые всем осознанно. «Настройки» внутри режутся по правам (v844),
+// «Клиенты» — контейнер вкладок, каждая со своим правом, «Профиль» — личная страница.
+// Всё, чего нет ни здесь, ни в NAV_VIEW_MAP, теперь СКРЫТО: раньше новый пункт меню
+// по умолчанию показывался каждому сотруднику.
+const NAV_ALWAYS_VISIBLE = {settings:1, cabinet:1, clients:1};
 
 // Скрывает пункты меню по правам. Права берём с фолбэком на набор роли: если объект прав
 // ещё не доехал (гонка загрузки), сотрудник НЕ должен увидеть лишние разделы.
@@ -11820,7 +11799,7 @@ function _applyNavVisibility(u){
    return;
   }
   var key = NAV_VIEW_MAP[view];
-  var allowed = key ? (acc[key] === 1 || acc[key] === true) : true;
+  var allowed = key ? (acc[key] === 1 || acc[key] === true) : !!NAV_ALWAYS_VISIBLE[view];
   el.classList.toggle('hidden', !allowed);
  });
 }
@@ -13012,7 +12991,6 @@ window._cfHistExp = null; // { monthlyConstant, monthlyVariable, byCategory: {..
 async function cfLoadHistoricalExpenses(monthsBack){
  try {
  var now = new Date();
- var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
  var sheetId = (typeof EXP_SHEET_ID !== 'undefined' ? EXP_SHEET_ID : (COUNTRY_CONFIG[currentCountry]||{}).EXP_SHEET_ID);
  if(!sheetId) return;
  var EXP_MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -13025,9 +13003,7 @@ async function cfLoadHistoricalExpenses(monthsBack){
  for(var n=0; n<2 && !found; n++){
  var name = n===0 ? label : altLabel;
  try {
- var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(name) + '&spreadsheetId=' + sheetId + '&range=A1:E1000'; // v864: было E100 — расходы ниже сотой строки молча пропадали
- var resp = await fetch(url);
- var json = await resp.json();
+ var json = await gsFetchSheet(sheetId, name, 'A1:E1000'); // v924 SEC: через /api/sheets; E1000 — расходы ниже сотой строки молча пропадали (v864)
  if(json.rows && json.rows.length >= 2) found = json.rows;
  } catch(e){}
  }
@@ -15566,8 +15542,8 @@ function applyAvatar(dataUrl) {
  try { localStorage.setItem(key, dataUrl); } catch(ex) { console.warn('Avatar save failed:', ex); }
  // Также сохранить в Google Sheet (Academy → Users) чтобы не терялось
  if(currentUser && typeof ACADEMY_SHEET_ID !== 'undefined') {
- var url = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- fetch(url, { method:'POST', headers:{'Content-Type':'text/plain'},
+ // v924 SEC: через серверный прокси — прямая ссылка на Apps Script из фронта убрана
+ sbFetch('/api/sheets', { method:'POST',
  body:JSON.stringify({action:'updateAvatar', spreadsheetId:ACADEMY_SHEET_ID, sheet:'Users', userId:currentUser.id, avatar:dataUrl})
  }).catch(function(e){ console.warn('Avatar cloud save failed:', e); });
  }
@@ -15594,9 +15570,8 @@ function _setAvatarUI(dataUrl) {
 }
 function _loadAvatarFromCloud() {
  if(!currentUser || typeof ACADEMY_SHEET_ID === 'undefined') return;
- var url = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- fetch(url + '?action=getAvatar&spreadsheetId=' + ACADEMY_SHEET_ID + '&sheet=Users&userId=' + currentUser.id)
- .then(function(r){ return r.json(); })
+ // v924 SEC: через серверный прокси
+ sbFetch('/api/sheets?action=getAvatar&spreadsheetId=' + encodeURIComponent(ACADEMY_SHEET_ID) + '&sheet=Users&userId=' + encodeURIComponent(currentUser.id))
  .then(function(data){
  if(data && data.avatar) {
  _setAvatarUI(data.avatar);
@@ -26467,7 +26442,6 @@ async function planLoad() {
  }
  } catch(_) {}
  var tab = PLAN_TABS[planTabIdx] || PLAN_TABS[0];
- var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
  // v272: пробуем несколько вариантов имени листа — пользователь может назвать
  // как «Май», «Май 26», «май 26», «Май 2026». Берём первое что отдаст данные.
  var monthName = PLAN_MONTHS_RU[tab.month];
@@ -26484,9 +26458,7 @@ async function planLoad() {
  var lastErr = null, gotData = null;
  for(var i = 0; i < nameVariants.length; i++){
  try {
- var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(nameVariants[i]) + '&spreadsheetId=' + kpiSheetId + '&range=A1:G60';
- var resp = await fetch(url);
- var asData = await resp.json();
+ var asData = await gsFetchSheet(kpiSheetId, nameVariants[i], 'A1:G60'); // v924 SEC: через /api/sheets
  if (asData.rows && asData.rows.length >= 2) { gotData = asData; tab.name = nameVariants[i]; break; }
  lastErr = asData.error || 'Нет данных в листе «' + nameVariants[i] + '»';
  } catch(e){ lastErr = e.message; }
@@ -26569,11 +26541,8 @@ async function expLoad() {
  }
  } catch(_) {}
  var tab = EXP_TABS[expTabIdx] || EXP_TABS[0];
- var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
- var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(tab.name) + '&spreadsheetId=' + EXP_SHEET_ID + '&range=A1:E1000'; // v864: было E100 — расходы ниже сотой строки молча пропадали
  try {
- var resp = await fetch(url);
- var json = await resp.json();
+ var json = await gsFetchSheet(EXP_SHEET_ID, tab.name, 'A1:E1000'); // v924 SEC: через /api/sheets
  if (!json.rows || json.rows.length < 2) throw new Error('Нет данных');
  // Ищем строку-заголовок
  var headerIdx = -1;
@@ -26826,10 +26795,7 @@ async function expLoadPrevTotal(currentTotal){
  var prevTab = EXP_TABS[expTabIdx + 1];
  if(!prevTab){ hide(); return; }
  try {
-  var GS_URL = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
-  var url = GS_URL + '?action=getSheet&sheet=' + encodeURIComponent(prevTab.name) + '&spreadsheetId=' + EXP_SHEET_ID + '&range=A1:E1000'; // v864: было E100 — расходы ниже сотой строки молча пропадали
-  var resp = await fetch(url);
-  var json = await resp.json();
+  var json = await gsFetchSheet(EXP_SHEET_ID, prevTab.name, 'A1:E1000'); // v924 SEC: через /api/sheets
   if(!json.rows) throw new Error('no data');
   var hIdx = -1;
   for(var i=0;i<json.rows.length;i++){ if(json.rows[i] && String(json.rows[i][0]||'').toLowerCase()==='дата'){ hIdx=i; break; } }
@@ -28696,6 +28662,13 @@ let expensesData = []; // {date, category, note, amount, bank, month}
 let _expensesLoadingPromise = null; // guard от параллельных вызовов (race condition → удвоение сумм)
 
 async function loadExpenses() {
+ // v924 SEC: расходы — только тем, у кого есть право. Раньше они грузились в браузер каждому,
+ // кто вошёл (оператору, менеджеру), и лежали в expensesData: раздел скрыт, а данные — в памяти
+ // вкладки, одна строка в консоли и они видны. Теперь у таких сотрудников массив просто пуст.
+ if (typeof currentUser !== 'undefined' && currentUser) {
+  var _acc = currentUser.access || {};
+  if (_acc.view_expenses !== 1 && _acc.view_expenses !== true) { expensesData = []; return; }
+ }
  // Если уже идёт загрузка — возвращаем тот же Promise, не запускаем второй параллельный fetch
  if (_expensesLoadingPromise) return _expensesLoadingPromise;
 
@@ -28703,7 +28676,6 @@ async function loadExpenses() {
  // Собираем результат в локальный буфер, чтобы race condition не мог накапливать push'и в глобальный массив
  var buffer = [];
 
- var EXP_GS = 'https://script.google.com/macros/s/AKfycbwwNL4CxOrSo4wXT3qci_dSSqi5tABLPUqHQPv2nWrn_WQhZsaOpfnwdygaqskzuHphvg/exec';
  var ALL_EXP_MONTHS = COUNTRY_CONFIG[currentCountry].expMonths;
  var nowExp = new Date();
  var curExpIdx = nowExp.getMonth();
@@ -28716,9 +28688,7 @@ async function loadExpenses() {
  var sheetName = months[si].name;
  var mi = months[si].mi;
  try {
- var url = EXP_GS + '?action=getSheet&sheet=' + encodeURIComponent(sheetName) + '&spreadsheetId=' + EXPENSES_SHEET_ID + '&range=A1:E1000'; // v850: было E100 — расходы ниже сотой строки молча не читались
- var resp = await fetch(url);
- var json = await resp.json();
+ var json = await gsFetchSheet(EXPENSES_SHEET_ID, sheetName, 'A1:E1000'); // v924 SEC: через /api/sheets
  if (!json.rows || json.rows.length < 2) continue;
 
  var headerIdx = -1;

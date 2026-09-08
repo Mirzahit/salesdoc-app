@@ -5,6 +5,8 @@
 //   import { checkAuth } from './_auth.js';
 //   if (!checkAuth(req, res)) return; // сам отправит 401
 
+import { resolveSession } from './_session.js';
+
 export function checkAuth(req, res) {
   const expected = (process.env.APP_TOKEN || '').trim();
   if (!expected) {
@@ -16,6 +18,11 @@ export function checkAuth(req, res) {
   }
   const got = (req.headers['x-app-token'] || '').toString().trim();
   if (got !== expected) {
+    // v924 SEC: подписанная сессия сотрудника — равноценный пропуск. Это ступень к тому,
+    // чтобы убрать общий APP_TOKEN из index.html: сейчас он лежит в открытом коде страницы,
+    // и любой, кто открыл сайт, может им дёргать API. Служебные клиенты (бот оплат, крон)
+    // сессий не имеют и остаются на токене.
+    if (resolveSession(req)) return true;
     res.status(401).json({ ok: false, error: 'Unauthorized' });
     return false;
   }
