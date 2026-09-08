@@ -396,7 +396,7 @@ async function buildLeadReport(env, fromTs, toTs){
   let eventsScanned = 0, eventsTruncated = false, eventsError = null;
   try {
     for(let page = 1; page <= 40; page++){
-      const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&limit=100&page=${page}`, env);
+      const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&filter[created_at][to]=${toTs || Math.floor(Date.now()/1000)}&limit=100&page=${page}`, env);
       if(!ev) break;
       const batch = (ev._embedded && ev._embedded.events) || [];
       if(!batch.length) break;
@@ -634,13 +634,16 @@ export default async function handler(req, res){
       const qFrom = String((req.query && req.query.from) || '').slice(0, 10);
       const qTo = String((req.query && req.query.to) || '').slice(0, 10);
       const _validDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+      // v922: границы считаем по Алматы (UTC+5), сервер Vercel живёт в UTC —
+      // иначе сделки, закрытые 1-го числа до 05:00, улетали в прошлый месяц.
+      const almaty = (y, m, d) => new Date(Date.UTC(y, m, d) - 5*3600*1000);
       if(_validDate(qFrom) && _validDate(qTo)){
-        fromDate = new Date(qFrom + 'T00:00:00');
-        toDate = new Date(qTo + 'T23:59:59');
+        fromDate = new Date(qFrom + 'T00:00:00+05:00');
+        toDate = new Date(qTo + 'T23:59:59+05:00');
         label = qFrom + ' — ' + qTo;
-      } else if(period === 'year'){ fromDate = new Date(yy,0,1); toDate = now; label = 'Год ' + yy; }
-      else if(period === 'quarter'){ const q = Math.floor(mm/3); fromDate = new Date(yy, q*3, 1); toDate = now; label = 'Квартал ' + (q+1) + ' · ' + yy; }
-      else { fromDate = new Date(yy, mm, 1); toDate = now; label = MONTHS_RU[mm] + ' ' + yy; }
+      } else if(period === 'year'){ fromDate = almaty(yy,0,1); toDate = now; label = 'Год ' + yy; }
+      else if(period === 'quarter'){ const q = Math.floor(mm/3); fromDate = almaty(yy, q*3, 1); toDate = now; label = 'Квартал ' + (q+1) + ' · ' + yy; }
+      else { fromDate = almaty(yy, mm, 1); toDate = now; label = MONTHS_RU[mm] + ' ' + yy; }
       const fromTs = Math.floor(fromDate.getTime()/1000);
       const toTs = Math.floor(toDate.getTime()/1000);
 
@@ -1240,7 +1243,7 @@ export default async function handler(req, res){
       let eventsScanned = 0, eventsTruncated = false, eventsError = null;
       try {
         for(let page = 1; page <= 40; page++){
-          const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&limit=100&page=${page}`, env);
+          const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&filter[created_at][to]=${toTs || Math.floor(Date.now()/1000)}&limit=100&page=${page}`, env);
           if(!ev) break;
           const batch = (ev._embedded && ev._embedded.events) || [];
           if(!batch.length) break;

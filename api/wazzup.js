@@ -171,7 +171,9 @@ export default async function handler(req, res) {
         webhooksUri: uri,
         subscriptions: { messagesAndStatuses: true, contactsAndDealsCreation: true }
       });
-      return res.status(200).json({ ok: true, subscribed_to: uri, wazzup: out });
+      // Секрет вебхука в ответ не отдаём: APP_TOKEN лежит в клиентском бандле,
+      // и открытый k= позволил бы слать фальшивые события в базу.
+      return res.status(200).json({ ok: true, subscribed_to: uri.split('k=')[0] + 'k=***', wazzup: { ok: true } });
     }
 
     if (action === 'status') {
@@ -202,7 +204,9 @@ export default async function handler(req, res) {
       const rows = await sbSelect('wazzup_events', {
         received_at: 'gte.' + since, order: 'received_at.desc', limit: 500
       });
-      return res.status(200).json({ ok: true, days, count: rows.length, events: rows });
+      // v922: raw (тексты переписок клиентов) наружу не отдаём — APP_TOKEN публичный.
+      const safe = rows.map(r => { const c = Object.assign({}, r); delete c.raw; delete c.text; return c; });
+      return res.status(200).json({ ok: true, days, count: safe.length, events: safe });
     }
 
     // ?phone= — рекламный след по конкретному номеру, для карточки сделки

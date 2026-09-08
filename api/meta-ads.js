@@ -141,14 +141,18 @@ async function metaFetchAllPages(pathOrUrl, params, token, maxPages) {
 // подхватывался сам, как только владелец выдаст доступ.
 // META_AD_ACCOUNT_IDS (через запятую) перекрывает автоопределение, если нужно
 // ограничить список вручную.
-let _acctCache = null, _acctCacheAt = 0;
+// v922: кэш по токену — при выключении SINGLE_CABINET KG-токен не должен
+// получать список кабинетов KZ-токена.
+const _acctCacheByTok = new Map();
 async function resolveAccounts(token) {
   const manual = String(process.env.META_AD_ACCOUNT_IDS || '').trim();
   if (manual) {
     return manual.split(',').map(x => x.trim()).filter(Boolean)
       .map(id => ({ id: id.startsWith('act_') ? id : 'act_' + id, name: null }));
   }
-  if (_acctCache && Date.now() - _acctCacheAt < CACHE_TTL_MS) return _acctCache;
+  const tk = String(token || '').slice(0, 16);
+  const hit = _acctCacheByTok.get(tk);
+  if (hit && Date.now() - hit.t < CACHE_TTL_MS) return hit.v;
   let list = [];
   try {
     const r = await metaFetch('/me/adaccounts', { fields: 'account_id,name,account_status', limit: 100 }, token);
@@ -157,7 +161,7 @@ async function resolveAccounts(token) {
   // Кабинет из env добавляем всегда: если /me/adaccounts не ответил, отчёт не должен опустеть.
   const fallback = (process.env.META_AD_ACCOUNT_ID || '').trim();
   if (fallback && !list.some(a => a.id === fallback)) list.unshift({ id: fallback, name: null });
-  if (list.length) { _acctCache = list; _acctCacheAt = Date.now(); }
+  if (list.length) _acctCacheByTok.set(tk, { t: Date.now(), v: list });
   return list;
 }
 
@@ -169,13 +173,19 @@ function validatePeriod(p) {
 // Для нестандартных period (this_month, last_month и т.п.) — возвращаем null,
 // сравнение тогда делаем эвристически (этот месяц vs прошлый).
 function periodDays(p) {
-  const m = { last_3d:3, last_7d:7, last_14d:14, last_28d:28, last_30d:30, last_90d:90, today:1, yesterday:1 };
+  const m = { last_3d:3, last_7d:7, last_14d:14, last_28d:28, last_30d:30, last_90d:90, yesterday:1 };
   return m[p] || null;
 }
 function ymd(d) { return d.toISOString().slice(0,10); }
 // Считает time_range предыдущего периода той же длины, заканчивающегося ровно перед текущим.
 // Например: last_7d покрывает [T-7..T-1], previous → [T-14..T-8].
 function previousRangeFor(p) {
+  // v922: для today предыдущий период — вчера (раньше выходило позавчера)
+  if (p === 'today') {
+    const t = new Date(); t.setUTCHours(0, 0, 0, 0);
+    const y = new Date(t.getTime() - 86400000);
+    return { since: ymd(y), until: ymd(y) };
+  }
   const days = periodDays(p);
   if (days) {
     const today = new Date();
@@ -222,7 +232,11 @@ function excludeList(query) {
 function isExcluded(row, list) {
   if (!list.length) return false;
   const hay = (String(row.adset_name || '') + ' ' + String(row.campaign_name || '')).toLowerCase();
-  return list.some(x => hay.indexOf(x) >= 0);
+  // v922: границы слова — иначе exclude=мк цеплял бы «ремкомплект» и «Химки»
+  return list.some(x => {
+    const esc = x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('(^|[^a-zа-я0-9])' + esc + '([^a-zа-я0-9]|$)', 'i').test(hay);
+  });
 }
 // Свод по отсечённым строкам — чтобы на экране было видно, сколько убрали.
 function excludedSummary(rows, list) {
@@ -334,13 +348,16 @@ export default async function handler(req, res) {
       // Разбивка по дням.
       // v797: limit обязателен — дефолтная страница Meta = 25 строк, и last_90d обрывался
       // на 25-м дне (недельная динамика в Маркетинге показывала апрель вместо июля).
-      const data = await metaFetch(`/${ACCOUNT}/insights`, {
+      // v922: пагинация — диапазон длиннее 100 дней (this_year, свои даты)
+      // молча обрезался на 100-м дне.
+      const dailyRows = await metaFetchAllPages(`/${ACCOUNT}/insights`, {
         fields: INSIGHT_FIELDS,
         ...timeParams(range, period),
         level: 'account',
         time_increment: 1,
         limit: 100
-      }, TOKEN);
+      }, TOKEN, 10);
+      const data = { data: dailyRows };
       const days = (data.data || []).map(d => {
         const leads = summarizeLeads(d.actions, d.cost_per_action_type);
         return { ...d, leads_count: leads.count };
