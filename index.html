@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v916</title>
+<title>SalesDoc — Финансовый Дашборд v917</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -18923,8 +18923,8 @@ window.mktSyncPeriodBtn = function(){
  if(b) b.textContent = _mktLabel(_mktSel);
  var sub = document.getElementById('mkt-period-sub');
  if(sub){
-  var r = _mktSelRange(_mktSel), pr = _mktPrevRange(_mktSel);
-  sub.textContent = _mktHuman(r) + '  ·  сравниваем с ' + _mktHuman(pr);
+  var pr = _mktPrevRange(_mktSel);
+  sub.textContent = 'сравнение — с ' + _mktHuman(pr);
  }
 };
 window.mktOpenPeriodPicker = function(ev){
@@ -19402,11 +19402,8 @@ function _mkdSrcRow(){
  var sum = '<div class="mkd-adsum">'
   + '<b class="' + (_mkdSrc === '__ads__' ? 'on' : '') + '" onclick="mkdSetSrc(&quot;' + encodeURIComponent('__ads__') + '&quot;)">'
   +  'С рекламы<i>' + ads + '</i></b>'
-  + '<span class="ex">' + (ads
-      ? ('из ' + raw.length + ' сделок за период. Это ' + parts + ' — источники, которые вы отметили как рекламные.')
-      : ('ни одна сделка за период не помечена рекламным источником.')) + '</span>'
   + '<button class="cfg" onclick="mkdEditAdSources(event)">изменить</button></div>';
- return sum + '<div class="mkd-srcrow"><span class="lb">Что вписали менеджеры в «Источник сделки»:</span>'
+ return sum + '<div class="mkd-srcrow"><span class="lb">Источник:</span>'
   + names.map(function(n){ return chip(n, n, by[n], _mkdIsAdSource(n) ? 'isad' : ''); }).join('')
   + (empty ? chip('__empty__', 'Не заполнен', empty, 'dim') : '')
   + '</div>';
@@ -19481,11 +19478,7 @@ function _mkdRender(){
    + 'Расход этого кабинета в отчёт не попал. Нужно выдать доступ системному пользователю '
    + 'salesdoc-dashboard в настройках рекламного аккаунта.</div></div>';
  }
- var live = cabs.filter(function(c){ return c.ok; });
- if(live.length > 1){
-  html += '<div class="mkd-note" style="margin:0 0 12px">Деньги собраны из ' + live.length
-   + ' рекламных кабинетов: ' + live.map(function(c){ return sanitize(String(c.code || c.account)); }).join(', ') + '.</div>';
- }
+ 
  var badAmo = Object.keys(_mkdData.amoErr || {});
  if(badAmo.length){
   html += '<div class="mkd-warn"><div><b>amoCRM ' + sanitize(badAmo.join(', ')) + ' не ответила.</b> '
@@ -19502,16 +19495,6 @@ function _mkdRender(){
  // v915: Meta досчитывает цифры задним числом 2-3 дня. Отчёт Ибрагима за 1-7
  // сентября, снятый 7-го, разошёлся с кабинетом на $20 именно поэтому — и наши
  // ранние цифры тоже. Если период цепляет последние 3 дня, говорим об этом прямо.
- (function(){
-  var r2 = _mktSelRange(_mktSel);
-  var fresh = new Date(); fresh.setHours(0,0,0,0);
-  fresh = new Date(fresh.getTime() - 2*86400000);
-  if(_mktParseIso(r2.until) >= fresh){
-   html += '<div class="mkd-fresh">Период цепляет последние 3 дня — Meta ещё досчитывает расход и показы задним числом. '
-    + 'Окончательные цифры по этим дням будут через 2–3 дня; сверять отчёты таргетологов с кабинетом надо после этого срока.</div>';
-  }
- })();
-
  // v915: строка «как в кабинете» — расход, показы, клики, заявки и цена заявки
  // ровно так, как их видит Ads Manager. Это то, с чем сверяются отчёты
  // таргетологов; всё, что ниже про сделки и продажи, — уже из amoCRM.
@@ -19528,18 +19511,8 @@ function _mkdRender(){
      return '<b class="' + (_mkdOrigin === x[0] ? 'on' : '') + '" onclick="mkdSetOrigin(&quot;' + x[0] + '&quot;)">'
       + x[1] + '<i>' + x[2] + '</i></b>';
     }).join('')
-  + '<span class="hint">«Заявка» — сделку завела интеграция: форма или сайт. «Звонок» — её создала телефония. '
-  + '«Завёл менеджер» — сделку создал человек, и откуда пришёл клиент, программа не знает.</span></div>';
- // v903: не сводим в одну строку счётчик рекламы и сделки amo — связи между ними
- // нет, и такое соседство читается как воронка, хотя это два разных счётчика.
- // Пишем прямо: что доказано записью, а чего программа не знает.
- html += '<div class="mkd-gap"><div class="ok"><b>Доказано записями</b>'
-  + 'Расход, показы и клики — из рекламного кабинета. Сделки, этапы, менеджеры, суммы и продажи — '
-  + 'из amoCRM. Любую цифру можно открыть и увидеть поимённо, каждую сделку — в amoCRM.</div>'
-  + '<div class="no"><b>Программа не знает</b>'
-  + 'Пришла ли сделка с рекламы. У ' + oManual + ' из ' + oAll + ' сделок за период источник в amoCRM '
-  + 'не записан — их завели руками. Пока это так, цена заявки и окупаемость считаются только по тем '
-  + 'сделкам, где источник проставлен: включите «С рекламы» в строке ниже.</div></div>';
+  + '</div>';
+ 
 
  html += _mkdExclRow();
  html += _mkdSrcRow();
@@ -19774,6 +19747,13 @@ function _mkdTargBlock(cur, prv){
 }
 
 // ── v915: строка рекламного кабинета ────────────────────────────────────────
+function _mkdFreshTag(){
+ var r2 = _mktSelRange(_mktSel);
+ var fresh = new Date(); fresh.setHours(0,0,0,0);
+ fresh = new Date(fresh.getTime() - 2*86400000);
+ return (_mktParseIso(r2.until) >= fresh)
+  ? ' · <span style="color:#E0A458">последние 2–3 дня Meta ещё досчитывает</span>' : '';
+}
 function _mkdCabRow(){
  var list = ((_mkdData.geo || {}).countries || []).filter(function(c){ return !_mkdHidden[c.code]; });
  if(!list.length) return '';
@@ -19798,7 +19778,7 @@ function _mkdCabRow(){
   ['Цена заявки (кабинет)', ld > 0 ? _mkdUsd(sp/ld) : '—']
  ];
  return '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Рекламный кабинет</div>'
-  + '<div class="s">эти цифры сходятся с Ads Manager один в один — по ним сверяйте отчёты таргетологов' + exNote + '</div></div>'
+  + '<div class="s">как в Ads Manager' + exNote + _mkdFreshTag() + '</div></div>'
   + '<div class="mkd-cab">' + cells.map(function(x){
      return '<div><div class="l">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>';
     }).join('') + '</div></div>';
