@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v913</title>
+<title>SalesDoc — Финансовый Дашборд v914</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6061,6 +6061,13 @@ body.light .ct-dd._mktper input[type=date]{color-scheme:light}
 #view-marketing .mkd-excl button{background:transparent;border:0;color:var(--text-muted);font-size:11.5px;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:3px;padding:0 2px}
 #view-marketing .mkd-excl button:hover{color:var(--text-primary)}
 #view-marketing .mkd-excl.off{border-style:dashed}
+#view-marketing .mkd-adsum{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 8px}
+#view-marketing .mkd-adsum b{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650;padding:6px 13px;border-radius:9px;border:1px solid rgba(76,183,130,.35);color:#4CB782;cursor:pointer;user-select:none}
+#view-marketing .mkd-adsum b.on{background:rgba(76,183,130,.14);border-color:rgba(76,183,130,.55)}
+#view-marketing .mkd-adsum b i{font-style:normal;font-weight:700;font-variant-numeric:tabular-nums}
+#view-marketing .mkd-adsum .ex{font-size:11.5px;color:var(--text-muted);line-height:1.5;flex:1;min-width:220px}
+#view-marketing .mkd-adsum .cfg{background:transparent;border:0;color:var(--text-muted);font-size:11px;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:3px;padding:4px}
+#view-marketing .mkd-adsum .cfg:hover{color:var(--text-primary)}
 #view-marketing .mkd-srcrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 16px}
 #view-marketing .mkd-srcrow .lb{font-size:11.5px;color:var(--text-muted);margin-right:2px}
 #view-marketing .mkd-srcrow b{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:5px 10px;border-radius:7px;border:1px solid var(--border-faint);color:var(--text-soft);cursor:pointer;user-select:none;white-space:nowrap}
@@ -19380,11 +19387,22 @@ function _mkdSrcRow(){
   return '<b class="' + (_mkdSrc === val ? 'on ' : '') + (cls || '') + '" onclick="mkdSetSrc(&quot;' + encodeURIComponent(val) + '&quot;)">'
    + sanitize(label) + '<i>' + n + '</i></b>';
  };
- return '<div class="mkd-srcrow"><span class="lb">Источник:</span>'
-  + chip('__ads__', 'С рекламы', ads, 'ads')
+ // v914: «С рекламы» — это ИТОГ по отмеченным источникам, а не ещё один источник.
+ // Стоя в общем ряду он читался как отдельный канал и путал. Выносим строкой выше
+ // и прямо расписываем, из чего сложился.
+ var adNames = names.filter(_mkdIsAdSource);
+ var parts = adNames.map(function(n){ return sanitize(n) + ' ' + by[n]; }).join(' + ');
+ var sum = '<div class="mkd-adsum">'
+  + '<b class="' + (_mkdSrc === '__ads__' ? 'on' : '') + '" onclick="mkdSetSrc(&quot;' + encodeURIComponent('__ads__') + '&quot;)">'
+  +  'С рекламы<i>' + ads + '</i></b>'
+  + '<span class="ex">' + (ads
+      ? ('из ' + raw.length + ' сделок за период. Это ' + parts + ' — источники, которые вы отметили как рекламные.')
+      : ('ни одна сделка за период не помечена рекламным источником.')) + '</span>'
+  + '<button class="cfg" onclick="mkdEditAdSources(event)">изменить</button></div>';
+ return sum + '<div class="mkd-srcrow"><span class="lb">Что вписали менеджеры в «Источник сделки»:</span>'
   + names.map(function(n){ return chip(n, n, by[n], _mkdIsAdSource(n) ? 'isad' : ''); }).join('')
   + (empty ? chip('__empty__', 'Не заполнен', empty, 'dim') : '')
-  + '<button class="cfg" onclick="mkdEditAdSources(event)">что считать рекламой</button></div>';
+  + '</div>';
 }
 var _mkdOrigin = 'all';
 var _MKD_ORIGIN_L = { all:'все сделки', auto:'заявки', call:'звонки', manual:'сделки, заведённые вручную' };
