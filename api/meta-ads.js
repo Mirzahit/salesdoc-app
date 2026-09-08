@@ -446,14 +446,20 @@ export default async function handler(req, res) {
       const PAGE = 25;
       let collected = [];
       let truncated = false;
-      let guard = 0;
-      let data = await metaFetch(`/${ACCOUNT}/ads`, { fields: adFields, limit: PAGE }, TOKEN);
-      while (data) {
-        collected = collected.concat(data.data || []);
-        if (collected.length >= MAX_ADS) { truncated = true; break; }
-        const next = data.paging && data.paging.next;
-        if (!next || guard++ > 40) break;
-        data = await metaFetch(next, null, TOKEN);
+      // v923: все кабинеты токена — раньше рейтинг видел только META_AD_ACCOUNT_ID,
+      // и объявления второго таргетолога в него не попадали
+      const accountsAll = await resolveAccounts(TOKEN);
+      for (const acc of accountsAll) {
+        let guard = 0;
+        let data = await metaFetch(`/${acc.id}/ads`, { fields: adFields, limit: PAGE }, TOKEN).catch(() => null);
+        while (data) {
+          collected = collected.concat(data.data || []);
+          if (collected.length >= MAX_ADS) { truncated = true; break; }
+          const next = data.paging && data.paging.next;
+          if (!next || guard++ > 40) break;
+          data = await metaFetch(next, null, TOKEN).catch(() => null);
+        }
+        if (truncated) break;
       }
       const ads = collected.map(a => {
         const ins = (a.insights && a.insights.data && a.insights.data[0]) || null;
@@ -658,13 +664,16 @@ export default async function handler(req, res) {
       // Для проваливания из дашборда: «что эта кампания давала день за днём».
       const campaignId = String(req.query.campaign_id || '').replace(/[^0-9]/g, '');
       if (!campaignId) return res.status(400).json({ error: 'Нужен campaign_id' });
-      const daysRaw = await metaFetchAllPages(`/${campaignId}/insights`, {
-        fields: 'spend,impressions,clicks,actions,cost_per_action_type,date_start',
+      const daysAll = await metaFetchAllPages(`/${campaignId}/insights`, {
+        fields: 'campaign_name,adset_name,spend,impressions,clicks,actions,cost_per_action_type,date_start',
         ...timeParams(range, period),
+        level: 'adset',
         breakdowns: 'country',
         time_increment: 1,
         limit: 500
       }, TOKEN, 20).catch(() => []);
+      // v923: то же исключение, что на всём экране — иначе сумма дней спорила со строкой «За период»
+      const daysRaw = daysAll.filter(r => !isExcluded(r, excl));
       const byDate = new Map();
       const seen = new Set();
       daysRaw.forEach(r => {
@@ -680,10 +689,12 @@ export default async function handler(req, res) {
       let ads = [];
       try {
         const adData = await metaFetch(`/${campaignId}/ads`, {
-          fields: `id,name,status,insights.${range ? `time_range({'since':'${range.since}','until':'${range.until}'})` : `date_preset(${period})`}{spend,impressions,clicks,ctr,actions,cost_per_action_type}`,
+          fields: `id,name,status,adset{name},insights.${range ? `time_range({'since':'${range.since}','until':'${range.until}'})` : `date_preset(${period})`}{spend,impressions,clicks,ctr,actions,cost_per_action_type}`,
           limit: 100
         }, TOKEN);
-        ads = (adData.data || []).map(a => {
+        ads = (adData.data || [])
+        .filter(a => !isExcluded({ adset_name: (a.adset || {}).name, campaign_name: '' }, excl))
+        .map(a => {
           const ins = (a.insights && a.insights.data && a.insights.data[0]) || null;
           const leads = ins ? summarizeLeads(ins.actions, ins.cost_per_action_type) : { count: 0 };
           const spend = ins ? Number(ins.spend || 0) : 0;

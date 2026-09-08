@@ -275,7 +275,8 @@ function _parseRow(row, headerIdx, hdrRow, cfg, monthName, monthIdx, sheetRowAbs
   if (!amount || amount <= 0) return null;
   // Дата
   let paidAt = _parseDate(row[colDate], cfg.dateCorrection);
-  if (!paidAt) paidAt = `2026-${String(monthIdx + 1).padStart(2, '0')}-01`;
+  // v923: не хардкодим год — с января следующего года платежи без даты уезжали бы в прошлый год
+  if (!paidAt) paidAt = `${new Date().getFullYear()}-${String(monthIdx + 1).padStart(2, '0')}-01`;
   const company = String(row[colClient] || '').trim();
   if (!company) return null;
   const catRaw = String(row[colCat] || '').trim();

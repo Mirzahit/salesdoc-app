@@ -396,7 +396,8 @@ async function buildLeadReport(env, fromTs, toTs){
   let eventsScanned = 0, eventsTruncated = false, eventsError = null;
   try {
     for(let page = 1; page <= 40; page++){
-      const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&filter[created_at][to]=${toTs || Math.floor(Date.now()/1000)}&limit=100&page=${page}`, env);
+      const evTo = Math.min(Math.floor(Date.now()/1000), (toTs ? toTs + 90*86400 : Math.floor(Date.now()/1000)));
+        const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&filter[created_at][to]=${evTo}&limit=100&page=${page}`, env);
       if(!ev) break;
       const batch = (ev._embedded && ev._embedded.events) || [];
       if(!batch.length) break;
@@ -1243,7 +1244,8 @@ export default async function handler(req, res){
       let eventsScanned = 0, eventsTruncated = false, eventsError = null;
       try {
         for(let page = 1; page <= 40; page++){
-          const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&filter[created_at][to]=${toTs || Math.floor(Date.now()/1000)}&limit=100&page=${page}`, env);
+          const evTo = Math.min(Math.floor(Date.now()/1000), (toTs ? toTs + 90*86400 : Math.floor(Date.now()/1000)));
+        const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&filter[created_at][to]=${evTo}&limit=100&page=${page}`, env);
           if(!ev) break;
           const batch = (ev._embedded && ev._embedded.events) || [];
           if(!batch.length) break;

@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v921</title>
+<title>SalesDoc — Финансовый Дашборд v923</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6023,6 +6023,8 @@ body.light #view-marketing .mkt-camps-head,body.light #view-marketing .mkc-n,bod
 .ct-dd._mktper .mktcal-g b.off:hover{background:transparent}
 .ct-dd._mktper .mktcal-f{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 2px 2px}
 .ct-dd._mktper .mktcal-f .sel{font-size:11.5px;color:var(--text-soft)}
+.ct-dd._mktper .mktcal-f .mon{padding:7px 12px;border:1px solid var(--border-faint);border-radius:8px;background:transparent;color:var(--text-soft);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.ct-dd._mktper .mktcal-f .mon:hover{color:var(--text-primary);border-color:var(--border-strong)}
 .ct-dd._mktper .mktcal-f .go{padding:7px 15px;border:0;border-radius:8px;background:var(--accent-bg);color:var(--accent-text);font-size:12px;font-weight:650;cursor:pointer;font-family:inherit}
 .ct-dd._mktper .mktcal-f .go[disabled]{opacity:.4;cursor:default}
 .ct-dd._mktper .mktper-sep{height:1px;background:var(--border-faint);margin:6px 4px}
@@ -6170,6 +6172,15 @@ body.light #view-marketing .mkd-cab>div{background:#FFFFFF}
 body.light #view-marketing .mkd-osw b,body.light .mkt-perbtn{background:#FFFFFF}
 body.light #view-marketing .mkd-lq{background:#F2F3F7}
 
+/* v923: окно «Закрыть задачу», открытое вне раздела Календарь (из карточки клиента) */
+.cal2-detail-float{position:fixed;z-index:10070;background:#14161E;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:14px 16px;width:320px;box-shadow:0 18px 50px rgba(0,0,0,.5);color:#F2F4F8}
+.cal2-detail-float .dt-x{position:absolute;right:10px;top:8px;cursor:pointer;color:#8A8F9C;font-size:15px}
+.cal2-detail-float .dt-title{font-size:13.5px;font-weight:700;margin-bottom:8px}
+.cal2-detail-float .dt-row{font-size:12px;color:#B8BDCB}
+.cal2-detail-float .dt-actions{margin-top:10px;display:flex;justify-content:flex-end}
+.cal2-detail-float .dt-actions button{border-radius:8px;padding:7px 13px;font-size:12px;cursor:pointer;border:1px solid transparent;font-family:inherit}
+body.light .cal2-detail-float{background:#FFFFFF;color:#16181D;border-color:rgba(15,18,25,.12)}
+body.light .cal2-detail-float .dt-row{color:#5A6072}
 /* подсказка при наведении и панель деталей живут в body, поэтому без #view-marketing */
 .mkd-sheet .mkd-scroll{overflow-x:auto;max-width:100%}
 .mkd-sheet table.mkd-lt{min-width:560px}
@@ -11910,6 +11921,7 @@ function switchCountry(code) {
  // Clear data
  payments.length = 0;
  if (typeof expensesData !== 'undefined') expensesData = [];
+ window._cfHistExp = null; // иначе Прогноз денег покажет расход прошлой страны в чужой валюте
  if (typeof expData !== 'undefined') expData = [];
  Object.keys(SEATED_MAP).forEach(function(k){ delete SEATED_MAP[k]; });
  // v557: при смене страны сбрасываем AC_KZ_CACHE, чтобы acLoadKZClients подтянул клиентов
@@ -13029,6 +13041,7 @@ async function cfLoadHistoricalExpenses(monthsBack){
  var byCat = {};
  dataRows.forEach(function(row){
  if(!row || !row[1] || !row[3]) return;
+ if(/перенос/i.test(String(row[1]||''))) return; // v822: перекладки между счетами — не расход
  var amount = typeof row[3] === 'number' ? row[3] : parseFloat(String(row[3]).replace(/[^0-9.,]/g,'').replace(',','.'));
  if(!amount || amount <= 0) return;
  var cat = String(row[1] || 'Прочее').trim();
@@ -14181,7 +14194,12 @@ function renderActCounters() {
 
 // v673 — заполняет «финансовую шапку» #view-payments (hero прибыли + P&L + расходы + недели)
 // на реальных данных. Расчёт 1:1 с renderPnL. Вызывается в конце renderAllPayments.
-function finDay(ds){ var m=String(ds||'').match(/(\d{1,2})[.\-\/]/); if(m) return parseInt(m[1],10); var d=new Date(ds); return isNaN(d)?0:d.getDate(); }
+function finDay(ds){
+ // сначала ISO: без якоря ^ регулярка выдирала «26» из «2026-» и весь месяц падал в 4-ю неделю
+ var iso = String(ds||'').match(/^\d{4}-\d{2}-(\d{2})/); if(iso) return parseInt(iso[1],10);
+ var m = String(ds||'').match(/^(\d{1,2})[.\-\/]/); if(m) return parseInt(m[1],10);
+ var d = new Date(ds); return isNaN(d)?0:d.getDate();
+}
 function finSpark(up){
   var n=7,pts=[]; for(var i=0;i<n;i++){ var f=i/(n-1); var a=up?0.74:0.30,b=up?0.22:0.74; var base=a+f*(b-a); var w=Math.sin(f*3.2+1.1)*0.10+Math.sin(f*6.5+0.4)*0.05; var y=Math.max(0.1,Math.min(0.9,base+w)); pts.push([+(2+f*172).toFixed(1),+(3+y*40).toFixed(1)]); }
   var d='M'+pts[0][0]+' '+pts[0][1]; for(var j=1;j<n;j++) d+=' L'+pts[j][0]+' '+pts[j][1];
@@ -14850,7 +14868,7 @@ function calcBonuses() {
 
  acts.filter(a => a.status==='signed').forEach(act => {
  const actDate = new Date(act.date + 'T00:00:00');
- if (selMo !== 'all' && actDate.getMonth() !== parseInt(selMo)) return;
+ if (selMo !== 'all' && (actDate.getMonth() !== parseInt(selMo) || actDate.getFullYear() !== (selectedMonth && selectedMonth.year || new Date().getFullYear()))) return;
 
  // Find the operator/tech support for this act
  const techName = act.techSupport;
@@ -18948,7 +18966,7 @@ window.mktSyncPeriodBtn = function(){
  var sub = document.getElementById('mkt-period-sub');
  if(sub){
   var pr = _mktPrevRange(_mktSel);
-  sub.textContent = 'сравнение — с ' + _mktHuman(pr);
+  sub.textContent = 'сравниваем с: ' + _mktHuman(pr);
  }
 };
 window.mktOpenPeriodPicker = function(ev){
@@ -19007,6 +19025,7 @@ window.mktOpenPeriodPicker = function(ev){
    + '<div class="mktcal-w">' + ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(function(w){ return '<span>' + w + '</span>'; }).join('') + '</div>'
    + '<div class="mktcal-g">' + cells + '</div>'
    + '<div class="mktcal-f"><span class="sel">' + selTxt + '</span>'
+   +  '<button type="button" class="mon">Весь месяц</button>'
    +  '<button type="button" class="go"' + ((selA && selB) ? '' : ' disabled') + '>Показать</button></div>';
   bind();
  }
@@ -19026,6 +19045,7 @@ window.mktOpenPeriodPicker = function(ev){
    });
   });
   dd.querySelector('[data-month]').addEventListener('click', function(){
+   if(new Date(view.getFullYear(), view.getMonth(), 1) > t0) return; // будущий месяц пуст
    dd.remove();
    mktSetPeriod({ mode:'month', y:view.getFullYear(), m:view.getMonth(), from:null, to:null });
   });
@@ -19038,6 +19058,12 @@ window.mktOpenPeriodPicker = function(ev){
     else { selB = iso; }
     draw();
    });
+  });
+  var monBtn = dd.querySelector('.mktcal-f .mon');
+  if(monBtn) monBtn.addEventListener('click', function(){
+   if(new Date(view.getFullYear(), view.getMonth(), 1) > t0) return;
+   dd.remove();
+   mktSetPeriod({ mode:'month', y:view.getFullYear(), m:view.getMonth(), from:null, to:null });
   });
   dd.querySelector('.mktcal-f .go').addEventListener('click', function(){
    if(!(selA && selB)) return;
@@ -19488,7 +19514,7 @@ function _mkdSrcRow(){
  var sum = '<div class="mkd-adsum">'
   + '<b class="' + (_mkdSrc === '__ads__' ? 'on' : '') + '" onclick="mkdSetSrc(&quot;' + encodeURIComponent('__ads__') + '&quot;)">'
   +  'С рекламы<i>' + ads + '</i></b>'
-  + '<button class="cfg" onclick="mkdEditAdSources(event)">изменить</button></div>';
+  + '<button class="cfg" onclick="mkdEditAdSources(event)">какие источники — реклама</button></div>';
  return sum + '<div class="mkd-srcrow"><span class="lb">Источник:</span>'
   + names.map(function(n){ return chip(n, n, by[n], _mkdIsAdSource(n) ? 'isad' : ''); }).join('')
   + (empty ? chip('__empty__', 'Не заполнен', empty, 'dim') : '')
@@ -19608,11 +19634,13 @@ function _mkdRender(){
  else if(_mkdSrc === '__empty__') base = 'сделки без источника';
  else if(_mkdSrc) base = 'источник «' + _mkdSrc + '»';
  var kpis = [
-  { l:'Потрачено', v:_mkdUsd(cur.spend), h:'реклама, доллары', d:'spend', dl:_mkdDl(cur.spend, prv.spend, _mkdFUsd, 'neutral') },
+  { l:'Потрачено', v:_mkdUsd(cur.spend), h:'реклама, доллары', d:'spend',
+    dl:(_mkdData.geoPrev && !_mkdData.geoPrev.error) ? _mkdDl(cur.spend, prv.spend, _mkdFUsd, 'neutral') : '' },
   { l:'Сделок', v:String(cur.leads), h:base, d:'list:all', dl:_mkdDl(cur.leads, prv.has ? prv.leads : null, _mkdFInt, false) },
   (_mkdSrc === '__ads__'
-   ? { l:'Цена заявки', v:_mkdUsd(cur.cpl), h:'потрачено ÷ заявки с рекламы', d:'cpl', dl:_mkdDl(cur.cpl, prv.cpl, _mkdFUsd, true) }
-   : { l:'Цена заявки', v:'—', v_dim:1, h:'нужен фильтр «С рекламы»', d:'cpl', dl:'' }),
+   ? { l:'Цена заявки', v:_mkdUsd(cur.cpl), h:'потрачено ÷ заявки с рекламы', d:'list:all',
+       dl:(_mkdData.geoPrev && !_mkdData.geoPrev.error) ? _mkdDl(cur.cpl, prv.cpl, _mkdFUsd, true) : '' }
+   : { l:'Цена заявки', v:'—', v_dim:1, h:'нажмите — посчитаем по рекламе', d:'ads-on', dl:'' }),
   { l:'Назначено встреч', v:String(cur.meet), h:_mkdShare(cur.meet, cur.leads) + ' от них', d:'list:meet', dl:_mkdDl(cur.meet, prv.has ? prv.meet : null, _mkdFInt, false) },
   { l:'Счетов выставлено', v:String(cur.inv), h:_mkdShare(cur.inv, cur.leads) + ' от них', d:'list:inv', dl:_mkdDl(cur.inv, prv.has ? prv.inv : null, _mkdFInt, false) },
   { l:'Продаж', v:String(cur.won), h:_mkdShare(cur.won, cur.leads) + ' от них', d:'list:won', dl:_mkdDl(cur.won, prv.has ? prv.won : null, _mkdFInt, false) },
@@ -19620,7 +19648,7 @@ function _mkdRender(){
   (_mkdSrc === '__ads__'
    ? { l:'Окупаемость', v:(cur.roi == null ? '—' : '×' + cur.roi.toFixed(1)), h:'заработали ÷ потратили', d:'list:won',
        dl:_mkdDl(cur.roi, prv.roi, function(n){ return Number(n).toFixed(1); }, false, _mkdFX) }
-   : { l:'Окупаемость', v:'—', v_dim:1, h:'нужен фильтр «С рекламы»', d:'list:won', dl:'' })
+   : { l:'Окупаемость', v:'—', v_dim:1, h:'нажмите — посчитаем по рекламе', d:'ads-on', dl:'' })
  ];
  html += '<div class="mkd-sec"><div class="mkd-kpis">' + kpis.map(function(x){
   return '<div class="mkd-kpi" onclick="mkdOpenKpi(&quot;' + x.d + '&quot;)"><div class="l">' + x.l + '</div>'
@@ -19653,7 +19681,7 @@ function _mkdRender(){
 
  var hid = _mkdAllCodes().filter(function(c){ return _mkdHidden[c]; });
  html += '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Реклама по странам</div>'
-  + '<div class="s">деньги — по стране аудитории' + (hid.length ? (' · скрыто: ' + hid.map(_mkdName).join(', ')) : '') + '</div></div>'
+  + '<div class="s">деньги — по стране аудитории · без фильтров сверху' + (hid.length ? (' · скрыто: ' + hid.map(_mkdName).join(', ')) : '') + '</div></div>'
   + '<div class="mkd-grid">' + _mkdCountryCards(t) + '</div></div>';
 
  html += '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Кампании</div>'
@@ -19721,6 +19749,7 @@ function _mkdTargName(acc){
 }
 window.mkdEditTarg = function(ev, accId, current){
  if(ev && ev.stopPropagation) ev.stopPropagation();
+ try { current = current ? decodeURIComponent(current) : ''; } catch(_){}
  document.querySelectorAll('.ct-dd._mkttarg').forEach(function(d){ d.remove(); });
  var rect = ev.target.getBoundingClientRect();
  var dd = document.createElement('div');
@@ -19797,7 +19826,7 @@ function _mkdTargBlock(cur, prv){
   }).filter(function(c){ return c.spend > 0; }).sort(function(x, y){ return y.spend - x.spend; });
   return '<div class="mkd-card mkd-tg">'
    + '<div class="mkd-tg-top">'
-   +  '<div class="mkd-tg-name" onclick="mkdEditTarg(event,&quot;' + a.id + '&quot;,&quot;' + sanitize(name) + '&quot;)" title="Нажмите, чтобы вписать имя">'
+   +  '<div class="mkd-tg-name" onclick="mkdEditTarg(event,&quot;' + a.id + '&quot;,&quot;' + encodeURIComponent(name) + '&quot;)" title="Нажмите, чтобы вписать имя">'
    +   (name ? sanitize(name) : '<span class="none">Вписать имя</span>') + '</div>'
    +  '<div class="mkd-tg-acc">' + sanitize(String(a.id).replace(/^act_/, '')) + ' · ' + (total > 0 ? Math.round(v.spend/total*100) : 0) + '% расхода</div>'
    + '</div>'
@@ -19812,7 +19841,7 @@ function _mkdTargBlock(cur, prv){
    + '<div class="mkd-tg-chips">'
    +  '<b>Переписки <i>' + Math.round(a.msgs) + '</i></b>'
    +  '<b>Клики <i>' + Math.round(a.clicks) + '</i></b>'
-   +  '<b>CTR <i>' + a.ctr + '%</i></b>'
+   +  '<b>Кликают <i>' + a.ctr + '%</i></b>'
    +  (off > 0 ? '<b class="warn">Мимо Кыргызстана <i>' + _mkdUsd(off) + '</i></b>' : '')
    + '</div>'
    + (mine.length
@@ -19841,7 +19870,8 @@ function _mkdFreshTag(){
   ? ' · <span style="color:#E0A458">последние 2–3 дня Meta ещё досчитывает</span>' : '';
 }
 function _mkdCabRow(){
- var list = ((_mkdData.geo || {}).countries || []).filter(function(c){ return !_mkdHidden[c.code]; });
+ // весь кабинет, без фильтра стран: скрытый Казахстан в Ads Manager всё равно виден
+ var list = ((_mkdData.geo || {}).countries || []);
  if(!list.length) return '';
  var sp = 0, im = 0, cl = 0, ld = 0;
  list.forEach(function(c){
@@ -19859,12 +19889,12 @@ function _mkdCabRow(){
   ['Расход', _mkdUsd(sp)],
   ['Показы', Math.round(im).toLocaleString('ru-RU')],
   ['Клики по ссылке', Math.round(cl).toLocaleString('ru-RU')],
-  ['CTR', im > 0 ? (cl/im*100).toFixed(2) + '%' : '—'],
+  ['Кликают (CTR)', im > 0 ? (cl/im*100).toFixed(2) + '%' : '—'],
   ['Заявки (кабинет)', String(ld)],
   ['Цена заявки (кабинет)', ld > 0 ? _mkdUsd(sp/ld) : '—']
  ];
  return '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Рекламный кабинет</div>'
-  + '<div class="s">как в Ads Manager' + exNote + _mkdFreshTag() + '</div></div>'
+  + '<div class="s">как в Ads Manager · весь кабинет, включая все страны' + exNote + _mkdFreshTag() + '</div></div>'
   + '<div class="mkd-cab">' + cells.map(function(x){
      return '<div><div class="l">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>';
     }).join('') + '</div></div>';
@@ -19884,12 +19914,12 @@ function _mkdFunnelCards(){
    if(!pv || !prevBase || prevReached == null) return '';
    var d = Math.round(share) - Math.round(prevReached/prevBase*100);
    var cls = d === 0 ? 'flat' : (d > 0 ? 'up' : 'down');
-   return '<span class="mkd-dl ' + cls + '">' + (d > 0 ? '+' : (d < 0 ? '−' : '')) + Math.abs(d) + ' п.п.</span>';
+   return '<span class="mkd-dl ' + cls + '">' + (d > 0 ? '+' : (d < 0 ? '−' : '')) + Math.abs(d) + '%</span>';
   };
   var rows = a.stages.map(function(st){
    var share = base > 0 ? st.reached/base*100 : 0;
    return '<div class="mkd-fr clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;stage&quot;,' + st.sort + ',&quot;&quot;,&quot;'
-    + sanitize(st.name) + '&quot;)"><div class="nm">' + sanitize(st.name) + '</div>'
+    + encodeURIComponent(st.name) + '&quot;)"><div class="nm">' + sanitize(st.name) + '</div>'
     + '<div class="bar"><i style="width:' + Math.max(share, st.reached ? 1.5 : 0) + '%;background:' + col + '"></i></div>'
     + '<div class="ct">' + st.reached + '</div>'
     + '<div class="pc">' + (base > 0 ? Math.round(share) + '%' : '—') + '</div>'
@@ -19981,13 +20011,13 @@ function _mkdManagerBlocks(){
    var conv = m.leads > 0 ? Math.round(m.won/m.leads*100) : 0;
    var was = prevConv[m.name];
    var dl = (was == null) ? '' : '<span class="mkd-dl ' + (conv === was ? 'flat' : (conv > was ? 'up' : 'down')) + '">'
-    + (conv > was ? '+' : (conv < was ? '−' : '')) + Math.abs(conv - was) + ' п.п.</span>';
+    + (conv > was ? '+' : (conv < was ? '−' : '')) + Math.abs(conv - was) + '%</span>';
    return '<tr><td>' + sanitize(m.name) + '</td>'
     + '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;all&quot;,0,&quot;' + encodeURIComponent(m.name) + '&quot;,&quot;Все сделки менеджера&quot;)">' + m.leads + '</td>'
     + ks.map(function(st){
        var c = m.reached[st.id] || 0;
        return '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;stage&quot;,' + st.sort + ',&quot;'
-        + encodeURIComponent(m.name) + '&quot;,&quot;' + sanitize(st.name) + '&quot;)">'
+        + encodeURIComponent(m.name) + '&quot;,&quot;' + encodeURIComponent(st.name) + '&quot;)">'
         + c + '<span class="sub">' + (m.leads > 0 ? Math.round(c/m.leads*100) + '%' : '—') + '</span></td>';
       }).join('')
     + '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;won&quot;,0,&quot;' + encodeURIComponent(m.name) + '&quot;,&quot;Продажи&quot;)">' + m.won + '</td>'
@@ -19996,7 +20026,7 @@ function _mkdManagerBlocks(){
   }).join('');
   var totalRow = '<tr class="tot"><td>Весь отдел</td>'
    + '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;all&quot;,0,&quot;&quot;,&quot;Все сделки&quot;)">' + a.leads_total + '</td>'
-   + ks.map(function(st){ return '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;stage&quot;,' + st.sort + ',&quot;&quot;,&quot;' + sanitize(st.name) + '&quot;)">'
+   + ks.map(function(st){ return '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;stage&quot;,' + st.sort + ',&quot;&quot;,&quot;' + encodeURIComponent(st.name) + '&quot;)">'
       + st.reached + '<span class="sub">' + _mkdShare(st.reached, a.leads_total) + '</span></td>'; }).join('')
    + '<td class="clk" onclick="mkdOpenList(&quot;' + cc + '&quot;,&quot;won&quot;,0,&quot;&quot;,&quot;Продажи&quot;)">' + a.won.count + '</td>'
    + '<td>' + teamConv + '%</td><td>—</td></tr>';
@@ -20039,10 +20069,13 @@ function _mkdPickStage(a, re){
 }
 window.mkdOpenList = function(cc, kind, val, mgr, title){
  mgr = mgr ? decodeURIComponent(mgr) : '';
+ // названия этапов приходят закодированными (кавычка в имени ломала onclick);
+ // статические русские заголовки decodeURIComponent не трогает
+ try { title = title ? decodeURIComponent(title) : ''; } catch(_){}
  var list = _mkdPickLeads(cc || '', kind, val, mgr);
  var multi = Object.keys(_mkdA).length > 1 && !cc;
  var sub = _mkdPeriodLabel() + ' · ' + list.length + ' ' + _mkdPlural(list.length, 'сделка', 'сделки', 'сделок');
- if(mgr) sub += ' · ' + mgr;
+ if(mgr) sub += ' · ' + sanitize(mgr);
  if(!list.length){
   _mkdOpenSheet(sanitize(title || 'Сделки'), sub, '<div class="mkd-empty">Таких сделок за период нет.</div>');
   return;
@@ -20153,7 +20186,7 @@ function _mkdLeadPathHtml(d, cc){
  var l = d.lead;
  var facts = [
   ['Кто ведёт', sanitize(l.manager)],
-  ['Как появился', l.origin === 'auto' ? 'завела интеграция' : ('завёл ' + sanitize(l.created_by_name))],
+  ['Как появился', l.origin === 'auto' ? 'пришёл сам (форма/сайт/бот)' : ('завёл ' + sanitize(l.created_by_name))],
   ['Создан', _mkdDateTime(l.created)],
   ['Сейчас на этапе', sanitize(l.stage)],
   ['Сумма', l.price ? _mkdLoc(l.price, cc) : '—']
@@ -20163,7 +20196,7 @@ function _mkdLeadPathHtml(d, cc){
   return '<div><div class="l">' + f[0] + '</div><div class="v">' + f[1] + '</div></div>';
  }).join('') + '</div>';
 
- var items = [{ at: l.created, to: 'Сделка создана', by: l.origin === 'auto' ? 'интеграция' : l.created_by_name, first: true }];
+ var items = [{ at: l.created, to: 'Сделка создана', by: l.origin === 'auto' ? 'пришла сама' : l.created_by_name, first: true }];
  (d.steps || []).forEach(function(st){ items.push(st); });
  html += '<div class="mkd-lp">' + items.map(function(st, i){
   var last = i === items.length - 1;
@@ -20309,7 +20342,7 @@ function _mkdCountryCards(t){
    +  row('Счёт выставлен', inv, _mkdPct(inv, meet))
    + '</div>'
    + '<div class="mkd-foot">'
-   +  '<div><div class="l">Стоимость квала</div><div class="v">' + _mkdUsd(qcost) + '</div></div>'
+   +  '<div><div class="l">Цена выставленного счёта</div><div class="v">' + _mkdUsd(qcost) + '</div></div>'
    +  '<div><div class="l">Продажи · окупаемость</div><div class="v' + (pay == null ? '' : (pay >= 2 ? ' good' : (pay >= 1 ? '' : ' bad'))) + '">'
    +   (sales != null ? _mkdLoc(sales, c.code) : '—')
    +   (pay != null ? ' <span style="font-size:12px;color:var(--text-muted)">×' + pay.toFixed(1) + '</span>' : '')
@@ -20337,7 +20370,7 @@ function _mkdVerdict(c, avgCpl){
  if(c.leads === 0 && c.msgs > 0) return { cls:'hold', t: c.msgs + ' ' + _mkdPlural(c.msgs, 'переписка', 'переписки', 'переписок') };
  if(c.leads === 0 && c.spend > 20) return { cls:'bad', t:'убрать' };
  if(c.leads === 0) return { cls:'norm', t:'ждём' };
- if(avgCpl > 0 && c.cpl != null && c.cpl <= avgCpl*0.85) return { cls:'good', t:'масштабировать' };
+ if(avgCpl > 0 && c.cpl != null && c.cpl <= avgCpl*0.85) return { cls:'good', t:'добавить бюджет' };
  if(avgCpl > 0 && c.cpl != null && c.cpl >= avgCpl*1.6) return { cls:'bad', t:'дорого' };
  return { cls:'norm', t:'норма' };
 }
@@ -20391,10 +20424,12 @@ function _mkdRenderPlan(){
  var day = isCurrent ? now.getDate() : dim;
  var codes = _MKD_AMO.filter(function(c){ return !_mkdHidden[c] && plan[c]; })
   .concat(_mkdAllCodes().filter(function(c){ return !_mkdHidden[c] && plan[c] && _MKD_AMO.indexOf(c) < 0; }));
- if(!codes.length){ el.innerHTML = '<div class="mkd-empty">План лидов не задан. Задать можно в разделе «Планы».</div>'; return; }
+ if(!codes.length){ el.innerHTML = '<div class="mkd-empty">План лидов не задан. Задать можно в разделе '
+  + '<a onclick="showView(&quot;plan&quot;)" style="color:var(--accent-text);cursor:pointer;text-decoration:underline;text-underline-offset:3px">Планы</a>.</div>'; return; }
  el.innerHTML = codes.map(function(cc){
   var p = Number((plan[cc] || {}).plan) || 0;
-  var f = (!monthOnly && _mkdA[cc]) ? _mkdA[cc].leads_total : 0;
+  var rpAll = (_mkdData.rep || {})[cc];
+  var f = (!monthOnly && rpAll) ? (rpAll.leads_total || 0) : 0;
   var need = p > 0 ? Math.round(p/dim*day) : 0;
   var w = p > 0 ? Math.min(Math.round(f/p*100), 100) : 0;
   return '<div class="mkd-prow"><div class="mkd-pn"><span class="mkd-dot" style="background:' + _mkdCol(cc) + '"></span>' + sanitize(_mkdName(cc)) + '</div>'
@@ -20551,6 +20586,7 @@ function _mkdOpenSheet(title, sub, html){
 window.mkdOpenKpi = function(kind){
  if(!_mkdData) return;
  if(kind === 'funnel'){ _mkdOpenFunnel(); return; }
+ if(kind === 'ads-on'){ if(_mkdSrc !== '__ads__') mkdSetSrc(encodeURIComponent('__ads__')); return; }
  if(String(kind).indexOf('list:') === 0){
   var k = String(kind).slice(5);
   var titles = { all:'Все сделки', meet:'Дошли до встречи', inv:'Дошли до счёта', won:'Продажи' };
@@ -20560,7 +20596,7 @@ window.mkdOpenKpi = function(kind){
  var d = _mkdData.daily || {}, days = d.days || [];
  var ccs = (d.countries || []).filter(function(c){ return !_mkdHidden[c]; });
  var m = kind;
- var titles = { spend:'Расход по дням', leads:'Лиды по дням', cpl:'Цена лида по дням' };
+ var titles = { spend:'Расход по дням', leads:'Заявки (кабинет) по дням', cpl:'Цена заявки (кабинет) по дням' };
  if(!days.length){ _mkdOpenSheet(titles[m], _mkdPeriodLabel(), '<div class="mkd-empty">Нет данных по дням.</div>'); return; }
  var rows = days.map(function(day){
   var cells = ccs.map(function(cc){
@@ -20619,9 +20655,11 @@ window.mkdOpenCamp = async function(id){
  var ccs = _mkdCampCountries(c).filter(function(x){ return !_mkdHidden[x]; });
  _mkdOpenSheet(sanitize(c.name), _mkdPeriodLabel() + ' · ' + ccs.map(_mkdName).join(', '), '<div class="mkd-empty">Загрузка…</div>');
  var rng = _mktSelRange(_mktSel);
+ var exclA = ((window._mktSettings || {}).excl) || [];
+ var exQ = (Array.isArray(exclA) && exclA.length) ? '&exclude=' + encodeURIComponent(exclA.join(',')) : '';
  var det = null;
  try {
-  var r = await authFetch('/api/meta-ads?endpoint=campaign_detail&since=' + rng.since + '&until=' + rng.until + '&campaign_id=' + encodeURIComponent(id));
+  var r = await authFetch('/api/meta-ads?endpoint=campaign_detail&since=' + rng.since + '&until=' + rng.until + exQ + '&campaign_id=' + encodeURIComponent(id));
   det = await r.json();
  } catch(e){ det = null; }
  var sheet = document.getElementById('mkd-sheet');
@@ -26710,7 +26748,7 @@ function expRenderBarChart() {
  }
 
  var activeW = weeks.filter(function(w){return w.total>0;}).length;
- var totalAll = expData.reduce(function(s,e){return s+e.amount;},0);
+ var totalAll = expData.reduce(function(s,e){ return s + ((typeof expIsTransfer==='function'&&expIsTransfer(e)) || !e.date ? 0 : e.amount); },0);
  document.getElementById('exp-bar-legend').innerHTML =
  '<div class="legend-item"><div class="legend-dot" style="background:#E5604D"></div>'+activeW+' из '+weeks.length+' недель</div>' +
  '<div class="legend-item"><div class="legend-dot" style="background:#E0A458"></div>'+expData.length+' операций</div>' +
@@ -26757,7 +26795,7 @@ function expRenderTable() {
  if (filterBank) filtered = filtered.filter(function(e){return e.bank===filterBank;});
  if (q) filtered = filtered.filter(function(e){ return ((e.note||'').toLowerCase().indexOf(q) >= 0) || ((e.category||'').toLowerCase().indexOf(q) >= 0); });
  // Sort by date desc
- filtered.sort(function(a,b){ return b.date.localeCompare(a.date); });
+ filtered.sort(function(a,b){ return String(b.date||'').localeCompare(String(a.date||'')); });
  var countEl = document.getElementById('exp-table-count');
  if (countEl) countEl.textContent = filtered.length + ' записей';
  // Сумма отфильтрованных (v822: переносы между счетами в итог не входят)
@@ -26769,7 +26807,7 @@ function expRenderTable() {
  var color = expColor(e.category);
  var trBadge = expIsTransfer(e) ? ' <span style="color:var(--text-muted);font-size:10.5px" title="Перекладка денег между своими счетами — не расход">не расход</span>' : '';
  return '<tr>' +
- '<td>'+e.date.split('-').slice(1).reverse().join('.')+'</td>' +
+ '<td>'+(e.date ? e.date.split('-').slice(1).reverse().join('.') : 'б/д')+'</td>' +
  '<td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+color+';margin-right:8px;vertical-align:middle"></span>'+sanitize(e.category)+trBadge+'</td>' +
  '<td title="'+sanitize(e.note)+'">'+sanitize(e.note)+'</td>' +
  '<td class="exp-am">'+fmtFull(e.amount)+'</td>' +
@@ -27360,6 +27398,7 @@ function intgSbRender(items){
  var byStage = {};
  INTG_STAGES.forEach(function(s){ byStage[s.key] = []; });
  visibleItems.forEach(function(r){
+  if(String(r.status) === 'Архив') return; // архив — не очередь: 6 архивных карточек раздували счётчик
   var key = byStage[r.status] !== undefined ? r.status : 'Новая';
   byStage[key].push(r);
  });
@@ -28697,7 +28736,8 @@ async function loadExpenses() {
  note: String(row[2] || '').trim(),
  amount: amount,
  bank: String(row[4] || '').trim(),
- month: mi
+ month: mi,
+ year: new Date().getFullYear() // лист расходов ведётся по текущему году
  });
  });
  } catch(e) { }
@@ -32238,7 +32278,9 @@ function ticketsCloseNew(){
  document.getElementById('tickets-modal').style.display = 'none';
 }
 
+var _ticketCreating = false;
 async function ticketsCreate(){
+ if(_ticketCreating) return; // сеть тормозит — второй клик не должен плодить дубль
  var client_id = document.getElementById('tickets-new-client').value;
  var title = document.getElementById('tickets-new-title').value.trim();
  var description = document.getElementById('tickets-new-desc').value.trim();
@@ -32250,6 +32292,7 @@ async function ticketsCreate(){
  if(!title){ sdToast('Опишите тему обращения'); return; }
  // v855: ответственный необязателен — обращение можно завести в общую очередь,
  // а взять его на себя отдельным действием. Кто первым ответит клиенту, тот и ведёт.
+ _ticketCreating = true;
  try {
   var d = await sbFetch('/api/cards?entity=ticket', {
    method:'POST',
@@ -32260,7 +32303,12 @@ async function ticketsCreate(){
     priority: priority,
     channel: channel,
     operator: operator,  // v460: передаём ответственного
-    country: window.currentCountry || 'KZ'
+    // v923: страна — из клиента, не из топбара: тикет KG-клиента, заведённый
+    // при выбранном KZ, пропадал для кыргызских операторов навсегда
+    country: (function(){
+     var c = (window.clients || []).find(function(x){ return x.client_id === client_id || x.id === client_id; });
+     return (c && c.country) || window.currentCountry || 'KZ';
+    })()
    })
   });
   if(!d.ok) throw new Error(d.error || 'create failed');
@@ -32313,6 +32361,8 @@ async function ticketsCreate(){
   ticketsLoad();
  } catch(e){
   sdToast('Не удалось создать: ' + e.message);
+ } finally {
+  _ticketCreating = false;
  }
 }
 
@@ -36829,6 +36879,7 @@ function kbParseCsv(text) {
 function kbFillFilters() {
  var opSel = document.getElementById('kb-filter-operator');
  var mgSel = document.getElementById('kb-filter-manager');
+ if(!opSel || !mgSel) return; // v923: элементы удалены при чистке v892 — падение здесь молча пустошило Действующие/Прогноз (известная ловушка kbLoad)
  var ops = {}, mgs = {};
  kbCards.forEach(function(c){ if(c.operator) ops[c.operator]=1; if(c.manager) mgs[c.manager]=1; });
  opSel.innerHTML = '<option value="">Все операторы</option>' + Object.keys(ops).sort().map(function(o){ return '<option value="'+o+'">'+o+'</option>'; }).join('');
@@ -37526,7 +37577,7 @@ async function cal2LoadPayments(){
     type: 'deadline',
     client: c.company_name || '',
     client_id: c.client_id,
-    operator: c.curator_operator || '',
+    operator: c.support_operator || c.curator_operator || '',
     status: 'planned',
     notes: 'Следующая оплата подписки' + (c.subscription_period_months ? ' · период ' + c.subscription_period_months + ' мес' : '')
    };
@@ -37920,7 +37971,11 @@ window.crmCalNavDay = function(delta){
   clearTimeout(_rzT);
   _rzT = setTimeout(function(){
    var view = document.getElementById('view-calendar');
-   if(view && view.style.display !== 'none' && (crmCalState.viewMode || 'week') === 'week') crmCalRenderWeek();
+   if(view && view.style.display !== 'none'){
+    var vm = crmCalState.viewMode || 'week';
+    if(vm === 'week') crmCalRenderWeek();
+    else if(vm === 'month' && typeof crmCalRender === 'function') crmCalRender(); // лента пересчитает высоту строк
+   }
   }, 250);
  });
 })();
@@ -38000,6 +38055,7 @@ function cal2MoScrollInit(bufStartStr){
  // строка недели: шесть недель ровно на экран, но не мельче минимума — иначе задачи не влезают
  var avail = grid.clientHeight || 600;
  var rowH = Math.max(CAL2_MO_ROW_MIN, Math.floor(avail / CAL2_MO_VIS));
+ var visWeeks = Math.max(1, Math.round(avail / rowH)); // реально видимых недель может быть меньше шести
  grid.style.gridAutoRows = rowH + 'px';
  var frac = window._cal2MoFrac || 0;
  window._cal2MoFrac = 0;
@@ -38008,7 +38064,7 @@ function cal2MoScrollInit(bufStartStr){
  // поэтому смена месяца считается на каждом событии, а тяжёлое (панель, перецентровка) — после паузы
  function midOf(idx){
   var mid = new Date(bufStartStr + 'T00:00:00');
-  mid.setDate(mid.getDate() + (idx + 2) * 7 + 3); // четверг третьей видимой недели — середина окна
+  mid.setDate(mid.getDate() + (idx + Math.floor((visWeeks - 1) / 2)) * 7 + 3); // четверг средней ВИДИМОЙ недели
   return mid;
  }
  var m0 = midOf(CAL2_MO_BEFORE), lastMon = m0.getFullYear() + '-' + m0.getMonth();
@@ -41864,7 +41920,7 @@ async function acLoadKZClients(cb){
      billing_host: c.billing_host || '',                       // код в биллинге отдельным полем (для отображения)
      monthlySum: 0,    // нет данных в clients — заполнится из payments в acGetActiveClients
      monthlyQty: 0,
-     operator: c.curator_operator || '',
+     operator: c.support_operator || c.curator_operator || '',
      _supabase: true,
      _clientId: c.client_id
     };
@@ -43127,7 +43183,7 @@ function _duesNorm(s){ return String(s || '').toLowerCase().replace(/[^a-zа-я�
 function _duesIsRenewal(p){
  var n = _duesNorm(p && (p.categoryRaw || p.category_raw));
  if(!n) return false;
- return n.indexOf('абон') === 0 || n.indexOf('новклиент') >= 0 || n.indexOf('новыйклиент') >= 0 || n === 'баланс';
+ return n.indexOf('абон') === 0 || n.indexOf('новклиент') >= 0 || n.indexOf('новыйклиент') >= 0 || n.indexOf('баланс') >= 0;
 }
 function _duesMk(y, m){ return y * 12 + (m - 1); }              // ключ месяца
 function _duesCurMk(){ var d = new Date(); return _duesMk(d.getFullYear(), d.getMonth() + 1); }
@@ -43827,7 +43883,10 @@ window.cal2DoneAsk = function(id, ev){
   + '<div class="dt-row" style="display:block;margin-bottom:8px">' + kbEsc((e.title || '').slice(0, 70)) + '</div>'
   + '<input id="cal2-done-result" placeholder="Что сделано? — короткий результат" style="width:100%;background:#14161e;border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#F2F4F8;font-family:inherit;font-size:12.5px;padding:8px 10px;outline:none;box-sizing:border-box">'
   + '<div class="dt-actions"><button onclick="cal2DoneSave(\'' + kbEsc(String(id)) + '\')" style="background:#2BB577;border-color:#2BB577;color:#0B0C10;font-weight:700">Закрыть задачу</button></div>';
- (document.getElementById('view-calendar') || document.body).appendChild(d);
+ var _calHost = document.getElementById('view-calendar');
+ var _calVisible = _calHost && _calHost.style.display !== 'none';
+ if(!_calVisible){ d.className += ' cal2-detail-float'; } // стили календаря заскоуплены #view-calendar
+ (_calVisible ? _calHost : document.body).appendChild(d);
  var x = (ev && ev.clientX) ? ev.clientX + 10 : window.innerWidth / 2 - 160;
  var y = (ev && ev.clientY) ? ev.clientY - 20 : 200;
  d.style.left = Math.min(x, window.innerWidth - 340) + 'px';
@@ -43957,7 +44016,8 @@ function crmEventSave(eventId){
  // v770: НЕ заменяем объект целиком — сохраняем маркеры синка (_sync_task/_task_id) и поля,
  // которых нет в этой модалке (client_id/time_end/is_all_day/type_id). Раньше замена целиком
  // теряла маркеры → следующий синк не убирал локальный клон и пушил серверную копию = ДУБЛИ.
- data = Object.assign({}, ex, data, { created_at: ex.created_at, status: ex.status });
+ // time_end в этой модалке не редактируется — сохраняем растянутую длительность
+ data = Object.assign({}, ex, data, { created_at: ex.created_at, status: ex.status, time_end: ex.time_end || '' });
  all[idx] = data;
  // Подстраховка: правка синк-задачи уходит и в базу (основной путь редактирования —
  // crmTaskEditStart из cal2ShowDetail, но эта модалка ещё доступна из старых вьюх)

@@ -947,8 +947,10 @@ async function handleTicketsRoute(req, res) {
     if (body.priority) {
       // v848: пересчёт срока в рабочих часах — от создания обращения, а не от «сейчас»,
       // иначе смена приоритета давала бы лишнее время
-      const existingPrio = await sbSelect('tickets', { id: 'eq.' + id, select: 'priority,country,created_at' });
-      if (existingPrio.length && existingPrio[0].priority !== body.priority) {
+      const existingPrio = await sbSelect('tickets', { id: 'eq.' + id, select: 'priority,country,created_at,first_response_at' });
+      // v923: срок пересчитываем только ПОКА нет ответа — иначе сменой срочности
+      // задним числом стиралось «ответили с опозданием»
+      if (existingPrio.length && existingPrio[0].priority !== body.priority && !existingPrio[0].first_response_at) {
         patch.sla_due_at = calculateTicketSLA(body.priority, existingPrio[0].country, existingPrio[0].created_at);
       }
     }
