@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v917</title>
+<title>SalesDoc — Финансовый Дашборд v918</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -20206,7 +20206,10 @@ function _mkdCountryCards(t){
 
 // ── кампании ────────────────────────────────────────────────────────────────
 function _mkdCampCountries(c){
- return Object.keys(c.by_country || {}).sort(function(a, b){ return c.by_country[b].spend - c.by_country[a].spend; });
+ // страны с расходом меньше доллара не показываем — те же центы роуминга/VPN
+ return Object.keys(c.by_country || {})
+  .filter(function(cc){ return (c.by_country[cc].spend || 0) >= 1; })
+  .sort(function(a, b){ return c.by_country[b].spend - c.by_country[a].spend; });
 }
 // Русское склонение: 1 переписка, 2-4 переписки, 5+ переписок.
 function _mkdPlural(n, one, few, many){
@@ -20510,7 +20513,12 @@ window.mkdOpenCamp = async function(id){
  var sheet = document.getElementById('mkd-sheet');
  if(!sheet || !sheet.classList.contains('on')) return; // панель успели закрыть
  var html = '';
- var dcc = (det && det.countries ? det.countries : []).filter(function(x){ return !_mkdHidden[x]; });
+ var dcc = (det && det.countries ? det.countries : []).filter(function(x){
+  if(_mkdHidden[x]) return false;
+  var sp = 0;
+  (det.days || []).forEach(function(day){ var b = day.by_country[x]; if(b) sp += b.spend; });
+  return sp >= 1; // центовые страны — мимо, как и в чипах
+ });
  if(det && det.days && det.days.length && dcc.length){
   html += '<div class="mkd-card" style="margin-bottom:14px">' + _mkdLineChart(det.days, dcc, 'spend', 640, 180, 'mkd-chart-camp')
    + '<div class="mkd-lg">' + dcc.map(function(cc){ return '<span><i style="background:' + _mkdCol(cc) + '"></i>' + sanitize(_mkdName(cc)) + '</span>'; }).join('') + '</div></div>';
