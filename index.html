@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v919</title>
+<title>SalesDoc — Финансовый Дашборд v920</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6002,6 +6002,10 @@ body.light #view-marketing .mkt-camps-head,body.light #view-marketing .mkc-n,bod
 .ct-dd._mktper .mktper-i:hover{background:rgba(120,120,128,.12)}
 .ct-dd._mktper .mktper-i.on{background:var(--accent-bg);color:var(--accent-text)}
 .ct-dd._mktper .mktper-i span{font-size:10.5px;color:var(--text-muted)}
+.ct-dd._mktper .mktper-q{display:flex;flex-wrap:wrap;gap:5px;padding:0 8px 8px}
+.ct-dd._mktper .mktper-q b{font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:7px;border:1px solid var(--border-faint);color:var(--text-soft);cursor:pointer;user-select:none}
+.ct-dd._mktper .mktper-q b:hover{color:var(--text-primary);border-color:var(--border-strong)}
+.ct-dd._mktper .mktper-q b.on{background:var(--accent-bg);color:var(--accent-text);border-color:var(--border-strong)}
 .ct-dd._mktper .mktper-sep{height:1px;background:var(--border-faint);margin:6px 4px}
 .ct-dd._mktper .mktper-h{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);padding:2px 11px 7px}
 .ct-dd._mktper .mktper-dates{display:flex;align-items:center;gap:7px;padding:0 8px 8px}
@@ -18937,7 +18941,24 @@ window.mktOpenPeriodPicker = function(ev){
  dd.className = 'ct-dd _mktper';
  dd.style.cssText += ';padding:6px;min-width:246px;max-height:430px;overflow:auto';
  var now = new Date();
- var html = '';
+ var t0 = new Date(); t0.setHours(0,0,0,0);
+ function dIso(off){ return _mktIso(new Date(t0.getTime() + off*86400000)); }
+ var dow = (t0.getDay() + 6) % 7; // понедельник = 0
+ var presets = [
+  ['Сегодня', dIso(0), dIso(0)],
+  ['Вчера', dIso(-1), dIso(-1)],
+  ['7 дней', dIso(-6), dIso(0)],
+  ['14 дней', dIso(-13), dIso(0)],
+  ['30 дней', dIso(-29), dIso(0)],
+  ['Эта неделя', dIso(-dow), dIso(0)],
+  ['Прошлая неделя', dIso(-dow-7), dIso(-dow-1)]
+ ];
+ var html = '<div class="mktper-h" style="padding-top:6px">Быстрые периоды</div><div class="mktper-q">'
+  + presets.map(function(pz, i){
+     var on = _mktSel.mode === 'range' && _mktSel.from === pz[1] && _mktSel.to === pz[2];
+     return '<b class="' + (on ? 'on' : '') + '" data-q="' + i + '">' + pz[0] + '</b>';
+    }).join('')
+  + '</div><div class="mktper-sep"></div><div class="mktper-h">Месяцы</div>';
  for(var i = 0; i < 12; i++){
   var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
   var on = _mktSel.mode === 'month' && _mktSel.y === d.getFullYear() && _mktSel.m === d.getMonth();
@@ -18955,6 +18976,13 @@ window.mktOpenPeriodPicker = function(ev){
  var y = rect.bottom + 6;
  if(y + dd.offsetHeight > window.innerHeight - 12) y = Math.max(12, rect.top - dd.offsetHeight - 6);
  dd.style.left = x + 'px'; dd.style.top = y + 'px';
+ [].forEach.call(dd.querySelectorAll('.mktper-q b'), function(el){
+  el.addEventListener('click', function(){
+   var pz = presets[Number(el.getAttribute('data-q'))];
+   dd.remove();
+   mktSetPeriod({ mode:'range', y:0, m:0, from:pz[1], to:pz[2] });
+  });
+ });
  [].forEach.call(dd.querySelectorAll('.mktper-i'), function(el){
   el.addEventListener('click', function(){
    dd.remove();
@@ -19117,6 +19145,8 @@ function _mktLabel(sel){
 }
 function _mktHuman(r){
  var a = _mktParseIso(r.since), b = _mktParseIso(r.until);
+ // один день — «7 сентября 2026», а не «7 — 7 сентября»
+ if(r.since === r.until) return a.getDate() + ' ' + _MKT_MONTHS_ROD[a.getMonth()] + ' ' + a.getFullYear();
  if(a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()){
   var full = a.getDate() === 1 && b.getDate() === new Date(b.getFullYear(), b.getMonth()+1, 0).getDate();
   if(full) return _MKT_MONTHS_R[a.getMonth()] + ' ' + a.getFullYear();
