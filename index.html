@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v914</title>
+<title>SalesDoc — Финансовый Дашборд v915</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6098,6 +6098,13 @@ body.light .ct-dd._mktper input[type=date]{color-scheme:light}
 #view-marketing .mkd-gap .ok b{color:#4CB782}
 #view-marketing .mkd-gap .no b{color:#E0A458}
 #view-marketing .mkd-kpi .v.dim{color:var(--text-muted)}
+#view-marketing .mkd-fresh{background:rgba(94,106,210,.08);border:1px solid rgba(94,106,210,.25);border-radius:10px;padding:9px 13px;font-size:11.5px;color:var(--text-soft);line-height:1.6;margin:0 0 12px}
+#view-marketing .mkd-cab{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border-faint);border:1px solid var(--border-faint);border-radius:14px;overflow:hidden}
+@media(min-width:900px){#view-marketing .mkd-cab{grid-template-columns:repeat(6,1fr)}}
+#view-marketing .mkd-cab>div{background:var(--surface,#14161E);padding:13px 15px}
+#view-marketing .mkd-cab .l{font-size:9.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px}
+#view-marketing .mkd-cab .v{font-size:19px;font-weight:700;letter-spacing:-.4px;color:var(--text-primary);font-variant-numeric:tabular-nums}
+body.light #view-marketing .mkd-cab>div{background:#FFFFFF}
 #view-marketing .mkd-fun{border-top:1px solid var(--border-faint);padding-top:12px}
 #view-marketing .mkd-fr{display:grid;grid-template-columns:minmax(96px,1.1fr) 1fr 34px 40px 62px;align-items:center;gap:9px;padding:4px 0}
 #view-marketing .mkd-fr .nm{font-size:11.5px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -19492,6 +19499,24 @@ function _mkdRender(){
 
  html += '<div class="mkd-ccf" id="mkt-dash-ccf"></div>';
 
+ // v915: Meta досчитывает цифры задним числом 2-3 дня. Отчёт Ибрагима за 1-7
+ // сентября, снятый 7-го, разошёлся с кабинетом на $20 именно поэтому — и наши
+ // ранние цифры тоже. Если период цепляет последние 3 дня, говорим об этом прямо.
+ (function(){
+  var r2 = _mktSelRange(_mktSel);
+  var fresh = new Date(); fresh.setHours(0,0,0,0);
+  fresh = new Date(fresh.getTime() - 2*86400000);
+  if(_mktParseIso(r2.until) >= fresh){
+   html += '<div class="mkd-fresh">Период цепляет последние 3 дня — Meta ещё досчитывает расход и показы задним числом. '
+    + 'Окончательные цифры по этим дням будут через 2–3 дня; сверять отчёты таргетологов с кабинетом надо после этого срока.</div>';
+  }
+ })();
+
+ // v915: строка «как в кабинете» — расход, показы, клики, заявки и цена заявки
+ // ровно так, как их видит Ads Manager. Это то, с чем сверяются отчёты
+ // таргетологов; всё, что ниже про сделки и продажи, — уже из amoCRM.
+ html += _mkdCabRow();
+
  // Переключатель «откуда лид» — главный ответ на «а точно ли это лиды с рекламы».
  var oAuto = 0, oCall = 0, oManual = 0, oAll = 0;
  Object.keys(_mkdA).forEach(function(cc){
@@ -19745,6 +19770,37 @@ function _mkdTargBlock(cur, prv){
   + '<div class="mkd-note">Сравниваются только рекламные цифры: сколько потратил, сколько заявок насчитала реклама и по какой цене. '
   + 'Кто из них доводит клиента до продажи — программа сказать не может: в amoCRM у сделки не записывается, из какого она кабинета.<br>'
   + 'Имя привязано к кабинету, а не к месяцу: если за выбранный период кабинет вёл другой человек, тут всё равно будет нынешнее имя.</div></div>';
+}
+
+// ── v915: строка рекламного кабинета ────────────────────────────────────────
+function _mkdCabRow(){
+ var list = ((_mkdData.geo || {}).countries || []).filter(function(c){ return !_mkdHidden[c.code]; });
+ if(!list.length) return '';
+ var sp = 0, im = 0, cl = 0, ld = 0;
+ list.forEach(function(c){
+  sp += c.spend || 0; im += c.impressions || 0; cl += c.link_clicks || 0; ld += c.leads || 0;
+ });
+ // Отсечённый мастер-класс возвращаем обратно: эта строка обязана сходиться
+ // с Ads Manager целиком, исключения живут только в блоках ниже.
+ var ex = ((_mkdData.geo || {}).excluded) || null;
+ var exNote = '';
+ if(ex && ex.spend){
+  sp += ex.spend; ld += ex.leads || 0; im += ex.impressions || 0; cl += ex.link_clicks || 0;
+  exNote = ' · включая мастер-класс ' + _mkdUsd(ex.spend);
+ }
+ var cells = [
+  ['Расход', _mkdUsd(sp)],
+  ['Показы', Math.round(im).toLocaleString('ru-RU')],
+  ['Клики по ссылке', Math.round(cl).toLocaleString('ru-RU')],
+  ['CTR', im > 0 ? (cl/im*100).toFixed(2) + '%' : '—'],
+  ['Заявки (кабинет)', String(ld)],
+  ['Цена заявки (кабинет)', ld > 0 ? _mkdUsd(sp/ld) : '—']
+ ];
+ return '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Рекламный кабинет</div>'
+  + '<div class="s">эти цифры сходятся с Ads Manager один в один — по ним сверяйте отчёты таргетологов' + exNote + '</div></div>'
+  + '<div class="mkd-cab">' + cells.map(function(x){
+     return '<div><div class="l">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>';
+    }).join('') + '</div></div>';
 }
 
 // ── v897: воронка по этапам ─────────────────────────────────────────────────

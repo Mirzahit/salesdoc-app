@@ -226,12 +226,16 @@ function isExcluded(row, list) {
 }
 // Свод по отсечённым строкам — чтобы на экране было видно, сколько убрали.
 function excludedSummary(rows, list) {
-  const out = { spend: 0, leads: 0, names: [] };
+  // v915: показы и клики тоже — строка «Рекламный кабинет» на экране добавляет
+  // отсечённый мастер-класс обратно, чтобы сходиться с Ads Manager один в один.
+  const out = { spend: 0, leads: 0, impressions: 0, link_clicks: 0, names: [] };
   const seen = {};
   rows.forEach(r => {
     if (!isExcluded(r, list)) return;
     out.spend += Number(r.spend || 0);
     out.leads += summarizeLeads(r.actions, r.cost_per_action_type).count || 0;
+    out.impressions += Number(r.impressions || 0);
+    out.link_clicks += Number(r.inline_link_clicks || 0);
     const n = r.adset_name || r.campaign_name;
     if (n && !seen[n]) { seen[n] = 1; out.names.push(n); }
   });
