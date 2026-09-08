@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v912</title>
+<title>SalesDoc — Финансовый Дашборд v913</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5898,6 +5898,7 @@ body.light #view-marketing .mkt-camps-head,body.light #view-marketing .mkc-n,bod
 #view-marketing .mkd-ccf b.off{color:var(--text-muted);background:transparent;border-style:dashed}
 #view-marketing .mkd-ccf b.off .mkd-dot{opacity:.3}
 #view-marketing .mkd-ccf .only{font-size:11.5px;color:var(--text-muted);background:transparent;border:0;cursor:pointer;font-family:inherit;padding:6px 4px;text-decoration:underline;text-underline-offset:3px}
+#view-marketing .mkd-ccf .tiny{font-size:11px;color:var(--text-muted);margin-left:4px}
 #view-marketing .mkd-dot{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
 
 #view-marketing .mkd-sec{margin-bottom:22px}
@@ -19044,7 +19045,8 @@ function _mktSaveSetting(key, value){
 // v897: Казахстан по умолчанию выключен — продажи ведутся по Кыргызстану.
 // Это не удаление: чип «Казахстан» вверху экрана включает его обратно.
 var _mkdSeq = 0, _mkdData = null, _mkdMetric = 'spend', _mkdHidden = { KZ: 1 }, _MKD_CHARTS = {};
-var _MKD_NAMES = { KG:'Кыргызстан', KZ:'Казахстан', UZ:'Узбекистан', RU:'Россия', TJ:'Таджикистан', UA:'Украина' };
+var _MKD_NAMES = { KG:'Кыргызстан', KZ:'Казахстан', UZ:'Узбекистан', RU:'Россия', TJ:'Таджикистан', UA:'Украина',
+                   UNKNOWN:'страна не определена', '??':'страна не определена' };
 var _MKD_COLORS = { KG:'#5E6AD2', KZ:'#46A6C9', UZ:'#C98A46', RU:'#8A8F9C' };
 var _MKD_CUR = { KG:'сом', KZ:'тг' };
 // Своя база amo есть только у этих стран — по остальным показываем лишь рекламу.
@@ -20082,17 +20084,29 @@ function _mkdRenderLeads(keepFocus){
 
 function _mkdRenderCcf(){
  var box = document.getElementById('mkt-dash-ccf'); if(!box) return;
- var codes = _mkdAllCodes();
- if(codes.length < 2){ box.innerHTML = ''; return; }
+ // v905: страны, куда утекли центы (роуминг, VPN, неопределённая страна), не
+ // выносим в чипы — они путают. Пишем их отдельной подписью, но не прячем.
+ var spendBy = {};
+ ((_mkdData.geo || {}).countries || []).forEach(function(c){ spendBy[c.code] = c.spend || 0; });
+ var all = _mkdAllCodes();
+ var tiny = all.filter(function(cc){ return (spendBy[cc] || 0) < 1 && !_mkdHidden[cc]; });
+ var codes = all.filter(function(cc){ return tiny.indexOf(cc) < 0; });
+ if(codes.length < 2 && !tiny.length){ box.innerHTML = ''; return; }
  var chips = codes.map(function(cc){
   var off = !!_mkdHidden[cc];
   return '<b class="' + (off ? 'off' : '') + '" onclick="mkdToggleCountry(&quot;' + cc + '&quot;)" title="' + (off ? 'Включить' : 'Выключить') + '">'
    + '<span class="mkd-dot" style="background:' + _mkdCol(cc) + '"></span>' + sanitize(_mkdName(cc)) + '</b>';
  }).join('');
- var extra = (_mkdVisCodes().length === codes.length)
+ // сравниваем с полным списком: мелочь из чипов убрана, но скрытой не считается
+ var extra = (_mkdVisCodes().length === all.length)
   ? codes.map(function(cc){ return '<button class="only" onclick="mkdOnlyCountry(&quot;' + cc + '&quot;)">только ' + sanitize(_mkdName(cc)) + '</button>'; }).join('')
   : '<button class="only" onclick="mkdAllCountries()">показать все</button>';
- box.innerHTML = '<span class="lb">Страны:</span>' + chips + extra;
+ var tail = tiny.length
+  ? '<span class="tiny">мелочь: ' + tiny.map(function(cc){
+      return sanitize(_mkdName(cc)) + ' ' + _mkdUsd(spendBy[cc] || 0);
+    }).join(', ') + ' — показы людям, которых Meta засчитала в другой стране</span>'
+  : '';
+ box.innerHTML = '<span class="lb">Страны:</span>' + chips + extra + tail;
 }
 
 function _mkdCountryCards(t){
