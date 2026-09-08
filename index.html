@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v924</title>
+<title>SalesDoc — Финансовый Дашборд v925</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -12071,7 +12071,7 @@ async function syncFromSheets() {
   try {
    const _sbNew = await _loadPaymentsFromSupabase();
    if(_sbNew && _sbNew.length){
-    payments = _sbNew;
+    payments = payApplyScope(_sbNew); // v925: менеджеру — только его сделки
     // Пересобираем acts (как в Sheets-ветке ниже)
     const implPays = payments.filter(function(p){ return p.category==='implementation' || (p.categoryRaw&&(p.categoryRaw.includes('внедрен')||p.categoryRaw.includes('интеграц'))); });
     acts = implPays.map(function(p,i){
@@ -12215,7 +12215,7 @@ async function syncFromSheets() {
  var key = p.client+'_'+p.date;
  if (oldPayMap[key] === true) p.serviceWritten = true;
  });
- payments = allNew;
+ payments = payApplyScope(allNew); // v925: менеджеру — только его сделки
  const implPays = payments.filter(function(p){ return p.category==='implementation' || (p.categoryRaw&&(p.categoryRaw.includes('внедрен')||p.categoryRaw.includes('интеграц'))); });
  acts = implPays.map(function(p,i){
  const techEmp = p.techSupport ? employees.find(function(e){return e.name.trim()===p.techSupport.trim();}) : null;
@@ -12271,12 +12271,12 @@ function parseSheetData(data) {
  const aKey=findCol(sample,colMap.amount);
  const catKey=findCol(sample,colMap.cat);
  const stKey=findCol(sample,colMap.status);
- payments = rows.filter(r=>r[aKey]).map((r,i)=>({
+ payments = payApplyScope(rows.filter(r=>r[aKey]).map((r,i)=>({
  id:100+i, client:r[cKey]||'—', date:formatDate(r[dKey]),
  employee:1, category:mapCategory(r[catKey]),
  amount:parseAmount(r[aKey]), method:'bank',
  status:mapStatus(r[stKey]), comment:r[findCol(r,colMap.comment)]||''
- }));
+ })));
  }
  }
  if (data['Акты'] || data['Acts']) {
@@ -12325,6 +12325,52 @@ function getWeekBounds(year, weekNum) {
  const mon = new Date(jan4.getTime() + (weekNum - 1) * 7 * 86400000 - (jan4Day - 1) * 86400000);
  const sun = new Date(mon.getTime() + 6 * 86400000);
  return { mon, sun };
+}
+
+// v925: личный кабинет цифр для менеджера (решение CEO 08.09.2026).
+// Менеджер видит выручку и оплаты ТОЛЬКО по себе. Общая выручка компании остаётся
+// у CEO, руководителя, РОПа и бухгалтера.
+//
+// Как устроено: глобальный `payments` для менеджера урезан до его сделок — на нём стоят
+// дашборд, «Оплаты», отчёты, выгрузка. Полный список живёт в window._paymentsAll: он нужен
+// экранам про клиентов («Действующие», «Оплаты и долги», доска внедрения) — там считаются
+// клиенты компании, а не личные продажи, и урезанный список показал бы неправду.
+window._paymentsAll = [];
+function payAll(){
+ return (window._paymentsAll && window._paymentsAll.length) ? window._paymentsAll : payments;
+}
+function payPersonalScope(){
+ return !!(typeof currentUser !== 'undefined' && currentUser
+  && String(currentUser.role || '').toLowerCase() === 'manager');
+}
+function _payNorm(v){ return String(v == null ? '' : v).trim().toLowerCase(); }
+function payIsMine(p){
+ if(typeof currentUser === 'undefined' || !currentUser || !p) return true;
+ if(p.employee && currentUser.id && p.employee === currentUser.id) return true;
+ // В таблице «Доходы» менеджер записан именем («Амир», «Юлия КЗ») — сверяем по имени,
+ // потому что employee проставляется поиском по имени и при промахе даёт id=1.
+ var mn = _payNorm(p.managerName || p.manager_name);
+ var me = _payNorm(currentUser.name);
+ if(!mn || !me) return false;
+ if(mn === me) return true;
+ var mnFirst = mn.split(' ')[0], meFirst = me.split(' ')[0];
+ return !!meFirst && mnFirst === meFirst;
+}
+function payApplyScope(list){
+ window._paymentsAll = Array.isArray(list) ? list : [];
+ if(!payPersonalScope()) return window._paymentsAll;
+ var mine = window._paymentsAll.filter(payIsMine);
+ // Имя менеджера в таблице «Доходы» может быть записано иначе, чем в «Сотрудниках»
+ // (например «Эмир» вместо «Амир»). Тогда своих сделок не найдётся вообще, и человек
+ // увидит нули, решив что программа сломалась. Говорим об этом прямо, один раз.
+ if(!mine.length && window._paymentsAll.length && !window._payScopeWarned){
+  window._payScopeWarned = true;
+  try {
+   if(typeof sdToast === 'function') sdToast('Ваши продажи не найдены: имя в таблице «Доходы» не совпадает с именем в программе. Сообщите руководителю.');
+   else if(typeof showNotif === 'function') showNotif('Ваши продажи не найдены', 'Имя в таблице «Доходы» отличается от имени в программе. Сообщите руководителю.');
+  } catch(_){}
+ }
+ return mine;
 }
 
 function getPeriodPayments(period) {
@@ -16868,6 +16914,9 @@ function _enterAppAsCurrentUser(){
  updateCountrySwitcherUI();
  initCalendar();
  if(typeof mnPollStart === 'function') mnPollStart(); // v773: поллинг упоминаний в комментариях
+ // v925: до первой синхронизации в payments лежит стартовый набор — прогоняем через скоуп,
+ // чтобы менеджеру на секунду не мелькнули чужие суммы.
+ try { payments = payApplyScope(payments); } catch(_){}
  renderAll();
  showView(_initialViewAfterLogin());
  setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
@@ -36743,8 +36792,8 @@ function kbLoad() {
 
  // Карта активации: проверяем только «новый клиент» и «лицензия» (не абонентку и не другие статьи)
  var clientActivMap = {};
- if(typeof payments !== 'undefined' && payments.length) {
- payments.forEach(function(p) {
+ if(payAll().length) { // v925: доска внедрения — по всей базе, не по личному срезу менеджера
+ payAll().forEach(function(p) {
  if(!p.activationDate) return;
  var cat = (p.categoryRaw||'').toLowerCase();
  // Только значимые статьи для активации
@@ -36755,7 +36804,7 @@ function kbLoad() {
  // v725: клиент, который ПЛАТИТ абонплату / баланс / продление — точно работает (активирован),
  // даже если дату активации в таблице не заполнили. Иначе такие висят в «Новом» месяцами/годами
  // (было 62 из 138 живых, ошибочно показанных зависшими). Дата активации — по самой ранней такой оплате.
- payments.forEach(function(p) {
+ payAll().forEach(function(p) {
  var cat = (p.categoryRaw||'').toLowerCase();
  var live = (p.category === 'subscription') || cat.indexOf('абон') >= 0 || cat.indexOf('баланс') >= 0 || cat.indexOf('продлен') >= 0;
  if(!live) return;
@@ -36765,8 +36814,8 @@ function kbLoad() {
  });
  }
 
- if(typeof payments !== 'undefined' && payments.length) {
- payments.forEach(function(p, i){
+ if(payAll().length) { // v925: доска внедрения — по всей базе, не по личному срезу менеджера
+ payAll().forEach(function(p, i){
  if(p.category !== 'implementation') return;
  // Исключаем "доработку" — на доске только "внедрение" и "нов внедрение"
  var catLow = (p.categoryRaw||'').toLowerCase();
@@ -36783,7 +36832,7 @@ function kbLoad() {
  var payD = '';
  if(p.date) { var dd = new Date(p.date); if(!isNaN(dd)) payD = ('0'+dd.getDate()).slice(-2)+'.'+('0'+(dd.getMonth()+1)).slice(-2)+'.'+dd.getFullYear(); }
  // Найти запись "новый клиент" для лицензий и периода
- var newClientPay = payments.find(function(pp){ return pp.client.toLowerCase()===clientKey && pp.categoryRaw && pp.categoryRaw.toLowerCase().indexOf('нов')>=0 && pp.categoryRaw.toLowerCase().indexOf('клиент')>=0; });
+ var newClientPay = payAll().find(function(pp){ return pp.client.toLowerCase()===clientKey && pp.categoryRaw && pp.categoryRaw.toLowerCase().indexOf('нов')>=0 && pp.categoryRaw.toLowerCase().indexOf('клиент')>=0; });
  var licQty = newClientPay ? String(newClientPay.qty||'') : String(p.qty||'');
  var licTariff = newClientPay ? (newClientPay.tariff||'') : (p.tariff||'');
  var licPeriod = newClientPay ? String(newClientPay.period||'') : String(p.period||'');
@@ -36813,7 +36862,7 @@ function kbLoad() {
  });
  }
 
- console.log('[Kanban] payments:', payments.length, 'implementation:', payments.filter(function(p){return p.category==='implementation'}).length, 'with activDate:', Object.keys(clientActivMap).length, '=> kbCards:', kbCards.length);
+ console.log('[Kanban] payments:', payAll().length, 'implementation:', payAll().filter(function(p){return p.category==='implementation'}).length, 'with activDate:', Object.keys(clientActivMap).length, '=> kbCards:', kbCards.length);
  kbSetStatus(kbCards.length + ' клиентов');
  kbFillFilters();
  kbRenderBoard();
@@ -41929,7 +41978,7 @@ function acToggleTag(client, tag){
 function acLastPayment(client){
  if(typeof payments === 'undefined' || !payments) return null;
  var lastD = null, lastAmt = 0;
- payments.forEach(function(p){
+ payAll().forEach(function(p){ // v925: по клиенту считаем из полной базы, не из личного среза
  if(!p) return;
  var clientName = p.client || p.cl || p.compName || '';
  if(clientName !== client) return;
@@ -42276,7 +42325,7 @@ function acGetActiveClients(){
  var payByHost = {};
  var prefixMerged = {}; // v303: payHost → {matchedTo, score} для диагностики
  var skipMatchMap = acGetSkipMatch();
- var combinedPays = (typeof payments !== 'undefined' && payments) ? payments.slice() : [];
+ var combinedPays = payAll().slice(); // v925: клиенты компании — из полной базы
  if(window._acPriorPays && window._acPriorPays.length){
  combinedPays = combinedPays.concat(window._acPriorPays);
  }
