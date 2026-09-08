@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v918</title>
+<title>SalesDoc — Финансовый Дашборд v919</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6155,6 +6155,7 @@ body.light #view-marketing .mkd-lq{background:#F2F3F7}
 .mkd-sheet table.mkd-lt tr.clk:hover td{background:rgba(120,120,128,.06)}
 .mkd-sheet table.mkd-lt tr.won td.sum{color:#4CB782}
 .mkd-sheet table.mkd-lt td.sum{font-weight:700;white-space:nowrap}
+.mkd-sheet table.mkd-lt tr.grp td{background:rgba(120,120,128,.08);font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);padding:7px 10px}
 .mkd-sheet table.mkd-lt tr.lost td{color:var(--text-muted)}
 .mkd-tip{position:fixed;pointer-events:none;z-index:10050;background:var(--surface,#1A1D26);border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:12px;color:var(--text-primary);box-shadow:0 10px 30px rgba(0,0,0,.35);opacity:0;transition:opacity .1s;min-width:150px}
 .mkd-tip .dt{font-size:10.5px;color:var(--text-muted);font-weight:600;letter-spacing:.3px;margin-bottom:7px}
@@ -19961,11 +19962,36 @@ window.mkdOpenList = function(cc, kind, val, mgr, title){
   _mkdOpenSheet(sanitize(title || 'Сделки'), sub, '<div class="mkd-empty">Таких сделок за период нет.</div>');
   return;
  }
+ var groups = null;
+ if(kind === 'stage'){
+  var here = [], passed = [], lost = [];
+  list.forEach(function(l){
+   if(l.is_lost) lost.push(l);
+   else if(!l.is_won && l.stage === title) here.push(l);
+   else passed.push(l);
+  });
+  groups = [
+   ['Сейчас на этом этапе', here],
+   ['Прошли дальше', passed],
+   ['Дошли сюда, но потом слились', lost]
+  ].filter(function(g){ return g[1].length; });
+  list = [];
+  groups.forEach(function(g){ list = list.concat(g[1]); });
+ }
+ var gi = 0, gLeft = groups ? 0 : Infinity;
+ var cols = 4 + (multi ? 1 : 0) + (mgr ? 0 : 1);
  var html = '<div class="mkd-scroll"><table class="mkd-t mkd-lt"><thead><tr><th>Клиент</th>'
   + (multi ? '<th>Страна</th>' : '')
   + '<th>Сумма</th><th>Создан</th>' + (mgr ? '' : '<th>Менеджер</th>')
   + '<th>Этап сейчас</th><th>Дальше всего дошёл</th></tr></thead><tbody>'
   + list.map(function(l){
+     var pre = '';
+     if(groups && gLeft === 0){
+      pre = '<tr class="grp"><td colspan="' + (cols + 1) + '">' + sanitize(groups[gi][0]) + ' · ' + groups[gi][1].length + '</td></tr>';
+      gLeft = groups[gi][1].length; gi++;
+     }
+     if(groups) gLeft--;
+     return pre + (function(){
      var d = new Date(l.created * 1000);
      var cls = l.is_won ? ' won' : (l.is_lost ? ' lost' : '');
      return '<tr class="clk' + cls + '" onclick="mkdOpenLead(' + l.id + ',&quot;' + l.cc + '&quot;)">'
@@ -19976,9 +20002,12 @@ window.mkdOpenList = function(cc, kind, val, mgr, title){
       + (mgr ? '' : '<td>' + sanitize(l.manager) + '</td>')
       + '<td>' + sanitize(l.stage) + '</td>'
       + '<td>' + (l.is_won ? 'Продажа' : sanitize(l.reached_stage || '—')) + '</td></tr>';
+     })();
     }).join('')
   + '</tbody></table></div>'
-  + '<div class="mkd-note">Клик по строке открывает путь этой сделки.</div>';
+  + '<div class="mkd-note">' + (kind === 'stage'
+     ? 'В списке все, кто дошёл до этапа «' + sanitize(title) + '» — даже если ушёл дальше или слился. Клик по строке открывает путь сделки.'
+     : 'Клик по строке открывает путь этой сделки.') + '</div>';
  _mkdOpenSheet(sanitize(title || 'Сделки'), sub, html);
 };
 
