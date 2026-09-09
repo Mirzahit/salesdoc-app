@@ -1478,6 +1478,19 @@ export default async function handler(req, res){
       adsJson.ads.forEach(a => { adById[a.ad_id] = a; });
       const forms = {};
       adsJson.ads.forEach(a => { if(a.form_id && !forms[a.form_id]) forms[a.form_id] = a; });
+      // v931.7: часть объявлений номер формы не отдаёт (динамические креативы), и такие
+      // заявки терялись — например весь сентябрь у Ибрагима. Поэтому спрашиваем полный
+      // список форм у самой Страницы, а кабинет потом берём по ad_id каждой заявки.
+      const pages = [...new Set(adsJson.ads.map(a => a.page_id).filter(Boolean))];
+      for(const pg of pages){
+        try {
+          const r = await metaGet(`/${pg}/leadgen_forms`, { fields: 'id,name', limit: 200 });
+          ((r && r.data) || []).forEach(fm => {
+            if(!forms[fm.id]) forms[fm.id] = { ad_name: fm.name || null, ad_id: null,
+              campaign: null, campaign_id: null, account: null, page_id: pg };
+          });
+        } catch(_){}
+      }
       const targets = Object.keys(forms).length
         ? Object.keys(forms).map(fid => ({ kind: 'form', id: fid, ad: forms[fid] }))
         : adsJson.ads.map(a => ({ kind: 'ad', id: a.ad_id, ad: a }));
@@ -1507,6 +1520,7 @@ export default async function handler(req, res){
           // Кабинет берём у объявления, которое привело заявку: одна форма может
           // стоять в объявлениях разных кампаний.
           const src = adById[l.ad_id] || t.ad;
+          if(!src || !src.account) return; // кабинет неизвестен — приписать некому
           raw.push({ lead: l.id, at: l.created_time, phone: digits, form_id: l.form_id || t.id,
             ad_id: l.ad_id || src.ad_id, ad_name: l.ad_name || src.ad_name,
             campaign_id: l.campaign_id || src.campaign_id, campaign: l.campaign_name || src.campaign,
