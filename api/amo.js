@@ -1474,6 +1474,7 @@ export default async function handler(req, res){
       const dryRunRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
       const dryRun = dryRunRaw !== '0' && dryRunRaw !== 'false';
       const sinceTs = Math.floor(Date.now() / 1000) - days * 86400;
+      const fullPhones = !!(req.headers['x-admin-token'] && checkAdminToken(req).ok);
 
       // v931.3: отдельный доступ для заявок. Страница с лидформами лежит в другом
       // бизнес-портфолио, поэтому у неё свой системный пользователь (salesdoc-leads)
@@ -1614,6 +1615,7 @@ export default async function handler(req, res){
         if(!leads.length){
           notFound.push({ at: f.at, targetolog: targ, campaign: f.campaign, ad_name: f.ad_name,
             name: f.fname || '', phone_masked: f.phone.slice(0, 3) + ' ••• ' + f.phone.slice(-4), phone_tail: f.phone.slice(-4),
+            phone_full: fullPhones ? f.phone : undefined,
             why: contacts.length ? 'контакт есть, сделки нет' : 'заявка есть в рекламе, а в amoCRM её нет' });
           continue;
         }
@@ -1665,14 +1667,27 @@ export default async function handler(req, res){
       const until = String(req.query.until || almatyIso(Date.now()));
       const gate = await requirePermSoft(req, res, 'view_marketing');
       if(!gate.ok) return;
-      const trusted = !!(gate.caller && gate.caller.trusted);
+      // v958: полный список для выгрузки — по админ-коду CEO. Подписанная сессия
+      // у пользователей пока не везде, а телефоны клиентов по публичному ключу
+      // отдавать нельзя.
+      const wantFull = String(req.query.full || '') === '1';
+      let adminOk = false;
+      if(wantFull){
+        const g = checkAdminToken(req);
+        if(!g.ok) return bad(res, g.unconfigured ? 503 : 403, g.unconfigured ? 'ADMIN_TOKEN не настроен' : 'Нужен админ-код');
+        adminOk = true;
+      }
+      const trusted = !!(gate.caller && gate.caller.trusted) || adminOk;
       const mask = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length < 7 ? '' : d.slice(0, 3) + ' ••• ' + d.slice(-4); };
       const days = Math.min(90, Math.max(1, Math.ceil((Date.now() - new Date(since).getTime()) / 86400000) + 1));
 
       const base = selfBase(req);
       const appTok = String(process.env.APP_TOKEN || '').trim();
       const selfGet = async (path) => {
-        const r = await fetch(`${base}${path}`, { headers: { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' } });
+        const hdr = { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' };
+        // админ-код пробрасываем дальше, чтобы лидформы тоже отдали полный номер
+        if(adminOk) hdr['x-admin-token'] = String(req.headers['x-admin-token'] || '');
+        const r = await fetch(`${base}${path}`, { headers: hdr });
         return r.json().catch(() => null);
       };
       let targByAcc = {};
@@ -1730,7 +1745,7 @@ export default async function handler(req, res){
         const f = await selfGet(`/api/amo?action=targ_forms&country=${country}&days=${days}&limit=200`);
         ((f && f.not_found) || []).forEach(x => {
           if(String(x.at || '').slice(0, 10) < since || String(x.at || '').slice(0, 10) > until) return;
-          out.push({ at: x.at, kind: 'заявка', name: x.name || '', phone: x.phone_masked || '', phone_tail: x.phone_tail || '',
+          out.push({ at: x.at, kind: 'заявка', name: x.name || '', phone: (adminOk && x.phone_full) ? x.phone_full : (x.phone_masked || ''), phone_tail: x.phone_tail || '',
             targetolog: x.targetolog, campaign: x.campaign, ad_name: x.ad_name, first_line: '' });
         });
       } catch(e){ out.push({ error: 'заявки: ' + (e.message || String(e)) }); }

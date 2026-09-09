@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v952</title>
+<title>SalesDoc — Финансовый Дашборд v958</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -20262,6 +20262,29 @@ window.mktLoadUnmatched = async function(force){
  } catch(_){ _mkdUnm = null; }
  _mkdRenderUnmatched(false);
 };
+// Полный список с телефонами — файл для Excel, по админ-коду.
+window.mkdExportUnmatched = async function(){
+ var code = prompt('Админ-код для выгрузки полных телефонов');
+ if(!code) return;
+ var r = _mktSelRange(_mktSel);
+ try {
+  var res = await authFetch('/api/amo?action=targ_unmatched&country=KG&full=1&since=' + r.since + '&until=' + r.until, { headers: { 'x-admin-token': code.trim() } });
+  var j = await res.json();
+  if(!res.ok || j.error){ sdToast(j.error || 'Не удалось выгрузить', 'error'); return; }
+  var rows = (j.items || []).filter(function(x){ return !x.error && (!_mkdTarg || x.targetolog === _mkdTarg); });
+  var esc = function(v){ v = String(v == null ? '' : v); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  var lines = [['Дата', 'Кто', 'Телефон', 'Канал', 'Чья реклама', 'Кампания', 'Объявление', 'Первое сообщение'].join(';')];
+  rows.forEach(function(x){
+   lines.push([String(x.at || '').slice(0, 10), x.name, x.phone, x.kind, x.targetolog, x.campaign || '', x.ad_name || '', x.first_line || ''].map(esc).join(';'));
+  });
+  var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'не-в-CRM_' + r.since + '_' + r.until + (_mkdTarg ? '_' + _mkdTarg : '') + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  sdToast('Выгружено: ' + rows.length + ' ' + _mkdPlural(rows.length, 'человек', 'человека', 'человек'), 'success');
+ } catch(e){ sdToast('Не удалось выгрузить', 'error'); }
+};
 function _mkdRenderUnmatched(loading){
  var box = document.getElementById('mkt-dash-unmatched'); if(!box) return;
  if(loading || !_mkdUnm){ box.innerHTML = '<div class="mkd-card"><div class="mkd-empty">' + (loading ? 'Собираем…' : 'Список не загрузился. Нажмите «Обновить».') + '</div></div>'; return; }
@@ -20511,7 +20534,7 @@ function _mkdRender(){
   + '<div class="s">кто именно пришёл с рекламы и чем закончилось · клик по сделке — её путь в CRM</div></div>'
   + '<div id="mkt-dash-adleads"></div></div>';
  html += '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Обратились, но в CRM не нашли</div>'
-  + '<div class="s">за них заплатили, а сделки нет — найти в amoCRM по имени или хвосту телефона</div></div>'
+  + '<div class="s">за них заплатили, а сделки нет · <a onclick="mkdExportUnmatched()" style="color:var(--text-soft);cursor:pointer;text-decoration:underline;text-underline-offset:3px">скачать полный список с телефонами</a></div></div>'
   + '<div id="mkt-dash-unmatched"></div></div>';
  html += '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Менеджеры по рекламным лидам</div>'
   + '<div class="s">за этих людей заплатили — кто из менеджеров что с ними сделал</div></div>'
