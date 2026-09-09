@@ -1679,8 +1679,39 @@ export default async function handler(req, res){
       // 3) Тянем сами сделки.
       const leads = {};
       for(const id of lastByLead.keys()){
-        try { const l = await amoFetch(`/leads/${id}`, env); if(l) leads[id] = l; } catch(_){}
+        try { const l = await amoFetch(`/leads/${id}?with=contacts`, env); if(l) leads[id] = l; } catch(_){}
       }
+      // v947: имя клиента живёт в контакте и компании, а сделка часто называется
+      // «Сделка #…» или «Facebook №…». Подтягиваем имена пачками, чтобы на экране
+      // было «Нурсултан Табалдиев · Айчурок Фармацевтика», а не номер.
+      const cids = new Set(), coids = new Set();
+      Object.keys(leads).forEach(id => {
+        const e = leads[id]._embedded || {};
+        (e.contacts || []).forEach(c => cids.add(c.id));
+        (e.companies || []).forEach(c => coids.add(c.id));
+      });
+      lastByLead.forEach(t => { if(t.contact_id) cids.add(Number(t.contact_id)); });
+      const nameOf = async (path, ids, key) => {
+        const out = {};
+        const arr = [...ids].filter(Boolean);
+        for(let i = 0; i < arr.length; i += 50){
+          const q = arr.slice(i, i + 50).map((x, k) => `filter[id][${k}]=${x}`).join('&');
+          try {
+            const r = await amoFetch(`${path}?${q}&limit=250`, env);
+            (((r && r._embedded) || {})[key] || []).forEach(x => { out[x.id] = x.name || ''; });
+          } catch(_){}
+        }
+        return out;
+      };
+      const cname = await nameOf('/contacts', cids, 'contacts');
+      const coname = await nameOf('/companies', coids, 'companies');
+      const clientOf = (l, t) => {
+        const e = (l && l._embedded) || {};
+        const main = (e.contacts || []).find(c => c.is_main) || (e.contacts || [])[0];
+        const cn = (main && cname[main.id]) || (t && t.contact_id && cname[Number(t.contact_id)]) || '';
+        const co = ((e.companies || [])[0] && coname[(e.companies || [])[0].id]) || '';
+        return { client: cn, company: co };
+      };
 
       // 4) Раскладываем по объявлениям.
       const byAd = new Map();
@@ -1706,7 +1737,8 @@ export default async function handler(req, res){
         }
         else if(firstIds.has(l.status_id)){ bucket = 'not_taken'; s.not_taken++; }
         else { s.in_work++; }
-        s.deals.push({ lead_id: leadId, name: l.name, stage: stName[l.status_id] || '—',
+        const who = clientOf(l, t);
+        s.deals.push({ lead_id: leadId, name: l.name, client: who.client, company: who.company, stage: stName[l.status_id] || '—',
           bucket, price: Number(l.price || 0), touched_at: t.touched_at,
           lead_created: t.lead_created, ad_ambiguous: !!t.ad_ambiguous });
       });
