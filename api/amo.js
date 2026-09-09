@@ -1439,8 +1439,8 @@ export default async function handler(req, res){
       // вся статистика расхода.
       const TOKEN = String(process.env.META_LEADS_TOKEN || process.env.META_ACCESS_TOKEN || '').trim();
       if(!TOKEN) return bad(res, 500, 'META_LEADS_TOKEN не задан');
-      async function metaGet(path, params){
-        const qs = new URLSearchParams(Object.assign({ access_token: TOKEN }, params || {}));
+      async function metaGet(path, params, tokenOverride){
+        const qs = new URLSearchParams(Object.assign({ access_token: tokenOverride || TOKEN }, params || {}));
         const r = await fetch(`https://graph.facebook.com/v21.0${path}?${qs.toString()}`);
         const j = await r.json().catch(() => null);
         if(!r.ok || (j && j.error)){
@@ -1482,14 +1482,27 @@ export default async function handler(req, res){
       // заявки терялись — например весь сентябрь у Ибрагима. Поэтому спрашиваем полный
       // список форм у самой Страницы, а кабинет потом берём по ad_id каждой заявки.
       const pages = [...new Set(adsJson.ads.map(a => a.page_id).filter(Boolean))];
+      const pageInfo = [];
+      const pageTokens = {};
       for(const pg of pages){
+        let added = 0, err = null, tok = null;
         try {
-          const r = await metaGet(`/${pg}/leadgen_forms`, { fields: 'id,name', limit: 200 });
+          // Формы принадлежат Странице, и Graph отдаёт их только по токену самой Страницы.
+          const pt = await metaGet(`/${pg}`, { fields: 'access_token,name' });
+          tok = (pt && pt.access_token) || null;
+          if(tok) pageTokens[pg] = tok;
+        } catch(e){ err = 'токен страницы: ' + e.message; }
+        try {
+          const r = await metaGet(`/${pg}/leadgen_forms`, { fields: 'id,name', limit: 200 }, tok);
           ((r && r.data) || []).forEach(fm => {
-            if(!forms[fm.id]) forms[fm.id] = { ad_name: fm.name || null, ad_id: null,
-              campaign: null, campaign_id: null, account: null, page_id: pg };
+            if(!forms[fm.id]){
+              forms[fm.id] = { ad_name: fm.name || null, ad_id: null, campaign: null,
+                campaign_id: null, account: null, page_id: pg };
+              added++;
+            }
           });
-        } catch(_){}
+        } catch(e){ err = (err ? err + ' | ' : '') + e.message; }
+        pageInfo.push({ page: pg, forms_added: added, error: err });
       }
       const targets = Object.keys(forms).length
         ? Object.keys(forms).map(fid => ({ kind: 'form', id: fid, ad: forms[fid] }))
@@ -1503,7 +1516,7 @@ export default async function handler(req, res){
             fields: 'id,created_time,ad_id,ad_name,campaign_id,campaign_name,form_id,field_data',
             filtering: JSON.stringify([{ field: 'time_created', operator: 'GREATER_THAN', value: sinceTs }]),
             limit: 200
-          });
+          }, pageTokens[t.ad && t.ad.page_id]);
           okCount++;
         } catch(e){
           errCount++;
@@ -1576,7 +1589,7 @@ export default async function handler(req, res){
 
       return res.status(200).json({
         country, days, dry_run: dryRun,
-        ads_scanned: scanned, sources_ok: okCount, sources_failed: errCount,
+        ads_scanned: scanned, sources_ok: okCount, sources_failed: errCount, pages: pageInfo,
         forms_leads_found: raw.length,
         matched: rowsToSave.length,
         saved, save_errors: saveErrors,
