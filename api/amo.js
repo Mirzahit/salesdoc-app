@@ -1433,8 +1433,12 @@ export default async function handler(req, res){
       const dryRun = dryRunRaw !== '0' && dryRunRaw !== 'false';
       const sinceTs = Math.floor(Date.now() / 1000) - days * 86400;
 
-      const TOKEN = String(process.env.META_ACCESS_TOKEN || '').trim();
-      if(!TOKEN) return bad(res, 500, 'META_ACCESS_TOKEN не задан');
+      // v931.3: отдельный доступ для заявок. Страница с лидформами лежит в другом
+      // бизнес-портфолио, поэтому у неё свой системный пользователь (salesdoc-leads)
+      // и свой токен. Основной META_ACCESS_TOKEN не трогаем — на нём держится
+      // вся статистика расхода.
+      const TOKEN = String(process.env.META_LEADS_TOKEN || process.env.META_ACCESS_TOKEN || '').trim();
+      if(!TOKEN) return bad(res, 500, 'META_LEADS_TOKEN не задан');
       async function metaGet(path, params){
         const qs = new URLSearchParams(Object.assign({ access_token: TOKEN }, params || {}));
         const r = await fetch(`https://graph.facebook.com/v21.0${path}?${qs.toString()}`);
