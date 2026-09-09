@@ -709,8 +709,66 @@ export default async function handler(req, res) {
       } catch (e) { ads = []; }
       result = { period, campaign_id: campaignId, days, countries: [...seen].sort(), ads };
 
+    } else if (endpoint === 'ads_map') {
+      // v926: карта «объявление → кабинет». Зачем: человек, кликнувший рекламу,
+      // приходит в WhatsApp с готовым текстом, в котором стоит ссылка на сам пост
+      // (instagram.com/p/XXXX или fb.me/YYY → story_fbid + id страницы). Другого следа
+      // у переписок нет — официальную метку Meta (ctwa_clid) отдаёт только WhatsApp
+      // Business API, а у нас поймано 0 из 52 сообщений. Значит, чьё это объявление,
+      // определяем по ссылке: тут собираем соответствие ссылки кабинету и кампании.
+      // Только чтение: ничего никуда не пишем.
+      const accounts = await resolveAccounts(TOKEN);
+      const FULL = 'id,name,effective_status,created_time,campaign{id,name},adset{id,name},'
+        + 'creative{id,object_type,instagram_permalink_url,effective_object_story_id,'
+        + 'object_story_id,effective_instagram_media_id,url_tags,thumbnail_url}';
+      // Запасной набор полей: если Meta не отдаст расширенные поля креатива
+      // (их видимость зависит от прав токена), карта не должна остаться пустой.
+      const LEAN = 'id,name,effective_status,campaign{id,name},creative{id,effective_object_story_id}';
+      const cabinets = [];
+      const ads = [];
+      for (const acc of accounts) {
+        let rows = null, used = 'full', err = null;
+        try {
+          rows = await metaFetchAllPages(`/${acc.id}/ads`, { fields: FULL, limit: 50 }, TOKEN, 12);
+        } catch (e) {
+          err = e.message || String(e);
+          try {
+            rows = await metaFetchAllPages(`/${acc.id}/ads`, { fields: LEAN, limit: 50 }, TOKEN, 12);
+            used = 'lean';
+          } catch (e2) { rows = null; err = (err || '') + ' | ' + (e2.message || String(e2)); }
+        }
+        if (!rows) { cabinets.push({ account: acc.id, name: acc.name || acc.id, ok: false, error: err }); continue; }
+        cabinets.push({ account: acc.id, name: acc.name || acc.id, ok: true, ads: rows.length, fields: used, warn: used === 'lean' ? err : null });
+        rows.forEach(a => {
+          const cr = a.creative || {};
+          const perma = cr.instagram_permalink_url || null;
+          const m = perma ? String(perma).match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/) : null;
+          const story = cr.effective_object_story_id || cr.object_story_id || null;
+          const st = story ? String(story).split('_') : null;
+          ads.push({
+            account: acc.id,
+            account_name: acc.name || acc.id,
+            ad_id: a.id,
+            ad_name: a.name || null,
+            status: a.effective_status || null,
+            created: a.created_time || null,
+            campaign_id: (a.campaign && a.campaign.id) || null,
+            campaign: (a.campaign && a.campaign.name) || null,
+            adset: (a.adset && a.adset.name) || null,
+            ig_permalink: perma,
+            ig_shortcode: m ? m[1] : null,
+            ig_media_id: cr.effective_instagram_media_id || null,
+            story_id: story,
+            page_id: st && st.length === 2 ? st[0] : null,
+            post_id: st && st.length === 2 ? st[1] : null,
+            url_tags: cr.url_tags || null
+          });
+        });
+      }
+      result = { cabinets, count: ads.length, ads };
+
     } else {
-      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info','geo','geo_daily','campaigns_geo','campaign_detail'] });
+      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info','geo','geo_daily','campaigns_geo','campaign_detail','ads_map'] });
     }
 
     // v442: метка страны в ответе — для отладки в DevTools Network видно какой кабинет ответил.
