@@ -11,6 +11,7 @@
 //   ?action=funnel&pipeline_id=N  — счётчики лидов по этапам выбранной воронки
 
 import { checkAuth, checkAdminToken } from './_auth.js';
+import { sbSelect } from './_supabase.js';
 import { almatyIso } from './_dates.js';
 
 function bad(res, code, msg, extra){
@@ -1169,6 +1170,184 @@ export default async function handler(req, res){
         },
         steps: steps,
         events_error: eventsError
+      });
+    }
+    if(action === 'targ_plan'){
+      // v927: кто привёл сделку — Ибрагим или Дастан. Разбор такой:
+      // человек кликает рекламу → попадает в WhatsApp с подставленным текстом,
+      // где стоит ссылка на сам пост → по ссылке находим объявление → у объявления
+      // свой кабинет → у кабинета вписано имя таргетолога. Другого следа у переписок
+      // нет: официальную метку Meta (ctwa_clid) отдаёт только WhatsApp Business API,
+      // а наш номер подключён по QR — за неделю поймано 0 меток из 52 сообщений.
+      //
+      // По умолчанию НИЧЕГО НЕ ПИШЕТ: отдаёт список «сделка → тег» на глаз.
+      // Реальная простановка — только с dry_run=false и админ-кодом.
+      const days = Math.min(Math.max(Number(req.query.days || 30), 1), 180);
+      const maxPhones = Math.min(Math.max(Number(req.query.limit || 60), 1), 200);
+      const dryRunRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
+      const dryRun = dryRunRaw !== '0' && dryRunRaw !== 'false';
+      if(!dryRun){
+        const gate = checkAdminToken(req);
+        if(!gate.ok) return bad(res, gate.unconfigured ? 503 : 403,
+          gate.unconfigured ? 'targ_plan: не настроен ADMIN_TOKEN' : 'Нужен админ-код (x-admin-token), чтобы ставить теги в amo');
+      }
+
+      // 1) Имена таргетологов по кабинетам — из тех же настроек, что и карточки на дашборде.
+      let targByAcc = {};
+      try {
+        const rows = await sbSelect('app_settings', { key: 'eq.mkt_targetologs', limit: '1' });
+        targByAcc = (rows.length && rows[0].value) || {};
+      } catch(_){ targByAcc = {}; }
+      const nameForAcc = (acc) => targByAcc[acc] || targByAcc[String(acc).replace(/^act_/, '')] || null;
+
+      // 2) Карта «пост → кабинет». Берём у своего же эндпоинта, чтобы не дублировать
+      //    работу с Meta: там уже разложены ссылки, кампании и id постов.
+      const proto = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const adsResp = await fetch(`${proto}://${host}/api/meta-ads?endpoint=ads_map`, {
+        headers: { 'x-app-token': String(process.env.APP_TOKEN || '').trim(), 'x-user-email': 'cron@salesdoc.io' }
+      });
+      const adsJson = await adsResp.json().catch(() => null);
+      if(!adsJson || !Array.isArray(adsJson.ads)) return bad(res, 502, 'Не удалось получить карту объявлений (ads_map)');
+      const byShort = {}, byStory = {}, byPost = {};
+      adsJson.ads.forEach(a => {
+        const info = { account: a.account, campaign: a.campaign, ad_name: a.ad_name };
+        if(a.ig_shortcode && !byShort[a.ig_shortcode]) byShort[a.ig_shortcode] = info;
+        if(a.story_id && !byStory[a.story_id]) byStory[a.story_id] = info;
+        if(a.post_id && !byPost[a.post_id]) byPost[a.post_id] = info;
+      });
+
+      // 3) Переписки из приёмника Wazzup. Нас интересуют только входящие с текстом:
+      //    именно в первом сообщении Meta подставляет ссылку на объявление.
+      const since = new Date(Date.now() - days * 86400000).toISOString();
+      const events = await sbSelect('wazzup_events', {
+        received_at: 'gte.' + since, order: 'received_at.asc', limit: 2000
+      });
+
+      // fb.me — короткая ссылка, разворачиваем в story_fbid + id страницы.
+      const shortCache = {};
+      async function expandFbMe(code){
+        if(shortCache[code] !== undefined) return shortCache[code];
+        let out = null;
+        try {
+          const r = await fetch('https://fb.me/' + code, { redirect: 'manual' });
+          const loc = r.headers.get('location') || '';
+          const story = loc.match(/story_fbid=(\d+)/);
+          const pid = loc.match(/[?&]id=(\d+)/);
+          if(story) out = { post: story[1], page: pid ? pid[1] : null };
+        } catch(_){ out = null; }
+        shortCache[code] = out;
+        return out;
+      }
+
+      // 4) Телефон → кабинет. Берём САМОЕ РАННЕЕ рекламное сообщение человека:
+      //    если он потом писал ещё раз с другого объявления, заслуга у первого.
+      const firstAd = new Map();
+      const noLink = [];
+      for(const e of events){
+        if(e.kind !== 'message' || e.direction === 'out') continue;
+        const txt = String(e.message_text || '');
+        const phone = e.phone ? String(e.phone) : null;
+        if(!phone || phone.length > 15) continue; // групповые чаты приходят длинным id
+        let hit = null, src = null;
+        const ig = txt.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+        const fb = txt.match(/fb\.me\/([A-Za-z0-9]+)/);
+        // Официальная метка, если она когда-нибудь начнёт приходить (переезд на WABA).
+        if(e.ad_source_id){
+          const a = adsJson.ads.find(x => String(x.ad_id) === String(e.ad_source_id));
+          if(a){ hit = { account: a.account, campaign: a.campaign, ad_name: a.ad_name }; src = 'метка Meta ' + e.ad_source_id; }
+        }
+        if(!hit && ig){ hit = byShort[ig[1]] || null; src = 'instagram.com/p/' + ig[1]; }
+        if(!hit && fb){
+          const ex = await expandFbMe(fb[1]);
+          if(ex){ hit = byStory[(ex.page || '') + '_' + ex.post] || byPost[ex.post] || null; }
+          src = 'fb.me/' + fb[1];
+        }
+        if(!src) continue;
+        if(!hit){ noLink.push({ phone, at: e.received_at, link: src, why: 'объявления с такой ссылкой в кабинетах нет' }); continue; }
+        if(!firstAd.has(phone)) firstAd.set(phone, { phone, at: e.received_at, link: src, account: hit.account, campaign: hit.campaign, ad_name: hit.ad_name });
+      }
+
+      // 5) Ищем сделку по телефону. Правило: помечаем только сделку, заведённую
+      //    ПОСЛЕ рекламного сообщения (с запасом в час) и не позже недели. Старые
+      //    сделки не трогаем — человек мог быть клиентом задолго до этой рекламы.
+      const plan = [], skipped = [], notFound = [];
+      let processed = 0;
+      for(const ad of firstAd.values()){
+        if(processed >= maxPhones) break;
+        processed++;
+        const acc = ad.account;
+        const targ = nameForAcc(acc);
+        const adTs = Math.floor(new Date(ad.at).getTime() / 1000);
+        if(!targ){ skipped.push({ phone: ad.phone, why: 'у кабинета ' + acc + ' не вписано имя таргетолога' }); continue; }
+        const tag = 'таргет-' + String(targ).trim().toLowerCase().replace(/\s+/g, '-');
+        let contacts = [];
+        try {
+          const r = await amoFetch(`/contacts?query=${encodeURIComponent(ad.phone)}&limit=10&with=leads`, env);
+          contacts = (r && r._embedded && r._embedded.contacts) || [];
+        } catch(e){ skipped.push({ phone: ad.phone, why: 'поиск в amo не удался: ' + e.message }); continue; }
+        const leadIds = [];
+        contacts.forEach(c => ((c._embedded && c._embedded.leads) || []).forEach(l => {
+          if(!leadIds.includes(l.id)) leadIds.push(l.id);
+        }));
+        if(!leadIds.length){
+          notFound.push({ phone: ad.phone, at: ad.at, targetolog: targ, campaign: ad.campaign,
+            contact_id: contacts.length ? contacts[0].id : null,
+            contact_name: contacts.length ? contacts[0].name : null,
+            why: contacts.length ? 'контакт есть, сделки нет' : 'ни контакта, ни сделки' });
+          continue;
+        }
+        for(const id of leadIds.slice(0, 5)){
+          let lead = null;
+          try { lead = await amoFetch(`/leads/${id}`, env); } catch(_){ continue; }
+          if(!lead) continue;
+          const created = Number(lead.created_at) || 0;
+          if(created < adTs - 3600 || created > adTs + 7 * 86400){
+            skipped.push({ phone: ad.phone, lead_id: id, lead_name: lead.name,
+              why: 'сделка от ' + almatyIso(created * 1000) + ' не совпадает с рекламой от ' + almatyIso(adTs * 1000) });
+            continue;
+          }
+          const tags = ((lead._embedded && lead._embedded.tags) || []).map(t => String(t.name || ''));
+          if(tags.some(t => t.toLowerCase() === tag)){
+            skipped.push({ phone: ad.phone, lead_id: id, lead_name: lead.name, why: 'тег «' + tag + '» уже стоит' });
+            continue;
+          }
+          plan.push({ phone: ad.phone, targetolog: targ, tag: tag, account: acc,
+            campaign: ad.campaign, ad_name: ad.ad_name, link: ad.link,
+            lead_id: id, lead_name: lead.name, created: almatyIso(created * 1000),
+            existing_tags: tags });
+        }
+      }
+
+      // 6) Запись — только по явной команде и под админ-кодом. amo не умеет добавлять
+      //    один тег, только заменять список целиком, поэтому старые переносим по id.
+      let applied = 0; const applyErrors = [];
+      if(!dryRun){
+        for(const p of plan){
+          try {
+            const cur = await amoFetch(`/leads/${p.lead_id}`, env);
+            const keep = ((cur._embedded && cur._embedded.tags) || []).map(t => ({ id: t.id }));
+            keep.push({ name: p.tag });
+            await amoMutate('PATCH', `/leads/${p.lead_id}`, { _embedded: { tags: keep } }, env);
+            applied++;
+          } catch(e){ applyErrors.push({ lead_id: p.lead_id, error: e.message }); }
+        }
+      }
+
+      return res.status(200).json({
+        country, days, dry_run: dryRun,
+        cabinets: (adsJson.cabinets || []).map(c => ({ account: c.account, targetolog: nameForAcc(c.account), ads: c.ads || 0, ok: c.ok })),
+        chats_with_ad_link: firstAd.size,
+        will_tag: plan.length,
+        applied: applied,
+        apply_errors: applyErrors,
+        plan: plan,
+        skipped: skipped,
+        ad_link_no_deal: notFound,
+        link_unknown: noLink,
+        message: dryRun
+          ? `Ничего не записано. Готово к простановке: ${plan.length} сделок. Чтобы применить — dry_run=false и админ-код.`
+          : `Проставлено тегов: ${applied}. Ошибок: ${applyErrors.length}.`
       });
     }
     if(action === 'lead_report'){
