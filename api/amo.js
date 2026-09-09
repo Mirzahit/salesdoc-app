@@ -1370,7 +1370,8 @@ export default async function handler(req, res){
         if(found === undefined){
           let contacts = [];
           try {
-            const r = await amoFetch(`/contacts?query=${encodeURIComponent(t.phone)}&limit=10&with=leads`, env);
+            const tail = t.phone.length > 9 ? t.phone.slice(-9) : t.phone;
+            const r = await amoFetch(`/contacts?query=${encodeURIComponent(tail)}&limit=10&with=leads`, env);
             contacts = (r && r._embedded && r._embedded.contacts) || [];
           } catch(e){ skipped.push({ phone: t.phone, why: 'поиск в amo не удался: ' + e.message }); leadCache.set(t.phone, null); continue; }
           const ids = [];
@@ -1593,8 +1594,16 @@ export default async function handler(req, res){
         const adTs = Math.floor(new Date(f.at).getTime() / 1000);
         let contacts = [];
         try {
-          const r = await amoFetch(`/contacts?query=${encodeURIComponent(f.phone)}&limit=10&with=leads`, env);
+          // v957: ищем по ХВОСТУ номера. В форме телефон приходит как +996555…, а менеджер
+          // в amo сохраняет «0555…» или «555…» — полный номер не совпадал, и живые
+          // заявки числились «нет в CRM». Последние 9 цифр одинаковы в любом формате.
+          const tail = f.phone.length > 9 ? f.phone.slice(-9) : f.phone;
+          const r = await amoFetch(`/contacts?query=${encodeURIComponent(tail)}&limit=10&with=leads`, env);
           contacts = (r && r._embedded && r._embedded.contacts) || [];
+          if(!contacts.length && tail !== f.phone){
+            const r2 = await amoFetch(`/contacts?query=${encodeURIComponent(f.phone)}&limit=10&with=leads`, env);
+            contacts = (r2 && r2._embedded && r2._embedded.contacts) || [];
+          }
         } catch(e){ skipped.push({ ad: f.ad_name, why: 'поиск в amo не удался: ' + e.message }); continue; }
         const ids = [];
         contacts.forEach(c => ((c._embedded && c._embedded.leads) || []).forEach(l => { if(!ids.includes(l.id)) ids.push(l.id); }));
