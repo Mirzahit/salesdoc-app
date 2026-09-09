@@ -762,6 +762,18 @@ export default async function handler(req, res) {
       };
 
     } else if (endpoint === 'ads_perf') {
+      // v937: канал определяем по настройке ГРУППЫ объявлений, а не по цели кампании.
+      // Цель кампании врёт: у кампании «МК» результатом оказывались клики по ссылке,
+      // хотя это переписки. У группы есть прямой ответ: destination_type говорит, куда
+      // ведёт объявление (WHATSAPP / ON_AD), optimization_goal — на что оптимизируется.
+      const adsetCfg = {};
+      for (const acc of await resolveAccounts(TOKEN)) {
+        try {
+          const rows = await metaFetchAllPages(`/${acc.id}/adsets`,
+            { fields: 'id,destination_type,optimization_goal', limit: 400 }, TOKEN, 8);
+          rows.forEach(a => { adsetCfg[a.id] = { dest: a.destination_type || null, goal: a.optimization_goal || null }; });
+        } catch (_) {}
+      }
       // v928: цифры по каждому объявлению за период — ровно те, что видит Ads Manager:
       // потрачено, показы, охват и «Результат». Результат у Meta зависит от цели кампании:
       // у кампаний на сообщения это начатые переписки, у лидформ — заявки. Считаем так же,
@@ -775,7 +787,7 @@ export default async function handler(req, res) {
       for (const acc of accounts) {
         try {
           const data = await metaFetchAllPages(`/${acc.id}/insights`, {
-            fields: 'ad_id,ad_name,adset_name,campaign_id,campaign_name,objective,spend,impressions,'
+            fields: 'ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,objective,spend,impressions,'
               + 'reach,clicks,inline_link_clicks,ctr,actions,cost_per_action_type,date_start',
             ...timeParams(range, period),
             level: 'ad',
@@ -794,11 +806,19 @@ export default async function handler(req, res) {
         : 0;
       // Какая строка в кабинете стоит в колонке «Результат» — зависит от цели кампании.
       function primaryResult(r) {
+        const cfg = adsetCfg[r.adset_id] || {};
+        const dest = String(cfg.dest || '').toUpperCase();
+        const goal = String(cfg.goal || '').toUpperCase();
         const obj = String(r.objective || '').toUpperCase();
         const msgs = actionSum(r.actions, 'onsite_conversion.messaging_conversation_started_7d');
         const leads = summarizeLeads(r.actions, r.cost_per_action_type).count || 0;
+        // Настройка группы — самый прямой ответ, с неё и начинаем.
+        if (dest === 'WHATSAPP' || dest === 'MESSENGER' || dest === 'INSTAGRAM_DIRECT' || goal === 'CONVERSATIONS')
+          return { kind: 'Начало переписки', count: msgs };
+        if (goal === 'LEAD_GENERATION' || (dest === 'ON_AD' && leads))
+          return { kind: 'Заявки', count: leads };
+        // Настройки нет (старая группа, удалённая) — падаем на прежнюю догадку по цели.
         if (/LEAD/.test(obj) && leads) return { kind: 'Заявки', count: leads };
-        if (/MESSAG|ENGAGEMENT|SALES|TRAFFIC/.test(obj) && msgs) return { kind: 'Начало переписки', count: msgs };
         if (msgs) return { kind: 'Начало переписки', count: msgs };
         if (leads) return { kind: 'Заявки', count: leads };
         return { kind: 'Клики по ссылке', count: Number(r.inline_link_clicks || 0) };
@@ -865,7 +885,7 @@ export default async function handler(req, res) {
       // (promoted_object), либо в кнопке креатива. Читается обычным правом ads_read —
       // в отличие от самих заявок, для которых нужен доступ к Странице.
       const FULL = 'id,name,effective_status,created_time,campaign{id,name},'
-        + 'adset{id,name,promoted_object},'
+        + 'adset{id,name,promoted_object,destination_type,optimization_goal},'
         + 'creative{id,object_type,instagram_permalink_url,effective_object_story_id,'
         + 'object_story_id,effective_instagram_media_id,url_tags,thumbnail_url,object_story_spec}';
       // Запасной набор полей: если Meta не отдаст расширенные поля креатива
@@ -902,6 +922,8 @@ export default async function handler(req, res) {
             campaign_id: (a.campaign && a.campaign.id) || null,
             campaign: (a.campaign && a.campaign.name) || null,
             adset: (a.adset && a.adset.name) || null,
+            dest: (a.adset && a.adset.destination_type) || null,
+            goal: (a.adset && a.adset.optimization_goal) || null,
             ig_permalink: perma,
             ig_shortcode: m ? m[1] : null,
             ig_media_id: cr.effective_instagram_media_id || null,
