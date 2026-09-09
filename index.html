@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v944</title>
+<title>SalesDoc — Финансовый Дашборд v945</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -19400,7 +19400,7 @@ function _mktSaveSetting(key, value){
 var _mkdSeq = 0, _mkdData = null, _mkdMetric = 'spend', _mkdHidden = { KZ: 1 }, _MKD_CHARTS = {};
 // v930: выбранный таргетолог (пусто = все). _mkdFull хранит данные до фильтра —
 // пересчитывать их с сервера при каждом клике незачем.
-var _mkdTarg = '', _mkdFull = null, _mkdAds = null, _mkdAdsKey = '';
+var _mkdTarg = '', _mkdFull = null, _mkdAds = null, _mkdAdsKey = '', _mkdAdsLoading = false;
 var _MKD_NAMES = { KG:'Кыргызстан', KZ:'Казахстан', UZ:'Узбекистан', RU:'Россия', TJ:'Таджикистан', UA:'Украина',
                    UNKNOWN:'страна не определена', '??':'страна не определена' };
 var _MKD_COLORS = { KG:'#5E6AD2', KZ:'#46A6C9', UZ:'#C98A46', RU:'#8A8F9C' };
@@ -19931,11 +19931,13 @@ window.mktLoadAdsReport = async function(force){
  var key = r.since + '|' + r.until;
  if(!force && _mkdAdsKey === key) return;
  _mkdAdsKey = key;
+ _mkdAdsLoading = true;
  try {
   var res = await authFetch('/api/amo?action=targ_report&country=KG&since=' + r.since + '&until=' + r.until);
   var j = await res.json();
   _mkdAds = (j && !j.error) ? j : null;
  } catch(_){ _mkdAds = null; }
+ _mkdAdsLoading = false;
  _mkdRenderAds();
 };
 function _mkdAdsFor(name){
@@ -20237,7 +20239,7 @@ function _mkdRenderAdLeads(){
  var box = document.getElementById('mkt-dash-adleads'); if(!box) return;
  var list = _mkdAdsFor(_mkdTarg);
  var deals = _mkdAdDeals(list).sort(function(a, b){ return (b.at || '') < (a.at || '') ? -1 : 1; });
- if(!deals.length){ box.innerHTML = '<div class="mkd-card"><div class="mkd-empty">За период сделок, связанных с рекламой, нет.</div></div>'; return; }
+ if(!deals.length){ box.innerHTML = '<div class="mkd-card"><div class="mkd-empty">' + (_mkdAdsLoading || !_mkdAds ? 'Собираем…' : 'За период сделок, связанных с рекламой, нет.') + '</div></div>'; return; }
  var cc = _mkdAmoCodes()[0] || 'KG';
  box.innerHTML = '<div class="mkd-card mkd-rl">'
   + '<div class="mkd-rl-t"><span>Когда</span><span>Сделка</span><span>Чья реклама</span><span>Объявление</span><span>Этап сейчас</span><span class="r">Исход</span></div>'
@@ -20289,7 +20291,7 @@ window.mkdToggleMore = function(){
 function _mkdRenderAds(){
  _mkdRenderHero(); _mkdRenderAdLeads(); _mkdRenderAdManagers();
  var box = document.getElementById('mkt-dash-ads'); if(!box) return;
- if(!_mkdAds){ box.innerHTML = '<div class="mkd-empty">Отчёт по объявлениям не загрузился.</div>'; return; }
+ if(!_mkdAds){ box.innerHTML = '<div class="mkd-empty">' + (_mkdAdsLoading ? 'Собираем отчёт по объявлениям…' : 'Отчёт по объявлениям не загрузился. Нажмите «Обновить».') + '</div>'; return; }
  var list = _mkdAdsFor(_mkdTarg);
  if(!list.length){ box.innerHTML = '<div class="mkd-empty">За период расхода по объявлениям нет.</div>'; return; }
  var num = function(n){ return Math.round(n).toLocaleString('ru-RU'); };
