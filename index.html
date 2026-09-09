@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v943</title>
+<title>SalesDoc — Финансовый Дашборд v944</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5932,6 +5932,7 @@ body.light #view-marketing .mkt-camps-head,body.light #view-marketing .mkc-n,bod
 #view-marketing .mkd-fn-h .by b{color:var(--text-2);font-weight:600}
 #view-marketing .mkd-funnel{width:100%;height:auto;display:block;margin-top:6px;color:var(--text-muted)}
 #view-marketing .mkd-funnel .fl{font-size:11px;fill:currentColor;font-family:inherit;font-variant-numeric:tabular-nums}
+@media(prefers-reduced-motion:reduce){#view-marketing .mkd-funnel .flow{display:none}}
 /* судьба узнанных */
 #view-marketing .mkd-fate-card{padding:16px 20px 15px;margin-bottom:6px}
 #view-marketing .mkd-fate-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
@@ -19988,17 +19989,26 @@ function _mkdFunnelSvg(list){
   });
   return { x: xs[i], segs: segs, total: total };
  });
- var out = '';
+ // v944: по лентам идёт поток — песчинки движутся слева направо, к «Купили».
+ // Узор один на всю воронку, лента сверху накрывается той же фигурой с этим узором.
+ var out = '<defs><pattern id="mkdSand" width="18" height="18" patternUnits="userSpaceOnUse">'
+  + '<circle cx="3" cy="4" r="1.4" fill="#fff"/><circle cx="11" cy="9" r="1" fill="#fff"/>'
+  + '<circle cx="7" cy="14" r="1.2" fill="#fff"/><circle cx="15" cy="2" r=".8" fill="#fff"/>'
+  + '<animateTransform attributeName="patternTransform" type="translate" from="0 0" to="18 0" dur="1.4s" repeatCount="indefinite"/>'
+  + '</pattern></defs>';
+ var flows = '';
  for(var i = 0; i < cols.length - 1; i++){
   var a = cols[i], b = cols[i + 1];
   a.segs.forEach(function(sa, k){
    var sb = b.segs[k]; if(sa.v <= 0 || sb.v <= 0) return;
    var x0 = a.x + colW, x1 = b.x, c = (x0 + x1) / 2;
-   out += '<path d="M' + x0 + ',' + sa.y0 + ' C' + c + ',' + sa.y0 + ' ' + c + ',' + sb.y0 + ' ' + x1 + ',' + sb.y0
-    + ' L' + x1 + ',' + sb.y1 + ' C' + c + ',' + sb.y1 + ' ' + c + ',' + sa.y1 + ' ' + x0 + ',' + sa.y1 + ' Z" fill="'
-    + _mkdTgColor(sa.name) + '" opacity=".22"/>';
+   var d = 'M' + x0 + ',' + sa.y0 + ' C' + c + ',' + sa.y0 + ' ' + c + ',' + sb.y0 + ' ' + x1 + ',' + sb.y0
+    + ' L' + x1 + ',' + sb.y1 + ' C' + c + ',' + sb.y1 + ' ' + c + ',' + sa.y1 + ' ' + x0 + ',' + sa.y1 + ' Z';
+   out += '<path d="' + d + '" fill="' + _mkdTgColor(sa.name) + '" opacity=".22"/>';
+   flows += '<path class="flow" d="' + d + '" fill="url(#mkdSand)" opacity=".3"/>';
   });
  }
+ out += flows;
  cols.forEach(function(c){
   c.segs.forEach(function(s){
    if(s.v <= 0) return;
