@@ -733,9 +733,15 @@ export default async function handler(req, res) {
       result = { period, campaign_id: campaignId, days, countries: [...seen].sort(), ads };
 
     } else if (endpoint === 'token_info') {
+      const TOKEN_MAIN = TOKEN;
       // v931: чей это доступ и какие у него права. Нужно, чтобы понять, почему Meta
       // не отдаёт заявки лидформ: не хватает разрешения leads_retrieval или доступа
       // к Странице. Сам токен в ответ НЕ попадает — только его тип, приложение и права.
+      // ?which=leads — проверить отдельный доступ для заявок (META_LEADS_TOKEN)
+      const TOKEN = String(req.query.which) === 'leads'
+        ? String(process.env.META_LEADS_TOKEN || '').trim()
+        : TOKEN_MAIN;
+      if (!TOKEN) { result = { error: 'META_LEADS_TOKEN не задан в Vercel' }; cacheSet(cacheKey, result); return res.status(200).json(result); }
       const me = await metaFetch('/me', { fields: 'id,name' }, TOKEN).catch(e => ({ error: e.message }));
       const dbg = await metaFetch('/debug_token', { input_token: TOKEN }, TOKEN).catch(e => ({ error: e.message }));
       const d = (dbg && dbg.data) || {};
