@@ -709,6 +709,97 @@ export default async function handler(req, res) {
       } catch (e) { ads = []; }
       result = { period, campaign_id: campaignId, days, countries: [...seen].sort(), ads };
 
+    } else if (endpoint === 'ads_perf') {
+      // v928: цифры по каждому объявлению за период — ровно те, что видит Ads Manager:
+      // потрачено, показы, охват и «Результат». Результат у Meta зависит от цели кампании:
+      // у кампаний на сообщения это начатые переписки, у лидформ — заявки. Считаем так же,
+      // иначе отчёт таргетолога не сойдётся с кабинетом и ему не поверят.
+      // daily=1 — то же самое по дням: нужно, чтобы понять, какое из объявлений с одним
+      // и тем же постом крутилось в день обращения клиента.
+      const daily = String(req.query.daily || '') === '1';
+      const accounts = await resolveAccounts(TOKEN);
+      const cabinets = [];
+      const rows = [];
+      for (const acc of accounts) {
+        try {
+          const data = await metaFetchAllPages(`/${acc.id}/insights`, {
+            fields: 'ad_id,ad_name,adset_name,campaign_id,campaign_name,objective,spend,impressions,'
+              + 'reach,clicks,inline_link_clicks,ctr,actions,cost_per_action_type,date_start',
+            ...timeParams(range, period),
+            level: 'ad',
+            limit: 200,
+            ...(daily ? { time_increment: 1 } : {})
+          }, TOKEN, 25);
+          data.forEach(r => { r._acct = acc.id; });
+          rows.push(...data);
+          cabinets.push({ account: acc.id, name: acc.name || acc.id, ok: true, rows: data.length });
+        } catch (e) {
+          cabinets.push({ account: acc.id, name: acc.name || acc.id, ok: false, error: e.message || String(e) });
+        }
+      }
+      const actionSum = (actions, type) => Array.isArray(actions)
+        ? actions.filter(a => a.action_type === type).reduce((s, a) => s + (parseFloat(a.value) || 0), 0)
+        : 0;
+      // Какая строка в кабинете стоит в колонке «Результат» — зависит от цели кампании.
+      function primaryResult(r) {
+        const obj = String(r.objective || '').toUpperCase();
+        const msgs = actionSum(r.actions, 'onsite_conversion.messaging_conversation_started_7d');
+        const leads = summarizeLeads(r.actions, r.cost_per_action_type).count || 0;
+        if (/LEAD/.test(obj) && leads) return { kind: 'Заявки', count: leads };
+        if (/MESSAG|ENGAGEMENT|SALES|TRAFFIC/.test(obj) && msgs) return { kind: 'Начало переписки', count: msgs };
+        if (msgs) return { kind: 'Начало переписки', count: msgs };
+        if (leads) return { kind: 'Заявки', count: leads };
+        return { kind: 'Клики по ссылке', count: Number(r.inline_link_clicks || 0) };
+      }
+      if (daily) {
+        const days = rows.map(r => {
+          const pr = primaryResult(r);
+          return {
+            date: r.date_start, ad_id: r.ad_id, ad_name: r.ad_name || null,
+            account: r._acct, campaign_id: r.campaign_id || null, campaign: r.campaign_name || null,
+            spend: Math.round(Number(r.spend || 0) * 100) / 100,
+            impressions: Number(r.impressions || 0),
+            results: pr.count, result_kind: pr.kind
+          };
+        }).filter(d => d.spend > 0 || d.results > 0);
+        result = { cabinets, count: days.length, days };
+      } else {
+        const agg = new Map();
+        rows.forEach(r => {
+          const id = r.ad_id;
+          if (!agg.has(id)) agg.set(id, {
+            ad_id: id, ad_name: r.ad_name || null, account: r._acct,
+            campaign_id: r.campaign_id || null, campaign: r.campaign_name || null,
+            adset: r.adset_name || null, objective: r.objective || null,
+            spend: 0, impressions: 0, reach: 0, clicks: 0, link_clicks: 0,
+            results: 0, result_kind: null, msgs: 0, leads: 0
+          });
+          const a = agg.get(id);
+          const pr = primaryResult(r);
+          a.spend += Number(r.spend || 0);
+          a.impressions += Number(r.impressions || 0);
+          // Охват (reach) не складывается между строками: один человек мог увидеть
+          // объявление и там, и там. При разбивке берём максимум — это ближе к правде,
+          // чем сумма, но всё равно приблизительно.
+          a.reach = Math.max(a.reach, Number(r.reach || 0));
+          a.clicks += Number(r.clicks || 0);
+          a.link_clicks += Number(r.inline_link_clicks || 0);
+          a.msgs += actionSum(r.actions, 'onsite_conversion.messaging_conversation_started_7d');
+          a.leads += summarizeLeads(r.actions, r.cost_per_action_type).count || 0;
+          a.results += pr.count;
+          a.result_kind = a.result_kind || pr.kind;
+        });
+        const ads = [...agg.values()].map(a => ({
+          ...a,
+          spend: Math.round(a.spend * 100) / 100,
+          msgs: Math.round(a.msgs),
+          results: Math.round(a.results),
+          cost_per_result: a.results > 0 ? Math.round((a.spend / a.results) * 100) / 100 : null,
+          ctr: a.impressions > 0 ? Math.round((a.clicks / a.impressions) * 10000) / 100 : 0
+        })).sort((x, y) => y.spend - x.spend);
+        result = { cabinets, count: ads.length, ads };
+      }
+
     } else if (endpoint === 'ads_map') {
       // v926: карта «объявление → кабинет». Зачем: человек, кликнувший рекламу,
       // приходит в WhatsApp с готовым текстом, в котором стоит ссылка на сам пост
@@ -761,14 +852,15 @@ export default async function handler(req, res) {
             story_id: story,
             page_id: st && st.length === 2 ? st[0] : null,
             post_id: st && st.length === 2 ? st[1] : null,
-            url_tags: cr.url_tags || null
+            url_tags: cr.url_tags || null,
+            thumb: cr.thumbnail_url || null
           });
         });
       }
       result = { cabinets, count: ads.length, ads };
 
     } else {
-      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info','geo','geo_daily','campaigns_geo','campaign_detail','ads_map'] });
+      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info','geo','geo_daily','campaigns_geo','campaign_detail','ads_map','ads_perf'] });
     }
 
     // v442: метка страны в ответе — для отладки в DevTools Network видно какой кабинет ответил.
