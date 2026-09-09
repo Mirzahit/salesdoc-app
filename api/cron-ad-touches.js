@@ -21,11 +21,11 @@ export default async function handler(req, res) {
   const got = String(req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
   if (got !== expected) return res.status(401).json({ ok: false, error: 'Unauthorized' });
 
-  const proto = req.headers['x-forwarded-proto'] || 'https';
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  // SEC: адрес своего сервера — из окружения, не из заголовков запроса.
+  const base = (String(process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '')) || 'https://salesdoc-app.vercel.app';
   const appTok = String(process.env.APP_TOKEN || '').trim();
   const call = async (qs) => {
-    const r = await fetch(`${proto}://${host}/api/amo?${qs}`, {
+    const r = await fetch(`${base}/api/amo?${qs}`, {
       headers: { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' }
     });
     return r.json().catch(() => ({ error: 'нечитаемый ответ' }));

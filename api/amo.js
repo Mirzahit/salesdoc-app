@@ -347,6 +347,17 @@ function _lrGet(k){
 }
 function _lrSet(k, v){ _lrCache.set(k, { t: Date.now(), v }); }
 
+
+// v951 SEC: адрес для вызова своих же эндпоинтов НЕ берём из заголовков запроса —
+// подделанный x-forwarded-host увёл бы APP_TOKEN на чужой сервер. База задаётся
+// окружением; заголовок используется только если он из списка своих доменов.
+const _SELF_HOSTS = new Set(['salesdoc-app.vercel.app', 'salesdoc-app-office-2203s-projects.vercel.app', 'salesdoc-app-git-main-office-2203s-projects.vercel.app']);
+function selfBase(req){
+  const env = String(process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+  if(env) return env;
+  const h = String((req && req.headers && (req.headers['x-forwarded-host'] || req.headers.host)) || '').split(',')[0].trim().toLowerCase();
+  return 'https://' + (_SELF_HOSTS.has(h) ? h : 'salesdoc-app.vercel.app');
+}
 const _trCache = new Map(); // v946: готовые отчёты по таргетологам
 async function buildLeadReport(env, fromTs, toTs){
   const pipelines = await getPipelines(env);
@@ -1215,11 +1226,10 @@ export default async function handler(req, res){
       } catch(_){ targByAcc = {}; }
       const nameForAcc = (acc) => targByAcc[acc] || targByAcc[String(acc).replace(/^act_/, '')] || null;
 
-      const proto = req.headers['x-forwarded-proto'] || 'https';
-      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const base = selfBase(req);
       const appTok = String(process.env.APP_TOKEN || '').trim();
       const selfGet = async (qs) => {
-        const r = await fetch(`${proto}://${host}/api/meta-ads?${qs}`, {
+        const r = await fetch(`${base}/api/meta-ads?${qs}`, {
           headers: { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' }
         });
         return r.json().catch(() => null);
@@ -1463,9 +1473,8 @@ export default async function handler(req, res){
       } catch(_){ targByAcc = {}; }
       const nameForAcc = (acc) => targByAcc[acc] || targByAcc[String(acc).replace(/^act_/, '')] || null;
 
-      const proto = req.headers['x-forwarded-proto'] || 'https';
-      const host = req.headers['x-forwarded-host'] || req.headers.host;
-      const adsResp = await fetch(`${proto}://${host}/api/meta-ads?endpoint=ads_map`, {
+      const base = selfBase(req);
+      const adsResp = await fetch(`${base}/api/meta-ads?endpoint=ads_map`, {
         headers: { 'x-app-token': String(process.env.APP_TOKEN || '').trim(), 'x-user-email': 'cron@salesdoc.io' }
       });
       const adsJson = await adsResp.json().catch(() => null);
@@ -1624,11 +1633,10 @@ export default async function handler(req, res){
       const mask = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length < 7 ? '' : d.slice(0, 3) + ' ••• ' + d.slice(-4); };
       const days = Math.min(90, Math.max(1, Math.ceil((Date.now() - new Date(since).getTime()) / 86400000) + 1));
 
-      const proto = req.headers['x-forwarded-proto'] || 'https';
-      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const base = selfBase(req);
       const appTok = String(process.env.APP_TOKEN || '').trim();
       const selfGet = async (path) => {
-        const r = await fetch(`${proto}://${host}${path}`, { headers: { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' } });
+        const r = await fetch(`${base}${path}`, { headers: { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' } });
         return r.json().catch(() => null);
       };
       let targByAcc = {};
@@ -1713,11 +1721,10 @@ export default async function handler(req, res){
       // ложится в сентябрь, туда же, где потрачены деньги (решение CEO 09.09.2026).
       const since = String(req.query.since || almatyIso(Date.now() - 30 * 86400000));
       const until = String(req.query.until || almatyIso(Date.now()));
-      const proto = req.headers['x-forwarded-proto'] || 'https';
-      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const base = selfBase(req);
       const appTok = String(process.env.APP_TOKEN || '').trim();
       const selfGet = async (qs) => {
-        const r = await fetch(`${proto}://${host}/api/meta-ads?${qs}`, {
+        const r = await fetch(`${base}/api/meta-ads?${qs}`, {
           headers: { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' }
         });
         return r.json().catch(() => null);
