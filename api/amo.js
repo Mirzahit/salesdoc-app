@@ -1231,8 +1231,11 @@ export default async function handler(req, res){
         selfGet(`endpoint=ads_perf&daily=1&since=${sinceIso}&until=${until}`)
       ]);
       if(!adsJson || !Array.isArray(adsJson.ads)) return bad(res, 502, 'Не удалось получить карту объявлений (ads_map)');
-      const spendByAdDay = {};
-      ((perfJson && perfJson.days) || []).forEach(d => { spendByAdDay[d.ad_id + '|' + d.date] = d.spend; });
+      const spendByAdDay = {}, kindByAdDay = {};
+      ((perfJson && perfJson.days) || []).forEach(d => {
+        spendByAdDay[d.ad_id + '|' + d.date] = d.spend;
+        kindByAdDay[d.ad_id + '|' + d.date] = d.result_kind || null;
+      });
 
       const byShort = {}, byStory = {}, byPost = {};
       const push = (map, key, ad) => { if(!key) return; (map[key] = map[key] || []).push(ad); };
@@ -1242,17 +1245,23 @@ export default async function handler(req, res){
         push(byPost, a.post_id, a);
       });
 
-      // Из нескольких объявлений с одним постом берём то, что крутилось в день обращения.
-      function pickAd(list, dayIso){
+      // Из нескольких объявлений с одним постом выбираем так:
+      //   1) крутилось ли оно в день обращения (был расход);
+      //   2) ведёт ли оно в переписку. Человек написал в WhatsApp — значит объявление
+      //      с лидформой его привести не могло, там другая кнопка. Без этого шага
+      //      переписки приписывались кампании IH_Лидформы, чего в жизни не бывает.
+      function pickAd(list, dayIso, wantChat){
         if(!list || !list.length) return null;
         if(list.length === 1) return { ad: list[0], ambiguous: false };
-        const live = list.filter(a => (spendByAdDay[a.ad_id + '|' + dayIso] || 0) > 0);
-        if(live.length === 1) return { ad: live[0], ambiguous: false };
-        if(live.length > 1){
-          live.sort((x, y) => (spendByAdDay[y.ad_id + '|' + dayIso] || 0) - (spendByAdDay[x.ad_id + '|' + dayIso] || 0));
-          return { ad: live[0], ambiguous: true };
+        let live = list.filter(a => (spendByAdDay[a.ad_id + '|' + dayIso] || 0) > 0);
+        if(!live.length) live = list.slice();
+        if(wantChat){
+          const chat = live.filter(a => kindByAdDay[a.ad_id + '|' + dayIso] === 'Начало переписки');
+          if(chat.length) live = chat;
         }
-        return { ad: list[0], ambiguous: true };
+        if(live.length === 1) return { ad: live[0], ambiguous: false };
+        live.sort((x, y) => (spendByAdDay[y.ad_id + '|' + dayIso] || 0) - (spendByAdDay[x.ad_id + '|' + dayIso] || 0));
+        return { ad: live[0], ambiguous: true };
       }
 
       // 3) Переписки из приёмника Wazzup: ссылка на объявление лежит в первом сообщении.
@@ -1297,9 +1306,9 @@ export default async function handler(req, res){
           src = 'fb.me/' + fb[1];
         }
         if(!src) continue;
-        const picked = pickAd(list, dayIso);
+        const picked = pickAd(list, dayIso, true);
         if(!picked){ noLink.push({ phone, at: e.received_at, link: src, why: 'объявления с такой ссылкой в кабинетах нет' }); continue; }
-        touches.push({ message_id: e.message_id || null, phone, at: e.received_at, link: src,
+        touches.push({ message_id: e.message_id || (phone + '@' + e.received_at), phone, at: e.received_at, link: src,
           ad: picked.ad, ambiguous: picked.ambiguous });
       }
 
