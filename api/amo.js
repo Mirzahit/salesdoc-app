@@ -1421,6 +1421,141 @@ export default async function handler(req, res){
           : `Сохранено касаний: ${saved}. Тегов проставлено: ${tagged}.`
       });
     }
+    if(action === 'targ_forms'){
+      // v931: второй канал разметки — заявки с лидформ.
+      // Переписки узнаём по ссылке на пост, а лидформа ссылки не присылает: человек
+      // заполняет форму внутри Facebook, и в amoCRM сделка приходит как «Facebook №…».
+      // Зато сама Meta отдаёт такую заявку вместе с номером объявления и телефоном —
+      // по телефону и находим сделку. Телефоны наружу не отдаём: APP_TOKEN публичный,
+      // поэтому вся работа с ними идёт здесь, на сервере.
+      const days = Math.min(Math.max(Number(req.query.days || 30), 1), 90);
+      const dryRunRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
+      const dryRun = dryRunRaw !== '0' && dryRunRaw !== 'false';
+      const sinceTs = Math.floor(Date.now() / 1000) - days * 86400;
+
+      const TOKEN = String(process.env.META_ACCESS_TOKEN || '').trim();
+      if(!TOKEN) return bad(res, 500, 'META_ACCESS_TOKEN не задан');
+      async function metaGet(path, params){
+        const qs = new URLSearchParams(Object.assign({ access_token: TOKEN }, params || {}));
+        const r = await fetch(`https://graph.facebook.com/v21.0${path}?${qs.toString()}`);
+        const j = await r.json().catch(() => null);
+        if(!r.ok || (j && j.error)){
+          const e = new Error(((j && j.error && j.error.message) || ('Meta ' + r.status)));
+          e.code = (j && j.error && j.error.code) || r.status;
+          throw e;
+        }
+        return j;
+      }
+
+      // Кто ведёт какой кабинет + список объявлений (у карты нет персональных данных).
+      let targByAcc = {};
+      try {
+        const rows = await sbSelect('app_settings', { key: 'eq.mkt_targetologs', limit: '1' });
+        targByAcc = (rows.length && rows[0].value) || {};
+      } catch(_){ targByAcc = {}; }
+      const nameForAcc = (acc) => targByAcc[acc] || targByAcc[String(acc).replace(/^act_/, '')] || null;
+
+      const proto = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const adsResp = await fetch(`${proto}://${host}/api/meta-ads?endpoint=ads_map`, {
+        headers: { 'x-app-token': String(process.env.APP_TOKEN || '').trim(), 'x-user-email': 'cron@salesdoc.io' }
+      });
+      const adsJson = await adsResp.json().catch(() => null);
+      if(!adsJson || !Array.isArray(adsJson.ads)) return bad(res, 502, 'Не удалось получить список объявлений');
+
+      // Тянем заявки по каждому объявлению. Meta хранит их 90 дней.
+      const phoneKeys = /phone|тел|номер/i;
+      const raw = [], adErrors = [];
+      let scanned = 0;
+      for(const a of adsJson.ads){
+        if(scanned >= 250) break;
+        scanned++;
+        let page = null;
+        try {
+          page = await metaGet(`/${a.ad_id}/leads`, {
+            fields: 'id,created_time,form_id,field_data',
+            filtering: JSON.stringify([{ field: 'time_created', operator: 'GREATER_THAN', value: sinceTs }]),
+            limit: 100
+          });
+        } catch(e){
+          if(adErrors.length < 5) adErrors.push({ ad_id: a.ad_id, ad_name: a.ad_name, code: e.code, error: e.message });
+          continue;
+        }
+        ((page && page.data) || []).forEach(l => {
+          let phone = '';
+          ((l.field_data) || []).forEach(f => {
+            if(!phone && phoneKeys.test(String(f.name || ''))) phone = String((f.values || [])[0] || '');
+          });
+          const digits = phone.replace(/\D/g, '');
+          if(digits.length < 9) return;
+          raw.push({ lead: l.id, at: l.created_time, phone: digits, form_id: l.form_id || null,
+            ad_id: a.ad_id, ad_name: a.ad_name, campaign_id: a.campaign_id, campaign: a.campaign, account: a.account });
+        });
+      }
+
+      // По телефону ищем сделку — так же, как в переписках.
+      const rowsToSave = [], notFound = [], skipped = [];
+      const seen = new Set();
+      for(const f of raw){
+        if(seen.has(f.lead)) continue;
+        seen.add(f.lead);
+        const targ = nameForAcc(f.account);
+        if(!targ){ skipped.push({ ad: f.ad_name, why: 'у кабинета ' + f.account + ' не вписано имя таргетолога' }); continue; }
+        const adTs = Math.floor(new Date(f.at).getTime() / 1000);
+        let contacts = [];
+        try {
+          const r = await amoFetch(`/contacts?query=${encodeURIComponent(f.phone)}&limit=10&with=leads`, env);
+          contacts = (r && r._embedded && r._embedded.contacts) || [];
+        } catch(e){ skipped.push({ ad: f.ad_name, why: 'поиск в amo не удался: ' + e.message }); continue; }
+        const ids = [];
+        contacts.forEach(c => ((c._embedded && c._embedded.leads) || []).forEach(l => { if(!ids.includes(l.id)) ids.push(l.id); }));
+        const leads = [];
+        for(const id of ids.slice(0, 8)){
+          try { const l = await amoFetch(`/leads/${id}`, env); if(l) leads.push(l); } catch(_){}
+        }
+        if(!leads.length){
+          notFound.push({ at: f.at, targetolog: targ, campaign: f.campaign, ad_name: f.ad_name,
+            why: contacts.length ? 'контакт есть, сделки нет' : 'заявка есть в рекламе, а в amoCRM её нет' });
+          continue;
+        }
+        const best = leads.slice().sort((x, y) =>
+          Math.abs(Number(x.created_at || 0) - adTs) - Math.abs(Number(y.created_at || 0) - adTs))[0];
+        rowsToSave.push({
+          country: country, message_id: 'lg:' + f.lead, phone: f.phone,
+          touched_at: f.at, account: f.account, targetolog: targ,
+          campaign_id: f.campaign_id || null, campaign: f.campaign || null,
+          ad_id: f.ad_id || null, ad_name: f.ad_name || null,
+          ad_ambiguous: false, link: 'лидформа ' + (f.form_id || ''), source: 'meta_leadform',
+          lead_id: best.id, contact_id: contacts.length ? contacts[0].id : null,
+          lead_created: new Date(Number(best.created_at || 0) * 1000).toISOString(),
+          _lead_name: best.name
+        });
+      }
+
+      let saved = 0; const saveErrors = [];
+      if(!dryRun && rowsToSave.length){
+        const clean = rowsToSave.map(r => { const c = Object.assign({}, r); delete c._lead_name; return c; });
+        try { await sbInsertIgnoreDup('ad_touches', clean, 'country,message_id'); saved = clean.length; }
+        catch(e){ saveErrors.push(e.message || String(e)); }
+      }
+
+      return res.status(200).json({
+        country, days, dry_run: dryRun,
+        ads_scanned: scanned,
+        forms_leads_found: raw.length,
+        matched: rowsToSave.length,
+        saved, save_errors: saveErrors,
+        ad_errors: adErrors,
+        touches: rowsToSave.map(r => ({ at: r.touched_at, targetolog: r.targetolog, campaign: r.campaign,
+          ad_name: r.ad_name, lead_id: r.lead_id, lead_name: r._lead_name })),
+        not_found: notFound,
+        skipped: skipped,
+        message: raw.length === 0
+          ? 'Заявок лидформ не получили. Если в ad_errors стоит про права — доступу нужно разрешение leads_retrieval на страницу.'
+          : (dryRun ? `Готово к сохранению: ${rowsToSave.length} заявок. Применить — dry_run=false.`
+                    : `Сохранено: ${saved}.`)
+      });
+    }
     if(action === 'targ_report'){
       // v929: отчёт по таргетологам и объявлениям.
       // Слева цифры ровно как в рекламном кабинете (потрачено, результаты, цена результата,
