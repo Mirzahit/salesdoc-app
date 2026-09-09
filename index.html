@@ -5903,6 +5903,7 @@ body.light #view-marketing .mkt-camps-head,body.light #view-marketing .mkc-n,bod
    людей в CRM. Граница между источниками — вертикальная линия, а не декор: слева то,
    за что отвечает таргетолог, справа то, за что отвечает отдел продаж. */
 #view-marketing .mkd-ccf._tg{margin:-8px 0 18px}
+#view-marketing .mkd-osw-note{font-size:11px;color:var(--text-muted);align-self:center;margin-left:2px}
 #view-marketing .mkd-ads{padding:0;overflow:hidden}
 #view-marketing .mkd-adh{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 14px;padding:15px 18px 12px}
 #view-marketing .mkd-adh .n{font-size:14.5px;font-weight:650;letter-spacing:-.01em;color:var(--text-primary)}
@@ -5936,12 +5937,17 @@ body.light #view-marketing .mkt-camps-head,body.light #view-marketing .mkc-n,bod
 #view-marketing .mkd-crm .won{color:var(--success);font-weight:600}
 #view-marketing .mkd-crm .lost{color:var(--danger)}
 #view-marketing .mkd-crm .none{color:var(--text-faint)}
-@media(max-width:1100px){
+@media(max-width:1180px){
  #view-marketing .mkd-adt{display:none}
- #view-marketing .mkd-adr{grid-template-columns:44px 1fr;gap:4px 12px;padding:13px 16px}
- #view-marketing .mkd-adr .v{text-align:left;grid-column:2;display:flex;align-items:baseline;gap:6px}
- #view-marketing .mkd-adr .v i{margin:0}
+ #view-marketing .mkd-adr{grid-template-columns:44px 1fr;gap:9px 12px;padding:15px 16px}
+ #view-marketing .mkd-adr>div:nth-child(2){grid-column:2}
+ #view-marketing .mkd-adr .v{grid-column:1/-1;display:flex;align-items:baseline;justify-content:space-between;
+  gap:12px;text-align:right;border-top:1px solid var(--border-faint);padding-top:7px}
+ #view-marketing .mkd-adr .v::before{content:attr(data-l);font-size:10px;font-weight:700;letter-spacing:.4px;
+  text-transform:uppercase;color:var(--text-faint);white-space:nowrap}
+ #view-marketing .mkd-adr .v i{display:none}
  #view-marketing .mkd-adr .sep{display:none}
+ #view-marketing .mkd-crm{grid-column:1/-1;border-top:1px solid var(--border-faint);padding-top:9px}
 }
 #view-marketing .mkd-dot{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
 
@@ -6276,6 +6282,9 @@ body.light .mkd-tip{background:#FFFFFF;border-color:rgba(15,18,25,.12)}
 body.light .mkd-sheet{background:#F6F7FA}
 body.light .mkd-sheet .mkd-card{background:#FFFFFF;border-color:rgba(15,18,25,.09)}
 body.light #view-marketing .mkd-card,body.light #view-marketing .mkd-kpi,body.light #view-marketing .mkd-ccf b{background:#FFFFFF;border-color:rgba(15,18,25,.09)}
+body.light #view-marketing .mkd-adr:hover{background:rgba(15,18,25,.025)}
+body.light #view-marketing .mkd-adr .pic{background:#F3F5F7}
+body.light #view-marketing .mkd-fate{background:rgba(15,18,25,.07)}
 body.light #view-marketing .mkd-ccf b.off{background:transparent}
 body.light #view-marketing .mkd-seg b.on{background:#FFFFFF}
 body.light #view-marketing .mkd-svg circle,body.light .mkd-sheet .mkd-svg circle{stroke:#FFFFFF}
@@ -19599,8 +19608,10 @@ function _mkdSrcRow(){
   + (empty ? chip('__empty__', 'Не заполнен', empty, 'dim') : '')
   + '</div>';
 }
-var _mkdOrigin = 'all';
-var _MKD_ORIGIN_L = { all:'все сделки', auto:'заявки', call:'звонки', manual:'сделки, заведённые вручную' };
+// v935: по умолчанию исключаем сделки, заведённые менеджером вручную — реклама
+// их не приводила, и в оценке маркетинга они только мешают.
+var _mkdOrigin = 'self';
+var _MKD_ORIGIN_L = { self:'пришли сами', all:'все сделки', auto:'заявки', call:'звонки', manual:'сделки, заведённые вручную' };
 // Сделки, созданные телефонией, тоже приходят «от программы», но это не заявка:
 // менеджер сам набрал номер. Отделяем их по названию, которое ставит телефония.
 var _RE_CALL = /исходящ|входящ|пропущ/i;
@@ -19613,7 +19624,9 @@ window.mkdSetOrigin = function(v){ _mkdOrigin = v; _mkdLeadF.limit = 60; _mkdRen
 function _mkdAgg(rp){
  var all = (rp && rp.leads) || [];
  var leads = all.filter(function(l){
-  if(_mkdOrigin !== 'all' && _mkdOriginOf(l) !== _mkdOrigin) return false;
+  var o = _mkdOriginOf(l);
+  if(_mkdOrigin === 'self'){ if(o === 'manual') return false; }
+  else if(_mkdOrigin !== 'all' && o !== _mkdOrigin) return false;
   return _mkdSrcPass(l);
  });
  var stages = ((rp && rp.stages) || []).map(function(st){
@@ -19827,12 +19840,12 @@ function _mkdRenderAds(){
     + '<div class="pic">' + pic + '</div>'
     + '<div><div class="nm">' + sanitize(a.ad_name || 'без названия') + '</div>'
     +  '<div class="cm">' + sanitize(a.campaign || '') + '</div></div>'
-    + '<div class="v">' + _mkdUsd(a.spend) + '</div>'
-    + '<div class="v' + (a.results ? '' : ' dim') + '">' + a.results
-    +  '<i>' + sanitize(a.result_kind || '') + '</i></div>'
-    + '<div class="v' + (a.cost_per_result != null ? '' : ' dim') + '">' + _mkdUsd(a.cost_per_result) + '</div>'
-    + '<div class="v">' + num(a.impressions) + '</div>'
-    + '<div class="v">' + num(a.reach) + '</div>'
+    + '<div class="v" data-l="Потрачено">' + _mkdUsd(a.spend) + '</div>'
+    + '<div class="v' + (a.results ? '' : ' dim') + '" data-l="' + sanitize(a.result_kind || 'Результат') + '">'
+    +  a.results + '<i>' + sanitize(a.result_kind || '') + '</i></div>'
+    + '<div class="v' + (a.cost_per_result != null ? '' : ' dim') + '" data-l="Цена">' + _mkdUsd(a.cost_per_result) + '</div>'
+    + '<div class="v" data-l="Показы">' + num(a.impressions) + '</div>'
+    + '<div class="v" data-l="Охват">' + num(a.reach) + '</div>'
     + '<div class="sep"></div>'
     + '<div class="mkd-crm">' + _mkdCrmLine(c) + '</div>'
     + '</div>';
@@ -19940,7 +19953,7 @@ function _mkdRender(){
   oManual += _mkdA[cc].origins.manual; oAll += _mkdA[cc].all_total;
  });
  html += '<div class="mkd-osw">'
-  + [['all','Все сделки',oAll],['auto','Заявки',oAuto],['call','Звонки',oCall],['manual','Завёл менеджер',oManual]].map(function(x){
+  + [['self','Пришли сами',oAuto + oCall],['auto','Заявки',oAuto],['call','Звонки',oCall],['manual','Завёл менеджер',oManual],['all','Все сделки',oAll]].map(function(x){
      return '<b class="' + (_mkdOrigin === x[0] ? 'on' : '') + '" onclick="mkdSetOrigin(&quot;' + x[0] + '&quot;)">'
       + x[1] + '<i>' + x[2] + '</i></b>';
     }).join('')
@@ -20012,8 +20025,9 @@ function _mkdRender(){
 
  var hid = _mkdAllCodes().filter(function(c){ return _mkdHidden[c]; });
  html += '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Реклама по странам</div>'
-  + '<div class="s">деньги — по стране аудитории · без фильтров сверху'
-  + (_mkdTarg ? ' · деньги только этого кабинета, а лиды и продажи в карточках — по всем' : '') + (hid.length ? (' · скрыто: ' + hid.map(_mkdName).join(', ')) : '') + '</div></div>'
+  + '<div class="s">деньги — по стране аудитории'
+  + ' · обращения и продажи — по фильтру «' + _MKD_ORIGIN_L[_mkdOrigin] + '»'
+  + (_mkdTarg ? ' · деньги только этого кабинета, а обращения — по всем' : '') + (hid.length ? (' · скрыто: ' + hid.map(_mkdName).join(', ')) : '') + '</div></div>'
   + '<div class="mkd-grid">' + _mkdCountryCards(t) + '</div></div>';
 
  html += '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Кампании</div>'
@@ -20642,13 +20656,18 @@ function _mkdRenderCcf(){
 }
 
 function _mkdCountryCards(t){
- var q = _mkdData.quals, costs = (_mkdData.settings || {}).costs || {};
+ var costs = (_mkdData.settings || {}).costs || {};
  var total = t.spend;
  return t.list.filter(function(c){ return _mkdOwn(c.code); }).map(function(c){
-  var x = q[c.code] || null;
-  var amo  = x ? x.leads : null;
-  var meet = (x && x.stages && x.stages.meeting) ? x.stages.meeting.count : null;
-  var inv  = (x && x.stages && x.stages.invoice) ? x.stages.invoice.count : null;
+  var x = _mkdA[c.code] || null;
+  var stg = function(re){
+   var f = null;
+   ((x && x.stages) || []).forEach(function(st){ if(!f && re.test(String(st.name).toLowerCase())) f = st; });
+   return f ? f.reached : null;
+  };
+  var amo  = x ? x.leads_total : null;
+  var meet = stg(_RE_MEET);
+  var inv  = stg(_RE_INV);
   var qcost = (inv && inv > 0) ? c.spend/inv : null;
   var rate = Number((costs[c.code] || {}).usd_rate) || 0;
   var spendLocal = rate > 0 ? c.spend * rate : null;
@@ -20672,7 +20691,7 @@ function _mkdCountryCards(t){
    + '</div>'
    + '<div class="mkd-fn">'
    +  row('Заявки с рекламы', c.leads || 0, '')
-   +  row('Всего лидов в amoCRM', amo, '')
+   +  row('Обращений в CRM · ' + _MKD_ORIGIN_L[_mkdOrigin], amo, '')
    +  row('Назначена встреча', meet, _mkdPct(meet, amo))
    +  row('Счёт выставлен', inv, _mkdPct(inv, meet))
    + '</div>'
