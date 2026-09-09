@@ -1249,12 +1249,33 @@ export default async function handler(req, res){
         kindByAdDay[d.ad_id + '|' + d.date] = d.result_kind || null;
       });
 
-      const byShort = {}, byStory = {}, byPost = {};
+      const byShort = {}, byStory = {}, byPost = {}, byText = {};
       const push = (map, key, ad) => { if(!key) return; (map[key] = map[key] || []).push(ad); };
+      // v954: узнаём объявление и по ТЕКСТУ первого сообщения, когда ссылки нет —
+      // человек мог её стереть. Тексты кнопок берём из кабинета (ice_breakers, автотекст),
+      // плюс ручная привязка из настроек mkt_text_codes: { "демо": "act_…" }.
+      const normText = (v) => String(v || '').toLowerCase().replace(/[^a-zа-яё0-9]+/gi, ' ').trim();
       adsJson.ads.forEach(a => {
         push(byShort, a.ig_shortcode, a);
         push(byStory, a.story_id, a);
         push(byPost, a.post_id, a);
+        const w = a.welcome; if(!w) return;
+        const tf = w.text_format || {}; const msg = tf.message || {};
+        const texts = [];
+        (msg.ice_breakers || []).forEach(x => texts.push(x.title || x.question || x.text));
+        [msg.autofill_message, tf.autofill_message].forEach(x => { if(x && x.content) texts.push(x.content); });
+        texts.forEach(t => push(byText, normText(t), a));
+      });
+      let textCodes = {};
+      try {
+        const rows = await sbSelect('app_settings', { key: 'eq.mkt_text_codes', limit: '1' });
+        textCodes = (rows.length && rows[0].value) || {};
+      } catch(_){}
+      Object.keys(textCodes).forEach(k => {
+        const acc = String(textCodes[k] || '');
+        const ads = adsJson.ads.filter(a => a.account === acc && String(a.dest || '').toUpperCase() === 'WHATSAPP');
+        if(ads.length) byText[normText(k)] = ads;
+        else if(acc) byText[normText(k)] = [{ ad_id: null, ad_name: null, campaign_id: null, campaign: null, account: acc }];
       });
 
       // Из нескольких объявлений с одним постом выбираем так:
@@ -1318,6 +1339,12 @@ export default async function handler(req, res){
           const ex = await expandFbMe(fb[1]);
           if(ex) list = byStory[(ex.page || '') + '_' + ex.post] || byPost[ex.post] || null;
           src = 'fb.me/' + fb[1];
+        }
+        if(!src){
+          const k = normText(txt.split('\n')[0]);
+          const byT = k ? byText[k] : null;
+          // текст должен указывать на ОДИН кабинет, иначе это не метка
+          if(byT && byT.length && new Set(byT.map(a => a.account)).size === 1){ list = byT; src = 'текст «' + txt.split('\n')[0].slice(0, 40) + '»'; }
         }
         if(!src) continue;
         const picked = pickAd(list, dayIso, true);
