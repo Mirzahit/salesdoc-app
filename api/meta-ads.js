@@ -855,9 +855,13 @@ export default async function handler(req, res) {
       // определяем по ссылке: тут собираем соответствие ссылки кабинету и кампании.
       // Только чтение: ничего никуда не пишем.
       const accounts = await resolveAccounts(TOKEN);
-      const FULL = 'id,name,effective_status,created_time,campaign{id,name},adset{id,name},'
+      // v931: просим ещё и номер лидформы. Он лежит либо в цели группы объявлений
+      // (promoted_object), либо в кнопке креатива. Читается обычным правом ads_read —
+      // в отличие от самих заявок, для которых нужен доступ к Странице.
+      const FULL = 'id,name,effective_status,created_time,campaign{id,name},'
+        + 'adset{id,name,promoted_object},'
         + 'creative{id,object_type,instagram_permalink_url,effective_object_story_id,'
-        + 'object_story_id,effective_instagram_media_id,url_tags,thumbnail_url}';
+        + 'object_story_id,effective_instagram_media_id,url_tags,thumbnail_url,object_story_spec}';
       // Запасной набор полей: если Meta не отдаст расширенные поля креатива
       // (их видимость зависит от прав токена), карта не должна остаться пустой.
       const LEAN = 'id,name,effective_status,campaign{id,name},creative{id,effective_object_story_id}';
@@ -899,7 +903,16 @@ export default async function handler(req, res) {
             page_id: st && st.length === 2 ? st[0] : null,
             post_id: st && st.length === 2 ? st[1] : null,
             url_tags: cr.url_tags || null,
-            thumb: cr.thumbnail_url || null
+            thumb: cr.thumbnail_url || null,
+            form_id: (function(){
+              const po = (a.adset && a.adset.promoted_object) || {};
+              if (po.lead_gen_form_id) return String(po.lead_gen_form_id);
+              const spec = cr.object_story_spec || {};
+              const ld = spec.link_data || spec.video_data || {};
+              const cta = ld.call_to_action || {};
+              const v = cta.value || {};
+              return v.lead_gen_form_id ? String(v.lead_gen_form_id) : null;
+            })()
           });
         });
       }
