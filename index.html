@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v932</title>
+<title>SalesDoc — Финансовый Дашборд v934</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -19246,6 +19246,11 @@ var _MKD_COLORS = { KG:'#5E6AD2', KZ:'#46A6C9', UZ:'#C98A46', RU:'#8A8F9C' };
 var _MKD_CUR = { KG:'сом', KZ:'тг' };
 // Своя база amo есть только у этих стран — по остальным показываем лишь рекламу.
 var _MKD_AMO = ['KZ','KG'];
+// v934: работаем только в этих странах. Meta иногда относит центы расхода к
+// соседям (роуминг, VPN) — раньше из-за $0.14 на экране появлялся Узбекистан
+// с пустой карточкой. Такие страны в итоги входят, но отдельно не показываются.
+var _MKD_OWN = { KZ: 1, KG: 1 };
+function _mkdOwn(cc){ return !!_MKD_OWN[cc]; }
 
 function _mkdCol(c){ return _MKD_COLORS[c] || '#8A8F9C'; }
 function _mkdName(c){ return _MKD_NAMES[c] || c; }
@@ -19314,7 +19319,7 @@ function _mkdAllCodes(){
  var set = {};
  ((_mkdData.geo.countries) || []).forEach(function(c){ if(c.spend > 0) set[c.code] = 1; });
  (((_mkdData.daily) || {}).countries || []).forEach(function(c){ set[c] = 1; });
- return Object.keys(set).sort();
+ return Object.keys(set).filter(_mkdOwn).sort();
 }
 function _mkdVisCodes(){ return _mkdAllCodes().filter(function(c){ return !_mkdHidden[c]; }); }
 
@@ -20639,7 +20644,7 @@ function _mkdRenderCcf(){
 function _mkdCountryCards(t){
  var q = _mkdData.quals, costs = (_mkdData.settings || {}).costs || {};
  var total = t.spend;
- return t.list.map(function(c){
+ return t.list.filter(function(c){ return _mkdOwn(c.code); }).map(function(c){
   var x = q[c.code] || null;
   var amo  = x ? x.leads : null;
   var meet = (x && x.stages && x.stages.meeting) ? x.stages.meeting.count : null;
@@ -20685,7 +20690,7 @@ function _mkdCountryCards(t){
 function _mkdCampCountries(c){
  // страны с расходом меньше доллара не показываем — те же центы роуминга/VPN
  return Object.keys(c.by_country || {})
-  .filter(function(cc){ return (c.by_country[cc].spend || 0) >= 1; })
+  .filter(function(cc){ return _mkdOwn(cc) && (c.by_country[cc].spend || 0) >= 1; })
   .sort(function(a, b){ return c.by_country[b].spend - c.by_country[a].spend; });
 }
 // Русское склонение: 1 переписка, 2-4 переписки, 5+ переписок.
@@ -20888,7 +20893,7 @@ function _mkdBindChart(id){
 }
 function _mkdDrawDaily(){
  var box = document.getElementById('mkt-dash-chart'); if(!box || !_mkdData) return;
- var d = _mkdData.daily || {}, days = d.days || [], ccs = (d.countries || []).filter(function(c){ return !_mkdHidden[c]; });
+ var d = _mkdData.daily || {}, days = d.days || [], ccs = (d.countries || []).filter(function(c){ return _mkdOwn(c) && !_mkdHidden[c]; });
  var lg = document.getElementById('mkt-dash-lg');
  if(!days.length || !ccs.length){ box.innerHTML = '<div class="mkd-empty">Нет данных по дням за период.</div>'; if(lg) lg.innerHTML = ''; return; }
  box.innerHTML = _mkdLineChart(days, ccs, _mkdMetric, null, null, 'mkd-chart-main');
@@ -20924,7 +20929,7 @@ window.mkdOpenKpi = function(kind){
   return;
  }
  var d = _mkdData.daily || {}, days = d.days || [];
- var ccs = (d.countries || []).filter(function(c){ return !_mkdHidden[c]; });
+ var ccs = (d.countries || []).filter(function(c){ return _mkdOwn(c) && !_mkdHidden[c]; });
  var m = kind;
  var titles = { spend:'Расход по дням', leads:'Заявки (кабинет) по дням', cpl:'Цена заявки (кабинет) по дням' };
  if(!days.length){ _mkdOpenSheet(titles[m], _mkdPeriodLabel(), '<div class="mkd-empty">Нет данных по дням.</div>'); return; }
