@@ -932,6 +932,15 @@ export default async function handler(req, res) {
             post_id: st && st.length === 2 ? st[1] : null,
             url_tags: cr.url_tags || null,
             thumb: cr.thumbnail_url || null,
+            // v953: текст, который Meta подставляет человеку при переходе в WhatsApp/Direct.
+            // Нужен, чтобы сопоставить первые сообщения клиентов с объявлениями.
+            welcome: (function(){
+              const spec = cr.object_story_spec || {};
+              const ld = spec.link_data || spec.video_data || {};
+              const w = ld.page_welcome_message;
+              if(!w) return null;
+              try { return typeof w === 'string' ? JSON.parse(w) : w; } catch (_) { return String(w).slice(0, 500); }
+            })(),
             form_id: (function(){
               const po = (a.adset && a.adset.promoted_object) || {};
               if (po.lead_gen_form_id) return String(po.lead_gen_form_id);
