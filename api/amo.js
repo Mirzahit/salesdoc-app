@@ -1256,7 +1256,9 @@ export default async function handler(req, res){
         let live = list.filter(a => (spendByAdDay[a.ad_id + '|' + dayIso] || 0) > 0);
         if(!live.length) live = list.slice();
         if(wantChat){
-          const chat = live.filter(a => kindByAdDay[a.ad_id + '|' + dayIso] === 'Начало переписки');
+          // v938: сначала по настройке группы (куда ведёт объявление), потом по факту дня.
+          const wa = live.filter(a => String(a.dest || '').toUpperCase() === 'WHATSAPP');
+          const chat = wa.length ? wa : live.filter(a => kindByAdDay[a.ad_id + '|' + dayIso] === 'Начало переписки');
           if(chat.length) live = chat;
         }
         if(live.length === 1) return { ad: live[0], ambiguous: false };
