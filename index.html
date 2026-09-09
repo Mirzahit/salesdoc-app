@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v950</title>
+<title>SalesDoc — Финансовый Дашборд v952</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -20266,7 +20266,16 @@ function _mkdRenderUnmatched(loading){
  var box = document.getElementById('mkt-dash-unmatched'); if(!box) return;
  if(loading || !_mkdUnm){ box.innerHTML = '<div class="mkd-card"><div class="mkd-empty">' + (loading ? 'Собираем…' : 'Список не загрузился. Нажмите «Обновить».') + '</div></div>'; return; }
  var items = (_mkdUnm.items || []).filter(function(x){ return !x.error && (!_mkdTarg || x.targetolog === _mkdTarg); });
- if(!items.length){ box.innerHTML = '<div class="mkd-card"><div class="mkd-empty">Все, кто обратился с рекламы, найдены в CRM.</div></div>'; return; }
+ if(!items.length){
+  var others = (_mkdUnm.items || []).filter(function(x){ return !x.error; }).length;
+  box.innerHTML = '<div class="mkd-card"><div class="mkd-empty">'
+   + (_mkdTarg
+      ? sanitize(_mkdTarg) + ': все, кого поймали Wazzup и лидформы, найдены в CRM' + (others ? ' · у других таких ' + others : '')
+        + '. Остальные обращения из кабинета Meta (Instagram Direct, переписки без ссылки на объявление) до нас не доходят — их поимённо показать нечем.'
+      : 'Все, кого поймали Wazzup и лидформы, найдены в CRM.')
+   + '</div></div>';
+  return;
+ }
  var base = _mkdUnm.amo_search || '';
  box.innerHTML = '<div class="mkd-card mkd-rl mkd-un">'
   + '<div class="mkd-rl-t"><span>Когда</span><span>Кто</span><span>Телефон</span><span>Канал</span><span>Чья реклама</span><span class="r">Найти</span></div>'
