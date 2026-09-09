@@ -543,9 +543,25 @@ export default async function handler(req, res) {
             impressions: prev.impressions + Number(r.impressions || 0),
             clicks: prev.clicks + Number(r.clicks || 0)
           };
+          // v930: то же самое в разрезе кабинета — иначе график по дням не умеет
+          // показать «только Ибрагима»: дни складываются по обоим кабинетам сразу.
+          if (!slot._acct) slot._acct = {};
+          const aslot = slot._acct[r._acct] = slot._acct[r._acct] || {};
+          const ap = aslot[cc] || { spend: 0, leads: 0, impressions: 0, clicks: 0 };
+          aslot[cc] = {
+            spend: ap.spend + Number(r.spend || 0),
+            leads: ap.leads + (leads.count || 0),
+            impressions: ap.impressions + Number(r.impressions || 0),
+            clicks: ap.clicks + Number(r.clicks || 0)
+          };
         });
         const days = [...byDate.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)
-          .map(([date, by_country]) => ({ date, by_country }));
+          .map(([date, slot]) => {
+            const by_account = slot._acct || {};
+            const by_country = Object.assign({}, slot);
+            delete by_country._acct;
+            return { date, by_country, by_account };
+          });
         result = { period, currency, days, countries: [...seenCountries].sort(), cabinets, excluded };
       } else {
         const agg = new Map();
@@ -584,8 +600,15 @@ export default async function handler(req, res) {
           acc.msgs += msgs;
           acc.impressions += Number(r.impressions || 0);
           acc.clicks += Number(r.clicks || 0);
-          const prevC = acc.by_country[cc] || { spend: 0, leads: 0 };
-          acc.by_country[cc] = { spend: prevC.spend + Number(r.spend || 0), leads: prevC.leads + (leads.count || 0) };
+          const prevC = acc.by_country[cc] || { spend: 0, leads: 0, impressions: 0, clicks: 0, link_clicks: 0, reach: 0 };
+          acc.by_country[cc] = {
+            spend: prevC.spend + Number(r.spend || 0),
+            leads: prevC.leads + (leads.count || 0),
+            impressions: prevC.impressions + Number(r.impressions || 0),
+            clicks: prevC.clicks + Number(r.clicks || 0),
+            link_clicks: prevC.link_clicks + Number(r.inline_link_clicks || 0),
+            reach: prevC.reach + Number(r.reach || 0)
+          };
         });
         const accounts = [...accMap.values()].map(a => ({
           ...a,
@@ -708,6 +731,29 @@ export default async function handler(req, res) {
         }).filter(a => a.spend > 0).sort((a, b) => b.spend - a.spend);
       } catch (e) { ads = []; }
       result = { period, campaign_id: campaignId, days, countries: [...seen].sort(), ads };
+
+    } else if (endpoint === 'token_info') {
+      // v931: чей это доступ и какие у него права. Нужно, чтобы понять, почему Meta
+      // не отдаёт заявки лидформ: не хватает разрешения leads_retrieval или доступа
+      // к Странице. Сам токен в ответ НЕ попадает — только его тип, приложение и права.
+      const me = await metaFetch('/me', { fields: 'id,name' }, TOKEN).catch(e => ({ error: e.message }));
+      const dbg = await metaFetch('/debug_token', { input_token: TOKEN }, TOKEN).catch(e => ({ error: e.message }));
+      const d = (dbg && dbg.data) || {};
+      let pages = null;
+      try {
+        const r = await metaFetch('/me/accounts', { fields: 'id,name,tasks', limit: 50 }, TOKEN);
+        pages = ((r && r.data) || []).map(p => ({ id: p.id, name: p.name, tasks: p.tasks || [] }));
+      } catch (e) { pages = { error: e.message }; }
+      result = {
+        owner: me,
+        token: {
+          type: d.type || null, app_id: d.app_id || null, application: d.application || null,
+          expires_at: d.expires_at || null, is_valid: d.is_valid == null ? null : !!d.is_valid,
+          scopes: d.scopes || null, granular_scopes: d.granular_scopes || null,
+          error: dbg && dbg.error ? dbg.error : null
+        },
+        pages_visible_to_token: pages
+      };
 
     } else if (endpoint === 'ads_perf') {
       // v928: цифры по каждому объявлению за период — ровно те, что видит Ads Manager:
@@ -860,7 +906,7 @@ export default async function handler(req, res) {
       result = { cabinets, count: ads.length, ads };
 
     } else {
-      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info','geo','geo_daily','campaigns_geo','campaign_detail','ads_map','ads_perf'] });
+      return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info','geo','geo_daily','campaigns_geo','campaign_detail','ads_map','ads_perf','token_info'] });
     }
 
     // v442: метка страны в ответе — для отладки в DevTools Network видно какой кабинет ответил.
