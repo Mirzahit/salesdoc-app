@@ -11,6 +11,7 @@
 //   ?action=funnel&pipeline_id=N  — счётчики лидов по этапам выбранной воронки
 
 import { checkAuth, checkAdminToken } from './_auth.js';
+import { requirePermSoft } from './_perm.js';
 import { sbSelect, sbInsertIgnoreDup } from './_supabase.js';
 import { almatyIso } from './_dates.js';
 
@@ -1527,9 +1528,10 @@ export default async function handler(req, res){
           continue;
         }
         ((page && page.data) || []).forEach(l => {
-          let phone = '';
+          let phone = '', fname = '';
           ((l.field_data) || []).forEach(f => {
             if(!phone && phoneKeys.test(String(f.name || ''))) phone = String((f.values || [])[0] || '');
+            if(!fname && /name|имя|фио/i.test(String(f.name || ''))) fname = String((f.values || [])[0] || '');
           });
           const digits = phone.replace(/\D/g, '');
           if(digits.length < 9) return;
@@ -1537,7 +1539,7 @@ export default async function handler(req, res){
           // стоять в объявлениях разных кампаний.
           const src = adById[l.ad_id] || t.ad;
           if(!src || !src.account) return; // кабинет неизвестен — приписать некому
-          raw.push({ lead: l.id, at: l.created_time, phone: digits, form_id: l.form_id || t.id,
+          raw.push({ lead: l.id, at: l.created_time, phone: digits, fname: fname, form_id: l.form_id || t.id,
             ad_id: l.ad_id || src.ad_id, ad_name: l.ad_name || src.ad_name,
             campaign_id: l.campaign_id || src.campaign_id, campaign: l.campaign_name || src.campaign,
             account: src.account });
@@ -1566,6 +1568,7 @@ export default async function handler(req, res){
         }
         if(!leads.length){
           notFound.push({ at: f.at, targetolog: targ, campaign: f.campaign, ad_name: f.ad_name,
+            name: f.fname || '', phone_masked: f.phone.slice(0, 3) + ' ••• ' + f.phone.slice(-4), phone_tail: f.phone.slice(-4),
             why: contacts.length ? 'контакт есть, сделки нет' : 'заявка есть в рекламе, а в amoCRM её нет' });
           continue;
         }
@@ -1606,6 +1609,92 @@ export default async function handler(req, res){
           : (dryRun ? `Готово к сохранению: ${rowsToSave.length} заявок. Применить — dry_run=false.`
                     : `Сохранено: ${saved}.`)
       });
+    }
+    if(action === 'targ_unmatched'){
+      // v950: обратились с рекламы, но в CRM их не нашли. CEO хочет видеть таких людей
+      // поимённо, чтобы найти вручную. Два источника: переписки Wazzup (телефон и имя
+      // контакта уже есть) и заявки лидформ Meta (имя из формы + хвост телефона).
+      // Полный телефон отдаём только сотруднику с подписанной сессией и правом на
+      // Маркетинг — APP_TOKEN публичный, а телефоны клиентов наружу утекать не должны.
+      const since = String(req.query.since || almatyIso(Date.now() - 30 * 86400000));
+      const until = String(req.query.until || almatyIso(Date.now()));
+      const gate = await requirePermSoft(req, res, 'view_marketing');
+      if(!gate.ok) return;
+      const trusted = !!(gate.caller && gate.caller.trusted);
+      const mask = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length < 7 ? '' : d.slice(0, 3) + ' ••• ' + d.slice(-4); };
+      const days = Math.min(90, Math.max(1, Math.ceil((Date.now() - new Date(since).getTime()) / 86400000) + 1));
+
+      const proto = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const appTok = String(process.env.APP_TOKEN || '').trim();
+      const selfGet = async (path) => {
+        const r = await fetch(`${proto}://${host}${path}`, { headers: { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' } });
+        return r.json().catch(() => null);
+      };
+      let targByAcc = {};
+      try { const rows = await sbSelect('app_settings', { key: 'eq.mkt_targetologs', limit: '1' }); targByAcc = (rows.length && rows[0].value) || {}; } catch(_){}
+      const nameForAcc = (acc) => targByAcc[acc] || targByAcc[String(acc).replace(/^act_/, '')] || ('кабинет ' + String(acc).replace(/^act_/, ''));
+
+      const out = [];
+      // 1) Переписки: сообщения со ссылкой на объявление, у которых нет касания в ad_touches.
+      try {
+        const adsJson = await selfGet('/api/meta-ads?endpoint=ads_map');
+        const byShort = {}, byStory = {}, byPost = {};
+        ((adsJson && adsJson.ads) || []).forEach(a => {
+          if(a.ig_shortcode && !byShort[a.ig_shortcode]) byShort[a.ig_shortcode] = a;
+          if(a.story_id && !byStory[a.story_id]) byStory[a.story_id] = a;
+          if(a.post_id && !byPost[a.post_id]) byPost[a.post_id] = a;
+        });
+        const events = await sbSelect('wazzup_events', {
+          received_at: 'gte.' + since + 'T00:00:00', order: 'received_at.asc', limit: 2000
+        });
+        const touched = new Set((await sbSelect('ad_touches', { country: 'eq.' + country, select: 'phone', touched_at: 'gte.' + since + 'T00:00:00', limit: 5000 })).map(r => String(r.phone)));
+        const seen = new Set();
+        const fbCache = {};
+        for(const e of events){
+          if(e.kind !== 'message' || e.direction === 'out') continue;
+          if(String(e.received_at).slice(0, 10) > until) continue;
+          const phone = e.phone ? String(e.phone) : '';
+          if(!phone || phone.length > 15 || seen.has(phone)) continue;
+          const txt = String(e.message_text || '');
+          const ig = txt.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+          const fb = txt.match(/fb\.me\/([A-Za-z0-9]+)/);
+          if(!ig && !fb) continue;
+          let ad = ig ? byShort[ig[1]] : null;
+          if(!ad && fb){
+            if(fbCache[fb[1]] === undefined){
+              try {
+                const r = await fetch('https://fb.me/' + fb[1], { redirect: 'manual' });
+                const loc = r.headers.get('location') || '';
+                const st = loc.match(/story_fbid=(\d+)/), pid = loc.match(/[?&]id=(\d+)/);
+                fbCache[fb[1]] = st ? (byStory[(pid ? pid[1] : '') + '_' + st[1]] || byPost[st[1]] || null) : null;
+              } catch(_){ fbCache[fb[1]] = null; }
+            }
+            ad = fbCache[fb[1]];
+          }
+          seen.add(phone);
+          if(touched.has(phone)) continue;
+          out.push({ at: e.received_at, kind: 'переписка', name: e.contact_name || '',
+            phone: trusted ? phone : mask(phone), phone_tail: phone.slice(-4),
+            targetolog: ad ? nameForAcc(ad.account) : 'объявление не опознано', campaign: ad ? ad.campaign : null, ad_name: ad ? ad.ad_name : null,
+            first_line: txt.split('\n')[0].slice(0, 40) });
+        }
+      } catch(e){ out.push({ error: 'переписки: ' + (e.message || String(e)) }); }
+
+      // 2) Заявки лидформ без сделки — из сухого прогона.
+      try {
+        const f = await selfGet(`/api/amo?action=targ_forms&country=${country}&days=${days}&limit=200`);
+        ((f && f.not_found) || []).forEach(x => {
+          if(String(x.at || '').slice(0, 10) < since || String(x.at || '').slice(0, 10) > until) return;
+          out.push({ at: x.at, kind: 'заявка', name: x.name || '', phone: x.phone_masked || '', phone_tail: x.phone_tail || '',
+            targetolog: x.targetolog, campaign: x.campaign, ad_name: x.ad_name, first_line: '' });
+        });
+      } catch(e){ out.push({ error: 'заявки: ' + (e.message || String(e)) }); }
+
+      out.sort((a, b) => (b.at || '') < (a.at || '') ? -1 : 1);
+      const amoSub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+      return res.status(200).json({ country, since, until, trusted, count: out.filter(x => !x.error).length,
+        amo_search: `https://${amoSub}.amocrm.ru/leads/list/?query=`, items: out });
     }
     if(action === 'targ_report'){
       // v946: отчёт тяжёлый (Meta + amo по каждой сделке, до 40 с на холодном старте).

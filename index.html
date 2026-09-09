@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v949</title>
+<title>SalesDoc — Финансовый Дашборд v950</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6032,6 +6032,10 @@ body.light #view-marketing .mkd-seg b.on,body.light #view-marketing .mkd-setup-b
 #view-marketing .mkd-rl-r .bk.not_taken{color:var(--warning)}
 #view-marketing .mkd-rl-r .bk.in_work{color:var(--text-2)}
 #view-marketing .mkd-rl-more{padding:9px 18px;font-size:11px;color:var(--text-muted)}
+#view-marketing .mkd-un .mkd-rl-t,#view-marketing .mkd-un .mkd-rl-r{grid-template-columns:56px minmax(160px,1.3fr) 130px minmax(150px,1fr) 130px 150px}
+#view-marketing .mkd-un .ph{font-variant-numeric:tabular-nums;color:var(--text-primary);font-weight:600;white-space:nowrap}
+#view-marketing .mkd-un .nm{cursor:default}
+#view-marketing .mkd-un .nm:hover{text-decoration:none}
 #view-marketing .mkd-mg-t,#view-marketing .mkd-mg-r{display:grid;grid-template-columns:minmax(140px,1fr) 80px minmax(160px,1.2fr) 100px 80px 80px;gap:0 14px;align-items:center;padding:0 18px}
 #view-marketing .mkd-mg-t{padding-top:12px;padding-bottom:7px;border-bottom:1px solid var(--border-faint)}
 #view-marketing .mkd-mg-t .r,#view-marketing .mkd-mg-r .r{text-align:right}
@@ -19943,6 +19947,7 @@ window.mktLoadAdsReport = async function(force){
  } catch(_){ _mkdAds = null; }
  _mkdAdsLoading = false;
  _mkdRenderAds();
+ mktLoadUnmatched(force);
 };
 function _mkdAdsFor(name){
  var list = ((_mkdAds || {}).targetologs) || [];
@@ -20240,6 +20245,45 @@ function _mkdDeptStrip(cur, prv){
 }
 
 // Рекламные лиды: доказательство цифр — кто именно, с чьей рекламы, чем закончилось.
+
+// ── v950: обратились, но в CRM не нашли ─────────────────────────────────────
+// Список поимённо: переписки Wazzup и заявки лидформ, у которых нет сделки.
+// Нужен, чтобы найти человека в amoCRM руками — телефон и имя даны для поиска.
+var _mkdUnm = null, _mkdUnmKey = '';
+window.mktLoadUnmatched = async function(force){
+ var r = _mktSelRange(_mktSel);
+ var key = r.since + '|' + r.until;
+ if(!force && _mkdUnmKey === key) return;
+ _mkdUnmKey = key; _mkdUnm = null; _mkdRenderUnmatched(true);
+ try {
+  var res = await authFetch('/api/amo?action=targ_unmatched&country=KG&since=' + r.since + '&until=' + r.until);
+  var j = await res.json();
+  _mkdUnm = (j && !j.error) ? j : null;
+ } catch(_){ _mkdUnm = null; }
+ _mkdRenderUnmatched(false);
+};
+function _mkdRenderUnmatched(loading){
+ var box = document.getElementById('mkt-dash-unmatched'); if(!box) return;
+ if(loading || !_mkdUnm){ box.innerHTML = '<div class="mkd-card"><div class="mkd-empty">' + (loading ? 'Собираем…' : 'Список не загрузился. Нажмите «Обновить».') + '</div></div>'; return; }
+ var items = (_mkdUnm.items || []).filter(function(x){ return !x.error && (!_mkdTarg || x.targetolog === _mkdTarg); });
+ if(!items.length){ box.innerHTML = '<div class="mkd-card"><div class="mkd-empty">Все, кто обратился с рекламы, найдены в CRM.</div></div>'; return; }
+ var base = _mkdUnm.amo_search || '';
+ box.innerHTML = '<div class="mkd-card mkd-rl mkd-un">'
+  + '<div class="mkd-rl-t"><span>Когда</span><span>Кто</span><span>Телефон</span><span>Канал</span><span>Чья реклама</span><span class="r">Найти</span></div>'
+  + items.slice(0, 80).map(function(x){
+     var at = x.at ? String(x.at).slice(0, 10).split('-').reverse().slice(0, 2).join('.') : '—';
+     var q = x.phone_tail || '';
+     return '<div class="mkd-rl-r"><span class="d">' + at + '</span>'
+      + '<span class="nm">' + sanitize(x.name || 'без имени') + (x.first_line ? '<em>«' + sanitize(x.first_line) + '»</em>' : '') + '</span>'
+      + '<span class="ph">' + sanitize(x.phone || '') + '</span>'
+      + '<span class="ad">' + sanitize(x.kind) + (x.campaign ? ' · ' + sanitize(x.campaign) : '') + '</span>'
+      + '<span class="who">' + (_mkdTgList().some(function(t){ return t.targetolog === x.targetolog; }) ? '<i style="background:' + _mkdTgColor(x.targetolog) + '"></i>' : '') + sanitize(x.targetolog) + '</span>'
+      + '<span class="r">' + (q && base ? '<a class="ext" href="' + sanitize(base + q) + '" target="_blank" rel="noopener">в amoCRM по …' + sanitize(q) + '</a>' : '') + '</span></div>';
+    }).join('')
+  + '<div class="mkd-mg-n">Здесь только те, кого поймали Wazzup и лидформы. Meta считает обращения шире: Instagram Direct и повторные сообщения сюда не попадают.'
+  + (_mkdUnm.trusted ? '' : ' Полный телефон виден после входа в программу заново.') + '</div></div>';
+}
+
 function _mkdRenderAdLeads(){
  var box = document.getElementById('mkt-dash-adleads'); if(!box) return;
  var list = _mkdAdsFor(_mkdTarg);
@@ -20298,7 +20342,7 @@ window.mkdToggleMore = function(){
 };
 
 function _mkdRenderAds(){
- _mkdRenderHero(); _mkdRenderAdLeads(); _mkdRenderAdManagers();
+ _mkdRenderHero(); _mkdRenderAdLeads(); _mkdRenderAdManagers(); _mkdRenderUnmatched(!_mkdUnm && _mkdUnmKey !== '');
  var box = document.getElementById('mkt-dash-ads'); if(!box) return;
  if(!_mkdAds){ box.innerHTML = '<div class="mkd-empty">' + (_mkdAdsLoading ? 'Собираем отчёт по объявлениям…' : 'Отчёт по объявлениям не загрузился. Нажмите «Обновить».') + '</div>'; return; }
  var list = _mkdAdsFor(_mkdTarg);
@@ -20457,6 +20501,9 @@ function _mkdRender(){
  html += '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Рекламные лиды</div>'
   + '<div class="s">кто именно пришёл с рекламы и чем закончилось · клик по сделке — её путь в CRM</div></div>'
   + '<div id="mkt-dash-adleads"></div></div>';
+ html += '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Обратились, но в CRM не нашли</div>'
+  + '<div class="s">за них заплатили, а сделки нет — найти в amoCRM по имени или хвосту телефона</div></div>'
+  + '<div id="mkt-dash-unmatched"></div></div>';
  html += '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Менеджеры по рекламным лидам</div>'
   + '<div class="s">за этих людей заплатили — кто из менеджеров что с ними сделал</div></div>'
   + '<div id="mkt-dash-admgr"></div></div>';
