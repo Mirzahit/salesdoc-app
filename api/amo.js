@@ -1195,11 +1195,14 @@ export default async function handler(req, res){
       const maxPhones = Math.min(Math.max(Number(req.query.limit || 60), 1), 200);
       const dryRunRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
       const dryRun = dryRunRaw !== '0' && dryRunRaw !== 'false';
-      const writeTags = String(req.query.tags || '') === '1';
-      if(!dryRun){
+      const writeTags = String(req.query.tags || '') === '1' && !dryRun;
+      // Права разведены намеренно: складывать касания в СВОЮ таблицу — обычная работа
+      // отчёта, а вот менять теги в amoCRM (чужие данные, видят менеджеры) — только
+      // с админ-кодом CEO.
+      if(writeTags){
         const gate = checkAdminToken(req);
         if(!gate.ok) return bad(res, gate.unconfigured ? 503 : 403,
-          gate.unconfigured ? 'targ_sync: не настроен ADMIN_TOKEN' : 'Нужен админ-код (x-admin-token), чтобы писать в amo');
+          gate.unconfigured ? 'targ_sync: не настроен ADMIN_TOKEN' : 'Нужен админ-код (x-admin-token), чтобы ставить теги в amoCRM');
       }
 
       // 1) Имена таргетологов по кабинетам — из тех же настроек, что и карточки на дашборде.
