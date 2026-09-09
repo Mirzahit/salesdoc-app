@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v948</title>
+<title>SalesDoc — Финансовый Дашборд v949</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -6020,6 +6020,8 @@ body.light #view-marketing .mkd-seg b.on,body.light #view-marketing .mkd-setup-b
 #view-marketing .mkd-rl-r .nm:hover{text-decoration:underline;text-underline-offset:3px}
 #view-marketing .mkd-rl-r .nm em{display:block;font-style:normal;font-size:10.5px;font-weight:500;color:var(--text-faint);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #view-marketing .mkd-rl-r .nm em:empty{display:none}
+#view-marketing .mkd-rl-r .nm .ext{color:var(--text-muted);text-decoration:underline;text-underline-offset:3px;margin-left:6px}
+#view-marketing .mkd-rl-r .nm .ext:hover{color:var(--text-primary)}
 #view-marketing .mkd-rl-r .who{display:inline-flex;align-items:center;gap:7px}
 #view-marketing .mkd-rl-r .who i{width:8px;height:8px;border-radius:2px;display:inline-block;flex:none}
 #view-marketing .mkd-rl-r .ad,#view-marketing .mkd-rl-r .st{color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
@@ -20161,7 +20163,7 @@ function _mkdAdDeals(list){
   (t.ads || []).forEach(function(a){
    (((a.crm || {}).deals) || []).forEach(function(d){
     out.push({ t: t.targetolog, ad: a.ad_name, campaign: a.campaign, lead_id: d.lead_id, name: d.name,
-      client: d.client || '', company: d.company || '',
+      client: d.client || '', company: d.company || '', url: d.amo_url || '',
       stage: d.stage, bucket: d.bucket, price: d.price || 0, at: d.touched_at, created: d.lead_created });
    });
   });
@@ -20251,7 +20253,9 @@ function _mkdRenderAdLeads(){
      return '<div class="mkd-rl-r"><span class="d">' + at + '</span>'
       + '<span class="nm" onclick="mkdOpenLead(' + Number(d.lead_id) + ',&quot;' + cc + '&quot;)">'
       +  sanitize(d.client || d.company || d.name || ('#' + d.lead_id))
-      +  '<em>' + sanitize(d.client ? (d.company || d.name || '') : (d.company ? (d.name || '') : '')) + '</em></span>'
+      +  '<em>' + sanitize(d.client ? (d.company || d.name || '') : (d.company ? (d.name || '') : ''))
+      +  (d.url && /^https:\/\/[a-z0-9-]+\.amocrm\.ru\//i.test(d.url) ? ' <a class="ext" href="' + sanitize(d.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">открыть в amoCRM</a>' : '')
+      +  '</em></span>'
       + '<span class="who"><i style="background:' + _mkdTgColor(d.t) + '"></i>' + sanitize(d.t) + '</span>'
       + '<span class="ad">' + sanitize(d.ad || '') + '</span>'
       + '<span class="st">' + sanitize(d.stage || '—') + '</span>'

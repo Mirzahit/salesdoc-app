@@ -1738,7 +1738,9 @@ export default async function handler(req, res){
         else if(firstIds.has(l.status_id)){ bucket = 'not_taken'; s.not_taken++; }
         else { s.in_work++; }
         const who = clientOf(l, t);
-        s.deals.push({ lead_id: leadId, name: l.name, client: who.client, company: who.company, stage: stName[l.status_id] || '—',
+        const amoSub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+        s.deals.push({ lead_id: leadId, name: l.name, client: who.client, company: who.company,
+          amo_url: `https://${amoSub}.amocrm.ru/leads/detail/${leadId}`, stage: stName[l.status_id] || '—',
           bucket, price: Number(l.price || 0), touched_at: t.touched_at,
           lead_created: t.lead_created, ad_ambiguous: !!t.ad_ambiguous });
       });
