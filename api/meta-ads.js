@@ -941,6 +941,16 @@ export default async function handler(req, res) {
               if(!w) return null;
               try { return typeof w === 'string' ? JSON.parse(w) : w; } catch (_) { return String(w).slice(0, 500); }
             })(),
+            // v955: куда ведёт кнопка — номер WhatsApp или ссылка. Нужно, чтобы понять,
+            // на наш ли номер уходят обращения (если нет — их не увидит ни Wazzup, ни CRM).
+            cta: (function(){
+              const spec = cr.object_story_spec || {};
+              const ld = spec.link_data || spec.video_data || {};
+              const c = ld.call_to_action || {};
+              const v = c.value || {};
+              return { type: c.type || null, app: v.app_destination || null,
+                whatsapp: v.whatsapp_number || null, link: v.link || ld.link || null };
+            })(),
             form_id: (function(){
               const po = (a.adset && a.adset.promoted_object) || {};
               if (po.lead_gen_form_id) return String(po.lead_gen_form_id);
