@@ -1421,6 +1421,142 @@ export default async function handler(req, res){
           : `Сохранено касаний: ${saved}. Тегов проставлено: ${tagged}.`
       });
     }
+    if(action === 'targ_report'){
+      // v929: отчёт по таргетологам и объявлениям.
+      // Слева цифры ровно как в рекламном кабинете (потрачено, результаты, цена результата,
+      // показы, охват), справа — что из этих людей вышло в CRM: в работе, не квал и почему,
+      // не взяли в работу, продали и на сколько. Считаем ПО ДАТЕ РЕКЛАМНОГО КАСАНИЯ:
+      // если человека завели в августе, а вернула его сентябрьская реклама — продажа
+      // ложится в сентябрь, туда же, где потрачены деньги (решение CEO 09.09.2026).
+      const since = String(req.query.since || almatyIso(Date.now() - 30 * 86400000));
+      const until = String(req.query.until || almatyIso(Date.now()));
+      const proto = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const appTok = String(process.env.APP_TOKEN || '').trim();
+      const selfGet = async (qs) => {
+        const r = await fetch(`${proto}://${host}/api/meta-ads?${qs}`, {
+          headers: { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' }
+        });
+        return r.json().catch(() => null);
+      };
+
+      const [perf, map, settingsRows, pipelines] = await Promise.all([
+        selfGet(`endpoint=ads_perf&since=${since}&until=${until}`),
+        selfGet('endpoint=ads_map'),
+        sbSelect('app_settings', { key: 'in.(mkt_targetologs,mkt_costs)' }).catch(() => []),
+        getPipelines(env)
+      ]);
+      const sett = {};
+      (settingsRows || []).forEach(r => { sett[r.key] = r.value; });
+      const targByAcc = sett.mkt_targetologs || {};
+      const nameForAcc = (acc) => targByAcc[acc] || targByAcc[String(acc).replace(/^act_/, '')] || null;
+      const rate = Number(((sett.mkt_costs || {})[country] || {}).usd_rate) || 0;
+
+      const thumbByAd = {};
+      (((map && map.ads) || [])).forEach(a => { if(a.ad_id) thumbByAd[a.ad_id] = a.thumb || null; });
+
+      // 1) Касания за период. Одна сделка — одно касание: если человек кликал несколько
+      //    объявлений, заслуга у ПОСЛЕДНЕГО (решение CEO).
+      const touches = await sbSelect('ad_touches', {
+        country: 'eq.' + country,
+        touched_at: 'gte.' + since + 'T00:00:00',
+        order: 'touched_at.asc', limit: 5000
+      });
+      const inRange = touches.filter(t => String(t.touched_at).slice(0, 10) <= until);
+      const lastByLead = new Map();
+      inRange.forEach(t => { if(t.lead_id) lastByLead.set(t.lead_id, t); });
+
+      // 2) Этапы воронки: что считать «не взяли в работу», «в работе», «слились», «продажа».
+      const p = pipelines.find(x => /^лид/i.test(x.name || '')) || pipelines.find(x => x.is_main) || pipelines[0];
+      const isLost = (st) => Number(st.id) === 143 || Number(st.sort) === 11000 || /закрыт.*не.*реализ|не реализ/i.test(String(st.name || ''));
+      const isWon = (st) => Number(st.id) === 142 || Number(st.sort) === 10000 || /успешн.*реализ/i.test(String(st.name || ''));
+      const flow = (p ? p.statuses : []).filter(st => !isLost(st) && !isWon(st)).sort((a, b) => a.sort - b.sort);
+      const firstIds = new Set(flow.slice(0, 1).map(st => st.id)); // самый первый этап = ещё не взяли
+      const stName = {};
+      (p ? p.statuses : []).forEach(st => { stName[st.id] = st.name; });
+
+      // Причины отказа — их выбирает менеджер, когда закрывает сделку.
+      let lossName = {};
+      try {
+        const lr = await amoFetch('/leads/loss_reasons?limit=250', env);
+        ((lr && lr._embedded && lr._embedded.loss_reasons) || []).forEach(x => { lossName[x.id] = x.name; });
+      } catch(_){}
+
+      // 3) Тянем сами сделки.
+      const leads = {};
+      for(const id of lastByLead.keys()){
+        try { const l = await amoFetch(`/leads/${id}`, env); if(l) leads[id] = l; } catch(_){}
+      }
+
+      // 4) Раскладываем по объявлениям.
+      const byAd = new Map();
+      const slot = (adId) => {
+        if(!byAd.has(adId)) byAd.set(adId, {
+          crm_leads: 0, in_work: 0, not_taken: 0, lost: 0, won: 0, won_sum: 0,
+          loss_reasons: {}, deals: []
+        });
+        return byAd.get(adId);
+      };
+      lastByLead.forEach((t, leadId) => {
+        const l = leads[leadId];
+        const s = slot(t.ad_id || ('camp:' + (t.campaign_id || t.account)));
+        s.crm_leads++;
+        if(!l) return;
+        const st = (p ? p.statuses : []).find(x => x.id === l.status_id) || null;
+        let bucket = 'in_work';
+        if(st && isWon(st)){ bucket = 'won'; s.won++; s.won_sum += Number(l.price || 0); }
+        else if(st && isLost(st)){
+          bucket = 'lost'; s.lost++;
+          const why = lossName[l.loss_reason_id] || 'причина не указана';
+          s.loss_reasons[why] = (s.loss_reasons[why] || 0) + 1;
+        }
+        else if(firstIds.has(l.status_id)){ bucket = 'not_taken'; s.not_taken++; }
+        else { s.in_work++; }
+        s.deals.push({ lead_id: leadId, name: l.name, stage: stName[l.status_id] || '—',
+          bucket, price: Number(l.price || 0), touched_at: t.touched_at,
+          lead_created: t.lead_created, ad_ambiguous: !!t.ad_ambiguous });
+      });
+
+      // 5) Собираем ответ: у каждого таргетолога его объявления с расходом.
+      const out = {};
+      ((perf && perf.ads) || []).forEach(a => {
+        const targ = nameForAcc(a.account) || ('кабинет ' + a.account);
+        if(!out[targ]) out[targ] = { targetolog: targ, account: a.account, spend: 0, results: 0,
+          crm_leads: 0, in_work: 0, not_taken: 0, lost: 0, won: 0, won_sum: 0, ads: [] };
+        const t = out[targ];
+        const s = byAd.get(a.ad_id) || null;
+        t.spend += a.spend; t.results += a.results;
+        if(s){ t.crm_leads += s.crm_leads; t.in_work += s.in_work; t.not_taken += s.not_taken;
+               t.lost += s.lost; t.won += s.won; t.won_sum += s.won_sum; }
+        t.ads.push({
+          ad_id: a.ad_id, ad_name: a.ad_name, campaign: a.campaign, thumb: thumbByAd[a.ad_id] || null,
+          spend: a.spend, results: a.results, result_kind: a.result_kind, cost_per_result: a.cost_per_result,
+          impressions: a.impressions, reach: a.reach, ctr: a.ctr,
+          crm: s ? { leads: s.crm_leads, in_work: s.in_work, not_taken: s.not_taken,
+                     lost: s.lost, won: s.won, won_sum: Math.round(s.won_sum),
+                     loss_reasons: s.loss_reasons, deals: s.deals }
+                 : { leads: 0, in_work: 0, not_taken: 0, lost: 0, won: 0, won_sum: 0, loss_reasons: {}, deals: [] }
+        });
+      });
+      const list = Object.values(out).map(t => {
+        const revUsd = rate > 0 ? t.won_sum / rate : null;
+        t.ads.sort((x, y) => (y.crm.won_sum - x.crm.won_sum) || (y.crm.leads - x.crm.leads) || (y.spend - x.spend));
+        return { ...t, spend: Math.round(t.spend * 100) / 100, won_sum: Math.round(t.won_sum),
+          revenue_usd: revUsd == null ? null : Math.round(revUsd * 100) / 100,
+          profit_usd: revUsd == null ? null : Math.round((revUsd - t.spend) * 100) / 100,
+          roi: (revUsd != null && t.spend > 0) ? Math.round(revUsd / t.spend * 100) / 100 : null };
+      }).sort((a, b) => b.spend - a.spend);
+
+      return res.status(200).json({
+        country, since, until, usd_rate: rate || null,
+        targetologs: list,
+        touches_total: inRange.length,
+        leads_attributed: lastByLead.size,
+        note: 'Слева — цифры рекламного кабинета. Справа — только те люди, которых удалось узнать '
+          + 'по ссылке на объявление в первом сообщении WhatsApp. Переписки копятся с 03.09.2026; '
+          + 'заявки из Instagram Direct и звонки следа рекламы не несут и сюда не попадают.'
+      });
+    }
     if(action === 'lead_report'){
       // v897: отчёт по лидам за период — для экрана «Маркетинг».
       // ?slim=1 — без списка лидов (нужен для сравнения с прошлым месяцем).
