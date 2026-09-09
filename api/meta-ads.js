@@ -747,8 +747,9 @@ export default async function handler(req, res) {
       const d = (dbg && dbg.data) || {};
       let pages = null;
       try {
-        const r = await metaFetch('/me/accounts', { fields: 'id,name,tasks', limit: 50 }, TK);
-        pages = ((r && r.data) || []).map(p => ({ id: p.id, name: p.name, tasks: p.tasks || [] }));
+        // v956: и номер WhatsApp, привязанный к Странице — туда уходят клики «Написать в WhatsApp».
+        const r = await metaFetch('/me/accounts', { fields: 'id,name,tasks,whatsapp_number', limit: 50 }, TK);
+        pages = ((r && r.data) || []).map(p => ({ id: p.id, name: p.name, tasks: p.tasks || [], whatsapp: p.whatsapp_number || null }));
       } catch (e) { pages = { error: e.message }; }
       result = {
         owner: me,
