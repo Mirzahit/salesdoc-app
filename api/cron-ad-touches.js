@@ -47,6 +47,13 @@ export default async function handler(req, res) {
                   saved: forms.saved || 0, errors: forms.save_errors || [] };
   } catch (e) { out.forms = { error: e.message || String(e) }; }
 
+  // Прогреваем отчёт за текущий месяц, чтобы экран открывался сразу, а не через 40 с.
+  try {
+    const d = new Date(); const y = d.getUTCFullYear(), m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const since = `${y}-${m}-01`, until = `${y}-${m}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    const r = await call(`action=targ_report&country=KG&since=${since}&until=${until}&fresh=1`);
+    out.warm = { ok: !r.error, targetologs: (r.targetologs || []).length };
+  } catch (e) { out.warm = { error: e.message || String(e) }; }
   console.log('[cron-ad-touches]', JSON.stringify(out));
   return res.status(200).json({ ok: true, ...out });
 }

@@ -346,6 +346,7 @@ function _lrGet(k){
 }
 function _lrSet(k, v){ _lrCache.set(k, { t: Date.now(), v }); }
 
+const _trCache = new Map(); // v946: готовые отчёты по таргетологам
 async function buildLeadReport(env, fromTs, toTs){
   const pipelines = await getPipelines(env);
   const p = pipelines.find(x => /^лид/i.test(x.name || '')) || pipelines.find(x => x.is_main) || pipelines[0];
@@ -1607,6 +1608,14 @@ export default async function handler(req, res){
       });
     }
     if(action === 'targ_report'){
+      // v946: отчёт тяжёлый (Meta + amo по каждой сделке, до 40 с на холодном старте).
+      // Держим готовый ответ 4 минуты: экран открывают чаще, чем меняются данные.
+      const trKey = country + '|' + String(req.query.since || '') + '|' + String(req.query.until || '');
+      const trHit = _trCache.get(trKey);
+      if(trHit && Date.now() - trHit.t < 4 * 60 * 1000 && String(req.query.fresh || '') !== '1'){
+        res.setHeader('X-Cache', 'HIT');
+        return res.status(200).json(trHit.v);
+      }
       // v929: отчёт по таргетологам и объявлениям.
       // Слева цифры ровно как в рекламном кабинете (потрачено, результаты, цена результата,
       // показы, охват), справа — что из этих людей вышло в CRM: в работе, не квал и почему,
@@ -1738,7 +1747,7 @@ export default async function handler(req, res){
           roi: (revUsd != null && t.spend > 0) ? Math.round(revUsd / t.spend * 100) / 100 : null };
       }).sort((a, b) => b.spend - a.spend);
 
-      return res.status(200).json({
+      const trOut = {
         country, since, until, usd_rate: rate || null,
         targetologs: list,
         touches_total: inRange.length,
@@ -1746,7 +1755,9 @@ export default async function handler(req, res){
         note: 'Слева — цифры рекламного кабинета. Справа — только те люди, которых удалось узнать '
           + 'по ссылке на объявление в первом сообщении WhatsApp. Переписки копятся с 03.09.2026; '
           + 'заявки из Instagram Direct и звонки следа рекламы не несут и сюда не попадают.'
-      });
+      };
+      _trCache.set(trKey, { t: Date.now(), v: trOut });
+      return res.status(200).json(trOut);
     }
     if(action === 'lead_report'){
       // v897: отчёт по лидам за период — для экрана «Маркетинг».
