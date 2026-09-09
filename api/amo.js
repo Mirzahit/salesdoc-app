@@ -1470,19 +1470,31 @@ export default async function handler(req, res){
       // Тянем заявки по каждому объявлению. Meta хранит их 90 дней.
       const phoneKeys = /phone|тел|номер/i;
       const raw = [], adErrors = [];
-      let scanned = 0;
-      for(const a of adsJson.ads){
+      let scanned = 0, okCount = 0, errCount = 0;
+      // v931.6: спрашиваем заявки у САМИХ ФОРМ, а не у каждого объявления.
+      // Форма принадлежит Странице, к которой у нас есть доступ; объявлений же 167,
+      // часть из них крутится со страниц, куда доступа нет, и они шумят ошибками.
+      const adById = {};
+      adsJson.ads.forEach(a => { adById[a.ad_id] = a; });
+      const forms = {};
+      adsJson.ads.forEach(a => { if(a.form_id && !forms[a.form_id]) forms[a.form_id] = a; });
+      const targets = Object.keys(forms).length
+        ? Object.keys(forms).map(fid => ({ kind: 'form', id: fid, ad: forms[fid] }))
+        : adsJson.ads.map(a => ({ kind: 'ad', id: a.ad_id, ad: a }));
+      for(const t of targets){
         if(scanned >= 250) break;
         scanned++;
         let page = null;
         try {
-          page = await metaGet(`/${a.ad_id}/leads`, {
-            fields: 'id,created_time,form_id,field_data',
+          page = await metaGet(`/${t.id}/leads`, {
+            fields: 'id,created_time,ad_id,ad_name,campaign_id,campaign_name,form_id,field_data',
             filtering: JSON.stringify([{ field: 'time_created', operator: 'GREATER_THAN', value: sinceTs }]),
-            limit: 100
+            limit: 200
           });
+          okCount++;
         } catch(e){
-          if(adErrors.length < 5) adErrors.push({ ad_id: a.ad_id, ad_name: a.ad_name, code: e.code, error: e.message });
+          errCount++;
+          if(adErrors.length < 5) adErrors.push({ kind: t.kind, id: t.id, name: t.ad.ad_name, code: e.code, error: e.message });
           continue;
         }
         ((page && page.data) || []).forEach(l => {
@@ -1492,8 +1504,13 @@ export default async function handler(req, res){
           });
           const digits = phone.replace(/\D/g, '');
           if(digits.length < 9) return;
-          raw.push({ lead: l.id, at: l.created_time, phone: digits, form_id: l.form_id || null,
-            ad_id: a.ad_id, ad_name: a.ad_name, campaign_id: a.campaign_id, campaign: a.campaign, account: a.account });
+          // Кабинет берём у объявления, которое привело заявку: одна форма может
+          // стоять в объявлениях разных кампаний.
+          const src = adById[l.ad_id] || t.ad;
+          raw.push({ lead: l.id, at: l.created_time, phone: digits, form_id: l.form_id || t.id,
+            ad_id: l.ad_id || src.ad_id, ad_name: l.ad_name || src.ad_name,
+            campaign_id: l.campaign_id || src.campaign_id, campaign: l.campaign_name || src.campaign,
+            account: src.account });
         });
       }
 
@@ -1545,7 +1562,7 @@ export default async function handler(req, res){
 
       return res.status(200).json({
         country, days, dry_run: dryRun,
-        ads_scanned: scanned,
+        ads_scanned: scanned, sources_ok: okCount, sources_failed: errCount,
         forms_leads_found: raw.length,
         matched: rowsToSave.length,
         saved, save_errors: saveErrors,
