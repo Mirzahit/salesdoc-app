@@ -1521,11 +1521,17 @@ export default async function handler(req, res){
       const out = {};
       ((perf && perf.ads) || []).forEach(a => {
         const targ = nameForAcc(a.account) || ('кабинет ' + a.account);
-        if(!out[targ]) out[targ] = { targetolog: targ, account: a.account, spend: 0, results: 0,
+        if(!out[targ]) out[targ] = { targetolog: targ, account: a.account, spend: 0,
+          chats: 0, leads_meta: 0, link_clicks: 0,
           crm_leads: 0, in_work: 0, not_taken: 0, lost: 0, won: 0, won_sum: 0, ads: [] };
         const t = out[targ];
         const s = byAd.get(a.ad_id) || null;
-        t.spend += a.spend; t.results += a.results;
+        t.spend += a.spend;
+        // Переписки, заявки и клики нельзя складывать в одно число: у кампании «МК»
+        // результат — клики по ссылке, и 135 кликов рядом с 17 перепискам врут в разы.
+        if(a.result_kind === 'Начало переписки') t.chats += a.results;
+        else if(a.result_kind === 'Заявки') t.leads_meta += a.results;
+        else t.link_clicks += a.results;
         if(s){ t.crm_leads += s.crm_leads; t.in_work += s.in_work; t.not_taken += s.not_taken;
                t.lost += s.lost; t.won += s.won; t.won_sum += s.won_sum; }
         t.ads.push({
