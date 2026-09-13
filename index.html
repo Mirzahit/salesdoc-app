@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v958</title>
+<title>SalesDoc — Финансовый Дашборд v959</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10269,7 +10269,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="sd-head">
  <div>
  <div class="sd-h1">Действующие клиенты</div>
- <div class="sd-sub">Активированные клиенты, риск отвала, абонплата, теги</div>
+ <div class="sd-sub">Доступ, абонплата, кураторы и теги</div>
  </div>
  <!-- v827: Linear-леджер — чипы вместо нативных select (правило проекта), быстрые сценарии
       оператора: Мои / Горит / Без куратора. Тексты чипов рисует acFchipsRender(). -->
@@ -10281,10 +10281,10 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <button type="button" class="intg-fchip" id="ac-fchip-operator" onclick="acFilterDdOpen(event,'operator')"></button>
  <button type="button" class="intg-fchip" id="ac-fchip-tag" onclick="acFilterDdOpen(event,'tag')"></button>
  <button id="ac-filter-reset" class="ac-reset-btn" onclick="acResetFilters()" style="display:none">Сбросить</button>
- <input type="search" id="ac-filter-search" class="ac-search" placeholder="Клиент или сервер..." oninput="acSetSearch(this.value)">
+ <input type="search" id="ac-filter-search" class="ac-search" placeholder="Поиск по названию или серверу" oninput="acSetSearch(this.value)">
  <!-- v823: кураторы (операторы) вносят оплаты отсюда — страницу «Платежи» они не видят -->
  <button id="ac-add-payment-btn" class="add-btn" style="display:none;font-size:11px;padding:6px 14px" onclick="openModal('payment')">+ Оплата</button>
- <button onclick="acReloadPrior()" id="ac-reload-prior-btn" title="Перечитать подписки из «Доходы 2025». Нужно только если в таблице 2025 что-то добавили вручную." style="display:none;padding:6px 10px;font-size:11px;background:rgba(120,120,128,.08);color:var(--text-soft);border:1px solid var(--border-faint);border-radius:6px;cursor:pointer">Обновить из 2025</button>
+ <!-- v959: кнопка «Обновить из 2025» убрана — она всегда была скрыта; перечитать историю можно через acReloadPrior() из консоли -->
  </div>
  </div>
  <!-- v827: компактная стат-строка (подписки/отвал/удержание + сегменты) — вместо крупных
@@ -10298,7 +10298,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
 
  <!-- v827: аналитика и служебные инструменты — под таблицей, свёрнуты (главное на странице — список) -->
  <div id="ac-more-section" style="margin-top:22px">
- <div class="ac-more-head" onclick="acToggleMore()">Графики и проверка данных <span id="ac-more-badge"></span> <span id="ac-more-arrow">▾</span></div>
+ <div class="ac-more-head" onclick="acToggleMore()">Сводка и данные для проверки <span id="ac-more-badge"></span> <span id="ac-more-arrow">▾</span></div>
  <div id="ac-more-body" style="display:none">
  <div class="sd-charts-row">
  <div class="sd-card sd-chart-card">
@@ -10311,20 +10311,19 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="sd-card sd-chart-card">
  <div class="sd-chart-head">
  <div class="sd-chart-title">Теги клиентов</div>
- <div class="sd-chart-sub">Ручная разметка операторов</div>
+ <div class="sd-chart-sub">Проставлены кураторами</div>
  </div>
  <div class="sd-bars" id="ac-tags-bars"></div>
  </div>
  </div>
- <!-- v280: AI-виджет Customer Success -->
- <div id="ai-w-clients-container"></div>
+ <!-- v959: контейнер AI-виджета убран — aiWidgetShow() давно no-op (v334) -->
  <!-- v277: несматченные платежи — ручное связывание -->
  <div id="ac-unmatched-section" style="display:none;margin-bottom:16px;margin-top:14px">
  <div class="sd-card" style="padding:14px 16px;background:rgba(214,163,114,.04);border:1px solid rgba(214,163,114,.25)">
  <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="acToggleUnmatched()">
  <div>
- <div style="font-size:12px;color:#E0A458;font-weight:700;letter-spacing:1px;text-transform:uppercase">Платежи без клиента <span id="ac-unmatched-count">0</span></div>
- <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Эти платежи не привязаны ни к одному клиенту в базе. Привяжи вручную — программа запомнит на будущее.</div>
+ <div style="font-size:12px;color:var(--ds-warning-text);font-weight:700;letter-spacing:1px;text-transform:uppercase">Оплаты без клиента <span id="ac-unmatched-count">0</span></div>
+ <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Программа не поняла, чьи это оплаты. Укажите клиента один раз — дальше такие оплаты будут попадать к нему сами.</div>
  </div>
  <div id="ac-unmatched-toggle" style="color:var(--text-muted);font-size:18px">▾</div>
  </div>
@@ -10336,8 +10335,8 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div class="sd-card" style="padding:14px 16px;background:rgba(214,163,114,.04);border:1px solid rgba(214,163,114,.25)">
  <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="acTogglePrefixList()">
  <div>
- <div style="font-size:12px;color:#E0A458;font-weight:700;letter-spacing:1px;text-transform:uppercase">Привязаны приблизительно <span id="ac-prefix-count">0</span></div>
- <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Эти клиенты привязаны не по точному совпадению названия. Проверьте — это те же компании или разные.</div>
+ <div style="font-size:12px;color:var(--ds-warning-text);font-weight:700;letter-spacing:1px;text-transform:uppercase">Требуют подтверждения <span id="ac-prefix-count">0</span></div>
+ <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Название в оплате отличается от карточки клиента. Подтвердите, что это тот же клиент, или отметьте как другого.</div>
  </div>
  <div id="ac-prefix-toggle" style="color:var(--text-muted);font-size:18px">▾</div>
  </div>
@@ -12119,6 +12118,11 @@ function switchCountry(code) {
  // v557: при смене страны сбрасываем AC_KZ_CACHE, чтобы acLoadKZClients подтянул клиентов
  // нужной страны (KZ→clients-kz.json, KG→Supabase). Иначе на KG показывались KZ-клиенты.
  AC_KZ_CACHE = null;
+ // v959 (Б8): оплаты 2025 прошлой страны, выбранные чекбоксы и ошибка загрузки — тоже сбрасываем,
+ // иначе KZ-подписки 2025 участвовали в расчёте доступа KG-клиентов до прихода своих
+ window._acPriorPays = null;
+ if (typeof acState !== 'undefined' && acState) acState.selected = {};
+ if (typeof _acLoadError !== 'undefined') _acLoadError = null;
  // Пересоздать EXP_TABS для новой страны
  var em = cfg.expMonths || COUNTRY_CONFIG[currentCountry].expMonths;
  EXP_TABS = [];
@@ -16942,7 +16946,12 @@ async function saveRecord() {
   if(!res || !res.ok){ failedAt = k; failErr = (res&&res.error)||'нет ответа сервера'; break; }
   savedRows.push(r);
   // мгновенно показать в текущей сессии (источник правды — Supabase, подтянется при перезагрузке)
-  payments.push({id:(res.payment&&res.payment.id)||('m'+Date.now()+'_'+k),_sbId:(res.payment&&res.payment.id)||null,client:client,date:paidAt,category:catMapped,categoryRaw:r.catLabel,amount:r.fact,qty:r.qty,periodMonths:payload.period_months,method:r.bank,managerName:managerName,comment:comment,seated:false,serviceWritten:false,receiptPath:rowReceipt});
+  // v959 (Б7): поле period — его читают «Действующие», «Оплаты и долги» и MRR; раньше писалось
+  // только periodMonths, и оплата на 12 мес не продлевала доступ до перезагрузки. Плюс дублируем
+  // в window._paymentsAll — экраны про клиентов читают полную базу через payAll(), а не `payments`.
+  var _newPay = {id:(res.payment&&res.payment.id)||('m'+Date.now()+'_'+k),_sbId:(res.payment&&res.payment.id)||null,client:client,clientId:payload.client_id||null,date:paidAt,category:catMapped,categoryRaw:r.catLabel,amount:r.fact,qty:r.qty,period:payload.period_months,periodMonths:payload.period_months,method:r.bank,managerName:managerName,comment:comment,seated:false,serviceWritten:false,receiptPath:rowReceipt};
+  payments.push(_newPay);
+  if(window._paymentsAll && window._paymentsAll.length && window._paymentsAll !== payments) window._paymentsAll.push(_newPay);
   var _sm = res.sheet_mirror;
   if(!(_sm && _sm.ok)) mirrorFails.push(_rowLabel(r) + ((_sm&&_sm.error)?(': '+_sm.error):''));
  }
@@ -17030,6 +17039,44 @@ function confirmAction(opts){
   box.querySelector('.cfa-confirm').addEventListener('click', function(){ cleanup(true); });
   document.addEventListener('keydown', escHandler, true);
   setTimeout(function(){ box.querySelector('.cfa-confirm').focus(); }, 0);
+ });
+}
+// v959: модалка с одним текстовым полем — замена нативному prompt() (он не в стиле программы
+// и не закрывается по Esc в PWA). Возвращает строку или null при отмене. Опции как у confirmAction
+// + value (начальное значение) и placeholder.
+function promptAction(opts){
+ opts = opts || {};
+ return new Promise(function(resolve){
+  var bg = document.createElement('div');
+  bg.className = 'cfa-bg';
+  bg.style.cssText = 'position:fixed;inset:0;z-index:1000010;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;animation:cfaFade .15s ease-out';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:22px;width:min(440px,92vw);box-shadow:0 24px 64px rgba(0,0,0,.5);font-family:Inter,sans-serif';
+  box.innerHTML = ''
+   + '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:8px;letter-spacing:-0.01em">'+ _escHtml(opts.title || 'Заполните поле') +'</div>'
+   + (opts.body ? '<div style="font-size:13px;color:var(--text-soft);margin-bottom:12px;line-height:1.45;white-space:pre-wrap">'+ _escHtml(opts.body) +'</div>' : '')
+   + '<input type="text" class="pra-input" value="'+ _escHtml(opts.value || '') +'" placeholder="'+ _escHtml(opts.placeholder || '') +'" style="width:100%;box-sizing:border-box;padding:9px 12px;margin-bottom:18px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit;outline:none">'
+   + '<div style="display:flex;justify-content:flex-end;gap:8px">'
+    + '<button class="cfa-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-soft);cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">'+ _escHtml(opts.cancelLabel || 'Отмена') +'</button>'
+    + '<button class="cfa-confirm" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent, #5E6AD2);color:#fff;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">'+ _escHtml(opts.confirmLabel || 'Готово') +'</button>'
+   + '</div>';
+  bg.appendChild(box);
+  document.body.appendChild(bg);
+  var inp = box.querySelector('.pra-input');
+  function cleanup(val){
+   try { bg.remove(); } catch(_){}
+   document.removeEventListener('keydown', escHandler, true);
+   resolve(val);
+  }
+  function escHandler(e){
+   if(e.key === 'Escape' || e.keyCode === 27){ e.stopPropagation(); cleanup(null); }
+   else if(e.key === 'Enter' || e.keyCode === 13){ e.stopPropagation(); cleanup(inp.value); }
+  }
+  bg.addEventListener('click', function(e){ if(e.target === bg) cleanup(null); });
+  box.querySelector('.cfa-cancel').addEventListener('click', function(){ cleanup(null); });
+  box.querySelector('.cfa-confirm').addEventListener('click', function(){ cleanup(inp.value); });
+  document.addEventListener('keydown', escHandler, true);
+  setTimeout(function(){ try { inp.focus(); inp.select(); } catch(_){} }, 0);
  });
 }
 // helper для escape HTML (если ещё не определён)
@@ -18231,13 +18278,8 @@ function renderCabinetV83() {
 
 // v290: переключение табов внутри раздела «Клиенты»
 function clientsGoTab(tab) {
- // Плейсхолдерные табы (пока без полноценного экрана) — показываем уведомление
- var placeholders = { all: 'Все клиенты', risk: 'В риске', churned: 'Расторгнутые' };
- if (placeholders[tab]) {
- try { showNotif('Скоро', 'Таб «' + placeholders[tab] + '» появится в v291-v294'); } catch(_){}
- return;
- }
- // Рабочие табы — это существующие view-* экраны
+ // v959: плейсхолдеры «Все/В риске/Расторгнутые» (уведомление «появится в v291-v294») убраны —
+ // таких табов в шапке нет с v762. Табы — это существующие view-* экраны.
  showView(tab);
 }
 
@@ -26507,6 +26549,7 @@ async function acLinkCommit(){
   var d=await sbFetch('/api/clients?action=link_hosts',{method:'POST',body:JSON.stringify({country:currentCountry,links:_acLinkToApply.map(function(x){return {client_id:x.client_id,billing_host:x.billing_host};})})});
   if(d&&d.ok){
    _churnClientsCache=null;
+   if(typeof acInvalidateCache==='function') acInvalidateCache(); // v959 (Б13): новые billing_host сразу участвуют в матчинге оплат
    document.getElementById('ac-link-preview').innerHTML='<div style="font-size:13px;font-weight:700;color:#10B981">Готово</div><div style="font-size:12px;color:var(--text-secondary);margin-top:6px">Привязано: '+d.linked+'<br>Пропущено (уже было): '+d.skipped+'<br>Конфликтов: '+d.conflicts_count+(d.failed_count?('<br>Ошибок: '+d.failed_count):'')+'</div>';
    document.getElementById('ac-link-actions').style.display='none';
    try{showNotif('Привязка готова','Привязано: '+d.linked+', пропущено: '+d.skipped);}catch(_){}
@@ -35090,6 +35133,7 @@ async function _routeTransferDo(cl, who){
   if(!d.ok) throw new Error(d.error || 'не сохранилось');
   cl.support_operator = who || null;
   if(_routeCurrentCard && _routeCurrentCard.clients) _routeCurrentCard.clients.support_operator = who || null;
+  if(typeof acInvalidateCache === 'function') acInvalidateCache(); // v959 (Б13): «Действующие» покажут нового куратора без перезагрузки
   // след в ленте клиента — кто, когда и кому передал
   try {
    await sbFetch('/api/history', { method:'POST', body: JSON.stringify({
@@ -42768,15 +42812,36 @@ function acSegmentMeta(key){
 // с Supabase (свежие импортированные). Для KG — только Supabase (179 клиентов).
 // Кэш per-country, чтобы переключение топбара не путало данные.
 var AC_COUNTRY_CACHE = {}; // { KZ: [...], KG: [...] }
+var _acLoadError = null;   // v959: текст последней ошибки загрузки (рендерится вместо «Клиентов нет»)
 function _acNormForMerge(s){ return String(s||'').toLowerCase().replace(/[^a-zа-яё0-9]/gi,''); }
+// v959: в «Действующих» — только клиенты со статусом active. Раньше запрос шёл без статуса, и в
+// список попадали ушедшие (87 в KZ) и те, кто ещё на доске внедрения. Ушедшие живут в «Отток».
+// Сетевая ошибка теперь бросается наверх, а не превращается в «пустую базу» (v959, Б5).
 async function _acFetchSupabaseClients(country){
  var token = window._APP_TOKEN || '';
+ var r = await fetch('/api/clients?country=' + country + '&status=active&limit=2000', { headers: { 'x-app-token': token } });
+ var d = await r.json().catch(function(){ return null; });
+ if(!d || !d.ok || !Array.isArray(d.clients)) throw new Error((d && d.error) || ('HTTP ' + r.status));
+ return d.clients;
+}
+// v959: сброс кэшей раздела после любой правки клиента (куратор, привязка хоста, создание).
+// Раньше такой сброс был только внутри массового назначения — после передачи клиента из карты
+// список показывал старого куратора до перезагрузки страницы (Б13).
+function acInvalidateCache(country){
  try {
-  var r = await fetch('/api/clients?country=' + country + '&limit=2000', { headers: { 'x-app-token': token } });
-  var d = await r.json();
-  if(!d || !d.ok || !Array.isArray(d.clients)) return [];
-  return d.clients;
- } catch(e){ return []; }
+  country = country || ((typeof currentCountry!=='undefined'&&currentCountry)||'KZ');
+  delete AC_COUNTRY_CACHE[country];
+  AC_KZ_CACHE = null;
+  if(window._payClients) window._payClients[country] = null;
+  if(typeof _acAllClientsLookup !== 'undefined') _acAllClientsLookup = null;
+  if(typeof _acClientIdCache !== 'undefined') _acClientIdCache = {};
+ } catch(_){}
+}
+// v959: перечитать список после ошибки (кнопка «Повторить» в таблице)
+function acReload(){
+ _acLoadError = null;
+ acInvalidateCache();
+ if(typeof acInit === 'function') acInit();
 }
 async function acLoadKZClients(cb){
  var country = (typeof currentCountry !== 'undefined') ? currentCountry : 'KZ';
@@ -42794,34 +42859,54 @@ async function acLoadKZClients(cb){
  try {
   var staticItems = await staticPromise;
   var sbClients = await sbPromise;
+  // v959 (Б8): пока ждали сеть, страну могли переключить — не подменяем кэш чужими данными
+  if(typeof currentCountry !== 'undefined' && currentCountry !== country) return;
   // Мерджим: static имеет приоритет (там monthlySum/monthlyQty уже посчитаны),
   // Supabase-клиенты добавляются если их норм-имени нет в static.
-  var seen = {};
-  staticItems.forEach(function(it){ seen[_acNormForMerge(it.name)] = true; seen[_acNormForMerge(it.host)] = true; });
-  var extras = sbClients
-   .filter(function(c){
-    var n = _acNormForMerge(c.company_name);
-    return n && !seen[n];
-   })
-   .map(function(c){
-    return {
-     name: c.company_name || c.client_id,
-     host: c.billing_host || c.company_name || c.client_id,   // v605: fallback на имя — иначе пустой host ломает привязку платежей и дедуп
-     billing_host: c.billing_host || '',                       // код в биллинге отдельным полем (для отображения)
-     monthlySum: 0,    // нет данных в clients — заполнится из payments в acGetActiveClients
-     monthlyQty: 0,
-     operator: c.support_operator || c.curator_operator || '',
-     _supabase: true,
-     _clientId: c.client_id
-    };
+  // v959: dедуп только по именам — раньше Supabase-клиент, чьё имя совпало с ЧУЖИМ хостом
+  // из статики, молча выпадал из списка. Хосты статики отдельно проставляют _clientId.
+  var seen = {}, idByHost = {}, staticHosts = {};
+  staticItems.forEach(function(it){ seen[_acNormForMerge(it.name)] = true; if(it.host) staticHosts[String(it.host).toLowerCase()] = true; });
+  var extras = [];
+  sbClients.forEach(function(c){
+   var n = _acNormForMerge(c.company_name);
+   if(!n) return;
+   var bh = String(c.billing_host || '').toLowerCase();
+   if(bh && staticHosts[bh]) idByHost['h:' + bh] = c.client_id;
+   if(seen[n]){ idByHost[n] = c.client_id; return; }
+   if(bh && staticHosts[bh]) return; // двойник статики по хосту — не дублируем строку
+   extras.push({
+    name: c.company_name || c.client_id,
+    host: c.billing_host || c.company_name || c.client_id,   // v605: fallback на имя — иначе пустой host ломает привязку платежей и дедуп
+    billing_host: c.billing_host || '',                       // код в биллинге отдельным полем (для отображения)
+    qty: 0, sum: 0,   // v959: те же имена полей, что у статики (раньше monthlySum/monthlyQty никто не читал)
+    operator: c.support_operator || c.curator_operator || '',
+    _supabase: true,
+    _clientId: c.client_id
    });
+  });
+  // v959 (Б1): статическим записям, у которых есть двойник в Supabase, отдаём его client_id —
+  // тогда у них тоже работают чекбоксы массового назначения и карта открывается без поиска
+  staticItems.forEach(function(it){
+   if(it._clientId) return;
+   it._clientId = idByHost[_acNormForMerge(it.name)] || idByHost['h:' + String(it.host || '').toLowerCase()] || null;
+  });
   var merged = staticItems.concat(extras);
   AC_COUNTRY_CACHE[country] = merged;
   AC_KZ_CACHE = merged;
+  _acLoadError = null;
   console.log('[acLoadKZClients]', country, ': static=' + staticItems.length, '+ supabase-extra=' + extras.length, '= total=' + merged.length);
   cb(merged);
   if(typeof _acTriggerPayLinksSync === 'function') _acTriggerPayLinksSync(country);
- } catch(e){ AC_COUNTRY_CACHE[country] = []; AC_KZ_CACHE = []; cb([]); }
+ } catch(e){
+  // v959 (Б5): ошибку не кэшируем — следующий заход в раздел загрузит заново
+  if(typeof currentCountry !== 'undefined' && currentCountry !== country) return;
+  delete AC_COUNTRY_CACHE[country];
+  AC_KZ_CACHE = null;
+  _acLoadError = (e && e.message) || 'ошибка сети';
+  console.warn('[acLoadKZClients] failed:', _acLoadError);
+  cb([]);
+ }
 }
 
 function acTagsAll(){
@@ -42892,12 +42977,21 @@ function acNormName(s){
 
 // v277: ручные override-привязки «pay-host → имя клиента». Хранятся в localStorage.
 // Используются при многозначных или сложных случаях, когда автоматика не нашла.
+// v959 (Б4): ключи localStorage — по стране. Раньше один ключ на KZ и KG: при переключении
+// страны sync выгружал казахстанские привязки в киргизский стор, и у KG-операторов появлялись
+// чужие «отдельные клиенты». Старые общие ключи просто удаляем — сервер (pay_links_KZ/KG) хранит
+// общую истину и наполнит кэш при первом sync.
+function _acLsKey(base){
+ var c = (typeof currentCountry !== 'undefined' && currentCountry) ? currentCountry : 'KZ';
+ try { if(localStorage.getItem(base) !== null) localStorage.removeItem(base); } catch(_){}
+ return base + '_' + c;
+}
 var AC_OVERRIDE_KEY = 'sd_pay_overrides';
-function acGetOverrides(){ try { return JSON.parse(localStorage.getItem(AC_OVERRIDE_KEY) || '{}'); } catch(e){ return {}; } }
+function acGetOverrides(){ try { return JSON.parse(localStorage.getItem(_acLsKey(AC_OVERRIDE_KEY)) || '{}'); } catch(e){ return {}; } }
 function acSetOverride(payHost, clientName){
  var ov = acGetOverrides();
  if(clientName) ov[payHost] = clientName; else delete ov[payHost];
- localStorage.setItem(AC_OVERRIDE_KEY, JSON.stringify(ov));
+ localStorage.setItem(_acLsKey(AC_OVERRIDE_KEY), JSON.stringify(ov));
  var _d = {}; _d[payHost] = clientName || null; // null = удалить на сервере
  if(typeof acPayLinksPush === 'function') acPayLinksPush({ overrides: _d });
 }
@@ -42906,11 +43000,11 @@ function acSetOverride(payHost, clientName){
 // Ключ — payHost (например 'karat-server2'), значение — true. Такие хосты не будут
 // автоматически сматчиваться даже при префикс-совпадении.
 var AC_SKIP_MATCH_KEY = 'sd_pay_skip_match';
-function acGetSkipMatch(){ try { return JSON.parse(localStorage.getItem(AC_SKIP_MATCH_KEY) || '{}'); } catch(e){ return {}; } }
+function acGetSkipMatch(){ try { return JSON.parse(localStorage.getItem(_acLsKey(AC_SKIP_MATCH_KEY)) || '{}'); } catch(e){ return {}; } }
 function acToggleSkipMatch(payHost){
  var sk = acGetSkipMatch();
  if(sk[payHost]) delete sk[payHost]; else sk[payHost] = true;
- localStorage.setItem(AC_SKIP_MATCH_KEY, JSON.stringify(sk));
+ localStorage.setItem(_acLsKey(AC_SKIP_MATCH_KEY), JSON.stringify(sk));
  var _ds = {}; _ds[payHost] = sk[payHost] ? true : false; // false = снять на сервере
  if(typeof acPayLinksPush === 'function') acPayLinksPush({ skip: _ds });
  if(typeof acRender === 'function') acRender();
@@ -42919,11 +43013,11 @@ function acToggleSkipMatch(payHost){
 // v305: «префикс-матч подтверждён» — пользователь проверил и сказал «этот матч правильный, убери из списка»
 // Ключ — payHost, значение — true. Такие хосты сматчены автоматом но не светятся в диагностике.
 var AC_PREFIX_APPROVED_KEY = 'sd_prefix_approved';
-function acGetApprovedPrefixes(){ try { return JSON.parse(localStorage.getItem(AC_PREFIX_APPROVED_KEY) || '{}'); } catch(e){ return {}; } }
+function acGetApprovedPrefixes(){ try { return JSON.parse(localStorage.getItem(_acLsKey(AC_PREFIX_APPROVED_KEY)) || '{}'); } catch(e){ return {}; } }
 function acApprovePrefix(payHost){
  var ap = acGetApprovedPrefixes();
  ap[payHost] = true;
- localStorage.setItem(AC_PREFIX_APPROVED_KEY, JSON.stringify(ap));
+ localStorage.setItem(_acLsKey(AC_PREFIX_APPROVED_KEY), JSON.stringify(ap));
  var _da = {}; _da[payHost] = true;
  if(typeof acPayLinksPush === 'function') acPayLinksPush({ approved: _da });
  if(typeof acRenderPrefixMerged === 'function') acRenderPrefixMerged();
@@ -42934,26 +43028,26 @@ function acApprovePrefix(payHost){
 // и каждый сервер — отдельный клиент с собственным учётом подписки.
 // Сохраняются в localStorage, мерджатся с AC_KZ_CACHE при чтении.
 var AC_ADD_CLIENTS_KEY = 'sd_additional_clients';
-function acGetAdditionalClients(){ try { return JSON.parse(localStorage.getItem(AC_ADD_CLIENTS_KEY) || '[]'); } catch(e){ return []; } }
+function acGetAdditionalClients(){ try { return JSON.parse(localStorage.getItem(_acLsKey(AC_ADD_CLIENTS_KEY)) || '[]'); } catch(e){ return []; } }
 function acAddClientAsSeparate(payHost, name){
  var list = acGetAdditionalClients();
  var nm = String(name || payHost).trim();
- if(!nm){ sdToast('Имя клиента не может быть пустым'); return; }
+ if(!nm){ sdToast('Укажите название клиента'); return; }
  // Не дублируем
  if(list.some(function(c){ return (c.host||'').toLowerCase() === payHost.toLowerCase(); })){
- sdToast('Клиент с host «'+payHost+'» уже создан');
+ sdToast('Для «'+payHost+'» клиент уже создан');
  return;
  }
  var _nc = { name: nm, host: payHost, qty: 0, sum: 0, _added: true };
  list.push(_nc);
- localStorage.setItem(AC_ADD_CLIENTS_KEY, JSON.stringify(list));
+ localStorage.setItem(_acLsKey(AC_ADD_CLIENTS_KEY), JSON.stringify(list));
  if(typeof acPayLinksPush === 'function') acPayLinksPush({ additional: [_nc] });
  if(typeof showNotif === 'function') showNotif('Клиент создан', nm + ' добавлен как отдельный клиент');
  if(typeof acRender === 'function') acRender();
 }
 function acRemoveAdditionalClient(host){
  var list = acGetAdditionalClients().filter(function(c){ return (c.host||'').toLowerCase() !== host.toLowerCase(); });
- localStorage.setItem(AC_ADD_CLIENTS_KEY, JSON.stringify(list));
+ localStorage.setItem(_acLsKey(AC_ADD_CLIENTS_KEY), JSON.stringify(list));
  acPayLinksPush({ additional_remove: [host] });
  if(typeof acRender === 'function') acRender();
 }
@@ -42984,10 +43078,12 @@ async function acPayLinksSync(){
   var mAp = Object.assign({}, lAp, sAp);
   var addByHost = {}; lAdd.concat(sAdd).forEach(function(c){ if(c && c.host) addByHost[String(c.host).toLowerCase()] = c; });
   var mAdd = Object.keys(addByHost).map(function(k){ return addByHost[k]; });
-  localStorage.setItem(AC_OVERRIDE_KEY, JSON.stringify(mOv));
-  localStorage.setItem(AC_SKIP_MATCH_KEY, JSON.stringify(mSk));
-  localStorage.setItem(AC_PREFIX_APPROVED_KEY, JSON.stringify(mAp));
-  localStorage.setItem(AC_ADD_CLIENTS_KEY, JSON.stringify(mAdd));
+  // v959: страна могла переключиться, пока ждали ответ — тогда ничего не пишем
+  if(typeof currentCountry !== 'undefined' && currentCountry !== country) return false;
+  localStorage.setItem(_acLsKey(AC_OVERRIDE_KEY), JSON.stringify(mOv));
+  localStorage.setItem(_acLsKey(AC_SKIP_MATCH_KEY), JSON.stringify(mSk));
+  localStorage.setItem(_acLsKey(AC_PREFIX_APPROVED_KEY), JSON.stringify(mAp));
+  localStorage.setItem(_acLsKey(AC_ADD_CLIENTS_KEY), JSON.stringify(mAdd));
   // миграция локальных-only записей на сервер (которых там ещё нет) — ничего не теряем
   var pOv = {}; Object.keys(lOv).forEach(function(h){ if(sOv[h] === undefined) pOv[h] = lOv[h]; });
   var pSk = {}; Object.keys(lSk).forEach(function(h){ if(sSk[h] === undefined) pSk[h] = true; });
@@ -43139,46 +43235,63 @@ function acRenderUnmatched(){
  }).join('');
  // Топ-30 несматченных (по убыванию суммы)
  var html = '<datalist id="ac-clients-datalist">' + dlOpts + '</datalist>';
- items.slice(0, 30).forEach(function(it){
+ // v959 (Б3): id инпута — по индексу строки. Раньше id строился из хоста с заменой всех
+ // не-латинских символов на «_»: кириллические хосты («тоо арай», «тоо аксу») получали один и тот
+ // же id, и имя, набранное во второй строке, привязывалось к хосту первой.
+ items.slice(0, 30).forEach(function(it, idx){
  var amt = Math.round(it.pay.totalAmount || 0);
  var lastPay = it.pay.lastPay ? new Date(it.pay.lastPay).toLocaleDateString('ru-RU') : '—';
- var inputId = 'ac-link-' + kbEsc(it.host).replace(/[^a-z0-9_-]/gi,'_');
  html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-faint);flex-wrap:wrap">'
  + '<div style="flex:1;min-width:200px">'
- + '<div style="font-family:monospace;font-size:13px;color:var(--text);font-weight:600">'+kbEsc(it.host)+'</div>'
- + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+it.pay.payCount+' платеж'+(it.pay.payCount===1?'':'ей')+' · '+amt.toLocaleString('ru-RU')+' '+_CUR+' · последний '+lastPay+'</div>'
+ + '<div style="font-size:13px;color:var(--text);font-weight:600">'+kbEsc(it.host)+'</div>'
+ + '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+_acPlural(it.pay.payCount,'оплата','оплаты','оплат')+' · '+amt.toLocaleString('ru-RU')+' '+_CUR+' · последняя '+lastPay+'</div>'
  + '</div>'
- + '<input type="text" id="'+inputId+'" list="ac-clients-datalist" placeholder="Начни печатать имя клиента..." autocomplete="off" style="flex:1;min-width:240px;padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-faint);border-radius:6px;color:var(--text);font-size:12px">'
- + '<button onclick="acLinkUnmatched(\''+kbEsc(it.host).replace(/\x27/g,"\\\x27")+'\')" style="padding:6px 14px;background:var(--amo-blue);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Привязать</button>'
- + '<button onclick="acCreateSeparatePrompt(\''+kbEsc(it.host).replace(/\x27/g,"\\\x27")+'\')" title="Создать host как отдельного клиента (для филиалов холдинга где каждый сервер — свой учёт)" style="padding:6px 14px;background:rgba(127,184,158,.12);color:#4CB782;border:1px solid rgba(127,184,158,.3);border-radius:6px;cursor:pointer;font-size:12px">Сделать отдельным</button>'
+ + '<input type="text" id="ac-link-'+idx+'" list="ac-clients-datalist" placeholder="Название клиента из списка" autocomplete="off" style="flex:1;min-width:240px;padding:6px 10px;background:var(--surface-2);border:1px solid var(--border-faint);border-radius:6px;color:var(--text);font-size:12px">'
+ + '<button onclick="acLinkUnmatched('+idx+','+_acJsAttr(it.host)+')" style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Привязать</button>'
+ + '<button onclick="acCreateSeparatePrompt('+_acJsAttr(it.host)+')" title="Создать отдельного клиента" style="padding:6px 14px;background:var(--ds-success-bg,rgba(76,183,130,.12));color:var(--ds-success-text);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px">Создать отдельного</button>'
  + '</div>';
  });
- if(items.length > 30) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:10px">...и ещё '+(items.length-30)+' (скрыто, привяжи топ-30 сначала)</div>';
+ if(items.length > 30) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:10px">…и ещё '+(items.length-30)+' — покажем, когда разберёте эти</div>';
  list.innerHTML = html;
 }
+// v959: склонение по числу — «1 оплата», «2 оплаты», «5 оплат», «21 оплата»
+function _acPlural(n, one, few, many){
+ n = Math.abs(Number(n) || 0);
+ var m10 = n % 10, m100 = n % 100;
+ var w = (m10 === 1 && m100 !== 11) ? one : (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) ? few : many;
+ return n + ' ' + w;
+}
+
+// v959: JS-литерал для inline-обработчика. JSON.stringify экранирует кавычки и обратные слэши,
+// kbEsc — HTML-спецсимволы; после HTML-декодирования атрибута в JS попадает корректная строка.
+// Раньше в модуле было три разных ручных «эскейпера», и апостроф в названии рвал onclick (Б9).
+function _acJsAttr(s){ return kbEsc(JSON.stringify(String(s == null ? '' : s))); }
 
 // v306: создать host как отдельного клиента (диалог для имени)
-function acCreateSeparatePrompt(payHost){
- var name = prompt('Имя нового клиента для host «'+payHost+'»:\n(можно оставить host если не знаешь точного названия)', payHost);
- if(name === null) return; // отмена
+// v959: модалка promptAction вместо нативного prompt()
+async function acCreateSeparatePrompt(payHost){
+ var name = (typeof promptAction === 'function')
+  ? await promptAction({ title: 'Новый клиент', body: 'Оплаты на «' + payHost + '» будут учитываться как отдельный клиент. Как назвать этого клиента?', value: payHost, confirmLabel: 'Создать' })
+  : prompt('Название нового клиента для сервера «'+payHost+'»:', payHost);
+ if(name === null || name === false) return; // отмена
  acAddClientAsSeparate(payHost, name);
 }
 
 // v277: связать pay-host с именем клиента вручную
 // v305: input с автодополнением (datalist) вместо select — но логика та же: берём value
-function acLinkUnmatched(payHost){
- var safeId = payHost.replace(/[^a-z0-9_-]/gi,'_');
- var sel = document.getElementById('ac-link-'+safeId);
- if(!sel || !sel.value){ sdToast('Начни печатать имя клиента и выбери из подсказок'); return; }
+// v959: первый аргумент — индекс строки (см. acRenderUnmatched)
+function acLinkUnmatched(idx, payHost){
+ var sel = document.getElementById('ac-link-'+idx);
+ if(!sel || !sel.value){ sdToast('Выберите клиента из подсказок'); return; }
  // Проверяем что введённое имя реально существует в мастере
  var name = sel.value.trim();
- var exists = (AC_KZ_CACHE || []).some(function(c){ return c.name === name; });
- if(!exists){ sdToast('Клиент «'+name+'» не найден в списке. Выбери из подсказок.'); return; }
+ var exists = (AC_KZ_CACHE || []).concat(acGetAdditionalClients()).some(function(c){ return c.name === name; });
+ if(!exists){ sdToast('Клиента «'+name+'» нет в списке. Выберите из подсказок или нажмите «Создать отдельного».'); return; }
  acSetOverride(payHost, name);
  // Перерисовать список действующих клиентов и блок несматченных
  if(typeof acRender === 'function') acRender();
  if(typeof acRenderUnmatched === 'function') acRenderUnmatched();
- if(typeof kbShowToast === 'function') kbShowToast('«'+payHost+'» привязан к «'+sel.value+'»');
+ if(typeof kbShowToast === 'function') kbShowToast('«'+payHost+'» привязан к «'+name+'»');
 }
 
 function acGetActiveClients(){
@@ -43306,14 +43419,17 @@ function acGetActiveClients(){
  var card = cardByKey[String(item.host||'').trim().toLowerCase()] || cardByKey[acNormName(name)] || null;
  var daysSince = pay.lastPay ? Math.floor((new Date() - pay.lastPay) / 86400000) : 999;
  // v300: статус доступа на основе подписочных платежей + period
+ // v959 (Б6): считаем по календарным дням, а не по миллисекундам. accessUntil — полночь
+ // последнего оплаченного дня; раньше уже в 00:01 этого дня клиент был «просрочен 1 дн».
  var accessStatus = 'never', daysOverdue = 0;
  if(pay.accessUntil){
- var diff = Math.floor((new Date() - pay.accessUntil) / 86400000);
- if(diff < 0) accessStatus = 'active';
- else if(diff < 7) { accessStatus = 'grace'; daysOverdue = diff + 1; }
- else { accessStatus = 'churned'; daysOverdue = diff + 1; }
+ var diff = -_acDaysLeft(pay.accessUntil); // 0 = последний оплаченный день, 1 = первый неоплаченный
+ if(diff <= 0) accessStatus = 'active';
+ else if(diff <= 7) { accessStatus = 'grace'; daysOverdue = diff; }
+ else { accessStatus = 'churned'; daysOverdue = diff; }
  }
  result.push({
+ _clientId: item._clientId || null, // v959 (Б1): без него не рендерились чекбоксы массового назначения
  client: name, host: item.host || '', billing_host: item.billing_host || '',
  monthlyQty: item.qty || 0, monthlySum: item.sum || 0,
  segment: acGetSegment(item.qty),
@@ -43343,18 +43459,21 @@ function acGetActiveClients(){
  .sort(function(a,b){ return (b.pay.totalAmount||0) - (a.pay.totalAmount||0); });
 
  // Fallback: KZ-кэш пустой → строим из payments напрямую
- if(!result.length && Object.keys(payByHost).length){
+ // v959: при ошибке загрузки клиентов fallback не нужен — иначе экран показывал сырые хосты
+ // из оплат вместо сообщения об ошибке
+ if(!result.length && !_acLoadError && Object.keys(payByHost).length){
  Object.keys(payByHost).forEach(function(host){
  var pay = payByHost[host];
  var card = cardByKey[host];
  var origName = (card && card.client) || host;
  var daysSince = pay.lastPay ? Math.floor((new Date() - pay.lastPay) / 86400000) : 999;
  result.push({
- client: origName, host: host, monthlyQty: 0, monthlySum: 0,
+ _clientId: null, client: origName, host: host, billing_host: '', monthlyQty: 0, monthlySum: 0, segment: null,
  operator: card ? (card.operator||'') : '', activDate: card?(card.activDate||''):'',
  stage: card?card.stage:'', cardId: card?card.id:null,
- lastPayDate: pay.lastPay, totalAmount: pay.totalAmount, payCount: pay.payCount,
- daysSincePay: daysSince, risk: acRiskLevelByDays(origName, daysSince, 'never', null), tags: acGetTags(origName)
+ lastPayDate: pay.lastPay, totalAmount: pay.totalAmount, payCount: pay.payCount, matchedHosts: [host],
+ daysSincePay: daysSince, accessUntil: null, accessStatus: 'never', daysOverdue: 0, // v959: без этих полей строка рендерила «undefined дн»
+ risk: acRiskLevelByDays(origName, daysSince, 'never', null), tags: acGetTags(origName)
  });
  });
  }
@@ -43363,6 +43482,15 @@ function acGetActiveClients(){
 
 // v302: риск теперь по accessStatus, а не по дням с последней оплаты.
 // Раньше клиент без оплат (999 дн) автоматом считался high и лез в топ сортировки.
+// v959: единый расчёт «сколько календарных дней до даты» — от полуночи сегодняшнего дня.
+// 0 = сегодня, 1 = завтра, −1 = вчера. Раньше в четырёх местах считали по миллисекундам с floor,
+// и «завтра» показывалось как «сегодня», а последний оплаченный день — как просрочка.
+function _acDaysLeft(d){
+ if(!d) return 0;
+ var t = new Date(); t.setHours(0,0,0,0);
+ var x = new Date(d.getTime()); x.setHours(0,0,0,0);
+ return Math.round((x - t) / 86400000);
+}
 function acRiskLevelByDays(client, days, accessStatus, accessUntil){
  var tags = acGetTags(client);
  if(tags.indexOf('risk') >= 0) return 'high';
@@ -43370,8 +43498,7 @@ function acRiskLevelByDays(client, days, accessStatus, accessUntil){
  if(accessStatus === 'churned') return 'high';
  if(accessStatus === 'grace') return 'med';
  if(accessStatus === 'active' && accessUntil){
- var daysLeft = Math.floor((accessUntil - new Date()) / 86400000);
- if(daysLeft <= 7) return 'med';
+ if(_acDaysLeft(accessUntil) <= 7) return 'med';
  }
  return 'low';
 }
@@ -43385,9 +43512,10 @@ function acSetOperator(op){ acState.operator = op || ''; acRender(); }
 var AC_TAG_LABELS = { risk:'Риск', problem:'Проблема', working:'В работе', ok:'Норма' };
 // Список операторов текущей страны (KB_OP_COLORS — казахстанский хардкод + сотрудники страны)
 function acOperatorOptions(){
- var ops = (typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
+ var _cn = (typeof currentCountry!=='undefined'&&currentCountry)||'KZ';
+ // v959: KB_OP_COLORS — казахстанский хардкод; в KG он подмешивал чужих кураторов в фильтр
+ var ops = (_cn === 'KZ' && typeof KB_OP_COLORS !== 'undefined') ? Object.keys(KB_OP_COLORS) : [];
  try {
-  var _cn = (typeof currentCountry!=='undefined'&&currentCountry)||'KZ';
   (employees||[]).forEach(function(e){
    if(e && String(e.role||'')==='operator' && String(e.country||'').toUpperCase()===_cn && ops.indexOf(e.name)<0) ops.push(e.name);
   });
@@ -43421,7 +43549,7 @@ function acFilterDdOpen(ev, key){
 function acIsHot(c){
  if(c.accessStatus === 'grace') return true;
  if(c.accessStatus === 'active' && c.accessUntil){
-  return Math.floor((c.accessUntil - new Date()) / 86400000) <= 7;
+  return _acDaysLeft(c.accessUntil) <= 7;
  }
  return false;
 }
@@ -43487,10 +43615,11 @@ function acBulkOps(){
  var ops = [];
  try {
   (employees||[]).forEach(function(e){
-   if(e && String(e.role||'')==='operator' && String(e.country||'').toUpperCase()===country && e.name) ops.push(e.name);
+   // v959: уволенных (active=false) не предлагаем — сервер их всё равно отклонит
+   if(e && e.active !== false && String(e.role||'')==='operator' && String(e.country||'').toUpperCase()===country && e.name) ops.push(e.name);
   });
  } catch(_){}
- if(!ops.length && typeof KB_OP_COLORS !== 'undefined') ops = Object.keys(KB_OP_COLORS);
+ if(!ops.length && country === 'KZ' && typeof KB_OP_COLORS !== 'undefined') ops = Object.keys(KB_OP_COLORS);
  return ops;
 }
 function acToggleSelect(cid, on){
@@ -43508,17 +43637,18 @@ function acUpdateBulkBar(){
  var n = Object.keys(acState.selected).length;
  if(!n){ bar.style.display = 'none'; bar.innerHTML = ''; return; }
  var ops = acBulkOps();
- var esc = function(s){ return String(s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); };
  bar.style.display = 'flex';
  bar.innerHTML = '<span class="abb-count">Выбрано: ' + n + '</span>'
   + '<span class="abb-hint">Назначить куратора:</span>'
   + ops.map(function(o){
-     return '<button class="abb-btn" onclick="acBulkAssignCurator(\'' + esc(o) + '\')">' + _escHtml(o) + '</button>';
+     return '<button class="abb-btn" onclick="acBulkAssignCurator(' + _acJsAttr(o) + ')">' + _escHtml(o) + '</button>';
     }).join('')
-  + '<button class="abb-btn" onclick="acBulkAssignCurator(null)" title="Убрать ответственного у выбранных">Снять куратора</button>'
+  + '<button class="abb-btn" onclick="acBulkAssignCurator(null)" title="Убрать куратора у выбранных">Снять куратора</button>'
   + '<button class="abb-clear" onclick="acClearSelection()">Отменить выбор</button>';
 }
+var _acBulkBusy = false;
 async function acBulkAssignCurator(name){
+ if(_acBulkBusy) return;
  var ids = Object.keys(acState.selected);
  if(!ids.length) return;
  var ok = await confirmAction({
@@ -43527,28 +43657,37 @@ async function acBulkAssignCurator(name){
   confirmLabel: name ? 'Назначить' : 'Снять'
  });
  if(!ok) return;
+ _acBulkBusy = true;
  var bar = document.getElementById('ac-bulk-bar');
  if(bar) bar.innerHTML = '<span class="abb-hint">Сохраняю... 0 из ' + ids.length + '</span>';
- var done = 0, fail = 0;
+ var done = 0, fail = 0, lastErr = '';
+ // v959: пишем support_operator («кто ведёт»), а не curator_operator («кто продал», из amo).
+ // Раньше массовое назначение меняло поле, которое список и карта клиента не показывают первым,
+ // и у клиента с уже заполненным support_operator визуально «ничего не происходило» (Б9).
+ // Сервер принимает только операторов из «Сотрудников» страны и сам шлёт уведомление куратору.
+ // След в ленте клиента — как при передаче из карты (_routeTransferDo).
+ var actor = (typeof currentUser!=='undefined'&&currentUser&&currentUser.name) ? String(currentUser.name).trim() : '';
  for(var i = 0; i < ids.length; i++){
   try {
    var r = await sbFetch('/api/clients?client_id=' + encodeURIComponent(ids[i]), {
-    method: 'PATCH', body: JSON.stringify({ curator_operator: name })
+    method: 'PATCH', body: JSON.stringify({ support_operator: name || '' })
    });
-   if(r && r.ok) done++; else fail++;
-  } catch(e){ fail++; }
+   if(r && r.ok){
+    done++;
+    try { sbFetch('/api/history', { method:'POST', body: JSON.stringify({
+     client_id: ids[i], event_type: 'system',
+     text: name ? ('Куратор назначен: ' + name + (actor ? (' (назначил: ' + actor + ')') : ''))
+                : ('Куратор снят' + (actor ? (' (снял: ' + actor + ')') : ''))
+    }) }).catch(function(){}); } catch(_){}
+   } else { fail++; lastErr = (r && r.error) || ''; }
+  } catch(e){ fail++; lastErr = (e && e.message) || ''; }
   if(bar && (i % 5 === 4)) bar.innerHTML = '<span class="abb-hint">Сохраняю... ' + (i+1) + ' из ' + ids.length + '</span>';
  }
+ _acBulkBusy = false;
  acState.selected = {};
- // инвалидация кэша клиентов — чтобы operator подтянулся заново из Supabase
- try {
-  var country = (typeof currentCountry!=='undefined'&&currentCountry)||'KZ';
-  delete AC_COUNTRY_CACHE[country];
-  AC_KZ_CACHE = null;
-  if(window._payClients) window._payClients[country] = null;
- } catch(_){}
+ acInvalidateCache();
  acLoadKZClients(function(){ acRender(); acUpdateBulkBar(); });
- showNotif(name ? 'Куратор назначен' : 'Куратор снят', 'Обновлено клиентов: ' + done + (fail ? (', ошибок: ' + fail) : ''));
+ showNotif(name ? 'Куратор назначен' : 'Куратор снят', 'Обновлено клиентов: ' + done + (fail ? (', ошибок: ' + fail + (lastErr ? (' — ' + lastErr) : '')) : ''));
 }
 function acSetRisk(r){ acState.risk = r || ''; acRender(); }
 function acSetTag(t){ acState.tag = t || ''; acRender(); }
@@ -43556,7 +43695,13 @@ function acSetSegment(s){ acState.segment = s || ''; acRender(); }
 function acSetShowChurned(v){ acState.showChurned = !!v; acRender(); }
 function acSetShowNoSub(v){ acState.showNoSub = !!v; acRender(); }
 // v541: поиск по имени клиента/хосту в Действующих
-function acSetSearch(s){ acState.search = (s || '').trim().toLowerCase(); acRender(); }
+// v959: debounce 180 мс — acRender пересобирает список из всех платежей, на каждую букву это лишнее
+var _acSearchTimer = null;
+function acSetSearch(s){
+ acState.search = (s || '').trim().toLowerCase();
+ clearTimeout(_acSearchTimer);
+ _acSearchTimer = setTimeout(function(){ acRender(); }, 180);
+}
 // v549: сброс всех фильтров одной кнопкой — если случайно поставил и не понимаешь почему пусто
 function acResetFilters(){
  acState.operator = ''; acState.risk = ''; acState.tag = ''; acState.segment = '';
@@ -43714,19 +43859,24 @@ function acRender(){
    // (не читаются — Фаза 4 миграции). Все active-подписки истекли → showChurned=false режет их.
    var anyFilterActive = !!(acState.operator || acState.risk || acState.tag || acState.segment || acState.search || acState.expiring); /* QA v827: без expiring чип «Горит» при пустоте показывал ложное «База пуста» */
    var msg;
-   if(anyFilterActive){
+   if(_acLoadError && !all.length){
+    // v959 (Б5): ошибка сети — честно говорим и даём повторить, а не «база пуста» (и не «под фильтр ничего»)
+    msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
+        + '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Не удалось загрузить список</div>'
+        + '<div style="font-size:12px;margin-bottom:6px;line-height:1.5">Нет связи с сервером. Проверьте интернет и нажмите «Повторить».</div>'
+        + '<div style="font-size:11px;color:var(--text-faint);margin-bottom:14px">' + _escHtml(_acLoadError) + '</div>'
+        + '<button onclick="acReload()" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Повторить</button>'
+        + '</div>';
+   } else if(anyFilterActive){
     msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
         + '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Под этот фильтр ничего не подходит</div>'
         + '<div style="font-size:12px;margin-bottom:14px">Из ' + all.length + ' клиентов после фильтрации не осталось ни одного</div>'
         + '<button onclick="acResetFilters()" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Сбросить все фильтры</button>'
         + '</div>';
    } else {
-    // Нет фильтров, но и клиентов нет — значит у всех истекла подписка (accessStatus=churned/never)
-    var churnedN = all.filter(function(c){ return c.accessStatus === 'churned'; }).length;
-    var neverN = all.filter(function(c){ return c.accessStatus === 'never'; }).length;
     msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
         + '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Клиентов нет</div>'
-        + '<div style="font-size:12px;margin-bottom:14px;line-height:1.5">База пуста или данные не загрузились. Нажми кнопку ↻ вверху страницы, чтобы перезагрузить.</div>'
+        + '<div style="font-size:12px;margin-bottom:14px;line-height:1.5">В базе пока нет действующих клиентов этой страны.</div>'
         + '</div>';
    }
    tbl.innerHTML = thead + '<tr><td colspan="'+_acColspan+'" style="padding:0;background:transparent">' + msg + '</td></tr></tbody>';
@@ -43736,12 +43886,11 @@ function acRender(){
    // горящих мелких клиентов внизу; размер остался фильтром.
    var sortKey = function(c){
     if(c.accessStatus === 'grace') return -100 + (c.daysOverdue || 0);      // просроченные — первыми
-    if(c.accessStatus === 'active') return Math.floor((c.accessUntil - new Date()) / 86400000); // ближайшие к концу выше
-    if(c.accessStatus === 'churned') return 100000 + (c.daysOverdue || 0);  // отвалившиеся — вниз
+    if(c.accessStatus === 'active') return _acDaysLeft(c.accessUntil);       // ближайшие к концу выше
+    if(c.accessStatus === 'churned') return 100000 + (c.daysOverdue || 0);  // доступ закрыт — вниз
     return 200000;                                                          // без подписки — в самый низ
    };
    filtered.sort(function(a,b){ return (sortKey(a) - sortKey(b)) || ((b.monthlySum||0) - (a.monthlySum||0)); });
-   var _now = new Date();
    var body = filtered.map(function(c){
      var opColor = (typeof KB_OP_COLORS !== 'undefined' && c.operator && KB_OP_COLORS[c.operator]) || '#888';
      // «Доступ»: главное — сколько осталось, дата — вторично. Цвет = срочность
@@ -43750,35 +43899,35 @@ function acRender(){
      var fmtDM = function(d){ return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0'); };
      if(c.accessStatus === 'never'){ accessStr = 'нет подписки'; accessColor = 'var(--text-muted)'; }
      else if(c.accessStatus === 'active'){
-      var daysLeft = Math.floor((c.accessUntil - _now) / 86400000);
+      var daysLeft = _acDaysLeft(c.accessUntil); // v959: календарные дни — «завтра» больше не показывается как «сегодня»
       var main = daysLeft <= 0 ? 'сегодня' : (daysLeft === 1 ? 'завтра' : 'через ' + daysLeft + ' дн');
       if(daysLeft > 30){ accessStr = 'до ' + fmtDM(c.accessUntil) + '.' + c.accessUntil.getFullYear(); accessColor = 'var(--text-2)'; }
-      else { accessStr = '<b>' + main + '</b> <span class="sub">· ' + fmtDM(c.accessUntil) + '</span>'; accessColor = daysLeft <= 3 ? 'var(--danger)' : (daysLeft <= 7 ? 'var(--warning,#E0A458)' : 'var(--text)'); }
+      else { accessStr = '<b>' + main + '</b> <span class="sub">· ' + fmtDM(c.accessUntil) + '</span>'; accessColor = daysLeft <= 3 ? 'var(--ds-danger-text)' : (daysLeft <= 7 ? 'var(--ds-warning-text)' : 'var(--text)'); }
      }
-     else if(c.accessStatus === 'grace'){ accessStr = '<b>просрочен ' + c.daysOverdue + ' дн</b>'; accessColor = 'var(--danger)'; }
-     else { accessStr = 'отвалился ' + c.daysOverdue + ' дн назад'; accessColor = 'var(--text-muted)'; }
+     else if(c.accessStatus === 'grace'){ accessStr = '<b>просрочен ' + c.daysOverdue + ' дн</b>'; accessColor = 'var(--ds-danger-text)'; }
+     else { accessStr = 'закрыт ' + c.daysOverdue + ' дн назад'; accessColor = 'var(--text-muted)'; }
      var tagsHtml = c.tags.map(function(t){
-      return '<span class="ac-tag" title="'+t+'">'+(AC_TAG_LABELS[t]||t)+'</span>';
+      return '<span class="ac-tag">'+(AC_TAG_LABELS[t]||t)+'</span>';
      }).join('');
-     var clientEsc = (c.client || '').replace(/'/g, "\\'").replace(/"/g, '&quot;'); /* v786: двойная кавычка в названии (ТОО "Арай") рвала onclick */
-     var hostEscBtn = (c.host || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-     /* v823: чекбокс массового назначения — только строки из Supabase (у static-KZ нет client_id) */
+     /* v959 (Б9): все аргументы inline-обработчиков — через _acJsAttr (JSON + HTML-escape) */
+     var aName = _acJsAttr(c.client || ''), aHost = _acJsAttr(c.host || ''), aCid = _acJsAttr(c._clientId || '');
+     /* v823: чекбокс массового назначения — только строки с client_id (v959: статике с двойником в Supabase id тоже проставлен) */
      var cbTd = '';
      if(_acCanBulk){
-      var cidEsc = String(c._clientId || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-      cbTd = '<td onclick="event.stopPropagation()">' + (c._clientId ? ('<input type="checkbox" class="ac-cb" '+(acState.selected[c._clientId]?'checked ':'')+'onclick="event.stopPropagation()" onchange="acToggleSelect(\''+cidEsc+'\', this.checked)">') : '') + '</td>';
+      cbTd = '<td onclick="event.stopPropagation()">' + (c._clientId ? ('<input type="checkbox" class="ac-cb" '+(acState.selected[c._clientId]?'checked ':'')+'onclick="event.stopPropagation()" onchange="acToggleSelect('+aCid+', this.checked)">') : '') + '</td>';
      }
      var host = c.billing_host || c.host || '';
      // v827: кликабельна вся строка (карта клиента); кнопки внутри глушат всплытие
-     return '<tr class="ac-row" onclick="acOpenClientCard(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" title="Открыть карту клиента">'
+     // v959 (Б2): если у строки есть client_id — открываем по нему, без поиска по имени
+     return '<tr class="ac-row" onclick="acOpenClientCard(event,'+aName+','+aHost+','+aCid+')">'
       + cbTd
       + '<td><div class="ac-name">'+kbEsc(c.client)+'</div>'+(host?('<div class="ac-host">'+kbEsc(host)+'</div>'):'')+'</td>'
       + '<td class="ac-access" style="color:'+accessColor+'">'+accessStr+'</td>'
       + '<td class="num">'+(c.monthlySum?fmtSum(c.monthlySum):'<span style="color:var(--text-muted)">—</span>')+'</td>'
       + '<td><div class="sd-op-cell"><span class="sd-op-dot" style="background:'+opColor+'"></span>'+kbEsc(c.operator || '—')+'</div></td>'
       + '<td class="num" style="color:var(--text-2)">'+(c.monthlyQty||0)+'</td>'
-      + '<td onclick="event.stopPropagation()"><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" onclick="event.stopPropagation();acTagModal(\''+clientEsc+'\')">+</button></div></td>'
-      + '<td style="white-space:nowrap"><button class="sd-risk-action ac-task-btn" onclick="event.stopPropagation();acOpenClientCardWithTask(event,\''+clientEsc+'\',\''+hostEscBtn+'\')" style="background:rgba(52,199,122,.14);color:#4CB782;border-color:rgba(52,199,122,.32)">+ Задача</button><span style="color:var(--text-muted);margin-left:8px;font-size:14px" title="Открыть карту клиента">›</span></td>'
+      + '<td onclick="event.stopPropagation()"><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" title="Теги" onclick="event.stopPropagation();acTagModal('+aName+')">+</button></div></td>'
+      + '<td style="white-space:nowrap"><button class="sd-risk-action ac-task-btn" onclick="event.stopPropagation();acOpenClientCardWithTask(event,'+aName+','+aHost+','+aCid+')" style="background:var(--ds-success-bg,rgba(76,183,130,.14));color:var(--ds-success-text);border-color:var(--border)">+ Задача</button><span style="color:var(--text-muted);margin-left:8px;font-size:14px">›</span></td>'
       + '</tr>';
    }).join('');
    tbl.innerHTML = thead + body + '</tbody>';
@@ -43793,7 +43942,7 @@ function acRender(){
  try {
   var _umN = (window._acUnmatchedPays || []).length;
   var _umB = document.getElementById('ac-more-badge');
-  if(_umB) _umB.innerHTML = _umN > 0 ? '<span style="color:#E0A458;font-weight:700">· платежи без клиента: ' + _umN + '</span>' : '';
+  if(_umB) _umB.innerHTML = _umN > 0 ? '<span style="color:var(--ds-warning-text);font-weight:700">· оплаты без клиента: ' + _umN + '</span>' : '';
  } catch(_){}
  // v295: MRR / ARR / Churn / NRR
  try { acRenderMRRStrip(); } catch(_){}
@@ -43840,53 +43989,86 @@ async function _acLoadAllClientsLookup(){
   return map;
  } catch(e){ console.warn('[_acLoadAllClientsLookup] failed:', e); return null; }
 }
+// v959 (Б2): только ТОЧНЫЕ совпадения. Раньше брался первый результат подстрочного поиска
+// (отсортированного по updated_at) и «Карат» открывал карту «Карат-PV»; префикс-матч по кэшу
+// («adal» → «adal14»/«adalz» — какой первый попадётся) дописывал заметки не тому клиенту.
+// Если точного совпадения нет — null, и пользователю предлагается создать карточку.
 async function _acResolveClientId(clientName, host){
  var key = (clientName || '') + '|' + (host || '');
  if(_acClientIdCache[key]) return _acClientIdCache[key];
- // 1) v556: ищем в ОБЕИХ странах (KZ+KG). sbFetch ограничивал country=currentCountry,
- //    из-за чего после переключения топбара клиент из другой страны не находился.
+ var cur = (typeof currentCountry !== 'undefined' && currentCountry) ? currentCountry : 'KZ';
+ var nName = _acNormalize(clientName), nHost = String(host || '').trim().toLowerCase();
+ var pickExact = function(list){
+  if(!list || !list.length) return null;
+  // сначала клиенты текущей страны — routeOpenClient грузит карту через sbFetch с country=текущая
+  var ordered = list.filter(function(c){ return c.country === cur; }).concat(list.filter(function(c){ return c.country !== cur; }));
+  var byHost = nHost && ordered.find(function(c){ return c.billing_host && String(c.billing_host).toLowerCase() === nHost; });
+  if(byHost) return byHost.client_id;
+  var byName = nName && ordered.find(function(c){ return _acNormalize(c.company_name) === nName; });
+  if(byName) return byName.client_id;
+  var byHostAsName = nHost && ordered.find(function(c){ return _acNormalize(c.company_name) === _acNormalize(nHost); });
+  return byHostAsName ? byHostAsName.client_id : null;
+ };
+ // 1) v556: ищем в ОБЕИХ странах (KZ+KG) — после переключения топбара клиент из другой страны тоже находится
  var queries = [];
  if(clientName) queries.push(clientName);
  if(host && host !== clientName) queries.push(host);
  for(var i = 0; i < queries.length; i++){
   try {
-   var clients = await _acFetchClientsBoth(queries[i]);
-   if(clients && clients.length){
-    var pick = clients.find(function(c){ return c.company_name; }) || clients[0];
-    _acClientIdCache[key] = pick.client_id;
-    return pick.client_id;
-   }
+   var found = pickExact(await _acFetchClientsBoth(queries[i]));
+   if(found){ _acClientIdCache[key] = found; return found; }
   } catch(_){}
  }
- // 2) v552: lookup по нормализованному имени через полный кэш — спасает после слияния дублей.
- //    «adal14» (host из payments) → «adal14» (normalized) → совпадает с «Adalz»? Нет.
- //    Но «sapatosh» в payments → «sapatosh» normalized → совпадает с «Sapatosh» canonical → ОК.
+ // 2) v552: полный кэш по нормализованному имени — спасает, если серверный поиск не нашёл
+ //    (например, из-за спецсимволов в названии)
  var lookup = await _acLoadAllClientsLookup();
  if(lookup){
   var candidates = [clientName, host].filter(Boolean);
   for(var j = 0; j < candidates.length; j++){
    var nk = _acNormalize(candidates[j]);
-   if(nk && lookup[nk]){
-    _acClientIdCache[key] = lookup[nk];
-    return lookup[nk];
-   }
-   // Префикс-матч: «adal14» начинается с «adal» — пробуем подстроку
-   if(nk && nk.length >= 4){
-    var found = null;
-    Object.keys(lookup).forEach(function(lk){
-     if(found) return;
-     if(lk.indexOf(nk) === 0 || nk.indexOf(lk) === 0) found = lookup[lk];
-    });
-    if(found){ _acClientIdCache[key] = found; return found; }
-   }
+   if(nk && lookup[nk]){ _acClientIdCache[key] = lookup[nk]; return lookup[nk]; }
   }
  }
  // 3) Auto-create отключён (раньше v518 создавал) — иначе плодим новые дубли.
- //    Если клиента реально нет — пользователь увидит toast и сможет связать вручную.
  return null;
 }
 
-async function acOpenClientCard(ev, clientName, host){
+// v959: единая точка «найти или создать карточку». cid — client_id из строки, если он уже известен.
+async function _acEnsureClientId(clientName, host, cid){
+ if(cid) return cid;
+ var found = await _acResolveClientId(clientName, host);
+ if(found) return found;
+ // v554: вместо тупого toast — спрашиваем «Создать клиента?». Если ОК — создаём через API.
+ var ok = (typeof confirmAction === 'function')
+  ? await confirmAction({
+     title: 'Карточки клиента ещё нет',
+     body: 'Создать карточку для «' + clientName + '»?',
+     confirmLabel: 'Создать',
+     cancelLabel: 'Отмена'
+    })
+  : confirm('Создать карточку для «' + clientName + '»?');
+ if(!ok) return null;
+ var country = (typeof currentCountry !== 'undefined' && currentCountry) ? currentCountry : 'KZ';
+ // billing_host пишем только если это похоже на имя сервера (латиница/цифры), а не на название компании
+ var bh = String(host || '').trim().toLowerCase();
+ if(!/^[a-z0-9][a-z0-9._-]*$/.test(bh) || _acNormalize(bh) === _acNormalize(clientName)) bh = '';
+ try {
+  var body = { company_name: clientName, country: country, status: 'active' };
+  if(bh) body.billing_host = bh;
+  var created = await sbFetch('/api/clients', { method: 'POST', body: JSON.stringify(body) });
+  if(created && created.ok && created.client && created.client.client_id){
+   acInvalidateCache(country); // v959 (Б13): чтобы в списке у строки появился client_id
+   if(typeof showNotif === 'function') showNotif(created.existed ? 'Карточка уже была' : 'Карточка создана', clientName);
+   return created.client.client_id;
+  }
+  if(typeof showNotif === 'function') showNotif('Не получилось', 'Ошибка создания: ' + (created && created.error || '—'));
+ } catch(e){
+  if(typeof showNotif === 'function') showNotif('Ошибка сети', e.message || e);
+ }
+ return null;
+}
+
+async function acOpenClientCard(ev, clientName, host, cid){
  // v555: event передаём явным параметром — иначе в async внутри inline onclick он undefined
  // v827-fix: с леджера кликается ВСЯ <tr> — подменять textContent можно только у кнопки,
  // у строки это сносило все ячейки (чекбокс, теги, кнопки) до следующего рендера
@@ -43895,58 +44077,22 @@ async function acOpenClientCard(ev, clientName, host){
  var prev = btn ? btn.textContent : null;
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
-  var cid = await _acResolveClientId(clientName, host);
-  if(!cid){
-   // v554: вместо тупого toast — спрашиваем «Создать клиента?». Если ОК — создаём через API.
-   var ok = (typeof confirmAction === 'function')
-    ? await confirmAction({
-       title: 'Клиент не найден в базе',
-       body: '«' + clientName + '» отсутствует в Supabase.\nСоздать новую карточку?',
-       confirmLabel: 'Создать',
-       cancelLabel: 'Отмена'
-      })
-    : confirm('Клиент «' + clientName + '» не найден. Создать?');
-   if(!ok) return;
-   var country = (typeof currentCountry !== 'undefined' && currentCountry) ? currentCountry : 'KZ';
-   try {
-    var created = await sbFetch('/api/clients', {
-     method: 'POST',
-     body: JSON.stringify({ company_name: clientName, country: country, status: 'active' })
-    });
-    if(created && created.ok && created.client && created.client.client_id){
-     cid = created.client.client_id;
-     // Очистим кэш чтоб следующий клик нашёл нового
-     _acAllClientsLookup = null;
-     _acClientIdCache = {};
-     if(typeof showNotif === 'function') showNotif('Клиент создан', clientName + ' добавлен в базу');
-    } else {
-     if(typeof showNotif === 'function') showNotif('Не получилось', 'Ошибка создания: ' + (created && created.error || '—'));
-     return;
-    }
-   } catch(e){
-    if(typeof showNotif === 'function') showNotif('Ошибка сети', e.message || e);
-    return;
-   }
-  }
-  if(typeof routeOpenClient === 'function') routeOpenClient(cid);
+  var id = await _acEnsureClientId(clientName, host, cid);
+  if(id && typeof routeOpenClient === 'function') routeOpenClient(id);
  } finally {
   if(btn){ btn.disabled = false; if(prev !== null) btn.textContent = prev; }
  }
 }
 
 // v515: открыть карту клиента и сразу переключить composer в режим «Задача»
-async function acOpenClientCardWithTask(ev, clientName, host){
+async function acOpenClientCardWithTask(ev, clientName, host, cid){
  // v555: event явным параметром
  var btn = ev && ev.currentTarget;
  var prev = btn ? btn.textContent : null;
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
-  var cid = await _acResolveClientId(clientName, host);
-  if(!cid){
-   if(typeof kbShowToast === 'function') kbShowToast('Клиент не найден — задачу не создать');
-   else sdToast('Клиент «' + clientName + '» не найден в Supabase');
-   return;
-  }
+  cid = await _acEnsureClientId(clientName, host, cid);
+  if(!cid) return;
   if(typeof routeOpenClient === 'function'){
    routeOpenClient(cid);
    // Дождёмся открытия карточки и переключим composer в task-режим + фокус на textarea
@@ -43969,12 +44115,8 @@ async function acQuickTaskFor(ev, clientName, host){
  var prev = btn ? btn.textContent : null;
  if(btn){ btn.disabled = true; btn.textContent = '...'; }
  try {
-  var cid = await _acResolveClientId(clientName, host);
-  if(!cid){
-   if(typeof kbShowToast === 'function') kbShowToast('Клиент не найден — задачу не создать');
-   else sdToast('Клиент «' + clientName + '» не найден в Supabase');
-   return;
-  }
+  var cid = await _acEnsureClientId(clientName, host, null); // v959: тот же путь, что клик по строке — предложит создать карточку
+  if(!cid) return;
   // Если есть полная модалка — переиспользуем и предвыбираем клиента
   if(typeof mytasksNewTaskStart === 'function'){
    await mytasksNewTaskStart();
@@ -44039,20 +44181,18 @@ function acRenderPrefixMerged(){
  if(!keys.length){ section.style.display = 'none'; return; }
  section.style.display = 'block';
  if(countEl) countEl.textContent = '(' + keys.length + ')';
- var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Проверь каждое: если совпадение правильное (просто разные написания одной фирмы) — «Норм, это тот же». Если это разные компании — «Это другой».</div>';
+ var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Слева — как клиент записан в оплате, справа — карточка, к которой его отнесла программа. Подтвердите или отметьте как другого клиента.</div>';
  keys.slice(0, 50).forEach(function(payHost){
  var info = pm[payHost];
- var hostEsc = kbEsc(payHost).replace(/\x27/g, "\\\x27");
  html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-faint);font-size:12px;flex-wrap:wrap">'
- + '<div style="flex:0 0 200px;font-family:monospace;color:var(--text-soft)">' + kbEsc(payHost) + '</div>'
+ + '<div style="flex:0 0 200px;color:var(--text-soft)">' + kbEsc(payHost) + '</div>'
  + '<div style="flex:0 0 30px;color:var(--text-muted)">→</div>'
  + '<div style="flex:1;min-width:180px;color:var(--text)">' + kbEsc(info.matchedTo) + '</div>'
- + '<div style="flex:0 0 50px;color:var(--text-muted);font-size:11px">score ' + info.score + '</div>'
- + '<button onclick="acApprovePrefix(\'' + hostEsc + '\')" style="padding:4px 10px;background:rgba(127,184,158,.12);color:#4CB782;border:1px solid rgba(127,184,158,.3);border-radius:6px;cursor:pointer;font-size:11px">Норм, это тот же</button>'
- + '<button onclick="acToggleSkipMatch(\'' + hostEsc + '\')" style="padding:4px 10px;background:rgba(255,107,92,.12);color:#FF6B5C;border:1px solid rgba(255,107,92,.3);border-radius:6px;cursor:pointer;font-size:11px">Это другой</button>'
+ + '<button onclick="acApprovePrefix(' + _acJsAttr(payHost) + ')" style="padding:4px 10px;background:var(--ds-success-bg,rgba(76,183,130,.12));color:var(--ds-success-text);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:11px">Это тот же клиент</button>'
+ + '<button onclick="acToggleSkipMatch(' + _acJsAttr(payHost) + ')" style="padding:4px 10px;background:var(--ds-danger-bg,rgba(229,96,77,.12));color:var(--ds-danger-text);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:11px">Другой клиент</button>'
  + '</div>';
  });
- if(keys.length > 50) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:10px">...и ещё ' + (keys.length-50) + ' (показаны первые 50)</div>';
+ if(keys.length > 50) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:10px">…и ещё ' + (keys.length-50) + ' — появятся после разбора этих</div>';
  listEl.innerHTML = html;
 }
 
