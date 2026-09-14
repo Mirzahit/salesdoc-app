@@ -8,7 +8,7 @@
 // POST /api/clients                          → создать (body: { client_id, company_name, ... })
 // PATCH /api/clients?client_id=SD-2026-1     → изменить (body: поля для обновления)
 
-import { sbSelect, sbSelectAll, sbInsert, sbUpdate } from './_supabase.js';
+import { sbSelect, sbSelectAll, sbInsert, sbUpdate, sbDelete } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 import { almatyIso } from './_dates.js';
 import { canonOperator, operatorNames } from './_operators.js';
@@ -214,6 +214,37 @@ export async function recalcBillingForCountry(country, dryRun) {
   };
 }
 
+// v964: автопауза. Действующий клиент, у которого доступ закрыт дольше N дней (app_settings.autopause
+// = {enabled, days}), переводится в «На паузе» с записью в ленту. Пока enabled=false — только
+// список кандидатов (решение владельца: первый прогон показать, включать после «ок»).
+export async function autoPauseForCountry(country, dryRun) {
+  let cfg = { enabled: false, days: 30 };
+  try {
+    const rows = await sbSelect('app_settings', { key: 'eq.autopause', limit: '1' });
+    if (rows.length && rows[0].value && typeof rows[0].value === 'object') cfg = Object.assign(cfg, rows[0].value);
+  } catch (_) {}
+  const days = Math.max(7, parseInt(cfg.days, 10) || 30);
+  const apply = !dryRun && cfg.enabled === true;
+  const today = almatyIso();
+  const cutoff = almatyIso(Date.now() - days * 86400000);
+  const params = { status: 'eq.active', access_until: 'lt.' + cutoff, select: 'client_id,company_name,access_until,support_operator,free_until', order: 'client_id' };
+  if (country) params['country'] = 'eq.' + country;
+  const cands = (await sbSelectAll('clients', params)).filter(c => !(c.free_until && String(c.free_until).slice(0, 10) >= today));
+  let paused = 0;
+  if (apply) {
+    for (const c of cands) {
+      try {
+        await sbUpdate('clients', { client_id: 'eq.' + c.client_id }, { status: 'paused', updated_at: new Date().toISOString() });
+        const over = Math.round((Date.parse(today) - Date.parse(String(c.access_until).slice(0, 10))) / 86400000);
+        await logClientEvent(c.client_id, 'Статус: действующий → на паузе · автоматически · нет оплаты ' + over + ' дн', 'автоматически');
+        paused++;
+      } catch (e) { console.error('[autopause]', c.client_id, e.message || e); }
+    }
+  }
+  return { ok: true, country: country || 'ALL', enabled: cfg.enabled === true, days, dry_run: !apply, candidates: cands.length, paused,
+    sample: cands.slice(0, 50).map(c => ({ client_id: c.client_id, company_name: c.company_name, access_until: c.access_until, curator: c.support_operator })) };
+}
+
 async function handleRecalcBilling(req, res) {
   const country = String(req.query.country || '').toUpperCase();
   if (country && !ALLOWED_COUNTRIES.includes(country)) {
@@ -229,6 +260,36 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'POST' && req.query.action === 'link_hosts') return await handleLinkHosts(req, res);
     if (req.method === 'POST' && req.query.action === 'recalc_billing') return await handleRecalcBilling(req, res);
+    // v964: автопауза — POST ?action=autopause&country=KG[&dry_run=1]
+    if (req.method === 'POST' && req.query.action === 'autopause') {
+      const c = String(req.query.country || '').toUpperCase();
+      if (c && !ALLOWED_COUNTRIES.includes(c)) return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
+      return res.status(200).json(await autoPauseForCountry(c, String(req.query.dry_run || '') === '1'));
+    }
+    // v964: теги клиентов на сервере (раньше — localStorage у каждого оператора)
+    // GET  ?action=tags&country=KG            → { ok, tags: { client_id: [tag,...] } }
+    // POST ?action=tag  body {client_id, tag, on} → поставить/снять
+    if (req.method === 'GET' && req.query.action === 'tags') {
+      const c = String(req.query.country || '').toUpperCase();
+      const cl = await sbSelectAll('clients', Object.assign({ select: 'client_id', order: 'client_id' }, c ? { country: 'eq.' + c } : {}));
+      const ids = {}; cl.forEach(x => { ids[x.client_id] = 1; });
+      const rows = await sbSelectAll('client_tags', { select: 'client_id,tag', order: 'client_id,tag' });
+      const tags = {};
+      rows.forEach(r => { if (!ids[r.client_id]) return; (tags[r.client_id] = tags[r.client_id] || []).push(r.tag); });
+      return res.status(200).json({ ok: true, tags });
+    }
+    if (req.method === 'POST' && req.query.action === 'tag') {
+      const body = await readBody(req);
+      const cid = String(body.client_id || '').trim(), tag = String(body.tag || '').trim().toLowerCase().slice(0, 40);
+      if (!cid || !tag) return res.status(400).json({ ok: false, error: 'нужны client_id и tag' });
+      if (body.on === false) {
+        await sbDelete('client_tags', { client_id: 'eq.' + cid, tag: 'eq.' + tag });
+      } else {
+        try { await sbInsert('client_tags', { client_id: cid, tag, created_by: callerName(req) || null }); }
+        catch (e) { if (!/23505|duplicate/i.test(String(e.message || e))) throw e; }
+      }
+      return res.status(200).json({ ok: true });
+    }
     if (req.method === 'GET') {
       const { client_id, status, curator, search, country, renewal_within, limit } = req.query || {};
       const params = { order: 'updated_at.desc' };

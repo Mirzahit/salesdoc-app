@@ -10,7 +10,7 @@
 // ENV: CRON_SECRET (защита от внешних curl; Vercel Cron шлёт его автоматически).
 
 import { importSheetsForCountry } from './payments.js';
-import { recalcBillingForCountry } from './clients.js';
+import { recalcBillingForCountry, autoPauseForCountry } from './clients.js';
 
 // Импорт тянет листы из медленного Apps Script — без этого функция обрывалась по
 // дефолтному таймауту, не дойдя до вставки новых строк (Supabase замерзал — v594).
@@ -55,10 +55,16 @@ export default async function handler(req, res) {
     billing = { ok: false, error: String((e && e.message) || e) };
   }
 
+  // v964: автопауза — действует только при app_settings.autopause.enabled=true, иначе считает кандидатов
+  let autopause = null;
+  try { autopause = await autoPauseForCountry(country, false); }
+  catch (e) { autopause = { ok: false, error: String((e && e.message) || e) }; }
+
   const totalInserted = ran.reduce((s, r) => s + (r.inserted || 0), 0);
   return res.status(200).json({
     ok: true, country, total_inserted: totalInserted, ran,
     billing_dates_updated: billing && billing.updated,
-    billing: billing
+    billing: billing,
+    autopause: autopause && { enabled: autopause.enabled, candidates: autopause.candidates, paused: autopause.paused }
   });
 }

@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v963</title>
+<title>SalesDoc — Финансовый Дашборд v964</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -35005,6 +35005,17 @@ function _routeRenderClientStrip(card, cl, isSynthetic){
   sp.style.maxWidth = '260px'; sp.style.overflow = 'hidden'; sp.style.textOverflow = 'ellipsis';
   strip.appendChild(sp);
  }
+ // v964: теги (общие, с сервера) + кнопка изменить
+ var renderTags = function(){
+  var tags = (window._acTagsSrv && window._acTagsSrv[cl.client_id]) || [];
+  var LBL = (typeof AC_TAG_LABELS !== 'undefined') ? AC_TAG_LABELS : {};
+  tags.forEach(function(t){ var s = pill('plain', LBL[t] || t); s.style.background = 'var(--surface-2)'; s.style.border = '1px solid var(--border-faint)'; s.style.fontWeight = '500'; strip.appendChild(s); });
+  var b = document.createElement('button'); b.type = 'button'; b.className = 'sig-btn'; b.style.height = '22px'; b.textContent = tags.length ? '+' : 'Тег';
+  b.title = 'Теги'; b.onclick = function(){ acTagModal(cl.company_name || '', cl.client_id); };
+  strip.appendChild(b);
+ };
+ if(window._acTagsSrv) renderTags();
+ else _acFetchTags(cl.country || 'KG').then(function(){ if(_routeCurrentCard && _routeCurrentCard.client_id === cl.client_id && !strip.querySelector('button[title="Теги"]')) renderTags(); });
 }
 // v963: 'YYYY-MM-DD' → 'DD.MM.YYYY'
 function _fmtDMY(s){ if(!s) return null; var p = String(s).slice(0,10).split('-'); return p.length === 3 ? (p[2]+'.'+p[1]+'.'+p[0]) : String(s); }
@@ -43120,9 +43131,11 @@ async function acLoadKZClients(cb){
   ? fetch('/clients-kz.json?cb='+Date.now()).then(function(r){ return r.json(); }).then(function(d){ return (d && d.items) ? d.items : []; }).catch(function(){ return []; })
   : Promise.resolve([]);
  var sbPromise = _acFetchSupabaseClients(country);
+ var tagsPromise = _acFetchTags(country); // v964: теги с сервера, параллельно
  try {
   var staticItems = await staticPromise;
   var sbClients = await sbPromise;
+  await tagsPromise;
   // v959 (Б8): пока ждали сеть, страну могли переключить — не подменяем кэш чужими данными
   if(typeof currentCountry !== 'undefined' && currentCountry !== country) return;
   // Мерджим: static имеет приоритет (там monthlySum/monthlyQty уже посчитаны),
@@ -43163,6 +43176,8 @@ async function acLoadKZClients(cb){
   console.log('[acLoadKZClients]', country, ': static=' + staticItems.length, '+ supabase-extra=' + extras.length, '= total=' + merged.length);
   cb(merged);
   if(typeof _acTriggerPayLinksSync === 'function') _acTriggerPayLinksSync(country);
+  // v964: локальные теги → сервер (один раз, после чего локальный список пустеет)
+  try { _acMigrateLocalTags(merged).then(function(){ if(typeof acRender === 'function') acRender(); }); } catch(_){}
  } catch(e){
   // v959 (Б5): ошибку не кэшируем — следующий заход в раздел загрузит заново
   if(typeof currentCountry !== 'undefined' && currentCountry !== country) return;
@@ -43174,6 +43189,8 @@ async function acLoadKZClients(cb){
  }
 }
 
+// v964: теги живут на сервере (client_tags, ключ — client_id) и видны всем. localStorage
+// остаётся только для строк без client_id (их у KG нет) и как источник разовой миграции.
 function acTagsAll(){
  try { return JSON.parse(localStorage.getItem(AC_TAGS_KEY) || '{}') || {}; }
  catch(e){ return {}; }
@@ -43182,17 +43199,70 @@ function acTagsSaveAll(obj){
  try { localStorage.setItem(AC_TAGS_KEY, JSON.stringify(obj)); return true; }
  catch(e){ return false; }
 }
-function acGetTags(client){
+async function _acFetchTags(country){
+ try {
+  var d = await sbFetch('/api/clients?action=tags&country=' + country);
+  if(d && d.ok && d.tags){ window._acTagsSrv = d.tags; return d.tags; }
+ } catch(_){}
+ return window._acTagsSrv || null;
+}
+function acGetTags(client, cid){
+ if(cid && window._acTagsSrv) return (window._acTagsSrv[cid] || []).slice();
  var all = acTagsAll(); return (all[client] || []);
 }
-function acToggleTag(client, tag){
- var all = acTagsAll();
- var arr = all[client] || [];
- var i = arr.indexOf(tag);
- if(i >= 0) arr.splice(i, 1); else arr.push(tag);
- if(arr.length) all[client] = arr; else delete all[client];
- acTagsSaveAll(all);
+async function acToggleTag(client, tag, cid){
+ if(cid){
+  window._acTagsSrv = window._acTagsSrv || {};
+  var arr = window._acTagsSrv[cid] || [];
+  var on = arr.indexOf(tag) < 0;
+  if(on) arr.push(tag); else arr.splice(arr.indexOf(tag), 1);
+  window._acTagsSrv[cid] = arr;
+  try {
+   var r = await sbFetch('/api/clients?action=tag', { method:'POST', body: JSON.stringify({ client_id: cid, tag: tag, on: on }) });
+   if(!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось');
+  } catch(e){
+   // откат оптимистичного изменения
+   if(on) arr.splice(arr.indexOf(tag), 1); else arr.push(tag);
+   sdToast('Тег не сохранился');
+  }
+ } else {
+  var all = acTagsAll();
+  var a2 = all[client] || [];
+  var i = a2.indexOf(tag);
+  if(i >= 0) a2.splice(i, 1); else a2.push(tag);
+  if(a2.length) all[client] = a2; else delete all[client];
+  acTagsSaveAll(all);
+ }
  acRender();
+ try { if(_routeCurrentCard && _routeCurrentCard.client_id === cid && typeof _routeRenderCardHead === 'function') _routeRenderCardHead(); } catch(_){}
+}
+// v964: разовый перенос локальных тегов (ключ — имя клиента) на сервер по client_id. Union.
+async function _acMigrateLocalTags(items){
+ if(!window._acTagsSrv) return; // сервер не ответил — localStorage не трогаем
+ var local = acTagsAll();
+ var names = Object.keys(local);
+ if(!names.length) return;
+ var byName = {};
+ (items || []).forEach(function(it){ if(it && it._clientId && it.name) byName[_acNormForMerge(it.name)] = it._clientId; });
+ var srv = window._acTagsSrv || {};
+ var moved = 0;
+ for(var i = 0; i < names.length; i++){
+  var cid = byName[_acNormForMerge(names[i])];
+  if(!cid) continue;
+  var tags = local[names[i]] || [];
+  var allOk = true;
+  for(var j = 0; j < tags.length; j++){
+   if((srv[cid] || []).indexOf(tags[j]) >= 0) continue;
+   try {
+    var r = await sbFetch('/api/clients?action=tag', { method:'POST', body: JSON.stringify({ client_id: cid, tag: tags[j], on: true }) });
+    if(r && r.ok){ (srv[cid] = srv[cid] || []).push(tags[j]); moved++; } else allOk = false;
+   } catch(_){ allOk = false; }
+  }
+  if(allOk) delete local[names[i]]; // локальную запись убираем только когда всё перенесено
+ }
+ window._acTagsSrv = srv;
+ acTagsSaveAll(local);
+ if(moved) sdToast('Теги перенесены: ' + moved);
 }
 
 // Последняя оплата клиента
@@ -43731,8 +43801,8 @@ function acGetActiveClients(){
  accessUntil: accessUntil,
  accessStatus: accessStatus,
  daysOverdue: daysOverdue,
- risk: acRiskLevelByDays(name, daysSince, accessStatus, accessUntil),
- tags: acGetTags(name)
+ risk: acRiskLevelByDays(name, daysSince, accessStatus, accessUntil, item._clientId || null),
+ tags: acGetTags(name, item._clientId || null)
  });
  });
 
@@ -43775,8 +43845,8 @@ function _acDaysLeft(d){
  var x = new Date(d.getTime()); x.setHours(0,0,0,0);
  return Math.round((x - t) / 86400000);
 }
-function acRiskLevelByDays(client, days, accessStatus, accessUntil){
- var tags = acGetTags(client);
+function acRiskLevelByDays(client, days, accessStatus, accessUntil, cid){
+ var tags = acGetTags(client, cid);
  if(tags.indexOf('risk') >= 0) return 'high';
  if(tags.indexOf('ok') >= 0) return 'low';
  if(accessStatus === 'churned') return 'high';
@@ -44281,7 +44351,7 @@ function acRender(){
       + '<td class="num" style="color:var(--text-2)">'+(c.monthlyQty||0)+'</td>'
       + '<td>'+contactHtml+'</td>'
       + '<td>'+nextHtml+'</td>'
-      + '<td onclick="event.stopPropagation()"><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" title="Теги" onclick="event.stopPropagation();acTagModal('+aName+')">+</button></div></td>'
+      + '<td onclick="event.stopPropagation()"><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" title="Теги" onclick="event.stopPropagation();acTagModal('+aName+','+aCid+')">+</button></div></td>'
       + '<td style="white-space:nowrap" onclick="event.stopPropagation()"><span class="ac-row-act">'
        + '<button class="sd-risk-action" onclick="acQuickNote(event,'+aName+','+aHost+','+aCid+')" style="background:var(--surface-2);color:var(--text);border-color:var(--border)">Заметка</button>'
        + '<button class="ac-ibtn" title="Ещё" onclick="acRowMenu(event,'+aName+','+aHost+','+aCid+')">&#8943;</button>'
@@ -44478,7 +44548,7 @@ function acRowMenu(ev, clientName, host, cid){
    var ops = acBulkOps().map(function(o){ return {value:o, label:o}; }).concat([{value:'', label:'Снять куратора'}]);
    _intgDdOpen(anchor, ops, row.operator || '', function(name){ acState.selected = {}; acState.selected[cid] = 1; acBulkAssignCurator(name || null); });
   }
-  else if(v === 'tags') acTagModal(clientName);
+  else if(v === 'tags') acTagModal(clientName, cid);
  });
 }
 
@@ -45313,26 +45383,27 @@ function acRiskBar(label, value, max, fillClass){
  + '</div>';
 }
 
-function acTagModal(client){
- var current = acGetTags(client);
+function acTagModal(client, cid){
+ cid = cid || null;
+ var current = acGetTags(client, cid);
  var bg = document.createElement('div');
  bg.className = 'crm-modal-bg';
  bg.onclick = function(e){ if(e.target === bg) bg.remove(); };
  var tagOpts = [
- {key:'risk', label:'Риск ухода', desc:'Клиент может уйти — обзвонить, прояснить ситуацию'},
- {key:'problem', label:'Проблема', desc:'Технический сбой / открытая жалоба'},
- {key:'working', label:'В работе', desc:'Идёт активная работа над улучшением'},
- {key:'ok', label:'Норма', desc:'Всё хорошо, риск низкий, отслеживать не нужно'}
+ {key:'risk', label:'Риск ухода'},
+ {key:'problem', label:'Проблема'},
+ {key:'working', label:'В работе'},
+ {key:'ok', label:'Норма'}
  ];
- var clientEsc = client.replace(/'/g, "\\'").replace(/"/g, '&quot;'); /* v786: кавычки в названии рвали onclick */
+ var aName = _acJsAttr(client), aCid = _acJsAttr(cid || '');
  var html = '<div class="crm-modal" onclick="event.stopPropagation()">'
- + '<div class="crm-modal-title">Теги клиента</div>'
+ + '<div class="crm-modal-title">Теги</div>'
  + '<div style="font-size:13px;color:var(--text-2);margin-bottom:14px">' + kbEsc(client) + '</div>';
  tagOpts.forEach(function(t){
  var on = current.indexOf(t.key) >= 0;
- html += '<label class="ac-tag-row-modal" onclick="event.preventDefault();acToggleTag(\''+clientEsc+'\',\''+t.key+'\');this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">'
+ html += '<label class="ac-tag-row-modal" onclick="event.preventDefault();acToggleTag('+aName+','+_acJsAttr(t.key)+','+aCid+');this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">'
  + '<input type="checkbox" '+(on?'checked':'')+' style="margin-right:10px;pointer-events:none">'
- + '<div><div style="font-weight:600;color:var(--text);font-size:14px">'+t.label+'</div><div style="font-size:12px;color:var(--text-soft);margin-top:3px">'+t.desc+'</div></div>'
+ + '<div style="font-weight:600;color:var(--text);font-size:14px">'+t.label+'</div>'
  + '</label>';
  });
  html += '<div class="crm-modal-actions"><button class="crm-action" onclick="this.closest(\'.crm-modal-bg\').remove()">Готово</button></div></div>';
