@@ -21,6 +21,7 @@ function _gsToken() {
   return t ? '&token=' + encodeURIComponent(t) : '';
 }
 import { ensureBoardEntryForPayment } from './cards.js';
+import { _normName as normClientName } from './clients.js'; // v961: одна нормализация имени на весь бэкенд
 
 // Импорт из Sheets последовательно дёргает медленный Apps Script (cold-start 11-19с)
 // и делает много вставок — дефолтный таймаут Vercel обрывал его на полпути. Поднимаем
@@ -87,17 +88,25 @@ async function _createBoardEntriesForPayments(rows) {
   return { cards_created: cards, integrations_created: integs, board_skipped: skipped, board_errors: errors };
 }
 
-// Резолв client_id по company_name (точное совпадение нормализованного имени).
-// Если найдено больше 1 кандидата — возвращаем null, попадёт в unmatched.
+// Резолв client_id по названию из оплаты: billing_host → нормализованное имя.
+// v961: раньше справочник резался на 500 строк (в KZ клиентов 478) и хост не учитывался —
+// оплаты «karat-pv» оставались без client_id. При нескольких совпадениях — действующий,
+// если он один; иначе null (попадёт в «оплаты без клиента»).
 async function _resolveClientId(companyName, country) {
-  const norm = _normName(companyName);
-  if (!norm) return null;
+  const raw = String(companyName || '').trim().toLowerCase();
+  const norm = normClientName(companyName);
+  if (!raw) return null;
   const rows = await sbSelect('clients', {
     country: 'eq.' + country,
-    limit: '500'
+    select: 'client_id,company_name,billing_host,status',
+    limit: '5000'
   });
-  const matches = rows.filter(r => _normName(r.company_name) === norm);
+  const byHost = rows.filter(r => r.billing_host && String(r.billing_host).toLowerCase() === raw);
+  if (byHost.length === 1) return byHost[0].client_id;
+  const matches = rows.filter(r => normClientName(r.company_name) === norm);
   if (matches.length === 1) return matches[0].client_id;
+  const act = matches.filter(r => r.status === 'active');
+  if (act.length === 1) return act[0].client_id;
   return null;
 }
 
@@ -346,9 +355,15 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
   const cfg = SHEET_CONFIG[country];
 
   // Загружаем существующих клиентов для lookup client_id
-  const clients = await sbSelect('clients', { country: 'eq.' + country, limit: '1000' });
-  const clientByNorm = {};
-  clients.forEach(c => { clientByNorm[_normName(c.company_name)] = c.client_id; });
+  // v961: + по billing_host; при дублях имени действующий важнее
+  const clients = await sbSelect('clients', { country: 'eq.' + country, select: 'client_id,company_name,billing_host,status', limit: '5000' });
+  const clientByNorm = {}, clientByHost = {}, _normStatus = {};
+  clients.forEach(c => {
+    const n = normClientName(c.company_name);
+    if (n && (!clientByNorm[n] || (c.status === 'active' && _normStatus[n] !== 'active'))) { clientByNorm[n] = c.client_id; _normStatus[n] = c.status; }
+    const h = String(c.billing_host || '').trim().toLowerCase();
+    if (h && !clientByHost[h]) clientByHost[h] = c.client_id;
+  });
 
   // Загружаем существующие платежи sheets_import чтобы не дублировать
   const existing = await sbSelect('payments', {
@@ -426,7 +441,7 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
       parsed.currency = cfg.currency;
       parsed.source = 'sheets_import';
       parsed.sheet_id = cfg.sheet_id;
-      parsed.client_id = clientByNorm[_normName(parsed.company_name)] || null;
+      parsed.client_id = clientByHost[String(parsed.company_name || '').trim().toLowerCase()] || clientByNorm[normClientName(parsed.company_name)] || null;
       parsed._key = `${parsed.sheet_tab}::${parsed.sheet_row}`;
       parsed._already_exists = existingKeys.has(parsed._key);
       presentKeysByTab[monthName].add(parsed.sheet_row);

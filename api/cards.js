@@ -510,6 +510,7 @@ async function handlePaymentBotSync(body, res) {
     } else {
       await sbUpdate('clients', { client_id: 'eq.' + cl.client_id }, {
         next_billing_at: newDate,
+        next_billing_source: 'bot', // v961: крон не понизит, пока оплата не доедет в payments
         subscription_period_months: period_months,
         updated_at: new Date().toISOString()
       });

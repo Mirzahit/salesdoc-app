@@ -68,11 +68,13 @@ export async function activateClient(clientId, opts) {
   // следующая оплата: явная → существующая (если ещё в будущем) → календарное правило от сегодня
   const today = almatyIso();
   const curNb = cl.next_billing_at ? String(cl.next_billing_at).slice(0, 10) : null;
-  if (opts.next_billing_at) patch.next_billing_at = String(opts.next_billing_at).slice(0, 10);
-  else if (!curNb || curNb < today || !wasActive) patch.next_billing_at = nextBillingAfter(today, per);
+  if (opts.next_billing_at) { patch.next_billing_at = String(opts.next_billing_at).slice(0, 10); patch.next_billing_source = opts.source === 'bot' ? 'bot' : 'manual'; }
+  else if (!curNb || curNb < today || !wasActive) { patch.next_billing_at = nextBillingAfter(today, per); patch.next_billing_source = 'calc'; }
+  if (patch.next_billing_at) { patch.access_until = new Date(Date.parse(patch.next_billing_at + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10); patch.access_status = accessStatusFor(patch.access_until, today); }
   // возврат ушедшего/приостановленного — причина неоплаты больше не актуальна
-  if (!wasActive && (cl.status === 'churned' || cl.status === 'paused') && cl.pay_reason) {
-    patch.pay_reason = null; patch.pay_reason_at = null; patch.pay_reason_by = null;
+  if (!wasActive && (cl.status === 'churned' || cl.status === 'paused')) {
+    if (cl.pay_reason) { patch.pay_reason = null; patch.pay_reason_at = null; patch.pay_reason_by = null; }
+    if (cl.churned_at) patch.churned_at = null; // v961
   }
   const result = await sbUpdate('clients', { client_id: 'eq.' + clientId }, patch);
   const client = result[0] || Object.assign({}, cl, patch);
@@ -102,10 +104,25 @@ function _accessEndUTC(paidAt, periodMonths) {
   return new Date(Date.UTC(y, m - 1 + periodMonths, 0));
 }
 
+// v961: статус доступа по дате — одно правило для списка, карточки, напоминаний и крона.
+// expiring — истекает в ближайшие 7 дней; grace — просрочен 1–7 дней; overdue — дольше.
+export function accessStatusFor(endIso, todayIso) {
+  if (!endIso) return 'none';
+  const d = Math.round((Date.parse(endIso + 'T00:00:00Z') - Date.parse(todayIso + 'T00:00:00Z')) / 86400000);
+  if (d < 0) return (-d <= 7) ? 'grace' : 'overdue';
+  return d <= 7 ? 'expiring' : 'active';
+}
+
+// v961: пересчёт доступа для ВСЕХ клиентов страны (раньше — только active, и «не откатывать»
+// цементировало неверную дату бота навсегда). Правила:
+//  • access_until = max(конец месяца(paid_at + period)) по подписке/лицензиям, с учётом free_until;
+//  • access_status — по accessStatusFor;
+//  • next_billing_at = access_until + 1 день; не понижаем, если дату поставил человек (manual)
+//    или бот (bot) — но повышаем всегда;
+//  • оплата привязывается к клиенту: client_id → billing_host → нормализованное имя.
 export async function recalcBillingForCountry(country, dryRun) {
   const cparams = {
-    status: 'eq.active',
-    select: 'client_id,company_name,country,next_billing_at,subscription_period_months',
+    select: 'client_id,company_name,country,status,next_billing_at,next_billing_source,subscription_period_months,billing_host,free_until,access_until,access_status',
     limit: '5000'
   };
   const pparams = {
@@ -118,11 +135,14 @@ export async function recalcBillingForCountry(country, dryRun) {
 
   const [clients, pays] = await Promise.all([sbSelect('clients', cparams), sbSelect('payments', pparams)]);
 
-  const byId = {}, byName = {};
+  const byId = {}, byName = {}, byHost = {};
   clients.forEach(c => {
     byId[c.client_id] = c;
     const n = _normName(c.company_name);
-    if (n && !byName[n]) byName[n] = c; // при дублях имени берём первого — привязка по client_id важнее
+    // при дублях имени — действующий важнее ушедшего
+    if (n && (!byName[n] || (c.status === 'active' && byName[n].status !== 'active'))) byName[n] = c;
+    const h = String(c.billing_host || '').trim().toLowerCase();
+    if (h && !byHost[h]) byHost[h] = c;
   });
 
   // Максимальная дата окончания доступа по каждому клиенту
@@ -130,7 +150,8 @@ export async function recalcBillingForCountry(country, dryRun) {
   pays.forEach(p => {
     const per = Math.max(1, Math.round(Number(p.period_months) || 1));
     if (!p.paid_at) return;
-    const cl = (p.client_id && byId[p.client_id]) || byName[_normName(p.company_name)];
+    const raw = String(p.company_name || '').trim().toLowerCase();
+    const cl = (p.client_id && byId[p.client_id]) || byHost[raw] || byName[_normName(p.company_name)];
     if (!cl) return;
     const end = _accessEndUTC(p.paid_at, per);
     if (!end || isNaN(end.getTime())) return;
@@ -138,44 +159,58 @@ export async function recalcBillingForCountry(country, dryRun) {
     if (!endByClient[k] || end > endByClient[k]) { endByClient[k] = end; perByClient[k] = per; }
   });
 
+  const today = almatyIso();
   const changes = [];
-  let unmatched = 0, kept = 0;
+  const statusCount = { active: 0, expiring: 0, grace: 0, overdue: 0, none: 0 };
+  let unmatched = 0;
   clients.forEach(c => {
-    const end = endByClient[c.client_id];
-    if (!end) { unmatched++; return; }
-    const next = new Date(end.getTime() + 86400000).toISOString().slice(0, 10); // первый неоплаченный день
-    const cur = c.next_billing_at ? String(c.next_billing_at).slice(0, 10) : null;
-    // Если в базе дата ПОЗЖЕ вычисленной — её поставил бот или человек вручную, не откатываем
-    if (cur && cur >= next) { kept++; return; }
-    changes.push({
-      client_id: c.client_id,
-      company_name: c.company_name,
-      from: cur,
-      to: next,
-      period_months: perByClient[c.client_id] || null
-    });
+    let end = endByClient[c.client_id] || null;
+    if (c.free_until) {
+      const f = new Date(String(c.free_until).slice(0, 10) + 'T00:00:00Z');
+      if (!isNaN(f.getTime()) && (!end || f > end)) end = f;
+    }
+    const endIso = end ? end.toISOString().slice(0, 10) : null;
+    if (!endIso) unmatched++;
+    const st = accessStatusFor(endIso, today);
+    statusCount[st] = (statusCount[st] || 0) + 1;
+    const patch = {};
+    const curEnd = c.access_until ? String(c.access_until).slice(0, 10) : null;
+    if (endIso !== curEnd) patch.access_until = endIso;
+    if (st !== c.access_status) patch.access_status = st;
+    if (endIso) {
+      const next = new Date(end.getTime() + 86400000).toISOString().slice(0, 10); // первый неоплаченный день
+      const cur = c.next_billing_at ? String(c.next_billing_at).slice(0, 10) : null;
+      const src = c.next_billing_source || 'calc';
+      const raise = !cur || next > cur;
+      if (cur !== next && (raise || src === 'calc')) {
+        patch.next_billing_at = next;
+        patch.next_billing_source = 'calc';
+      }
+      const per = perByClient[c.client_id];
+      if (per && ALLOWED_PERIODS.includes(per) && per !== c.subscription_period_months) patch.subscription_period_months = per;
+    }
+    if (Object.keys(patch).length) {
+      changes.push({ client_id: c.client_id, company_name: c.company_name, status: c.status, from: c.next_billing_at || null, to: patch.next_billing_at || c.next_billing_at || null, access_until: endIso, access_status: st, patch });
+    }
   });
 
   if (!dryRun) {
     for (const ch of changes) {
-      const patch = { next_billing_at: ch.to, updated_at: new Date().toISOString() };
-      if (ch.period_months && ALLOWED_PERIODS.includes(ch.period_months)) patch.subscription_period_months = ch.period_months;
-      await sbUpdate('clients', { client_id: 'eq.' + ch.client_id }, patch);
+      await sbUpdate('clients', { client_id: 'eq.' + ch.client_id }, Object.assign({ updated_at: new Date().toISOString() }, ch.patch));
     }
   }
 
-  const today = almatyIso();
   return {
     ok: true,
     dry_run: !!dryRun,
     country: country || 'ALL',
-    active_clients: clients.length,
+    clients: clients.length,
+    active_clients: clients.filter(c => c.status === 'active').length,
     updated: changes.length,
-    already_ok: kept,
     no_payments: unmatched,
-    overdue_after: changes.filter(c => c.to < today).length,
-    due_30d_after: changes.filter(c => c.to >= today && c.to <= almatyIso(Date.now() + 30 * 86400000)).length,
-    sample: changes.slice(0, 20)
+    access: statusCount,
+    overdue_active: clients.filter(c => c.status === 'active' && ['grace', 'overdue'].includes(accessStatusFor(endByClient[c.client_id] ? endByClient[c.client_id].toISOString().slice(0, 10) : null, today))).length,
+    sample: changes.slice(0, 20).map(ch => ({ client_id: ch.client_id, company_name: ch.company_name, status: ch.status, from: ch.from, to: ch.to, access_until: ch.access_until, access_status: ch.access_status }))
   };
 }
 
@@ -367,11 +402,20 @@ export default async function handler(req, res) {
       // v859: support_operator — кто ВЕДЁТ клиента. curator_operator отвечает на другой вопрос,
       // «кто продал»: там имена продавцов из amoCRM, и у 452 действующих клиентов из 538 пусто.
       // v960: activation_source / status_reason — служебные, в таблицу не пишутся (снимаются ниже)
-      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','support_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months','implementation_contact','billing_host','pay_reason','pay_reason_note','free_until','activation_source','status_reason'];
+      // v961: + next_step_at/next_step_text («следующий шаг» из списка)
+      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','support_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months','implementation_contact','billing_host','pay_reason','pay_reason_note','free_until','activation_source','status_reason','next_step_at','next_step_text'];
       const body = {};
       Object.keys(rawBody).forEach(k => {
         if (ALLOWED_PATCH_FIELDS.includes(k)) body[k] = rawBody[k];
       });
+      // v961: дату следующей оплаты поставил человек — крон её не понижает
+      if (body.next_billing_at !== undefined && body.status !== 'active') {
+        body.next_billing_source = body.next_billing_at ? 'manual' : 'calc';
+        if (body.next_billing_at) {
+          body.access_until = new Date(Date.parse(String(body.next_billing_at).slice(0, 10) + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+          body.access_status = accessStatusFor(body.access_until, almatyIso());
+        }
+      }
       // v859: оператора поддержки принимаем только из «Сотрудников» нужной страны и
       // приводим к тому написанию, как человек записан в базе. Пустая строка — снять.
       if (body.support_operator !== undefined) {
@@ -459,6 +503,9 @@ export default async function handler(req, res) {
           ? parseInt(body.renewal_months, 10)
           : (existing[0].subscription_period_months || 1);
         body.next_billing_at = nextBillingAfter(almatyIso(), months); // v960: календарное правило, как у крона и бота
+        body.next_billing_source = 'manual';
+        body.access_until = new Date(Date.parse(body.next_billing_at + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+        body.access_status = accessStatusFor(body.access_until, almatyIso());
         body.subscription_period_months = months;
         delete body.renew;
         delete body.renewal_months;
@@ -486,6 +533,7 @@ export default async function handler(req, res) {
       }
       // v960: остальные переходы статуса — в ленту клиента с актором и причиной
       if (body.status && body.status !== 'active') {
+        if (body.status === 'churned') body.churned_at = new Date().toISOString(); // v961
         try {
           const prevRow = await sbSelect('clients', { client_id: 'eq.' + client_id, select: 'status', limit: '1' });
           const was = (prevRow[0] || {}).status;
