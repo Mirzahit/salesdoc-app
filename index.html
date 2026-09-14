@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v964</title>
+<title>SalesDoc — Финансовый Дашборд v965</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10385,7 +10385,6 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <input type="search" id="ac-filter-search" class="ac-search" placeholder="Поиск по названию или серверу" oninput="acSetSearch(this.value)">
  <!-- v823: кураторы (операторы) вносят оплаты отсюда — страницу «Платежи» они не видят -->
  <button id="ac-add-payment-btn" class="add-btn" style="display:none;font-size:11px;padding:6px 14px" onclick="openModal('payment')">+ Оплата</button>
- <!-- v959: кнопка «Обновить из 2025» убрана — она всегда была скрыта; перечитать историю можно через acReloadPrior() из консоли -->
  </div>
  </div>
  <!-- v827: компактная стат-строка (подписки/отвал/удержание + сегменты) — вместо крупных
@@ -12226,9 +12225,7 @@ function switchCountry(code) {
  // v557: при смене страны сбрасываем AC_KZ_CACHE, чтобы acLoadKZClients подтянул клиентов
  // нужной страны (KZ→clients-kz.json, KG→Supabase). Иначе на KG показывались KZ-клиенты.
  AC_KZ_CACHE = null;
- // v959 (Б8): оплаты 2025 прошлой страны, выбранные чекбоксы и ошибка загрузки — тоже сбрасываем,
- // иначе KZ-подписки 2025 участвовали в расчёте доступа KG-клиентов до прихода своих
- window._acPriorPays = null;
+ // v959 (Б8): выбранные чекбоксы и ошибка загрузки — тоже сбрасываем
  if (typeof acState !== 'undefined' && acState) acState.selected = {};
  if (typeof _acLoadError !== 'undefined') _acLoadError = null;
  // Пересоздать EXP_TABS для новой страны
@@ -43060,7 +43057,7 @@ var AC_KZ_CACHE = null;
 // v553: showChurned/showNoSub = true по умолчанию — чтобы видеть ВСЕХ клиентов сразу, без нажатия галок.
 // Если кому-то нужно отделить активных — пусть включит фильтр риска или галку выключит.
 // v962: view = hot | mine | all (сегмент представлений); sort — колонка и направление; page — сколько строк показано.
-var acState = { view: '', operator: '', risk: '', tag: '', segment: '', expiring: false, showChurned: true, showNoSub: true, search: '', selected: {}, sort: { key: 'access', dir: 1 }, page: 100 }; /* v823: selected = client_id→1 для массового назначения куратора */
+var acState = { view: '', operator: '', risk: '', tag: '', segment: '', showChurned: true, showNoSub: true, search: '', selected: {}, sort: { key: 'access', dir: 1 }, page: 100 }; /* v823: selected = client_id→1 для массового назначения куратора */
 var AC_PAGE = 100;
 
 // v253: сегменты клиентов по кол-ву пользователей (qty)
@@ -43126,10 +43123,8 @@ async function acLoadKZClients(cb){
   if(typeof _acTriggerPayLinksSync === 'function') _acTriggerPayLinksSync(country);
   return;
  }
- // Загружаем оба источника параллельно
- var staticPromise = (country === 'KZ')
-  ? fetch('/clients-kz.json?cb='+Date.now()).then(function(r){ return r.json(); }).then(function(d){ return (d && d.items) ? d.items : []; }).catch(function(){ return []; })
-  : Promise.resolve([]);
+ // v965: статический clients-kz.json больше не загружается (KZ отключён, KG весь в Supabase)
+ var staticPromise = Promise.resolve([]);
  var sbPromise = _acFetchSupabaseClients(country);
  var tagsPromise = _acFetchTags(country); // v964: теги с сервера, параллельно
  try {
@@ -43263,39 +43258,6 @@ async function _acMigrateLocalTags(items){
  window._acTagsSrv = srv;
  acTagsSaveAll(local);
  if(moved) sdToast('Теги перенесены: ' + moved);
-}
-
-// Последняя оплата клиента
-function acLastPayment(client){
- if(typeof payments === 'undefined' || !payments) return null;
- var lastD = null, lastAmt = 0;
- payAll().forEach(function(p){ // v925: по клиенту считаем из полной базы, не из личного среза
- if(!p) return;
- var clientName = p.client || p.cl || p.compName || '';
- if(clientName !== client) return;
- // v441: parseDateObjFromSheet возвращает Date в локальной TZ (раньше была строка → сломанное сравнение).
- var d = (typeof parseDateObjFromSheet === 'function' && p.date) ? parseDateObjFromSheet(p.date) : (p.date ? new Date(p.date) : null);
- if(!d || isNaN(d)) return;
- if(!lastD || d > lastD){ lastD = d; lastAmt = parseFloat(p.amount || p.am || 0) || 0; }
- });
- return lastD ? { date: lastD, amount: lastAmt } : null;
-}
-
-function acDaysSinceLastPay(client){
- var lp = acLastPayment(client);
- if(!lp) return 999;
- return Math.floor((new Date() - lp.date) / 86400000);
-}
-
-function acRiskLevel(client){
- var tags = acGetTags(client);
- // ручной тег risk → high. ok → low. problem → med.
- if(tags.indexOf('risk') >= 0) return 'high';
- if(tags.indexOf('ok') >= 0) return 'low';
- var days = acDaysSinceLastPay(client);
- if(days > 60) return 'high';
- if(days > 30) return 'med';
- return 'low';
 }
 
 // v257: нормализация имени компании — убираем ТОО / ИП / OOO / кавычки / лишние пробелы,
@@ -43444,105 +43406,6 @@ function _acTriggerPayLinksSync(country){
  } catch(e){}
 }
 
-// v303: загрузка подписочных платежей 2025 для корректного расчёта «Доступ до»
-// Многие клиенты оплатили на год/полгода в 2025, и эти подписки покрывают 2026.
-// Без этих данных «годовики» показываются как «нет подписки».
-// v304: кэш бессрочный — 2025 год закрыт, данные не меняются. Перезагрузка только по кнопке.
-var AC_PRIOR_CACHE_KEY = 'sd_prior_payments_cache';
-
-function acLoadPriorPayments(forceRefresh){
- // Проверяем кэш — без TTL, используем всегда если есть и страна совпадает
- if(!forceRefresh){
- try {
- var raw = localStorage.getItem(AC_PRIOR_CACHE_KEY);
- if(raw){
- var cached = JSON.parse(raw);
- if(cached.country === currentCountry && Array.isArray(cached.payments)){
- window._acPriorPays = cached.payments;
- return Promise.resolve(window._acPriorPays);
- }
- }
- } catch(_){}
- }
-
- var cfg = COUNTRY_CONFIG[currentCountry];
- var priorId = cfg && cfg.LTV_ID;
- if(!priorId){ window._acPriorPays = []; return Promise.resolve([]); }
-
- var months = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
- var today = new Date();
- var allSubs = [];
-
- // Простой CSV parser для русского формата (запятая разделитель, кавычки экранируют)
- function parseCSV(text){
- return text.split('\n').map(function(line){
- var fields = [], cur = '', inQ = false;
- for(var i = 0; i < line.length; i++){
- var ch = line[i];
- if(ch === '"'){ inQ = !inQ; continue; }
- if(ch === ',' && !inQ){ fields.push(cur); cur = ''; continue; }
- cur += ch;
- }
- fields.push(cur);
- return fields;
- });
- }
-
- function parseNum(s){
- if(typeof s === 'number') return s;
- return parseFloat(String(s||'').replace(/\s/g,'').replace(',','.')) || 0;
- }
-
- function parseDateDMY(s){
- var m = String(s||'').trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
- if(!m) return null;
- return m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
- }
-
- var promises = months.map(function(sheet, mi){
- var url = 'https://docs.google.com/spreadsheets/d/' + priorId
- + '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(sheet) + '&range=A4:T500';
- return fetch(url).then(function(r){ return r.text(); }).then(function(csv){
- var rows = parseCSV(csv);
- rows.forEach(function(row){
- if(!row[1]) return;
- var dateStr = parseDateDMY(row[0]);
- if(!dateStr) return;
- var cat = String(row[2]||'').trim();
- // v441: единое правило подписки через isSubscriptionPay (включая «доп. лицензии»).
- if(!isSubscriptionPay({categoryRaw: cat})) return;
- var amount = parseNum(row[12]) || parseNum(row[9]);
- if(amount <= 0) return;
- var period = Math.max(1, Math.round(parseNum(row[8]) || 1));
- // Проверяем что endDate >= сегодня (иначе подписка истекла, не нужна для accessUntil)
- var dp = dateStr.split('-');
- var dY = parseInt(dp[0],10), dM = parseInt(dp[1],10), dD = parseInt(dp[2],10);
- var endD = new Date(dY, dM - 1 + period, 0);
- if(endD < today) return;
- allSubs.push({
- date: dateStr,
- client: String(row[1]).trim(),
- category: 'subscription',
- categoryRaw: cat,
- amount: amount,
- period: period,
- _prior: true // метка чтоб в матчинге понять что это исторический
- });
- });
- }).catch(function(){});
- });
-
- return Promise.all(promises).then(function(){
- window._acPriorPays = allSubs;
- try {
- localStorage.setItem(AC_PRIOR_CACHE_KEY, JSON.stringify({
- ts: Date.now(), country: currentCountry, payments: allSubs
- }));
- } catch(_){}
- return allSubs;
- });
-}
-
 // v277: UI — раскрыть/свернуть блок несматченных
 function acToggleUnmatched(){
  var list = document.getElementById('ac-unmatched-list');
@@ -43639,15 +43502,10 @@ function acGetActiveClients(){
  var overrides = acGetOverrides();
 
  // 1. Группируем платежи по полю client (это host или имя — что в Sheets вписано)
- // v303: к 2026 платежам добавляем подписочные из 2025 (window._acPriorPays) —
- //       те у кого date+period ещё покрывает текущий месяц. Они влияют только на accessUntil.
  var payByHost = {};
  var prefixMerged = {}; // v303: payHost → {matchedTo, score} для диагностики
  var skipMatchMap = acGetSkipMatch();
  var combinedPays = payAll().slice(); // v925: клиенты компании — из полной базы
- if(window._acPriorPays && window._acPriorPays.length){
- combinedPays = combinedPays.concat(window._acPriorPays);
- }
  if(combinedPays.length){
  combinedPays.forEach(function(p){
  var host = String(p && (p.client || p.cl || p.compName) || '').trim().toLowerCase();
@@ -44060,8 +43918,6 @@ async function acBulkAssignCurator(name){
 function acSetRisk(r){ acState.risk = r || ''; acRender(); }
 function acSetTag(t){ acState.tag = t || ''; acRender(); }
 function acSetSegment(s){ acState.segment = s || ''; acRender(); }
-function acSetShowChurned(v){ acState.showChurned = !!v; acRender(); }
-function acSetShowNoSub(v){ acState.showNoSub = !!v; acRender(); }
 // v541: поиск по имени клиента/хосту в Действующих
 // v959: debounce 180 мс — acRender пересобирает список из всех платежей, на каждую букву это лишнее
 var _acSearchTimer = null;
@@ -44073,27 +43929,13 @@ function acSetSearch(s){
 // v549: сброс всех фильтров одной кнопкой — если случайно поставил и не понимаешь почему пусто
 function acResetFilters(){
  acState.operator = ''; acState.risk = ''; acState.tag = ''; acState.segment = '';
- acState.expiring = false; acState.search = ''; acState.page = AC_PAGE;
+ acState.search = ''; acState.page = AC_PAGE;
  // v827-fix: сброс возвращает ДЕФОЛТ (true, показываем всех) — раньше ставил false
  // вопреки дефолту v553 и «Сбросить» прятал часть клиентов
  acState.showChurned = true; acState.showNoSub = true;
  var s = document.getElementById('ac-filter-search'); if(s) s.value = '';
  acRender();
 }
-// v304: ручная перезагрузка 2025 (на случай если что-то реально добавили)
-function acReloadPrior(){
- var btn = document.getElementById('ac-reload-prior-btn');
- if(btn){ btn.disabled = true; btn.textContent = 'Загрузка...'; }
- try { localStorage.removeItem(AC_PRIOR_CACHE_KEY); } catch(_){}
- acLoadPriorPayments(true).then(function(pays){
- if(btn){ btn.disabled = false; btn.textContent = 'Обновить из 2025'; }
- if(typeof showNotif === 'function') showNotif('2025 обновлён', 'Подгружено ' + (pays?pays.length:0) + ' подписочных платежей');
- if(typeof acRender === 'function') acRender();
- }).catch(function(){
- if(btn){ btn.disabled = false; btn.textContent = 'Обновить из 2025'; }
- });
-}
-
 function acInit(){
  // v827: список операторов теперь в acOperatorOptions() (чипы + дропдаун).
  // v823-qa: при смене страны KZ→KG выбранного оператора может не быть — сбрасываем фильтр.
@@ -44120,13 +43962,8 @@ function acInit(){
  var renderAfter = function(){ acLoadKZClients(function(){ acRender(); }); };
  if(loadKb && typeof loadKb.then === 'function'){ loadKb.then(renderAfter).catch(renderAfter); }
  else { renderAfter(); }
- // v303: подгружаем подписочные 2025 (асинхронно, не блокирует первый рендер).
- //       Когда придут — перерисовываем чтоб accessUntil обновился у годовиков.
- if(typeof acLoadPriorPayments === 'function'){
- acLoadPriorPayments().then(function(){
- if(typeof acRender === 'function') acRender();
- }).catch(function(){});
- }
+ // v965: подгрузка «Доходов 2025» из Google Sheets убрана — оплаты 2025 лежат в Supabase,
+ // доступ считает сервер (access_until/access_status)
 }
 
 function acRender(){
@@ -44648,54 +44485,6 @@ async function acOpenClientCardWithTask(ev, clientName, host, cid){
     if(ta) try { ta.focus(); } catch(_){}
    }, 400);
   }
- } finally {
-  if(btn){ btn.disabled = false; if(prev !== null) btn.textContent = prev; }
- }
-}
-
-async function acQuickTaskFor(ev, clientName, host){
- // v555: event явным параметром
- var btn = ev && ev.currentTarget;
- var prev = btn ? btn.textContent : null;
- if(btn){ btn.disabled = true; btn.textContent = '...'; }
- try {
-  var cid = await _acEnsureClientId(clientName, host, null); // v959: тот же путь, что клик по строке — предложит создать карточку
-  if(!cid) return;
-  // Если есть полная модалка — переиспользуем и предвыбираем клиента
-  if(typeof mytasksNewTaskStart === 'function'){
-   await mytasksNewTaskStart();
-   var sel = document.getElementById('mt-new-client');
-   if(sel){
-    // Если client_id уже есть в селекте — выбираем
-    var has = false;
-    for(var i = 0; i < sel.options.length; i++){
-     if(sel.options[i].value === cid){ sel.value = cid; has = true; break; }
-    }
-    // Если нет (список ограничен 200 активных) — добавляем option и выбираем
-    if(!has){
-     var opt = document.createElement('option');
-     opt.value = cid; opt.textContent = clientName + ' (' + cid + ')';
-     sel.appendChild(opt); sel.value = cid;
-    }
-   }
-   var ta = document.getElementById('mt-new-text');
-   if(ta) try { ta.focus(); } catch(_){}
-   return;
-  }
-  // Fallback: prompt + POST /api/tasks
-  var text = window.prompt('Текст задачи для «' + clientName + '»:');
-  if(!text || !text.trim()) return;
-  var deadline = new Date(Date.now() + 86400000);
-  var body = {
-   client_id: cid,
-   type_id: 1,
-   text: text.trim(),
-   deadline_at: deadline.toISOString(),
-   is_all_day: true
-  };
-  var d = await sbFetch('/api/tasks', { method:'POST', body: JSON.stringify(body) });
-  if(!d || !d.ok){ sdToast('Не удалось создать: ' + (d && d.error || 'ошибка')); return; }
-  if(typeof kbShowToast === 'function') kbShowToast('Задача поставлена');
  } finally {
   if(btn){ btn.disabled = false; if(prev !== null) btn.textContent = prev; }
  }

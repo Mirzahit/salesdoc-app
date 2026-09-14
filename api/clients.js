@@ -329,7 +329,10 @@ export default async function handler(req, res) {
       // (колонки списка «Действующие» и правило «Горит»)
       if (String(req.query.with_activity || '') === '1' && data.length) {
         try {
-          const act = await sbSelectAll('client_activity', { order: 'client_id' });
+          // v965: для одной карты — одна строка view, а не вся таблица
+          const act = data.length === 1
+            ? await sbSelect('client_activity', { client_id: 'eq.' + data[0].client_id, limit: '1' })
+            : await sbSelectAll('client_activity', { order: 'client_id' });
           const byId = {};
           act.forEach(a => { byId[a.client_id] = a; });
           data.forEach(c => {

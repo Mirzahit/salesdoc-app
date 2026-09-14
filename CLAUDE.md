@@ -31,6 +31,15 @@
 
 **Источник данных:** Google Sheets — несколько таблиц, главная "Доходы 2026". Доступ через Apps Script Web App URL (внутри `index.html`). Часть данных переезжает в Supabase (см. память `project_integration_migration_state`).
 
+**Клиенты / «Действующие» (с v959–v965, сентябрь 2026):**
+- Программа работает **только с KG** (`currentCountry` всегда `'KG'`, переключатель стран скрыт). Данные KZ в Supabase остаются, но не показываются.
+- Источник истины — Supabase `clients`: `status`, `access_until`/`access_status` (считает `recalcBillingForCountry` в `api/clients.js`, крон `api/cron-import-payments.js` каждый час), `next_billing_at` (+ `next_billing_source`: calc/bot/manual), `support_operator` = куратор (кто внедрял), `curator_operator` = кто продал, `next_step_at/next_step_text`, теги в `client_tags`.
+- Активация клиента — только через `activateClient()` в `api/clients.js` (доска, кнопка, чек-лист, статус, создание, бот). Все переходы статуса и смена куратора пишутся в `card_history` (`event_type='system'`) сервером — на фронте не дублировать.
+- **PostgREST отдаёт ≤1000 строк за запрос** — для длинных выборок только `sbSelectAll()` из `api/_supabase.js`.
+- Автопауза: `app_settings.autopause = {enabled, days}`; пока `enabled:false` крон только считает кандидатов; `POST /api/clients?action=autopause&country=KG&dry_run=1` — список.
+- Фронт «Действующие» (`view-activeclients`, функции `ac*`): представления Горит·Мои·Все, «Горит» = доступ истекает/не оплачен ≤30 дн и нет контакта 7 дней и нет запланированного шага. Карточка действующего клиента — `#view-route-card` в режиме синтетической карты (`id:'client:…'`).
+- Правило владельца по текстам: минимум слов в интерфейсе, «вы», никаких упоминаний ИИ («Что не так», «Черновик ответа»). Спеки: `docs/superpowers/specs/2026-09-13-*.md`.
+
 **Партнёрские правила работы (важно):**
 - НЕ читать `index.html` целиком без необходимости — он большой, токены
 - Точечные правки через Edit, а не Write
