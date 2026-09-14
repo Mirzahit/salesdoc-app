@@ -44,6 +44,23 @@ export async function sbSelect(table, params) {
   return text ? JSON.parse(text) : [];
 }
 
+// v961: PostgREST отдаёт не больше 1000 строк за запрос, какой бы limit ни просили
+// (у KZ 1648 подписочных оплат — пересчёт доступа видел только первые 1000, 2026 год
+// выпадал). Тянем страницами через offset, пока страница не окажется короче.
+export async function sbSelectAll(table, params, pageSize) {
+  const size = Math.min(1000, Math.max(1, pageSize || 1000));
+  const p = Object.assign({}, params || {});
+  delete p.limit; delete p.offset;
+  if (!p.order) p.order = 'id'; // стабильный порядок обязателен для offset-пагинации
+  const out = [];
+  for (let off = 0; off < 100000; off += size) {
+    const page = await sbSelect(table, Object.assign({}, p, { limit: String(size), offset: String(off) }));
+    out.push.apply(out, page);
+    if (page.length < size) break;
+  }
+  return out;
+}
+
 // INSERT: sbInsert('clients', { client_id: 'SD-1', company_name: 'X' }) или массив
 export async function sbInsert(table, rowOrRows) {
   checkEnv();

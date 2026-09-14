@@ -10,7 +10,7 @@
 // PATCH  /api/payments?id=UUID                                  → редактировать (whitelist)
 // DELETE /api/payments?id=UUID                                  → удалить (только manual)
 
-import { sbSelect, sbInsert, sbUpdate, sbDelete, sbUpsert } from './_supabase.js';
+import { sbSelect, sbSelectAll, sbInsert, sbUpdate, sbDelete, sbUpsert } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { requirePermSoft, PAYMENTS_KEYS } from './_perm.js';
 
@@ -96,10 +96,10 @@ async function _resolveClientId(companyName, country) {
   const raw = String(companyName || '').trim().toLowerCase();
   const norm = normClientName(companyName);
   if (!raw) return null;
-  const rows = await sbSelect('clients', {
+  const rows = await sbSelectAll('clients', {
     country: 'eq.' + country,
     select: 'client_id,company_name,billing_host,status',
-    limit: '5000'
+    order: 'client_id'
   });
   const byHost = rows.filter(r => r.billing_host && String(r.billing_host).toLowerCase() === raw);
   if (byHost.length === 1) return byHost[0].client_id;
@@ -356,7 +356,7 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
 
   // Загружаем существующих клиентов для lookup client_id
   // v961: + по billing_host; при дублях имени действующий важнее
-  const clients = await sbSelect('clients', { country: 'eq.' + country, select: 'client_id,company_name,billing_host,status', limit: '5000' });
+  const clients = await sbSelectAll('clients', { country: 'eq.' + country, select: 'client_id,company_name,billing_host,status', order: 'client_id' });
   const clientByNorm = {}, clientByHost = {}, _normStatus = {};
   clients.forEach(c => {
     const n = normClientName(c.company_name);
@@ -366,10 +366,12 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
   });
 
   // Загружаем существующие платежи sheets_import чтобы не дублировать
-  const existing = await sbSelect('payments', {
+  // v961: постранично — PostgREST режет ответ до 1000 строк, у KZ их больше: часть существующих
+  // строк считалась «новыми», а защита от удаления видела неполную картину
+  const existing = await sbSelectAll('payments', {
     country: 'eq.' + country,
     source: 'eq.sheets_import',
-    limit: '5000'
+    order: 'id'
   });
   const existingKeys = new Set(existing.map(p => `${p.sheet_tab}::${p.sheet_row}`));
 
@@ -573,11 +575,11 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
   // оплату — уже без чека. Отсюда жалоба «одна с чеком, одна без».
   // Теперь перед вставкой ищем свою же ручную запись (страна, клиент, дата, сумма) и
   // просто дописываем ей номер строки: дубль не появляется, чек сохраняется.
-  const manualRows = await sbSelect('payments', {
+  const manualRows = await sbSelectAll('payments', {
     country: 'eq.' + country,
     sheet_row: 'is.null',
     select: 'id,company_name,paid_at,amount,category_raw,receipt_path',
-    limit: '2000'
+    order: 'id'
   });
   const manualKey = (r) => [
     String(r.company_name || '').trim().toLowerCase(),

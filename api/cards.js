@@ -22,7 +22,7 @@
 // DELETE /api/cards?entity=ticket&id=UUID        → закрыть (status='closed')
 
 import crypto from 'crypto';
-import { sbSelect, sbInsert, sbUpdate, sbUpsert, sbDelete } from './_supabase.js';
+import { sbSelect, sbSelectAll, sbInsert, sbUpdate, sbUpsert, sbDelete } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { almatyIso } from './_dates.js';
 import { notifCreate } from './_notify.js'; // v871: новый клиент от продаж
@@ -319,7 +319,7 @@ async function operatorFromImplementation(clientId) {
 async function findClientByName(company, country) {
   const n = normClientName(company);
   if (!n) return null;
-  const rows = await sbSelect('clients', { country: 'eq.' + country, select: '*', order: 'created_at.desc', limit: '5000' });
+  const rows = await sbSelectAll('clients', { country: 'eq.' + country, select: '*', order: 'created_at.desc,client_id' });
   const hits = rows.filter(c => normClientName(c.company_name) === n);
   if (!hits.length) return null;
   return hits.find(c => c.status === 'active') || hits[0];

@@ -8,7 +8,7 @@
 // POST /api/clients                          → создать (body: { client_id, company_name, ... })
 // PATCH /api/clients?client_id=SD-2026-1     → изменить (body: поля для обновления)
 
-import { sbSelect, sbInsert, sbUpdate } from './_supabase.js';
+import { sbSelect, sbSelectAll, sbInsert, sbUpdate } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 import { almatyIso } from './_dates.js';
 import { canonOperator, operatorNames } from './_operators.js';
@@ -123,17 +123,17 @@ export function accessStatusFor(endIso, todayIso) {
 export async function recalcBillingForCountry(country, dryRun) {
   const cparams = {
     select: 'client_id,company_name,country,status,next_billing_at,next_billing_source,subscription_period_months,billing_host,free_until,access_until,access_status',
-    limit: '5000'
+    order: 'client_id'
   };
   const pparams = {
-    select: 'client_id,company_name,paid_at,category,period_months',
+    select: 'id,client_id,company_name,paid_at,category,period_months',
     category: 'in.(' + RECALC_CATEGORIES.join(',') + ')',
-    order: 'paid_at.asc',
-    limit: '20000'
+    order: 'paid_at.asc,id'
   };
   if (country) { cparams['country'] = 'eq.' + country; pparams['country'] = 'eq.' + country; }
 
-  const [clients, pays] = await Promise.all([sbSelect('clients', cparams), sbSelect('payments', pparams)]);
+  // v961: постранично — PostgREST отдаёт максимум 1000 строк за запрос
+  const [clients, pays] = await Promise.all([sbSelectAll('clients', cparams), sbSelectAll('payments', pparams)]);
 
   const byId = {}, byName = {}, byHost = {};
   clients.forEach(c => {

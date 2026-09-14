@@ -6,7 +6,7 @@
 // - внедрения >7 дней на этапе — оператору + CEO (алерт на 7-й, 14-й, 21-й день: ключ по неделям);
 // - идемпотентность НЕ через last_sent, а через dedup_key — повторный запуск того же часа безопасен.
 
-import { sbSelect, sbDelete } from './_supabase.js';
+import { sbSelect, sbSelectAll, sbDelete } from './_supabase.js';
 import { notifCreate, opEmailByName } from './_notify.js';
 
 const CEO_EMAIL = 'office@salesdoc.io';
@@ -111,12 +111,12 @@ export async function runReminders() {
     const ids = cls.map(c => c.client_id).filter(Boolean);
     let pays = [];
     if (ids.length) {
-      pays = await sbSelect('payments', {
+      pays = await sbSelectAll('payments', {
         client_id: 'in.(' + ids.map(i => '"' + i + '"').join(',') + ')',
         category: 'in.("subscription","license")',
-        select: 'client_id,amount,period_months,paid_at,category',
-        order: 'paid_at.asc', limit: '5000'
-      });
+        select: 'id,client_id,amount,period_months,paid_at,category',
+        order: 'paid_at.asc,id'
+      }); // v961: постранично (PostgREST ≤1000 строк за запрос)
     }
     // Фолбэк для платежей без client_id — матч по нормализованному имени внутри страны
     const paysNoId = await sbSelect('payments', {
@@ -195,10 +195,10 @@ export async function runReminders() {
     if (fresh.length) {
       const fids = Array.from(new Set(fresh.map(p => p.client_id)));
       const inList = 'in.(' + fids.map(i => '"' + i + '"').join(',') + ')';
-      const hist = await sbSelect('payments', {
+      const hist = await sbSelectAll('payments', {
         client_id: inList, category: 'eq.subscription',
-        select: 'client_id,amount,period_months,paid_at', order: 'paid_at.asc', limit: '5000'
-      });
+        select: 'id,client_id,amount,period_months,paid_at', order: 'paid_at.asc,id'
+      }); // v961: постранично
       const clRows = await sbSelect('clients', { client_id: inList, select: 'client_id,company_name,curator_operator,support_operator' });
       const clById = {};
       clRows.forEach(c => { c.curator_operator = c.support_operator || c.curator_operator || null; clById[c.client_id] = c; }); // v960: куратор = support_operator
