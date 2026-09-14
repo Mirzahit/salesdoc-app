@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v961</title>
+<title>SalesDoc — Финансовый Дашборд v962</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -7920,6 +7920,33 @@ body.light #ac-bulk-bar { box-shadow:0 12px 32px rgba(15,18,25,.18); }
 .ac-task-btn { opacity:0; transition:opacity .12s; }
 .ac-ledger tr.ac-row:hover .ac-task-btn { opacity:1; }
 @media (hover:none){ .ac-task-btn { opacity:1; } } /* на тач-экранах hover нет — кнопка видна всегда */
+/* v962: сегмент представлений, сортируемые заголовки, «показать ещё», скелет, быстрая заметка */
+.ac-seg { display:inline-flex; background:var(--surface-3,var(--surface-2)); border-radius:8px; padding:3px; gap:2px; }
+.ac-seg-btn { height:28px; padding:0 12px; border:0; border-radius:6px; background:transparent; color:var(--text-2); font:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.ac-seg-btn.is-on { background:var(--surface); color:var(--text); box-shadow:var(--sh-1,0 1px 2px rgba(0,0,0,.3)); }
+.ac-seg-btn .cnt-b { margin-left:5px; font-weight:600; color:var(--text-soft); font-variant-numeric:tabular-nums; }
+.ac-seg-btn.is-on .cnt-b { color:var(--accent-text,#828FF7); }
+.ac-ledger th.ac-sort { cursor:pointer; user-select:none; }
+.ac-ledger th.ac-sort:hover { color:var(--text); }
+.ac-ledger th.ac-sort.is-on { color:var(--text); }
+.ac-ledger th.ac-sort .arr { font-size:9px; margin-left:3px; opacity:.7; }
+.ac-more-row td { text-align:center; padding:10px; }
+.ac-more-btn { padding:7px 16px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text-2); font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+.ac-more-btn:hover { background:var(--surface-2); color:var(--text); }
+.ac-skel { display:block; height:12px; border-radius:6px; background:var(--surface-2); position:relative; overflow:hidden; }
+.ac-skel::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,var(--surface-3,rgba(255,255,255,.06)),transparent); animation:acShimmer 1.2s infinite; }
+@keyframes acShimmer { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
+@media (prefers-reduced-motion:reduce){ .ac-skel::after{ animation:none; } }
+.ac-contact { font-size:12px; color:var(--text-2); white-space:nowrap; }
+.ac-contact.old { color:var(--text-soft); }
+.ac-next { font-size:12px; white-space:nowrap; max-width:220px; overflow:hidden; text-overflow:ellipsis; color:var(--text-2); }
+.ac-next.due { color:var(--ds-warning-text); }
+.ac-next.over { color:var(--ds-danger-text); }
+.ac-row-act { display:inline-flex; gap:4px; opacity:0; transition:opacity .12s; }
+.ac-ledger tr.ac-row:hover .ac-row-act { opacity:1; }
+@media (hover:none){ .ac-row-act { opacity:1; } }
+.ac-ibtn { width:28px; height:28px; display:inline-grid; place-items:center; border-radius:7px; border:1px solid var(--border-faint); background:var(--surface-2); color:var(--text-2); cursor:pointer; font-size:14px; line-height:1; font-family:inherit; }
+.ac-ibtn:hover { color:var(--text); border-color:var(--border); }
 .ac-more-head { font-size:11.5px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--text-soft); cursor:pointer; padding:10px 2px; user-select:none; }
 .ac-more-head:hover { color:var(--text-2); }
 @media (max-width:900px){ .ac-ledger-wrap { overflow-x:auto; } .ac-ledger th { position:static; } .ac-search { margin-left:0; flex:1 1 100%; } }
@@ -10273,12 +10300,15 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  </div>
  <!-- v827: Linear-леджер — чипы вместо нативных select (правило проекта), быстрые сценарии
       оператора: Мои / Горит / Без куратора. Тексты чипов рисует acFchipsRender(). -->
+ <!-- v962: представления «Горит · Мои · Все» (сегмент), фильтры — дропдауны. Без куратора — внутри «Куратор». -->
  <div class="sd-filters ac-toolbar">
- <button type="button" class="intg-fchip" id="ac-fchip-mine" onclick="acToggleMine()">Мои</button>
- <button type="button" class="intg-fchip" id="ac-fchip-hot" onclick="acToggleExpiring()">Горит</button>
- <button type="button" class="intg-fchip" id="ac-fchip-nocurator" onclick="acToggleNoCurator()">Без куратора</button>
- <span class="ac-toolbar-sep"></span>
+ <div class="ac-seg" id="ac-seg">
+  <button type="button" class="ac-seg-btn" data-view="hot" onclick="acSetView('hot')">Горит</button>
+  <button type="button" class="ac-seg-btn" data-view="mine" onclick="acSetView('mine')">Мои</button>
+  <button type="button" class="ac-seg-btn" data-view="all" onclick="acSetView('all')">Все</button>
+ </div>
  <button type="button" class="intg-fchip" id="ac-fchip-operator" onclick="acFilterDdOpen(event,'operator')"></button>
+ <button type="button" class="intg-fchip" id="ac-fchip-segment" onclick="acFilterDdOpen(event,'segment')"></button>
  <button type="button" class="intg-fchip" id="ac-fchip-tag" onclick="acFilterDdOpen(event,'tag')"></button>
  <button id="ac-filter-reset" class="ac-reset-btn" onclick="acResetFilters()" style="display:none">Сбросить</button>
  <input type="search" id="ac-filter-search" class="ac-search" placeholder="Поиск по названию или серверу" oninput="acSetSearch(this.value)">
@@ -10507,11 +10537,11 @@ body.light .mt-filter-section-title { color:#8A90A0; }
     <div id="ticket-card-desc-box" class="tk-desc-box"></div>
     <div id="ticket-card-feed" class="amocard-feed tk-feed"></div>
     <!-- v541: AI-предложение ответа клиенту. Появляется по клику «Подсказать» — над composer. -->
-    <div id="ticket-ai-suggest" style="display:none;margin:8px 14px 0;padding:12px;background:rgba(120,80,255,.08);border:1px solid rgba(120,80,255,.18);border-radius:10px">
-     <div style="font-size:10.5px;font-weight:700;color:#9E7BFF;letter-spacing:.6px;margin-bottom:6px">ПОМОЩНИК ПРЕДЛАГАЕТ</div>
+    <div id="ticket-ai-suggest" style="display:none;margin:8px 14px 0;padding:12px;background:var(--surface-2);border:1px solid var(--border-faint);border-radius:10px">
+     <div style="font-size:11px;font-weight:600;color:var(--text-soft);letter-spacing:.04em;margin-bottom:6px;text-transform:uppercase">Черновик ответа</div>
      <div id="ticket-ai-text" style="font-size:13px;color:var(--text);line-height:1.5;white-space:pre-wrap;margin-bottom:10px">…</div>
      <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <button type="button" onclick="ticketAiUse()" class="tt-mode-btn" style="padding:5px 12px;font-size:11px">Использовать</button>
+      <button type="button" onclick="ticketAiUse()" class="tt-mode-btn" style="padding:5px 12px;font-size:11px">Вставить</button>
       <button type="button" onclick="ticketAiRephrase()" class="tt-mode-btn" style="padding:5px 12px;font-size:11px">Перефразировать</button>
       <button type="button" onclick="ticketAiHide()" class="tt-mode-btn" style="padding:5px 12px;font-size:11px;margin-left:auto">Скрыть</button>
      </div>
@@ -10520,7 +10550,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
     <div class="amocard-chat-input">
      <!-- v855: раньше поле было подписано «Заметка ... клиент это НЕ увидит», а отправка
           засчитывалась как ответ клиенту. Теперь два разных действия с разными кнопками. -->
-     <span class="amocard-chat-select" style="display:inline-flex;align-items:center;gap:8px"><b>Ответ клиенту</b><button type="button" id="ticket-ai-btn" onclick="ticketAiAsk()" title="Попросить подсказать ответ клиенту" style="padding:4px 10px;font-size:11px;font-weight:600;background:rgba(120,80,255,.12);color:#9E7BFF;border:1px solid rgba(120,80,255,.30);border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/></svg>Подсказать</button></span>
+     <span class="amocard-chat-select" style="display:inline-flex;align-items:center;gap:8px"><b>Ответ клиенту</b><button type="button" id="ticket-ai-btn" onclick="ticketAiAsk()" title="Попросить подсказать ответ клиенту" style="padding:4px 10px;font-size:11px;font-weight:600;background:var(--surface-2);color:var(--text-2);border:1px solid var(--border);border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px">Подсказать</button></span>
      <textarea id="ticket-comment-text" rows="2" placeholder="Что вы ответили клиенту. Ctrl+Enter — отправить" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();ticketCommentSend();}" style="resize:vertical;min-height:36px;max-height:200px;font-family:inherit"></textarea>
      <button id="ticket-comment-send" class="amocard-send" onclick="ticketCommentSend()" title="Отправить (Ctrl+Enter)">&rarr;</button>
     </div>
@@ -11543,7 +11573,10 @@ let nextEmpId = 14;
 // ============================================================
 // COUNTRY CONFIG (KZ / KG)
 // ============================================================
-let currentCountry = localStorage.getItem('sd_country') || 'KZ';
+// v962: программа работает только с Кыргызстаном (решение владельца 14.09.2026). Данные KZ
+// в базе остаются, но не показываются: переключатель стран скрыт, страна всегда KG.
+let currentCountry = 'KG';
+try { localStorage.setItem('sd_country', 'KG'); } catch(_){}
 const COUNTRY_CONFIG = {
  KZ: {
  label:'Казахстан', flag:'\u{1F1F0}\u{1F1FF}', currency:'\u20B8',
@@ -12090,9 +12123,10 @@ function countryLockFor(u){
  u = u || (typeof currentUser !== 'undefined' ? currentUser : null);
  if(!u) return null;
  var c = String(u.country || '').trim().toUpperCase();
- return (c === 'KG' || c === 'KZ') ? c : null;
+ return c === 'KG' ? 'KG' : null; // v962: KZ отключён — сотрудник с country=KZ не запирается, работает с KG
 }
 function switchCountry(code) {
+ if (code !== 'KG') return; // v962: только KG
  var _lk = countryLockFor();
  if (_lk && code !== _lk) return; // v768: запертый не может уйти со своей страны
  if (code === currentCountry) return;
@@ -12180,7 +12214,7 @@ function updateCountrySwitcherUI() {
 }
 // v476: toggle страны для country-lamp кнопки в топбаре
 function toggleCountry(){
- switchCountry(currentCountry === 'KZ' ? 'KG' : 'KZ');
+ // v962: переключение стран отключено — работаем только с KG
 }
 
 function setSyncStatus(state, text) {
@@ -12962,7 +12996,7 @@ function renderPlanFactStrip(ps, factTotal){
 // Кэш 6 часов в localStorage, ключ: sd_ai_w_<widgetId>.
 var AI_WIDGETS = {
  'ai-w-dashboard': { agent: 'financier', title: 'Инсайты Финдиректора', sub: 'AI-анализ плана, факта, тренда', contextFn: 'aiCtxDashboard' },
- 'ai-w-clients': { agent: 'customer', title: 'Инсайты по клиентам', sub: 'Customer Success — риски оттока, апсейл', contextFn: 'aiCtxClients' },
+ 'ai-w-clients': { agent: 'customer', title: 'Сигналы', sub: 'Доступ, оплаты, нагрузка кураторов', contextFn: 'aiCtxClients' },
  'ai-w-kanban': { agent: 'integrator', title: 'Инсайты по внедрению', sub: 'Узкие места канбана и операторов', contextFn: 'aiCtxKanban' },
  'ai-w-marketing': { agent: 'marketing', title: 'Инсайты Маркетолога', sub: 'Анализ Meta Ads и каналов', contextFn: 'aiCtxMarketing' }
 };
@@ -16097,7 +16131,23 @@ function showView(v) {
 // поэтому браузерный back прыгал поверх модалок и менял view — теперь ESC даёт явный
 // способ закрыть верхнюю модалку без задевания SPA-навигации.
 document.addEventListener('keydown', function(ev){
+ // v962: «/» в «Действующих» — фокус в поиск (если курсор не в поле ввода)
+ if(ev.key === '/' && !ev.ctrlKey && !ev.metaKey && !ev.altKey){
+  var _t = ev.target, _tag = _t && _t.tagName;
+  var _inField = _tag === 'INPUT' || _tag === 'TEXTAREA' || _tag === 'SELECT' || (_t && _t.isContentEditable);
+  var _acView = document.getElementById('view-activeclients');
+  var _rc = document.getElementById('view-route-card');
+  if(!_inField && _acView && _acView.style.display !== 'none' && !(_rc && _rc.style.display === 'block')){
+   var _s = document.getElementById('ac-filter-search');
+   if(_s){ ev.preventDefault(); _s.focus(); _s.select(); return; }
+  }
+ }
  if(ev.key !== 'Escape' && ev.keyCode !== 27) return;
+ // v962: Esc закрывает карту клиента, если нет модалок поверх неё
+ if(!document.querySelector('.cfa-bg, .ct-modal-bg, .crm-modal-bg, .ct-dd, .modal-overlay.open')){
+  var _rcv = document.getElementById('view-route-card');
+  if(_rcv && _rcv.style.display === 'block' && typeof routeCloseCard === 'function'){ ev.stopPropagation(); routeCloseCard(); return; }
+ }
  // Закрываем самую верхнюю модалку (последнюю в DOM-порядке)
  var modals = document.querySelectorAll('.ct-modal-bg, .crm-modal-bg');
  if(modals.length){
@@ -17165,7 +17215,7 @@ function _enterAppAsCurrentUser(){
  if(typeof _intgFchipsRender === 'function') _intgFchipsRender();
  } else {
  var cs2=document.getElementById('country-switcher'); if(cs2) cs2.style.display='none';
- var tc2=document.getElementById('country-lamp'); if(tc2) tc2.style.display='';
+ var tc2=document.getElementById('country-lamp'); if(tc2) tc2.style.display='none'; // v962: только KG
  // v768-qa: если до этого в той же вкладке сидел запертый (logout без перезагрузки),
  // фильтр стран Интеграций остался бы скрытым и залипшим на его стране — возвращаем.
  if(window._intgFilters) window._intgFilters.country = '';
@@ -42768,7 +42818,9 @@ var AC_TAGS_KEY = 'crm_client_tags';
 var AC_KZ_CACHE = null;
 // v553: showChurned/showNoSub = true по умолчанию — чтобы видеть ВСЕХ клиентов сразу, без нажатия галок.
 // Если кому-то нужно отделить активных — пусть включит фильтр риска или галку выключит.
-var acState = { operator: '', risk: '', tag: '', segment: '', expiring: false, showChurned: true, showNoSub: true, search: '', selected: {} }; /* v823: selected = client_id→1 для массового назначения куратора; v827: expiring = чип «Горит» */
+// v962: view = hot | mine | all (сегмент представлений); sort — колонка и направление; page — сколько строк показано.
+var acState = { view: '', operator: '', risk: '', tag: '', segment: '', expiring: false, showChurned: true, showNoSub: true, search: '', selected: {}, sort: { key: 'access', dir: 1 }, page: 100 }; /* v823: selected = client_id→1 для массового назначения куратора */
+var AC_PAGE = 100;
 
 // v253: сегменты клиентов по кол-ву пользователей (qty)
 var AC_SEGMENTS = [
@@ -42801,7 +42853,7 @@ function _acNormForMerge(s){ return String(s||'').toLowerCase().replace(/[^a-zа
 // Сетевая ошибка теперь бросается наверх, а не превращается в «пустую базу» (v959, Б5).
 async function _acFetchSupabaseClients(country){
  var token = window._APP_TOKEN || '';
- var r = await fetch('/api/clients?country=' + country + '&status=active&limit=2000', { headers: { 'x-app-token': token } });
+ var r = await fetch('/api/clients?country=' + country + '&status=active&limit=2000&with_activity=1', { headers: { 'x-app-token': token } });
  var d = await r.json().catch(function(){ return null; });
  if(!d || !d.ok || !Array.isArray(d.clients)) throw new Error((d && d.error) || ('HTTP ' + r.status));
  return d.clients;
@@ -42864,7 +42916,8 @@ async function acLoadKZClients(cb){
     qty: 0, sum: 0,   // v959: те же имена полей, что у статики (раньше monthlySum/monthlyQty никто не читал)
     operator: c.support_operator || c.curator_operator || '',
     _supabase: true,
-    _clientId: c.client_id
+    _clientId: c.client_id,
+    _sb: c   // v962: серверные поля (access_until/access_status, следующий шаг, последний контакт, телефон)
    });
   });
   // v959 (Б1): статическим записям, у которых есть двойник в Supabase, отдаём его client_id —
@@ -43403,15 +43456,34 @@ function acGetActiveClients(){
  // v300: статус доступа на основе подписочных платежей + period
  // v959 (Б6): считаем по календарным дням, а не по миллисекундам. accessUntil — полночь
  // последнего оплаченного дня; раньше уже в 00:01 этого дня клиент был «просрочен 1 дн».
- var accessStatus = 'never', daysOverdue = 0;
- if(pay.accessUntil){
- var diff = -_acDaysLeft(pay.accessUntil); // 0 = последний оплаченный день, 1 = первый неоплаченный
+ // v962: если сервер уже посчитал доступ (access_status) — берём его: одна истина для списка,
+ // карточки, напоминаний и крона. Локальный расчёт по оплатам остаётся запасным.
+ var accessStatus = 'never', daysOverdue = 0, accessUntil = pay.accessUntil || null;
+ var sb = item._sb || null;
+ if(sb && sb.access_status && sb.access_status !== 'none' && sb.access_until){
+ var _au = String(sb.access_until).slice(0,10).split('-');
+ accessUntil = new Date(parseInt(_au[0],10), parseInt(_au[1],10)-1, parseInt(_au[2],10));
+ var _d = -_acDaysLeft(accessUntil);
+ if(_d <= 0) accessStatus = 'active';
+ else if(_d <= 7) { accessStatus = 'grace'; daysOverdue = _d; }
+ else { accessStatus = 'churned'; daysOverdue = _d; }
+ } else if(accessUntil){
+ var diff = -_acDaysLeft(accessUntil); // 0 = последний оплаченный день, 1 = первый неоплаченный
  if(diff <= 0) accessStatus = 'active';
  else if(diff <= 7) { accessStatus = 'grace'; daysOverdue = diff; }
  else { accessStatus = 'churned'; daysOverdue = diff; }
  }
+ var _lc = sb && sb.last_contact_at ? new Date(sb.last_contact_at) : null;
+ var _ns = sb && sb.next_step_at ? new Date(sb.next_step_at) : null;
+ var _nt = sb && sb.next_task_at ? new Date(sb.next_task_at) : null;
  result.push({
  _clientId: item._clientId || null, // v959 (Б1): без него не рендерились чекбоксы массового назначения
+ lastContactAt: (_lc && !isNaN(_lc)) ? _lc : null,
+ nextStepAt: (_ns && !isNaN(_ns)) ? _ns : null,
+ nextStepText: (sb && sb.next_step_text) || '',
+ nextTaskAt: (_nt && !isNaN(_nt)) ? _nt : null,
+ openTasks: (sb && sb.open_tasks) || 0,
+ phone: (sb && sb.main_phone) || '',
  client: name, host: item.host || '', billing_host: item.billing_host || '',
  monthlyQty: item.qty || 0, monthlySum: item.sum || 0,
  segment: acGetSegment(item.qty),
@@ -43426,10 +43498,10 @@ function acGetActiveClients(){
  payCount: pay.payCount || 0,
  matchedHosts: pay.hosts,
  daysSincePay: daysSince,
- accessUntil: pay.accessUntil || null,
+ accessUntil: accessUntil,
  accessStatus: accessStatus,
  daysOverdue: daysOverdue,
- risk: acRiskLevelByDays(name, daysSince, accessStatus, pay.accessUntil),
+ risk: acRiskLevelByDays(name, daysSince, accessStatus, accessUntil),
  tags: acGetTags(name)
  });
  });
@@ -43513,7 +43585,7 @@ function acFilterDdOpen(ev, key){
    .concat(acOperatorOptions().map(function(o){ return {value:o,label:o}; }));
   current = acState.operator;
  } else if(key === 'segment'){
-  opts = [{value:'',label:'Любой размер'}].concat(AC_SEGMENTS.map(function(s){ return {value:s.key, label:s.name+' · '+s.desc}; }));
+  opts = [{value:'',label:'Любой размер'}].concat(AC_SEGMENTS.map(function(s){ return {value:s.key, label:s.label+' · '+s.desc}; }));
   current = acState.segment;
  } else { // tag
   opts = [{value:'',label:'Все теги'}].concat(Object.keys(AC_TAG_LABELS).map(function(t){ return {value:t,label:AC_TAG_LABELS[t]}; }));
@@ -43528,25 +43600,40 @@ function acFilterDdOpen(ev, key){
 }
 // «Горит» — доступ просрочен (grace) или кончается в ближайшие 7 дней.
 // QA v827: floor как в строке таблицы — иначе клиент с «через 7 дн» не попадал в чип
-function acIsHot(c){
+// v962: «Горит» — доступ истекает (≤7 дн), просрочен или закрыт, И за 7 дней не было контакта,
+// И следующий шаг не запланирован на будущее. После заметки «следующий шаг до даты» клиент
+// перестаёт гореть до этой даты — иначе экран через неделю перестанут смотреть.
+function acAccessUrgent(c){
  if(c.accessStatus === 'grace') return true;
- if(c.accessStatus === 'active' && c.accessUntil){
-  return _acDaysLeft(c.accessUntil) <= 7;
- }
+ if(c.accessStatus === 'churned') return (c.daysOverdue || 0) <= 30; // давно закрытые — не «горят», их ждёт автопауза
+ if(c.accessStatus === 'active' && c.accessUntil) return _acDaysLeft(c.accessUntil) <= 7;
  return false;
 }
-function acToggleExpiring(){ acState.expiring = !acState.expiring; acRender(); }
-function acToggleNoCurator(){ acState.operator = acState.operator === '__none' ? '' : '__none'; acRender(); }
-// «Мои» — портфель текущего пользователя (ищем его имя в списке операторов по первому слову)
-function acToggleMine(){
+function acIsHot(c){
+ if(!acAccessUrgent(c)) return false;
+ var now = Date.now();
+ if(c.lastContactAt && (now - c.lastContactAt.getTime()) < 7 * 86400000) return false;
+ if(c.nextStepAt && c.nextStepAt.getTime() > now) return false;
+ return true;
+}
+function _acMyOperatorName(){
  var me = (typeof currentUser!=='undefined'&&currentUser&&currentUser.name) ? String(currentUser.name).trim() : '';
- if(!me) return;
+ if(!me) return '';
  var first = me.split(/\s+/)[0].toLowerCase();
- var match = acOperatorOptions().filter(function(o){ return o.toLowerCase().indexOf(first) === 0; })[0] || me;
- acState.operator = (acState.operator === match) ? '' : match;
+ return acOperatorOptions().filter(function(o){ return o.toLowerCase().indexOf(first) === 0; })[0] || me;
+}
+function _acIsMine(c){
+ var me = _acMyOperatorName(); if(!me) return false;
+ var op = String(c.operator||'').trim().toLowerCase(), f = me.split(/\s+/)[0].toLowerCase();
+ return !!op && (op === me.toLowerCase() || op.split(/\s+/)[0] === f);
+}
+function acSetView(v){ acState.view = v; acState.page = AC_PAGE; acRender(); }
+function acSetSort(key){
+ if(acState.sort.key === key) acState.sort.dir = -acState.sort.dir; else acState.sort = { key: key, dir: 1 };
  acRender();
 }
-// Тексты и подсветка чипов; counts = {hot, nocur} считает acRender по отскоупленному списку
+function acShowMore(){ acState.page += AC_PAGE; acRender(); }
+// Тексты и подсветка сегмента/чипов; counts считает acRender по отскоупленному списку
 function acFchipsRender(counts){
  counts = counts || window._acChipCounts || {};
  var set = function(id, html, on){
@@ -43557,24 +43644,23 @@ function acFchipsRender(counts){
  };
  var arrow = ' <span style="font-size:9px;opacity:.6">&#9662;</span>';
  var lbl = function(name, val){ return '<span style="opacity:.65;font-weight:500">'+name+':</span> '+_escHtml(val)+arrow; };
- var cnt = function(n){ return n > 0 ? '<span class="cnt-b">'+n+'</span>' : ''; };
- // «Мои» — только если у пользователя реально есть свои клиенты (UX v827: у CEO без
- // портфеля чип вёл в пустой список); роль operator и так отскоуплена — прячем
- var mineEl = document.getElementById('ac-fchip-mine');
- if(mineEl){
-  var isOp = (typeof currentUser!=='undefined'&&currentUser&&String(currentUser.role||'').toLowerCase()==='operator');
-  var hasName = !!(typeof currentUser!=='undefined'&&currentUser&&currentUser.name);
-  mineEl.style.display = (!isOp && hasName && (counts.mine || 0) > 0) ? '' : 'none';
-  var first = hasName ? String(currentUser.name).trim().split(/\s+/)[0].toLowerCase() : '';
-  mineEl.classList.toggle('is-on', !!(acState.operator && acState.operator !== '__none' && acState.operator.toLowerCase().indexOf(first) === 0));
- }
- set('ac-fchip-hot', 'Горит' + cnt(counts.hot), acState.expiring);
- set('ac-fchip-nocurator', 'Без куратора' + cnt(counts.nocur), acState.operator === '__none');
+ var cnt = function(n){ return (n > 0) ? '<span class="cnt-b">'+n+'</span>' : ''; };
+ var isOp = (typeof currentUser!=='undefined'&&currentUser&&String(currentUser.role||'').toLowerCase()==='operator');
+ if(!acState.view) acState.view = isOp ? 'hot' : 'all';
+ var mineBtn = document.querySelector('#ac-seg [data-view="mine"]');
+ if(mineBtn) mineBtn.style.display = (isOp || !(counts.mine > 0)) ? 'none' : ''; // оператор и так видит только своих; без своих клиентов — прячем
+ document.querySelectorAll('#ac-seg .ac-seg-btn').forEach(function(b){
+  var v = b.getAttribute('data-view');
+  b.innerHTML = (v === 'hot' ? 'Горит' : v === 'mine' ? 'Мои' : 'Все') + cnt(v === 'hot' ? counts.hot : v === 'mine' ? counts.mine : counts.all);
+  b.classList.toggle('is-on', acState.view === v);
+ });
  set('ac-fchip-operator', lbl('Куратор', acState.operator === '__none' ? 'Без куратора' : (acState.operator || 'Все')), !!acState.operator);
+ var segM = acState.segment ? acSegmentMeta(acState.segment) : null;
+ set('ac-fchip-segment', lbl('Размер', segM ? segM.label : 'Любой'), !!acState.segment);
  set('ac-fchip-tag', lbl('Тег', acState.tag ? (AC_TAG_LABELS[acState.tag]||acState.tag) : 'Все'), !!acState.tag);
  var resetBtn = document.getElementById('ac-filter-reset');
  if(resetBtn){
-  var anyActive = !!(acState.operator || acState.risk || acState.tag || acState.segment || acState.search || acState.expiring);
+  var anyActive = !!(acState.operator || acState.risk || acState.tag || acState.segment || acState.search);
   resetBtn.style.display = anyActive ? 'inline-block' : 'none';
  }
 }
@@ -43687,7 +43773,7 @@ function acSetSearch(s){
 // v549: сброс всех фильтров одной кнопкой — если случайно поставил и не понимаешь почему пусто
 function acResetFilters(){
  acState.operator = ''; acState.risk = ''; acState.tag = ''; acState.segment = '';
- acState.expiring = false; acState.search = '';
+ acState.expiring = false; acState.search = ''; acState.page = AC_PAGE;
  // v827-fix: сброс возвращает ДЕФОЛТ (true, показываем всех) — раньше ставил false
  // вопреки дефолту v553 и «Сбросить» прятал часть клиентов
  acState.showChurned = true; acState.showNoSub = true;
@@ -43715,6 +43801,18 @@ function acInit(){
   acState.operator = '';
  }
  acFchipsRender(); // QA v827: тексты чипов сразу, не дожидаясь сети (иначе пустые пилюли)
+ // v962: скелет таблицы, пока нет данных — вместо пустой страницы
+ try {
+  var _cn0 = (typeof currentCountry!=='undefined'&&currentCountry)||'KZ';
+  if(!AC_COUNTRY_CACHE[_cn0]){
+   var _tbl0 = document.getElementById('ac-table');
+   if(_tbl0){
+    var _sk = '';
+    for(var _i=0;_i<7;_i++){ _sk += '<tr><td colspan="10" style="height:40px"><span class="ac-skel" style="width:'+(30+((_i*23)%45))+'%"></span></td></tr>'; }
+    _tbl0.innerHTML = '<tbody>' + _sk + '</tbody>';
+   }
+  }
+ } catch(_){}
  // v257-fix: дождаться kbLoad чтобы операторы/этапы из канбана корректно
  // подтянулись в карточки клиентов (acGetActiveClients использует kbCards).
  var loadKb = (typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'
@@ -43745,15 +43843,17 @@ function acRender(){
    return op && (op === _acMe || op.split(/\s+/)[0] === _acMeFirst);
   });
  }
+ if(!acState.view) acState.view = _acMe ? 'hot' : 'all';
  var filtered = all.filter(function(c){
+ // v962: представление — Горит / Мои / Все
+ if(acState.view === 'hot' && !acIsHot(c)) return false;
+ if(acState.view === 'mine' && !_acIsMine(c)) return false;
  // v823: «Без куратора» — клиенты без ответственного (их разбирают Малика/Элиза)
  if(acState.operator === '__none'){ if(c.operator) return false; }
  else if(acState.operator && c.operator !== acState.operator) return false;
  if(acState.risk && c.risk !== acState.risk) return false;
  if(acState.tag && c.tags.indexOf(acState.tag) < 0) return false;
  if(acState.segment && c.segment !== acState.segment) return false;
- // v827: чип «Горит» — просрочка или доступ кончается в ближайшие 7 дней
- if(acState.expiring && !acIsHot(c)) return false;
  // v300: по умолчанию скрываем отвалившихся (доступ закончился >7 дн назад)
  if(!acState.showChurned && c.accessStatus === 'churned') return false;
  // v302: по умолчанию скрываем тех, у кого вообще не было подписочных платежей —
@@ -43770,13 +43870,16 @@ function acRender(){
  // Counter
  var cnt = document.getElementById('ac-count');
  if(cnt) cnt.textContent = '· ' + filtered.length + ' из ' + all.length;
+ window._acLastRows = all; // v962: для меню строки (телефон, куратор)
 
  // v827: счётчики для чипов «Горит»/«Без куратора» + сегменты для стат-строки
  var _meFirst = (typeof currentUser!=='undefined'&&currentUser&&currentUser.name) ? String(currentUser.name).trim().split(/\s+/)[0].toLowerCase() : '';
  window._acChipCounts = {
   hot: all.filter(acIsHot).length,
   nocur: all.filter(function(c){ return !c.operator; }).length,
-  mine: _meFirst ? all.filter(function(c){ return String(c.operator||'').trim().toLowerCase().indexOf(_meFirst) === 0; }).length : 0
+  mine: all.filter(_acIsMine).length,
+  all: all.length,
+  noplan: all.filter(function(c){ return !c.openTasks && !(c.nextStepAt && c.nextStepAt.getTime() > Date.now()); }).length
  };
  var segStats = {};
  AC_SEGMENTS.forEach(function(s){ segStats[s.key] = { count:0, sum:0, licenses:0 }; });
@@ -43830,16 +43933,20 @@ function acRender(){
  // v823: массовое назначение куратора — чекбоксы видят все, кроме роли «оператор»
  // (оператор и так работает только со своими). Чекбокс только у строк из Supabase (_clientId).
  var _acCanBulk = !(typeof currentUser !== 'undefined' && currentUser && String(currentUser.role||'').toLowerCase() === 'operator');
- var _acColspan = _acCanBulk ? 8 : 7;
+ var _acColspan = _acCanBulk ? 10 : 9;
  if(tbl){
   // v827: плоский леджер. Колонка «Риск» убрана — это дубль «Доступ до» (риск считается из той же
   // даты); колонка «Имя сервера» ушла второй строкой в ячейку клиента.
-  var thead = '<thead><tr>' + (_acCanBulk ? '<th style="width:26px"></th>' : '') + '<th>Клиент</th><th>Доступ</th><th class="num">Абонплата</th><th>Куратор</th><th class="num" title="Сколько пользователей у клиента">Пользователи</th><th>Теги</th><th style="width:104px"></th></tr></thead><tbody>';
+  // v962: + «Последний контакт», «Следующий шаг»; сортировка кликом по заголовку
+  var _th = function(key, label, cls){
+   var on = acState.sort.key === key;
+   return '<th class="ac-sort'+(on?' is-on':'')+(cls?' '+cls:'')+'" onclick="acSetSort('+_acJsAttr(key)+')">'+label+(on?('<span class="arr">'+(acState.sort.dir>0?'&#9650;':'&#9660;')+'</span>'):'')+'</th>';
+  };
+  var thead = '<thead><tr>' + (_acCanBulk ? '<th style="width:26px"></th>' : '')
+   + _th('client','Клиент') + _th('access','Доступ') + _th('sum','Абонплата','num') + '<th>Куратор</th>'
+   + _th('qty','Пользователи','num') + _th('contact','Контакт') + '<th>Следующий шаг</th><th>Теги</th><th style="width:132px"></th></tr></thead><tbody>';
   if(!filtered.length){
-   // v550: понятное сообщение вместо «Нет клиентов по фильтру».
-   // Корень: данные платежей в коде статичны (январь-март 2026), апрель-май лежат в Supabase
-   // (не читаются — Фаза 4 миграции). Все active-подписки истекли → showChurned=false режет их.
-   var anyFilterActive = !!(acState.operator || acState.risk || acState.tag || acState.segment || acState.search || acState.expiring); /* QA v827: без expiring чип «Горит» при пустоте показывал ложное «База пуста» */
+   var anyFilterActive = !!(acState.operator || acState.risk || acState.tag || acState.segment || acState.search || acState.view === 'hot' || acState.view === 'mine');
    var msg;
    if(_acLoadError && !all.length){
     // v959 (Б5): ошибка сети — честно говорим и даём повторить, а не «база пуста» (и не «под фильтр ничего»)
@@ -43849,11 +43956,16 @@ function acRender(){
         + '<div style="font-size:11px;color:var(--text-faint);margin-bottom:14px">' + _escHtml(_acLoadError) + '</div>'
         + '<button onclick="acReload()" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Повторить</button>'
         + '</div>';
+   } else if(acState.view === 'hot' && !(acState.operator || acState.risk || acState.tag || acState.segment || acState.search)){
+    // v962: пустое «Горит» — хорошая новость, а не ошибка фильтра
+    msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
+        + '<div style="font-size:14px;font-weight:600;color:var(--text)">Горящих нет</div>'
+        + '</div>';
    } else if(anyFilterActive){
     msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
         + '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Под этот фильтр ничего не подходит</div>'
-        + '<div style="font-size:12px;margin-bottom:14px">Из ' + all.length + ' клиентов после фильтрации не осталось ни одного</div>'
-        + '<button onclick="acResetFilters()" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Сбросить все фильтры</button>'
+        + '<div style="font-size:12px;margin-bottom:14px">Всего клиентов: ' + all.length + '</div>'
+        + '<button onclick="acResetFilters();acSetView(\'all\')" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Сбросить фильтры</button>'
         + '</div>';
    } else {
     msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
@@ -43872,8 +43984,25 @@ function acRender(){
     if(c.accessStatus === 'churned') return 100000 + (c.daysOverdue || 0);  // доступ закрыт — вниз
     return 200000;                                                          // без подписки — в самый низ
    };
-   filtered.sort(function(a,b){ return (sortKey(a) - sortKey(b)) || ((b.monthlySum||0) - (a.monthlySum||0)); });
-   var body = filtered.map(function(c){
+   // v962: сортировка по выбранной колонке; по умолчанию — по срочности доступа
+   var sk = acState.sort.key, sd = acState.sort.dir;
+   var cmp = {
+    access: function(a,b){ return (sortKey(a) - sortKey(b)) || ((b.monthlySum||0) - (a.monthlySum||0)); },
+    client: function(a,b){ return String(a.client||'').localeCompare(String(b.client||''), 'ru'); },
+    sum: function(a,b){ return (b.monthlySum||0) - (a.monthlySum||0); },
+    qty: function(a,b){ return (b.monthlyQty||0) - (a.monthlyQty||0); },
+    contact: function(a,b){ return ((a.lastContactAt&&a.lastContactAt.getTime())||0) - ((b.lastContactAt&&b.lastContactAt.getTime())||0); }
+   }[sk] || null;
+   if(cmp) filtered.sort(function(a,b){ return sd * cmp(a,b); });
+   var _total = filtered.length;
+   var _shown = filtered.slice(0, acState.page);
+   var _fmtAgo = function(d){
+    if(!d) return '';
+    var days = Math.floor((Date.now() - d.getTime()) / 86400000);
+    if(days <= 0) return 'сегодня'; if(days === 1) return 'вчера'; if(days < 30) return days + ' дн назад';
+    return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0');
+   };
+   var body = _shown.map(function(c){
      var opColor = (typeof KB_OP_COLORS !== 'undefined' && c.operator && KB_OP_COLORS[c.operator]) || '#888';
      // «Доступ»: главное — сколько осталось, дата — вторично. Цвет = срочность
      // (риск-колонка убрана: это была та же информация вторым словом).
@@ -43899,6 +44028,18 @@ function acRender(){
       cbTd = '<td onclick="event.stopPropagation()">' + (c._clientId ? ('<input type="checkbox" class="ac-cb" '+(acState.selected[c._clientId]?'checked ':'')+'onclick="event.stopPropagation()" onchange="acToggleSelect('+aCid+', this.checked)">') : '') + '</td>';
      }
      var host = c.billing_host || c.host || '';
+     // v962: последний контакт и следующий шаг
+     var lcDays = c.lastContactAt ? Math.floor((Date.now() - c.lastContactAt.getTime())/86400000) : null;
+     var contactHtml = c.lastContactAt ? '<span class="ac-contact'+(lcDays > 7 ? ' old' : '')+'">'+_fmtAgo(c.lastContactAt)+'</span>' : '<span class="ac-contact old">—</span>';
+     var nextHtml = '';
+     if(c.nextStepAt){
+      var nsd = _acDaysLeft(c.nextStepAt);
+      var nsLbl = nsd < 0 ? 'просрочен' : nsd === 0 ? 'сегодня' : nsd === 1 ? 'завтра' : (String(c.nextStepAt.getDate()).padStart(2,'0')+'.'+String(c.nextStepAt.getMonth()+1).padStart(2,'0'));
+      nextHtml = '<span class="ac-next'+(nsd < 0 ? ' over' : nsd <= 1 ? ' due' : '')+'" title="'+kbEsc(c.nextStepText||'')+'">'+kbEsc(c.nextStepText || 'шаг')+' · '+nsLbl+'</span>';
+     } else if(c.nextTaskAt){
+      var ntd = _acDaysLeft(c.nextTaskAt);
+      nextHtml = '<span class="ac-next'+(ntd < 0 ? ' over' : ntd <= 1 ? ' due' : '')+'">задача · '+(ntd < 0 ? 'просрочена' : ntd === 0 ? 'сегодня' : ntd === 1 ? 'завтра' : (String(c.nextTaskAt.getDate()).padStart(2,'0')+'.'+String(c.nextTaskAt.getMonth()+1).padStart(2,'0')))+'</span>';
+     } else nextHtml = '<span class="ac-next" style="color:var(--text-faint)">—</span>';
      // v827: кликабельна вся строка (карта клиента); кнопки внутри глушат всплытие
      // v959 (Б2): если у строки есть client_id — открываем по нему, без поиска по имени
      return '<tr class="ac-row" onclick="acOpenClientCard(event,'+aName+','+aHost+','+aCid+')">'
@@ -43908,10 +44049,18 @@ function acRender(){
       + '<td class="num">'+(c.monthlySum?fmtSum(c.monthlySum):'<span style="color:var(--text-muted)">—</span>')+'</td>'
       + '<td><div class="sd-op-cell"><span class="sd-op-dot" style="background:'+opColor+'"></span>'+kbEsc(c.operator || '—')+'</div></td>'
       + '<td class="num" style="color:var(--text-2)">'+(c.monthlyQty||0)+'</td>'
+      + '<td>'+contactHtml+'</td>'
+      + '<td>'+nextHtml+'</td>'
       + '<td onclick="event.stopPropagation()"><div class="ac-tag-row">'+tagsHtml+'<button class="ac-tag-edit" title="Теги" onclick="event.stopPropagation();acTagModal('+aName+')">+</button></div></td>'
-      + '<td style="white-space:nowrap"><button class="sd-risk-action ac-task-btn" onclick="event.stopPropagation();acOpenClientCardWithTask(event,'+aName+','+aHost+','+aCid+')" style="background:var(--ds-success-bg,rgba(76,183,130,.14));color:var(--ds-success-text);border-color:var(--border)">+ Задача</button><span style="color:var(--text-muted);margin-left:8px;font-size:14px">›</span></td>'
+      + '<td style="white-space:nowrap" onclick="event.stopPropagation()"><span class="ac-row-act">'
+       + '<button class="sd-risk-action" onclick="acQuickNote(event,'+aName+','+aHost+','+aCid+')" style="background:var(--surface-2);color:var(--text);border-color:var(--border)">Заметка</button>'
+       + '<button class="ac-ibtn" title="Ещё" onclick="acRowMenu(event,'+aName+','+aHost+','+aCid+')">&#8943;</button>'
+      + '</span></td>'
       + '</tr>';
    }).join('');
+   if(_total > _shown.length){
+    body += '<tr class="ac-more-row"><td colspan="'+_acColspan+'"><button class="ac-more-btn" onclick="acShowMore()">Показать ещё '+Math.min(AC_PAGE, _total - _shown.length)+'</button></td></tr>';
+   }
    tbl.innerHTML = thead + body + '</tbody>';
   }
  }
@@ -43926,8 +44075,16 @@ function acRender(){
   var _umB = document.getElementById('ac-more-badge');
   if(_umB) _umB.innerHTML = _umN > 0 ? '<span style="color:var(--ds-warning-text);font-weight:700">· оплаты без клиента: ' + _umN + '</span>' : '';
  } catch(_){}
- // v295: MRR / ARR / Churn / NRR
- try { acRenderMRRStrip(); } catch(_){}
+ // v295: MRR / ARR / Churn / NRR. v962: оператору — только его цифры (решение владельца: MRR скрыть)
+ try {
+  if(_acMe){
+   var _st = document.getElementById('ac-mrr-strip');
+   if(_st) _st.innerHTML = '<div class="ac-statline">'
+    + '<span class="ac-stat"><span class="l">Мои клиенты</span><span class="n">'+all.length+'</span></span>'
+    + '<span class="ac-stat" title="Нет ни задачи, ни следующего шага"><span class="l">Без плана</span><span class="n">'+window._acChipCounts.noplan+'</span></span>'
+    + '</div>';
+  } else acRenderMRRStrip();
+ } catch(_){}
  // v823: панель массового назначения куратора живёт поверх перерисовок
  try { acUpdateBulkBar(); } catch(_){}
 }
@@ -44064,6 +44221,111 @@ async function acOpenClientCard(ev, clientName, host, cid){
  } finally {
   if(btn){ btn.disabled = false; if(prev !== null) btn.textContent = prev; }
  }
+}
+
+// v962: меню строки «⋯»
+function acRowMenu(ev, clientName, host, cid){
+ ev.stopPropagation();
+ var anchor = ev.currentTarget || ev.target;
+ var row = (window._acLastRows || []).find(function(r){ return (cid && r._clientId === cid) || r.client === clientName; }) || {};
+ var opts = [ {value:'note', label:'Заметка'}, {value:'task', label:'Задача'} ];
+ if(row.phone){ opts.push({value:'call', label:'Позвонить'}); opts.push({value:'wa', label:'WhatsApp'}); }
+ var canPay = !!(typeof currentUser !== 'undefined' && currentUser && currentUser.access && currentUser.access.add_payments);
+ if(canPay) opts.push({value:'pay', label:'Внести оплату'});
+ var isOp = (typeof currentUser!=='undefined'&&currentUser&&String(currentUser.role||'').toLowerCase()==='operator');
+ if(!isOp && cid) opts.push({value:'curator', label:'Сменить куратора'});
+ opts.push({value:'tags', label:'Теги'});
+ opts.push({value:'open', label:'Открыть карту'});
+ _intgDdOpen(anchor, opts, null, function(v){
+  var fakeEv = { currentTarget: null };
+  if(v === 'open') acOpenClientCard(fakeEv, clientName, host, cid);
+  else if(v === 'note') acQuickNote(fakeEv, clientName, host, cid);
+  else if(v === 'task') acOpenClientCardWithTask(fakeEv, clientName, host, cid);
+  else if(v === 'call') window.location.href = 'tel:' + String(row.phone).replace(/[^\d+]/g,'');
+  else if(v === 'wa') window.open('https://wa.me/' + String(row.phone).replace(/\D/g,''), '_blank');
+  else if(v === 'pay'){ try { openModal('payment'); } catch(_){} }
+  else if(v === 'curator'){
+   var ops = acBulkOps().map(function(o){ return {value:o, label:o}; }).concat([{value:'', label:'Снять куратора'}]);
+   _intgDdOpen(anchor, ops, row.operator || '', function(name){ acState.selected = {}; acState.selected[cid] = 1; acBulkAssignCurator(name || null); });
+  }
+  else if(v === 'tags') acTagModal(clientName);
+ });
+}
+
+// v962: быстрая заметка из строки — текст + «следующий шаг до даты». Пишет в ленту клиента
+// и в clients.next_step_*; строка обновляется без перезагрузки списка.
+async function acQuickNote(ev, clientName, host, cid){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ var id = await _acEnsureClientId(clientName, host, cid);
+ if(!id) return;
+ var r = await _acNoteModal(clientName);
+ if(!r) return;
+ var author = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? currentUser.name : 'оператор';
+ try {
+  if(r.text){
+   var d = await sbFetch('/api/history', { method:'POST', body: JSON.stringify({ client_id: id, event_type: 'note', text: r.text, author: author, mentions: (typeof mnCollect === 'function') ? mnCollect(r.text) : [] }) });
+   if(!d || !d.ok) throw new Error((d && d.error) || 'не сохранилось');
+  }
+  if(r.nextAt !== undefined){
+   var p = await sbFetch('/api/clients?client_id=' + encodeURIComponent(id), { method:'PATCH', body: JSON.stringify({ next_step_at: r.nextAt, next_step_text: r.nextText || null }) });
+   if(!p || !p.ok) throw new Error((p && p.error) || 'шаг не сохранился');
+  }
+  // локально обновляем строку
+  (AC_KZ_CACHE || []).forEach(function(it){
+   if(it._clientId !== id) return;
+   it._sb = it._sb || {};
+   if(r.text) it._sb.last_contact_at = new Date().toISOString();
+   if(r.nextAt !== undefined){ it._sb.next_step_at = r.nextAt; it._sb.next_step_text = r.nextText || null; }
+  });
+  sdToast(r.nextAt ? 'Записано · следующий шаг ' + r.nextLabel : 'Записано');
+  if(!AC_KZ_CACHE) acLoadKZClients(function(){ acRender(); }); else acRender(); // кэш мог сброситься при создании карточки
+ } catch(e){ console.warn('[acQuickNote]', e); sdToast('Не удалось сохранить. Попробуйте ещё раз'); }
+}
+function _acNoteModal(clientName){
+ return new Promise(function(resolve){
+  var bg = document.createElement('div');
+  bg.className = 'cfa-bg';
+  bg.style.cssText = 'position:fixed;inset:0;z-index:1000010;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;animation:cfaFade .15s ease-out';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--surface);border:1px solid var(--border-faint);border-radius:14px;padding:20px;width:min(460px,92vw);box-shadow:0 24px 64px rgba(0,0,0,.5);font-family:Inter,sans-serif';
+  var today = new Date(); var iso = function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+  var tmr = new Date(today.getTime()+86400000), wk = new Date(today.getTime()+7*86400000);
+  box.innerHTML = ''
+   + '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:10px;letter-spacing:-0.01em">'+ _escHtml(clientName) +'</div>'
+   + '<textarea class="qn-text" placeholder="Заметка" style="width:100%;box-sizing:border-box;min-height:76px;padding:9px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea>'
+   + '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">'
+    + '<span style="font-size:12px;color:var(--text-2)">Следующий шаг</span>'
+    + '<input class="qn-step" type="text" placeholder="Что сделать" style="flex:1;min-width:140px;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;outline:none">'
+    + '<input class="qn-date" type="date" style="padding:7px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;outline:none">'
+   + '</div>'
+   + '<div style="display:flex;gap:6px;margin-top:8px">'
+    + '<button type="button" class="qn-q" data-d="'+iso(today)+'" style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-2);font-size:12px;cursor:pointer;font-family:inherit">сегодня</button>'
+    + '<button type="button" class="qn-q" data-d="'+iso(tmr)+'" style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-2);font-size:12px;cursor:pointer;font-family:inherit">завтра</button>'
+    + '<button type="button" class="qn-q" data-d="'+iso(wk)+'" style="padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-2);font-size:12px;cursor:pointer;font-family:inherit">через неделю</button>'
+   + '</div>'
+   + '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">'
+    + '<button class="cfa-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-soft);cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Отмена</button>'
+    + '<button class="cfa-confirm" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent, #5E6AD2);color:#fff;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">Записать</button>'
+   + '</div>';
+  bg.appendChild(box); document.body.appendChild(bg);
+  var ta = box.querySelector('.qn-text'), st = box.querySelector('.qn-step'), dt = box.querySelector('.qn-date');
+  box.querySelectorAll('.qn-q').forEach(function(b){ b.onclick = function(){ dt.value = b.getAttribute('data-d'); if(!st.value) st.focus(); }; });
+  function cleanup(val){ try { bg.remove(); } catch(_){} document.removeEventListener('keydown', esc, true); resolve(val); }
+  function submit(){
+   var text = ta.value.trim(), step = st.value.trim(), date = dt.value;
+   if(step && !date) date = iso(tmr); // шаг без даты — на завтра, чтобы не пропал молча
+   if(!text && !date){ cleanup(null); return; }
+   var out = { text: text };
+   if(date){ var p = date.split('-'); var d = new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10), 18, 0, 0); out.nextAt = d.toISOString(); out.nextText = step || text.slice(0, 80); out.nextLabel = p[2]+'.'+p[1]; }
+   cleanup(out);
+  }
+  function esc(e){ if(e.key === 'Escape'){ e.stopPropagation(); cleanup(null); } else if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.stopPropagation(); submit(); } }
+  bg.addEventListener('click', function(e){ if(e.target === bg) cleanup(null); });
+  box.querySelector('.cfa-cancel').onclick = function(){ cleanup(null); };
+  box.querySelector('.cfa-confirm').onclick = submit;
+  document.addEventListener('keydown', esc, true);
+  setTimeout(function(){ try { ta.focus(); } catch(_){} }, 0);
+ });
 }
 
 // v515: открыть карту клиента и сразу переключить composer в режим «Задача»

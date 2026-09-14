@@ -264,6 +264,21 @@ export default async function handler(req, res) {
         params['order'] = 'next_billing_at.asc';
       }
       const data = await sbSelect('clients', params);
+      // v962: with_activity=1 — последний контакт / ближайшая задача из view client_activity
+      // (колонки списка «Действующие» и правило «Горит»)
+      if (String(req.query.with_activity || '') === '1' && data.length) {
+        try {
+          const act = await sbSelectAll('client_activity', { order: 'client_id' });
+          const byId = {};
+          act.forEach(a => { byId[a.client_id] = a; });
+          data.forEach(c => {
+            const a = byId[c.client_id] || {};
+            c.last_contact_at = a.last_contact_at || null;
+            c.next_task_at = a.next_task_at || null;
+            c.open_tasks = a.open_tasks || 0;
+          });
+        } catch (e) { console.warn('[clients] activity join failed:', e.message || e); }
+      }
       return res.status(200).json({ ok: true, count: data.length, clients: data });
     }
 
