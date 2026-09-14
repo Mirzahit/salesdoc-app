@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v962</title>
+<title>SalesDoc — Финансовый Дашборд v963</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -7950,6 +7950,77 @@ body.light #ac-bulk-bar { box-shadow:0 12px 32px rgba(15,18,25,.18); }
 .ac-more-head { font-size:11.5px; font-weight:700; letter-spacing:.8px; text-transform:uppercase; color:var(--text-soft); cursor:pointer; padding:10px 2px; user-select:none; }
 .ac-more-head:hover { color:var(--text-2); }
 @media (max-width:900px){ .ac-ledger-wrap { overflow-x:auto; } .ac-ledger th { position:static; } .ac-search { margin-left:0; flex:1 1 100%; } }
+/* ============================================================
+   v963 — DS-FINAL: единый набор токенов (спека 2026-09-13-design-system-unification.md,
+   шаг 1). Ставится ПОСЛЕ v664 и после палитры карточки клиента (--amocard-*), поэтому
+   побеждает в каскаде. Старые имена остаются алиасами — визуально меняются только:
+   text-soft ≠ text-faint (в v664 совпадали), light surface-2 серый, info — голубой,
+   радиусы 8/12/16, карточка клиента — на общей палитре. Откат = удалить блок.
+   ============================================================ */
+:root{
+  --text-2:#A3A8B1; --text-soft:#7A7F89; --text-faint:#565B64;
+  --border:rgba(255,255,255,.08); --border-faint:rgba(255,255,255,.05); --border-strong:rgba(255,255,255,.13);
+  --ds-success-text:#6ACB99; --ds-warning-text:#EAB878; --ds-danger-text:#F0806F;
+  --ds-info:#5AA7F0; --ds-info-text:#7FBCF5; --ds-info-bg:rgba(90,167,240,.14);
+  --focus-ring:0 0 0 3px rgba(94,106,210,.35);
+  --r-control:8px; --r-card:12px; --r-modal:16px; --r-pill:999px;
+  --r-sm:var(--r-control); --r-md:var(--r-card); --r-lg:var(--r-modal); --r-xl:var(--r-modal);
+  --sh-1:0 1px 2px rgba(0,0,0,.30);
+  --sh-2:0 6px 16px rgba(0,0,0,.32),0 2px 4px rgba(0,0,0,.20);
+  --sh-3:0 24px 48px rgba(0,0,0,.45),0 8px 16px rgba(0,0,0,.24);
+  --text-muted:var(--text-soft); --text-secondary:var(--text-2);
+}
+body.light{
+  --surface-2:#F4F5F7; --surface-3:#EDEEF1;
+  --text-2:#5C616B; --text-soft:#7A7F89; --text-faint:#A0A5AE;
+  --border:rgba(15,18,25,.09); --border-faint:rgba(15,18,25,.06); --border-strong:rgba(15,18,25,.15);
+  --ds-success-text:#237A54; --ds-warning-text:#8F6222; --ds-danger-text:#B23C2B;
+  --ds-info:#2E7FD6; --ds-info-text:#2565B0; --ds-info-bg:rgba(46,127,214,.10);
+  --focus-ring:0 0 0 3px rgba(94,106,210,.25);
+  --sh-1:0 1px 2px rgba(15,18,25,.06);
+  --sh-2:0 6px 16px rgba(15,18,25,.10),0 2px 4px rgba(15,18,25,.06);
+  --sh-3:0 24px 48px rgba(15,18,25,.16),0 8px 16px rgba(15,18,25,.08);
+  --text-muted:var(--text-soft); --text-secondary:var(--text-2);
+}
+/* карточка клиента и обращения — на общей палитре (28 токенов → алиасы) */
+#view-route-card.amocard-active, #view-ticket-card.amocard-active,
+body.light #view-route-card.amocard-active, body.light #view-ticket-card.amocard-active{
+  --amocard-bg:var(--bg); --amocard-surface:var(--surface); --amocard-surface-2:var(--bg); --amocard-surface-3:var(--surface-3);
+  --amocard-border:var(--border); --amocard-border-strong:var(--border-strong); --amocard-hairline:var(--border-faint);
+  --amocard-text:var(--text); --amocard-text-2:var(--text-2); --amocard-text-soft:var(--text-soft); --amocard-text-faint:var(--text-faint);
+  --amocard-accent:var(--accent); --amocard-accent-bg:var(--accent-bg); --amocard-accent-deep:var(--accent);
+  --amocard-blue:var(--ds-info); --amocard-blue-bg:var(--ds-info-bg);
+  --amocard-green:var(--ds-success); --amocard-green-bg:var(--ds-success-bg);
+  --amocard-amber:var(--ds-warning); --amocard-amber-bg:var(--ds-warning-bg);
+  --amocard-purple:var(--accent-hover); --amocard-purple-bg:var(--accent-bg);
+  --amocard-sh-1:var(--sh-1); --amocard-sh-2:var(--sh-2); --amocard-sh-3:var(--sh-3);
+}
+#view-route-card .x-chip-route{ background:var(--ds-success-bg); color:var(--ds-success-text); border-color:var(--border); }
+.amocard-activate{ color:#fff; }
+/* v963: карточка действующего клиента — полоса статуса, сигналы, провенанс, таблица оплат */
+.cs-strip{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 0 6px; }
+.cs-pill{ display:inline-flex; align-items:center; gap:6px; height:22px; padding:0 9px; border-radius:6px; font-size:11.5px; font-weight:600; background:var(--surface-3); color:var(--text-2); white-space:nowrap; }
+.cs-pill::before{ content:""; width:6px; height:6px; border-radius:50%; background:currentColor; flex:none; }
+.cs-pill.ok{ background:var(--ds-success-bg); color:var(--ds-success-text); }
+.cs-pill.warn{ background:var(--ds-warning-bg); color:var(--ds-warning-text); }
+.cs-pill.bad{ background:var(--ds-danger-bg); color:var(--ds-danger-text); }
+.cs-pill.acc{ background:var(--accent-bg); color:var(--accent-text); }
+.cs-pill.plain::before{ display:none; }
+.amocard-prov{ font-size:11px; color:var(--text-faint); padding:0 4px 10px; }
+.sig-list{ display:grid; gap:6px; padding:4px 0 8px; }
+.sig-it{ display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:var(--r-control); background:var(--surface-2); font-size:13px; color:var(--text); }
+.sig-d{ width:8px; height:8px; border-radius:50%; flex:none; }
+.sig-sp{ flex:1; min-width:0; }
+.sig-why{ font-size:11.5px; color:var(--text-soft); }
+.sig-btn{ height:26px; padding:0 10px; border-radius:7px; border:1px solid var(--border); background:transparent; color:var(--text-2); font:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.sig-btn:hover{ background:var(--surface-3); color:var(--text); }
+.sig-ok{ font-size:12.5px; color:var(--text-soft); padding:6px 4px 10px; }
+.pays-tbl{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:6px; }
+.pays-tbl th{ text-align:left; font-size:11px; font-weight:500; color:var(--text-soft); padding:6px 6px; border-bottom:1px solid var(--border); white-space:nowrap; }
+.pays-tbl td{ padding:7px 6px; border-bottom:1px solid var(--border-faint); vertical-align:middle; white-space:nowrap; color:var(--text); }
+.pays-tbl td.num, .pays-tbl th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+.pays-tbl td.sub{ color:var(--text-soft); }
+.pays-tbl tr:last-child td{ border-bottom:0; }
 /* v824: форма оплаты «как в боте» — чипы с переносом, плашка расчёта, кнопки прайса */
 .pay-chips-wrap { flex-wrap:wrap; }
 .pay-chips-wrap .pp-chip { flex:0 0 auto; padding:8px 14px; }
@@ -10628,7 +10699,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
   <section class="amocard-left">
    <div class="amocard-head">
     <div class="amocard-head-left">
-     <span class="amocard-back" onclick="routeCloseCard()" title="Назад во Внедрение">&lsaquo;</span>
+     <span class="amocard-back" onclick="routeCloseCard()" title="Назад">&lsaquo;</span>
      <div>
       <div id="route-card-name" class="amocard-name">&mdash;</div>
       <div class="amocard-id-row">
@@ -10641,7 +10712,9 @@ body.light .mt-filter-section-title { color:#8A90A0; }
     <div id="route-card-assign" style="position:relative;justify-self:end"></div>
    </div>
    <div class="amocard-stage-box">
-    <div class="amocard-stage-row">
+    <!-- v963: у действующего клиента вместо этапа/пайплайна — полоса статуса (доступ, куратор, сервер) -->
+    <div id="route-card-clientstrip" class="cs-strip" style="display:none"></div>
+    <div class="amocard-stage-row" id="route-card-stage-row">
      <div>
       <div class="amocard-stage-label">Внедрение</div><!-- v763 -->
       <div class="amocard-stage-name"><span id="route-card-stage-name">&mdash;</span> <span id="route-card-stage-days" class="amocard-days"></span></div>
@@ -10654,6 +10727,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
    </div>
    <div class="amocard-tabs">
     <button id="route-tab-amo" class="amocard-tab active" onclick="routeCardTab('amo')">Основное</button>
+    <button id="route-tab-pays" class="amocard-tab" onclick="routeCardTab('pays')" style="display:none">Оплаты</button><!-- v963: у действующего клиента -->
     <button id="route-tab-check" class="amocard-tab" onclick="routeCardTab('check')">Чек-лист</button>
     <button id="route-tab-history" class="amocard-tab" onclick="routeCardTab('history')" style="display:none">История</button>
     <button id="route-tab-contact" class="amocard-tab" onclick="routeCardTab('contact')">Контакт</button>
@@ -10673,7 +10747,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
    <div id="route-card-feed" class="amocard-feed"></div>
    <div id="route-card-task-hint" class="amocard-task-hint" style="display:none">
     <span class="amocard-ic">&#9201;</span>
-    <span>Нет запланированных задач, рекомендуем <a href="#" onclick="event.preventDefault();routeChatPickMode('task');var t=document.getElementById('route-chat-text');if(t){t.focus();}return false;">добавить</a></span>
+    <span>Задач нет · <a href="#" onclick="event.preventDefault();routeChatPickMode('task');var t=document.getElementById('route-chat-text');if(t){t.focus();}return false;">поставить</a></span>
    </div>
    <!-- v457: двухрежимный composer с тремя рядами: mode / task-params / input. -->
    <div class="amocard-chat-input has-mode">
@@ -10686,13 +10760,13 @@ body.light .mt-filter-section-title { color:#8A90A0; }
     </div>
     <div class="amocard-chat-row" style="position:relative">
      <!-- v489: trigger типа записи и input в одной строке (как в amoCRM): «Примечание: ...» -->
-     <span class="amocard-mode-trigger" id="route-chat-mode-trigger" onclick="routeChatToggleModePopup(event)" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"><u id="route-chat-mode-label">Примечание</u></span>
+     <span class="amocard-mode-trigger" id="route-chat-mode-trigger" onclick="routeChatToggleModePopup(event)" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false"><u id="route-chat-mode-label">Заметка</u></span>
      <span class="amocard-mode-sep">:</span>
      <textarea id="route-chat-text" rows="1" placeholder="введите текст — Enter отправить, Shift+Enter новая строка" onkeydown="routeChatTextKey(event)" oninput="routeChatTextInput(this)"></textarea>
      <button id="route-chat-send" class="amocard-send" onclick="routeChatSend()" title="Сохранить" disabled>&rarr;</button>
      <div class="amocard-mode-popup" id="route-chat-mode-popup" role="menu">
-      <div class="amocard-mode-popup-item is-disabled" role="menuitem" title="Скоро — потребуется интеграция с WhatsApp">Чат</div>
-      <div class="amocard-mode-popup-item is-active" role="menuitem" data-mode="note" onclick="routeChatPickMode('note')">Примечание</div>
+      <div class="amocard-mode-popup-item is-disabled" role="menuitem" style="display:none">Чат</div><!-- v963: скрыт до появления интеграции с WhatsApp -->
+      <div class="amocard-mode-popup-item is-active" role="menuitem" data-mode="note" onclick="routeChatPickMode('note')">Заметка</div>
       <div class="amocard-mode-popup-item" role="menuitem" data-mode="task" onclick="routeChatPickMode('task')">Задача</div>
      </div>
     </div>
@@ -28929,7 +29003,7 @@ async function routeOpenClient(clientId){
  // Если карточки Внедрения нет — открываем «синтетическую» (только клиентская инфа,
  // без stage/чек-листа). Лента истории сама загрузится по client_id.
  try {
-  var d = await sbFetch('/api/clients?client_id=' + encodeURIComponent(clientId));
+  var d = await sbFetch('/api/clients?client_id=' + encodeURIComponent(clientId) + '&with_activity=1'); // v963: + последний контакт/задачи для «Сигналов»
   if(!d.ok || !d.clients || !d.clients.length) throw new Error('клиент не найден');
   var cl = d.clients[0];
   // Подменяем _routeCurrentCard минимально-валидной структурой
@@ -34325,9 +34399,12 @@ function _routeRenderCardHead(){
    _assignRouteOperator(card, newOp);
   }, (typeof sdOpLoadCounts === 'function') ? sdOpLoadCounts() : null); // v820: нагрузка; v835: операторы по стране карты
  } else {
-  var b = document.getElementById('route-card-assign');
-  if(b) b.replaceChildren();
+  // v963: у действующего клиента та же кнопка — куратор (support_operator), сохраняется через _routeTransferDo
+  _renderAssignButton('route-card-assign', cl.support_operator, _routeOpChoices(cl.support_operator, cl.country || card.country), function(newOp){
+   _routeTransferDo(cl, newOp || '').then(function(){ try { _routeRenderCardHead(); } catch(_){} });
+  }, (typeof sdOpLoadCounts === 'function') ? sdOpLoadCounts() : null);
  }
+ _routeRenderClientStrip(card, cl, isSynthetic); // v963
  // v511: чипы интеграций в шапке (визуальная связь Внедрение↔Интеграция)
  if(typeof _routeRenderCrossChip === 'function') _routeRenderCrossChip();
 }
@@ -34535,7 +34612,7 @@ function routeChatSetMode(mode){
  if(mode === 'task') _routeChatInitTaskState();
  // v488: обновляем dropdown-trigger label и активный пункт в popup
  var label = document.getElementById('route-chat-mode-label');
- if(label) label.textContent = mode === 'task' ? 'Задача' : 'Примечание';
+ if(label) label.textContent = mode === 'task' ? 'Задача' : 'Заметка';
  var popup = document.getElementById('route-chat-mode-popup');
  if(popup){
   popup.querySelectorAll('.amocard-mode-popup-item').forEach(function(it){
@@ -34839,7 +34916,7 @@ async function routeActivateClient(){
 function routeCardTab(tab){
  _routeCurrentTab = tab;
  // v380: переключение через класс .active на .amocard-tab (вместо inline-стилей).
- ['amo','check','history','contact','docs'].forEach(function(t){
+ ['amo','pays','check','history','contact','docs'].forEach(function(t){
   var btn = document.getElementById('route-tab-' + t);
   if(!btn) return;
   btn.classList.toggle('active', t === tab);
@@ -34856,6 +34933,146 @@ function routeCardTab(tab){
  if(tab === 'contact') _routeRenderContact();
  if(tab === 'docs') _routeRenderDocs();
  if(tab === 'amo') _routeRenderAmo();
+ if(tab === 'pays') _routeRenderPays();
+}
+
+// v963: вкладка «Оплаты» у действующего клиента — таблица всех оплат
+async function _routeRenderPays(){
+ var body = document.getElementById('route-card-body');
+ if(!body) return;
+ body.replaceChildren();
+ var card = _routeCurrentCard; if(!card || !card.client_id) return;
+ var cl = card.clients || {};
+ var wrap = document.createElement('div');
+ wrap.innerHTML = '<div style="color:var(--text-soft);font-size:13px;padding:10px 4px">Загрузка…</div>';
+ body.appendChild(wrap);
+ var list = [];
+ try {
+  var d = await sbFetch('/api/payments?client_id=' + encodeURIComponent(card.client_id) + '&limit=500');
+  list = (d && d.ok && Array.isArray(d.payments)) ? d.payments : [];
+ } catch(_){}
+ if(!_routeCurrentCard || _routeCurrentCard.client_id !== card.client_id) return;
+ list.sort(function(a,b){ return String(b.paid_at||'').localeCompare(String(a.paid_at||'')); });
+ var cur = (cl.country === 'KG' || card.country === 'KG') ? 'сом' : '₸';
+ var fmtD = function(s){ if(!s) return '—'; var p = String(s).slice(0,10).split('-'); return p.length === 3 ? (p[2]+'.'+p[1]+'.'+p[0]) : s; };
+ var canPay = !!(typeof currentUser !== 'undefined' && currentUser && currentUser.access && currentUser.access.add_payments);
+ var html = '';
+ var total = list.reduce(function(s,p){ return s + (Number(p.amount)||0); }, 0);
+ html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 4px 2px"><span class="num" style="font-size:14px;font-weight:600">' + _acPlural(list.length, 'оплата', 'оплаты', 'оплат') + '</span>'
+      + '<span style="font-size:12px;color:var(--text-soft)">·</span><span class="num" style="font-size:14px;font-weight:600">' + Math.round(total).toLocaleString('ru-RU') + ' ' + cur + '</span>'
+      + (canPay ? '<button class="abtn" style="width:auto;margin-left:auto" onclick="openModal(\'payment\')">+ Оплата</button>' : '') + '</div>';
+ if(!list.length){
+  html += '<div class="sig-ok">Оплат пока нет</div>';
+ } else {
+  html += '<div style="overflow-x:auto"><table class="pays-tbl"><thead><tr><th>Дата</th><th class="num">Сумма</th><th>За что</th><th>Период</th><th>Банк</th><th>Кто внёс</th></tr></thead><tbody>';
+  list.forEach(function(p){
+   var per = p.period_months ? (p.period_months + ' мес') : '';
+   html += '<tr><td class="num">' + fmtD(p.paid_at) + '</td><td class="num">' + Math.round(Number(p.amount)||0).toLocaleString('ru-RU') + '</td><td>' + _escHtml(p.category_raw || p.category || '') + '</td><td class="sub">' + per + '</td><td class="sub">' + _escHtml(p.bank || '') + '</td><td class="sub">' + _escHtml(p.manager_name || 'автоматически') + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+ }
+ wrap.innerHTML = html;
+}
+
+// v963: полоса статуса действующего клиента в шапке карты (вместо этапа/пайплайна внедрения)
+function _routeRenderClientStrip(card, cl, isSynthetic){
+ var strip = document.getElementById('route-card-clientstrip');
+ var stageRow = document.getElementById('route-card-stage-row');
+ var pipe = document.getElementById('route-card-pipeline');
+ var paysTab = document.getElementById('route-tab-pays');
+ var amoTab = document.getElementById('route-tab-amo');
+ if(!strip) return;
+ if(!isSynthetic){
+  strip.style.display = 'none'; strip.replaceChildren();
+  if(stageRow) stageRow.style.display = ''; if(pipe) pipe.style.display = '';
+  if(paysTab) paysTab.style.display = 'none'; if(amoTab) amoTab.textContent = 'Основное';
+  return;
+ }
+ if(stageRow) stageRow.style.display = 'none'; if(pipe) pipe.style.display = 'none';
+ if(paysTab) paysTab.style.display = ''; if(amoTab) amoTab.textContent = 'Обзор';
+ strip.style.display = '';
+ strip.replaceChildren();
+ var pill = function(cls, text, title){ var s = document.createElement('span'); s.className = 'cs-pill ' + cls; s.textContent = text; if(title) s.title = title; return s; };
+ // цвет = статус: действующий зелёный, на паузе жёлтый, ушёл серый
+ strip.appendChild(pill(cl.status === 'active' ? 'ok' : (cl.status === 'paused' ? 'warn' : 'plain'), _amoLabelStatus(cl.status || 'active')));
+ var a = _routeAccessInfo(cl);
+ if(a) strip.appendChild(pill(a.cls, a.text, a.title));
+ if(cl.next_step_text || cl.next_step_at){
+  var nd = cl.next_step_at ? new Date(cl.next_step_at) : null;
+  var dl = (nd && !isNaN(nd)) ? _acDaysLeft(nd) : null;
+  var nl = dl === null ? '' : (dl === 0 ? 'сегодня' : dl === 1 ? 'завтра' : (String(nd.getDate()).padStart(2,'0')+'.'+String(nd.getMonth()+1).padStart(2,'0')));
+  var sp = pill(dl !== null && dl < 0 ? 'bad plain' : 'plain', (cl.next_step_text || 'Следующий шаг') + (nl ? ' · ' + nl : ''), 'Следующий шаг');
+  sp.style.maxWidth = '260px'; sp.style.overflow = 'hidden'; sp.style.textOverflow = 'ellipsis';
+  strip.appendChild(sp);
+ }
+}
+// v963: 'YYYY-MM-DD' → 'DD.MM.YYYY'
+function _fmtDMY(s){ if(!s) return null; var p = String(s).slice(0,10).split('-'); return p.length === 3 ? (p[2]+'.'+p[1]+'.'+p[0]) : String(s); }
+// v963: доступ клиента по серверным полям → {cls, text, title}
+function _routeAccessInfo(cl){
+ if(!cl || !cl.access_until) return cl && cl.access_status === 'none' ? { cls:'plain', text:'Нет подписки' } : null;
+ var p = String(cl.access_until).slice(0,10).split('-');
+ var d = new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10));
+ var left = _acDaysLeft(d), dm = p[2] + '.' + p[1] + (p[0] !== String(new Date().getFullYear()) ? '.' + p[0] : '');
+ var src = cl.next_billing_source === 'manual' ? 'дата поставлена вручную' : '';
+ if(left < 0){
+  var over = -left;
+  // одна формулировка, меняется только цвет: красный до 7 дней, дальше серый
+  return { cls: over <= 7 ? 'bad' : 'plain', text:'Не оплачено ' + over + ' дн', title: 'Было до ' + dm + (src ? ' · ' + src : ''), over: over };
+ }
+ if(left <= 7) return { cls:'warn', text:'Истекает ' + (left === 0 ? 'сегодня' : left === 1 ? 'завтра' : 'через ' + left + ' дн') + ' · ' + dm, title: src };
+ return { cls:'ok', text:'Оплачено до ' + dm, title: 'через ' + left + ' дн' + (src ? ' · ' + src : '') };
+}
+// v963: «Сигналы» — правила, не ИИ. Каждый — с действием.
+function _routeRenderSignals(body, cl, card){
+ var sigs = [];
+ var a = _routeAccessInfo(cl);
+ var now = Date.now();
+ if(a && a.cls === 'bad') sigs.push({ c:'var(--ds-danger)', t:a.text + ' · ' + a.title.replace('Было до', 'было до').split(' · ')[0], w:'', act:'Написать', fn:'note' });
+ else if(a && a.cls === 'warn') sigs.push({ c:'var(--ds-warning)', t:a.text, w:'', act:'Написать', fn:'note' });
+ else if(a && a.over > 7 && cl.status === 'active') sigs.push({ c:'var(--text-faint)', t:a.over + ' дн без оплаты, статус — Действующий', w:'', act:'Сменить статус', fn:'status' });
+ if(!cl.support_operator) sigs.push({ c:'var(--ds-warning)', t:'Нет куратора', w:'', act:'Назначить', fn:'assign' });
+ var lc = cl.last_contact_at ? new Date(cl.last_contact_at) : null;
+ var lcDays = (lc && !isNaN(lc)) ? Math.floor((now - lc.getTime())/86400000) : null;
+ var actD = cl.activation_date ? new Date(String(cl.activation_date).slice(0,10) + 'T00:00:00') : null;
+ var freshClient = actD && !isNaN(actD) && (now - actD.getTime()) < 30 * 86400000;
+ if(cl.status === 'active' && !freshClient && (lcDays === null || lcDays > 30)) sigs.push({ c:'var(--ds-warning)', t: lcDays === null ? 'Ещё не общались' : 'Не общались ' + lcDays + ' дн', w:'', act:'Написать', fn:'note' });
+ var nt = cl.next_task_at ? new Date(cl.next_task_at) : null;
+ if(nt && !isNaN(nt) && nt.getTime() < now) sigs.push({ c:'var(--ds-danger)', t:'Задача просрочена', w:'', act:'Открыть', fn:'task-scroll' });
+ var ns = cl.next_step_at ? new Date(cl.next_step_at) : null;
+ if(!(cl.open_tasks > 0) && !(ns && !isNaN(ns) && ns.getTime() > now) && cl.status === 'active') sigs.push({ c:'var(--text-soft)', t:'Нет плана', w:'', act:'Поставить', fn:'task' });
+ var head = document.createElement('div'); head.className = 'amocard-section-head'; head.textContent = 'Что не так'; body.appendChild(head);
+ if(!sigs.length){ var ok = document.createElement('div'); ok.className = 'sig-ok'; ok.textContent = 'Всё в порядке'; body.appendChild(ok); return; }
+ var list = document.createElement('div'); list.className = 'sig-list';
+ sigs.forEach(function(s){
+  var it = document.createElement('div'); it.className = 'sig-it';
+  var d = document.createElement('span'); d.className = 'sig-d'; d.style.background = s.c; it.appendChild(d);
+  var sp = document.createElement('div'); sp.className = 'sig-sp'; sp.textContent = s.t;
+  if(s.w){ var w = document.createElement('div'); w.className = 'sig-why'; w.textContent = s.w; sp.appendChild(w); }
+  it.appendChild(sp);
+  if(s.act){
+   var b = document.createElement('button'); b.type = 'button'; b.className = 'sig-btn'; b.textContent = s.act;
+   b.onclick = function(){
+    if(s.fn === 'note' || s.fn === 'task'){ try { routeChatPickMode(s.fn); } catch(_){} var t = document.getElementById('route-chat-text'); if(t) t.focus(); }
+    else if(s.fn === 'assign'){ var ab = document.querySelector('#route-card-assign button'); if(ab) ab.click(); }
+    else if(s.fn === 'task-scroll'){ var el = document.querySelector('#route-card-feed [data-task-id]'); if(el) el.scrollIntoView({ behavior:'smooth', block:'center' }); }
+    else if(s.fn === 'status'){
+     _intgDdOpen(b, [{value:'paused', label:'На паузе'}, {value:'churned', label:'Ушёл'}], null, async function(st){
+      try {
+       var r = await sbFetch('/api/clients?client_id=' + encodeURIComponent(cl.client_id), { method:'PATCH', body: JSON.stringify({ status: st }) });
+       if(!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось');
+       cl.status = st; if(typeof acInvalidateCache === 'function') acInvalidateCache();
+       sdToast('Статус: ' + _amoLabelStatus(st));
+       _routeRenderCardHead(); _routeRenderAmo();
+      } catch(e){ sdToast('Не удалось сохранить. Попробуйте ещё раз'); }
+     });
+    }
+   };
+   it.appendChild(b);
+  }
+  list.appendChild(it);
+ });
+ body.appendChild(list);
 }
 
 async function _routeRenderChecklist(){
@@ -35166,17 +35383,10 @@ async function _routeTransferDo(cl, who){
   cl.support_operator = who || null;
   if(_routeCurrentCard && _routeCurrentCard.clients) _routeCurrentCard.clients.support_operator = who || null;
   if(typeof acInvalidateCache === 'function') acInvalidateCache(); // v959 (Б13): «Действующие» покажут нового куратора без перезагрузки
-  // след в ленте клиента — кто, когда и кому передал
-  try {
-   await sbFetch('/api/history', { method:'POST', body: JSON.stringify({
-    client_id: clientId,
-    event_type: 'system',
-    text: who ? ('Клиент передан: ' + was + ' → ' + who) : ('Ответственный снят (был ' + was + ')')
-   }) });
-  } catch(_){}
+  // v963: след в ленте («Куратор: A → B», с автором) пишет сервер в PATCH /api/clients — здесь не дублируем
   _routeRenderAmo();
   if(typeof _routeRenderHistory === 'function' && _routeCurrentTab === 'history') _routeRenderHistory();
-  sdToast(who ? ('Клиент передан: ' + who) : 'Ответственный снят');
+  sdToast(who ? ('Куратор: ' + who) : 'Куратор снят');
  } catch(e){ sdToast('Не получилось передать: ' + (e.message || e)); }
 }
 
@@ -35879,7 +36089,8 @@ async function _routeRenderAmo(){
 
  // v391: подсказка-онбординг если карточка без оператора. Помогает оператору при
  // первом входе понять что делать: «Возьмите карточку → кликните Ответственный».
- if(!card.operator){
+ // v963: у действующего клиента (синтетическая карта) «Ответственного» нет — подсказка не нужна
+ if(!card.operator && !isSynthetic){
   var hint = document.createElement('div');
   // v740: тихая подсказка вместо жёлтой плашки (правило: без «кричащих» цветов на служебных текстах)
   hint.style.cssText = 'background:none;border:none;color:var(--amocard-text-soft);border-radius:0;padding:8px 2px;font-size:12.5px;line-height:1.4;margin-bottom:14px';
@@ -35962,7 +36173,22 @@ async function _routeRenderAmo(){
   body.appendChild(f);
  }
 
+ // v963: режим действующего клиента — «Доступ», «Кто ведёт», «Сигналы» вместо «Сделки»
+ if(isSynthetic){
+  addSection('Доступ');
+  // «вручную» — только если дату поставил человек; иначе провенанс не нужен (подсказка есть в шапке)
+  addField('Оплачено до', cl.access_until ? (_fmtDMY(cl.access_until) + (cl.next_billing_source === 'manual' ? ' · вручную' : '')) : null, { canHide:true });
+  addField('Период подписки', cl.subscription_period_months ? cl.subscription_period_months + ' мес' : null, { canHide:true, editable:true, entity:'client', field:'subscription_period_months', type:'select', choices:['1','3','6','12'], choiceLabels:{'1':'1 мес','3':'3 мес','6':'6 мес','12':'12 мес'}, rawValue:cl.subscription_period_months });
+  addField('Статус', _amoLabelStatus(cl.status || 'active'), { editable:true, entity:'client', field:'status', type:'select', choices:['active','paused','churned'], choiceLabels:{active:'Действующий',paused:'На паузе',churned:'Ушёл'}, rawValue:cl.status });
+  addField('Работает с', _fmtDMY(cl.activation_date), { canHide:true });
+  addSection('Кто ведёт');
+  addField('Куратор', cl.support_operator, { editable:true, entity:'client', field:'support_operator', type:'select', choices:_routeOpChoices(cl.support_operator, cl.country || card.country), rawValue:cl.support_operator });
+  addField('Кто продал', cl.curator_operator, { canHide:true });
+  _flushEmpty();
+  _routeRenderSignals(body, cl, card);
+ }
  // Секция СДЕЛКА
+ if(!isSynthetic){
  addSection('Сделка');
  addField('Ответственный', card.operator, { editable:true, entity:'card', field:'operator', type:'select', choices:_routeOpChoices(card.operator, card.country), rawValue:card.operator });
  addField('Сумма оплаты', card.payment_amount ? Number(card.payment_amount).toLocaleString('ru-RU').replace(/,/g, ' ') + ' ' + ((card.country==='KG')?'сом':'₸') : null, { price:true, editable:true, entity:'card', field:'payment_amount', type:'number', rawValue:card.payment_amount });
@@ -35970,6 +36196,7 @@ async function _routeRenderAmo(){
  addField('Менеджер продаж', card.sales_manager, { editable:true, entity:'card', field:'sales_manager', type:'select', choices:(function(){ var l = (typeof PAYBOT_CFG !== 'undefined' && PAYBOT_CFG[String(card.country||'KZ').toUpperCase()] && PAYBOT_CFG[String(card.country||'KZ').toUpperCase()].managers) || ['Мирзахит','Юлия','Айдос Хапез']; l = l.slice(); if(card.sales_manager && l.indexOf(card.sales_manager) < 0) l.push(card.sales_manager); return l; })(), rawValue:card.sales_manager });
  addField('Категория', _amoLabelCategory(card.payment_category), { editable:true, entity:'card', field:'payment_category', type:'select', choices:['Нов внедрение','Нов интеграция','абон. плата','доп. лицензии','новый клиент','доработка'], rawValue:card.payment_category });
  addField('Создана', card.created_at ? new Date(card.created_at).toLocaleDateString('ru-RU') : null);
+ }
 
  // Секция КОНТАКТ
  addSection('Контакт');
@@ -35989,11 +36216,13 @@ async function _routeRenderAmo(){
  // v391: «Куратор внедрения» — тот кто закреплён за клиентом ПОСЛЕ активации (для продлений
  // в «Мои клиенты»). «Ответственный» (выше) — кто ведёт сейчас в Маршруте. Часто это один
  // человек, но могут отличаться (например брал Айдос, передаёт после внедрения Акбару).
- addField('Куратор после активации', cl.curator_operator, { canHide:true, editable:true, entity:'client', field:'curator_operator', type:'select', choices:_routeOpChoices(cl.curator_operator, cl.country || card.country), rawValue:cl.curator_operator });
+ // v963: у действующего клиента куратор уже в секции «Кто ведёт»
+ if(!isSynthetic) addField('Куратор после активации', cl.curator_operator, { canHide:true, editable:true, entity:'client', field:'curator_operator', type:'select', choices:_routeOpChoices(cl.curator_operator, cl.country || card.country), rawValue:cl.curator_operator });
  // Имя сервера (логин в биллинге) — связь с оттоком/биллингом по постоянному коду (v604).
  addField('Имя сервера', cl.billing_host, { canHide:true, editable:true, entity:'client', field:'billing_host', type:'text', rawValue:cl.billing_host });
 
- // Секция ПОДПИСКА
+ // Секция ПОДПИСКА (v963: у действующего клиента — уже в «Доступ»)
+ if(!isSynthetic){
  addSection('Подписка');
  addField('Период подписки', cl.subscription_period_months ? cl.subscription_period_months + ' мес' : null, { canHide:true, editable:true, entity:'client', field:'subscription_period_months', type:'select', choices:['1','3','6','12'], rawValue:cl.subscription_period_months });
  addField('Лицензии', card.licenses_count, { canHide:true, editable:true, entity:'card', field:'licenses_count', type:'number', rawValue:card.licenses_count });
@@ -36006,6 +36235,7 @@ async function _routeRenderAmo(){
  addSection('Продукт');
  addField('Модули', card.modules, { canHide:true, editable:true, entity:'card', field:'modules', type:'text', rawValue:card.modules });
  addField('Страна', card.country || cl.country || 'KZ');
+ }
  _flushEmpty(); // v764: хвост последней секции
 
  // Параллельно рисуем ленту событий справа
@@ -36070,7 +36300,7 @@ async function _routeRenderFeed(){
     id: 'pay:' + p.id,
     event_type: 'note',
     created_at: p.paid_at,
-    author: p.manager_name || 'бот',
+    author: p.manager_name || 'автоматически', // v963: не «бот»
     // v764: paid_at — только дата (YYYY-MM-DD), время у оплаты фейковое (UTC-полночь → «05:00»).
     // _dateOnly говорит рендеру не показывать время; _ftype — тип для фильтров ленты.
     _dateOnly: true,
@@ -36111,7 +36341,7 @@ async function _routeRenderFeed(){
     var kindLbl = { churn:'Отток', decline:'Спад', growth:'Прирост', new:'Новый' };
     churnFeedItems = chList.filter(function(r){ return r.kind==='churn'||r.kind==='decline'; }).map(function(r){
      // v633: сумма убрана (цена за лицензию недостоверна)
-     return { id:'churn:'+r.id, event_type:'note', created_at:r.period_month, author:'биллинг',
+     return { id:'churn:'+r.id, event_type:'note', created_at:r.period_month, author:'с сервера',
       _dateOnly:true, _ftype:'sys', // v764: period_month — дата без времени; в фильтрах это «Система»
       text:(kindLbl[r.kind]||r.kind)+' ('+String(r.period_month||'').slice(0,7)+')'+(r.reason?(' · '+r.reason):'') };
     });
@@ -36270,7 +36500,7 @@ function _feedDayDivider(d){
 // v764: фильтры ленты карты клиента. Фильтруем уже отрисованные узлы по data-ft,
 // день-разделители без видимых записей прячем. Сброс на 'all' — в routeOpenCard/routeCloseCard.
 var _routeFeedFilter = 'all';
-var _ROUTE_FEED_FILTERS = [['all','Все'],['note','Примечания'],['task','Задачи'],['pay','Оплаты'],['sys','Система']];
+var _ROUTE_FEED_FILTERS = [['all','Все'],['note','Заметки'],['task','Задачи'],['pay','Оплаты'],['sys','Изменения']]; // v963: без «Системы»
 function _routeFeedFiltersRender(){
  var bar = document.getElementById('route-card-filters');
  if(!bar) return;
