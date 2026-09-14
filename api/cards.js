@@ -27,6 +27,8 @@ import { checkAuth, checkAdminToken } from './_auth.js';
 import { almatyIso } from './_dates.js';
 import { notifCreate } from './_notify.js'; // v871: новый клиент от продаж
 import { canonOperator, operatorNames, supportOperators } from './_operators.js'; // v850: операторы из «Сотрудников», а не из кода
+import { activateClient, nextBillingAfter, logClientEvent, _normName as normClientName } from './clients.js'; // v960: единая активация и календарная дата оплаты
+import { callerName } from './_caller.js';
 
 // v364: whitelist разрешённых стадий — иначе мусорный stage сохранится молча
 // v861: этапы задаёт руководитель (app_settings.route_stages). Здесь — запасной список
@@ -58,22 +60,18 @@ async function routeStagesCfg() {
 // v862: клиент доехал до последнего этапа — внедрение закончено. Карточка уходит с доски,
 // клиент становится действующим и закрепляется за тем, кто его внедрял. Раньше конца у доски
 // не было: 22 карточки из 32 стояли в «Активации», часть по два месяца, и никто этого не видел.
-async function finishImplementation(card) {
+// v960: через общий activateClient — куратор (кто внедрял), дата по Алматы, период,
+// следующая оплата и запись в ленту клиента ставятся в одном месте.
+async function finishImplementation(card, actor) {
   try {
-    if (!card || !card.client_id) return;
-    const country = card.country || 'KZ';
-    const patch = { status: 'active' };
-    const cur = await sbSelect('clients', { client_id: 'eq.' + card.client_id, select: 'support_operator,activation_date', limit: '1' });
-    const cl = cur[0] || {};
-    if (!cl.support_operator && card.operator) {
-      const who = await canonOperator(card.operator, country);
-      if (who) patch.support_operator = who;
-    }
-    if (!cl.activation_date) patch.activation_date = new Date().toISOString().slice(0, 10);
-    await sbUpdate('clients', { client_id: 'eq.' + card.client_id }, patch);
+    if (!card) return false;
+    if (!card.client_id) return true; // нечего активировать — карточка просто уходит с доски
+    const r = await activateClient(card.client_id, { operator: card.operator || null, actor: actor || null, source: 'board' });
+    return !!(r && r.ok);
   } catch (e) {
     // не валим перемещение карточки: клиента можно поправить руками, а работу оператора рвать нельзя
     console.error('[finish implementation]', e.message || e);
+    return false;
   }
 }
 const ALLOWED_COUNTRIES = ['KZ','KG'];
@@ -242,15 +240,31 @@ export default async function handler(req, res) {
       if (body.sales_manager !== undefined) patch.sales_manager = body.sales_manager;
       if (body.payment_category !== undefined) patch.payment_category = body.payment_category;
       if (!Object.keys(patch).length) return res.status(400).json({ ok: false, error: 'нечего обновлять' });
+      // v960: сначала активируем клиента, потом архивируем карточку. Если активация не удалась —
+      // карточка остаётся на доске (раньше клиент мог зависнуть без карточки и без статуса).
+      let activated = false;
+      if (finishing) {
+        const probe = await sbSelect('kanban_cards', { id: 'eq.' + id, select: 'client_id,operator', limit: '1' });
+        activated = await finishImplementation(Object.assign({}, probe[0] || {}, { operator: patch.operator !== undefined ? patch.operator : (probe[0] || {}).operator }), callerName(req));
+        if (!activated) { delete patch.archived_at; finishing = false; }
+      }
       const result = await sbUpdate('kanban_cards', { id: 'eq.' + id }, patch);
       if (!result.length) return res.status(404).json({ ok: false, error: 'карточка не найдена' });
-      if (finishing) await finishImplementation(result[0]);
-      return res.status(200).json({ ok: true, card: result[0], finished: finishing });
+      return res.status(200).json({ ok: true, card: result[0], finished: finishing, activated });
     }
 
     if (req.method === 'DELETE') {
       const { id } = req.query || {};
       if (!id) return res.status(400).json({ ok: false, error: 'нужен ?id=UUID' });
+      // v960: архивация с ?activate=1 (кнопка «Активировать», чек-лист «Передать») — одна операция:
+      // клиент активируется, и только потом карточка уходит с доски
+      if (String(req.query.activate || '') === '1') {
+        const probe = await sbSelect('kanban_cards', { id: 'eq.' + id, select: 'client_id,operator', limit: '1' });
+        if (!probe.length) return res.status(404).json({ ok: false, error: 'карточка не найдена' });
+        const src = String(req.query.source || 'button');
+        const a = probe[0].client_id ? await activateClient(probe[0].client_id, { operator: probe[0].operator || null, actor: callerName(req) || null, source: (src === 'checklist' ? 'checklist' : 'button') }) : { ok: true };
+        if (!a.ok) return res.status(400).json({ ok: false, error: 'Клиента активировать не удалось: ' + (a.error || '') });
+      }
       const result = await sbUpdate('kanban_cards', { id: 'eq.' + id }, {
         stage: 'Архив',
         archived_at: new Date().toISOString()
@@ -300,6 +314,40 @@ async function operatorFromImplementation(clientId) {
   } catch (_) { return null; }
 }
 
+// v960: клиент страны по нормализованному имени; при нескольких совпадениях — действующий,
+// иначе первый. null — не найден.
+async function findClientByName(company, country) {
+  const n = normClientName(company);
+  if (!n) return null;
+  const rows = await sbSelect('clients', { country: 'eq.' + country, select: '*', order: 'created_at.desc', limit: '5000' });
+  const hits = rows.filter(c => normClientName(c.company_name) === n);
+  if (!hits.length) return null;
+  return hits.find(c => c.status === 'active') || hits[0];
+}
+
+// v960: вставка клиента с генерацией номера по МАКСИМУМУ года (как v882 в /api/clients),
+// с повтором при столкновении. Раньше номер брался у последнего созданного, и при дырах
+// в нумерации вставка падала на duplicate key — карточка по оплате не создавалась.
+async function insertClientWithFreshId(fields) {
+  const country = fields.country;
+  const year = new Date().getFullYear();
+  const prefix = 'SD-' + country + '-' + year + '-';
+  const last = await sbSelect('clients', { select: 'client_id', client_id: 'like.' + prefix + '%', order: 'client_id.desc', limit: '1' });
+  let nextNum = 1;
+  if (last.length) { const m = String(last[0].client_id || '').match(/-(\d+)$/); if (m) nextNum = parseInt(m[1], 10) + 1; }
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const cid = prefix + String(nextNum + attempt).padStart(5, '0');
+    try {
+      await sbInsert('clients', Object.assign({ client_id: cid }, fields));
+      return cid;
+    } catch (e) {
+      const msg = String((e && e.message) || e);
+      if (!(msg.includes('23505') || msg.toLowerCase().includes('duplicate key'))) throw e;
+    }
+  }
+  throw new Error('не удалось подобрать свободный номер клиента');
+}
+
 export async function ensureBoardEntryForPayment(opts) {
   const company = (opts.company || '').trim();
   const country = (opts.country || 'KZ').toUpperCase();
@@ -311,33 +359,20 @@ export async function ensureBoardEntryForPayment(opts) {
   if (!ALLOWED_COUNTRIES.includes(country)) throw new Error('country должен быть KZ или KG');
   if (kind !== 'impl' && kind !== 'integ') throw new Error('kind должен быть impl|integ');
 
-  // Найти/создать клиента (точное имя + country; имя из колонки «Компания» стабильно).
-  const existing = await sbSelect('clients', {
-    country: 'eq.' + country, company_name: 'eq.' + company, select: '*', limit: '1'
-  });
+  // Найти/создать клиента. v960: по нормализованному имени (как импорт оплат и POST /api/clients),
+  // а не по точному — «ТОО Карат» / «Карат» / «karat » плодили трёх клиентов.
+  const existing = await findClientByName(company, country);
   let clientId;
-  if (existing.length) {
-    clientId = existing[0].client_id;
-    if (existing[0].subscription_period_months !== period_months) {
+  if (existing) {
+    clientId = existing.client_id;
+    if (existing.subscription_period_months !== period_months) {
       await sbUpdate('clients', { client_id: 'eq.' + clientId }, {
         subscription_period_months: period_months, updated_at: new Date().toISOString()
       });
     }
   } else {
-    // Авто-генерация client_id: SD-KZ-2026-NNNNN
-    const last = await sbSelect('clients', {
-      select: 'client_id', country: 'eq.' + country, order: 'created_at.desc', limit: '1'
-    });
-    const year = new Date().getFullYear();
-    const prefix = 'SD-' + country + '-' + year + '-';
-    let nextNum = 1;
-    if (last.length) {
-      const m = (last[0].client_id || '').match(/SD-[A-Z]{2}-\d{4}-(\d+)/);
-      if (m) nextNum = parseInt(m[1], 10) + 1;
-    }
-    clientId = prefix + String(nextNum).padStart(5, '0');
-    await sbInsert('clients', {
-      client_id: clientId, company_name: company, country: country,
+    clientId = await insertClientWithFreshId({
+      company_name: company, country: country,
       status: 'onboarding', subscription_period_months: period_months
     });
   }
@@ -453,32 +488,32 @@ async function handlePaymentBotSync(body, res) {
     return res.status(200).json({ ok: true, action: 'ignored', reason: 'category not in implementation/integration/renewal whitelist' });
   }
 
-  // Ищем существующего клиента по точному имени (+ country).
-  // Имя приходит из колонки B Доходов 2026 — сотрудник вводит его в боте,
-  // поэтому в рамках одного клиента имя стабильно (нет дублей 777/7771/7772).
-  const existing = await sbSelect('clients', {
-    country: 'eq.' + country,
-    company_name: 'eq.' + company,
-    select: '*',
-    limit: '1'
-  });
+  // v960: клиента ищем по нормализованному имени (регистр/кавычки/пробелы не важны)
+  const existingOne = await findClientByName(company, country);
 
   if (isRenewal) {
     // Продление подписки: клиент должен существовать. Если нет — это сигнал ошибки данных.
-    if (!existing.length) {
+    if (!existingOne) {
       return res.status(404).json({
         ok: false,
         action: 'renewal_failed',
         error: 'клиент с именем «' + company + '» не найден в Supabase (country=' + country + '). Проверьте имя в Доходах.'
       });
     }
-    const cl = existing[0];
-    const newDate = addMonthsISO(new Date(), period_months);
-    await sbUpdate('clients', { client_id: 'eq.' + cl.client_id }, {
-      next_billing_at: newDate,
-      subscription_period_months: period_months,
-      updated_at: new Date().toISOString()
-    });
+    const cl = existingOne;
+    // v960: календарное правило (как крон и активация) — раньше «сегодня + N мес» от даты приёма,
+    // и крон потом не мог откатить дату. Ушедший/приостановленный клиент, который снова платит,
+    // возвращается в действующие (раньше оставался churned навсегда).
+    const newDate = nextBillingAfter(almatyIso(), period_months);
+    if (cl.status === 'churned' || cl.status === 'paused') {
+      await activateClient(cl.client_id, { period: period_months, next_billing_at: newDate, source: 'bot' });
+    } else {
+      await sbUpdate('clients', { client_id: 'eq.' + cl.client_id }, {
+        next_billing_at: newDate,
+        subscription_period_months: period_months,
+        updated_at: new Date().toISOString()
+      });
+    }
     return res.status(200).json({
       ok: true,
       action: 'renewed',

@@ -22,6 +22,14 @@ async function loadRoles(now) {
   return map;
 }
 
+// v960: имя вызывающего из заголовка x-user-name. Фронт кодирует кириллицу через
+// encodeURIComponent (в HTTP-заголовок нельзя положить не-latin1), здесь раскодируем.
+export function callerName(req) {
+  let raw = String((req && req.headers && req.headers['x-user-name']) || '').trim();
+  if (raw.indexOf('%') >= 0) { try { raw = decodeURIComponent(raw); } catch (_) {} }
+  return raw;
+}
+
 // Возвращает { email, role, active, trusted } вызывающего или null.
 // v924 SEC: сначала пробуем ПОДПИСАННУЮ сессию (x-session-token) — её подделать нельзя,
 // пока задан SESSION_SECRET. Если сессии нет (env не задан / старый вход) — падаем на

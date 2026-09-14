@@ -33,7 +33,8 @@ export default async function handler(req, res) {
     // 1. Получаем подходящих клиентов
     const clientParams = { order: 'updated_at.desc', limit: '1000' };
     if (statusFilter) clientParams['status'] = 'eq.' + statusFilter;
-    if (curator)      clientParams['curator_operator'] = 'eq.' + curator;
+    // v960: куратор — support_operator (кто ведёт) либо curator_operator (кто продал)
+    if (curator)      clientParams['or'] = '(support_operator.eq.' + curator + ',curator_operator.eq.' + curator + ')';
     if (country)      clientParams['country'] = 'eq.' + country;
     // По умолчанию ищем «активных» (lead/sale/onboarding/active) — те, кто требует касаний.
     if (!statusFilter) clientParams['status'] = 'in.(lead,sale,onboarding,active)';

@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v959</title>
+<title>SalesDoc — Финансовый Дашборд v960</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10323,7 +10323,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="acToggleUnmatched()">
  <div>
  <div style="font-size:12px;color:var(--ds-warning-text);font-weight:700;letter-spacing:1px;text-transform:uppercase">Оплаты без клиента <span id="ac-unmatched-count">0</span></div>
- <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Программа не поняла, чьи это оплаты. Укажите клиента один раз — дальше такие оплаты будут попадать к нему сами.</div>
+ <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Укажите клиента — связь сохранится.</div>
  </div>
  <div id="ac-unmatched-toggle" style="color:var(--text-muted);font-size:18px">▾</div>
  </div>
@@ -10336,7 +10336,7 @@ body.light .mt-filter-section-title { color:#8A90A0; }
  <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="acTogglePrefixList()">
  <div>
  <div style="font-size:12px;color:var(--ds-warning-text);font-weight:700;letter-spacing:1px;text-transform:uppercase">Требуют подтверждения <span id="ac-prefix-count">0</span></div>
- <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Название в оплате отличается от карточки клиента. Подтвердите, что это тот же клиент, или отметьте как другого.</div>
+ <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Название в оплате отличается от карточки.</div>
  </div>
  <div id="ac-prefix-toggle" style="color:var(--text-muted);font-size:18px">▾</div>
  </div>
@@ -31647,6 +31647,13 @@ async function sbFetch(path, options){
  if(window._SESSION_TOKEN){ options.headers['x-session-token'] = window._SESSION_TOKEN; }
  // v582: личность вызывающего для серверной проверки роли (например, /api/employee-access)
  if(typeof currentUser!=='undefined' && currentUser && currentUser.email){ options.headers['x-user-email'] = currentUser.email; }
+ // v960: имя — для ленты клиента («кто передал», «кто активировал»). Кириллицу в заголовок
+ // класть нельзя — кодируем, сервер раскодирует (callerName в api/_caller.js)
+ // Только для /api/clients и /api/cards: остальные эндпоинты читают заголовок по-своему (первое слово имени)
+ if(typeof currentUser!=='undefined' && currentUser && currentUser.name && !options.headers['x-user-name'] && (path.startsWith('/api/clients') || path.startsWith('/api/cards'))){
+  var _un = String(currentUser.name).trim();
+  options.headers['x-user-name'] = /^[\x00-\xff]*$/.test(_un) ? _un : encodeURIComponent(_un);
+ }
  // v587: админ-код для опасных мутаций (сотрудники/права) — не в бандле, вводит CEO
  if(window._ADMIN_TOKEN){ options.headers['x-admin-token'] = window._ADMIN_TOKEN; }
  if(options.body && !options.headers['Content-Type']){
@@ -32209,14 +32216,22 @@ function routeDragEnd(el){
  document.body.classList.remove('route-trash-visible');
 }
 
-// v607: при переходе карточки в стадию «Активация» — активируем клиента в реестре
-// (status=active; API сам проставит дату активации и следующую оплату). Идемпотентно.
-async function _routeMaybeActivate(card, newStage){
- if(newStage !== 'Активация' || !card || !card.client_id) return;
- try {
-  var r = await sbFetch('/api/clients?client_id=' + encodeURIComponent(card.client_id), { method:'PATCH', body: JSON.stringify({ status:'active' }) });
-  if(r && r.ok){ if(card.clients) card.clients.status = 'active'; if(typeof kbShowToast === 'function') kbShowToast('Клиент активирован'); }
- } catch(e){ try{ showNotif('Активация','Этап изменён, но клиента активировать не удалось: '+(e&&e.message||e)); }catch(_){} }
+// v960: активацию делает сервер при переходе на последний этап (api/cards.js → activateClient).
+// Фронт только реагирует на ответ: finished — карточка ушла с доски; activated=false — клиента
+// активировать не удалось и карточка осталась. Хардкод «Активация» убран: последний этап настраиваемый.
+function _routeAfterStageMove(d){
+ if(!d) return false;
+ if(d.finished){
+  sdToast('Клиент передан в Действующие');
+  routeLoad();
+  return true;
+ }
+ if(d.activated === false){
+  sdToast('Клиента активировать не удалось — карточка осталась на доске');
+  routeLoad();
+  return true;
+ }
+ return false;
 }
 async function routeDrop(ev, newStage){
  ev.preventDefault();
@@ -32238,7 +32253,7 @@ async function routeDrop(ev, newStage){
    body: JSON.stringify({ stage: newStage })
   });
   if(!d.ok) throw new Error(d.error);
-  await _routeMaybeActivate(card, newStage);
+  _routeAfterStageMove(d);
  } catch(e) {
   console.error('routeDrop:', e);
   if(typeof kbShowToast === 'function') kbShowToast('Не получилось сохранить перенос — проверьте интернет'); else sdToast('Не получилось сохранить перенос');
@@ -32263,14 +32278,7 @@ async function routeAdvanceStage(cardId){
  try {
   var d = await sbFetch('/api/cards?id=' + cardId, { method: 'PATCH', body: JSON.stringify({ stage: newStage }) });
   if(!d.ok) throw new Error(d.error);
-  await _routeMaybeActivate(card, newStage);
-  // v862: последний этап — внедрение закончено. Карточка уходит с доски, клиент становится
-  // действующим и закрепляется за тем, кто его внедрял. Перезагружаем, чтобы доска очистилась.
-  if(d.finished){
-   sdToast('Внедрение завершено: клиент передан в Действующие');
-   routeLoad();
-   return;
-  }
+  if(_routeAfterStageMove(d)) return;
  } catch(e) {
   console.error('routeAdvanceStage:', e);
   if(typeof kbShowToast === 'function') kbShowToast('Не получилось сохранить перенос — проверьте интернет'); else sdToast('Не получилось сохранить перенос');
@@ -32301,7 +32309,9 @@ async function routePipeSetStage(newStage){
   // Обновим список карточек если открыт канбан
   var inList = routeCards.find(function(c){ return c.id === card.id; });
   if(inList){ inList.stage = newStage; inList.stage_entered_at = card.stage_entered_at; }
-  await _routeMaybeActivate(card, newStage);  // v607: «Активация» → активировать клиента
+  // v960: последний этап — сервер сам активировал клиента и снял карточку с доски; закрываем карту
+  if(d.finished){ if(typeof routeCloseCard === 'function') routeCloseCard(); }
+  _routeAfterStageMove(d);
  } catch(e){
   card.stage = oldStage;
   if(typeof _routeRenderCardHead === 'function'){ try { _routeRenderCardHead(); } catch(_){} }
@@ -34746,54 +34756,27 @@ async function routeChatSend(){
 async function routeActivateClient(){
  var card = _routeCurrentCard;
  if(!card) return;
- if(card.stage !== 'Активация'){
-  sdToast('Активация доступна только на этапе «Активация»');
+ // v960: последний этап — из настроек, а не хардкод «Активация»
+ var lastStage = ROUTE_STAGES_ORDER[ROUTE_STAGES_ORDER.length - 1];
+ if(card.stage !== lastStage){
+  sdToast('Сначала переведите на этап «' + lastStage + '»');
   return;
  }
  var clName = (card.clients && card.clients.company_name) || 'клиента';
- var months = (card.clients && card.clients.subscription_period_months) || 1;
- // v388: понятный текст — что произойдёт, что нельзя откатить
- if(!confirm('Активировать «' + clName + '»?\n\nЧто произойдёт:\n• Карточка уйдёт из Маршрута в «Мои клиенты»\n• Куратор: ' + (card.operator || '—') + '\n• Дата следующей оплаты: через ' + months + ' мес\n\nОткатить можно будет только вручную.')){
-  return;
- }
+ var ok = (typeof confirmAction === 'function')
+  ? await confirmAction({ title: 'Передать в Действующие?', body: clName + '\nКуратор: ' + (card.operator || '—'), confirmLabel: 'Передать' })
+  : confirm('Передать «' + clName + '» в Действующие?');
+ if(!ok) return;
  // v364: блокировка кнопки на время запроса — защита от двойного клика
  var btn = document.querySelector('button[onclick*="routeActivateClient"]');
  if(btn){ btn.disabled = true; btn.style.opacity = 0.5; btn.style.cursor = 'wait'; }
  try {
-  // v364: локальная дата (не UTC) — иначе вечером запишется завтрашняя
-  var today = new Date();
-  var localDate = today.getFullYear() + '-' +
-                  String(today.getMonth()+1).padStart(2,'0') + '-' +
-                  String(today.getDate()).padStart(2,'0');
-  // 1) Клиент → status active + куратор + дата активации + период подписки
-  //    API сам проставит next_billing_at = today + months через addMonthsISO
-  var d1 = await sbFetch('/api/clients?client_id=' + encodeURIComponent(card.client_id), {
-   method: 'PATCH',
-   body: JSON.stringify({
-    status: 'active',
-    activation_date: localDate,
-    curator_operator: card.operator || null,
-    subscription_period_months: months
-   })
-  });
-  if(!d1.ok) throw new Error('client update: ' + d1.error);
-  // 2) Карточка → архив ВСЕГДА (v738 фикс: раньше DELETE стоял внутри if(!already_active),
-  //    и если клиента уже активировал бросок в колонку «Активация» (v607) — карточка зависала на доске навечно)
-  var d2 = await sbFetch('/api/cards?id=' + card.id, { method: 'DELETE' });
-  if(!d2.ok) throw new Error('card archive: ' + d2.error);
-  // 3) История — только при первой активации (идемпотентность)
-  if(!d1.already_active){
-   sbFetch('/api/history', {
-    method: 'POST',
-    body: JSON.stringify({
-     card_id: card.id,
-     client_id: card.client_id,
-     event_type: 'system',
-     text: 'Клиент активирован. Куратор: ' + (card.operator || '—')
-    })
-   }).catch(function(e){ console.error('history:', e); });
-  }
-  sdToast('Готово! ' + clName + ' переведён в Действующие. Куратор: ' + (card.operator || '—'));
+  // v960: одна серверная операция — активация клиента (куратор = кто внедрял, дата, период,
+  // следующая оплата, запись в ленту) и архивация карточки. Если активация не прошла —
+  // карточка остаётся на доске, клиент не зависает.
+  var d2 = await sbFetch('/api/cards?id=' + card.id + '&activate=1&source=button', { method: 'DELETE' });
+  if(!d2.ok) throw new Error(d2.error || 'не удалось');
+  sdToast(clName + ' — в Действующих');
   if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; } // v738: разблокировать и на успехе
   routeCloseCard();
   routeLoad();
@@ -34909,10 +34892,9 @@ async function _routeToggleCheck(itemId, title, stage, checked){
   // активируем клиента (status=active) + архивируем карточку (soft-delete → уходит с маршрута в Действующие).
   // Раньше галочка просто отмечалась, карточка висела в «Активация» вечно.
   if(checked && title === 'Передать в Действующие клиенты' && _routeCurrentCard && String(_routeCurrentCard.id||'').indexOf('client:') !== 0){
-   if(_routeCurrentCard.client_id){
-    try { await sbFetch('/api/clients?client_id=' + encodeURIComponent(_routeCurrentCard.client_id), { method:'PATCH', body: JSON.stringify({ status:'active' }) }); } catch(_){}
-   }
-   var _del = await sbFetch('/api/cards?id=' + _routeCurrentCard.id, { method:'DELETE' });
+   // v960: активация + архивация одной серверной операцией; при ошибке карточка остаётся
+   // (раньше ошибка активации глоталась, а карточка всё равно архивировалась → клиент в лимбо)
+   var _del = await sbFetch('/api/cards?id=' + _routeCurrentCard.id + '&activate=1&source=checklist', { method:'DELETE' });
    if(!_del.ok) throw new Error(_del.error || 'не удалось передать в Действующие');
    if(typeof kbShowToast === 'function') kbShowToast('Клиент передан в Действующие');
    var _cv = document.getElementById('view-route-card'); if(_cv) _cv.style.display = 'none';
@@ -43271,7 +43253,7 @@ function _acJsAttr(s){ return kbEsc(JSON.stringify(String(s == null ? '' : s)));
 // v959: модалка promptAction вместо нативного prompt()
 async function acCreateSeparatePrompt(payHost){
  var name = (typeof promptAction === 'function')
-  ? await promptAction({ title: 'Новый клиент', body: 'Оплаты на «' + payHost + '» будут учитываться как отдельный клиент. Как назвать этого клиента?', value: payHost, confirmLabel: 'Создать' })
+  ? await promptAction({ title: 'Новый клиент', body: 'Название для «' + payHost + '»', value: payHost, confirmLabel: 'Создать' })
   : prompt('Название нового клиента для сервера «'+payHost+'»:', payHost);
  if(name === null || name === false) return; // отмена
  acAddClientAsSeparate(payHost, name);
@@ -43863,7 +43845,7 @@ function acRender(){
     // v959 (Б5): ошибка сети — честно говорим и даём повторить, а не «база пуста» (и не «под фильтр ничего»)
     msg = '<div style="padding:24px 16px;text-align:center;color:var(--text-soft)">'
         + '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">Не удалось загрузить список</div>'
-        + '<div style="font-size:12px;margin-bottom:6px;line-height:1.5">Нет связи с сервером. Проверьте интернет и нажмите «Повторить».</div>'
+        + '<div style="font-size:12px;margin-bottom:6px;line-height:1.5">Нет связи с сервером.</div>'
         + '<div style="font-size:11px;color:var(--text-faint);margin-bottom:14px">' + _escHtml(_acLoadError) + '</div>'
         + '<button onclick="acReload()" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:12px;font-weight:600">Повторить</button>'
         + '</div>';
@@ -44181,7 +44163,7 @@ function acRenderPrefixMerged(){
  if(!keys.length){ section.style.display = 'none'; return; }
  section.style.display = 'block';
  if(countEl) countEl.textContent = '(' + keys.length + ')';
- var html = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Слева — как клиент записан в оплате, справа — карточка, к которой его отнесла программа. Подтвердите или отметьте как другого клиента.</div>';
+ var html = '';
  keys.slice(0, 50).forEach(function(payHost){
  var info = pm[payHost];
  html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-faint);font-size:12px;flex-wrap:wrap">'

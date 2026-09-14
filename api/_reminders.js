@@ -100,8 +100,11 @@ export async function runReminders() {
       status: 'eq.active',
       next_billing_at: 'not.is.null',
       and: '(next_billing_at.gte.' + cap45 + ',next_billing_at.lte.' + in30 + ')',
-      select: 'client_id,company_name,curator_operator,next_billing_at,country'
+      select: 'client_id,company_name,curator_operator,support_operator,next_billing_at,country'
     });
+    // v960: куратор — support_operator (кто ведёт); curator_operator — «кто продал», запасной вариант.
+    // Раньше читали только curator_operator, а он пуст у 452 из 538 действующих — напоминания молчали.
+    cls.forEach(c => { c.curator_operator = c.support_operator || c.curator_operator || null; });
 
     // Платежи этих клиентов: кросс-чек «уже оплатил, но дату не сдвинули» + суммы для сводки CEO.
     // По определению проекта доступ продлевают абонплата/баланс (subscription) и лицензии/новый клиент (license).
@@ -196,9 +199,9 @@ export async function runReminders() {
         client_id: inList, category: 'eq.subscription',
         select: 'client_id,amount,period_months,paid_at', order: 'paid_at.asc', limit: '5000'
       });
-      const clRows = await sbSelect('clients', { client_id: inList, select: 'client_id,company_name,curator_operator' });
+      const clRows = await sbSelect('clients', { client_id: inList, select: 'client_id,company_name,curator_operator,support_operator' });
       const clById = {};
-      clRows.forEach(c => { clById[c.client_id] = c; });
+      clRows.forEach(c => { c.curator_operator = c.support_operator || c.curator_operator || null; clById[c.client_id] = c; }); // v960: куратор = support_operator
       const monthly = p => (Number(p.amount) || 0) / (Number(p.period_months) || 1);
       for (const p of fresh) {
         const prev = hist

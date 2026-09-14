@@ -13,13 +13,77 @@ import { checkAuth } from './_auth.js';
 import { almatyIso } from './_dates.js';
 import { canonOperator, operatorNames } from './_operators.js';
 import { notifCreate, opEmailByName } from './_notify.js'; // v870: уведомление о передаче клиента // v859: операторы из «Сотрудников»
+import { callerName } from './_caller.js'; // v960: кто нажал — для ленты клиента
 
 const ALLOWED_STATUS = ['lead','sale','onboarding','active','paused','churned'];
 const ALLOWED_COUNTRIES = ['KZ','KG'];
 const ALLOWED_PERIODS = [1, 3, 6, 12]; // месяцев подписки
+const STATUS_RU = { lead:'новый', sale:'продано', onboarding:'внедрение', active:'действующий', paused:'на паузе', churned:'ушёл' };
 
 // v606: нормализация имени для анти-дубля (как _acNormForMerge на фронте / _normName в payments).
-function _normName(s) { return String(s || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, ''); }
+export function _normName(s) { return String(s || '').toLowerCase().replace(/[^a-zа-яё0-9]/gi, ''); }
+
+// v960: запись в ленту клиента (card_history, event_type=system). Ошибка не валит операцию.
+export async function logClientEvent(clientId, text, author) {
+  try {
+    await sbInsert('card_history', { client_id: clientId, event_type: 'system', text: String(text || '').slice(0, 500), author: author || null });
+  } catch (e) { console.error('[client history]', e.message || e); }
+}
+
+// v960: дата следующей оплаты по календарному правилу: оплата (или активация) в месяце M
+// на N месяцев закрывает доступ по конец месяца M+N-1; следующая оплата — 1-е число после.
+// Одно правило для активации, продления ботом и пересчёта кроном (раньше их было три).
+export function nextBillingAfter(dateIso, periodMonths) {
+  const end = _accessEndUTC(dateIso, Math.max(1, parseInt(periodMonths, 10) || 1));
+  if (!end || isNaN(end.getTime())) return null;
+  return new Date(end.getTime() + 86400000).toISOString().slice(0, 10);
+}
+
+// v960: ЕДИНАЯ активация клиента — все девять путей (последний этап доски, кнопка
+// «Активировать», чек-лист «Передать», inline-статус, создание, импорт, продление ботом
+// ушедшего) идут через неё. Раньше доска писала status напрямую, а следующий PATCH с фронта
+// получал already_active и выбрасывал дату оплаты, период и куратора — у клиентов после
+// внедрения next_billing_at не ставился, напоминания молчали.
+// opts: { operator, period, activation_date, next_billing_at, actor, source }
+// source: 'board' | 'button' | 'checklist' | 'status' | 'create' | 'bot' | 'import'
+export async function activateClient(clientId, opts) {
+  opts = opts || {};
+  const rows = await sbSelect('clients', { client_id: 'eq.' + clientId, limit: '1' });
+  if (!rows.length) return { ok: false, error: 'клиент не найден' };
+  const cl = rows[0];
+  const wasActive = cl.status === 'active';
+  const patch = { updated_at: new Date().toISOString() };
+  if (!wasActive) patch.status = 'active';
+  // период: явный → существующий → 1
+  const per = ALLOWED_PERIODS.includes(parseInt(opts.period, 10)) ? parseInt(opts.period, 10)
+    : (ALLOWED_PERIODS.includes(parseInt(cl.subscription_period_months, 10)) ? parseInt(cl.subscription_period_months, 10) : 1);
+  if (per !== cl.subscription_period_months) patch.subscription_period_months = per;
+  // дата активации — Алматы, не Гринвич; не перезаписываем, если уже есть
+  if (!cl.activation_date) patch.activation_date = opts.activation_date || almatyIso();
+  // куратор = кто внедрял. Не перезаписываем уже назначенного.
+  if (!cl.support_operator && opts.operator) {
+    const who = await canonOperator(opts.operator, cl.country || 'KZ');
+    if (who) patch.support_operator = who;
+  }
+  // следующая оплата: явная → существующая (если ещё в будущем) → календарное правило от сегодня
+  const today = almatyIso();
+  const curNb = cl.next_billing_at ? String(cl.next_billing_at).slice(0, 10) : null;
+  if (opts.next_billing_at) patch.next_billing_at = String(opts.next_billing_at).slice(0, 10);
+  else if (!curNb || curNb < today || !wasActive) patch.next_billing_at = nextBillingAfter(today, per);
+  // возврат ушедшего/приостановленного — причина неоплаты больше не актуальна
+  if (!wasActive && (cl.status === 'churned' || cl.status === 'paused') && cl.pay_reason) {
+    patch.pay_reason = null; patch.pay_reason_at = null; patch.pay_reason_by = null;
+  }
+  const result = await sbUpdate('clients', { client_id: 'eq.' + clientId }, patch);
+  const client = result[0] || Object.assign({}, cl, patch);
+  if (!wasActive || opts.force_log) {
+    const SRC = { board:'внедрение завершено', button:'кнопка «Активировать»', checklist:'чек-лист', status:'смена статуса', create:'создан как действующий', bot:'оплата абонплаты', import:'импорт' };
+    const from = STATUS_RU[cl.status] || cl.status || '—';
+    const who = client.support_operator ? (' · куратор ' + client.support_operator) : '';
+    await logClientEvent(clientId, 'Статус: ' + from + ' → действующий · ' + (SRC[opts.source] || 'вручную') + who, opts.actor || (opts.source === 'bot' ? 'бот' : null));
+  }
+  return { ok: true, client, already_active: wasActive };
+}
 
 // v838: дата следующей оплаты из истории платежей.
 // Раньше next_billing_at писал ТОЛЬКО бот при оплате «абон.плата» — у клиентов,
@@ -257,9 +321,17 @@ export default async function handler(req, res) {
       // v452: авто-задача «Связаться» при создании клиента (spec §8 п.2).
       // Запускается всегда, кроме случая когда явно отключено body.skip_auto_task=true.
       // Errors here are логируются но не валят создание клиента.
+      // v960: клиент, созданный сразу действующим (из «Действующих» / формы оплаты) — через
+      // общую активацию: дата, период, следующая оплата, запись в ленту.
+      if (result[0] && result[0].status === 'active') {
+        try {
+          const a = await activateClient(result[0].client_id, { operator: body.support_operator || null, period: body.subscription_period_months, actor: callerName(req) || null, source: 'create', force_log: true });
+          if (a.ok && a.client) result[0] = a.client;
+        } catch (e) { console.warn('[clients] activate on create failed:', e.message || e); }
+      }
       if (result[0] && !skipAutoTask) {
         try {
-          const userName = (req.headers['x-user-name'] || '').toString().trim()
+          const userName = callerName(req)
             || body.curator_operator
             || 'system';
           const assignee = body.curator_operator || userName;
@@ -294,7 +366,8 @@ export default async function handler(req, res) {
       // v838: pay_reason/pay_reason_note/free_until — причина неоплаты и подаренный период
       // v859: support_operator — кто ВЕДЁТ клиента. curator_operator отвечает на другой вопрос,
       // «кто продал»: там имена продавцов из amoCRM, и у 452 действующих клиентов из 538 пусто.
-      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','support_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months','implementation_contact','billing_host','pay_reason','pay_reason_note','free_until'];
+      // v960: activation_source / status_reason — служебные, в таблицу не пишутся (снимаются ниже)
+      const ALLOWED_PATCH_FIELDS = ['company_name','main_phone','curator_operator','support_operator','status','country','subscription_period_months','next_billing_at','activation_date','amo_lead_id','renew','renewal_months','implementation_contact','billing_host','pay_reason','pay_reason_note','free_until','activation_source','status_reason'];
       const body = {};
       Object.keys(rawBody).forEach(k => {
         if (ALLOWED_PATCH_FIELDS.includes(k)) body[k] = rawBody[k];
@@ -330,7 +403,7 @@ export default async function handler(req, res) {
                   entity_type: 'client',
                   entity_id: client_id,
                   client_id: client_id,
-                  actor: String(req.headers['x-user-name'] || '').trim() || null
+                  actor: callerName(req) || null
                 });
               }
             }
@@ -338,6 +411,17 @@ export default async function handler(req, res) {
             console.error('[client transfer notify]', e.message || e);
           }
         }
+      }
+      // v960: смена куратора — в ленту клиента (раньше только уведомление; через полгода
+      // никто не мог сказать, кто и когда передал клиента)
+      if (body.support_operator !== undefined) {
+        try {
+          const prevRow = await sbSelect('clients', { client_id: 'eq.' + client_id, select: 'support_operator', limit: '1' });
+          const was = (prevRow[0] || {}).support_operator || null;
+          if (was !== body.support_operator) {
+            await logClientEvent(client_id, body.support_operator ? ('Куратор: ' + (was || '—') + ' → ' + body.support_operator) : ('Куратор снят (был ' + (was || '—') + ')'), callerName(req) || null);
+          }
+        } catch (_) {}
       }
       // v838: причина ставится только из списка; пустая строка = снять причину
       if (body.pay_reason !== undefined) {
@@ -350,7 +434,7 @@ export default async function handler(req, res) {
           return res.status(400).json({ ok: false, error: 'pay_reason должен быть один из: ' + PAY_REASONS.join(', ') });
         } else {
           body.pay_reason_at = new Date().toISOString();
-          body.pay_reason_by = String(req.headers['x-user-name'] || '').trim() || null;
+          body.pay_reason_by = callerName(req) || null;
         }
       }
       body.updated_at = new Date().toISOString();
@@ -374,28 +458,45 @@ export default async function handler(req, res) {
         const months = ALLOWED_PERIODS.includes(parseInt(body.renewal_months, 10))
           ? parseInt(body.renewal_months, 10)
           : (existing[0].subscription_period_months || 1);
-        body.next_billing_at = addMonthsISO(new Date(), months);
+        body.next_billing_at = nextBillingAfter(almatyIso(), months); // v960: календарное правило, как у крона и бота
         body.subscription_period_months = months;
         delete body.renew;
         delete body.renewal_months;
+        try { await logClientEvent(client_id, 'Продление на ' + months + ' мес · следующая оплата ' + body.next_billing_at, callerName(req) || null); } catch (_) {}
       }
-      // v364: идемпотентность активации — если уже active и снова шлют active, не пишем
+      // v960: активация — через activateClient (одна логика на все пути). Остальные поля тела
+      // применяются ПОСЛЕ: раньше при already_active они молча выбрасывались.
+      let activation = null;
       if (body.status === 'active') {
-        const existing = await sbSelect('clients', { client_id: 'eq.' + client_id, select: 'status,activation_date,subscription_period_months,amo_lead_id,country' });
-        if (existing[0] && existing[0].status === 'active') {
-          return res.status(200).json({ ok: true, client: existing[0], already_active: true });
+        activation = await activateClient(client_id, {
+          operator: body.support_operator || body.curator_operator || null,
+          period: body.subscription_period_months,
+          activation_date: body.activation_date,
+          next_billing_at: body.next_billing_at,
+          actor: callerName(req) || null,
+          source: body.activation_source || 'status'
+        });
+        if (!activation.ok) return res.status(404).json({ ok: false, error: activation.error });
+        delete body.status; delete body.activation_date; delete body.next_billing_at; delete body.subscription_period_months;
+        if (body.curator_operator && !body.support_operator && activation.client && !activation.client.support_operator) { /* куратор уже обработан в activateClient как support_operator */ }
+        delete body.curator_operator;
+        if (Object.keys(body).length <= 1) { // только updated_at
+          return res.status(200).json({ ok: true, client: activation.client, already_active: activation.already_active });
         }
-        // v369: при активации автоматически проставляем next_billing_at = today + period месяцев.
-        // Если в body явно передан next_billing_at — уважаем его (для случаев когда куратор знает точную дату).
-        if (!body.next_billing_at) {
-          const months = body.subscription_period_months
-            || (existing[0] && existing[0].subscription_period_months)
-            || 1;
-          body.next_billing_at = addMonthsISO(new Date(), months);
-          if (!body.subscription_period_months) body.subscription_period_months = months;
-        }
-        if (!body.activation_date) body.activation_date = almatyIso(); // v817: ночная активация получала вчерашнюю дату
       }
+      // v960: остальные переходы статуса — в ленту клиента с актором и причиной
+      if (body.status && body.status !== 'active') {
+        try {
+          const prevRow = await sbSelect('clients', { client_id: 'eq.' + client_id, select: 'status', limit: '1' });
+          const was = (prevRow[0] || {}).status;
+          if (was && was !== body.status) {
+            const PAY_RU = { churn:'ушёл', decline:'отказ', debt:'долг', free:'бесплатный период' };
+            const reason = body.pay_reason ? (' · ' + (PAY_RU[body.pay_reason] || body.pay_reason)) : (body.status_reason ? (' · ' + String(body.status_reason).slice(0, 120)) : '');
+            await logClientEvent(client_id, 'Статус: ' + (STATUS_RU[was] || was) + ' → ' + (STATUS_RU[body.status] || body.status) + reason, callerName(req) || null);
+          }
+        } catch (_) {}
+      }
+      delete body.status_reason; delete body.activation_source;
       let result;
       try {
         result = await sbUpdate('clients', { client_id: 'eq.' + client_id }, body);
@@ -406,6 +507,7 @@ export default async function handler(req, res) {
         throw e;
       }
       if (!result.length) return res.status(404).json({ ok: false, error: 'клиент не найден' });
+      if (activation) return res.status(200).json({ ok: true, client: result[0], already_active: activation.already_active });
 
       // v376 → v379: авто-синхронизация SD→amo при активации ОТМЕНЕНА.
       // Менеджеры продаж сами закрывают сделки в amo — не нужно ещё одного источника
@@ -470,16 +572,8 @@ async function readBody(req) {
   });
 }
 
-// v369: добавляет N месяцев к дате, возвращает 'YYYY-MM-DD'.
-// Делаем сами а не через Postgres чтобы поведение было предсказуемым в JS-логике.
-function addMonthsISO(date, months) {
-  const d = new Date(date);
-  const day = d.getDate();
-  d.setMonth(d.getMonth() + months);
-  // Если в целевом месяце меньше дней (например 31 янв + 1 мес = 28 фев) — JS уже корректирует, но проверим
-  if (d.getDate() < day) d.setDate(0); // последний день предыдущего месяца
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
+// v960: addMonthsISO («сегодня + N мес») удалён — все даты следующей оплаты считает
+// nextBillingAfter по календарному правилу.
 
 // v376→v379: функция syncActivationToAmo удалена. CEO решил не дёргать amo автоматически
 // при активации в SalesDoc — менеджеры продаж сами закрывают сделки в amo. Endpoint
