@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v976</title>
+<title>SalesDoc — Финансовый Дашборд v977</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -3029,7 +3029,7 @@ body.light #view-academy .acad-wm{opacity:.07}
 .nav-item.active{background:rgba(94,106,210,0.15);color:#fff;border:none;box-shadow:none}
 /* v263: акцент сайдбара под AmoCRM — синяя полоса слева вместо золотой */
 .nav-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);border-radius:0 2px 2px 0}
-.nav-item.hidden,.nav-item-solo.hidden{display:none}
+.nav-item.hidden,.nav-item-solo.hidden,.nav-group.hidden{display:none!important}
 .nav-item-solo{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;cursor:pointer;transition:all .2s;font-size:9px;font-weight:600;letter-spacing:.3px;color:rgba(255,255,255,.45);margin-bottom:0;text-align:center;width:100%;border-radius:0;position:relative}
 .nav-item-solo:hover{background:var(--surface-2);color:#fff}
 .nav-item-solo.active{background:rgba(94,106,210,.15);color:#fff;border:none}
@@ -11198,6 +11198,7 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
  <option value="operator" selected>Оператор</option>
  <option value="accountant">Бухгалтер</option>
  <option value="viewer">Просмотр</option>
+ <option value="targetolog">Таргетолог</option>
  </select>
  <div class="form-select" id="e-role-chip" style="cursor:pointer" onclick="empRoleDD(this)">Оператор &#9662;</div>
  </div><div class="form-group"><label class="form-label">Бонус, % от оплат</label><input class="form-input" id="e-bonus" type="number" placeholder="30" value="30" min="0" max="100"></div></div>
@@ -11532,7 +11533,7 @@ const ACCESS_HIDDEN_KEYS = ['view_statistics','view_tests','view_keyclients','vi
 
 const ROLE_LABELS = {
  admin:'Администратор', head:'Руководитель', rop:'РОП',
- manager:'Менеджер', operator:'Оператор', accountant:'Бухгалтер', viewer:'Просмотр'
+ manager:'Менеджер', operator:'Оператор', accountant:'Бухгалтер', viewer:'Просмотр', targetolog:'Таргетолог'
 };
 
 // v151: убран view_ai (ключ удалён); добавлен view_statistics для всех ролей явно;
@@ -11551,6 +11552,7 @@ const ROLE_DEFAULTS = {
  rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
  manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
  operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:1,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ targetolog: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:0,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:0,view_calendar:0,view_mytasks:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 }, // v977: таргетолог — только Маркетинг (свой кабинет) и профиль
  accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:1,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:0,manage_employees:0 },
  viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:0,view_mytasks:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
 };
@@ -12142,7 +12144,14 @@ function _applyNavVisibility(u){
   }
   var key = NAV_VIEW_MAP[view];
   var allowed = key ? (acc[key] === 1 || acc[key] === true) : !!NAV_ALWAYS_VISIBLE[view];
+  // v977: «Клиенты» — только если есть хоть одна вкладка внутри (иначе кнопка вела в «Нет доступа»)
+  if(view === 'clients') allowed = ['view_kanban','view_activeclients','view_supportdash','view_integrations'].some(function(k){ return acc[k] === 1 || acc[k] === true; });
   el.classList.toggle('hidden', !allowed);
+ });
+ // v977: группа («Финансы», «Команда») без единого видимого пункта — тоже скрывается
+ document.querySelectorAll('#sidebar .nav-group').forEach(function(g){
+  var anyVisible = [].some.call(g.querySelectorAll('.nav-item[data-view]'), function(it){ return !it.classList.contains('hidden'); });
+  g.classList.toggle('hidden', !anyVisible);
  });
 }
 
@@ -15260,8 +15269,8 @@ function calcBonuses() {
 // ============================================================
 function renderEmployees() {
  if (!document.getElementById('emp-grid')) return; // раздел скрыт
- const roleLabels={admin:'Администратор',head:'Руководитель',rop:'РОП',manager:'Менеджер',operator:'Оператор',accountant:'Бухгалтер',viewer:'Просмотр'};
- const roleColors={admin:'#7FB5AD',head:'#0F6E66',rop:'#7FB5AD',manager:'#7FB5AD',operator:'#1F7A5A',accountant:'#B7791F',viewer:'#BCAAA4'};
+ const roleLabels={admin:'Администратор',head:'Руководитель',rop:'РОП',manager:'Менеджер',operator:'Оператор',accountant:'Бухгалтер',viewer:'Просмотр',targetolog:'Таргетолог'};
+ const roleColors={admin:'#7FB5AD',head:'#0F6E66',rop:'#7FB5AD',manager:'#7FB5AD',operator:'#1F7A5A',accountant:'#B7791F',viewer:'#BCAAA4',targetolog:'#2E5AAC'};
  const canManage = currentUser && currentUser.access.manage_employees;
 
  // Status filter
@@ -16015,7 +16024,9 @@ function defaultViewForUser(u){
  // (у них дефолт как раз канбан) получали пустую страницу: подстановка ниже по showView идёт ПОСЛЕ
  // строки редиректа kanban→route, поэтому редирект её уже не ловил. Право осталось view_kanban.
  var preferred = ['dashboard','route','planning','knowledge','cabinet'];
- var keyMap = {dashboard:'view_dashboard',route:'view_kanban',activeclients:'view_activeclients',planning:'view_planning',knowledge:'view_knowledge',cabinet:'view_cabinet'};
+ var keyMap = {dashboard:'view_dashboard',route:'view_kanban',activeclients:'view_activeclients',marketing:'view_marketing',planning:'view_planning',knowledge:'view_knowledge',cabinet:'view_cabinet'};
+ // v977: таргетолог входит сразу в Маркетинг (закреплён на своём кабинете)
+ if (String(u.role || '').toLowerCase() === 'targetolog') preferred = ['marketing','cabinet'];
  // v976: оператор стартует с «Действующих» (там для него по умолчанию «Горит»), а не с доски всей компании
  if (String(u.role || '').toLowerCase() === 'operator') preferred = ['activeclients','route','planning','knowledge','cabinet'];
  for (var i = 0; i < preferred.length; i++) {
@@ -20082,10 +20093,27 @@ function _mkdFilterDaily(daily, accs){
  });
  return Object.assign({}, daily, { days: days });
 }
+// v977: роль «таргетолог» — Маркетинг закреплён на его кабинете. Связь: имя сотрудника (первое слово)
+// = имя в настройке «Таргетологи» (mkt_targetologs: кабинет → имя). Переключить на других он не может.
+function _mkdIsTargUser(){
+ return !!(typeof currentUser !== 'undefined' && currentUser && String(currentUser.role || '').toLowerCase() === 'targetolog');
+}
+function _mkdMyTargName(){
+ if(!_mkdIsTargUser()) return null;
+ var first = String(currentUser.name || '').trim().split(/\s+/)[0].toLowerCase();
+ var targ = ((window._mktSettings || {}).targ) || ((((_mkdData || {}).settings) || {}).targ) || {};
+ var names = Object.keys(targ).map(function(k){ return targ[k]; });
+ for(var i = 0; i < names.length; i++){
+  if(String(names[i] || '').trim().split(/\s+/)[0].toLowerCase() === first) return names[i];
+ }
+ return null;
+}
 function _mkdApplyTarg(){
  if(!_mkdFull || !_mkdData) return;
+ if(_mkdIsTargUser()){ _mkdTarg = _mkdMyTargName() || '—'; } // нет пары в настройках → пусто, а не чужие цифры
  var accs = _mkdTarg ? _mkdTargAccs(_mkdTarg) : null;
- if(!accs || !accs.length){
+ if(_mkdIsTargUser() && (!accs || !accs.length)) accs = [];
+ if(!accs || (!accs.length && !_mkdIsTargUser())){
   _mkdTarg = accs ? _mkdTarg : '';
   _mkdData.geo = _mkdFull.geo; _mkdData.geoPrev = _mkdFull.geoPrev;
   _mkdData.camps = _mkdFull.camps; _mkdData.daily = _mkdFull.daily;
@@ -20097,6 +20125,7 @@ function _mkdApplyTarg(){
  _mkdData.daily = _mkdFilterDaily(_mkdFull.daily, accs);
 }
 window.mkdSetTarg = function(raw){
+ if(_mkdIsTargUser()) return; // v977: таргетолог закреплён на своём кабинете
  var name = raw ? decodeURIComponent(raw) : '';
  _mkdTarg = (_mkdTarg === name) ? '' : name;
  _mkdApplyTarg(); mkdCloseSheet(); _mkdRender();
@@ -20111,6 +20140,7 @@ function _mkdTargNames(){
  return names;
 }
 function _mkdTargChips(){
+ if(_mkdIsTargUser()) return ''; // v977
  var names = _mkdTargNames();
  if(names.length < 2) return '';
  return '<div class="mkd-ccf _tg"><span class="lb">Таргетолог:</span>'
@@ -20328,7 +20358,7 @@ function _mkdRenderHero(){
   + _mkdTodo(list)
   + _mkdFateCard(list)
   + '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Таргетологи</div><div class="s">'
-   + (_mkdTarg ? 'только ' + sanitize(_mkdTarg) + ' · <a onclick="mkdSetTarg(&quot;&quot;)">показать всех</a>'
+   + (_mkdTarg ? 'только ' + sanitize(_mkdTarg) + (_mkdIsTargUser() ? '' : ' · <a onclick="mkdSetTarg(&quot;&quot;)">показать всех</a>')
                : 'то же самое по каждому · нажмите на карточку, чтобы оставить одного')
    + '</div></div><div class="mkd-grid' + (list.length === 1 ? ' one' : '') + '">'
    + list.map(function(t){ return _mkdPersonCard(t, total); }).join('') + '</div></div>';
@@ -20338,7 +20368,7 @@ var _mkdSetupOpen = false;
 window.mkdToggleSetup = function(){ _mkdSetupOpen = !_mkdSetupOpen; var el = document.getElementById('mkt-dash-setup'); if(el) el.hidden = !_mkdSetupOpen; var b = document.getElementById('mkt-dash-setup-btn'); if(b) b.className = 'mkd-setup-btn' + (_mkdSetupOpen ? ' on' : ''); };
 function _mkdToolbar(){
  var names = _mkdTargNames();
- var seg = names.length > 1
+ var seg = (names.length > 1 && !_mkdIsTargUser())
   ? '<span class="mkd-seg"><b class="' + (_mkdTarg ? '' : 'on') + '" onclick="mkdSetTarg(&quot;&quot;)">Все</b>'
     + names.map(function(n){
        return '<b class="' + (_mkdTarg === n ? 'on' : '') + '" onclick="mkdSetTarg(&quot;' + encodeURIComponent(n) + '&quot;)"><i style="background:' + _mkdTgColor(n) + '"></i>' + sanitize(n) + '</b>';
@@ -20936,7 +20966,7 @@ function _mkdTargBlock(cur, prv){
    + '</div>';
  }).join('');
  return '<div class="mkd-sec"><div class="mkd-sh"><div class="n">Таргетологи</div>'
-  + '<div class="s">у каждого свой рекламный кабинет · имя вписывается кликом</div></div>'
+  + '<div class="s">у каждого свой рекламный кабинет · имя вписывается кликом · оно же должно стоять у сотрудника с ролью «Таргетолог», тогда он видит только свой кабинет</div></div>'
   + '<div class="mkd-grid">' + cards + '</div>'
   + '<div class="mkd-note">Сравниваются только рекламные цифры: сколько потратил, сколько заявок насчитала реклама и по какой цене. '
   + 'Кто из них доводит клиента до продажи — программа сказать не может: в amoCRM у сделки не записывается, из какого она кабинета.<br>'
