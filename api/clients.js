@@ -62,8 +62,9 @@ export async function activateClient(clientId, opts) {
   if (!cl.activation_date) patch.activation_date = opts.activation_date || almatyIso();
   // куратор = кто внедрял. Не перезаписываем уже назначенного.
   if (!cl.support_operator && opts.operator) {
-    const who = await canonOperator(opts.operator, cl.country || 'KZ');
+    const who = await canonOperator(opts.operator, cl.country || 'KG'); // v976: программа работает с KG — дефолт страны KG
     if (who) patch.support_operator = who;
+    else console.warn('[activateClient] оператор не распознан в «Сотрудниках», куратор не назначен:', opts.operator, 'client', cl.client_id);
   }
   // следующая оплата: явная → существующая (если ещё в будущем) → календарное правило от сегодня
   const today = almatyIso();

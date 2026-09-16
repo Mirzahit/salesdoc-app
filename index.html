@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v975</title>
+<title>SalesDoc — Финансовый Дашборд v976</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -16015,7 +16015,9 @@ function defaultViewForUser(u){
  // (у них дефолт как раз канбан) получали пустую страницу: подстановка ниже по showView идёт ПОСЛЕ
  // строки редиректа kanban→route, поэтому редирект её уже не ловил. Право осталось view_kanban.
  var preferred = ['dashboard','route','planning','knowledge','cabinet'];
- var keyMap = {dashboard:'view_dashboard',route:'view_kanban',planning:'view_planning',knowledge:'view_knowledge',cabinet:'view_cabinet'};
+ var keyMap = {dashboard:'view_dashboard',route:'view_kanban',activeclients:'view_activeclients',planning:'view_planning',knowledge:'view_knowledge',cabinet:'view_cabinet'};
+ // v976: оператор стартует с «Действующих» (там для него по умолчанию «Горит»), а не с доски всей компании
+ if (String(u.role || '').toLowerCase() === 'operator') preferred = ['activeclients','route','planning','knowledge','cabinet'];
  for (var i = 0; i < preferred.length; i++) {
  var k = keyMap[preferred[i]];
  if (u.access[k] === 1 || u.access[k] === true) return preferred[i];
@@ -16074,7 +16076,7 @@ function showView(v) {
  // v886-hotfix: страховка от пустого экрана. Если v указывает на несуществующий экран (удалённый
  // раздел, опечатка, старая ссылка), цикл ниже скрыл бы ВСЁ и не показал ничего. Подставляем рабочий.
  if (!document.getElementById('view-' + v)) {
- var _fb = (currentUser && currentUser.access && (currentUser.access.view_dashboard === 1 || currentUser.access.view_dashboard === true)) ? 'dashboard' : 'route';
+ var _fb = (currentUser && typeof defaultViewForUser === 'function') ? defaultViewForUser(currentUser) : 'route'; // v976: тот же порядок, что при входе
  try { console.warn('[showView] экран view-' + v + ' не найден, открываю ' + _fb); } catch(_){}
  v = _fb;
  }
@@ -31906,7 +31908,17 @@ async function routeLoad(){
   });
   routeCards = cardsRes.cards || [];
   if(typeof sdOpLoadEnsure === 'function') sdOpLoadEnsure(); // v820: прогрев карточек Интеграции для счётчиков нагрузки
-  routeOperators = (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
+  // v976: операторы доски — из «Сотрудников» (operator/integrator по текущей стране), а не из старой
+  // таблицы operators (там остались только KZ: Айдос/Акбар/Самат — у KG-операторов не было «Мои/Все»,
+  // а куратор при активации терялся). sb-ping — только запасной вариант, если сотрудники не загрузились.
+  var _cn = String((typeof currentCountry !== 'undefined' && currentCountry) || 'KG').toUpperCase();
+  var _fromEmp = (typeof employees !== 'undefined' ? (employees || []) : []).filter(function(e){
+   if(!e || e.active === false || !e.name) return false;
+   var r = String(e.role || '').toLowerCase();
+   var ec = String(e.country || '').toUpperCase();
+   return (r === 'operator' || r === 'integrator') && (!ec || ec === _cn);
+  }).map(function(e){ return { name: String(e.name).trim().split(/\s+/)[0], role:'integrator', active:true, email:e.email || '' }; });
+  routeOperators = _fromEmp.length ? _fromEmp : (opsRes.operators || []).filter(o=>o.role==='integrator' && o.active);
   // v365: посчитать прогресс чек-листа на каждую карточку (для бейджа 3/6 на главной)
   var clItems = (clRes && clRes.items) || [];
   routeCards.forEach(function(c){
@@ -31938,6 +31950,16 @@ async function routeLoad(){
     filterEl.appendChild(opt);
    });
    filterEl.value = _fopCur;
+   // v976: оператору при первом входе — сразу «Мои» (раньше всегда открывалась вся компания)
+   if(!filterEl.value && !window._routeScopeInit){
+    window._routeScopeInit = true;
+    var _meOp = _routeMyOperatorName();
+    if(_meOp && typeof currentUser !== 'undefined' && currentUser && String(currentUser.role||'').toLowerCase() === 'operator'){
+     filterEl.value = _meOp;
+     var _lblM = document.getElementById('route-op-chip-val'); if(_lblM) _lblM.textContent = _meOp;
+     var _chipM = document.getElementById('route-op-chip'); if(_chipM) _chipM.classList.add('on');
+    }
+   }
    if(filterEl.selectedIndex < 0) filterEl.value = ''; // выбранного больше нет (сменили страну)
   }
   if(st) st.textContent = 'Карточек: ' + routeCards.length;
@@ -43179,7 +43201,7 @@ async function acLoadKZClients(cb){
     host: c.billing_host || c.company_name || c.client_id,   // v605: fallback на имя — иначе пустой host ломает привязку платежей и дедуп
     billing_host: c.billing_host || '',                       // код в биллинге отдельным полем (для отображения)
     qty: 0, sum: 0,   // v959: те же имена полей, что у статики (раньше monthlySum/monthlyQty никто не читал)
-    operator: c.support_operator || c.curator_operator || '',
+    operator: c.support_operator || '',   // v976: только куратор (кто ведёт); продавец (curator_operator) не подменяет
     _supabase: true,
     _clientId: c.client_id,
     _sb: c   // v962: серверные поля (access_until/access_status, следующий шаг, последний контакт, телефон)
@@ -43674,7 +43696,7 @@ function acGetActiveClients(){
  segment: acGetSegment(item.qty),
  // v786: у клиента БЕЗ карточки внедрения operator был всегда пуст — скоуп оператора (v733)
  // отрезал его из «Действующих»; берём куратора из Supabase-клиента как fallback
- operator: (card && card.operator) || item.operator || item.curator_operator || '',
+ operator: item.operator || '',   // v976: куратор только из Supabase (support_operator); старая Google-таблица канбана не участвует
  activDate: card ? (card.activDate || '') : '',
  stage: card ? card.stage : '',
  cardId: card ? card.id : null,
@@ -43984,11 +44006,9 @@ function acInit(){
  } catch(_){}
  // v257-fix: дождаться kbLoad чтобы операторы/этапы из канбана корректно
  // подтянулись в карточки клиентов (acGetActiveClients использует kbCards).
- var loadKb = (typeof kbCards === 'undefined' || !kbCards || !kbCards.length) && typeof kbLoad === 'function'
-  ? (function(){ try{ return kbLoad(); }catch(e){ return null; } })() : null;
- var renderAfter = function(){ acLoadKZClients(function(){ acRender(); }); };
- if(loadKb && typeof loadKb.then === 'function'){ loadKb.then(renderAfter).catch(renderAfter); }
- else { renderAfter(); }
+ // v976: ожидание kbLoad() убрано — это старая Google-таблица канбана KZ (3 gviz-запроса на каждый вход),
+ // куратор и этап теперь только из Supabase.
+ acLoadKZClients(function(){ acRender(); });
  // v965: подгрузка «Доходов 2025» из Google Sheets убрана — оплаты 2025 лежат в Supabase,
  // доступ считает сервер (access_until/access_status)
 }

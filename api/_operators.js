@@ -14,7 +14,7 @@ import { sbSelect } from './_supabase.js';
 
 // Кто может быть ответственным по обращению. rop/head/admin — чтобы руководитель
 // и директор могли взять обращение на себя.
-const SUPPORT_ROLES = ['operator', 'rop', 'head', 'admin'];
+const SUPPORT_ROLES = ['operator', 'integrator', 'rop', 'head', 'admin']; // v976: + integrator (интеграторы тоже ведут клиентов)
 
 // Кириллическое написание → первое слово имени сотрудника в employees (латиница).
 // Нужно только для старых записей; новые пишутся уже каноническим именем.
