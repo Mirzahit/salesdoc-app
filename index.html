@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v986</title>
+<title>SalesDoc — Финансовый Дашборд v987</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -3030,6 +3030,13 @@ body.light #view-academy .acad-wm{opacity:.07}
 /* v263: акцент сайдбара под AmoCRM — синяя полоса слева вместо золотой */
 .nav-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);border-radius:0 2px 2px 0}
 .nav-item.hidden,.nav-item-solo.hidden,.nav-group.hidden{display:none!important}
+/* v987: «Кто заходит» */
+.dl-line{font-size:13px;line-height:1.7;color:var(--text)}
+.dl-bad{color:#B4432E;font-weight:600}
+.dl-d{font-weight:500;color:var(--text-soft);font-size:11px}
+.dl-mute{color:var(--text-soft)}
+.dl-ok{color:#1F7A5A}
+.dl-sep{color:var(--text-faint)}
 /* v983: «Мои продажи» менеджера */
 .mys-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:14px}
 .mys-stat .l{font-size:11px;color:var(--text-soft);margin-bottom:4px}
@@ -8649,6 +8656,8 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
  <div class="panel-title" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center"><span>План по менеджерам <span id="mgr-plan-month" style="font-size:11px;color:var(--text-muted);font-weight:400"></span></span><span onclick="showView('plan')" style="font-size:11px;color:var(--text-muted);cursor:pointer;font-weight:400">Все планы →</span></div>
  <div id="mgr-plan-rows"></div>
  </div>
+ <!-- v987: кто заходит в программу — только руководителю; рисует renderLoginsStrip -->
+ <div class="panel" id="dash-logins" style="display:none;margin-bottom:16px"></div>
  <!-- v886: сводки Внедрение + Маркетинг — путь клиента виден с главной, без походов по разделам -->
  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:16px">
  <div class="panel" style="margin-bottom:0;cursor:pointer" onclick="showView('route')">
@@ -12902,6 +12911,7 @@ function renderAll() {
  var _monthTotal = (currentPeriod === 'month') ? total : getPeriodPayments('month').reduce(function(a,p){ return a + (Number(p.amount)||0); }, 0);
  renderPlanFactStrip(ps, _monthTotal);
  try { renderMySales(); } catch(e){ console.error('[renderMySales]', e); } // v983
+ try { renderLoginsStrip(); } catch(e){ console.error('[renderLoginsStrip]', e); } // v987
 }
 
 // v275: рабочие дни KZ/KG (пн-пт минус государственные праздники)
@@ -13832,6 +13842,40 @@ function renderMySales(){
   + stat('За неделю', fmt(wS) + ' <span class="u">' + cur + '</span>', wN + ' с понедельника')
   + stat('Вчера и сегодня', fmt(tS) + ' <span class="u">' + cur + '</span>', tN ? tN + ' новых' : 'пока нет')
   + '</div></div>';
+ el.style.display = '';
+}
+// v987: «Кто заходит» — руководителю видно, кто из команды вчера и сегодня не открывал программу.
+// Время входа пишет сервер при входе (employees.last_login_at); до первого входа после v987 — «ещё не входил».
+function renderLoginsStrip(){
+ var el = document.getElementById('dash-logins');
+ if(!el) return;
+ var u = (typeof currentUser !== 'undefined') ? currentUser : null;
+ var role = u ? String(u.role || '').toLowerCase() : '';
+ if(!u || (role !== 'admin' && role !== 'head')){ el.style.display = 'none'; el.innerHTML = ''; return; }
+ var list = (typeof employees !== 'undefined' ? employees : []).filter(function(e){
+  if(!e || e.active === false || !e.name) return false;
+  var r = String(e.role || '').toLowerCase();
+  if(r === 'admin' || r === 'viewer') return false;
+  if(u.email && String(e.email || '').toLowerCase() === String(u.email).toLowerCase()) return false;
+  return true;
+ });
+ if(!list.length){ el.style.display = 'none'; return; }
+ var now = new Date();
+ var yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1); // с начала вчера
+ var late = [], never = [], ok = [];
+ list.forEach(function(e){
+  var t = e.last_login_at ? new Date(e.last_login_at) : null;
+  if(!t || isNaN(t)) never.push(e);
+  else if(t < yStart) late.push({ e: e, days: Math.floor((now - t) / 86400000) });
+  else ok.push(e);
+ });
+ var nm = function(e){ return sanitize(String(e.name || '').split(/\s+/)[0]); };
+ var parts = [];
+ if(late.length) parts.push('<span class="dl-bad">Не заходили: ' + late.map(function(x){ return nm(x.e) + ' <span class="dl-d">' + x.days + ' дн.</span>'; }).join(', ') + '</span>');
+ if(never.length) parts.push('<span class="dl-mute">Ещё не входили: ' + never.map(nm).join(', ') + '</span>');
+ if(!late.length && !never.length) parts.push('<span class="dl-ok">Вчера и сегодня заходили все: ' + ok.map(nm).join(', ') + '</span>');
+ else if(ok.length) parts.push('<span class="dl-ok">Заходили: ' + ok.map(nm).join(', ') + '</span>');
+ el.innerHTML = '<div class="panel-title" style="margin-bottom:8px">Кто заходит в программу</div><div class="dl-line">' + parts.join('<span class="dl-sep"> · </span>') + '</div>';
  el.style.display = '';
 }
 function renderMgrPlanRows(){

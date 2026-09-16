@@ -12,7 +12,7 @@ import { checkAuth, checkAdminToken } from './_auth.js';
 import { resolveCaller } from './_caller.js';
 
 const ADMIN_ROLES = new Set(['admin', 'head']);
-const PUBLIC_COLS = 'id,name,pos,email,role,bonus,active,country,is_temp';
+const PUBLIC_COLS = 'id,name,pos,email,role,bonus,active,country,is_temp,last_login_at'; // v987: + время последнего входа
 
 function sha256(s) { return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex'); }
 
@@ -26,7 +26,7 @@ function genTempPassword(len) {
 }
 function normEmail(s) { return String(s || '').trim().toLowerCase(); }
 function publicEmp(e) {
-  return { id: e.id, name: e.name, pos: e.pos, email: e.email, role: e.role, bonus: e.bonus, active: e.active, country: e.country, is_temp: e.is_temp };
+  return { id: e.id, name: e.name, pos: e.pos, email: e.email, role: e.role, bonus: e.bonus, active: e.active, country: e.country, is_temp: e.is_temp, last_login_at: e.last_login_at || null };
 }
 
 export default async function handler(req, res) {

@@ -5,7 +5,7 @@
 // POST { email, pass_hash }  — автологин по сохранённому в localStorage хэшу (хэш как токен).
 // Ответ: { ok:true, employee:{...без pass_hash...} } | { ok:false, error, disabled? }
 import crypto from 'crypto';
-import { sbSelect } from './_supabase.js';
+import { sbSelect, sbUpdate } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 import { issueSession } from './_session.js';
 
@@ -84,6 +84,9 @@ export default async function handler(req, res) {
     // пойдёт не так (или SESSION_SECRET не задан), логин работает как раньше, без токена.
     let session_token = null;
     try { session_token = issueSession(emp); } catch (_) { session_token = null; }
+    // v987: время последнего входа — для строки «вчера не заходили» на дашборде руководителя.
+    // Падение записи не должно мешать входу.
+    try { await sbUpdate('employees', { id: 'eq.' + emp.id }, { last_login_at: new Date().toISOString() }); } catch (e) { console.warn('[login] last_login_at:', e.message); }
     return res.status(200).json({ ok: true, employee: publicEmp(emp), session_token });
   } catch (e) {
     console.error('[api/login] error:', e);
