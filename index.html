@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v979</title>
+<title>SalesDoc — Финансовый Дашборд v980</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -3030,6 +3030,8 @@ body.light #view-academy .acad-wm{opacity:.07}
 /* v263: акцент сайдбара под AmoCRM — синяя полоса слева вместо золотой */
 .nav-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);border-radius:0 2px 2px 0}
 .nav-item.hidden,.nav-item-solo.hidden,.nav-group.hidden{display:none!important}
+/* v980: без права «Расходы» не показываем расход/прибыль компании (дашборд, Оплаты) и вкладки Клиентов без права */
+body.sd-noexp #dash-pnl-cards .pcard.expense, body.sd-noexp #dash-pnl-cards .pcard.profit, body.sd-noexp #pnl-panel, body.sd-noexp #view-payments .fin-hero, body.sd-noexp #view-payments .fin-pnl, body.sd-noexp #view-payments .fin-ratio, .cli-tab.hidden{display:none!important}
 .nav-item-solo{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;cursor:pointer;transition:all .2s;font-size:9px;font-weight:600;letter-spacing:.3px;color:rgba(255,255,255,.45);margin-bottom:0;text-align:center;width:100%;border-radius:0;position:relative}
 .nav-item-solo:hover{background:var(--surface-2);color:#fff}
 .nav-item-solo.active{background:rgba(94,106,210,.15);color:#fff;border:none}
@@ -8490,7 +8492,7 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
  <button class="cli-tab" data-clients-tab="dues" onclick="clientsGoTab('dues')">Продления<span id="dues-tab-badge" class="cli-tab-badge" style="display:none"></span></button><!-- v838 -->
  <button class="cli-tab" data-clients-tab="tickets" onclick="clientsGoTab('tickets')">Поддержка<span id="tickets-tab-badge" class="cli-tab-badge" style="display:none"></span></button>
  <button class="cli-tab cli-tab-extra" data-clients-tab="integrations" onclick="clientsGoTab('integrations')" title="Очередь интеграции"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:5px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Интеграции</button>
- <button class="cli-tab" data-clients-tab="supportdash" onclick="clientsGoTab('supportdash')">Тех.поддержка</button><!-- v763: из подменю во вкладку -->
+ <button class="cli-tab" data-clients-tab="supportdash" onclick="clientsGoTab('supportdash')">Отчёт по операторам</button><!-- v763: из подменю во вкладку -->
  </div>
 
  <!-- DASHBOARD -->
@@ -10189,7 +10191,7 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
  <div class="sd-page">
  <div class="sd-head">
  <div>
- <div class="sd-h1">Тех.поддержка</div>
+ <div class="sd-h1">Отчёт по операторам</div><!-- v980: было «Тех.поддержка» — это отчёт руководителя, не место работы -->
  <div class="sd-sub">Метрики операторов, риски, клиенты под контролем</div>
  </div>
  <div class="sd-filters">
@@ -11495,7 +11497,7 @@ const ACCESS_KEYS = [
  { key:'view_keyclients', label:'Ключевые клиенты', group:'Клиенты' },
  { key:'view_kanban', label:'Внедрение (канбан)', group:'Клиенты' },
  { key:'view_integrations', label:'Очередь интеграции', group:'Клиенты' },
- { key:'view_supportdash', label:'Тех.поддержка (дашборд)', group:'Клиенты' }, // v261
+ { key:'view_supportdash', label:'Отчёт по операторам', group:'Клиенты' }, // v261
  { key:'view_activeclients', label:'Действующие клиенты', group:'Клиенты' }, // v261
  { key:'view_newclients', label:'Новые клиенты', group:'Клиенты' }, // v298
  { key:'view_calendar', label:'Задачи (календарь)', group:'Команда' }, // v261; v762: переименован
@@ -11551,7 +11553,7 @@ const ROLE_DEFAULTS = {
  head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
  rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
  manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:1,view_reports:0,view_kanban:1,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:1,view_reports:0,view_kanban:1,view_statistics:0,view_planning:0,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
  targetolog: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:0,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:0,view_calendar:0,view_mytasks:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 }, // v977: таргетолог — только Маркетинг (свой кабинет) и профиль
  accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:1,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,add_payments:1,add_acts:1,edit_plans:0,manage_employees:0 },
  viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:0,view_mytasks:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
@@ -12168,6 +12170,18 @@ function applyUserAccess() {
  // из-за гонки загрузки прав) обрывала функцию, и сотрудник видел ВСЕ пункты, включая
  // «Настройки» — клик по ним отбрасывал его на «Клиенты» и выглядел как поломка.
  try { _applyNavVisibility(u); } catch(e){ console.error('[applyUserAccess] nav:', e); }
+ // v980: расход и прибыль компании — только с правом «Расходы» (раньше менеджер/РОП видели их на дашборде и в Оплатах)
+ try {
+  var _acc = (u.access && typeof u.access === 'object') ? u.access : (ROLE_DEFAULTS[u.role] || {});
+  var _has = function(k){ return _acc[k] === 1 || _acc[k] === true; };
+  document.body.classList.toggle('sd-noexp', !_has('view_expenses'));
+  // вкладки «Клиентов» — каждая со своим правом; без права вкладка не показывается (раньше вела в «Нет доступа»)
+  var _tabKey = { route:['view_kanban'], activeclients:['view_activeclients'], dues:['view_activeclients'], tickets:['view_supportdash','view_kanban'], integrations:['view_integrations'], supportdash:['view_supportdash'] };
+  document.querySelectorAll('.cli-tab[data-clients-tab]').forEach(function(t){
+   var keys = _tabKey[t.dataset.clientsTab]; if(!keys) return;
+   t.classList.toggle('hidden', !keys.some(_has));
+  });
+ } catch(e){ console.error('[applyUserAccess] finance/tabs:', e); }
  document.getElementById('ub-name').textContent=u.name.split(' ')[0]+' '+(u.name.split(' ')[1]||'');
  document.getElementById('ub-role').textContent=(ROLE_LABELS||{})[u.role]||{admin:'Администратор',head:'Руководитель',rop:'РОП',manager:'Менеджер',operator:'Оператор',accountant:'Бухгалтер',viewer:'Просмотр'}[u.role]||u.role;
  document.getElementById('ub-avatar').textContent=u.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
@@ -45293,8 +45307,11 @@ function acTagModal(client, cid){
 }
 
 function supportOpenCard(cardId){
+ // v980: открываем настоящую карту клиента (Supabase), а не старую карточку Google-канбана —
+ // её правки уходили в лист и localStorage мимо базы
  var c = (typeof kbCards !== 'undefined' && kbCards) ? kbCards.find(function(x){ return x.id === cardId; }) : null;
- if(c && typeof kbOpenCardPage === 'function') kbOpenCardPage(c);
+ if(!c) return;
+ if(typeof acOpenClientCard === 'function') acOpenClientCard(null, c.client, c.host || '', null);
 }
 
 // helper parsePayDate
@@ -48548,6 +48565,11 @@ function kbShowToast(msg, kind) {
 
 // --- ACTIVATION & ACT ---
 window.kbActivateCard = function(cardId) {
+ // v980: активация клиента — только через доску «Внедрение» (/api/cards → activateClient на сервере).
+ // Старая карточка активировала в обход: статус в базе не менялся, куратор и доступ не считались.
+ if(typeof kbShowToast === 'function') kbShowToast('Активация — на доске «Внедрение», в карте клиента');
+ if(typeof showView === 'function') showView('route');
+ return;
  var card = kbCards.find(function(c){ return c.id === cardId; });
  if(!card) return;
 
