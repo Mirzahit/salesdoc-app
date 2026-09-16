@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v977</title>
+<title>SalesDoc — Финансовый Дашборд v978</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11827,7 +11827,10 @@ function isSubscriptionPay(p){
  }
  if(raw.includes('абон') || raw.includes('баланс')) return true;
  if(raw.includes('нов клиент') || raw.includes('новый клиент')) return true;
- if(raw.includes('лицен')) return true; // включая «доп. лицензии»
+ // v978: правило = серверное (api/clients.js RECALC_CATEGORIES + api/payments.js _mapCategory):
+ // лицензии продлевают доступ, «доп. лицензии» — нет (выравниваются по сроку, срок не двигают)
+ if(raw.includes('доп') && raw.includes('лиц')) return false;
+ if(raw.includes('лицен')) return true;
  return false;
 }
 
@@ -12382,7 +12385,7 @@ async function _loadPaymentsFromSupabase(){
     _sbId: r.id,           // v551: UUID Supabase — для будущих PATCH/DELETE
     date: dateStr,
     client: String(r.company_name).trim(),
-    category: mapCategoryFromSheet(catRaw) || r.category || 'other',
+    category: catRaw ? (mapCategoryFromSheet(catRaw) || 'other') : (r.category || 'other'), // v978: без сырой статьи — доверяем серверной категории (раньше всегда «Прочее»)
     categoryRaw: catRaw,
     employee: managerToEmpId(managerRaw),
     managerName: managerRaw,
@@ -12845,6 +12848,11 @@ function renderAll() {
  })();
  /* v257: реальная Δ vs предыдущий месяц — показываем процент роста/спада */
  (function renderDeltaPills(){
+ // v978: сравнение «к прошлому месяцу» имеет смысл только в режиме «Месяц» — иначе неделя сравнивалась с целым месяцем
+ if(currentPeriod !== 'month'){
+ ['license','sub','impl','integ','revision','other','total'].forEach(function(k){ var el = document.getElementById('delta-'+k); if(el) el.style.display = 'none'; });
+ return;
+ }
  var curM, curY;
  if (typeof selectedMonth !== 'undefined' && selectedMonth) { curM = selectedMonth.month; curY = selectedMonth.year; }
  else { var _n = new Date(); curM = _n.getMonth(); curY = _n.getFullYear(); }
@@ -12896,7 +12904,9 @@ function renderAll() {
  renderM2MA2A(ps);
  renderMgrPlanRows(); // v886: план/факт по менеджерам вместо среднего чека
  renderLeadersStrip();
- renderPlanFactStrip(ps, total);
+ // v978: герой «Доход за <месяц> · прогноз плана» всегда по месяцу, даже если сверху выбран период Неделя/Год
+ var _monthTotal = (currentPeriod === 'month') ? total : getPeriodPayments('month').reduce(function(a,p){ return a + (Number(p.amount)||0); }, 0);
+ renderPlanFactStrip(ps, _monthTotal);
 }
 
 // v275: рабочие дни KZ/KG (пн-пт минус государственные праздники)
@@ -12961,6 +12971,7 @@ function renderLeadersStrip(){
  var d = new Date(p.date + 'T00:00:00');
  var name = getMgrName(p);
  if(!name || name === '-') return;
+ if(p.category === 'subscription') return; // v978: абонплата записана на офис/директора, это не продажа менеджера
  if(d >= thisMonStart && d <= now){
  thisWeek[name] = (thisWeek[name]||0) + (Number(p.amount)||0);
  } else if(inRange(d, prevMonStart, prevMonEnd)){
@@ -15707,10 +15718,13 @@ async function planLeadsFact(c){
  var cached = window._planLeadsCache[c];
  if(cached && Date.now() - cached.ts < 10*60*1000) return cached.fact;
  try {
-  var r = await authFetch('/api/meta-ads?endpoint=account_summary&period=this_month&country=' + c);
+  // v978: по СТРАНЕ АУДИТОРИИ (endpoint=geo), как на дашборде и в Маркетинге — кабинет один на обе
+  // страны, account_summary отдавал лидов всего кабинета и «Планы» показывали в разы больше
+  var r = await authFetch('/api/meta-ads?endpoint=geo&period=this_month&scope=all&country=' + c);
   var d = await r.json();
   if(d && d.error) return null;
-  var fact = Math.round(Number(((d||{}).summary||{}).leads_count || 0));
+  var mine = ((d||{}).countries || []).filter(function(x){ return x.code === c; })[0] || {};
+  var fact = Math.round(Number(mine.leads || 0));
   window._planLeadsCache[c] = { ts: Date.now(), fact: fact };
   return fact;
  } catch(_){ return null; }
@@ -33320,7 +33334,7 @@ function ticketsRender(){
 function _ticketsIsOverdue(t){
  if(!t || !t.sla_due_at) return false;
  if(t.first_response_at) return false;                       // ответили — секундомер остановлен
- if(['solved','closed','dev'].indexOf(t.status) >= 0) return false; // закрытые и переданные разработчикам не горят: ход не за оператором
+ if(['solved','closed','dev','waiting_client'].indexOf(t.status) >= 0) return false; // закрытые, у разработчиков и «ждём клиента» не горят: ход не за оператором (v978)
  return new Date(t.sla_due_at) < new Date();
 }
 
@@ -44621,9 +44635,10 @@ function _duesNorm(s){ return String(s || '').toLowerCase().replace(/[^a-zа-я�
 // Продлевают доступ только абонплата / новый клиент / баланс. Написания KZ и KG различаются
 // («абон. плата» vs «абон.плата», «новый клиент» vs «Нов.клиент») — сравниваем нормализованно.
 function _duesIsRenewal(p){
- var n = _duesNorm(p && (p.categoryRaw || p.category_raw));
- if(!n) return false;
- return n.indexOf('абон') === 0 || n.indexOf('новклиент') >= 0 || n.indexOf('новыйклиент') >= 0 || n.indexOf('баланс') >= 0;
+ // v978: одно правило «какая оплата продлевает доступ» на всю программу — isSubscriptionPay
+ // (раньше здесь лицензии не считались продлением, и «Долги» спорили с «Действующими»)
+ if(!p) return false;
+ return isSubscriptionPay({ categoryRaw: p.categoryRaw || p.category_raw || '', category: p.category || '' });
 }
 function _duesMk(y, m){ return y * 12 + (m - 1); }              // ключ месяца
 function _duesCurMk(){ var d = new Date(); return _duesMk(d.getFullYear(), d.getMonth() + 1); }

@@ -843,7 +843,7 @@ async function handleTicketsRoute(req, res) {
       params['sla_due_at'] = 'lt.' + new Date().toISOString();
       params['first_response_at'] = 'is.null';
       // v663: явный фильтр по status имеет приоритет; SLA-дефолт только если status не задан
-      if (!status) params['status'] = 'in.(new,in_progress,waiting_client,reopened)';
+      if (!status) params['status'] = 'in.(new,in_progress,reopened)'; // v978: «ждём клиента» не горит — ход не за оператором (как _ticketsIsOverdue на фронте)
     }
     // По умолчанию скрываем закрытые если нет явного фильтра по status.
     // all=1 — показать все, включая закрытые (для ленты карточки клиента — историческая хронология).
