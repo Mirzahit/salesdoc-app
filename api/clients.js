@@ -325,7 +325,11 @@ export default async function handler(req, res) {
         }
         params['order'] = 'next_billing_at.asc';
       }
-      const data = await sbSelect('clients', params);
+      // v984: limit больше 1000 — PostgREST режет страницу на 1000 строк, поэтому листаем (пикер клиентов
+      // и «Действующие» просят 2000 и раньше молча теряли хвост списка)
+      const data = (Number.isFinite(lim) && lim > 1000)
+        ? await sbSelectAll('clients', Object.assign({}, params, { order: params.order || 'client_id' }))
+        : await sbSelect('clients', params);
       // v962: with_activity=1 — последний контакт / ближайшая задача из view client_activity
       // (колонки списка «Действующие» и правило «Горит»)
       if (String(req.query.with_activity || '') === '1' && data.length) {

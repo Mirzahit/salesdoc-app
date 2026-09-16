@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v983</title>
+<title>SalesDoc — Финансовый Дашборд v984</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17109,6 +17109,9 @@ async function saveRecord() {
  const client = clientInp.value.trim();
  const clientId = clientInp.dataset.clientId || '';
  if(!clientId){sdToast('Выберите клиента из базы — поле «Клиент»');return;}
+ // v984: продавец обязателен — иначе оплата уходила на первого в списке, и «Мои продажи» менеджеров врали
+ var _mgrEl = document.getElementById('p-employee');
+ if(_mgrEl && !_mgrEl.value){ sdToast('Укажите, кто продал — поле «Менеджер»'); try { _mgrEl.focus(); } catch(_){} return; }
  // v825: форма собирает ПАКЕТ строк (лицензия + строка дней + услуги) — как бот, который
  // разносит услуги отдельными строками листа. Каждая строка = отдельный POST /api/payments.
  var colAll = payCollectAll();
@@ -40137,10 +40140,33 @@ function payFormInit(){
  var mgrSel = document.getElementById('p-employee');
  if(mgrSel){
   var meFirst = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) ? String(currentUser.name).trim().split(/\s+/)[0].toLowerCase() : '';
-  mgrSel.innerHTML = cfg.managers.map(function(m){
-   var sel = meFirst && m.toLowerCase().indexOf(meFirst) === 0 ? ' selected' : '';
+  // v984: продавцы — из «Сотрудников» (менеджер/РОП/руководитель/директор своей страны) плюс список
+  // бота как запас. Раньше список был зашит в код и для KG не содержал Амира и Асели — все оплаты
+  // уходили на первого в списке (директора). Пустой первый пункт: выбрать продавца обязательно.
+  var _cn = String((typeof currentCountry !== 'undefined' && currentCountry) || '').toUpperCase();
+  // одно и то же имя латиницей (Сотрудники) и кириллицей (лист/бот) — один человек
+  var _LAT = { mirzahit:'мирзахит', yulia:'юлия', aidos:'айдос', samat:'самат', akbar:'акбар', nuray:'нурай', malika:'малика', eliza:'элиза', arslan:'арслан' };
+  var _canon = function(n){ var f = String(n || '').trim().toLowerCase().split(/\s+/)[0]; return _LAT[f] || f; };
+  var mgrs = [], seen = {}, botSpelling = {};
+  (cfg.managers || []).forEach(function(m){ botSpelling[_canon(m)] = String(m).trim(); }); // в лист/бот уходит их написание
+  var add = function(nm){ nm = String(nm || '').trim(); if(!nm) return; var k = _canon(nm); if(seen[k]) return; seen[k] = 1; mgrs.push(botSpelling[k] || nm); };
+  try {
+   (typeof employees !== 'undefined' ? employees : []).forEach(function(e){
+    if(!e || e.active === false || !e.name) return;
+    var r = String(e.role || '').toLowerCase(), ec = String(e.country || '').toUpperCase();
+    if(['manager','rop','head','admin'].indexOf(r) < 0) return;
+    if(ec && _cn && ec !== _cn) return;
+    add(e.name);
+   });
+  } catch(_){}
+  (cfg.managers || []).forEach(add);
+  var anySel = false;
+  var opts = mgrs.map(function(m){
+   var sel = (!anySel && meFirst && m.toLowerCase().indexOf(meFirst) === 0) ? ' selected' : '';
+   if(sel) anySel = true;
    return '<option value="' + _escHtml(m) + '"' + sel + '>' + _escHtml(m) + '</option>';
-  }).join('');
+  });
+  mgrSel.innerHTML = '<option value=""' + (anySel ? '' : ' selected') + '>— кто продал —</option>' + opts.join('');
  }
  var bankBox = document.getElementById('p-bank');
  if(bankBox){
@@ -44625,7 +44651,7 @@ function acRowMenu(ev, clientName, host, cid){
   else if(v === 'task') acOpenClientCardWithTask(fakeEv, clientName, host, cid);
   else if(v === 'call') window.location.href = 'tel:' + String(row.phone).replace(/[^\d+]/g,'');
   else if(v === 'wa') window.open('https://wa.me/' + String(row.phone).replace(/\D/g,''), '_blank');
-  else if(v === 'pay'){ try { openModal('payment'); } catch(_){} }
+  else if(v === 'pay'){ try { openModal('payment'); var _pc = document.getElementById('p-client'); if(_pc && cid){ _pc.value = clientName; _pc.dataset.clientId = cid; } } catch(_){} } // v984: клиент подставлен
   else if(v === 'curator'){
    var ops = acBulkOps().map(function(o){ return {value:o, label:o}; }).concat([{value:'', label:'Снять куратора'}]);
    _intgDdOpen(anchor, ops, row.operator || '', function(name){ acState.selected = {}; acState.selected[cid] = 1; acBulkAssignCurator(name || null); });
