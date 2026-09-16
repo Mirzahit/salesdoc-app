@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v982</title>
+<title>SalesDoc — Финансовый Дашборд v983</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -3030,8 +3030,15 @@ body.light #view-academy .acad-wm{opacity:.07}
 /* v263: акцент сайдбара под AmoCRM — синяя полоса слева вместо золотой */
 .nav-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);border-radius:0 2px 2px 0}
 .nav-item.hidden,.nav-item-solo.hidden,.nav-group.hidden{display:none!important}
+/* v983: «Мои продажи» менеджера */
+.mys-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:14px}
+.mys-stat .l{font-size:11px;color:var(--text-soft);margin-bottom:4px}
+.mys-stat .v{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--text);letter-spacing:-.01em;line-height:1.1}
+.mys-stat .v .u{font-family:var(--font);font-size:13px;font-weight:500;color:var(--text-soft);letter-spacing:0}
+.mys-stat .s{font-size:11px;color:var(--text-soft);margin-top:4px}
+@media(max-width:1024px){.mys-grid{grid-template-columns:1fr 1fr}}
 /* v980: без права «Расходы» не показываем расход/прибыль компании (дашборд, Оплаты) и вкладки Клиентов без права */
-body.sd-noexp #dash-pnl-cards .pcard.expense, body.sd-noexp #dash-pnl-cards .pcard.profit, body.sd-noexp #pnl-panel, body.sd-noexp #view-payments .fin-hero, body.sd-noexp #view-payments .fin-pnl, body.sd-noexp #view-payments .fin-ratio, .cli-tab.hidden{display:none!important}
+body.sd-noexp #dash-pnl-cards, body.sd-noexp #pnl-panel, body.sd-noexp #view-payments .fin-hero, body.sd-noexp #view-payments .fin-pnl, body.sd-noexp #view-payments .fin-ratio, .cli-tab.hidden{display:none!important}
 .nav-item-solo{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;cursor:pointer;transition:all .2s;font-size:9px;font-weight:600;letter-spacing:.3px;color:rgba(255,255,255,.45);margin-bottom:0;text-align:center;width:100%;border-radius:0;position:relative}
 .nav-item-solo:hover{background:var(--surface-2);color:#fff}
 .nav-item-solo.active{background:rgba(94,106,210,.15);color:#fff;border:none}
@@ -8500,6 +8507,8 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
  <button onclick="showDataSources('dashboard')" title="Источники данных" style="position:absolute;right:8px;top:68px;width:24px;height:24px;border-radius:50%;border:1px solid var(--dark-border);background:rgba(94,106,210,.06);color:var(--text-muted);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .2s;z-index:10" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.55'" aria-label="Источники данных"><span style="font-style:italic;font-family:Georgia,serif;font-weight:700">i</span></button>
 
  <!-- v266: План/факт пилюля — сразу видно «на треке» / «отстаём» -->
+ <!-- v983: «Мои продажи» — личный блок менеджера/РОПа (план из Светофора, свои оплаты); рисует renderMySales -->
+ <div id="dash-my-sales" style="display:none;margin-bottom:18px"></div>
  <div id="plan-fact-strip" style="margin-bottom:18px"></div>
 
  <!-- v685: 3 P&L-карточки (Доход/Расход/Прибыль), зеркалят renderPnL -->
@@ -12921,6 +12930,7 @@ function renderAll() {
  // v978: герой «Доход за <месяц> · прогноз плана» всегда по месяцу, даже если сверху выбран период Неделя/Год
  var _monthTotal = (currentPeriod === 'month') ? total : getPeriodPayments('month').reduce(function(a,p){ return a + (Number(p.amount)||0); }, 0);
  renderPlanFactStrip(ps, _monthTotal);
+ try { renderMySales(); } catch(e){ console.error('[renderMySales]', e); } // v983
 }
 
 // v275: рабочие дни KZ/KG (пн-пт минус государственные праздники)
@@ -13789,6 +13799,70 @@ function fmtK(n){
 // v886: morningRender удалён — экран Утро выключен (история в git)
 // v886: «План по менеджерам» на дашборде — вместо среднего чека (renderAvgCheckManagers удалён,
 // история в git). Данные из Светофора (planLastData.agents), KPI с «продаж» в названии = деньги.
+// v983: «Мои продажи» — первый экран менеджера/РОПа. Свой план и факт из Светофора (строка с его
+// именем), свои оплаты (менеджер в оплате = он) за сегодня, неделю и месяц, нужный темп до конца
+// месяца. Ниже остаётся «План по менеджерам» по всем — соревнование видно, но своё крупнее.
+function _mySalesFirst(n){ return String(n || '').trim().split(/\s+/)[0].toLowerCase(); }
+function renderMySales(){
+ var el = document.getElementById('dash-my-sales');
+ if(!el) return;
+ var u = (typeof currentUser !== 'undefined') ? currentUser : null;
+ var role = u ? String(u.role || '').toLowerCase() : '';
+ if(!u || (role !== 'manager' && role !== 'rop')){ el.style.display = 'none'; el.innerHTML = ''; return; }
+ var me = _mySalesFirst(u.name);
+ var cur = (typeof _CUR !== 'undefined') ? _CUR : 'сом';
+ var fmt = function(n){ return Math.round(n || 0).toLocaleString('ru-RU'); };
+ var sel = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth : { year: new Date().getFullYear(), month: new Date().getMonth() };
+ var now = new Date();
+ var inCur = (sel.year === now.getFullYear() && sel.month === now.getMonth());
+ var cc = (typeof currentCountry !== 'undefined') ? currentCountry : 'KG';
+ // план и факт из Светофора
+ var plan = 0, fact = 0, found = false;
+ if(typeof planLastData !== 'undefined' && planLastData && planLastData.agents){
+  planLastData.agents.forEach(function(a){
+   if(_mySalesFirst(a.name) !== me) return;
+   found = true;
+   (a.kpis || []).forEach(function(k){
+    if(String(k.name || '').toLowerCase().indexOf('продаж') >= 0){ plan += Number(k.plan) || 0; fact += Number(k.fact) || 0; }
+   });
+  });
+ }
+ // мои оплаты из загруженного списка
+ var iso = function(d){ return (typeof taskLocalIso === 'function') ? taskLocalIso(d) : d.toISOString().slice(0, 10); };
+ var todayIso = iso(now), yestIso = iso(new Date(now.getTime() - 86400000));
+ var dow = now.getDay() || 7; var mon = new Date(now); mon.setDate(now.getDate() - (dow - 1)); var monIso = iso(mon);
+ var mStart = sel.year + '-' + String(sel.month + 1).padStart(2, '0') + '-01';
+ var mEnd = sel.year + '-' + String(sel.month + 1).padStart(2, '0') + '-' + String(new Date(sel.year, sel.month + 1, 0).getDate()).padStart(2, '0');
+ var tN = 0, tS = 0, wN = 0, wS = 0, mN = 0, mS = 0;
+ (typeof payments !== 'undefined' ? payments : []).forEach(function(p){
+  if(!p || !p.date || _mySalesFirst(p.managerName) !== me) return;
+  var a = Number(p.amount) || 0;
+  if(p.date >= mStart && p.date <= mEnd){ mN++; mS += a; }
+  if(p.date >= yestIso && p.date <= todayIso){ tN++; tS += a; }
+  if(p.date >= monIso && p.date <= todayIso){ wN++; wS += a; }
+ });
+ var pct = plan ? Math.round(fact / plan * 100) : 0;
+ var color = pct >= 100 ? '#1F7A5A' : pct >= 70 ? '#B7791F' : '#B4432E';
+ var left = '';
+ if(plan && inCur && typeof workDaysInMonth === 'function' && typeof workDaysPassed === 'function'){
+  var total = workDaysInMonth(sel.year, sel.month, cc), done = workDaysPassed(sel.year, sel.month, now.getDate(), cc);
+  var rest = Math.max(0, total - done);
+  left = rest ? 'осталось ' + rest + ' раб. дн. · нужно ' + fmt(Math.max(0, plan - fact) / rest) + ' ' + cur + ' в день' : 'месяц закончился';
+ }
+ var stat = function(l, v, sub){ return '<div class="mys-stat"><div class="l">' + l + '</div><div class="v">' + v + '</div>' + (sub ? '<div class="s">' + sub + '</div>' : '') + '</div>'; };
+ var planHtml = found && plan
+  ? stat('Мой план · ' + (typeof PLAN_TABS !== 'undefined' && PLAN_TABS[planTabIdx] ? PLAN_TABS[planTabIdx].label : 'месяц'),
+     '<span style="color:' + color + '">' + pct + '%</span> <span class="u">' + fmt(fact) + ' из ' + fmt(plan) + ' ' + cur + '</span>', left)
+  : stat('Мой план', '—', found ? 'в Светофоре нет плана продаж на этот месяц' : 'в Светофоре нет строки с вашим именем');
+ el.innerHTML = '<div class="panel mys"><div class="panel-title" style="margin-bottom:10px">Мои продажи</div>'
+  + '<div class="mys-grid">'
+  + planHtml
+  + stat('Мои оплаты за месяц', fmt(mS) + ' <span class="u">' + cur + '</span>', mN + ' ' + (mN === 1 ? 'оплата' : (mN >= 2 && mN <= 4) ? 'оплаты' : 'оплат'))
+  + stat('За неделю', fmt(wS) + ' <span class="u">' + cur + '</span>', wN + ' с понедельника')
+  + stat('Вчера и сегодня', fmt(tS) + ' <span class="u">' + cur + '</span>', tN ? tN + ' новых' : 'пока нет')
+  + '</div></div>';
+ el.style.display = '';
+}
 function renderMgrPlanRows(){
  var el = document.getElementById('mgr-plan-rows');
  if(!el) return;
@@ -27648,6 +27722,7 @@ async function planLoad() {
  planRender(data);
  // v886: обновляем «План по менеджерам» на дашборде из свежих данных Светофора
  try { renderMgrPlanRows(); } catch(e) {}
+ try { renderMySales(); } catch(e) {} // v983
  // v272: пере-рендерим план/факт плашку — теперь с правильным месяцем
  try { if(typeof renderAll === 'function' && document.getElementById('view-dashboard').style.display !== 'none') renderAll(); } catch(e) {}
  if (st) st.textContent = '';
