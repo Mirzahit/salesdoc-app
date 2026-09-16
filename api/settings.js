@@ -9,6 +9,7 @@
 
 import { sbSelect, sbUpsert } from './_supabase.js';
 import { checkAuth } from './_auth.js';
+import { requirePerm } from './_perm.js'; // v979 SEC
 
 // intg_fields (v796): настройка полей карты интеграции — {hidden:[стандартные ключи], custom:[{key,label}]}
 // mkt_lead_plan (v797): план лидов на месяц по странам — {KZ:{plan:200}, KG:{plan:80}}
@@ -44,6 +45,11 @@ export default async function handler(req, res) {
       if (!ALLOWED_KEYS.includes(key)) {
         return res.status(400).json({ ok: false, error: 'key должен быть один из: ' + ALLOWED_KEYS.join(', ') });
       }
+      // v979 SEC: раньше настройки мог переписать любой вошедший (только общий токен). Планы — тем, кто
+      // «Может править планы»; всё остальное (этапы, автопауза, курс, таргетологи) — только с доступом к Настройкам.
+      const PLAN_KEYS = ['company_plans', 'plan_history', 'mkt_lead_plan', 'intg_month_plan'];
+      const _w = await requirePerm(req, res, PLAN_KEYS.includes(key) ? ['edit_plans', 'view_settings'] : 'view_settings');
+      if (!_w.ok) return;
       if (body.value == null || typeof body.value !== 'object') {
         return res.status(400).json({ ok: false, error: 'value должен быть объектом' });
       }

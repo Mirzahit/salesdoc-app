@@ -12,7 +12,7 @@
 
 import { sbSelect, sbSelectAll, sbInsert, sbUpdate, sbDelete, sbUpsert } from './_supabase.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
-import { requirePermSoft, PAYMENTS_KEYS } from './_perm.js';
+import { requirePermSoft, requirePerm, PAYMENTS_KEYS } from './_perm.js';
 
 // v924 SEC: Apps Script закрывается секретом (см. docs/APPS_SCRIPT_SECURE.md) — серверные
 // вызовы должны его нести, иначе импорт из «Доходов» перестанет работать после закрытия скрипта.
@@ -697,7 +697,9 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
   // ручной DELETE-эндпоинт их и так не трогает.
   // ВКЛ только при env SYNC_DELETE_ORPHANS=1 — чтобы после деплоя крон не начал чистить
   // ДО проверки dry-run. Пока флаг выключен — считаем сирот, но не трогаем (would_delete).
-  const DELETE_ENABLED = String(process.env.SYNC_DELETE_ORPHANS || '') === '1';
+  // v979: включено по умолчанию — сверка листа и базы 16.09.2026 показала 0 сирот по всем вкладкам KG 2026,
+  // предохранители (только прочитанные вкладки, физически пустая строка, стоп при >60%) остаются. Выключить: SYNC_DELETE_ORPHANS=0.
+  const DELETE_ENABLED = String(process.env.SYNC_DELETE_ORPHANS || '1') !== '0';
   if (DELETE_ENABLED) {
     for (const o of toDelete) {
       try { await sbDelete('payments', { id: 'eq.' + o.id }); deleted.push(o.id); }
@@ -1001,9 +1003,18 @@ export default async function handler(req, res) {
       if (!_g.ok) return;
       return await handleGet(req, res);
     }
-    if (req.method === 'POST')   return await handlePost(req, res);
-    if (req.method === 'PATCH')  return await handlePatch(req, res);
-    if (req.method === 'DELETE') return await handleDelete(req, res);
+    // v979 SEC: запись оплат — только с правом «Вносить оплаты». POST мягко (бот оплат без учётки проходит),
+    // PATCH/DELETE строго (их делают только люди из программы). Раньше проверялся лишь общий токен из бандла.
+    if (req.method === 'POST') {
+      const _w = await requirePermSoft(req, res, ['add_payments']);
+      if (!_w.ok) return;
+      return await handlePost(req, res);
+    }
+    if (req.method === 'PATCH' || req.method === 'DELETE') {
+      const _w = await requirePerm(req, res, 'add_payments');
+      if (!_w.ok) return;
+      return req.method === 'PATCH' ? await handlePatch(req, res) : await handleDelete(req, res);
+    }
     return res.status(405).json({ ok: false, error: 'method not allowed' });
   } catch (e) {
     console.error('[api/payments] error:', e);
