@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v980</title>
+<title>SalesDoc — Финансовый Дашборд v981</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -44071,6 +44071,74 @@ function acInit(){
  // доступ считает сервер (access_until/access_status)
 }
 
+// v981: «Мой день» оператора — одна строка над списком: мои клиенты · горит · без плана ·
+// внедряю (застряли) · задач сегодня (просрочено) · оплаты за 2 дня. Карточки и задачи
+// подгружаются один раз в 5 минут; оплаты — из уже загруженного списка оплат.
+window._acMyDay = { ts: 0, cards: null, tasks: null, loading: false };
+function _acMyDayLoad(){
+ var st = window._acMyDay;
+ if(st.loading || (st.ts && Date.now() - st.ts < 5 * 60 * 1000)) return;
+ st.loading = true;
+ Promise.allSettled([
+  sbFetch('/api/cards'),
+  (typeof crmTasksFetch === 'function' ? crmTasksFetch('/api/tasks') : sbFetch('/api/tasks'))
+ ]).then(function(rs){
+  st.cards = (rs[0].status === 'fulfilled' && rs[0].value && rs[0].value.cards) ? rs[0].value.cards : [];
+  st.tasks = (rs[1].status === 'fulfilled' && rs[1].value && rs[1].value.tasks) ? rs[1].value.tasks : [];
+  st.ts = Date.now(); st.loading = false;
+  try { if(document.getElementById('view-activeclients').style.display !== 'none') acRender(); } catch(_){}
+ }).catch(function(){ st.loading = false; st.ts = Date.now(); });
+}
+function _acSameOp(name, meFirst){
+ var n = String(name || '').trim().toLowerCase();
+ if(!n) return false;
+ if(typeof crmOpCanon === 'function') n = String(crmOpCanon(n) || n).toLowerCase();
+ return n === meFirst || n.split(/\s+/)[0] === meFirst;
+}
+function acRenderMyDay(all, counts){
+ var st = document.getElementById('ac-mrr-strip');
+ if(!st) return;
+ var meFirst = String((currentUser && currentUser.name) || '').trim().split(/\s+/)[0].toLowerCase();
+ var d = window._acMyDay || {};
+ if(!d.ts) _acMyDayLoad();
+ var now = new Date();
+ var todayIso = (typeof taskLocalIso === 'function') ? taskLocalIso(now) : now.toISOString().slice(0,10);
+ var y = new Date(now.getTime() - 86400000);
+ var yestIso = (typeof taskLocalIso === 'function') ? taskLocalIso(y) : y.toISOString().slice(0,10);
+ // внедрение: мои незакрытые карточки, застряли — на этапе дольше 7 дней
+ var myCards = (d.cards || []).filter(function(c){ return !c.archived_at && _acSameOp(c.operator, meFirst); });
+ var stuck = myCards.filter(function(c){ return c.stage_entered_at && (now - new Date(c.stage_entered_at)) > 7 * 86400000; }).length;
+ // задачи: мои открытые; сегодня — срок сегодня, просрочено — срок раньше сегодня
+ var openT = (d.tasks || []).filter(function(t){
+  if(t.closed_at || ['done','closed','cancelled','canceled'].indexOf(String(t.status||'').toLowerCase()) >= 0) return false;
+  return _acSameOp(t.assignee_operator, meFirst);
+ });
+ var tToday = openT.filter(function(t){ return String(t.deadline_at||'').slice(0,10) === todayIso; }).length;
+ var tLate = openT.filter(function(t){ var dd = String(t.deadline_at||'').slice(0,10); return dd && dd < todayIso; }).length;
+ // оплаты моих клиентов за вчера и сегодня
+ var myNames = {};
+ all.forEach(function(c){ if(c.client) myNames[String(c.client).trim().toLowerCase()] = 1; });
+ var payN = 0, paySum = 0;
+ (typeof payments !== 'undefined' ? payments : []).forEach(function(p){
+  if(!p || !p.date || p.date < yestIso) return;
+  if(!myNames[String(p.client||'').trim().toLowerCase()]) return;
+  payN++; paySum += Number(p.amount) || 0;
+ });
+ var cur = (typeof _CUR !== 'undefined') ? _CUR : 'сом';
+ var stat = function(l, n, extra, title, onclick){
+  return '<span class="ac-stat' + (onclick ? ' ac-stat-link' : '') + '"' + (title ? ' title="' + title + '"' : '') + (onclick ? ' style="cursor:pointer" onclick="' + onclick + '"' : '') + '>'
+   + '<span class="l">' + l + '</span><span class="n">' + n + '</span>' + (extra ? '<span class="l" style="margin-left:4px">' + extra + '</span>' : '') + '</span>';
+ };
+ var loading = !d.ts;
+ st.innerHTML = '<div class="ac-statline">'
+  + stat('Мои клиенты', all.length)
+  + stat('Горит', counts.hot || 0, '', 'Доступ истекает или не оплачен, контакта не было 7 дней, шаг не запланирован', "acSetView('hot')")
+  + stat('Без плана', counts.noplan || 0, '', 'Нет ни задачи, ни следующего шага')
+  + stat('Внедряю', loading ? '…' : myCards.length, (!loading && stuck) ? 'дольше 7 дн: ' + stuck : '', 'Мои карточки на доске «Внедрение»', "showView('route')")
+  + stat('Задач сегодня', loading ? '…' : tToday, (!loading && tLate) ? 'просрочено: ' + tLate : '', 'Мои открытые задачи со сроком сегодня', "showView('mytasks')")
+  + stat('Оплаты за 2 дня', payN, payN ? Math.round(paySum).toLocaleString('ru-RU') + ' ' + cur : '', 'Оплаты моих клиентов за вчера и сегодня')
+  + '</div>';
+}
 function acRender(){
  var all = acGetActiveClients();
  // v733: роль «оператор» видит в «Действующие» ТОЛЬКО своих клиентов (по оператору/куратору).
@@ -44319,13 +44387,8 @@ function acRender(){
  } catch(_){}
  // v295: MRR / ARR / Churn / NRR. v962: оператору — только его цифры (решение владельца: MRR скрыть)
  try {
-  if(_acMe){
-   var _st = document.getElementById('ac-mrr-strip');
-   if(_st) _st.innerHTML = '<div class="ac-statline">'
-    + '<span class="ac-stat"><span class="l">Мои клиенты</span><span class="n">'+all.length+'</span></span>'
-    + '<span class="ac-stat" title="Нет ни задачи, ни следующего шага"><span class="l">Без плана</span><span class="n">'+window._acChipCounts.noplan+'</span></span>'
-    + '</div>';
-  } else acRenderMRRStrip();
+  if(_acMe){ acRenderMyDay(all, window._acChipCounts || {}); } // v981: «Мой день» оператора
+  else acRenderMRRStrip();
  } catch(_){}
  // v823: панель массового назначения куратора живёт поверх перерисовок
  try { acUpdateBulkBar(); } catch(_){}
