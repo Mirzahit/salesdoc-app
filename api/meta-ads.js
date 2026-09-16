@@ -271,7 +271,7 @@ export default async function handler(req, res) {
 
   // v360: поддержка двух стран — KZ (по умолчанию) и KG (через ?country=KG).
   // .trim() убирает невидимые пробелы при копи-паст в Vercel UI.
-  const country = String(req.query.country || 'KZ').toUpperCase();
+  const country = String(req.query.country || 'KG').toUpperCase();
   let TOKEN, ACCOUNT;
   if (!SINGLE_CABINET && country === 'KG') {
     ACCOUNT = (process.env.META_AD_ACCOUNT_ID_KG || '').trim();

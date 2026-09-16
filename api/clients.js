@@ -355,7 +355,7 @@ export default async function handler(req, res) {
       const body = await readBody(req);
       // v817: фронт передаёт country в query (sbFetch), body может его не содержать —
       // без фолбэка клиент с доски KG получал вечный SD-KZ- id
-      const country = (body.country || (req.query || {}).country || 'KZ').toUpperCase();
+      const country = (body.country || (req.query || {}).country || 'KG').toUpperCase();
       if (!ALLOWED_COUNTRIES.includes(country)) {
         return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
       }
@@ -508,7 +508,7 @@ export default async function handler(req, res) {
           body.support_operator = null;
         } else {
           const own = await sbSelect('clients', { client_id: 'eq.' + client_id, select: 'country', limit: '1' });
-          const cCountry = (own.length && own[0].country) || 'KZ';
+          const cCountry = (own.length && own[0].country) || 'KG';
           const canon = await canonOperator(raw, cCountry);
           if (!canon) {
             const known = await operatorNames(cCountry);
@@ -658,7 +658,7 @@ export default async function handler(req, res) {
 // body: { country, links: [{ client_id, billing_host }, ...] }. Дедуп/конфликты/идемпотентность.
 async function handleLinkHosts(req, res) {
   const body = await readBody(req);
-  const country = (body.country || 'KZ').toUpperCase();
+  const country = (body.country || 'KG').toUpperCase();
   if (!ALLOWED_COUNTRIES.includes(country)) return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
   const links = Array.isArray(body.links) ? body.links : [];
   if (!links.length) return res.status(400).json({ ok: false, error: 'links пуст — нечего привязывать' });

@@ -524,7 +524,7 @@ export default async function handler(req, res){
   // PII клиентов из amo и позволяли GET-мутацию тегов сделок без токена.
   if(!checkAuth(req, res)) return;
   // v361: поддержка двух amo-кабинетов (KZ + KG) через ?country=KG
-  const country = String((req.query && req.query.country) || 'KZ').toUpperCase();
+  const country = String((req.query && req.query.country) || 'KG').toUpperCase();
   const env = country === 'KG' ? {
     AMO_SUBDOMAIN: process.env.AMO_SUBDOMAIN_KG,
     AMO_TOKEN: process.env.AMO_TOKEN_KG,

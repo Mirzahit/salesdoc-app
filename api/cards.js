@@ -193,7 +193,7 @@ export default async function handler(req, res) {
       }
       // v817: фронт передаёт country в query (sbFetch), body может его не содержать —
       // без фолбэка карточка с доски KG молча писалась как KZ
-      const country = (body.country || (req.query || {}).country || 'KZ').toUpperCase();
+      const country = (body.country || (req.query || {}).country || 'KG').toUpperCase();
       if (!ALLOWED_COUNTRIES.includes(country)) {
         return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
       }
@@ -350,7 +350,7 @@ async function insertClientWithFreshId(fields) {
 
 export async function ensureBoardEntryForPayment(opts) {
   const company = (opts.company || '').trim();
-  const country = (opts.country || 'KZ').toUpperCase();
+  const country = (opts.country || 'KG').toUpperCase();
   const kind = opts.kind;
   const period_months = parseInt(opts.period_months, 10) || 1;
   const sheet_row = opts.sheet_row != null ? parseInt(opts.sheet_row, 10) : null;
@@ -467,7 +467,7 @@ export async function ensureBoardEntryForPayment(opts) {
 async function handlePaymentBotSync(body, res) {
   const company = (body.company || '').trim();
   const category = (body.category || '').trim();
-  const country = (body.country || 'KZ').toUpperCase();
+  const country = (body.country || 'KG').toUpperCase();
   const period_months = parseInt(body.period_months, 10) || 1;
   const sheet_row = body.sheet_row ? parseInt(body.sheet_row, 10) : null;
   const sheet_month = body.sheet_month ? parseInt(body.sheet_month, 10) : null;
@@ -595,7 +595,7 @@ async function handleTicketCommentsRoute(req, res) {
         // v855: кто первым ответил клиенту — тот и ведёт обращение. В общей очереди
         // иначе непонятно, кто занимается, и двое могут отвечать одновременно.
         if (!t[0].operator && row.author) {
-          const who = await canonOperator(row.author, t[0].country || 'KZ');
+          const who = await canonOperator(row.author, t[0].country || 'KG');
           if (who) patch.operator = who;
         }
         await sbUpdate('tickets', { id: 'eq.' + body.ticket_id }, patch);
@@ -860,7 +860,7 @@ async function handleTicketsRoute(req, res) {
     if (!body.client_id) return res.status(400).json({ ok: false, error: 'client_id обязателен (тикет привязан к клиенту)' });
     if (!body.title || !String(body.title).trim()) return res.status(400).json({ ok: false, error: 'title обязателен' });
 
-    const country = (body.country || 'KZ').toUpperCase();
+    const country = (body.country || 'KG').toUpperCase();
     if (!ALLOWED_COUNTRIES.includes(country)) {
       return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
     }
@@ -926,7 +926,7 @@ async function handleTicketsRoute(req, res) {
         patchOperator = null; // сброс назначения
       } else {
         const own = await sbSelect('tickets', { id: 'eq.' + id, select: 'country', limit: '1' });
-        const tCountry = (own.length && own[0].country) || 'KZ';
+        const tCountry = (own.length && own[0].country) || 'KG';
         patchOperator = await canonOperator(body.operator, tCountry);
         if (!patchOperator) {
           const known = await operatorNames(tCountry);
@@ -942,7 +942,7 @@ async function handleTicketsRoute(req, res) {
     if (body.priority) {
       const cur0 = await sbSelect('tickets', { id: 'eq.' + id, select: 'first_response_at,country,created_at', limit: '1' });
       if (cur0.length && !cur0[0].first_response_at) {
-        patch.sla_due_at = calculateTicketSLA(body.priority, cur0[0].country || 'KZ', cur0[0].created_at);
+        patch.sla_due_at = calculateTicketSLA(body.priority, cur0[0].country || 'KG', cur0[0].created_at);
       }
     }
     ['status','priority','category','title','description'].forEach(k => {
@@ -1135,7 +1135,7 @@ async function handleSheetsImport(req, res) {
     const r = rows[i];
     if (!r || !r.length) continue;
     const sheetRow = i + 1; // Google Sheets row number (1-based + заголовок)
-    const country = String(r[0]||'').trim().toUpperCase() || 'KZ';
+    const country = String(r[0]||'').trim().toUpperCase() || 'KG';
     const datePaid = _parseDmy(r[1]);
     const dateTaken = _parseDmy(r[2]);
     const deadline = _parseDmy(r[3]);
@@ -1166,7 +1166,7 @@ async function handleSheetsImport(req, res) {
       // v436 FIX: sheet_month=0 для Sheets-импорта. Партиальный uniq-индекс
       // требует чтобы оба поля были не-null. Иначе повторный импорт продублирует.
       sheet_month: 0,
-      country: ['KZ','KG'].includes(country) ? country : 'KZ',
+      country: ['KZ','KG'].includes(country) ? country : 'KG',
       company_name: company,
       status: INTEGRATION_STATUSES.includes(status) ? status : 'Новая',
       type, package: pkg, db_type: dbType,
@@ -1252,7 +1252,7 @@ async function handleSheetsImport(req, res) {
   }
 
   for (const g of newClientsPlan) {
-    const cn = ['KZ','KG'].includes(g.country) ? g.country : 'KZ';
+    const cn = ['KZ','KG'].includes(g.country) ? g.country : 'KG';
     const num = nextNumByCountry[cn]++;
     const cid = 'SD-' + cn + '-' + year + '-' + String(num).padStart(5, '0');
     try {
@@ -1400,7 +1400,7 @@ async function handleIntegrationsRoute(req, res) {
     if (!body.company_name || !String(body.company_name).trim()) {
       return res.status(400).json({ ok: false, error: 'company_name обязателен' });
     }
-    const country = String(body.country || 'KZ').toUpperCase();
+    const country = String(body.country || 'KG').toUpperCase();
     if (!ALLOWED_COUNTRIES.includes(country)) {
       return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
     }

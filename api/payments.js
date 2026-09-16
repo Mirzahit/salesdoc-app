@@ -348,7 +348,7 @@ async function _fetchSheet(sheetName, cfg) {
 // monthsBack — сколько последних месяцев перечитывать (current-first). Не задан/0 →
 // все месяцы с января (полный backfill). Крон передаёт 2 (текущий + прошлый).
 export async function importSheetsForCountry(country, dryRun, monthsBack, rebuild) {
-  country = String(country || 'KZ').toUpperCase();
+  country = String(country || 'KG').toUpperCase();
   if (!ALLOWED_COUNTRIES.includes(country)) {
     throw new Error('country должен быть KZ или KG');
   }
@@ -769,7 +769,7 @@ function _payLinksNorm(st) {
 //        additional_remove: [host,...]). Возвращает слитый стор. Слияние на сервере → не теряем
 //        чужие правки при параллельной работе.
 async function handlePayLinks(req, res) {
-  const country = String((req.query.country || 'KZ')).toUpperCase();
+  const country = String((req.query.country || 'KG')).toUpperCase();
   if (!ALLOWED_COUNTRIES.includes(country)) return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
   const { url, token } = _kvEnv();
   if (!url || !token) return res.status(503).json({ ok: false, error: 'KV не настроен' });
@@ -910,7 +910,7 @@ async function handleBackfillBoards(req, res) {
 
 // Тонкая обёртка-эндпоинт над importSheetsForCountry (auth + парсинг query).
 async function handleImportSheets(req, res) {
-  const country = (req.query.country || 'KZ').toUpperCase();
+  const country = (req.query.country || 'KG').toUpperCase();
   if (!ALLOWED_COUNTRIES.includes(country)) {
     return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
   }
@@ -1087,7 +1087,7 @@ async function sbSelectAllPaged(table, params) {
 async function handlePost(req, res) {
   const body = await readBody(req);
 
-  const country = (body.country || 'KZ').toUpperCase();
+  const country = (body.country || 'KG').toUpperCase();
   if (!ALLOWED_COUNTRIES.includes(country)) {
     return res.status(400).json({ ok: false, error: 'country должен быть KZ или KG' });
   }
