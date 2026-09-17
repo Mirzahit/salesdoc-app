@@ -114,6 +114,7 @@ export async function runReminders() {
       pays = await sbSelectAll('payments', {
         client_id: 'in.(' + ids.map(i => '"' + i + '"').join(',') + ')',
         category: 'in.("subscription","license")',
+        amount: 'gt.0', // v989: возвраты — не оплаты
         select: 'id,client_id,amount,period_months,paid_at,category',
         order: 'paid_at.asc,id'
       }); // v961: постранично (PostgREST ≤1000 строк за запрос)
@@ -122,6 +123,7 @@ export async function runReminders() {
     const paysNoId = await sbSelect('payments', {
       client_id: 'is.null',
       category: 'in.("subscription","license")',
+      amount: 'gt.0', // v989
       paid_at: 'gte.' + cap45,
       select: 'company_name,paid_at,country', limit: '2000'
     });

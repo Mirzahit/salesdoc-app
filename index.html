@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v988</title>
+<title>SalesDoc — Финансовый Дашборд v989</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11280,6 +11280,8 @@ function parseDateObjFromSheet(v){
 function isSubscriptionPay(p){
  if(!p) return false;
  var raw = String(p.categoryRaw || p.cat || '').toLowerCase().replace(/\./g,' ').replace(/\s+/g,' ').trim();
+ if(raw.indexOf('возврат') >= 0) return false; // v989: возврат доступ не продлевает
+ if(p.amount != null && Number(p.amount) <= 0) return false;
  if(!raw){
   var cat = String(p.category || '').toLowerCase();
   return (cat === 'subscription' || cat === 'license');
@@ -11834,7 +11836,7 @@ async function _loadPaymentsFromSupabase(){
    var dateStr = r.paid_at || null;
    if(!dateStr || !r.company_name || !r.amount) return;
    var amount = parseFloat(r.amount);
-   if(!amount || amount <= 0) return;
+   if(!amount) return; // v989: минус у «Возврат …» — оставляем
    var managerRaw = r.manager_name || '';
    var techRaw = r.tech_support || '';
    var catRaw = r.category_raw || '';
@@ -12287,7 +12289,7 @@ function renderAll() {
  ps.forEach(function(p){
  var raw = String(p.categoryRaw||'').toLowerCase().trim();
  // Только "новый клиент" = признак нового клиента (не "нов внедрение" и не "нов интеграция")
- if(raw === 'новый клиент' || (raw.indexOf('нов') >= 0 && raw.indexOf('клиент') >= 0)) {
+ if(raw.indexOf('возврат') < 0 && (raw === 'новый клиент' || (raw.indexOf('нов') >= 0 && raw.indexOf('клиент') >= 0))) {
  var cn = normClient(p.client);
  if(cn) newClientNames[cn] = true;
  }
@@ -12988,6 +12990,31 @@ function fmtK(n){
 // именем), свои оплаты (менеджер в оплате = он) за сегодня, неделю и месяц, нужный темп до конца
 // месяца. Ниже остаётся «План по менеджерам» по всем — соревнование видно, но своё крупнее.
 function _mySalesFirst(n){ return String(n || '').trim().split(/\s+/)[0].toLowerCase(); }
+// v989: факт «новых продаж» по менеджерам считаем из оплат программы, а не из руками
+// вписанного факта Светофора (он расходился с оплатами). Правило то же, что в бонусе:
+// статья содержит «нов» и не «абон» (Нов.клиент + нов.внедрение + нов.интеграция, минус возвраты).
+// payAll(): у менеджера `payments` урезан до своих, а блок по команде должен видеть всех.
+function _newSalesFactByFirst(year, month){
+ var pre = year + '-' + String(month + 1).padStart(2, '0');
+ var out = {};
+ (typeof payAll === 'function' ? payAll() : (payments || [])).forEach(function(p){
+  if(!p || !p.date || String(p.date).slice(0, 7) !== pre) return;
+  var raw = String(p.categoryRaw || '').toLowerCase();
+  if(raw.indexOf('нов') < 0 || raw.indexOf('абон') >= 0) return;
+  var f = _mySalesFirst(p.managerName); if(!f) return;
+  out[f] = (out[f] || 0) + (Number(p.amount) || 0);
+ });
+ return out;
+}
+// v989: строки-сводки Светофора («Абон плата», «Итого», «КЗ»…) — не люди, в блоки по менеджерам
+// не берём. Человека с непохожим на программу именем НЕ прячем: пусть висит с фактом 0 —
+// так видно, что имя в Светофоре надо привести к имени в «Сотрудниках».
+function _svetoforIsPerson(nm){
+ nm = String(nm || '').trim();
+ if(!nm || nm.length < 3 || /^нов(ый|ая)\s+менеджер$/i.test(nm)) return false;
+ if(/^(абон|итого|всего|общ|план|факт|сумм|средн)/i.test(nm) || /^(kz|кз|kg|кг)$/i.test(nm)) return false; //  с кириллицей не работает
+ return true;
+}
 function renderMySales(){
  var el = document.getElementById('dash-my-sales');
  if(!el) return;
@@ -13008,9 +13035,10 @@ function renderMySales(){
    if(_mySalesFirst(a.name) !== me) return;
    found = true;
    (a.kpis || []).forEach(function(k){
-    if(String(k.name || '').toLowerCase().indexOf('продаж') >= 0){ plan += Number(k.plan) || 0; fact += Number(k.fact) || 0; }
+    if(String(k.name || '').toLowerCase().indexOf('продаж') >= 0){ plan += Number(k.plan) || 0; }
    });
   });
+  fact = _newSalesFactByFirst(sel.year, sel.month)[me] || 0; // v989: факт из оплат
  }
  // мои оплаты из загруженного списка
  var iso = function(d){ return (typeof taskLocalIso === 'function') ? taskLocalIso(d) : d.toISOString().slice(0, 10); };
@@ -13108,14 +13136,17 @@ function renderMgrPlanRows(){
  return;
  }
  var rows = [];
+ // v989: план из Светофора, факт из оплат программы (см. _newSalesFactByFirst); сводки Светофора не берём
+ var _sel = (typeof selectedMonth !== 'undefined' && selectedMonth) ? selectedMonth : { year: new Date().getFullYear(), month: new Date().getMonth() };
+ var _facts = _newSalesFactByFirst(_sel.year, _sel.month);
  planLastData.agents.forEach(function(a){
- // v889: «Новый менеджер» — незаполненный слот в Светофоре, не человек. В блок не берём.
  var nm = String(a.name||'').trim();
- if(!nm || /^нов(ый|ая)\s+менеджер$/i.test(nm)) return;
- var plan = 0, fact = 0;
+ if(!_svetoforIsPerson(nm)) return;
+ var plan = 0;
  (a.kpis || []).forEach(function(k){
- if(String(k.name||'').toLowerCase().indexOf('продаж') >= 0){ plan += Number(k.plan)||0; fact += Number(k.fact)||0; }
+ if(String(k.name||'').toLowerCase().indexOf('продаж') >= 0){ plan += Number(k.plan)||0; }
  });
+ var fact = _facts[_mySalesFirst(nm)] || 0;
  if(plan > 0) rows.push({ name: nm, plan: plan, fact: fact, pct: Math.round(fact/plan*100) });
  });
  if(!rows.length){
@@ -13296,7 +13327,7 @@ function buildKpiTooltip(type, ps) {
  function normClient(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
  var newNames = {};
  ps.forEach(function(p) {
- var _r=String(p.categoryRaw||'').toLowerCase().trim(); if(_r==='новый клиент'||(_r.indexOf('нов')>=0&&_r.indexOf('клиент')>=0)) newNames[normClient(p.client)]=p.client;
+ var _r=String(p.categoryRaw||'').toLowerCase().trim(); if(_r.indexOf('возврат')<0&&(_r==='новый клиент'||(_r.indexOf('нов')>=0&&_r.indexOf('клиент')>=0))) newNames[normClient(p.client)]=p.client;
  });
  var clientSums = {};
  ps.forEach(function(p) {
@@ -13615,7 +13646,7 @@ function renderRecognizedRevenue() {
  }
 
  // --- Новый клиент: считаем по дате активации (O) ---
- if (raw === 'новый клиент' || (raw.indexOf('нов') >= 0 && raw.indexOf('клиент') >= 0)) {
+ if (raw.indexOf('возврат') < 0 && (raw === 'новый клиент' || (raw.indexOf('нов') >= 0 && raw.indexOf('клиент') >= 0))) {
  if (!p.activationDate) {
  // Нет даты активации — НЕ признаём
  totalDeferred += amt;
@@ -13782,7 +13813,7 @@ function renderRecognizedRevenue() {
  var mps = payments.filter(function(p){ return p.month === mi; });
  mps.forEach(function(p){
  var raw = String(p.categoryRaw||'').toLowerCase().trim();
- if ((raw === 'новый клиент' || (raw.indexOf('нов') >= 0 && raw.indexOf('клиент') >= 0)) && !p.activationDate) {
+ if (raw.indexOf('возврат') < 0 && (raw === 'новый клиент' || (raw.indexOf('нов') >= 0 && raw.indexOf('клиент') >= 0)) && !p.activationDate) {
  allNewClients.push({client: p.client, amount: p.amount, qty: p.qty || 0, month: monthNames[mi]});
  allNewTotal += p.amount;
  allNewLicenses += (p.qty || 0);
@@ -18323,7 +18354,7 @@ function renderM2MA2A(ps) {
  payArr.forEach(function(p) {
  var raw = String(p.categoryRaw||'').toLowerCase().trim();
  // Ищем именно "новый клиент" — не просто "нов"
- if (raw === 'новый клиент' || raw.indexOf('нов') >= 0 && raw.indexOf('клиент') >= 0) {
+ if (raw.indexOf('возврат') < 0 && (raw === 'новый клиент' || raw.indexOf('нов') >= 0 && raw.indexOf('клиент') >= 0)) {
  var cn = String(p.client||'').trim().toLowerCase();
  if (cn) newClients[cn] = true;
  }
@@ -25622,7 +25653,7 @@ function calcManagerBonus(agentName, plan, fact, tabIdx, salesPct, kpis, _exclud
  nameVariants.forEach(function(nv){ if (mgrLow.indexOf(nv) >= 0 || nv.indexOf(mgrLow) >= 0) matched = true; });
  if (!matched) return;
  var raw = String(p.categoryRaw||'').toLowerCase().trim();
- if (raw === 'новый клиент' || (raw.indexOf('новый') >= 0 && raw.indexOf('клиент') >= 0)) {
+ if (raw.indexOf('возврат') < 0 && (raw === 'новый клиент' || (raw.indexOf('новый') >= 0 && raw.indexOf('клиент') >= 0))) {
  confirmedNewClients[p.client.toLowerCase()] = true;
  }
  });
@@ -25766,7 +25797,7 @@ function showBonusDetail(bonusId) {
  if (pY > _tY) return;
  if (pY === _tY && pM > _tM) return;
  var raw = String(p.categoryRaw||'').toLowerCase().trim();
- if (raw === 'новый клиент' || (raw.indexOf('новый') >= 0 && raw.indexOf('клиент') >= 0)) {
+ if (raw.indexOf('возврат') < 0 && (raw === 'новый клиент' || (raw.indexOf('новый') >= 0 && raw.indexOf('клиент') >= 0))) {
  var clKey = p.client.toLowerCase().trim();
  if (!_prevNewClients[clKey]) _prevNewClients[clKey] = _dupeMonths[pM] + ' ' + pY;
  }
@@ -37497,8 +37528,10 @@ var PAYBOT_CFG = {
    {k:'balans',        l:'Баланс',         t:'lic'},
    {k:'dorabotka',     l:'доработка',      t:'man'},
    {k:'telegram_boty', l:'телеграмм бот',  t:'bot'},
-   {k:'kantri',        l:'Кантри',         t:'man'}
+   {k:'kantri',        l:'Кантри',         t:'man'},
+   {k:'vozvrat',       l:'Возврат',        t:'refund'} // v989: деньги вернули клиенту — строка с минусом
   ],
+  refundFor: ['нов.внедрение','нов.интеграция','Нов.клиент','абон.плата','доп.лицензия'], // v989: «Возврат <статья>»
   licTypes: ['лицензия','Баланс','Услуга'],
   periods: [
    {l:'3 месяц',m:3},{l:'6 месяц',m:6},{l:'12 месяц',m:12},
@@ -37631,6 +37664,11 @@ function payFlowRender(){
     + cfg.botPeriods.map(function(p, i){ return '<button type="button" class="pp-chip' + (i === 0 ? ' on' : '') + '" data-v="' + _escHtml(p) + '" onclick="payChip(this)">' + _escHtml(p) + '</button>'; }).join('')
     + '</div></div></div>';
   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Сумма (' + cfg.currency + ')</label><input class="form-input" id="p-amount" type="number" min="0" placeholder="15000"></div></div>';
+ } else if(cat.t === 'refund'){ // v989: возврат — за что и сколько; в базу и лист уходит минус
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">За что возврат</label><div class="pay-period-chips pay-chips-wrap" id="p-refund-for">'
+    + (cfg.refundFor || []).map(function(c, i){ return '<button type="button" class="pp-chip' + (i === 0 ? ' on' : '') + '" data-v="' + _escHtml(c) + '" onclick="payChip(this)">' + _escHtml(c) + '</button>'; }).join('')
+    + '</div></div></div>';
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Сумма возврата (' + cfg.currency + ')</label><input class="form-input" id="p-amount" type="number" min="0" placeholder="29900"></div></div>';
  } else { // man — сумма руками
   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Сумма (' + cfg.currency + ')</label><input class="form-input" id="p-amount" type="number" min="0" placeholder="15000"></div></div>';
  }
@@ -37727,6 +37765,13 @@ function payCollect(){
   var amtB = parseFloat((document.getElementById('p-amount') || {}).value) || 0;
   if(amtB <= 0){ sdToast('Введите сумму'); return null; }
   r.plan = amtB; r.fact = amtB; r.unit = amtB;
+ } else if(cat.t === 'refund'){ // v989
+  var rf = payChipVal('p-refund-for') || '';
+  if(!rf){ sdToast('Выберите, за что возврат'); return null; }
+  var amtR = Math.abs(parseFloat((document.getElementById('p-amount') || {}).value) || 0);
+  if(amtR <= 0){ sdToast('Введите сумму возврата'); return null; }
+  r.catLabel = 'Возврат ' + rf; r.licType = 'Услуга'; r.tariff = 'Услуга';
+  r.plan = -amtR; r.fact = -amtR; r.unit = -amtR;
  } else {
   r.licType = 'Услуга'; r.tariff = 'Услуга';
   var amtM = parseFloat((document.getElementById('p-amount') || {}).value) || 0;
@@ -37759,7 +37804,7 @@ function payExtrasCapture(){
 }
 function payExtraAdd(){
  var cfg = payBotCfg();
- var first = cfg.categories.filter(function(c){ return c.t !== 'lic'; })[0];
+ var first = cfg.categories.filter(function(c){ return c.t !== 'lic' && c.t !== 'refund'; })[0];
  if(!first) return;
  payExtrasCapture();
  payExtras.push({ cat: first.k });
@@ -37793,7 +37838,7 @@ function payExtrasRender(){
     + '<button type="button" onclick="payExtraRemove(' + i + ')" style="border:none;background:none;color:var(--text-muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px" title="Убрать услугу">&times;</button>'
     + '</div>';
   h += '<div class="form-row single"><div class="form-group full"><div class="pay-period-chips pay-chips-wrap">'
-    + cfg.categories.filter(function(c){ return c.t !== 'lic'; }).map(function(c){
+    + cfg.categories.filter(function(c){ return c.t !== 'lic' && c.t !== 'refund'; }).map(function(c){
        return '<button type="button" class="pp-chip' + (c.k === cat.k ? ' on' : '') + '" onclick="payExtraSetCat(' + i + ',\'' + c.k + '\')">' + _escHtml(c.l) + '</button>';
       }).join('')
     + '</div></div></div>';

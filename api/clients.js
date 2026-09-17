@@ -129,6 +129,7 @@ export async function recalcBillingForCountry(country, dryRun) {
   const pparams = {
     select: 'id,client_id,company_name,paid_at,category,period_months',
     category: 'in.(' + RECALC_CATEGORIES.join(',') + ')',
+    amount: 'gt.0', // v989: «Возврат …» (минус) доступ не продлевает
     order: 'paid_at.asc,id'
   };
   if (country) { cparams['country'] = 'eq.' + country; pparams['country'] = 'eq.' + country; }

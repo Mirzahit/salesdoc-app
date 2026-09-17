@@ -64,6 +64,7 @@ async function _createBoardEntriesForPayments(rows) {
   for (const p of (rows || [])) {
     const kind = _boardKindForCategory(p.category);
     if (!kind) continue;
+    if (Number(p.amount) <= 0) continue; // v989: возврат карту не создаёт
     if (!p.company_name) continue;
     try {
       const r = await ensureBoardEntryForPayment({
@@ -250,6 +251,10 @@ function _mapCategory(cat) {
   if (c.includes('лицен') || c.includes('новый клиент') || c.includes('нов клиент')) return 'license';
   return 'other';
 }
+// v989: «Возврат …» — единственная статья с отрицательной суммой (возврат денег клиенту).
+// category остаётся у возвращаемой статьи (Возврат нов.интеграция → integration), чтобы минус
+// сам вычитался из карточек дашборда и «новых продаж» менеджера.
+function _isRefundRaw(s) { return /^\s*возврат/i.test(String(s || '')); }
 
 function _parseNumber(v) {
   if (v == null) return null;
@@ -289,14 +294,14 @@ function _parseRow(row, headerIdx, hdrRow, cfg, monthName, monthIdx, sheetRowAbs
   let amtRaw = row[colAmt];
   if (amtRaw == null || String(amtRaw).trim() === '') amtRaw = row[9];
   const amount = _parseNumber(amtRaw);
-  if (!amount || amount <= 0) return null;
+  const catRaw = String(row[colCat] || '').trim();
+  if (!amount || (amount <= 0 && !_isRefundRaw(catRaw))) return null; // v989: минус только у «Возврат …»
   // Дата
   let paidAt = _parseDate(row[colDate], cfg.dateCorrection);
   // v923: не хардкодим год — с января следующего года платежи без даты уезжали бы в прошлый год
   if (!paidAt) paidAt = `${new Date().getFullYear()}-${String(monthIdx + 1).padStart(2, '0')}-01`;
   const company = String(row[colClient] || '').trim();
   if (!company) return null;
-  const catRaw = String(row[colCat] || '').trim();
   let actDate = _parseDate(row[colActivation], cfg.dateCorrection);
   if (!actDate && colActivation === 14) actDate = _parseDate(row[15], cfg.dateCorrection);
   return {
@@ -833,6 +838,7 @@ async function handleBackfillBoards(req, res) {
   const candParams = {
     select: 'id,company_name,country,client_id,category,paid_at,manager_name,amount,period_months',
     category: 'eq.integration',
+    amount: 'gt.0', // v989: возвраты не кандидаты
     order: 'id.asc',
     limit: String(limit),
     offset: String(offset)
@@ -1099,8 +1105,8 @@ async function handlePost(req, res) {
     return res.status(400).json({ ok: false, error: 'company_name обязателен' });
   }
   const amount = Number(body.amount);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return res.status(400).json({ ok: false, error: 'amount должен быть положительным числом' });
+  if (!Number.isFinite(amount) || amount === 0 || (amount < 0 && !_isRefundRaw(body.category_raw))) {
+    return res.status(400).json({ ok: false, error: 'отрицательная сумма допустима только для статьи «Возврат …»' });
   }
   const source = body.source && ALLOWED_SOURCES.includes(body.source) ? body.source : 'manual';
   let category = body.category;
@@ -1206,7 +1212,7 @@ async function handlePost(req, res) {
     // v636: ручная оплата внедрения/интеграции → завести карту в Маршруте / Очереди интеграции.
     // Side-effect, не роняем ответ если создание карты не удалось.
     let board = null;
-    const _kind = _boardKindForCategory(category);
+    const _kind = amount > 0 ? _boardKindForCategory(category) : null; // v989: возврат карту не создаёт
     if (_kind && result[0]) {
       try {
         board = await ensureBoardEntryForPayment({
@@ -1255,8 +1261,13 @@ async function handlePatch(req, res) {
   }
   if (patch.amount !== undefined) {
     const a = Number(patch.amount);
-    if (!Number.isFinite(a) || a <= 0) {
-      return res.status(400).json({ ok: false, error: 'amount должен быть > 0' });
+    let _refund = _isRefundRaw(patch.category_raw);
+    if (!_refund && patch.category_raw === undefined && a < 0) {
+      const _ex = await sbSelect('payments', { id: 'eq.' + id, select: 'category_raw', limit: 1 });
+      _refund = _isRefundRaw(_ex[0] && _ex[0].category_raw);
+    }
+    if (!Number.isFinite(a) || a === 0 || (a < 0 && !_refund)) {
+      return res.status(400).json({ ok: false, error: 'отрицательная сумма допустима только для статьи «Возврат …»' });
     }
     patch.amount = a;
   }
