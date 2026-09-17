@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v990</title>
+<title>SalesDoc — Финансовый Дашборд v991</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -10611,18 +10611,20 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
  <div class="form-row"><div class="form-group"><label class="form-label">Клиент</label><input class="form-input" id="p-client" placeholder="Выбрать из базы..." readonly style="cursor:pointer" onclick="payClientPickerOpen(this)"></div><div class="form-group"><label class="form-label">Дата оплаты</label><input class="form-input" id="p-date" type="date"></div></div>
  <div class="form-row"><div class="form-group"><label class="form-label">Менеджер</label><select class="form-select" id="p-employee"></select></div><div class="form-group"><label class="form-label">Статья</label><select class="form-select" id="p-category" onchange="payFlowRender()"></select></div></div>
  <div id="p-flow"></div>
- <!-- v825: доп. услуги (внедрение/интеграция/боты/доработка...) — каждая уходит ОТДЕЛЬНОЙ строкой
-      в лист «Доходы» и отдельным платежом в базе, как это делает телеграм-бот -->
- <div id="p-extras"></div>
- <div class="form-row single"><div class="form-group full"><button type="button" class="pp-chip" id="p-extra-add" onclick="payExtraAdd()">+ Добавить услугу</button>
- <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Дни и каждая услуга запишутся в таблицу «Доходы» отдельными записями — как это делает бот</div></div></div>
+ <!-- v991: банк и чек основной оплаты стоят СРАЗУ под её деталями, до услуг. Раньше они висели
+      в самом низу после услуг — менеджер по инерции ставил лицензии банк услуг (nomad-abico 17.09) -->
  <div class="form-row single"><div class="form-group full"><label class="form-label">Банк основной оплаты</label><div class="pay-period-chips pay-chips-wrap" id="p-bank"></div></div></div>
- <div class="form-row single"><div class="form-group full"><label class="form-label">Комментарий</label><input class="form-input" id="p-comment" placeholder="Примечание..."></div></div>
  <!-- v825: чек ОБЯЗАТЕЛЕН — бухгалтер сверяет оплату с банком по этому файлу (хранится только в программе) -->
  <div class="form-row single"><div class="form-group full"><label class="form-label">Чек основной оплаты — скрин перевода (обязательно)</label>
   <input type="file" id="p-receipt-input" accept="image/*,.pdf,application/pdf" style="display:none" onchange="payReceiptPick(this)"><!-- v833: .pdf явно — на Windows без расширения PDF-файлы в диалоге бывают серыми -->
   <div id="p-receipt-box"></div>
  </div></div>
+ <!-- v825: доп. услуги (внедрение/интеграция/боты/доработка...) — каждая уходит ОТДЕЛЬНОЙ строкой
+      в лист «Доходы» и отдельным платежом в базе, как это делает телеграм-бот -->
+ <div id="p-extras"></div>
+ <div class="form-row single"><div class="form-group full"><button type="button" class="pp-chip" id="p-extra-add" onclick="payExtraAdd()">+ Добавить услугу</button>
+ <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Дни и каждая услуга запишутся в таблицу «Доходы» отдельными записями — как это делает бот</div></div></div>
+ <div class="form-row single"><div class="form-group full"><label class="form-label">Комментарий</label><input class="form-input" id="p-comment" placeholder="Примечание..."></div></div>
  </div>
  <div id="form-act" style="display:none">
  <div class="form-row"><div class="form-group"><label class="form-label">Клиент</label><input class="form-input" id="a-client" placeholder="ТОО Компания"></div><div class="form-group"><label class="form-label">Дата акта</label><input class="form-input" id="a-date" type="date"></div></div>
@@ -16433,8 +16435,8 @@ async function saveRecord() {
   var r = rows[k];
   _btnText(rows.length > 1 ? ('СОХРАНЯЮ ЗАПИСЬ '+(k+1)+' из '+rows.length+'... (каждая до 20 сек)') : 'СОХРАНЯЮ... (запись в базу и таблицу, до 20 сек)');
   var catMapped = (typeof mapCategoryFromSheet === 'function') ? mapCategoryFromSheet(r.catLabel) : null;
-  // v825.1: у услуги со своим чеком — путь её чека, иначе общий чек внесения
-  var rowReceipt = (r.exIndex != null && payExtras[r.exIndex] && payExtras[r.exIndex].receipt && payExtras[r.exIndex].receipt.uploadedPath) || receiptPath;
+  // v991: у услуги — только её собственный чек (он обязателен), общий чек на услуги не подставляется
+  var rowReceipt = r.exIndex != null ? ((payExtras[r.exIndex] && payExtras[r.exIndex].receipt && payExtras[r.exIndex].receipt.uploadedPath) || null) : receiptPath;
   var payload = {
    op_id: (window._payOpIds || [])[k] || null, // v878: повтор не создаст вторую оплату
    country: country,
@@ -37771,8 +37773,7 @@ function payCollect(){
 // ============================================================
 var payExtras = []; // [{cat, amount, package, botper, bank, receipt}] — состояние карточек услуг
 // bank: услуги часто приходят на ДРУГОЙ счёт, поэтому банк у каждой услуги свой и без
-// предвыбора — менеджер обязан нажать сам. receipt: свой чек услуги (обязателен, если банк
-// отличается от основного; иначе можно не прикладывать — пойдёт общий чек).
+// предвыбора — менеджер обязан нажать сам. receipt: свой чек услуги, обязателен всегда (v991).
 
 // QA v825: перед ЛЮБОЙ пересборкой списка снять введённое из DOM в состояние —
 // иначе «+ Добавить услугу» стирал сумму/пакет уже заполненной услуги
@@ -37844,10 +37845,10 @@ function payExtrasRender(){
   h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Банк услуги</label><div class="pay-period-chips pay-chips-wrap" id="p-ex' + i + '-bank">'
     + cfg.banks.map(function(b){ return '<button type="button" class="pp-chip' + (ex.bank === b ? ' on' : '') + '" data-v="' + _escHtml(b) + '" onclick="payChip(this)">' + _escHtml(b) + '</button>'; }).join('')
     + '</div></div></div>';
-  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Чек услуги</label>'
+  h += '<div class="form-row single"><div class="form-group full"><label class="form-label">Чек услуги (обязательно)</label>'
     + '<input type="file" id="p-ex' + i + '-receipt-input" accept="image/*,.pdf,application/pdf" style="display:none" onchange="payExtraReceiptPick(' + i + ',this)">'
     + '<div id="p-ex' + i + '-receipt-box"></div>'
-    + '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Если банк тот же, что у основной оплаты — можно не прикладывать, пойдёт общий чек. Если другой — приложите чек этого перевода.</div>'
+    + '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Чек перевода за эту услугу</div>'
     + '</div></div>';
   h += '</div>';
   return h;
@@ -37869,8 +37870,8 @@ function payExtrasSum(){
  return { sum: sum, count: count };
 }
 // Сбор услуг с валидацией — null + toast если какая-то не заполнена.
-// v825.1: у каждой услуги СВОЙ банк (без предвыбора) и свой чек: банк отличается от
-// основного → чек этой услуги обязателен (это отдельный перевод на другой счёт).
+// v825.1: у каждой услуги СВОЙ банк (без предвыбора). v991: и свой чек ВСЕГДА — раньше при
+// совпадении банков общий чек молча копировался на услугу, и это прятало ошибку выбора банка.
 function payCollectExtras(mainBank){
  var cfg = payBotCfg();
  var out = [];
@@ -37883,8 +37884,10 @@ function payCollectExtras(mainBank){
   if(amt <= 0){ sdToast('Услуга ' + (i + 1) + ' (' + cat.l + '): ' + (cat.t === 'pkg' ? 'выберите пакет или введите сумму' : 'введите сумму')); return null; }
   var exBank = payChipVal('p-ex' + i + '-bank');
   if(!exBank){ sdToast('Услуга ' + (i + 1) + ' (' + cat.l + '): выберите банк услуги'); return null; }
-  if(exBank !== mainBank && !(payExtras[i].receipt)){
-   sdToast('Услуга ' + (i + 1) + ' (' + cat.l + '): оплата на другой счёт — приложите чек этой услуги');
+  if(!(payExtras[i].receipt)){
+   sdToast('Услуга ' + (i + 1) + ' (' + cat.l + '): приложите чек этой услуги');
+   var _eb = document.getElementById('p-ex' + i + '-receipt-box');
+   if(_eb){ _eb.scrollIntoView({ behavior: 'smooth', block: 'center' }); _eb.style.outline = '2px solid #B4432E'; _eb.style.outlineOffset = '3px'; _eb.style.borderRadius = '10px'; setTimeout(function(){ _eb.style.outline = ''; }, 2500); }
    return null;
   }
   var tariff = 'Услуга';
