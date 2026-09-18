@@ -13349,11 +13349,13 @@ var _incSimR = {};
 function _incSimSlug(em){ return String(em || '').toLowerCase().replace(/[^a-z0-9]/g, '_'); }
 function _incSimKey(sel, em){ return 'inc_sim_' + _incYm(sel) + '_' + String(em || '').toLowerCase(); }
 function _incSimGet(sel, em){ try { return Number(localStorage.getItem(_incSimKey(sel, em))) || 0; } catch(_){ return 0; } }
-function incomeSimSet(em, v){
+function incomeSimSet(slug, v){
+ // v998 SEC: в разметку уходит только slug (буквы/цифры), почту берём из _incSimR
+ var r0 = _incSimR[slug]; if(!r0) return; var em = String(r0.emp.email || '').toLowerCase();
  var sel = _incSel(); var n = Math.max(0, Math.round(Number(String(v).replace(/[^0-9.]/g, '')) || 0));
  try { if(n) localStorage.setItem(_incSimKey(sel, em), String(n)); else localStorage.removeItem(_incSimKey(sel, em)); } catch(_){}
- var box = document.getElementById('inc-sim-out-' + _incSimSlug(em)); if(box) box.innerHTML = _incSimOut(em, n);
- var inp = document.getElementById('inc-sim-amount-' + _incSimSlug(em)); if(inp) inp.value = n ? fmtBonus(n) : '';
+ var box = document.getElementById('inc-sim-out-' + slug); if(box) box.innerHTML = _incSimOut(slug, n);
+ var inp = document.getElementById('inc-sim-amount-' + slug); if(inp) inp.value = n ? fmtBonus(n) : '';
 }
 function _incSimCalc(r, amount){
  var pct = r.salesPlan > 0 ? Math.round(amount / r.salesPlan * 100) : 0, coeff = 0;
@@ -13361,8 +13363,8 @@ function _incSimCalc(r, amount){
  var bonus = Math.round(amount * coeff / 100);
  return { pct: pct, coeff: coeff, bonus: bonus, total: r.grade.salary + r.kpiTotal + bonus - r.minus };
 }
-function _incSimOut(em, amount){
- var r = _incSimR[String(em || '').toLowerCase()]; if(!r || !r.grade) return '';
+function _incSimOut(slug, amount){
+ var r = _incSimR[slug]; if(!r || !r.grade) return '';
  var cur = (typeof _CUR !== 'undefined' && _CUR) || 'сом';
  if(!amount) return '<div class="inc-sim-res muted">Впишите сумму продаж за месяц — покажу бонус и доход.</div>';
  var s = _incSimCalc(r, amount);
@@ -13371,19 +13373,19 @@ function _incSimOut(em, amount){
 function _incSimBlock(r, sel){
  if(!r.grade || !(r.grade.scale || []).length) return '';
  var em = String(r.emp.email || '').toLowerCase(), slug = _incSimSlug(em);
- _incSimR[em] = r;
+ _incSimR[slug] = r;
  var cur = (typeof _CUR !== 'undefined' && _CUR) || 'сом';
  var v = _incSimGet(sel, em);
  var h = '<div class="inc-sim"><div class="inc-sim-head"><div class="t">Прикинуть доход</div><div class="s">На сколько планируете продать за ' + _incMonthLabel(sel) + '?</div></div>'
-  + '<div class="inc-sim-in"><input type="text" inputmode="numeric" id="inc-sim-amount-' + slug + '" placeholder="например 600 000" value="' + (v ? fmtBonus(v) : '') + '" onchange="incomeSimSet(\x27' + em + '\x27,this.value)" onkeydown="if(event.key===\x27Enter\x27){this.blur();}"><span class="u">' + cur + '</span></div>'
-  + '<div id="inc-sim-out-' + slug + '">' + _incSimOut(em, v) + '</div>';
+  + '<div class="inc-sim-in"><input type="text" inputmode="numeric" id="inc-sim-amount-' + slug + '" placeholder="например 600 000" value="' + (v ? fmtBonus(v) : '') + '" onchange="incomeSimSet(\x27' + slug + '\x27,this.value)" onkeydown="if(event.key===\x27Enter\x27){this.blur();}"><span class="u">' + cur + '</span></div>'
+  + '<div id="inc-sim-out-' + slug + '">' + _incSimOut(slug, v) + '</div>';
  // лестница ступеней: сколько продать и какой будет бонус на каждой
  var steps = (r.grade.scale || []).filter(function(s){ return Number(s.pct) > 0; });
  if(r.salesPlan > 0 && steps.length){
   h += '<div class="inc-ladder">' + steps.map(function(s){
    var amt = Math.ceil(r.salesPlan * s.min / 100), b = Math.round(amt * Number(s.pct) / 100);
    var cls = (r.salesPct >= s.min && r.salesPct <= s.max) ? ' now' : (r.salesPct > s.max ? ' done' : '');
-   return '<div class="inc-step' + cls + '" onclick="incomeSimSet(\x27' + em + '\x27,' + amt + ')" title="Подставить в расчёт"><span class="p">' + (s.max >= 9999 ? s.min + ' %+' : s.min + ' %') + '</span><span class="a">от ' + fmtBonus(amt) + '</span><span class="b">' + s.pct + ' % → ' + fmtBonus(b) + '</span></div>';
+   return '<div class="inc-step' + cls + '" onclick="incomeSimSet(\x27' + slug + '\x27,' + amt + ')" title="Подставить в расчёт"><span class="p">' + (s.max >= 9999 ? s.min + ' %+' : s.min + ' %') + '</span><span class="a">от ' + fmtBonus(amt) + '</span><span class="b">' + s.pct + ' % → ' + fmtBonus(b) + '</span></div>';
   }).join('') + '</div><div class="inc-note" style="margin-top:6px">Ступени шкалы бонуса: сколько нужно продать и сколько это даст. Клик по ступени подставляет сумму.</div>';
  }
  return h + '</div>';
