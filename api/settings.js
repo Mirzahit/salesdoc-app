@@ -26,7 +26,35 @@ import { requirePerm } from './_perm.js'; // v979 SEC
 // v899: mkt_targetologs — кто ведёт какой рекламный кабинет { 'act_123': 'Имя' }.
 // v901: mkt_ad_sources — какие значения поля «Источник сделки» считаются рекламой.
 // v964: autopause — {enabled:bool, days:30}: действующий клиент без оплаты дольше N дней → «На паузе» (крон)
-const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_text_codes', 'mkt_ad_sources', 'mkt_exclude_ads', 'tg_digest', 'company_plans', 'plan_history', 'route_stages', 'autopause'];
+// v993: salary_grades — грейды менеджеров (оклад, премия KPI, план, шкала бонуса, веса, штраф, кто на каком грейде);
+//   salary_manual — то, что РОП ставит руками по месяцам: балл CRM и нарушения {'YYYY-MM':{email:{crm,late,noreport,complaint}}}.
+const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_text_codes', 'mkt_ad_sources', 'mkt_exclude_ads', 'tg_digest', 'company_plans', 'plan_history', 'route_stages', 'autopause', 'salary_grades', 'salary_manual'];
+
+// v993 SEC: кто видит зарплаты всех (руководители, РОП, бухгалтер) и кто их правит (без бухгалтера)
+const SALARY_KEYS = ['salary_grades', 'salary_manual'];
+const SALARY_FULL_ROLES = ['admin', 'head', 'rop', 'accountant'];
+const SALARY_EDIT_ROLES = ['admin', 'head', 'rop'];
+function salaryFullAccess(caller) { return SALARY_FULL_ROLES.includes(String(caller.role || '').toLowerCase()); }
+// Менеджеру — только его кусок: грейд, на котором он стоит, общие правила и его собственные баллы по месяцам
+function salaryOwnOnly(key, value, email) {
+  const em = String(email || '').toLowerCase();
+  if (key === 'salary_grades') {
+    const assign = (value && value.assign) || {};
+    const myId = assign[em] || null;
+    const grades = Array.isArray(value.grades) ? value.grades.filter(g => g && g.id === myId) : [];
+    const own = {}; if (myId) own[em] = myId;
+    return { grades, weights: value.weights || null, kpi_floor: value.kpi_floor, violation_fine: value.violation_fine, assign: own };
+  }
+  if (key === 'salary_manual') {
+    const out = {};
+    Object.keys(value || {}).forEach(ym => {
+      const row = value[ym] && value[ym][em];
+      if (row) out[ym] = {}; if (row) out[ym][em] = row;
+    });
+    return out;
+  }
+  return value;
+}
 
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
@@ -36,8 +64,18 @@ export default async function handler(req, res) {
       if (!ALLOWED_KEYS.includes(key)) {
         return res.status(400).json({ ok: false, error: 'key должен быть один из: ' + ALLOWED_KEYS.join(', ') });
       }
+      // v993 SEC: зарплатные настройки — только с правом «Мой доход»; менеджер получает лишь свою
+      // часть (свой грейд, свой балл и нарушения), чужие оклады и баллы наружу не уходят.
+      let caller = null;
+      if (SALARY_KEYS.includes(key)) {
+        const _r = await requirePerm(req, res, 'view_income');
+        if (!_r.ok) return;
+        caller = _r.caller;
+      }
       const rows = await sbSelect('app_settings', { key: 'eq.' + key, limit: '1' });
-      return res.status(200).json({ ok: true, key: key, value: rows.length ? rows[0].value : null });
+      let value = rows.length ? rows[0].value : null;
+      if (caller && value && !salaryFullAccess(caller)) value = salaryOwnOnly(key, value, caller.email);
+      return res.status(200).json({ ok: true, key: key, value: value });
     }
     if (req.method === 'PATCH') {
       const body = await readBody(req);
@@ -48,8 +86,17 @@ export default async function handler(req, res) {
       // v979 SEC: раньше настройки мог переписать любой вошедший (только общий токен). Планы — тем, кто
       // «Может править планы»; всё остальное (этапы, автопауза, курс, таргетологи) — только с доступом к Настройкам.
       const PLAN_KEYS = ['company_plans', 'plan_history', 'mkt_lead_plan', 'intg_month_plan'];
-      const _w = await requirePerm(req, res, PLAN_KEYS.includes(key) ? ['edit_plans', 'view_settings'] : 'view_settings');
-      if (!_w.ok) return;
+      let _w;
+      if (key === 'salary_manual') {
+        // v993 SEC: балл CRM и нарушения ставят только руководители и РОП — у менеджера тоже есть
+        // edit_plans, но свой доход он править не должен
+        _w = await requirePerm(req, res, 'view_income');
+        if (!_w.ok) return;
+        if (!SALARY_EDIT_ROLES.includes(_w.caller.role)) return res.status(403).json({ ok: false, error: 'Балл CRM и нарушения ставит руководитель' });
+      } else {
+        _w = await requirePerm(req, res, PLAN_KEYS.includes(key) ? ['edit_plans', 'view_settings'] : 'view_settings');
+        if (!_w.ok) return;
+      }
       if (body.value == null || typeof body.value !== 'object') {
         return res.status(400).json({ ok: false, error: 'value должен быть объектом' });
       }
