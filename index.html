@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v999</title>
+<title>SalesDoc — Финансовый Дашборд v1000</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13208,6 +13208,9 @@ function _incEmployees(){
 // ошибка запоминается в _inc.error и показывается на экране, а не прячется за значениями по умолчанию
 async function _incLoadData(){
  if(_inc.loaded) return;
+ // v1000: страница открыта сразу на «Моём доходе»/Грейдах — автовход ещё идёт, сотрудник не известен.
+ // Раньше запрос уходил без личности, получал 401 и отказ запоминался до перезагрузки.
+ if(typeof currentUser === 'undefined' || !currentUser || !currentUser.email){ _inc.error = null; return; }
  if(_inc.promise) return _inc.promise;
  _inc.promise = (async function(){
   _inc.loading = true; _inc.error = null;
@@ -13216,7 +13219,8 @@ async function _incLoadData(){
    if(!rs[0] || rs[0].ok !== true){ _inc.error = (rs[0] && rs[0].error) || 'сервер не ответил'; _inc.denied = /доступ/i.test(_inc.error); }
    _inc.grades = (rs[0] && rs[0].ok && rs[0].value) ? rs[0].value : null;
    _inc.manual = (rs[1] && rs[1].ok && rs[1].value) ? rs[1].value : {};
-   _inc.loaded = true;
+   // «войдите заново» (401) — личность ещё не подтянулась, следующий заход повторит запрос
+   _inc.loaded = !(rs[0] && rs[0].needLogin);
   } catch(e){ console.error('[income] settings:', e); _inc.error = 'нет связи с сервером'; _inc.manual = _inc.manual || {}; }
   _inc.loading = false; _inc.promise = null;
  })();
@@ -17172,6 +17176,16 @@ function _empWithAccess(rec){
 }
 
 // v587: общий вход в приложение под currentUser (используют и ручной логин, и автологин).
+// v1000: после входа догружаем «Мой доход»/Грейды, если они уже открыты (страница стартовала на них)
+function incomeAfterLogin(){
+ try {
+  _inc.loaded = false; _inc.error = null; _inc.denied = false; _inc.promise = null;
+  var v = document.getElementById('view-income');
+  if(v && v.style.display !== 'none') incomeLoad();
+  var p = document.getElementById('set-panel-grades');
+  if(p && p.classList.contains('active')) settingsGradesRender();
+ } catch(e){ console.error('[income] after login:', e); }
+}
 function _enterAppAsCurrentUser(){
  document.getElementById('login-screen').style.display = 'none';
  document.getElementById('sidebar').style.display = 'flex';
@@ -17179,6 +17193,7 @@ function _enterAppAsCurrentUser(){
  document.documentElement.removeAttribute('data-auto-login');
  var sp = document.getElementById('sd-splash'); if(sp) sp.remove();
  applyUserAccess();
+ try { incomeAfterLogin(); } catch(_){} // v1000
  loadAvatar();
  applyTheme(localStorage.getItem('sd-theme') || 'light');
  try { if (typeof planSyncFetch === 'function') planSyncFetch(true); } catch(_){}
