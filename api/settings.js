@@ -28,10 +28,11 @@ import { requirePerm } from './_perm.js'; // v979 SEC
 // v964: autopause — {enabled:bool, days:30}: действующий клиент без оплаты дольше N дней → «На паузе» (крон)
 // v993: salary_grades — грейды менеджеров (оклад, премия KPI, план, шкала бонуса, веса, штраф, кто на каком грейде);
 //   salary_manual — то, что РОП ставит руками по месяцам: балл CRM и нарушения {'YYYY-MM':{email:{crm,late,noreport,complaint}}}.
-const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_text_codes', 'mkt_ad_sources', 'mkt_exclude_ads', 'tg_digest', 'company_plans', 'plan_history', 'route_stages', 'autopause', 'salary_grades', 'salary_manual'];
+const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_text_codes', 'mkt_ad_sources', 'mkt_exclude_ads', 'tg_digest', 'company_plans', 'plan_history', 'route_stages', 'autopause', 'salary_grades', 'salary_manual', 'salary_closed'];
+// v1001: salary_closed — закрытые месяцы: {'YYYY-MM':{email:{closed_at,by,total,oklad,kpi,bonus,minus,sales_fact,sales_pct}}}; расчёт заморожен.
 
 // v993 SEC: кто видит зарплаты всех (руководители, РОП, бухгалтер) и кто их правит (без бухгалтера)
-const SALARY_KEYS = ['salary_grades', 'salary_manual'];
+const SALARY_KEYS = ['salary_grades', 'salary_manual', 'salary_closed'];
 const SALARY_FULL_ROLES = ['admin', 'head', 'rop', 'accountant'];
 const SALARY_EDIT_ROLES = ['admin', 'head', 'rop'];
 function salaryFullAccess(caller) { return SALARY_FULL_ROLES.includes(String(caller.role || '').toLowerCase()); }
@@ -45,7 +46,7 @@ function salaryOwnOnly(key, value, email) {
     const own = {}; if (myId) own[em] = myId;
     return { grades, weights: value.weights || null, kpi_floor: value.kpi_floor, violation_fine: value.violation_fine, assign: own };
   }
-  if (key === 'salary_manual') {
+  if (key === 'salary_manual' || key === 'salary_closed') {
     const out = {};
     Object.keys(value || {}).forEach(ym => {
       const row = value[ym] && value[ym][em];
@@ -87,7 +88,7 @@ export default async function handler(req, res) {
       // «Может править планы»; всё остальное (этапы, автопауза, курс, таргетологи) — только с доступом к Настройкам.
       const PLAN_KEYS = ['company_plans', 'plan_history', 'mkt_lead_plan', 'intg_month_plan'];
       let _w;
-      if (key === 'salary_manual') {
+      if (key === 'salary_manual' || key === 'salary_closed') {
         // v993 SEC: балл CRM и нарушения ставят только руководители и РОП — у менеджера тоже есть
         // edit_plans, но свой доход он править не должен
         _w = await requirePerm(req, res, 'view_income');

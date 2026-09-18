@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v1000</title>
+<title>SalesDoc — Финансовый Дашборд v1001</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -2875,6 +2875,32 @@ body.light .logout-nav:hover .nav-label{color:var(--ds-danger)!important;-webkit
 #view-income .inc-fc{font-size:12px;color:var(--text-soft);margin-top:8px;background:var(--accent-bg);border-radius:8px;padding:6px 10px;display:inline-block}
 #view-income .inc-fc b{color:var(--text);font-variant-numeric:tabular-nums}
 #view-income .inc-hint{font-size:12px;color:var(--accent-text);padding:0 0 8px 18px;margin-top:-4px}
+#view-income .inc-link{color:var(--accent-text);text-decoration:none;border-bottom:1px dashed currentColor;cursor:pointer;font-size:inherit}
+#view-income .inc-closed{display:inline-block;font-size:11.5px;font-weight:600;color:var(--success,#1F7A5A);background:rgba(55,178,108,.12);border-radius:999px;padding:3px 10px;margin-top:6px}
+#view-income .inc-cap-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#view-income .inc-cap-act{text-transform:none;letter-spacing:0;font-weight:500;display:flex;align-items:center;gap:8px}
+#view-income .inc-chip.v{background:rgba(229,96,77,.10)}
+#view-income .inc-chip.v b{font-family:var(--mono);font-weight:600}
+#view-income .inc-x{margin-left:6px;color:var(--text-muted);text-decoration:none;font-weight:700}
+#view-income .inc-x:hover{color:var(--ds-danger)}
+.ct-dd.inc-vform{padding:12px 14px;min-width:260px;display:flex;flex-direction:column;gap:8px}
+.ct-dd.inc-vform .lab{font-size:10.5px;font-weight:700;color:var(--text-muted)}
+.ct-dd.inc-vform .types{display:flex;gap:5px;flex-wrap:wrap}
+.ct-dd.inc-vform .tp{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--surface-2,rgba(120,120,128,.12));cursor:pointer;color:var(--text-soft)}
+.ct-dd.inc-vform .tp.on{background:var(--accent,#0F6E66);color:#fff}
+.ct-dd.inc-vform input{width:100%;padding:7px 10px;border:1px solid var(--border-faint);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:13px;font-family:inherit;outline:none}
+.ct-dd.inc-vform .acts{display:flex;gap:6px;justify-content:flex-end}
+#view-income .inc-hist{margin-top:18px;padding:14px 18px;background:var(--surface-2,rgba(120,120,128,.08));border-radius:14px}
+#view-income .inc-hist-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+#view-income .inc-hist-head .t{font-size:13px;font-weight:700;color:var(--text)}
+#view-income .inc-hist-head .d{font-size:12px;font-weight:600}
+#view-income .inc-hist-head .d.up{color:var(--success,#1F7A5A)} #view-income .inc-hist-head .d.down{color:var(--ds-danger,#B4432E)}
+#view-income .inc-bars{display:flex;align-items:flex-end;gap:10px;height:110px}
+#view-income .inc-barcol{flex:1;max-width:72px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px}
+#view-income .inc-barcol i{display:block;width:100%;background:var(--accent,#0F6E66);border-radius:6px 6px 2px 2px;min-height:4px}
+#view-income .inc-barcol.live i{background:var(--warning,#B7791F);opacity:.7}
+#view-income .inc-barcol .val{font-family:var(--mono);font-size:11px;color:var(--text);font-variant-numeric:tabular-nums}
+#view-income .inc-barcol .m{font-size:10.5px;color:var(--text-muted);white-space:nowrap}
 #view-income .inc-sim{margin-top:18px;padding:16px 18px;background:var(--surface-2,rgba(120,120,128,.08));border-radius:14px}
 #view-income .inc-sim-head .t{font-size:14px;font-weight:700;color:var(--text)}
 #view-income .inc-sim-head .s{font-size:12px;color:var(--text-soft);margin-top:2px}
@@ -13215,10 +13241,11 @@ async function _incLoadData(){
  _inc.promise = (async function(){
   _inc.loading = true; _inc.error = null;
   try {
-   var rs = await Promise.all([ sbFetch('/api/settings?key=salary_grades'), sbFetch('/api/settings?key=salary_manual') ]);
+   var rs = await Promise.all([ sbFetch('/api/settings?key=salary_grades'), sbFetch('/api/settings?key=salary_manual'), sbFetch('/api/settings?key=salary_closed') ]);
    if(!rs[0] || rs[0].ok !== true){ _inc.error = (rs[0] && rs[0].error) || 'сервер не ответил'; _inc.denied = /доступ/i.test(_inc.error); }
    _inc.grades = (rs[0] && rs[0].ok && rs[0].value) ? rs[0].value : null;
    _inc.manual = (rs[1] && rs[1].ok && rs[1].value) ? rs[1].value : {};
+   _inc.closed = (rs[2] && rs[2].ok && rs[2].value) ? rs[2].value : {}; // v1001: закрытые месяцы
    // «войдите заново» (401) — личность ещё не подтянулась, следующий заход повторит запрос
    _inc.loaded = !(rs[0] && rs[0].needLogin);
   } catch(e){ console.error('[income] settings:', e); _inc.error = 'нет связи с сервером'; _inc.manual = _inc.manual || {}; }
@@ -13302,10 +13329,26 @@ function _incCalc(emp, sel){
  r.bonus = Math.round(r.salesFact * r.coeff / 100);
  // нарушения
  r.fine = Number(G.violation_fine) || 0;
+ // v1001: нарушения — список с датой и причиной [{type,date,note}]; старые счётчики late/noreport/complaint тоже считаем
+ r.violations = Array.isArray(manual.violations) ? manual.violations.slice() : [];
+ r.violations.sort(function(a, b){ return String(a.date || '').localeCompare(String(b.date || '')); });
  r.viol = { late: Number(manual.late) || 0, noreport: Number(manual.noreport) || 0, complaint: Number(manual.complaint) || 0 };
+ r.violations.forEach(function(v){ if(r.viol[v.type] != null) r.viol[v.type]++; });
  r.violCount = r.viol.late + r.viol.noreport + r.viol.complaint;
  r.minus = r.violCount * r.fine;
  r.total = r.oklad + r.kpiTotal + r.bonus - r.minus;
+ // v1001: месяц закрыт — цифры заморожены на момент закрытия, живой пересчёт не показываем
+ var closedRow = _incClosedRow(sel, emp.email);
+ if(closedRow){
+  r.closed = closedRow;
+  r.oklad = Number(closedRow.oklad) || 0; r.kpiTotal = Number(closedRow.kpi) || 0; r.bonus = Number(closedRow.bonus) || 0;
+  r.minus = Number(closedRow.minus) || 0; r.total = Number(closedRow.total) || 0;
+  r.salesFact = Number(closedRow.sales_fact) || r.salesFact; r.salesPct = Number(closedRow.sales_pct) || r.salesPct;
+  if(Array.isArray(closedRow.kpi_rows)) closedRow.kpi_rows.forEach(function(k, i){ if(r.kpi[i]){ r.kpi[i].plan = k.plan; r.kpi[i].fact = k.fact; r.kpi[i].pct = k.pct; r.kpi[i].earned = k.earned; r.kpi[i].below = k.below; r.kpi[i].has = true; } });
+  r.days = { plan: closedRow.days_plan || r.days.plan, fact: closedRow.days_fact || r.days.plan, isPast: true, isCur: false };
+  r.hints = {}; r.forecast = null;
+  return r;
+ }
  // v995: подсказки «сколько не хватает до денег» и прогноз к концу месяца — только пока месяц идёт
  r.hints = {};
  if(r.days.isCur){
@@ -13401,6 +13444,7 @@ function _incSimBlock(r, sel){
  return h + '</div>';
 }
 function _incCard(r, sel, editable, own){
+ if(r.closed) editable = false; // v1001: закрытый месяц не правится (сначала «открыть заново»)
  var emp = r.emp, cur = (typeof _CUR !== 'undefined' && _CUR) || 'сом';
  var em = String(emp.email || '').toLowerCase();
  var h = '<div class="inc-card">';
@@ -13409,8 +13453,9 @@ function _incCard(r, sel, editable, own){
    + '<div class="inc-empty" style="padding:6px 0 0">' + (editable ? 'Назначьте грейд в Настройках → Грейды, тогда доход посчитается.' : 'Попросите руководителя назначить вам грейд — тогда здесь появится расчёт.') + '</div></div>';
   return h;
  }
- var st = r.days.isPast ? 'месяц закрыт' : (r.days.isCur ? 'на сегодня' : 'месяц ещё не начался');
- h += '<div class="inc-head"><div><div class="inc-who">' + sanitize(emp.name) + '</div><div class="inc-grade">' + sanitize(r.grade.title) + ' · ' + _incMonthLabel(sel) + '</div></div>'
+ var st = r.closed ? 'за месяц' : (r.days.isPast ? 'за месяц · не закрыт' : (r.days.isCur ? 'на сегодня' : 'месяц ещё не начался'));
+ var closedNote = r.closed ? '<div class="inc-closed">Месяц закрыт ' + _incDateRu(r.closed.closed_at) + (r.closed.by ? ' · ' + sanitize(r.closed.by) : '') + ' · цифры зафиксированы</div>' : '';
+ h += '<div class="inc-head"><div><div class="inc-who">' + sanitize(emp.name) + '</div><div class="inc-grade">' + sanitize(r.grade.title) + ' · ' + _incMonthLabel(sel) + ' · <a href="javascript:void 0" class="inc-link" onclick="incomeHowTo()">Как считается</a></div>' + closedNote + '</div>'
   + '<div class="inc-total"><div class="l">Доход ' + st + '</div><div class="v">' + _incMoney(r.total) + '</div><div class="s">оклад ' + fmtBonus(r.oklad) + ' + KPI ' + fmtBonus(r.kpiTotal) + ' + бонус ' + fmtBonus(r.bonus) + (r.minus ? ' − ' + fmtBonus(r.minus) : '') + '</div>'
   + (r.forecast ? '<div class="inc-fc">При таком темпе к концу месяца <b>' + fmtBonus(r.forecast.total) + ' ' + cur + '</b> · план продаж ' + r.forecast.salesPct + ' %</div>' : '') + '</div></div>';
  r.flags.forEach(function(f){ h += '<div class="inc-warn">' + sanitize(f) + '</div>'; });
@@ -13442,19 +13487,126 @@ function _incCard(r, sel, editable, own){
   + '<div class="inc-sum">' + fmtBonus(r.bonus) + '<small>' + (r.coeff ? r.coeff + ' % от продаж' : 'до 50 % плана бонуса нет') + '</small></div></div>';
  if(r.hints.bonus) h += '<div class="inc-hint">' + sanitize(r.hints.bonus) + '</div>';
  // нарушения
- var vi = [['late','Опоздания'],['noreport','Нет отчёта'],['complaint','Жалобы клиентов']];
- var chips = vi.map(function(v){
-  var n = r.viol[v[0]];
-  return '<span class="inc-chip">' + v[1] + ' <b' + (editable ? ' class="inc-edit" onclick="incomeEditManual(\'' + em + '\',\'' + v[0] + '\',event)" title="Клик — изменить"' : '') + '>' + n + '</b></span>';
+ var canEditV = editable && !r.closed;
+ var vlist = r.violations.map(function(v, i){
+  return '<span class="inc-chip v"><b>' + _incDateRu(v.date, true) + '</b> ' + (INC_VIOL_LABELS[v.type] || v.type) + (v.note ? ' · ' + sanitize(v.note) : '')
+   + (canEditV ? '<a href="javascript:void 0" class="inc-x" onclick="incomeViolationDel(\'' + em + '\',' + i + ')" title="Убрать">×</a>' : '') + '</span>';
  }).join('');
- h += '<div class="inc-row"><div class="n">Нарушения<small>' + (r.fine ? 'по ' + fmtBonus(r.fine) + ' ' + cur + ' за каждое' : 'сумма штрафа не задана') + '</small></div><div class="inc-mid"><div class="inc-chips">' + chips + '</div></div><div class="inc-sum' + (r.minus ? ' minus' : '') + '">' + (r.minus ? '− ' + fmtBonus(r.minus) : '0') + '</div></div>';
+ var legacy = ['late','noreport','complaint'].filter(function(k){ return Number(_incManual(sel, em)[k]) > 0; }).map(function(k){ return '<span class="inc-chip">' + INC_VIOL_LABELS[k] + ' <b>' + Number(_incManual(sel, em)[k]) + '</b></span>'; }).join('');
+ if(!vlist && !legacy) vlist = '<span class="inc-nums">нет</span>';
+ var addBtn = canEditV ? '<a href="javascript:void 0" class="inc-link" onclick="incomeViolationAdd(\'' + em + '\',event)">+ добавить</a>' : '';
+ h += '<div class="inc-row"><div class="n">Нарушения<small>' + (r.fine ? 'по ' + fmtBonus(r.fine) + ' ' + cur + ' за каждое' : 'сумма штрафа не задана') + '</small></div><div class="inc-mid"><div class="inc-chips">' + vlist + legacy + addBtn + '</div></div><div class="inc-sum' + (r.minus ? ' minus' : '') + '">' + (r.minus ? '− ' + fmtBonus(r.minus) : '0') + '</div></div>';
  h += '<div class="inc-row total"><div class="n">Итого ' + st + '</div><div class="inc-mid"></div><div class="inc-sum">' + fmtBonus(r.total) + ' ' + cur + '</div></div>';
  h += '</div>';
  if(r.days.isCur) h += '<div class="inc-note">Оклад и KPI начислены за прошедшие рабочие дни. Продажи считаются по оплатам, внесённым в программу; звонки и встречи — по Светофору.</div>';
  // v997: калькулятор «а если продам на…» — на своей карточке у менеджера и на каждой карточке у руководителя/РОПа
- if((own || editable) && !r.days.isPast) h += _incSimBlock(r, sel);
+ if((own || editable) && !r.days.isPast && !r.closed) h += _incSimBlock(r, sel);
+ h += _incHistoryBlock(r, sel); // v1001: доход по месяцам из закрытых месяцев
  h += '</div>';
  return h;
+}
+// v1001: подписи, даты, закрытые месяцы, история
+var INC_VIOL_LABELS = { late: 'опоздание', noreport: 'нет отчёта', complaint: 'жалоба клиента' };
+function _incDateRu(iso, short){
+ if(!iso) return '';
+ var d = new Date(String(iso).length === 10 ? iso + 'T00:00:00' : iso); if(isNaN(d)) return String(iso);
+ return short ? d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }).replace('.', '') : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+function _incClosedRow(sel, email){
+ var c = _inc.closed || {}; var row = (c[_incYm(sel)] || {})[String(email || '').toLowerCase()];
+ return row && row.closed_at ? row : null;
+}
+function _incMonthShort(ym){ var M = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек']; var p = ym.split('-'); return M[parseInt(p[1], 10) - 1] + ' ' + p[0].slice(2); }
+function _incHistoryBlock(r, sel){
+ var em = String(r.emp.email || '').toLowerCase(); var c = _inc.closed || {};
+ var months = Object.keys(c).filter(function(ym){ return c[ym] && c[ym][em] && c[ym][em].closed_at; }).sort();
+ var curYm = _incYm(sel);
+ var items = months.map(function(ym){ return { ym: ym, total: Number(c[ym][em].total) || 0, closed: true }; });
+ if(!r.closed && r.grade && (r.days.isCur || r.days.isPast) && months.indexOf(curYm) < 0) items.push({ ym: curYm, total: r.total, closed: false });
+ items = items.slice(-8);
+ if(items.length < 2) return '<div class="inc-note" style="margin-top:14px">История дохода по месяцам появится, когда руководитель закроет первый месяц.</div>';
+ var max = Math.max.apply(null, items.map(function(x){ return x.total; })) || 1;
+ var cur = (typeof _CUR !== 'undefined' && _CUR) || 'сом';
+ // сравниваем только закрытые месяцы: текущий ещё идёт, его сравнивать рано
+ var closedItems = items.filter(function(x){ return x.closed; });
+ var prev = closedItems.length >= 2 ? closedItems[closedItems.length - 2].total : 0, last = closedItems.length ? closedItems[closedItems.length - 1].total : 0;
+ var diff = prev ? Math.round((last - prev) / prev * 100) : 0;
+ return '<div class="inc-hist"><div class="inc-hist-head"><span class="t">Доход по месяцам</span>' + (prev ? '<span class="d ' + (diff >= 0 ? 'up' : 'down') + '">' + (diff >= 0 ? '+' : '') + diff + ' % · ' + _incMonthShort(closedItems[closedItems.length - 1].ym) + ' к ' + _incMonthShort(closedItems[closedItems.length - 2].ym) + '</span>' : '') + '</div><div class="inc-bars">'
+  + items.map(function(x){ return '<div class="inc-barcol' + (x.closed ? '' : ' live') + '" title="' + _incMonthShort(x.ym) + ' · ' + fmtBonus(x.total) + ' ' + cur + (x.closed ? '' : ' · идёт') + '"><span class="val">' + fmtBonus(Math.round(x.total / 1000)) + 'к</span><i style="height:' + Math.max(4, Math.round(x.total / max * 100)) + '%"></i><span class="m">' + _incMonthShort(x.ym) + '</span></div>'; }).join('')
+  + '</div></div>';
+}
+// v1001: ссылка «Как считается» → урок «Из чего складывается доход» в курсе «Адаптация»
+function incomeHowTo(){
+ var lessonId = 'b0000000-0000-0000-0002-000000000003';
+ showView('academy');
+ var tries = 0;
+ (function wait(){
+  if(_acad && _acad.structure){ var loc = (typeof acadLocateLesson === 'function') ? acadLocateLesson(lessonId) : null; if(loc){ _acad.courseId = loc.course.id; _acad.moduleId = loc.module.id; } acadOpenLesson(lessonId); return; }
+  if(++tries < 40) setTimeout(wait, 150);
+ })();
+}
+// v1001: нарушение с датой и причиной — мини-форма (тип чипами, дата, комментарий)
+function incomeViolationAdd(email, ev){
+ if(!_incCanEdit()) return;
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ document.querySelectorAll('.ct-dd._mkt').forEach(function(d){ if(d._cancel) d._cancel(); else d.remove(); });
+ var sel = _incSel(); var em = String(email || '').toLowerCase();
+ var rect = ev.target.getBoundingClientRect();
+ var dd = document.createElement('div'); dd.className = 'ct-dd _mkt inc-vform';
+ var type = 'late';
+ var today = (typeof taskLocalIso === 'function') ? taskLocalIso(new Date()) : new Date().toISOString().slice(0, 10);
+ dd.innerHTML = '<div class="lab">Нарушение</div><div class="types">' + Object.keys(INC_VIOL_LABELS).map(function(k){ return '<span class="tp' + (k === type ? ' on' : '') + '" data-t="' + k + '">' + INC_VIOL_LABELS[k] + '</span>'; }).join('') + '</div>'
+  + '<input type="date" class="dt" value="' + today + '"><input type="text" class="nt" placeholder="Что случилось (необязательно)">'
+  + '<div class="acts"><button class="acx-obtn" type="button">Добавить</button><button class="acx-obtn ghost" type="button" style="cursor:pointer">Отмена</button></div>';
+ document.body.appendChild(dd);
+ var x = Math.max(12, Math.min(rect.left, window.innerWidth - dd.offsetWidth - 12)), y = rect.bottom + 4;
+ if(y + dd.offsetHeight > window.innerHeight - 12) y = rect.top - dd.offsetHeight - 4;
+ dd.style.left = x + 'px'; dd.style.top = y + 'px';
+ dd._cancel = function(){ dd.remove(); };
+ dd.querySelectorAll('.tp').forEach(function(t){ t.onclick = function(){ type = t.dataset.t; dd.querySelectorAll('.tp').forEach(function(z){ z.classList.toggle('on', z === t); }); }; });
+ dd.querySelectorAll('button')[1].onclick = function(){ dd.remove(); };
+ dd.querySelectorAll('button')[0].onclick = function(){
+  var date = dd.querySelector('.dt').value || today, note = dd.querySelector('.nt').value.trim().slice(0, 120);
+  dd.remove();
+  var ym = _incYm(sel);
+  _inc.manual = _inc.manual || {}; _inc.manual[ym] = _inc.manual[ym] || {}; _inc.manual[ym][em] = Object.assign({}, _inc.manual[ym][em] || {});
+  var list = Array.isArray(_inc.manual[ym][em].violations) ? _inc.manual[ym][em].violations.slice() : [];
+  list.push({ type: type, date: date, note: note, by: (currentUser && currentUser.name) || '' });
+  _inc.manual[ym][em].violations = list;
+  _mktSaveSetting('salary_manual', _inc.manual); incomeRerender();
+ };
+ setTimeout(function(){ document.addEventListener('mousedown', function closer(e2){ if(!dd.contains(e2.target)){ dd.remove(); document.removeEventListener('mousedown', closer, true); } }, true); }, 50);
+}
+function incomeViolationDel(email, idx){
+ if(!_incCanEdit()) return;
+ var sel = _incSel(), ym = _incYm(sel), em = String(email || '').toLowerCase();
+ var row = ((_inc.manual || {})[ym] || {})[em]; if(!row || !Array.isArray(row.violations)) return;
+ var sorted = row.violations.slice().sort(function(a, b){ return String(a.date || '').localeCompare(String(b.date || '')); });
+ var victim = sorted[idx]; if(!victim) return;
+ row.violations = row.violations.filter(function(v){ return v !== victim; });
+ _mktSaveSetting('salary_manual', _inc.manual); incomeRerender();
+}
+// v1001: закрыть месяц — зафиксировать расчёт всех менеджеров; открыть заново могут admin/head
+var _incCloseArmed = false;
+function incomeCloseMonth(){
+ if(!_incCanEdit()) return;
+ if(!_incCloseArmed){ _incCloseArmed = true; incomeRerender(); setTimeout(function(){ if(_incCloseArmed){ _incCloseArmed = false; incomeRerender(); } }, 6000); return; }
+ _incCloseArmed = false;
+ var sel = _incSel(), ym = _incYm(sel);
+ _inc.closed = _inc.closed || {}; _inc.closed[ym] = _inc.closed[ym] || {};
+ var who = (currentUser && currentUser.name) || '';
+ _incEmployees().forEach(function(e){
+  var r = _incCalc(e, sel); if(!r.grade || r.closed) return;
+  _inc.closed[ym][String(e.email).toLowerCase()] = { closed_at: new Date().toISOString(), by: who, total: r.total, oklad: r.oklad, kpi: r.kpiTotal, bonus: r.bonus, minus: r.minus,
+   sales_fact: r.salesFact, sales_pct: r.salesPct, days_plan: r.days.plan, days_fact: r.days.fact, grade: r.grade.title,
+   kpi_rows: r.kpi.map(function(k){ return { key: k.key, plan: k.plan, fact: k.fact, pct: k.pct, earned: k.earned, below: !!k.below }; }) };
+ });
+ _mktSaveSetting('salary_closed', _inc.closed); incomeRerender();
+}
+function incomeReopenMonth(){
+ if(['admin','head'].indexOf(_incRole()) < 0) return;
+ var ym = _incYm(_incSel()); if(_inc.closed && _inc.closed[ym]) delete _inc.closed[ym];
+ _mktSaveSetting('salary_closed', _inc.closed || {}); incomeRerender();
 }
 function incomeRerender(){
  var root = document.getElementById('income-root');
@@ -13474,10 +13626,17 @@ function incomeRerender(){
  else if(!_incCanSeeAll()){ h += '<div class="inc-card"><div class="inc-empty">Доход считается для менеджеров и РОПов. Ваша роль — ' + sanitize(u.role || '') + '.</div></div>'; }
  if(_incCanSeeAll()){
   var others = all.filter(function(e){ return String(e.email || '').toLowerCase() !== meEmail; });
-  h += '<div class="inc-cap">Менеджеры · ' + _incMonthLabel(sel) + '</div>';
+  var ym = _incYm(sel), closedAny = !!(_inc.closed && _inc.closed[ym] && Object.keys(_inc.closed[ym]).length);
+  var closeBtn = '';
+  if(editable && !closedAny && (sel.year < new Date().getFullYear() || (sel.year === new Date().getFullYear() && sel.month <= new Date().getMonth()))){
+   closeBtn = '<button class="acx-obtn' + (_incCloseArmed ? '' : ' ghost') + '" id="inc-close-btn" style="cursor:pointer" onclick="incomeCloseMonth()">' + (_incCloseArmed ? 'Точно закрыть ' + _incMonthLabel(sel) + '? Нажмите ещё раз' : 'Закрыть месяц') + '</button>';
+  } else if(closedAny){
+   closeBtn = '<span class="inc-closed">Месяц закрыт</span>' + (['admin','head'].indexOf(_incRole()) >= 0 ? ' <a href="javascript:void 0" class="inc-link" onclick="incomeReopenMonth()">открыть заново</a>' : '');
+  }
+  h += '<div class="inc-cap inc-cap-row"><span>Менеджеры · ' + _incMonthLabel(sel) + '</span><span class="inc-cap-act">' + closeBtn + '</span></div>';
   if(!others.length) h += '<div class="inc-card"><div class="inc-empty">Нет активных менеджеров в «Сотрудниках».</div></div>';
   others.sort(function(a, b){ return String(a.name).localeCompare(String(b.name), 'ru'); }).forEach(function(e){ h += _incCard(_incCalc(e, sel), sel, editable); });
-  if(editable) h += '<div class="inc-note">Балл CRM и нарушения — кликните по числу, чтобы изменить. Грейды и шкала бонуса — в Настройках → Грейды.</div>';
+  if(editable) h += '<div class="inc-note">Балл CRM, план и факт звонков и встреч — кликните по числу. Нарушения — «+ добавить». «Закрыть месяц» фиксирует цифры всех менеджеров и убирает их из пересчёта. Грейды и шкала бонуса — в Настройках → Грейды.</div>';
  }
  h += '</div>';
  root.innerHTML = h;
@@ -13485,6 +13644,7 @@ function incomeRerender(){
 // РОП ставит балл CRM (0–100) и число нарушений за месяц; хранится в app_settings.salary_manual
 function incomeEditManual(email, field, ev){
  if(!_incCanEdit()) return;
+ if(_incClosedRow(_incSel(), email)){ if(typeof showNotif === 'function') showNotif('Мой доход', 'Месяц закрыт — сначала откройте его заново'); return; }
  var sel = _incSel(), ym = _incYm(sel), em = String(email || '').toLowerCase();
  var cur = _incManual(sel, em);
  var labels = { crm: 'Балл CRM и отчётности, % (0–100)', late: 'Опозданий за месяц', noreport: 'Дней без отчёта', complaint: 'Жалоб клиентов',
