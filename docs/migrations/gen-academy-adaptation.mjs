@@ -46,6 +46,8 @@ ON CONFLICT (id) DO UPDATE SET course_id = EXCLUDED.course_id, sort = EXCLUDED.s
       const id = lmap[a || b]; if (!id) throw new Error('битая внутренняя ссылка ' + m); return `href="#acad/${id}"`;
     }).replace(/[❌✅]\s?/g, ''); // правило проекта: без эмоджи в интерфейсе
     const qs = l.quiz.map(q => ({ q: q.q, options: q.a, correct: q.c }));
+    // ссылки на claude.ai — приватные страницы владельца, менеджеры их не откроют
+    l.links = (l.links || []).filter(x => !/^https:\/\/claude\.ai\//.test(x.u || ''));
     lesRows.push({ id: lesId(d, i), module_id: modId(d), sort: (i + 1) * 10, title: l.title, duration_label: l.minutes + ' мин', cards: [], trainer: null, questions: qs, body_html: body.trim(), links: l.links || [], pass_score: l.exam ? 100 : null, ack_text: l.ack || null, active: true });
     lines.push(`INSERT INTO academy_lessons (id, module_id, sort, title, duration_label, cards, trainer, questions, body_html, links, pass_score, ack_text, active) VALUES
  (${lit(lesId(d, i))}, ${lit(modId(d))}, ${(i + 1) * 10}, ${lit(l.title)}, ${lit(l.minutes + ' мин')}, '[]'::jsonb, NULL, ${js(qs)}, ${lit(body.trim())}, ${js(l.links || [])}, ${l.exam ? 100 : 'NULL'}, ${lit(l.ack || null)}, true)
