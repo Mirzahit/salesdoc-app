@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v994</title>
+<title>SalesDoc — Финансовый Дашборд v995</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -2872,6 +2872,10 @@ body.light .logout-nav:hover .nav-label{color:var(--ds-danger)!important;-webkit
 #view-income .inc-total .v{font-family:var(--mono);font-size:28px;font-weight:600;color:var(--text);letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
 #view-income .inc-total .v .u{font-family:var(--font);font-size:13px;font-weight:500;color:var(--text-soft)}
 #view-income .inc-total .s{font-size:11.5px;color:var(--text-soft);margin-top:3px}
+#view-income .inc-fc{font-size:12px;color:var(--text-soft);margin-top:8px;background:var(--accent-bg);border-radius:8px;padding:6px 10px;display:inline-block}
+#view-income .inc-fc b{color:var(--text);font-variant-numeric:tabular-nums}
+#view-income .inc-hint{font-size:12px;color:var(--accent-text);padding:0 0 8px 18px;margin-top:-4px}
+#view-income .inc-row + .inc-hint{padding-left:0}
 #view-income .inc-rows{display:flex;flex-direction:column}
 #view-income .inc-row{display:grid;grid-template-columns:190px 1fr 150px;gap:14px;align-items:center;padding:11px 0;border-top:1px solid var(--border-faint)}
 #view-income .inc-row.sub{grid-template-columns:190px 1fr 150px;padding:7px 0 7px 18px;border-top:none}
@@ -13260,6 +13264,44 @@ function _incCalc(emp, sel){
  r.violCount = r.viol.late + r.viol.noreport + r.viol.complaint;
  r.minus = r.violCount * r.fine;
  r.total = r.oklad + r.kpiTotal + r.bonus - r.minus;
+ // v995: подсказки «сколько не хватает до денег» и прогноз к концу месяца — только пока месяц идёт
+ r.hints = {};
+ if(r.days.isCur){
+  var pl = function(n, a, b, c){ return n + ' ' + ((typeof acadPlural === 'function') ? acadPlural(n, a, b, c) : c); }; // acadPlural отдаёт только слово
+  var units = { calls: ['звонок','звонка','звонков'], meetings: ['встреча','встречи','встреч'] };
+  r.kpi.forEach(function(k){
+   if(k.manual || !k.has || k.plan <= 0) return;
+   var u = units[k.key];
+   if(k.below){
+    var need = Math.max(1, Math.ceil(k.plan * floor) - k.fact);
+    k.hint = 'Ещё ' + pl(need, u[0], u[1], u[2]) + ' — и премия включится: ' + fmtBonus(Math.round(k.potential * floor));
+   } else if(k.pct < 100){
+    k.hint = 'Ещё ' + pl(Math.max(1, k.plan - k.fact), u[0], u[1], u[2]) + ' до полной премии ' + fmtBonus(k.potential);
+   }
+  });
+  if(r.salesPlan > 0){
+   var next = (grade.scale || []).find(function(s){ return s.min > r.salesPct && Number(s.pct) > r.coeff; });
+   if(next){
+    var needS = Math.max(0, Math.ceil(r.salesPlan * next.min / 100) - r.salesFact);
+    var bonusAt = Math.round(r.salesPlan * next.min / 100 * Number(next.pct) / 100);
+    r.hints.bonus = 'До ' + next.min + ' % плана не хватает ' + fmtBonus(needS) + ' — тогда бонус ' + fmtBonus(bonusAt) + ' (' + next.pct + ' %)';
+   }
+  }
+  // прогноз: тот же расчёт, факты растянуты по темпу (сколько дней прошло из рабочих)
+  if(r.days.fact > 0 && r.days.fact < r.days.plan){
+   var pace = r.days.plan / r.days.fact;
+   var fk = r.kpi.reduce(function(s, k){
+    if(k.manual) return s + k.earned;
+    if(!k.has || k.plan <= 0) return s;
+    var p = (k.fact * pace) / k.plan;
+    return s + (p < floor ? 0 : Math.min(k.potential, Math.round(k.potential * p)));
+   }, 0);
+   var fSales = Math.round(r.salesFact * pace);
+   var fPct = r.salesPlan > 0 ? Math.round(fSales / r.salesPlan * 100) : 0;
+   var fCoeff = 0; (grade.scale || []).forEach(function(s){ if(fPct >= s.min && fPct <= s.max) fCoeff = Number(s.pct) || 0; });
+   r.forecast = { total: grade.salary + fk + Math.round(fSales * fCoeff / 100) - r.minus, salesPct: fPct };
+  }
+ }
  return r;
 }
 function _incMoney(n){ return fmtBonus(n) + ' <span class="u">' + ((typeof _CUR !== 'undefined' && _CUR) || 'сом') + '</span>'; }
@@ -13279,7 +13321,8 @@ function _incCard(r, sel, editable){
  }
  var st = r.days.isPast ? 'месяц закрыт' : (r.days.isCur ? 'на сегодня' : 'месяц ещё не начался');
  h += '<div class="inc-head"><div><div class="inc-who">' + sanitize(emp.name) + '</div><div class="inc-grade">' + sanitize(r.grade.title) + ' · ' + _incMonthLabel(sel) + '</div></div>'
-  + '<div class="inc-total"><div class="l">Доход ' + st + '</div><div class="v">' + _incMoney(r.total) + '</div><div class="s">оклад ' + fmtBonus(r.oklad) + ' + KPI ' + fmtBonus(r.kpiTotal) + ' + бонус ' + fmtBonus(r.bonus) + (r.minus ? ' − ' + fmtBonus(r.minus) : '') + '</div></div></div>';
+  + '<div class="inc-total"><div class="l">Доход ' + st + '</div><div class="v">' + _incMoney(r.total) + '</div><div class="s">оклад ' + fmtBonus(r.oklad) + ' + KPI ' + fmtBonus(r.kpiTotal) + ' + бонус ' + fmtBonus(r.bonus) + (r.minus ? ' − ' + fmtBonus(r.minus) : '') + '</div>'
+  + (r.forecast ? '<div class="inc-fc">При таком темпе к концу месяца <b>' + fmtBonus(r.forecast.total) + ' ' + cur + '</b> · план продаж ' + r.forecast.salesPct + ' %</div>' : '') + '</div></div>';
  r.flags.forEach(function(f){ h += '<div class="inc-warn">' + sanitize(f) + '</div>'; });
  h += '<div class="inc-rows">';
  // оклад
@@ -13299,11 +13342,13 @@ function _incCard(r, sel, editable){
    mid = '<div class="inc-mid"><div class="inc-bar"><i class="' + _incBarCls(k.pct, k.below) + '" style="width:' + Math.min(100, k.pct) + '%"></i></div><span class="inc-pct">' + k.pct + ' %</span><span class="inc-nums">' + fmtBonus(k.fact) + ' из ' + fmtBonus(k.plan) + '</span></div>';
   }
   h += '<div class="inc-row sub"><div class="n">' + k.label + '</div>' + mid + '<div class="inc-sum">' + fmtBonus(k.earned) + '<small>из ' + fmtBonus(k.potential) + (k.below && k.has ? ' · ниже порога' : '') + '</small></div></div>';
+  if(k.hint) h += '<div class="inc-hint">' + sanitize(k.hint) + '</div>';
  });
  // бонус за план
  h += '<div class="inc-row"><div class="n">Бонус за план продаж<small>план ' + fmtBonus(r.salesPlan) + ' ' + cur + ' · ' + r.salesPlanFrom + '</small></div>'
   + '<div class="inc-mid"><div class="inc-bar"><i class="' + _incBarCls(r.salesPct, r.coeff === 0) + '" style="width:' + Math.min(100, r.salesPct) + '%"></i></div><span class="inc-pct">' + r.salesPct + ' %</span><span class="inc-nums">' + fmtBonus(r.salesFact) + ' из ' + fmtBonus(r.salesPlan) + '</span></div>'
   + '<div class="inc-sum">' + fmtBonus(r.bonus) + '<small>' + (r.coeff ? r.coeff + ' % от продаж' : 'до 50 % плана бонуса нет') + '</small></div></div>';
+ if(r.hints.bonus) h += '<div class="inc-hint">' + sanitize(r.hints.bonus) + '</div>';
  // нарушения
  var vi = [['late','Опоздания'],['noreport','Нет отчёта'],['complaint','Жалобы клиентов']];
  var chips = vi.map(function(v){
