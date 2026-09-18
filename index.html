@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v997</title>
+<title>SalesDoc — Финансовый Дашборд v998</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13343,13 +13343,17 @@ function _incMonthLabel(sel){
  return M[sel.month] + ' ' + sel.year;
 }
 // v997: «Прикинуть» — менеджер вписывает, на сколько планирует продать, и видит бонус и доход.
-// Ничего не сохраняем на сервере: сумма живёт в браузере (localStorage) по месяцам.
-function _incSimKey(sel){ return 'inc_sim_' + _incYm(sel); }
-function _incSimGet(sel){ try { return Number(localStorage.getItem(_incSimKey(sel))) || 0; } catch(_){ return 0; } }
-function incomeSimSet(v){
- var sel = _incSel(); var n = Math.max(0, Math.round(Number(String(v).replace(/[^\d.]/g, '')) || 0));
- try { if(n) localStorage.setItem(_incSimKey(sel), String(n)); else localStorage.removeItem(_incSimKey(sel)); } catch(_){}
- var box = document.getElementById('inc-sim-out'); if(box) box.innerHTML = _incSimOut(n);
+// Ничего не сохраняем на сервере: сумма живёт в браузере (localStorage) по месяцам и сотрудникам.
+// v998: блок есть на каждой карточке у руководителя — поэтому всё привязано к email, а не к одному id.
+var _incSimR = {};
+function _incSimSlug(em){ return String(em || '').toLowerCase().replace(/[^a-z0-9]/g, '_'); }
+function _incSimKey(sel, em){ return 'inc_sim_' + _incYm(sel) + '_' + String(em || '').toLowerCase(); }
+function _incSimGet(sel, em){ try { return Number(localStorage.getItem(_incSimKey(sel, em))) || 0; } catch(_){ return 0; } }
+function incomeSimSet(em, v){
+ var sel = _incSel(); var n = Math.max(0, Math.round(Number(String(v).replace(/[^0-9.]/g, '')) || 0));
+ try { if(n) localStorage.setItem(_incSimKey(sel, em), String(n)); else localStorage.removeItem(_incSimKey(sel, em)); } catch(_){}
+ var box = document.getElementById('inc-sim-out-' + _incSimSlug(em)); if(box) box.innerHTML = _incSimOut(em, n);
+ var inp = document.getElementById('inc-sim-amount-' + _incSimSlug(em)); if(inp) inp.value = n ? fmtBonus(n) : '';
 }
 function _incSimCalc(r, amount){
  var pct = r.salesPlan > 0 ? Math.round(amount / r.salesPlan * 100) : 0, coeff = 0;
@@ -13357,9 +13361,8 @@ function _incSimCalc(r, amount){
  var bonus = Math.round(amount * coeff / 100);
  return { pct: pct, coeff: coeff, bonus: bonus, total: r.grade.salary + r.kpiTotal + bonus - r.minus };
 }
-var _incSimR = null;
-function _incSimOut(amount){
- var r = _incSimR; if(!r || !r.grade) return '';
+function _incSimOut(em, amount){
+ var r = _incSimR[String(em || '').toLowerCase()]; if(!r || !r.grade) return '';
  var cur = (typeof _CUR !== 'undefined' && _CUR) || 'сом';
  if(!amount) return '<div class="inc-sim-res muted">Впишите сумму продаж за месяц — покажу бонус и доход.</div>';
  var s = _incSimCalc(r, amount);
@@ -13367,19 +13370,20 @@ function _incSimOut(amount){
 }
 function _incSimBlock(r, sel){
  if(!r.grade || !(r.grade.scale || []).length) return '';
- _incSimR = r;
+ var em = String(r.emp.email || '').toLowerCase(), slug = _incSimSlug(em);
+ _incSimR[em] = r;
  var cur = (typeof _CUR !== 'undefined' && _CUR) || 'сом';
- var v = _incSimGet(sel);
+ var v = _incSimGet(sel, em);
  var h = '<div class="inc-sim"><div class="inc-sim-head"><div class="t">Прикинуть доход</div><div class="s">На сколько планируете продать за ' + _incMonthLabel(sel) + '?</div></div>'
-  + '<div class="inc-sim-in"><input type="text" inputmode="numeric" id="inc-sim-amount" placeholder="например 600 000" value="' + (v ? fmtBonus(v) : '') + '" onchange="incomeSimSet(this.value)" onkeydown="if(event.key===\'Enter\'){this.blur();}"><span class="u">' + cur + '</span></div>'
-  + '<div id="inc-sim-out">' + _incSimOut(v) + '</div>';
+  + '<div class="inc-sim-in"><input type="text" inputmode="numeric" id="inc-sim-amount-' + slug + '" placeholder="например 600 000" value="' + (v ? fmtBonus(v) : '') + '" onchange="incomeSimSet(\x27' + em + '\x27,this.value)" onkeydown="if(event.key===\x27Enter\x27){this.blur();}"><span class="u">' + cur + '</span></div>'
+  + '<div id="inc-sim-out-' + slug + '">' + _incSimOut(em, v) + '</div>';
  // лестница ступеней: сколько продать и какой будет бонус на каждой
  var steps = (r.grade.scale || []).filter(function(s){ return Number(s.pct) > 0; });
  if(r.salesPlan > 0 && steps.length){
   h += '<div class="inc-ladder">' + steps.map(function(s){
    var amt = Math.ceil(r.salesPlan * s.min / 100), b = Math.round(amt * Number(s.pct) / 100);
    var cls = (r.salesPct >= s.min && r.salesPct <= s.max) ? ' now' : (r.salesPct > s.max ? ' done' : '');
-   return '<div class="inc-step' + cls + '" onclick="var i=document.getElementById(\'inc-sim-amount\');if(i){i.value=\'' + fmtBonus(amt) + '\';incomeSimSet(' + amt + ');}" title="Подставить в расчёт"><span class="p">' + (s.max >= 9999 ? s.min + ' %+' : s.min + ' %') + '</span><span class="a">от ' + fmtBonus(amt) + '</span><span class="b">' + s.pct + ' % → ' + fmtBonus(b) + '</span></div>';
+   return '<div class="inc-step' + cls + '" onclick="incomeSimSet(\x27' + em + '\x27,' + amt + ')" title="Подставить в расчёт"><span class="p">' + (s.max >= 9999 ? s.min + ' %+' : s.min + ' %') + '</span><span class="a">от ' + fmtBonus(amt) + '</span><span class="b">' + s.pct + ' % → ' + fmtBonus(b) + '</span></div>';
   }).join('') + '</div><div class="inc-note" style="margin-top:6px">Ступени шкалы бонуса: сколько нужно продать и сколько это даст. Клик по ступени подставляет сумму.</div>';
  }
  return h + '</div>';
@@ -13435,7 +13439,8 @@ function _incCard(r, sel, editable, own){
  h += '<div class="inc-row total"><div class="n">Итого ' + st + '</div><div class="inc-mid"></div><div class="inc-sum">' + fmtBonus(r.total) + ' ' + cur + '</div></div>';
  h += '</div>';
  if(r.days.isCur) h += '<div class="inc-note">Оклад и KPI начислены за прошедшие рабочие дни. Продажи считаются по оплатам, внесённым в программу; звонки и встречи — по Светофору.</div>';
- if(own && !r.days.isPast) h += _incSimBlock(r, sel); // v997: калькулятор «а если продам на…»
+ // v997: калькулятор «а если продам на…» — на своей карточке у менеджера и на каждой карточке у руководителя/РОПа
+ if((own || editable) && !r.days.isPast) h += _incSimBlock(r, sel);
  h += '</div>';
  return h;
 }
