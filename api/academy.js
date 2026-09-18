@@ -8,6 +8,8 @@
 //   GET  ?rating=1           → «Баллы мощности»: доска месяца + история победителей (все авторизованные)
 //   POST {action:'progress', lesson_id, notes_done?, trainer_score?, trainer_review?}
 //   POST {action:'check_test', lesson_id, answers:[int]} → сервер считает балл, зачёт от 80%
+//        (v992: у урока может быть свой порог pass_score, экзамен = 100)
+//   POST {action:'ack', lesson_id} → v992: лист ознакомления (ack_at), только если тест сдан
 //
 // v816: рейтинг «Баллы мощности». Начисления ТОЛЬКО здесь, журнал academy_points,
 // идемпотентность на UNIQUE(user_email,dedup_key). Сбой журнала не роняет прогресс.
@@ -21,6 +23,11 @@ import { checkAuth } from './_auth.js';
 export const config = { maxDuration: 30 };
 
 const PASS_SCORE = 80;
+// v992: порог зачёта урока — свой (1..100) или общий 80
+function passScoreOf(l) {
+  const n = parseInt(l && l.pass_score, 10);
+  return n >= 1 && n <= 100 ? n : PASS_SCORE;
+}
 
 // ===== v816: «Баллы мощности» =====
 // Месяц гонки и неделя регулярности — по Алматы (UTC+5). Без сдвига зачёт в 02:00
@@ -96,13 +103,16 @@ async function awardTrainer(email, lessonId, bestEver) {
 async function checkModuleBonus(email, moduleId) {
   try {
     if (!moduleId) return 0;
-    const lessons = await sbSelect('academy_lessons', { module_id: 'eq.' + moduleId, active: 'eq.true', select: 'id' });
+    const lessons = await sbSelect('academy_lessons', { module_id: 'eq.' + moduleId, active: 'eq.true', select: 'id,ack_text' });
     if (!lessons.length) return 0;
     const ids = lessons.map(l => l.id);
+    const needAck = new Set(lessons.filter(l => l.ack_text).map(l => l.id));
     const prog = await sbSelect('academy_progress', {
-      user_email: 'eq.' + email, lesson_id: 'in.(' + ids.join(',') + ')', passed: 'eq.true', select: 'lesson_id'
+      user_email: 'eq.' + email, lesson_id: 'in.(' + ids.join(',') + ')', passed: 'eq.true', select: 'lesson_id,ack_at'
     });
-    if (new Set(prog.map(p => p.lesson_id)).size < ids.length) return 0;
+    // v992: урок с листом ознакомления считается сданным только после подписи (как на фронте)
+    const done = new Set(prog.filter(p => !needAck.has(p.lesson_id) || p.ack_at).map(p => p.lesson_id));
+    if (done.size < ids.length) return 0;
     let got = await award(email, 'module_pass', moduleId, 'module_pass:' + moduleId, POINTS.module_pass);
     if (got > 0) {
       const jr = await sbSelect('academy_points', {
@@ -176,7 +186,7 @@ export default async function handler(req, res) {
         const [courses, mods, lessons] = await Promise.all([
           sbSelect('academy_courses', { order: 'sort.asc' }),
           sbSelect('academy_modules', { active: 'eq.true', order: 'sort.asc' }),
-          sbSelect('academy_lessons', { active: 'eq.true', order: 'sort.asc', select: 'id,module_id,sort,title,duration_label,trainer,questions,video_path' })
+          sbSelect('academy_lessons', { active: 'eq.true', order: 'sort.asc', select: 'id,module_id,sort,title,duration_label,trainer,questions,video_path,ack_text,pass_score' })
         ]);
         const byMod = {};
         lessons.forEach(l => {
@@ -184,6 +194,8 @@ export default async function handler(req, res) {
             id: l.id, sort: l.sort, title: l.title, duration_label: l.duration_label,
             has_trainer: !!l.trainer,
             has_video: !!l.video_path,
+            has_ack: !!l.ack_text,          // v992: урок зачтён только после листа ознакомления
+            pass_score: passScoreOf(l),
             questions_count: Array.isArray(l.questions) ? l.questions.length : 0
           });
         });
@@ -197,7 +209,7 @@ export default async function handler(req, res) {
             console.warn('[api/academy] модуль без курса, показан в первом активном:', m.id, m.title);
             cid = fallbackCourse ? fallbackCourse.id : cid;
           }
-          (byCourse[cid] = byCourse[cid] || []).push({ id: m.id, sort: m.sort, title: m.title, lessons: byMod[m.id] || [] });
+          (byCourse[cid] = byCourse[cid] || []).push({ id: m.id, sort: m.sort, title: m.title, intro: m.intro || null, gate: m.gate || null, lessons: byMod[m.id] || [] });
         });
         return res.status(200).json({
           ok: true,
@@ -218,6 +230,10 @@ export default async function handler(req, res) {
           lesson: {
             id: l.id, module_id: l.module_id, title: l.title, duration_label: l.duration_label,
             cards: l.cards || [],
+            body_html: l.body_html || null, // v992: готовая разметка урока; фронт пропускает через allowlist
+            links: Array.isArray(l.links) ? l.links : [],
+            pass_score: passScoreOf(l),
+            ack_text: l.ack_text || null,
             trainer: l.trainer || null,
             has_video: !!l.video_path, // v808: сам путь не отдаём — плеер берёт подписанную ссылку через ?video=
             // Правильные ответы наружу не отдаём — проверка только в check_test
@@ -248,11 +264,24 @@ export default async function handler(req, res) {
 
       if (q.team === '1') {
         if (!(await isHead(email))) return res.status(403).json({ ok: false, error: 'только для руководителей' });
-        const [rows, lessons] = await Promise.all([
+        // v992: с двумя курсами прогресс считается по курсу — отдаём карту урок→курс и размеры курсов
+        const [rows, lessons, mods, courses] = await Promise.all([
           sbSelect('academy_progress', { order: 'updated_at.desc', limit: '2000' }),
-          sbSelect('academy_lessons', { active: 'eq.true', select: 'id' })
+          sbSelect('academy_lessons', { active: 'eq.true', select: 'id,module_id,ack_text' }),
+          sbSelect('academy_modules', { active: 'eq.true', select: 'id,course_id' }),
+          sbSelect('academy_courses', { select: 'id,title' })
         ]);
-        return res.status(200).json({ ok: true, rows, lessons_total: lessons.length });
+        const modCourse = {}; mods.forEach(m => { modCourse[m.id] = m.course_id || null; });
+        const lessonMap = {}; const totals = {};
+        lessons.forEach(l => {
+          const cid = modCourse[l.module_id] || null;
+          lessonMap[l.id] = { course_id: cid, has_ack: !!l.ack_text };
+          if (cid) totals[cid] = (totals[cid] || 0) + 1;
+        });
+        return res.status(200).json({
+          ok: true, rows, lessons_total: lessons.length, lessons: lessonMap,
+          courses: courses.map(c => ({ id: c.id, title: c.title, total: totals[c.id] || 0 }))
+        });
       }
 
       // v816: «Баллы мощности» — доска текущего месяца + история победителей.
@@ -312,7 +341,7 @@ export default async function handler(req, res) {
       // v808: прогресс читаем только там, где он нужен (upload_sign/set_video работают
       // с lesson_id и падали бы на select с невалидным uuid до своей ветки)
       let cur = null;
-      if (body.action === 'progress' || body.action === 'check_test') {
+      if (body.action === 'progress' || body.action === 'check_test' || body.action === 'ack') {
         const existing = await sbSelect('academy_progress', {
           user_email: 'eq.' + email, lesson_id: 'eq.' + lessonId, limit: '1'
         });
@@ -365,9 +394,10 @@ export default async function handler(req, res) {
       }
 
       if (body.action === 'check_test') {
-        const lessons = await sbSelect('academy_lessons', { id: 'eq.' + lessonId, select: 'questions,module_id', limit: '1' });
+        const lessons = await sbSelect('academy_lessons', { id: 'eq.' + lessonId, select: 'questions,module_id,pass_score', limit: '1' });
         if (!lessons.length) return res.status(404).json({ ok: false, error: 'урок не найден' });
         const questions = lessons[0].questions || [];
+        const passScore = passScoreOf(lessons[0]);
         const answers = Array.isArray(body.answers) ? body.answers : [];
         if (!questions.length) return res.status(400).json({ ok: false, error: 'в уроке нет теста' });
         if (answers.length !== questions.length) return res.status(400).json({ ok: false, error: 'ответы не на все вопросы' });
@@ -379,7 +409,7 @@ export default async function handler(req, res) {
           else wrong.push(i);
         });
         const score = Math.round(correct / questions.length * 100);
-        const passedNow = score >= PASS_SCORE;
+        const passedNow = score >= passScore;
 
         const row = {
           user_email: email,
@@ -404,7 +434,24 @@ export default async function handler(req, res) {
           pointsAwarded += await awardOnPass(email, lessons[0].module_id || null);
         }
         // Правильные индексы не раскрываем — только какие вопросы мимо
-        return res.status(200).json({ ok: true, score, passed: saved[0].passed, correct_count: correct, total: questions.length, wrong_indexes: wrong, attempts: saved[0].test_attempts, points_awarded: pointsAwarded });
+        return res.status(200).json({ ok: true, score, passed: saved[0].passed, pass_score: passScore, correct_count: correct, total: questions.length, wrong_indexes: wrong, attempts: saved[0].test_attempts, points_awarded: pointsAwarded });
+      }
+
+      // v992: лист ознакомления. Отметка ставится один раз, только после сданного теста
+      // (или сразу, если теста у урока нет). Баллы не начисляются — это подпись, не учёба.
+      if (body.action === 'ack') {
+        const ls = await sbSelect('academy_lessons', { id: 'eq.' + lessonId, select: 'ack_text,questions', limit: '1' });
+        if (!ls.length) return res.status(404).json({ ok: false, error: 'урок не найден' });
+        if (!ls[0].ack_text) return res.status(400).json({ ok: false, error: 'в этом уроке нет листа ознакомления' });
+        const hasTest = Array.isArray(ls[0].questions) && ls[0].questions.length > 0;
+        if (hasTest && !(cur && cur.passed)) return res.status(400).json({ ok: false, error: 'сначала сдай тест' });
+        if (cur && cur.ack_at) return res.status(200).json({ ok: true, row: cur });
+        // merge-duplicates: остальные колонки строки не трогаем
+        const saved = await sbUpsert('academy_progress', {
+          user_email: email, lesson_id: lessonId,
+          ack_at: new Date().toISOString(), updated_at: new Date().toISOString()
+        }, 'user_email,lesson_id');
+        return res.status(200).json({ ok: true, row: saved[0] });
       }
 
       // v808: подписанный upload-URL для загрузки видео (только руководители).
