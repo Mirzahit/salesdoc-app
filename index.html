@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v998</title>
+<title>SalesDoc — Финансовый Дашборд v999</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13204,17 +13204,23 @@ function _incEmployees(){
    && String(e.country || '').toUpperCase() !== 'KZ';
  });
 }
+// v999: одна загрузка на всех — второй вызов ждёт первую, а не рисует пустое состояние;
+// ошибка запоминается в _inc.error и показывается на экране, а не прячется за значениями по умолчанию
 async function _incLoadData(){
- if(_inc.loaded || _inc.loading) return;
- _inc.loading = true;
- try {
-  var rs = await Promise.all([ sbFetch('/api/settings?key=salary_grades'), sbFetch('/api/settings?key=salary_manual') ]);
-  if(rs[0] && rs[0].ok === false && /доступ/i.test(rs[0].error || '')) { _inc.denied = true; }
-  _inc.grades = (rs[0] && rs[0].ok && rs[0].value) ? rs[0].value : null;
-  _inc.manual = (rs[1] && rs[1].ok && rs[1].value) ? rs[1].value : {};
-  _inc.loaded = true;
- } catch(e){ console.error('[income] settings:', e); _inc.manual = _inc.manual || {}; }
- _inc.loading = false;
+ if(_inc.loaded) return;
+ if(_inc.promise) return _inc.promise;
+ _inc.promise = (async function(){
+  _inc.loading = true; _inc.error = null;
+  try {
+   var rs = await Promise.all([ sbFetch('/api/settings?key=salary_grades'), sbFetch('/api/settings?key=salary_manual') ]);
+   if(!rs[0] || rs[0].ok !== true){ _inc.error = (rs[0] && rs[0].error) || 'сервер не ответил'; _inc.denied = /доступ/i.test(_inc.error); }
+   _inc.grades = (rs[0] && rs[0].ok && rs[0].value) ? rs[0].value : null;
+   _inc.manual = (rs[1] && rs[1].ok && rs[1].value) ? rs[1].value : {};
+   _inc.loaded = true;
+  } catch(e){ console.error('[income] settings:', e); _inc.error = 'нет связи с сервером'; _inc.manual = _inc.manual || {}; }
+  _inc.loading = false; _inc.promise = null;
+ })();
+ return _inc.promise;
 }
 async function incomeLoad(){
  var root = document.getElementById('income-root');
@@ -13453,6 +13459,7 @@ function incomeRerender(){
  var u = (typeof currentUser !== 'undefined') ? currentUser : null;
  if(!u){ root.innerHTML = ''; return; }
  if(_inc.denied){ root.innerHTML = '<div class="inc-card"><div class="inc-empty">Нет доступа к разделу «Мой доход».</div></div>'; return; }
+ if(_inc.error){ root.innerHTML = '<div class="inc-card"><div class="inc-empty">Не удалось загрузить грейды: ' + sanitize(_inc.error) + '<br><button class="acx-obtn" style="margin-top:12px" onclick="_inc.loaded=false;incomeLoad()">Попробовать снова</button></div></div>'; return; }
  var sel = _incSel();
  var all = _incEmployees();
  var meEmail = String(u.email || '').toLowerCase();
@@ -18293,6 +18300,7 @@ async function settingsGradesRender(){
 function _settingsGradesDraw(){
  var body = document.getElementById('set-grades-body');
  if(!body) return;
+ if(_inc.error){ body.innerHTML = '<div class="panel"><div class="panel-title">Грейды</div><div style="font-size:12.5px;color:var(--ds-danger)">Не удалось загрузить грейды: ' + sanitize(_inc.error) + '</div><div style="font-size:12px;color:var(--text-muted);margin-top:6px">Обновите страницу. Если не помогает — выйдите и войдите заново.</div><button class="acx-obtn" style="margin-top:12px" onclick="_inc.loaded=false;settingsGradesRender()">Попробовать снова</button></div>'; return; }
  var G = _incGrades(); var cur = (typeof _CUR !== 'undefined' && _CUR) || 'сом';
  var h = '<div class="panel"><div class="panel-title">Грейды</div><div class="gr-grid">';
  G.grades.forEach(function(g){
@@ -18325,7 +18333,9 @@ function _settingsGradesDraw(){
  h += '</div><div style="font-size:11px;color:var(--text-muted);margin-top:12px;max-width:520px">Эти числа использует экран «Мой доход». Звонки, встречи и план продаж на месяц по-прежнему задаются в Светофоре.</div></div>';
  body.innerHTML = h;
 }
-function _incSaveGrades(){ _mktSaveSetting('salary_grades', _incGrades()); _settingsGradesDraw(); if(typeof incomeRerender === 'function') incomeRerender(); }
+function _incSaveGrades(){
+ if(!_inc.loaded || _inc.error){ if(typeof showNotif === 'function') showNotif('Грейды', 'Данные не загружены — обновите страницу и повторите'); return; }
+ _mktSaveSetting('salary_grades', _incGrades()); _settingsGradesDraw(); if(typeof incomeRerender === 'function') incomeRerender(); }
 function settingsGradeEdit(gradeId, field, ev){
  var g = _incGrades().grades.find(function(x){ return x.id === gradeId; }); if(!g) return;
  var labels = { salary: 'Оклад в месяц', kpi_bonus: 'Премия KPI при 100 %', sales_plan: 'План продаж в месяц' };
