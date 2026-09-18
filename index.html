@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v995</title>
+<title>SalesDoc — Финансовый Дашборд v996</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13217,13 +13217,24 @@ function _incCalc(emp, sel){
  if(typeof planLastData !== 'undefined' && planLastData && planLastData.agents){
   agent = planLastData.agents.find(function(a){ return _mySalesFirst(a.name) === first; }) || null;
  }
- if(!agent) r.flags.push('В Светофоре за этот месяц нет строки с именем «' + emp.name + '» — звонки и встречи не посчитаны');
+ if(!agent) r.flags.push('В Светофоре за этот месяц нет строки с именем «' + emp.name + '» — звонки и встречи можно поставить вручную');
  var kpiOf = function(sub){
   if(!agent) return null;
   var k = (agent.kpis || []).find(function(x){ return String(x.name || '').toLowerCase().indexOf(sub) >= 0; });
   return k ? { plan: Number(k.plan) || 0, fact: Number(k.fact) || 0 } : null;
  };
  var calls = kpiOf('звонк'), meetings = kpiOf('встреч'), salesK = kpiOf('продаж');
+ // v996: руководитель может поправить план/факт звонков и встреч на экране — своё значение
+ // перекрывает Светофор за этот месяц (хранится в salary_manual рядом с баллом CRM)
+ var manual0 = _incManual(sel, emp.email);
+ var ovr = function(base, pk, fk){
+  var o = { plan: base ? base.plan : 0, fact: base ? base.fact : 0, edited: false, has: !!base };
+  if(manual0[pk] != null && manual0[pk] !== ''){ o.plan = Number(manual0[pk]) || 0; o.edited = true; o.has = true; }
+  if(manual0[fk] != null && manual0[fk] !== ''){ o.fact = Number(manual0[fk]) || 0; o.edited = true; o.has = true; }
+  return o;
+ };
+ calls = ovr(calls, 'calls_plan', 'calls_fact');
+ meetings = ovr(meetings, 'meetings_plan', 'meetings_fact');
  // рабочие дни: прошлый месяц — полный, текущий — сколько прошло (по Светофору, иначе по календарю)
  var now = new Date();
  var isCur = (sel.year === now.getFullYear() && sel.month === now.getMonth());
@@ -13244,10 +13255,11 @@ function _incCalc(emp, sel){
   return { key: key, label: label, plan: plan, fact: fact, pct: Math.round(p * 100), potential: pot, earned: earned, below: p < floor, has: pct != null || plan > 0 };
  }
  r.kpi = [
-  kpiRow('calls', 'Звонки', calls ? calls.plan : 0, calls ? calls.fact : 0, null, W.calls),
-  kpiRow('meetings', 'Встречи', meetings ? meetings.plan : 0, meetings ? meetings.fact : 0, null, W.meetings),
+  kpiRow('calls', 'Звонки', calls.plan, calls.fact, null, W.calls),
+  kpiRow('meetings', 'Встречи', meetings.plan, meetings.fact, null, W.meetings),
   kpiRow('crm', 'CRM и отчётность', 100, Math.round(crmPct * 100), crmPct, W.crm)
  ];
+ r.kpi[0].edited = calls.edited; r.kpi[1].edited = meetings.edited;
  r.kpi[2].manual = true; r.kpi[2].isDefault = (manual.crm == null || manual.crm === '');
  r.kpiTotal = r.kpi.reduce(function(s, k){ return s + k.earned; }, 0);
  // бонус за план продаж
@@ -13336,10 +13348,12 @@ function _incCard(r, sel, editable){
   if(k.manual){
    var val = (editable ? '<span class="inc-edit" onclick="incomeEditManual(\'' + em + '\',\'crm\',event)" title="Клик — изменить балл">' : '<span>') + k.pct + ' %</span>';
    mid = '<div class="inc-mid"><div class="inc-bar"><i class="' + _incBarCls(k.pct, k.below) + '" style="width:' + Math.min(100, k.pct) + '%"></i></div><span class="inc-nums">балл ' + val + (k.isDefault ? ' · по умолчанию' : ' · поставил РОП') + '</span></div>';
-  } else if(!k.has){
-   mid = '<div class="inc-mid"><span class="inc-nums">нет данных в Светофоре</span></div>';
   } else {
-   mid = '<div class="inc-mid"><div class="inc-bar"><i class="' + _incBarCls(k.pct, k.below) + '" style="width:' + Math.min(100, k.pct) + '%"></i></div><span class="inc-pct">' + k.pct + ' %</span><span class="inc-nums">' + fmtBonus(k.fact) + ' из ' + fmtBonus(k.plan) + '</span></div>';
+   // v996: факт и план — кликабельны для руководителя/РОПа
+   var fEl = editable ? '<span class="inc-edit" onclick="incomeEditManual(\'' + em + '\',\'' + k.key + '_fact\',event)" title="Клик — изменить факт">' + fmtBonus(k.fact) + '</span>' : fmtBonus(k.fact);
+   var pEl = editable ? '<span class="inc-edit" onclick="incomeEditManual(\'' + em + '\',\'' + k.key + '_plan\',event)" title="Клик — изменить план">' + fmtBonus(k.plan) + '</span>' : fmtBonus(k.plan);
+   var src = k.edited ? ' · поставил РОП' : (k.has ? '' : ' · нет в Светофоре');
+   mid = '<div class="inc-mid"><div class="inc-bar"><i class="' + _incBarCls(k.pct, k.below) + '" style="width:' + Math.min(100, k.pct) + '%"></i></div><span class="inc-pct">' + k.pct + ' %</span><span class="inc-nums">' + fEl + ' из ' + pEl + src + '</span></div>';
   }
   h += '<div class="inc-row sub"><div class="n">' + k.label + '</div>' + mid + '<div class="inc-sum">' + fmtBonus(k.earned) + '<small>из ' + fmtBonus(k.potential) + (k.below && k.has ? ' · ниже порога' : '') + '</small></div></div>';
   if(k.hint) h += '<div class="inc-hint">' + sanitize(k.hint) + '</div>';
@@ -13392,8 +13406,16 @@ function incomeEditManual(email, field, ev){
  if(!_incCanEdit()) return;
  var sel = _incSel(), ym = _incYm(sel), em = String(email || '').toLowerCase();
  var cur = _incManual(sel, em);
- var labels = { crm: 'Балл CRM и отчётности, % (0–100)', late: 'Опозданий за месяц', noreport: 'Дней без отчёта', complaint: 'Жалоб клиентов' };
- var curVal = (field === 'crm') ? ((cur.crm != null && cur.crm !== '') ? Number(cur.crm) : 100) : (Number(cur[field]) || 0);
+ var labels = { crm: 'Балл CRM и отчётности, % (0–100)', late: 'Опозданий за месяц', noreport: 'Дней без отчёта', complaint: 'Жалоб клиентов',
+  calls_plan: 'План звонков на месяц', calls_fact: 'Факт звонков', meetings_plan: 'План встреч на месяц', meetings_fact: 'Факт встреч' };
+ var curVal;
+ if(field === 'crm') curVal = (cur.crm != null && cur.crm !== '') ? Number(cur.crm) : 100;
+ else if(/_(plan|fact)$/.test(field)){
+  // текущее значение: своё, если ставили, иначе то, что сейчас на экране (из Светофора)
+  if(cur[field] != null && cur[field] !== '') curVal = Number(cur[field]);
+  else { var emp0 = _incEmployees().find(function(e){ return String(e.email || '').toLowerCase() === em; }); var r0 = emp0 ? _incCalc(emp0, sel) : null; var k0 = r0 && r0.kpi ? r0.kpi.find(function(k){ return k.key === field.split('_')[0]; }) : null; curVal = k0 ? k0[field.split('_')[1]] : 0; }
+ }
+ else curVal = Number(cur[field]) || 0;
  _mktNumPopover(ev, { label: labels[field] || field, value: curVal, onSave: function(n){
   if(field === 'crm') n = Math.max(0, Math.min(100, n));
   _inc.manual = _inc.manual || {};
