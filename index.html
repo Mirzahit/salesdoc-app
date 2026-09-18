@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v1001</title>
+<title>SalesDoc — Финансовый Дашборд v1002</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -5026,7 +5026,8 @@ body{font-feature-settings:"tnum" 1}
 #view-payments .data-table tr:hover td{ background:var(--hover) !important; }
 /* Дата(1) — моно, тише; Сумма(5) — моно, справа */
 #view-payments .data-table td:nth-child(1){ font-family:var(--mono) !important; color:var(--text-soft) !important; font-size:12.5px !important; white-space:nowrap; }
-#view-payments .data-table th:nth-child(5),#view-payments .data-table td:nth-child(5){ text-align:right; }
+/* v1002: !important — общий .data-table th{text-align:left !important} перебивал заголовок «Сумма», и он уезжал влево от цифр */
+#view-payments .data-table th:nth-child(5),#view-payments .data-table td:nth-child(5){ text-align:right !important; }
 #view-payments .data-table td:nth-child(5){ font-family:var(--mono) !important; font-feature-settings:"tnum" 1; color:var(--text) !important; font-weight:500 !important; letter-spacing:-.2px; white-space:nowrap; }
 /* лишние колонки скрыты: Способ(6), Комментарий(9), инспект(10) */
 /* v832-fix: после добавления колонки «Чек» (9-я) старые номера сместились — правило прятало
@@ -14817,7 +14818,8 @@ function renderAllPayments() {
  +'<td style="color:var(--text-muted)">'+sanitize(p.date)+'</td>'
  +'<td>'+sanitize(p.client)+'</td>'
  +'<td style="color:var(--text-secondary);font-size:11px"><span style="display:inline-flex;align-items:center;gap:6px">'+renderAvatar(p.managerName||empName(p.employee),'avatar-sm')+'<span>'+sanitize(p.managerName||empName(p.employee))+'</span></span></td>'
- +'<td style="color:var(--text-secondary)">'+sanitize( catNames[p.category]||p.category)+'</td>'
+ /* v1002: статья правится кликом — раньше только в таблице «Доходы» */
+ +'<td style="color:var(--text-secondary);cursor:pointer" onclick="payCatMenu(event,\''+_pid+'\')" title="'+sanitize(p.categoryRaw||'')+' — нажмите, чтобы изменить статью">'+sanitize( catNames[p.category]||p.category)+'</td>'
  +'<td style="color:var(--gold-bright);font-weight:600">'+fmtFull(p.amount)+'</td>'
  +'<td style="color:var(--text-muted)">'+sanitize( methodNames[p.method]||p.method||'—')+'</td>'
  +'<td>'+seatBtn+'</td>'
@@ -14834,6 +14836,52 @@ function renderAllPayments() {
  // v834: греем подписанные ссылки всех видимых чеков — клик по «Чек» открывается сразу,
  // без ожидания холодного сервера (чеков в выдаче единицы, трафик копеечный)
  try { ps.filter(function(p){ return p.receiptPath; }).slice(0, 30).forEach(function(p){ payReceiptPrefetch(p.id); }); } catch(_){}
+}
+
+// v1002: список статей для смены — как в форме «+Оплата» (без «Возврат»), плюс текущая
+// статья записи, если её в списке нет (старые написания из таблицы).
+function payCatOptions(p){
+ var cats = [];
+ try { cats = (payBotCfg().categories || []).filter(function(c){ return c.t !== 'refund'; }).map(function(c){ return c.l; }); } catch(_){}
+ var cur = String((p && p.categoryRaw) || '').trim();
+ if(cur && cats.indexOf(cur) < 0) cats.unshift(cur);
+ return cats.map(function(l){ return { value:l, label:l }; });
+}
+// Смена статьи: сначала показываем, потом пишем в базу и в лист (колонка C).
+// Лист не записался — сервер откатывает базу, мы — строку. renderAll — чтобы дашборд
+// («Источник дохода») пересчитался сразу.
+async function paySetCategory(p, raw){
+ raw = String(raw || '').trim();
+ if(!p || !raw || raw === String(p.categoryRaw || '').trim()) return false;
+ var sbId = p._sbId || (typeof p.id === 'string' && p.id.length > 20 ? p.id : null);
+ if(!sbId){ showNotif('Нельзя изменить', p.client + ' — у записи нет связи с базой.'); return false; }
+ var prevRaw = p.categoryRaw, prevCat = p.category;
+ p.categoryRaw = raw; p.category = mapCategoryFromSheet(raw) || 'other';
+ if(typeof renderAllPayments === 'function') renderAllPayments();
+ try {
+  var r = await sbFetch('/api/payments?action=set_category', { method:'POST', body: JSON.stringify({ id: sbId, category_raw: raw }) });
+  if(!r || !r.ok) throw new Error((r && r.error) || 'нет ответа сервера');
+  if(r.category) p.category = r.category;
+  if(typeof renderAll === 'function') renderAll();
+  showNotif('Статья изменена', p.client + ' — ' + raw + ((r.sheet && r.sheet.skipped) ? '. Записано в базу.' : '. Записано в базу и Google-таблицу.'));
+  return true;
+ } catch(e){
+  p.categoryRaw = prevRaw; p.category = prevCat;
+  if(typeof renderAllPayments === 'function') renderAllPayments();
+  if(typeof confirmAction === 'function'){
+   confirmAction({ title: 'Статья не записалась', body: String(e.message || e) + '\n\nВсё возвращено как было. Попробуйте ещё раз — если повторится, скажите администратору.', confirmLabel: 'Понятно', hideCancel: true });
+  } else {
+   showNotif('Не сохранилось', 'Статья не записалась: ' + (e.message || e));
+  }
+  return false;
+ }
+}
+function payCatMenu(ev, pid){
+ ev.stopPropagation();
+ var p = (typeof payments !== 'undefined' ? payments : []).find(function(x){ return String(x.id) === String(pid); });
+ if(!p){ showNotif('Ошибка', 'запись не найдена'); return; }
+ if((p.amount || 0) < 0){ showNotif('Возврат', 'у записи с минусом статью правьте в таблице «Доходы»'); return; }
+ _intgDdOpen(ev.currentTarget || ev.target, payCatOptions(p), String(p.categoryRaw || '').trim(), function(v){ paySetCategory(p, v); });
 }
 
 // v880: меню оплаты — изменить или удалить. Раньше в конце строки была служебная
@@ -14854,8 +14902,9 @@ function payRowMenu(ev, pid){
  });
 }
 
-// Правим то, что программа хранит сама. Сумму, дату и статью правят в таблице «Доходы»:
+// Правим то, что программа хранит сама. Сумму и дату правят в таблице «Доходы»:
 // оттуда они приезжают каждый час и перезаписали бы правку в программе.
+// v1002: статья правится здесь — уходит и в базу, и в лист (см. paySetCategory).
 function payRowEdit(p){
  // источник записи известен из данных: sheets_import и bot приезжают из таблицы
  var fromSheet = (p.source === 'sheets_import' || p.source === 'bot');
@@ -14885,6 +14934,33 @@ function payRowEdit(p){
   card.appendChild(w);
   return i;
  };
+ // v1002: статья — свой дропдаун (не системный список), значение уходит через paySetCategory
+ var catPick = String(p.categoryRaw || '').trim();
+ var catBtn = null;
+ if((p.amount || 0) >= 0){
+  var cw = document.createElement('div');
+  cw.style.cssText = 'margin-bottom:10px';
+  var cl = document.createElement('div');
+  cl.style.cssText = 'font-size:11.5px;color:var(--text-soft);margin-bottom:4px';
+  cl.textContent = 'Статья';
+  catBtn = document.createElement('button');
+  catBtn.type = 'button';
+  catBtn.className = 'form-input';
+  catBtn.style.cssText = 'width:100%;font-size:13px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center';
+  var setCatBtn = function(){
+   catBtn.textContent = '';
+   var t = document.createElement('span'); t.textContent = catPick || '— выбрать —';
+   var a = document.createElement('span'); a.textContent = '\u25BE'; a.style.color = 'var(--text-muted)';
+   catBtn.appendChild(t); catBtn.appendChild(a);
+  };
+  setCatBtn();
+  catBtn.onclick = function(ev){
+   ev.stopPropagation();
+   _intgDdOpen(catBtn, payCatOptions(p), catPick, function(v){ catPick = v; setCatBtn(); });
+  };
+  cw.appendChild(cl); cw.appendChild(catBtn);
+  card.appendChild(cw);
+ }
  var comment = mk('Комментарий', p.comment, 'например: оплата за две точки');
  var bank = mk('Банк', p.method, 'МБизнес, Халык…');
  var manager = mk('Менеджер', p.managerName, '');
@@ -14892,7 +14968,7 @@ function payRowEdit(p){
  var note = document.createElement('div');
  note.style.cssText = 'font-size:11.5px;color:var(--text-muted);line-height:1.5;margin:6px 0 14px';
  note.textContent = fromSheet
-  ? 'Сумму, дату и статью правьте в таблице «Доходы» — они приходят оттуда каждый час и перезапишут правку в программе.'
+  ? 'Сумму и дату правьте в таблице «Доходы» — они приходят оттуда каждый час и перезапишут правку в программе. Статья уходит в таблицу сама.'
   : 'Эта оплата в таблицу не попадала — правки останутся здесь.';
  card.appendChild(note);
 
@@ -14907,6 +14983,11 @@ function payRowEdit(p){
  save.onclick = async function(){
   save.disabled = true; save.textContent = 'Сохраняю…';
   try {
+   // v1002: статья — отдельным запросом (база + лист); не записалась — остальное не трогаем
+   if(catBtn && catPick && catPick !== String(p.categoryRaw || '').trim()){
+    var okCat = await paySetCategory(p, catPick);
+    if(!okCat) throw new Error('статья не записалась — остальные поля не сохраняли');
+   }
    var d = await sbFetch('/api/payments?id=' + encodeURIComponent(p._sbId || p.id), {
     method:'PATCH',
     body: JSON.stringify({ comment: comment.value.trim(), bank: bank.value.trim(), manager_name: manager.value.trim() })

@@ -982,6 +982,63 @@ async function handleSetSeated(req, res) {
   return res.status(200).json({ ok: true, seated, sheet: { ok: true, tab: p.sheet_tab, row: p.sheet_row } });
 }
 
+// v1002: смена статьи из программы. Статья — источник трендов «Источник дохода» на дашборде,
+// поэтому менеджеры должны править её сами, не лезя в таблицу. Пишем в ОБА места, как setSeated:
+// база (category_raw + пересчитанная category) и лист «Доходы» колонка C (источник истины —
+// иначе часовой синк вернул бы старую статью). Лист не записался — откатываем базу и говорим честно.
+async function handleSetCategory(req, res) {
+  const body = await readBody(req);
+  const id = body.id;
+  const raw = String(body.category_raw || '').trim();
+  if (!id) return res.status(400).json({ ok: false, error: 'нужен id платежа' });
+  if (!raw) return res.status(400).json({ ok: false, error: 'статья пустая' });
+  if (raw.length > 60) return res.status(400).json({ ok: false, error: 'статья слишком длинная' });
+  const rows = await sbSelect('payments', { id: 'eq.' + id, limit: 1 });
+  if (!rows.length) return res.status(404).json({ ok: false, error: 'платёж не найден' });
+  const p = rows[0];
+  const amt = Number(p.amount) || 0;
+  if (amt < 0 && !_isRefundRaw(raw)) return res.status(400).json({ ok: false, error: 'у записи с минусом статья должна начинаться с «Возврат»' });
+  if (amt > 0 && _isRefundRaw(raw)) return res.status(400).json({ ok: false, error: '«Возврат» — только для записи с минусом' });
+  const prev = { category_raw: p.category_raw, category: p.category };
+  const next = { category_raw: raw, category: _mapCategory(raw) };
+  if (prev.category_raw === raw) return res.status(200).json({ ok: true, ...next, sheet: { ok: true, skipped: 'без изменений' } });
+  await sbUpdate('payments', { id: 'eq.' + id }, next);
+  if (!(p.sheet_id && p.sheet_tab && p.sheet_row)) {
+    return res.status(200).json({ ok: true, ...next, sheet: { ok: true, skipped: 'без строки листа' } });
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25000);
+  let gasData = null;
+  try {
+    const resp = await fetch(APPEND_GS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      signal: ctrl.signal,
+      body: JSON.stringify({
+        action: 'setCategory',
+        spreadsheetId: p.sheet_id,
+        sheet: p.sheet_tab,
+        row: p.sheet_row,
+        company: p.company_name, // сверка на стороне GAS — защита от сдвига строк листа
+        value: raw
+      })
+    });
+    gasData = await resp.json().catch(() => null);
+  } catch (e) {
+    gasData = { ok: false, error: ctrl.signal.aborted ? 'Google-таблица не ответила за 25 секунд' : String((e && e.message) || e) };
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!gasData || gasData.ok !== true) {
+    try { await sbUpdate('payments', { id: 'eq.' + id }, prev); } catch (e) {}
+    return res.status(502).json({
+      ok: false,
+      error: 'лист «Доходы» не обновился: ' + ((gasData && gasData.error) || 'экшен setCategory не задеплоен в Apps Script')
+    });
+  }
+  return res.status(200).json({ ok: true, ...next, sheet: { ok: true, tab: p.sheet_tab, row: p.sheet_row } });
+}
+
 export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   try {
@@ -989,6 +1046,8 @@ export default async function handler(req, res) {
     if (req.query.action === 'pay_links') return await handlePayLinks(req, res);
     // v828: отметка «Посажена» — база + колонка L листа
     if (req.method === 'POST' && req.query.action === 'set_seated') return await handleSetSeated(req, res);
+    // v1002: смена статьи — база + колонка C листа
+    if (req.method === 'POST' && req.query.action === 'set_category') return await handleSetCategory(req, res);
     if (req.method === 'POST' && req.query.action === 'import_sheets') {
       // v592 SEC: массовая вставка платежей (финансы) — только с админ-кодом
       const _g = checkAdminToken(req);
