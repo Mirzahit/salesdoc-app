@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v1002</title>
+<title>SalesDoc — Финансовый Дашборд v1003</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8667,6 +8667,10 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
  <option value="yes">Списана</option>
  <option value="no">Не списана</option>
  </select>
+ <!-- v1003: фильтр по статье (абон., лицензии, внедрение…) — раньше статью можно было только править, но не отобрать -->
+ <select id="filter-cat" class="form-select" style="font-size:11px;padding:4px 10px" onchange="renderAllPayments()">
+ <option value="">Все статьи</option>
+ </select>
  <select id="filter-bank" class="form-select" style="font-size:11px;padding:4px 10px" onchange="renderAllPayments()">
  <option value="">Все банки</option>
  </select>
@@ -14693,6 +14697,7 @@ function renderAllPayments() {
  const fSeat = document.getElementById('filter-seated')?.value || 'all';
  const fSvc = document.getElementById('filter-service')?.value || 'all';
  const fBank = document.getElementById('filter-bank')?.value || '';
+ const fCat = document.getElementById('filter-cat')?.value || ''; // v1003
  const fQ = (document.getElementById('fin-search')?.value || '').trim().toLowerCase();
  // v833: подсветка сегмента «Посадка» синхронно со значением (quickFilterPayments ставит его программно)
  try { var _segSeat = document.getElementById('fin-seg-seat');
@@ -14707,6 +14712,7 @@ function renderAllPayments() {
  if (fSvc === 'yes') ps = ps.filter(function(p){ return p.serviceWritten === true; });
  if (fSvc === 'no') ps = ps.filter(function(p){ return !p.serviceWritten; });
  if (fBank) ps = ps.filter(function(p){ return (p.bank||'') === fBank; });
+ if (fCat) ps = ps.filter(function(p){ return (p.category||'other') === fCat; }); // v1003
  if (fQ) ps = ps.filter(function(p){ return String(p.client||'').toLowerCase().indexOf(fQ) >= 0; });
 
  // Сумма отфильтрованных
@@ -14802,8 +14808,22 @@ function renderAllPayments() {
  bankSelectEl.value = curBankVal;
  }
 
- // v894: свои дропдауны вместо системных списков (менеджер, банк) — после наполнения опций
+ // v1003: статьи — в порядке суммы за период, как банки
+ var catSelectEl = document.getElementById('filter-cat');
+ if (catSelectEl) {
+ var curCatVal = catSelectEl.value;
+ var catMap = {};
+ allPs.forEach(function(p){ var c = p.category || 'other'; catMap[c] = (catMap[c]||0) + (p.amount||0); });
+ if (curCatVal && !(curCatVal in catMap)) catMap[curCatVal] = 0; // выбранная статья остаётся в списке, даже если в этом периоде её нет
+ var catKeys = Object.keys(catMap).sort(function(a,b){ return catMap[b]-catMap[a]; });
+ catSelectEl.innerHTML = '<option value="">Все статьи</option>';
+ catKeys.forEach(function(c){ catSelectEl.innerHTML += '<option value="'+sanitize(c)+'">'+sanitize((catNames[c]||c).trim())+' ('+fmtNum(catMap[c])+')</option>'; });
+ catSelectEl.value = curCatVal;
+ }
+
+ // v894: свои дропдауны вместо системных списков (менеджер, банк, статья) — после наполнения опций
  try { sdSelectChip('filter-employee', {compact:true}); sdSelectChipSync('filter-employee'); } catch(_){}
+ try { sdSelectChip('filter-cat', {compact:true}); sdSelectChipSync('filter-cat'); } catch(_){}
  try { sdSelectChip('filter-bank', {compact:true}); sdSelectChipSync('filter-bank'); } catch(_){}
 
  document.getElementById('all-payments').innerHTML = ps.map(function(p) {
@@ -15216,7 +15236,8 @@ function quickFilterPayments(label) {
   if (fSvc) fSvc.value='all';
   var fe=document.getElementById('filter-employee'); if (fe) fe.value='';
   var fb=document.getElementById('filter-bank'); if (fb) fb.value='';
-  try { sdSelectChipSync('filter-employee'); sdSelectChipSync('filter-bank'); } catch(_){} // v894: обновить подпись чипов при сбросе
+  var fc=document.getElementById('filter-cat'); if (fc) fc.value=''; // v1003
+  try { sdSelectChipSync('filter-employee'); sdSelectChipSync('filter-bank'); sdSelectChipSync('filter-cat'); } catch(_){} // v894: обновить подпись чипов при сбросе
  }
  else if (label === 'Посажено') { fSeat.value='yes'; fSvc.value='all'; }
  else if (label === 'Не посажено') { fSeat.value='no'; fSvc.value='all'; }
@@ -29360,6 +29381,7 @@ function _searchOpenPayment(payId){
  // сбрасываем фильтры, чтобы нужная строка точно отрисовалась
  var fe=document.getElementById('filter-employee'); if(fe) fe.value='';
  var fb=document.getElementById('filter-bank'); if(fb) fb.value='';
+ var fc=document.getElementById('filter-cat'); if(fc) fc.value=''; // v1003
  var fs=document.getElementById('filter-seated'); if(fs) fs.value='all';
  var fv=document.getElementById('filter-service'); if(fv) fv.value='all';
  if(typeof renderAllPayments === 'function') renderAllPayments();
@@ -29632,6 +29654,7 @@ function exportPaymentsCSV(){
  var fSeat = document.getElementById('filter-seated')?.value || 'all';
  var fSvc = document.getElementById('filter-service')?.value || 'all';
  var fBank = document.getElementById('filter-bank')?.value || '';
+ var fCat = document.getElementById('filter-cat')?.value || ''; // v1003
  var ps = getPeriodPayments(currentPeriod).slice().reverse();
  if(fEmp) ps=ps.filter(function(p){return (p.managerName||empName(p.employee))===fEmp;});
  if(fSeat==='yes') ps=ps.filter(function(p){return p.seated===true;});
@@ -29639,6 +29662,7 @@ function exportPaymentsCSV(){
  if(fSvc==='yes') ps=ps.filter(function(p){return p.serviceWritten===true;});
  if(fSvc==='no') ps=ps.filter(function(p){return !p.serviceWritten;});
  if(fBank) ps=ps.filter(function(p){return (p.bank||'')===fBank;});
+ if(fCat) ps=ps.filter(function(p){return (p.category||'other')===fCat;}); // v1003
  var catNames={license:'Лицензии',subscription:'Абон.',implementation:'Внедрение',integration:'Интеграция',revision:'Доработки',other:'Прочее'};
  var rows=[['Дата','Клиент','Сотрудник','Статья','Сумма','Способ','Посажена','Услуга списана','Комментарий']];
  ps.forEach(function(p){
