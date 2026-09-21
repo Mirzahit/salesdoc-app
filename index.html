@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v1003</title>
+<title>SalesDoc — Финансовый Дашборд v1004</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -8433,6 +8433,21 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
  <div class="kpi-chip-prev"></div>
  </div>
  </div></div></div>
+ <div class="kpi-card" data-kpi-type="extra" style="cursor:pointer"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Доп. лицензии</div><div class="kpi-value" id="kpi-extra">0 <span>₸</span></div><div class="kpi-delta up" id="delta-extra">0%</div></div><div class="kpi-divider"></div>
+ <div class="kpi-right">
+ <div class="kpi-chip chip-flat" id="m2m-extra">
+ <div class="kpi-chip-label">к прошл.мес</div>
+ <div class="kpi-chip-val">—</div>
+ <div class="kpi-chip-sub">нет данных</div>
+ <div class="kpi-chip-prev"></div>
+ </div>
+ <div class="kpi-chip chip-flat" id="a2a-extra">
+ <div class="kpi-chip-label">к прошл.году</div>
+ <div class="kpi-chip-val">—</div>
+ <div class="kpi-chip-sub">нет данных</div>
+ <div class="kpi-chip-prev"></div>
+ </div>
+ </div></div></div>
  <div class="kpi-card" data-kpi-type="subscription" style="cursor:pointer"><div class="kpi-card-inner"><div class="kpi-left"><div class="kpi-label">Абон. плата</div><div class="kpi-value" id="kpi-sub">0 <span>₸</span></div><div class="kpi-delta up" id="delta-sub">0%</div></div><div class="kpi-divider"></div>
  <div class="kpi-right">
  <div class="kpi-chip chip-flat" id="m2m-sub">
@@ -11415,7 +11430,7 @@ function mapCategoryFromSheet(cat) {
  if (c.includes('интеграц')) return 'integration';
  if (c.includes('внедрен')) return 'implementation';
  if (c.includes('абон') || c.includes('баланс')) return 'subscription';
- if (c.includes('доп') && c.includes('лиц')) return 'other';
+ if (c.includes('доп') && c.includes('лиц')) return 'extra'; // v1004: своя статья «Доп. лицензии» (раньше «Прочее»)
  if (c.includes('лицен') || c.includes('новый клиент') || c.includes('нов клиент')) return 'license';
  return 'other';
 }
@@ -12303,7 +12318,7 @@ function parseSheetData(data) {
 
 function parseAmount(v){ if(!v)return 0; return parseFloat(String(v).replace(/[^0-9.]/g,''))||0; }
 function formatDate(v){ if(!v)return taskLocalIso(new Date()); if(v instanceof Date)return taskLocalIso(v); const s=String(v); if(s.includes('.'))return s.split('.').reverse().join('-'); return s.substring(0,10); }
-function mapCategory(v){ const s=String(v||'').toLowerCase(); if(s.includes('доп')&&s.includes('лиц'))return'other'; if(s.includes('лиц')||s.includes('lic'))return'license'; if(s.includes('абон')||s.includes('sub'))return'subscription'; if(s.includes('интеграц')||s.includes('integr'))return'integration'; if(s.includes('доработ'))return'revision'; if(s.includes('внед')||s.includes('impl'))return'implementation'; return'other'; }
+function mapCategory(v){ const s=String(v||'').toLowerCase(); if(s.includes('доп')&&s.includes('лиц'))return'extra'; if(s.includes('лиц')||s.includes('lic'))return'license'; if(s.includes('абон')||s.includes('sub'))return'subscription'; if(s.includes('интеграц')||s.includes('integr'))return'integration'; if(s.includes('доработ'))return'revision'; if(s.includes('внед')||s.includes('impl'))return'implementation'; return'other'; }
 function mapStatus(v){ const s=String(v||'').toLowerCase(); if(s.includes('оплач')||s.includes('paid'))return'paid'; return'pending'; }
 
 // ============================================================
@@ -12460,8 +12475,8 @@ function renderAll() {
  updatePeriodLabel();
  const ps=getPeriodPayments(currentPeriod);
  const license=sumByCategory(ps,'license'), sub=sumByCategory(ps,'subscription'), impl=sumByCategory(ps,'implementation'), integ=sumByCategory(ps,'integration');
- const revision=sumByCategory(ps,'revision'), other=sumByCategory(ps,'other');
- const total=license+sub+impl+integ+revision+other;
+ const revision=sumByCategory(ps,'revision'), other=sumByCategory(ps,'other'), extra=sumByCategory(ps,'extra'); // v1004: доп. лицензии
+ const total=license+sub+impl+integ+revision+other+extra;
  var _cur = COUNTRY_CONFIG[currentCountry].currency;
  document.getElementById('kpi-license').innerHTML=fmt(license)+' <span>'+_cur+'</span>';
  document.getElementById('kpi-sub').innerHTML=fmt(sub)+' <span>'+_cur+'</span>';
@@ -12469,6 +12484,7 @@ function renderAll() {
  const _integEl=document.getElementById('kpi-integ'); if(_integEl)_integEl.innerHTML=fmt(integ)+' <span>'+_cur+'</span>';
  const _revEl=document.getElementById('kpi-revision'); if(_revEl)_revEl.innerHTML=fmt(revision)+' <span>'+_cur+'</span>';
  const _othEl=document.getElementById('kpi-other'); if(_othEl)_othEl.innerHTML=fmt(other)+' <span>'+_cur+'</span>';
+ const _extEl=document.getElementById('kpi-extra'); if(_extEl)_extEl.innerHTML=fmt(extra)+' <span>'+_cur+'</span>';
  document.getElementById('kpi-total').innerHTML=fmt(total)+' <span>'+_cur+'</span>';
  // Средний чек новых клиентов: "новый" = у кого в categoryRaw (столбец Статья) есть слово "нов"
  (function calcAvgNewCheck(){
@@ -12504,7 +12520,7 @@ function renderAll() {
  (function renderDeltaPills(){
  // v978: сравнение «к прошлому месяцу» имеет смысл только в режиме «Месяц» — иначе неделя сравнивалась с целым месяцем
  if(currentPeriod !== 'month'){
- ['license','sub','impl','integ','revision','other','total'].forEach(function(k){ var el = document.getElementById('delta-'+k); if(el) el.style.display = 'none'; });
+ ['license','extra','sub','impl','integ','revision','other','total'].forEach(function(k){ var el = document.getElementById('delta-'+k); if(el) el.style.display = 'none'; });
  return;
  }
  var curM, curY;
@@ -12526,6 +12542,7 @@ function renderAll() {
  'integ':{cur:integ, prev:sumByCategory(prevPay,'integration')},
  'revision':{cur:revision, prev:sumByCategory(prevPay,'revision')},
  'other':{cur:other, prev:sumByCategory(prevPay,'other')},
+ 'extra':{cur:extra, prev:sumByCategory(prevPay,'extra')},
  'total':{cur:total, prev:prevPay.reduce(function(s,p){return s+p.amount;},0)}
  };
  Object.keys(mapping).forEach(function(k){
@@ -12541,7 +12558,7 @@ function renderAll() {
  el.style.display = '';
  });
  })();
- renderBarChart(ps); renderIncomeStructure({license:license,subscription:sub,implementation:impl,integration:integ,revision:revision,other:other}); if(typeof renderPnL==='function') renderPnL();
+ renderBarChart(ps); renderIncomeStructure({license:license,extra:extra,subscription:sub,implementation:impl,integration:integ,revision:revision,other:other}); if(typeof renderPnL==='function') renderPnL();
  renderRecentPayments(ps.slice(-5).reverse());
  if(typeof renderDashFunnel==='function') renderDashFunnel();
  renderActCounters(); renderAllPayments(); renderAllActs(); renderPlanView();
@@ -13941,9 +13958,9 @@ function setupKpiTooltips(ps) {
 }
 
 function buildKpiTooltip(type, ps) {
- if (type === 'license') {
+ if (type === 'license' || type === 'extra') { // v1004: extra = доп. лицензии, тот же список по компаниям
  // Новые лицензии — компании с "нов" + "клиент"/"лиц" в статье
- var items = ps.filter(function(p) { return p.category === 'license'; });
+ var items = ps.filter(function(p) { return p.category === type; });
  if (!items.length) return '';
  // Группируем по клиентам
  var map = {};
@@ -13958,7 +13975,7 @@ function buildKpiTooltip(type, ps) {
  return '<div class="chart-tooltip-row"><div class="chart-tooltip-dot" style="background:var(--accent-hover)"></div><div class="chart-tooltip-label" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + cl + '</div><div class="chart-tooltip-val">' + fmtFull(map[cl].sum)+'</div></div>';
  }).join('');
  var total = items.reduce(function(s,p){return s+p.amount;},0);
- return '<div class="chart-tooltip-title"> НОВЫЕ ЛИЦЕНЗИИ · ' + sorted.length + ' компаний</div>' + rows +
+ return '<div class="chart-tooltip-title"> ' + (type === 'extra' ? 'ДОП. ЛИЦЕНЗИИ' : 'НОВЫЕ ЛИЦЕНЗИИ') + ' · ' + sorted.length + ' компаний</div>' + rows +
  (sorted.length > 12 ? '<div style="font-size:10px;color:var(--text-muted);margin-top:4px">...и ещё ' + (sorted.length-12) + '</div>' : '') +
  '<div class="chart-tooltip-total">Итого: ' + fmtFull(total)+'</div>';
  }
@@ -14177,6 +14194,7 @@ function renderIncomeStructure(parts){
  var _cur = (typeof _CUR !== 'undefined') ? _CUR : (COUNTRY_CONFIG[currentCountry].currency || '');
  var defs = [
   {key:'license',        label:'Лицензии',   color:'#7FB5AD'},
+  {key:'extra',          label:'Доп. лицензии', color:'#4F8F87'}, // v1004
   {key:'subscription',   label:'Абон. платы',color:'#0F6E66'},
   {key:'implementation', label:'Внедрение',  color:'#1F7A5A'},
   {key:'integration',    label:'Интеграция', color:'#CE93D8'},
@@ -14277,7 +14295,7 @@ function renderRecentPayments(ps) {
  if (el) el.textContent=ps.length+' записей';
  var tb = document.getElementById('recent-payments');
  if (!tb) return;
- const catNames={license:'Лицензии',subscription:'Абон.',implementation:'Внедрение',integration:'Интеграция',revision:'Доработки',other:'Прочее'};
+ const catNames={license:'Лицензии',extra:'Доп. лицензии',subscription:'Абон.',implementation:'Внедрение',integration:'Интеграция',revision:'Доработки',other:'Прочее'};
  tb.innerHTML=ps.map(p=>`<tr><td>${sanitize(String(p.client).substring(0,16))}…</td><td style="color:var(--text-secondary)">${catNames[p.category]}</td><td style="color:var(--gold-bright);font-weight:600">${fmt(p.amount)} ${_CUR}</td><td><span class="status-badge ${p.seated?'status-paid':'status-pending'}">${p.seated?'ПОСАЖ.':'НЕТ'}</span></td></tr>`).join('');
 }
 
@@ -14415,9 +14433,9 @@ function renderRecognizedRevenue() {
  return;
  }
 
- // --- Прочее: 100% сразу ---
+ // --- Прочее: 100% сразу (v1004: доп. лицензии — своей строкой) ---
  totalRecognized += amt;
- breakdown.other += amt;
+ if (raw.includes('доп') && raw.includes('лиц')) breakdown.extra += amt; else breakdown.other += amt;
  });
 
  // Отображаем KPI
@@ -14431,7 +14449,8 @@ function renderRecognizedRevenue() {
  {label:'Внедрение', amt:breakdown.impl, color:'#FBBF77'},
  {label:'Интеграция', amt:breakdown.integ, color:'#CE93D8'},
  {label:'Оплата долга', amt:breakdown.debt, color:'#D89595'},
- {label:'Прочее', amt:breakdown.other+breakdown.extra, color:'#90A4AE'}
+ {label:'Доп. лицензии', amt:breakdown.extra, color:'#4F8F87'},
+ {label:'Прочее', amt:breakdown.other, color:'#90A4AE'}
  ].filter(function(it){ return it.amt > 0; });
 
  var maxAmt = Math.max.apply(null, items.map(function(it){ return it.amt; })) || 1;
@@ -14690,7 +14709,7 @@ function finRenderHeader(){
 }
 
 function renderAllPayments() {
- const catNames={license:' Лицензии',subscription:' Абон.',implementation:' Внедрение',integration:' Интеграция',revision:' Доработки',other:' Прочее'};
+ const catNames={license:' Лицензии',extra:' Доп. лицензии',subscription:' Абон.',implementation:' Внедрение',integration:' Интеграция',revision:' Доработки',other:' Прочее'};
  const methodNames={bank:'Банк',cash:'Наличные',card:'Карта'};
 
  const fEmp = document.getElementById('filter-employee')?.value || '';
@@ -17810,10 +17829,10 @@ function drawStatChart(ps, cat) {
  setText('stat-period-label', 'НАКОПИТЕЛЬНАЯ');
 
  } else if (cat==='general') {
- labels = ['Абон.', 'Лицензии', 'Внедрение', 'Интеграция', 'Прочее'];
+ labels = ['Абон.', 'Лицензии', 'Доп. лиц.', 'Внедрение', 'Интеграция', 'Прочее']; // v1004: + доп. лицензии
  values = labels.map(function(l,i){
- const catKey = ['subscription','license','implementation','implementation','other'][i];
- if (i===3) return ps.filter(function(p){return p.categoryRaw&&p.categoryRaw.toLowerCase().includes('интеграц');}).reduce(function(a,b){return a+b.amount;},0);
+ const catKey = ['subscription','license','extra','implementation','implementation','other'][i];
+ if (i===4) return ps.filter(function(p){return p.categoryRaw&&p.categoryRaw.toLowerCase().includes('интеграц');}).reduce(function(a,b){return a+b.amount;},0);
  return ps.filter(function(p){return p.category===catKey;}).reduce(function(a,b){return a+b.amount;},0);
  });
  color = '#B4432E'; isBar = true;
@@ -19203,7 +19222,8 @@ function renderM2MA2A(ps) {
  var curG = sumByCategory(ps, 'integration');
  var curR = sumByCategory(ps, 'revision');
  var curO = sumByCategory(ps, 'other');
- var curT = curL + curS + curI + curG + curR + curO;
+ var curX = sumByCategory(ps, 'extra'); // v1004
+ var curT = curL + curS + curI + curG + curR + curO + curX;
 
  function sumCat(arr, cat) { return arr.length > 0 ? sumByCategory(arr, cat) : null; }
  function sumAll(arr) { return arr.length > 0 ? arr.reduce(function(a,b){return a+b.amount;},0) : null; }
@@ -19220,6 +19240,8 @@ function renderM2MA2A(ps) {
  setChip('a2a-revision', curR, sumCat(a2aPay,'revision'), a2aLabel);
  setChip('m2m-other', curO, sumCat(m2mPay,'other'), prevLabel);
  setChip('a2a-other', curO, sumCat(a2aPay,'other'), a2aLabel);
+ setChip('m2m-extra', curX, sumCat(m2mPay,'extra'), prevLabel);
+ setChip('a2a-extra', curX, sumCat(a2aPay,'extra'), a2aLabel);
  setChip('m2m-total', curT, sumAll(m2mPay), prevLabel);
  setChip('a2a-total', curT, sumAll(a2aPay), a2aLabel);
 
@@ -29663,7 +29685,7 @@ function exportPaymentsCSV(){
  if(fSvc==='no') ps=ps.filter(function(p){return !p.serviceWritten;});
  if(fBank) ps=ps.filter(function(p){return (p.bank||'')===fBank;});
  if(fCat) ps=ps.filter(function(p){return (p.category||'other')===fCat;}); // v1003
- var catNames={license:'Лицензии',subscription:'Абон.',implementation:'Внедрение',integration:'Интеграция',revision:'Доработки',other:'Прочее'};
+ var catNames={license:'Лицензии',extra:'Доп. лицензии',subscription:'Абон.',implementation:'Внедрение',integration:'Интеграция',revision:'Доработки',other:'Прочее'};
  var rows=[['Дата','Клиент','Сотрудник','Статья','Сумма','Способ','Посажена','Услуга списана','Комментарий']];
  ps.forEach(function(p){
  // v592 FIX: имя как в таблице (managerName||empName), а не только empName — раньше CSV расходился с UI
@@ -45834,7 +45856,7 @@ window.amoToggleFunnelLeads = function(detailsId, linkEl){
         var tc=document.getElementById('kpi-total'); tc=tc&&tc.closest('.kpi-card');
         if(tc) tc.style.display = heroOn ? 'none' : '';
       }catch(e){}
-      ['license','sub','impl','revision','integ','other'].forEach(function(t, idx){
+      ['license','extra','sub','impl','revision','integ','other'].forEach(function(t, idx){
         var valEl=document.getElementById('kpi-'+t), delEl=document.getElementById('delta-'+t);
         if(!valEl||!delEl) return;
         var left=valEl.parentElement; if(!left||!left.classList||!left.classList.contains('kpi-left')) return;

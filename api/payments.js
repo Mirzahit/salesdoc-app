@@ -29,7 +29,7 @@ import { _normName as normClientName } from './clients.js'; // v961: одна н
 export const config = { maxDuration: 300 }; // v620: полный backfill всех месяцев не влезал в 60с (504)
 
 const ALLOWED_COUNTRIES = ['KZ', 'KG'];
-const ALLOWED_CATEGORIES = ['implementation', 'integration', 'revision', 'subscription', 'license', 'other'];
+const ALLOWED_CATEGORIES = ['implementation', 'integration', 'revision', 'subscription', 'license', 'extra', 'other']; // v1004: extra = доп. лицензии
 const ALLOWED_SOURCES = ['manual', 'payment_bot', 'sheets_import'];
 const ALLOWED_PATCH_FIELDS = [
   'paid_at', 'company_name', 'client_id', 'category', 'category_raw',
@@ -247,7 +247,7 @@ function _mapCategory(cat) {
   if (c.includes('интеграц')) return 'integration';
   if (c.includes('внедрен')) return 'implementation';
   if (c.includes('абон') || c.includes('баланс')) return 'subscription';
-  if (c.includes('доп') && c.includes('лиц')) return 'other';
+  if (c.includes('доп') && c.includes('лиц')) return 'extra'; // v1004: своя статья «Доп. лицензии» (раньше «Прочее»)
   if (c.includes('лицен') || c.includes('новый клиент') || c.includes('нов клиент')) return 'license';
   return 'other';
 }
