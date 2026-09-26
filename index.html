@@ -8221,7 +8221,7 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
 .fz-ph .sp{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
 .fz-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--fz-line);background:var(--fz-surface);border-radius:7px;padding:6px 12px;font-size:13px;font-weight:500;color:var(--fz-ink2);line-height:1.3;text-decoration:none}
 .fz-btn:hover{border-color:var(--fz-muted)}
-.fz-btn.pri{background:var(--fz-accent);border-color:var(--fz-accent);color:var(--fz-accent-ink)}
+.fz .fz-btn.pri,.fz td .fz-btn.pri{background:var(--fz-accent)!important;border-color:var(--fz-accent)!important;color:var(--fz-accent-ink)!important} /* глобальные стили кнопок в таблицах перекрашивали её в белое */
 .fz-btn svg.i{width:15px;height:15px}
 .fz-panel{background:var(--fz-surface);border:1px solid var(--fz-line);border-radius:9px;min-width:0}
 .fz-panel-h{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--fz-line2)}
@@ -8333,6 +8333,14 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
 .fz-m.a{align-self:flex-start;background:var(--fz-sunk);padding:9px 12px;border-radius:10px 10px 10px 3px}
 .fz-m.u{align-self:flex-end;background:var(--fz-accent);color:var(--fz-accent-ink);padding:8px 12px;border-radius:10px 10px 3px 10px}
 .fz-m .t{display:block;font-size:11px;color:var(--fz-muted);margin-top:3px}
+.fz-m .who{font-weight:600;margin-right:6px}
+.fz-m .trace{display:block;font-size:11.5px;color:var(--fz-muted);margin-top:6px;border-top:1px dashed var(--fz-line);padding-top:4px}
+.fz-m p{margin:0 0 6px}.fz-m p:last-child{margin-bottom:0}.fz-m ul{margin:4px 0 6px 18px;padding:0}.fz-m li{margin:2px 0}
+.fz-m.a b{font-weight:600}
+.fz-typing{align-self:flex-start;font-size:12.5px;color:var(--fz-muted);padding:4px 2px}
+.fz-limit{margin:0 16px 8px;padding:8px 10px;border-radius:7px;background:var(--fz-warn-soft);color:var(--fz-warn);font-size:12.5px}
+.fz-minp{width:110px;border:1px solid var(--fz-line);border-radius:7px;padding:5px 8px;font-size:13px;text-align:right;color:var(--fz-ink);background:var(--fz-surface)}
+.fz-qi .ev{grid-column:2 / -1;font-size:12px;color:var(--fz-muted);margin-top:4px}
 .fz-m.u .t{color:inherit;opacity:.75}
 .fz-composer{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--fz-line);min-width:360px}
 .fz-composer input{flex:1;min-width:0;border:1px solid var(--fz-line);background:var(--fz-bg);border-radius:8px;padding:9px 12px;font-size:13.5px;color:var(--fz-ink)}
@@ -11047,8 +11055,17 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
 
    <!-- ВОПРОСЫ -->
    <section class="fz-view" id="v-questions" data-title="Вопросы агента">
-    <div class="fz-ph"><div><h1>Вопросы агента</h1><p>Собраны из расхождений за месяц. Ваш ответ ничего не меняет в оплатах — это только отметка</p></div></div>
-    <div class="fz-panel"><div class="fz-qlist" id="fz-q-full"></div></div>
+    <div class="fz-ph"><div><h1>Вопросы агента</h1><p>Агент собирает их ночью и по кнопке «Обновить». Ваш ответ ничего не меняет в оплатах — это отметка, которую агент помнит</p></div>
+     <div class="sp"><button class="fz-btn" id="fz-q-refresh"><svg class="i"><use href="#fzi-flag"/></svg>Обновить</button></div></div>
+    <div class="fz-panel fz-mb" id="fz-missing-panel">
+     <div class="fz-panel-h"><h2>Недостающие данные</h2><span id="fz-missing-sub">обязательные статьи месяца</span></div>
+     <div class="fz-tw"><table>
+      <thead><tr><th>Статья</th><th>Что не так</th><th class="r">Обычно</th><th class="r">В таблице</th><th>Действие</th></tr></thead>
+      <tbody id="fz-missing-body"></tbody>
+     </table></div>
+    </div>
+    <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Открытые</h2><span id="fz-q-open-sub"></span></div><div class="fz-qlist" id="fz-q-full"></div></div>
+    <div class="fz-panel"><div class="fz-panel-h"><h2>Отвеченные</h2><span id="fz-q-done-sub"></span></div><div class="fz-qlist" id="fz-q-done"></div></div>
    </section>
 
    <!-- СПОРНЫЕ ЗАПИСИ -->
@@ -11165,6 +11182,10 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
      <div class="fz-tw"><table>
       <thead><tr><th>Показатель</th><th class="r">Сейчас</th><th class="r">Цель</th></tr></thead>
       <tbody id="fz-goals-body"></tbody></table></div></div>
+    <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Обязательные статьи месяца</h2><span>так агент ищет недостающие данные: нет строки — «нет», отличие от обычного больше чем на 40% — «проверить»</span></div>
+     <div class="fz-tw"><table>
+      <thead><tr><th>Статья</th><th>Какие строки таблицы считаются этой статьёй</th></tr></thead>
+      <tbody id="fz-expected-body"></tbody></table></div></div>
     <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Откуда берётся зарплата</h2><span>так считается «Команда»</span></div>
      <div class="fz-tw"><table>
       <thead><tr><th>Строка в расходах</th><th>Считается как</th></tr></thead>
@@ -11189,14 +11210,14 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
 
  <aside class="fz-agent" id="fz-agent" aria-label="Чат с агентом">
   <div class="fz-agent-h"><div class="av"><svg class="i" style="width:16px;height:16px"><use href="#fzi-chat"/></svg></div>
-   <div><b>Финансист</b><span>чат подключим позже</span></div>
+   <div><b>Финансист</b><span id="fz-agent-sub">читает базу, считает, спорит</span></div>
    <button class="x" id="fz-agent-x" aria-label="Закрыть"><svg class="i"><use href="#fzi-x"/></svg></button></div>
   <div class="fz-msgs" id="fz-msgs">
-   <div class="fz-m a">Чат ещё не подключён. Здесь будут вопросы и ответы по цифрам этой страницы.</div>
+   <div class="fz-empty" id="fz-msgs-empty">Спросите про выручку, расходы, прибыль, людей или отток за любой период. Каждая цифра — из базы.</div>
   </div>
   <form class="fz-composer" id="fz-composer" onsubmit="return false">
-   <input id="fz-inp" placeholder="Чат подключим позже" aria-label="Сообщение" autocomplete="off" disabled>
-   <button type="submit" aria-label="Отправить" disabled style="opacity:.5;cursor:default"><svg class="i" style="width:17px;height:17px"><use href="#fzi-send"/></svg></button>
+   <input id="fz-inp" placeholder="Спросите про деньги" aria-label="Сообщение" autocomplete="off">
+   <button type="submit" id="fz-send" aria-label="Отправить"><svg class="i" style="width:17px;height:17px"><use href="#fzi-send"/></svg></button>
   </form>
  </aside>
 </div>
@@ -46384,8 +46405,8 @@ window.amoToggleFunnelLeads = function(detailsId, linkEl){
 // ============================================================
 // FINANSIST MODULE — v1005. «Финансы → Финансист» (владелец и бухгалтер).
 // Только отображение: цифры приходят готовыми из /api/finansist (право view_finansist
-// проверяет сервер), расходы — из таблицы расходов (loadExpenses → expensesData, право
-// view_expenses). Никаких выводов и правок базы. Макет: docs/finansist-prototype.html.
+// проверяет сервер), расходы — тоже с сервера: снимок Google-таблицы + суммы, внесённые бухгалтером
+// (v1006). Никаких выводов и правок базы. Макет: docs/finansist-prototype.html.
 // ============================================================
 var _fz = { inited:false, month:null, data:null, view:'overview', busy:false, err:null, reqId:0,
   filters:{ q:'', type:'', cat:'', bank:'' }, done:{}, balance:null, balanceMeta:null, balanceTimer:null, expReady:false, expLoaded:false }; // done и balance приходят с сервера (finansist_answers / finansist_settings), на устройстве не храним
@@ -46422,12 +46443,13 @@ var FZ_SALARY_RULES = [
 function fzSalaryRule(e){ var c = String((e && e.category) || '').trim(), n = String((e && e.note) || '').trim(); for (var i = 0; i < FZ_SALARY_RULES.length; i++) { var r = FZ_SALARY_RULES[i]; if (r.category.test(c) && r.note.test(n)) return r; } return null; }
 function fzIsSalary(e){ var c = String((e && e.category) || '').trim().toLowerCase(); return c === 'зп' || /^зп[\s.\/-]|зарплат|оклад|аванс|бонус|премия|отпускн/.test(c) || !!fzSalaryRule(e); } // \b в JS не знает кириллицу; бонусы и отпускные — тоже люди
 
-// ---------- расходы (из expensesData, лист текущего года) ----------
+// ---------- расходы (с сервера, _fz.data.expenses) ----------
 function fzExpRows(m){
- if (!m || m.y !== new Date().getFullYear()) return null; // лист расходов ведётся по текущему году
- if (!_fz.expLoaded || typeof expensesData === 'undefined' || !Array.isArray(expensesData)) return null; // ещё едут — не показываем нули
- var rows = expensesData.filter(function(e){ return e.month === m.mo - 1 && (e.year == null || e.year === m.y) && !expIsTransfer(e); });
- return rows.length ? rows : null; // пустой месяц в таблице = нет данных, а не ноль расходов
+ // v1006: расходы приходят с сервера вместе с данными месяца (снимок Google-таблицы + суммы, внесённые бухгалтером)
+ var d = _fz.data; if (!d || !d.expenses) return null;
+ var e = d.expenses[fzMonthKey(m)]; if (!e || !e.available) return null;
+ var rows = e.rows.filter(function(x){ return !expIsTransfer(x); });
+ return rows.length ? rows : null;
 }
 function fzExpSum(rows){ return (rows || []).reduce(function(s, e){ return s + (+e.amount || 0); }, 0); }
 function fzExpSalary(rows){ return (rows || []).filter(fzIsSalary); }
@@ -46439,24 +46461,15 @@ function fzSalaryByPerson(rows){
 }
 
 // строки «Команды»: выручка по менеджеру (сервер) + зарплата и доля общих (расходы)
-// Общие расходы (аренда, таргет, связь, банк…) на людей НЕ делим — решение CEO 26.09.2026: поровну
-// искажало картину (поддержка получала ту же долю таргета и amo, что и продажи). Логику задаст агент.
-// У человека — только прямые расходы: его зарплата, бонусы, отпускные. Общие — отдельной строкой.
+// v1006: «Команда» считается на сервере (_finansist_core.teamRows) — те же цифры видит агент.
+// Общие расходы на людей НЕ делятся (решение CEO 26.09.2026): у человека только его зарплата, бонусы, отпускные.
 function fzTeamRows(){
- var d = _fz.data; if (!d) return { rows:[], hasExp:false, shared:0, sharedBy:[], head:0, salTotal:0 };
- var exp = fzExpRows(_fz.month);
- var hasExp = exp != null;
- var sal = hasExp ? fzSalaryByPerson(exp) : {};
- var salTotal = 0; Object.keys(sal).forEach(function(k){ salTotal += sal[k].sum; });
- var sharedMap = {}; (exp || []).forEach(function(e){ if (fzIsSalary(e)) return; var c = String(e.category || 'Прочее').trim(); sharedMap[c] = (sharedMap[c] || 0) + (+e.amount || 0); });
- var sharedBy = Object.keys(sharedMap).map(function(c){ return { category:c, sum:sharedMap[c] }; }).sort(function(a, b){ return b.sum - a.sum; });
- var shared = sharedBy.reduce(function(a, x){ return a + x.sum; }, 0);
- var rows = {};
- (d.team || []).forEach(function(t){ var k = fzNameKey(t.name); rows[k] = { name:t.name, revenue:t.revenue, prev:t.prev_revenue, count:t.count, newc:t.new_clients, salary:0, hasSalary:false }; });
- Object.keys(sal).forEach(function(k){ if (!rows[k]) rows[k] = { name:sal[k].name, revenue:0, prev:0, count:0, newc:0, salary:0, hasSalary:false }; rows[k].salary = sal[k].sum; rows[k].hasSalary = true; });
- var list = Object.keys(rows).map(function(k){ var r = rows[k]; r.cost = r.salary; r.res = r.revenue - r.cost; return r; });
- list.sort(function(a, b){ return b.revenue - a.revenue || b.cost - a.cost; });
- return { rows:list, hasExp:hasExp, shared:shared, sharedBy:sharedBy, head:Object.keys(sal).length, salTotal:salTotal };
+ var d = _fz.data; if (!d || !d.team) return { rows:[], hasExp:false, shared:0, sharedBy:[], head:0, salTotal:0 };
+ var t = d.team;
+ var list = (t.rows || []).map(function(r){ return { name:r.name, revenue:+r.revenue || 0, prev:+r.prev_revenue || 0, count:r.count || 0, newc:r.new_clients || 0, salary:+r.salary || 0, hasSalary:!!r.has_salary, cost:+r.salary || 0, res:(+r.revenue || 0) - (+r.salary || 0) }; });
+ var sharedBy = Object.keys(t.shared_by_category || {}).map(function(c){ return { category:c, sum:t.shared_by_category[c] }; }).sort(function(a, b){ return b.sum - a.sum; });
+ var salTotal = list.reduce(function(a, r){ return a + r.salary; }, 0);
+ return { rows:list, hasExp:!!t.has_expenses, shared:+t.shared || 0, sharedBy:sharedBy, head:list.filter(function(r){ return r.hasSalary; }).length, salTotal:salTotal };
 }
 function fzTeamTag(r){
  if (!r.hasSalary && r.revenue > 0) return '<span class="st mu">нет в расходах</span>';
@@ -46477,6 +46490,9 @@ function fzInit(){
    var ddb = e.target.closest('.fz-dd-btn'); if (ddb) { var dd = ddb.parentNode; var was = dd.classList.contains('on'); root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); }); if (!was) dd.classList.add('on'); return; }
    var ddi = e.target.closest('.fz-dd-menu button'); if (ddi) { var dd2 = ddi.closest('.fz-dd'); _fz.filters[dd2.getAttribute('data-fz-dd')] = ddi.getAttribute('data-v') || ''; dd2.classList.remove('on'); fzRenderDisputes(); return; }
    var qa = e.target.closest('.fz-qi .acts button'); if (qa) { var qi = qa.closest('.fz-qi'); fzQuestionAnswer(qi.getAttribute('data-q'), +qa.getAttribute('data-j')); return; }
+   if (e.target.closest('#fz-q-refresh')) { fzRefreshQuestions(); return; }
+   var mf = e.target.closest('[data-fz-mfill]'); if (mf) { fzMissingAct(mf.getAttribute('data-fz-mfill'), 'fill'); return; }
+   var mi = e.target.closest('[data-fz-mign]'); if (mi) { fzMissingAct(mi.getAttribute('data-fz-mign'), 'ignore'); return; }
    if (!e.target.closest('.fz-dd')) root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); });
   });
   document.addEventListener('click', function(e){ if (!root.contains(e.target)) root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); }); });
@@ -46489,7 +46505,8 @@ function fzInit(){
   document.getElementById('fz-next').onclick = function(){ _fz.month = fzMonthShift(_fz.month, 1); fzLoad(); };
   document.getElementById('fz-f-q').addEventListener('input', function(){ _fz.filters.q = this.value.trim().toLowerCase(); fzRenderDisputes(); });
   document.getElementById('fz-balance').addEventListener('input', function(){ var v = parseFloat(String(this.value).replace(/\s/g,'').replace(',','.')); _fz.balance = isNaN(v) ? null : v; fzRenderCash(); fzRenderCashMini(); clearTimeout(_fz.balanceTimer); _fz.balanceTimer = setTimeout(fzSaveBalance, 800); });
-  document.getElementById('fz-composer').addEventListener('submit', function(){ var i = document.getElementById('fz-inp'); var t = i.value.trim(); if (!t) return; fzChatAdd(t, 'u'); i.value = ''; setTimeout(function(){ fzChatAdd('Чат ещё не подключён. Сообщение никуда не ушло.', 'a'); }, 300); });
+  document.getElementById('fz-composer').addEventListener('submit', function(){ var i = document.getElementById('fz-inp'); var t = i.value.trim(); if (!t) return; i.value = ''; fzChatSend(t); });
+  fzChatLoad();
  }
  fzLoad();
 }
@@ -46513,13 +46530,6 @@ async function fzLoad(){
  st.innerHTML = '<div class="fz-loading">Считаю за ' + FZ_MONTHS[m.mo - 1].toLowerCase() + '…</div>';
  _fz.busy = true; _fz.err = null;
  var my = ++_fz.reqId; // ответ устаревшего запроса (быстро щёлкали месяцы) игнорируем целиком
- // расходы из таблицы едут медленно (Apps Script, лист за каждый месяц) — не ждём их:
- // рисуем цифры из базы сразу, а когда расходы доедут, перерисуем
- if (!_fz.expReady && typeof loadExpenses === 'function') {
-  _fz.expReady = true;
-  if (typeof expensesData !== 'undefined' && Array.isArray(expensesData) && expensesData.length) _fz.expLoaded = true; // уже грузили в «Расходах» — не ждём повторного чтения листов
-  loadExpenses().catch(function(e){ console.warn('[finansist] расходы:', e); }).then(function(){ _fz.expLoaded = true; if (_fz.data && !_fz.busy) fzRenderAll(); });
- }
  var r = null, ex = null;
  try { r = await sbFetch('/api/finansist?month=' + fzMonthKey(m)); } catch(e) { ex = e; }
  if (my !== _fz.reqId) return; // уже ушли на другой месяц — этот ответ никому не нужен
@@ -46533,22 +46543,22 @@ async function fzLoad(){
 }
 // Ответы на вопросы и остаток по счетам — общие для владельца и бухгалтера, приходят с сервера
 function fzApplyServerState(r){
- _fz.done = {};
- (r.answers || []).forEach(function(a){ _fz.done[a.question_id] = { idx:a.answer_idx, by:a.answered_by_name || a.answered_by || '', at:a.answered_at }; });
+ _fz.expLoaded = true; // v1006: расходы в ответе сервера
+ _fz.questions = r.questions || []; _fz.missing = (r.missing && r.missing.items) || []; _fz.agent = r.agent || null;
  var b = r.settings && r.settings.balance;
  _fz.balance = (b && b.balance != null) ? +b.balance : null; _fz.balanceMeta = b || null;
  var inp = document.getElementById('fz-balance'); if (inp && document.activeElement !== inp) inp.value = _fz.balance == null ? '' : Math.round(_fz.balance).toLocaleString('ru-RU');
 }
 function fzWhen(iso){ var d = new Date(iso); if (isNaN(d)) return ''; return d.getDate() + ' ' + FZ_MONTHS_GEN[d.getMonth()] + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
 function fzRenderEmpty(){
- ['fz-kpis','fz-team-mini','fz-q-preview','fz-q-full','fz-pay-body','fz-acc-body','fz-people-body','fz-churn-body','fz-cash-out','fz-cash-in','fz-churn-kpis','fz-cash-kpis'].forEach(function(id){ var el = document.getElementById(id); if (el) el.innerHTML = ''; });
+ ['fz-kpis','fz-team-mini','fz-q-preview','fz-q-full','fz-q-done','fz-missing-body','fz-pay-body','fz-acc-body','fz-people-body','fz-churn-body','fz-cash-out','fz-cash-in','fz-churn-kpis','fz-cash-kpis'].forEach(function(id){ var el = document.getElementById(id); if (el) el.innerHTML = ''; });
  document.getElementById('fz-updated').textContent = 'Данных нет';
 }
 function fzRenderAll(){
  var d = _fz.data;
  var lp = d.meta && d.meta.last_paid_at;
  document.getElementById('fz-updated').textContent = 'Оплаты по ' + (lp ? fzDay(lp) : '—');
- fzRenderOverview(); fzRenderQuestions(); fzRenderDisputes(); fzRenderAccounts(); fzRenderPeople(); fzRenderChurn(); fzRenderCash(); fzRenderCashMini(); fzRenderGoals();
+ [fzRenderOverview, fzRenderQuestions, fzRenderDisputes, fzRenderAccounts, fzRenderPeople, fzRenderChurn, fzRenderCash, fzRenderCashMini, fzRenderGoals].forEach(function(fn){ try { fn(); } catch(e){ console.error('[finansist] ' + fn.name + ':', e); } });
 }
 
 // ---------- обзор ----------
@@ -46572,7 +46582,7 @@ function fzRenderOverview(){
  var k = [
   { l:'Выручка', v:fzMoney(cur.revenue), p:fzDeltaPill(fzDelta(cur.revenue, prev && prev.revenue), true), s:s.map(function(x){ return x.revenue; }), g:(cur.revenue >= (prev ? prev.revenue : 0)) },
   { l:'Расходы', v:cur.expense == null ? '—' : fzMoney(cur.expense), p:fzDeltaPill(prev && prev.expense != null && cur.expense != null ? fzDelta(cur.expense, prev.expense) : null, false), s:s.map(function(x){ return x.expense; }), g:!(prev && prev.expense != null && cur.expense != null && cur.expense > prev.expense) },
-  { l:'Прибыль', v:cur.profit == null ? '—' : fzMoney(cur.profit), p:fzDeltaPill(prev && prev.profit != null && cur.profit != null ? fzDelta(cur.profit, prev.profit) : null, true), s:s.map(function(x){ return x.profit; }), g:cur.profit != null && cur.profit >= 0 },
+  { l:'Прибыль' + (d.period.profit_incomplete ? ' <span class="fz-pill neg" title="Не все обязательные статьи расходов внесены — см. «Вопросы агента»">неполная</span>' : ''), v:cur.profit == null ? '—' : fzMoney(cur.profit), p:fzDeltaPill(prev && prev.profit != null && cur.profit != null ? fzDelta(cur.profit, prev.profit) : null, true), s:s.map(function(x){ return x.profit; }), g:cur.profit != null && cur.profit >= 0 },
   { l:'Прибыль от выручки', v:cur.margin == null ? '—' : fzPctTxt(Math.round(cur.margin*10)/10), p:prev && prev.margin != null && cur.margin != null ? '<span class="fz-pill ' + (cur.margin >= prev.margin ? 'pos' : 'neg') + '">было ' + fzPctTxt(Math.round(prev.margin*10)/10) + '</span>' : '<span class="fz-pill mu">нет прошлого месяца</span>', s:s.map(function(x){ return x.margin; }), g:cur.margin != null && (!prev || prev.margin == null || cur.margin >= prev.margin) },
   { l:'Зарплаты от выручки', v:cur.fot == null ? '—' : fzPctTxt(Math.round(cur.fot)), p:prev && prev.fot != null && cur.fot != null ? '<span class="fz-pill ' + (cur.fot <= prev.fot ? 'pos' : 'neg') + '">было ' + Math.round(prev.fot) + '%</span>' : '<span class="fz-pill mu">нет прошлого месяца</span>', s:s.map(function(x){ return x.fot; }), g:cur.fot != null && (!prev || prev.fot == null || cur.fot <= prev.fot) }
  ];
@@ -46604,38 +46614,101 @@ function fzRenderTeamMini(){
   + '<div class="fz-tm-leg"><span><i class="rv"></i>Принёс</span><span><i class="cs"></i>Стоит компании</span>' + (t.hasExp ? '' : '<span>расходы ещё не внесены</span>') + '</div>';
 }
 
-// ---------- вопросы (заготовка из расхождений) ----------
-function fzQuestions(){
- var d = _fz.data, c = d.disputes.counts, list = d.disputes.list, m = fzMonthKey(_fz.month), out = [];
- var sum = function(t){ return list.filter(function(p){ return p.issues.some(function(i){ return i.type === t; }); }).reduce(function(s, p){ return s + p.amount; }, 0); };
- if (c.bank) out.push({ id:m+':bank', ty:'bank', tl:'Счёт', t:c.bank + ' ' + fzPlural(c.bank,'платёж','платежа','платежей') + ' не на том счёте', d:'Статья говорит одно, счёт — другое. Список — в «Спорных записях», фильтр «Не тот счёт».', m:sum('bank'), a:['Ошибка в счёте','Ошибка в статье','Позже'], r:['Отмечено. В оплатах ничего не изменилось.','Отмечено. В оплатах ничего не изменилось.','Отложено.'] });
- if (c.dup) out.push({ id:m+':dup', ty:'dup', tl:'Дубль', t:c.dup + ' ' + fzPlural(c.dup,'платёж похож','платежа похожи','платежей похожи') + ' на двойную запись', d:'Один клиент, одинаковая сумма и статья в пределах 3 дней. Список — в «Спорных записях», фильтр «Возможный дубль».', m:sum('dup'), a:['Проверю в оплатах','Это разные платежи','Позже'], r:['Правки — в разделе «Оплаты».','Отмечено. В оплатах ничего не изменилось.','Отложено.'] });
- if (c.dec) out.push({ id:m+':dec', ty:'dec', tl:'Декады', t:c.dec + ' ' + fzPlural(c.dec,'оплату','оплаты','оплат') + ' проверить по правилу декад', d:'Новый клиент, абонплата или доп. лицензии оплачены 10-го числа и позже, а сумма внесена как за полные месяцы. Мог быть остаток на балансе. Список — в «Спорных записях», фильтр «Не по декаде».', m:sum('dec'), a:['Это аванс','Проверю','Позже'], r:['Отмечено. В оплатах ничего не изменилось.','Отмечено. В оплатах ничего не изменилось.','Отложено.'] });
- var s = fzSeries(), cur = s[s.length-1];
- out.push({ id:m+':goal', ty:'goal', tl:'Цель', t:'Задать цель по доле зарплат', d:cur.fot == null ? 'За этот месяц зарплат в расходах нет, сравнивать не с чем.' : 'Сейчас зарплаты — ' + Math.round(cur.fot) + '% выручки. Цель пока не задана.', m:null, a:['Задать цель','Позже'], r:['Ввод целей добавим позже.','Отложено.'] });
- return out;
+// ---------- вопросы агента (с сервера: finansist_questions) и недостающие данные ----------
+var FZ_QTYPE = { bank:'Счёт', dup:'Дубль', dec:'Декады', missing:'Данные', goal:'Цель', other:'Вопрос' };
+function fzQHtml(q){
+ var done = q.status !== 'open';
+ var ev = q.evidence || {};
+ var evTxt = ev.date ? fzDDMM(ev.date) + (ev.client ? ' · ' + ev.client : '') + (ev.bank ? ' · счёт «' + ev.bank + '»' : '') + (ev.manager ? ' · ' + ev.manager : '') : '';
+ return '<div class="fz-qi' + (done ? ' done' : '') + '" data-q="' + fzEsc(q.id) + '"><span class="ty ' + (q.type === 'missing' ? 'goal' : (FZ_QTYPE[q.type] ? q.type : 'goal')) + '">' + fzEsc(FZ_QTYPE[q.type] || 'Вопрос') + '</span><h3>' + fzEsc(q.title) + '</h3><span class="amt">' + (q.amount ? fzMoney(q.amount) : '') + '</span><p>' + fzEsc(q.body) + '</p>' + (evTxt ? '<div class="ev">' + fzEsc(evTxt) + '</div>' : '')
+  + (done
+   ? '<div class="res">' + fzEsc(q.answer_text || (q.status === 'dismissed' ? 'Закрыт' : '')) + '<span class="muted" style="font-weight:400"> · ' + fzEsc(q.answered_by_name || q.answered_by || 'агент') + (q.answered_at || q.updated_at ? ', ' + fzWhen(q.answered_at || q.updated_at) : '') + '</span></div>'
+   : '<div class="acts">' + (Array.isArray(q.options) ? q.options : []).map(function(a, j){ return '<button class="fz-btn' + (j === 0 ? ' pri' : '') + '" data-j="' + j + '">' + fzEsc(a) + '</button>'; }).join('') + '</div>')
+  + '</div>';
 }
-function fzQHtml(q){ var done = _fz.done[q.id]; return '<div class="fz-qi' + (done != null ? ' done' : '') + '" data-q="' + fzEsc(q.id) + '"><span class="ty ' + q.ty + '">' + q.tl + '</span><h3>' + fzEsc(q.t) + '</h3><span class="amt">' + (q.m ? fzMoney(q.m) : '') + '</span><p>' + fzEsc(q.d) + '</p>' + (done != null ? '<div class="res">' + fzEsc(q.r[done.idx] || '') + '<span class="muted" style="font-weight:400"> · ' + fzEsc(done.by || '') + (done.at ? ', ' + fzWhen(done.at) : '') + (done.pending ? ' (сохраняю…)' : '') + '</span></div>' : '<div class="acts">' + q.a.map(function(a, j){ return '<button class="fz-btn' + (j === 0 ? ' pri' : '') + '" data-j="' + j + '">' + fzEsc(a) + '</button>'; }).join('') + '</div>') + '</div>'; }
 function fzRenderQuestions(){
- var Q = fzQuestions(); var open = Q.filter(function(q){ return _fz.done[q.id] == null; });
- document.getElementById('fz-q-full').innerHTML = Q.length ? Q.map(fzQHtml).join('') : '<div class="fz-empty">Вопросов за месяц нет.</div>';
+ var qs = _fz.questions || [];
+ var open = qs.filter(function(q){ return q.status === 'open'; }), done = qs.filter(function(q){ return q.status !== 'open'; });
+ document.getElementById('fz-q-full').innerHTML = open.length ? open.map(fzQHtml).join('') : '<div class="fz-empty">Открытых вопросов за месяц нет.</div>';
+ document.getElementById('fz-q-done').innerHTML = done.length ? done.slice(0, 50).map(fzQHtml).join('') : '<div class="fz-empty">Пока ни одного ответа.</div>';
+ document.getElementById('fz-q-open-sub').textContent = open.length ? open.length + ' ' + fzPlural(open.length,'вопрос','вопроса','вопросов') : '';
+ document.getElementById('fz-q-done-sub').textContent = done.length ? done.length : '';
  document.getElementById('fz-q-preview').innerHTML = open.length ? open.slice(0,2).map(fzQHtml).join('') : '<div class="fz-empty">Открытых вопросов нет.</div>';
  document.getElementById('fz-q-left').textContent = open.length + ' ' + fzPlural(open.length,'открыт','открыто','открыто');
  var b = document.getElementById('fz-nav-q'); b.textContent = open.length; b.style.display = open.length ? '' : 'none';
+ fzRenderMissing();
 }
 function fzQuestionAnswer(id, j){
- var q = fzQuestions().filter(function(x){ return x.id === id; })[0]; if (!q) return;
- var prev = _fz.done[id];
- _fz.done[id] = { idx:j, by:(typeof currentUser !== 'undefined' && currentUser && currentUser.name) || '', at:new Date().toISOString(), pending:true };
+ var q = (_fz.questions || []).filter(function(x){ return x.id === id; })[0]; if (!q) return;
+ var snap = JSON.parse(JSON.stringify(q));
+ q.status = 'answered'; q.answer_idx = j; q.answer_text = (q.options || [])[j]; q.answered_by_name = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || ''; q.answered_at = new Date().toISOString();
  fzRenderQuestions();
- sbFetch('/api/finansist?action=answer', { method:'POST', body: JSON.stringify({ month: fzMonthKey(_fz.month), question_id: id, answer_idx: j, answer_text: q.a[j] }) })
-  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось'); var a = r.answer || {}; _fz.done[id] = { idx:(a.answer_idx != null ? a.answer_idx : j), by:a.answered_by_name || a.answered_by || '', at:a.answered_at }; fzRenderQuestions(); })
-  .catch(function(e){ if (prev) _fz.done[id] = prev; else delete _fz.done[id]; fzRenderQuestions(); try { sdToast('Ответ не сохранился: ' + (e && e.message || e), 'error'); } catch(_){} });
+ sbFetch('/api/finansist-agent?action=answer', { method:'POST', body: JSON.stringify({ id: id, idx: j }) })
+  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось'); })
+  .catch(function(e){ Object.assign(q, snap); fzRenderQuestions(); try { sdToast('Ответ не сохранился: ' + (e && e.message || e), 'error'); } catch(_){} });
 }
-function fzSaveBalance(){
- sbFetch('/api/finansist?action=balance', { method:'POST', body: JSON.stringify({ balance: _fz.balance }) })
-  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось'); _fz.balanceMeta = r.balance || null; fzRenderCash(); })
-  .catch(function(e){ try { sdToast('Остаток не сохранился: ' + (e && e.message || e), 'error'); } catch(_){} });
+function fzRefreshQuestions(){
+ var btn = document.getElementById('fz-q-refresh'); if (!btn || btn.disabled) return;
+ btn.disabled = true; var old = btn.innerHTML; btn.textContent = 'Проверяю…';
+ sbFetch('/api/finansist-agent?action=refresh', { method:'POST', body: JSON.stringify({ month: fzMonthKey(_fz.month) }) })
+  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не получилось'); var x = r.result || {}; try { sdToast('Новых вопросов: ' + (x.created || 0) + (x.closed ? ', закрыто: ' + x.closed : ''), 'ok'); } catch(_){} return fzLoad(); })
+  .catch(function(e){ try { sdToast('Обход не удался: ' + (e && e.message || e), 'error'); } catch(_){} })
+  .then(function(){ btn.disabled = false; btn.innerHTML = old; });
+}
+var FZ_MSTATUS = { missing:['bad','нет строки'], odd:['wr','сумма отличается'], filled:['ok','внесено вручную'], superseded:['mu','заменено строкой таблицы'], ignored:['mu','в этом месяце нет'] };
+function fzRenderMissing(){
+ var items = _fz.missing || []; var body = document.getElementById('fz-missing-body'); if (!body) return;
+ var openN = items.filter(function(i){ return i.status === 'missing' || i.status === 'odd'; }).length;
+ document.getElementById('fz-missing-sub').textContent = openN ? openN + ' ' + fzPlural(openN,'статья требует','статьи требуют','статей требуют') + ' внимания — прибыль за месяц неполная' : 'все обязательные статьи на месте';
+ body.innerHTML = items.length ? items.map(function(i){
+  var st = FZ_MSTATUS[i.status] || ['mu', i.status];
+  var act = (i.status === 'missing' || i.status === 'odd')
+   ? '<span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap"><input class="fz-minp" type="text" inputmode="numeric" placeholder="сумма" data-fz-minp="' + fzEsc(i.id) + '"><button class="fz-btn pri" data-fz-mfill="' + fzEsc(i.id) + '">Внести</button><button class="fz-btn" data-fz-mign="' + fzEsc(i.id) + '">Нет такой статьи</button></span>'
+   : (i.status === 'filled' ? fzMoney(i.amount) + '<span class="sub">' + fzEsc((i.filled_by_name || i.filled_by || '') + (i.filled_at ? ', ' + fzWhen(i.filled_at) : '')) + '</span>' : '');
+  return '<tr><td>' + fzEsc(i.item_label) + '</td><td class="wrap"><span class="st ' + st[0] + '">' + st[1] + '</span>' + (i.note ? '<span class="sub">' + fzEsc(i.note) + '</span>' : '') + '</td><td class="r">' + (i.expected_amount ? fzMoney(i.expected_amount) : '<span class="muted">—</span>') + '</td><td class="r">' + (i.found_amount ? fzMoney(i.found_amount) : '<span class="muted">нет</span>') + '</td><td>' + act + '</td></tr>';
+ }).join('') : '<tr><td colspan="5" class="muted">Все обязательные статьи за месяц на месте.</td></tr>';
+}
+function fzMissingAct(id, kind){
+ var body = { id: id };
+ if (kind === 'fill') { var inp = document.querySelector('[data-fz-minp="' + id + '"]'); var v = parseFloat(String(inp && inp.value || '').replace(/\s/g,'').replace(',','.')); if (!v || v <= 0) { try { sdToast('Введите сумму', 'error'); } catch(_){} return; } body.amount = v; }
+ sbFetch('/api/finansist-agent?action=' + (kind === 'fill' ? 'missing_fill' : 'missing_ignore'), { method:'POST', body: JSON.stringify(body) })
+  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось'); return fzLoad(); })
+  .catch(function(e){ try { sdToast('Не сохранилось: ' + (e && e.message || e), 'error'); } catch(_){} });
+}
+
+// ---------- чат с агентом ----------
+function fzMd(t){
+ var h = fzEsc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+ var lines = h.split(/\n/), out = [], inList = false;
+ lines.forEach(function(l){ var m = l.match(/^\s*[-•]\s+(.*)$/); if (m) { if (!inList) { out.push('<ul>'); inList = true; } out.push('<li>' + m[1] + '</li>'); return; } if (inList) { out.push('</ul>'); inList = false; } if (l.trim()) out.push('<p>' + l + '</p>'); });
+ if (inList) out.push('</ul>');
+ return out.join('');
+}
+function fzChatRender(msgs){
+ var box = document.getElementById('fz-msgs'); if (!box) return;
+ var me = (typeof currentUser !== 'undefined' && currentUser && currentUser.email) || '';
+ box.innerHTML = msgs.length ? msgs.map(function(m){
+  if (m.role === 'user') return '<div class="fz-m u">' + (m.author_email && m.author_email !== me ? '<span class="who">' + fzEsc(m.author_name || m.author_email) + '</span>' : '') + fzEsc(m.content) + '<span class="t">' + fzWhen(m.created_at) + '</span></div>';
+  var tr = Array.isArray(m.tool_trace) && m.tool_trace.length ? '<span class="trace">посмотрел: ' + fzEsc(m.tool_trace.map(function(x){ var i = x.input || {}; return (FZ_TOOL_RU[x.tool] || x.tool) + (i.from ? ' ' + fzDDMM(i.from) + '–' + fzDDMM(i.to) : (i.month ? ' ' + i.month : '')); }).join(', ')) + '</span>' : '';
+  return '<div class="fz-m a">' + fzMd(m.content) + tr + '<span class="t">' + fzWhen(m.created_at) + '</span></div>';
+ }).join('') : '<div class="fz-empty" id="fz-msgs-empty">Спросите про выручку, расходы, прибыль, людей или отток за любой период. Каждая цифра — из базы.</div>';
+ if (_fz.chatBusy) box.insertAdjacentHTML('beforeend', '<div class="fz-typing">считаю…</div>');
+ box.scrollTop = box.scrollHeight;
+ var lim = _fz.agent; var sub = document.getElementById('fz-agent-sub'); if (sub && lim) sub.textContent = lim.exhausted ? 'дневной лимит исчерпан' : ('сегодня ' + (lim.spent_usd || 0).toFixed(2) + ' $ из ' + lim.daily_usd + ' $');
+}
+var FZ_TOOL_RU = { get_summary:'сводка', get_payments:'оплаты', get_expenses:'расходы', get_team:'команда', get_disputes:'спорные', get_churn:'отток', get_client:'клиент', get_cash:'касса', get_missing_data:'недостающие', get_decisions:'решения', compare_periods:'сравнение', ask_question:'вопрос', note_missing_data:'пометка', record_decision:'решение' };
+function fzChatLoad(){
+ return sbFetch('/api/finansist-agent?action=history&limit=60').then(function(r){ if (r && r.ok) { _fz.chat = r.messages || []; if (r.limit) _fz.agent = r.limit; fzChatRender(_fz.chat); } }).catch(function(){});
+}
+function fzChatSend(text){
+ if (_fz.chatBusy) return;
+ _fz.chat = _fz.chat || [];
+ _fz.chat.push({ role:'user', content:text, author_email:(typeof currentUser !== 'undefined' && currentUser && currentUser.email) || '', author_name:(typeof currentUser !== 'undefined' && currentUser && currentUser.name) || '', created_at:new Date().toISOString() });
+ _fz.chatBusy = true; fzChatRender(_fz.chat);
+ sbFetch('/api/finansist-agent?action=chat', { method:'POST', body: JSON.stringify({ text: text }) })
+  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'нет ответа'); if (r.reply) _fz.chat.push(r.reply); if (r.limit) _fz.agent = Object.assign({}, _fz.agent || {}, r.limit, { exhausted: r.limit.spent_usd >= r.limit.daily_usd }); })
+  .catch(function(e){ _fz.chat.push({ role:'assistant', content:'Не получилось ответить: ' + (e && e.message || e), created_at:new Date().toISOString() }); })
+  .then(function(){ _fz.chatBusy = false; fzChatRender(_fz.chat); if (_fz.data) fzLoad(); });
 }
 
 // ---------- спорные записи ----------
@@ -46784,6 +46857,7 @@ function fzRenderGoals(){
   ['Отток в деньгах', cur.revenue ? fzPctTxt(Math.round(c.lost_monthly / cur.revenue * 1000) / 10) + ' в мес.' : '—']
  ];
  document.getElementById('fz-goals-body').innerHTML = rows.map(function(r){ return '<tr><td>' + r[0] + '</td><td class="r">' + r[1] + '</td><td class="r muted">не задана</td></tr>'; }).join('');
+ var ex = (_fz.data.meta && _fz.data.meta.expected_items) || []; var eb = document.getElementById('fz-expected-body'); if (eb) eb.innerHTML = ex.map(function(i){ return '<tr><td>' + fzEsc(i.label) + '</td><td class="wrap">' + fzEsc(i.how) + '</td></tr>'; }).join('');
 }
 
 // ---------- выгрузка ----------
