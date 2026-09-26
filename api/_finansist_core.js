@@ -402,7 +402,10 @@ export async function syncMissing(byMonth, monthKey) {
   const now = new Date().toISOString();
   for (const it of found) {
     const ex = exMap[it.item_key];
-    if (it.status === 'no_data' || it.status === 'early') continue; // рано судить — ничего не заводим и не закрываем
+    if (it.status === 'no_data' || it.status === 'early') { // рано судить: ничего не заводим, а старые «нет строки/отличается» (заведённые, пока данных не было) убираем
+      if (ex && (ex.status === 'missing' || ex.status === 'odd')) { await sbDelete('finansist_missing_data', { id: 'eq.' + ex.id }); changes.push({ type: 'resolved', item: it, prev: ex }); }
+      continue;
+    }
     const note = it.status === 'missing'
       ? 'В таблице расходов за ' + monthLabel(monthKey) + ' нет строки «' + it.item_label + '». Спросить у Гульшан сумму' + (it.expected_amount ? ' (обычно около ' + round(it.expected_amount) + ' сом)' : '') + '.'
       : it.status === 'odd' ? '«' + it.item_label + '» за ' + monthLabel(monthKey) + ': ' + round(it.found_amount) + ' сом, обычно около ' + round(it.expected_amount) + ' сом. Уточнить у Гульшан, всё ли внесено.' : null;
