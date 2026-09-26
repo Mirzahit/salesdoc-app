@@ -21,6 +21,7 @@
 import { sbSelect, sbSelectAll } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 import { requirePerm } from './_perm.js';
+import { almatyIso } from './_dates.js'; // «сегодня» по Бишкеку, не по UTC (ловушка toISOString)
 
 export const config = { maxDuration: 60 };
 
@@ -43,7 +44,7 @@ export function bankKey(bank) {
   const s = String(bank || '').toLowerCase().replace(/\s+/g, '');
   if (!s) return 'none';
   if (/усл/.test(s)) return 'services';
-  if (/мбизнес|м-банк|мбанк|mbank|mbusiness/.test(s)) return 'license';
+  if (/мбизнес|м-?банк|m-?bank|mbusiness/.test(s)) return 'license';
   if (/касса|налич/.test(s)) return 'cash';
   return 'other';
 }
@@ -73,7 +74,7 @@ function normName(s) {
   return String(s || '').toLowerCase().replace(/[«»"',.()]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 function decadeDays(day) { return day >= 20 ? 10 : (day >= 10 ? 20 : 30); }
-function todayIso() { return new Date().toISOString().slice(0, 10); }
+function todayIso() { return almatyIso(); }
 function addDays(iso, k) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + k); return d.toISOString().slice(0, 10); }
 
 // ---------- расхождения ----------
@@ -166,7 +167,7 @@ export default async function handler(req, res) {
     const range = monthRange(pm.y, pm.mo);
     const prev = monthRange(shiftMonth(pm.y, pm.mo, -1).y, shiftMonth(pm.y, pm.mo, -1).mo);
 
-    const [payments, clients, churnRows, licRows, employees] = await Promise.all([
+    const [payments, clients, churnRows, licRows, licPeriods, employees] = await Promise.all([
       sbSelectAll('payments', {
         country: 'eq.' + COUNTRY,
         select: 'id,paid_at,company_name,client_id,category,category_raw,amount,qty,price,period_months,bank,manager_name,source,created_by,created_at',
@@ -177,8 +178,9 @@ export default async function handler(req, res) {
         select: 'client_id,company_name,city,status,next_billing_at,access_until,access_status,pay_reason,pay_reason_note,pay_reason_at,churned_at,subscription_period_months,support_operator,curator_operator',
         order: 'client_id',
       }),
-      sbSelect('churn_records', { country: 'eq.' + COUNTRY, select: 'period_month,company_name,company_key,kind,prev_count,prev_amount,cur_count,cur_amount,diff,reason,reason_raw', order: 'period_month.desc', limit: '1000' }),
-      sbSelect('churn_license_changes', { country: 'eq.' + COUNTRY, select: 'period_month,company_key,license_type,m1_count,m2_count,diff', order: 'period_month.desc', limit: '1000' }),
+      sbSelectAll('churn_records', { country: 'eq.' + COUNTRY, period_month: 'eq.' + range.from, select: 'period_month,company_name,company_key,kind,prev_count,prev_amount,cur_count,cur_amount,diff,reason,reason_raw' }),
+      sbSelectAll('churn_license_changes', { country: 'eq.' + COUNTRY, period_month: 'eq.' + range.from, select: 'period_month,company_key,license_type,m1_count,m2_count,diff' }),
+      sbSelectAll('churn_license_changes', { country: 'eq.' + COUNTRY, select: 'period_month' }), // только даты выгрузок — для подсказки «есть за …»
       sbSelect('employees', { active: 'eq.true', select: 'name,pos,role,country,email', order: 'name', limit: '200' }),
     ]);
 
@@ -207,7 +209,7 @@ export default async function handler(req, res) {
       by_category: sumBy(cur, p => p.category),
       by_manager: sumBy(cur, p => p.manager_name),
       by_bank: sumBy(cur, p => bankKey(p.bank)),
-      last_paid_at: payments.length ? payments[0].paid_at : null,
+      last_paid_at: (function(){ const t = todayIso(); const p = payments.find(x => x.paid_at && x.paid_at <= t); return p ? p.paid_at : (payments.length ? payments[0].paid_at : null); })(), // без опечаток из будущего
     };
 
     // --- спорные ---
@@ -259,7 +261,7 @@ export default async function handler(req, res) {
           operator: c.support_operator || null,
         };
       });
-    const churnPeriods = Array.from(new Set(churnRows.map(r => r.period_month))).sort().reverse();
+    const churnPeriods = Array.from(new Set(churnRows.map(r => r.period_month).concat(licPeriods.map(r => r.period_month)))).filter(Boolean).sort().reverse();
     const churnMonth = churnRows.filter(r => r.period_month === range.from).map(r => ({
       company_name: r.company_name, kind: r.kind, prev_count: r.prev_count, cur_count: r.cur_count,
       prev_amount: num(r.prev_amount), cur_amount: num(r.cur_amount), diff: r.diff, reason: r.reason || r.reason_raw || '',
