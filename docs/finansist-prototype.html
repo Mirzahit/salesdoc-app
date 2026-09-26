@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SalesDoc Финансист</title>
+<!-- Макет вкладки «Финансы → Финансист» (v1005). Прислан CEO 26.09.2026. Цифры вымышленные — это образец вёрстки и поведения, не данные. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F4F6F6; --surface:#FFFFFF; --sunk:#EEF1F1; --ink:#162024; --ink2:#34424A; --muted:#66757B; --line:#DEE4E4; --line2:#E9EEEE;
+  --side:#18242A; --side-ink:#C9D4D7; --side-muted:#7F9197; --side-hi:#23343B;
+  --accent:#1E6072; --accent-ink:#FFFFFF; --accent-soft:#E1EEF1;
+  --pos:#1B7A4A; --pos-soft:#E1F2E8; --neg:#B42C22; --neg-soft:#FBE6E3; --warn:#8A5A00; --warn-soft:#F6EDDA;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  font-family:"Onest", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1618; --surface:#162024; --sunk:#1B272B; --ink:#E3EAEA; --ink2:#C3CFD1; --muted:#8C9CA1; --line:#26343A; --line2:#1F2C31;
+    --side:#0B1113; --side-ink:#C3CFD2; --side-muted:#71858B; --side-hi:#18252A;
+    --accent:#6DB3C5; --accent-ink:#0B1113; --accent-soft:#1C3339;
+    --pos:#4DC38A; --pos-soft:#17312A; --neg:#F07C70; --neg-soft:#3A201E; --warn:#E3B45C; --warn-soft:#352A15;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1618; --surface:#162024; --sunk:#1B272B; --ink:#E3EAEA; --ink2:#C3CFD1; --muted:#8C9CA1; --line:#26343A; --line2:#1F2C31;
+  --side:#0B1113; --side-ink:#C3CFD2; --side-muted:#71858B; --side-hi:#18252A;
+  --accent:#6DB3C5; --accent-ink:#0B1113; --accent-soft:#1C3339;
+  --pos:#4DC38A; --pos-soft:#17312A; --neg:#F07C70; --neg-soft:#3A201E; --warn:#E3B45C; --warn-soft:#352A15;
+}
+html,body{height:100%}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0; background:var(--bg); color:var(--ink); font-size:14px; line-height:1.45; font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased; overflow:hidden}
+button,input,select{font:inherit; color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+svg.i{width:18px; height:18px; flex:none; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round}
+.num{white-space:nowrap} .pos{color:var(--pos)} .neg{color:var(--neg)} .muted{color:var(--muted)}
+
+.app{height:100%; display:grid; grid-template-columns:236px minmax(0,1fr) auto}
+
+/* sidebar */
+.side{background:var(--side); color:var(--side-ink); display:flex; flex-direction:column; min-height:0}
+.logo{display:flex; align-items:center; gap:10px; padding:18px 18px 16px}
+.logo .mk{width:30px; height:30px; border-radius:7px; background:var(--accent); color:var(--accent-ink); display:grid; place-items:center; font-weight:700; font-size:13px}
+.logo b{display:block; font-size:14px; color:#fff; font-weight:600}
+:root[data-theme="dark"] .logo b{color:var(--ink)}
+.logo span{display:block; font-size:12px; color:var(--side-muted)}
+.nav{flex:1; overflow-y:auto; padding:6px 10px}
+.nav h4{font-size:12px; font-weight:500; color:var(--side-muted); margin:16px 10px 6px}
+.nav button{width:100%; display:flex; align-items:center; gap:10px; border:0; background:none; color:var(--side-ink); padding:8px 10px; border-radius:7px; font-size:14px; text-align:left}
+.nav button:hover{background:var(--side-hi)}
+.nav button[aria-current="page"]{background:var(--side-hi); color:#fff; box-shadow:inset 3px 0 0 var(--accent)}
+.nav .badge{margin-left:auto; background:var(--neg); color:#fff; font-size:11px; font-weight:600; border-radius:999px; padding:1px 7px}
+.side-foot{padding:14px 18px; border-top:1px solid var(--side-hi); font-size:12px; color:var(--side-muted); display:flex; align-items:center; gap:8px}
+.live{width:7px; height:7px; border-radius:50%; background:#4DC38A}
+
+/* content */
+.content{display:flex; flex-direction:column; min-width:0; min-height:0}
+.bar{display:flex; align-items:center; gap:12px; padding:0 24px; height:58px; border-bottom:1px solid var(--line); background:var(--surface); flex:none}
+.burger{display:none; border:0; background:none; padding:6px; margin-left:-6px}
+.crumbs{font-size:14px; color:var(--muted); margin-right:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.crumbs b{color:var(--ink); font-weight:600}
+.ctl{display:flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:7px; padding:6px 10px; background:var(--surface); font-size:13px; color:var(--ink2)}
+.seg{display:flex; border:1px solid var(--line); border-radius:7px; overflow:hidden}
+.seg button{border:0; background:var(--surface); padding:6px 11px; font-size:13px; color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--sunk); color:var(--ink); font-weight:600}
+.agent-btn{display:flex; align-items:center; gap:7px; border:1px solid var(--accent); background:var(--accent); color:var(--accent-ink); border-radius:7px; padding:6px 12px; font-size:13px; font-weight:500}
+.agent-btn[aria-pressed="false"]{background:var(--surface); color:var(--accent)}
+.ava{width:30px; height:30px; border-radius:50%; background:var(--sunk); display:grid; place-items:center; font-size:12px; font-weight:600; color:var(--ink2)}
+.scroll{flex:1; overflow-y:auto; min-height:0}
+.page{padding:22px 24px 48px; max-width:1320px}
+.view{display:none} .view.on{display:block}
+.ph{display:flex; align-items:flex-end; gap:16px; margin-bottom:18px; flex-wrap:wrap}
+.ph h1{font-size:21px; font-weight:600; margin:0; letter-spacing:-.01em}
+.ph p{margin:2px 0 0; color:var(--muted); font-size:13px}
+.ph .sp{margin-left:auto; display:flex; gap:8px}
+.btn{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--surface); border-radius:7px; padding:6px 12px; font-size:13px; font-weight:500; color:var(--ink2)}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
+
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:9px}
+.panel-h{display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid var(--line2)}
+.panel-h h2{font-size:14px; font-weight:600; margin:0}
+.panel-h span{font-size:12px; color:var(--muted)}
+.panel-h .r{margin-left:auto}
+.panel-b{padding:16px}
+.link{border:0; background:none; color:var(--accent); font-size:13px; font-weight:500; padding:0}
+
+/* insight */
+.insight{display:flex; gap:14px; align-items:flex-start; padding:14px 16px; margin-bottom:16px; background:var(--accent-soft); border-radius:9px; border:1px solid transparent}
+.insight .av{width:32px; height:32px; border-radius:8px; background:var(--accent); color:var(--accent-ink); display:grid; place-items:center; flex:none}
+.insight b{display:block; font-size:14.5px; margin-bottom:2px}
+.insight p{margin:0; font-size:13.5px; color:var(--ink2); max-width:90ch}
+.insight .act{margin-left:auto; flex:none}
+
+/* kpi */
+.kpis{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin-bottom:16px}
+.kpi{padding:14px 16px 12px}
+.kpi small{font-size:12.5px; color:var(--muted)}
+.kpi strong{display:block; font-size:21px; font-weight:600; letter-spacing:-.01em; margin:3px 0 6px}
+.kpi .row{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.pill{font-size:12px; font-weight:600; padding:1px 7px; border-radius:5px}
+.pill.pos{background:var(--pos-soft)} .pill.neg{background:var(--neg-soft)}
+.kpi svg{width:72px; height:24px}
+
+.grid2{display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:16px; margin-bottom:16px}
+.chart svg{width:100%; height:auto; display:block}
+.legend{display:flex; gap:16px; font-size:12px; color:var(--muted); margin-top:6px}
+.legend i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px}
+
+.hbars{display:flex; flex-direction:column; gap:13px}
+.tm{display:flex; flex-direction:column; padding:4px 16px 0}
+.tm-row{display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"n r" "b t"; gap:8px 14px; align-items:center; padding:10px 0; border-bottom:1px solid var(--line2)}
+.tm-name{grid-area:n; font-size:13.5px; font-weight:500}
+.tm-name span{display:block; font-size:12px; color:var(--muted); font-weight:400}
+.tm-bars{grid-area:b; display:flex; flex-direction:column; gap:3px}
+.tm-bars i,.tm-leg i{display:block; height:6px; border-radius:3px; min-width:2px}
+.tm-bars .rv,.tm-leg .rv{background:var(--accent)}
+.tm-bars .cs,.tm-leg .cs{background:var(--muted); opacity:.45}
+.tm-res{grid-area:r; font-size:14px; font-weight:600; text-align:right; white-space:nowrap}
+.tm-tag{grid-area:t; text-align:right}
+.tm-tag .st{font-size:11.5px}
+.tm-leg{display:flex; gap:16px; font-size:12px; color:var(--muted); padding:10px 0 4px}
+.tm-leg span{display:flex; align-items:center; gap:6px}
+.tm-leg i{width:14px}
+.tm-note{margin:6px 16px 14px; padding:10px 12px; border-radius:7px; background:var(--neg-soft); font-size:13px; color:var(--ink2)}
+.tm-note b{color:var(--neg); font-weight:600}
+.hbar .lab{display:flex; justify-content:space-between; font-size:13px; margin-bottom:5px}
+.track{height:7px; background:var(--sunk); border-radius:4px; overflow:hidden}
+.fill{height:100%; background:var(--accent); border-radius:4px}
+
+/* list of questions */
+.qlist{display:flex; flex-direction:column}
+.qi{display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:4px 14px; padding:14px 16px; border-bottom:1px solid var(--line2); align-items:start}
+.qi:last-child{border-bottom:0}
+.qi .ty{grid-row:span 2; font-size:11.5px; font-weight:600; padding:2px 8px; border-radius:5px; white-space:nowrap; margin-top:1px}
+.ty.bank{background:var(--warn-soft); color:var(--warn)}
+.ty.dec{background:var(--accent-soft); color:var(--accent)}
+.ty.dup{background:var(--neg-soft); color:var(--neg)}
+.ty.goal{background:var(--sunk); color:var(--ink2)}
+.qi h3{font-size:14px; font-weight:600; margin:0}
+.qi p{margin:0; font-size:13px; color:var(--muted); grid-column:2}
+.qi .amt{font-weight:600; text-align:right}
+.qi .acts{grid-column:2 / -1; display:flex; gap:6px; flex-wrap:wrap; margin-top:8px}
+.qi .res{grid-column:2 / -1; font-size:13px; color:var(--pos); font-weight:500; margin-top:6px}
+.qi.done{opacity:.7}
+
+/* tables */
+.toolbar{display:flex; gap:8px; flex-wrap:wrap; padding:12px 16px; border-bottom:1px solid var(--line2)}
+.toolbar input,.toolbar select{border:1px solid var(--line); background:var(--surface); border-radius:7px; padding:6px 10px; font-size:13px}
+.toolbar input{flex:1; min-width:180px}
+.tw{overflow-x:auto}
+table{width:100%; border-collapse:collapse; font-size:13.5px}
+th,td{padding:10px 16px; text-align:left; border-bottom:1px solid var(--line2); white-space:nowrap}
+th{font-size:12px; font-weight:500; color:var(--muted); background:var(--sunk); position:sticky; top:0}
+td.r,th.r{text-align:right}
+tbody tr:hover{background:var(--sunk)}
+tfoot td{font-weight:600; border-top:1px solid var(--line); border-bottom:0}
+td .sub{display:block; font-size:12px; color:var(--muted)}
+.st{display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:500; padding:2px 8px; border-radius:5px}
+.st::before{content:""; width:6px; height:6px; border-radius:50%; background:currentColor}
+.st.ok{color:var(--pos); background:var(--pos-soft)}
+.st.bad{color:var(--neg); background:var(--neg-soft)}
+.st.wr{color:var(--warn); background:var(--warn-soft)}
+.tfoot-note{padding:10px 16px; font-size:12.5px; color:var(--muted); border-top:1px solid var(--line2)}
+.note{font-size:12.5px; color:var(--muted); margin:12px 2px 0}
+
+/* agent panel */
+.agent{width:0; overflow:hidden; background:var(--surface); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0}
+body.agent-on .agent{width:372px}
+.agent-h{height:58px; flex:none; display:flex; align-items:center; gap:10px; padding:0 16px; border-bottom:1px solid var(--line)}
+.agent-h .av{width:28px; height:28px; border-radius:7px; background:var(--accent); color:var(--accent-ink); display:grid; place-items:center}
+.agent-h b{font-size:14px; display:block}
+.agent-h span{font-size:12px; color:var(--muted); display:block}
+.agent-h .x{margin-left:auto; border:0; background:none; color:var(--muted); padding:6px}
+.msgs{flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; min-height:0}
+.m{max-width:92%; font-size:13.5px}
+.m.a{align-self:flex-start; background:var(--sunk); padding:9px 12px; border-radius:10px 10px 10px 3px}
+.m.u{align-self:flex-end; background:var(--accent); color:var(--accent-ink); padding:8px 12px; border-radius:10px 10px 3px 10px}
+.m .t{display:block; font-size:11px; color:var(--muted); margin-top:3px}
+.m.u .t{color:inherit; opacity:.75}
+.chips{display:flex; gap:6px; flex-wrap:wrap; padding:0 16px 10px}
+.chips button{border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:4px 10px; font-size:12.5px; color:var(--ink2)}
+.chips button:hover{border-color:var(--accent); color:var(--accent)}
+.composer{display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--line)}
+.composer input{flex:1; min-width:0; border:1px solid var(--line); background:var(--bg); border-radius:8px; padding:9px 12px; font-size:13.5px}
+.composer button{border:0; background:var(--accent); color:var(--accent-ink); border-radius:8px; width:40px; display:grid; place-items:center}
+.scrim{display:none}
+
+@media (max-width:1280px){
+  .app{grid-template-columns:236px minmax(0,1fr)}
+  .agent{position:fixed; top:0; right:0; bottom:0; z-index:50; box-shadow:-12px 0 32px rgba(0,0,0,.14); padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px)}
+  body.agent-on .agent{width:min(400px,100%)}
+  .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media (max-width:900px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:fixed; top:0; left:0; bottom:0; width:260px; z-index:60; transform:translateX(-100%); transition:transform .2s; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px)}
+  body.nav-on .side{transform:none}
+  body.nav-on .scrim{display:block; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:55}
+  .burger{display:block}
+  .bar{padding:0 14px; gap:8px}
+  .hide-m{display:none}
+  .page{padding:16px 14px 40px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px}
+  .kpis .kpi:first-child{grid-column:1 / -1}
+  .grid2{grid-template-columns:1fr}
+  .insight{flex-wrap:wrap}
+  .insight .act{margin-left:46px}
+  .ph .sp{margin-left:0}
+  body.agent-on .agent{width:100%}
+  .qi{grid-template-columns:minmax(0,1fr) auto}
+  .qi .ty{grid-row:auto; grid-column:1 / -1; justify-self:start}
+  .qi p,.qi .acts,.qi .res{grid-column:1 / -1}
+}
+@media (prefers-reduced-motion:reduce){ .side{transition:none} }
+
+@media (max-width:640px){
+  #v-payments .tw table, #v-payments .tw tbody{display:block;width:100%}
+  #v-payments .tw thead{display:none}
+  #v-payments .tw tr{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 16px;border-bottom:1px solid var(--line,#e5e7eb)}
+  #v-payments .tw td{display:block;padding:0;border:0;white-space:normal}
+  #v-payments .tw td:nth-child(1){grid-column:2;grid-row:1;color:var(--muted,#6b7280);font-size:13px;text-align:right}
+  #v-payments .tw td:nth-child(2){grid-column:1;grid-row:1;font-weight:600}
+  #v-payments .tw td:nth-child(3){grid-column:1;grid-row:2}
+  #v-payments .tw td:nth-child(4){grid-column:2;grid-row:2;font-weight:600}
+  #v-payments .tw td:nth-child(5),#v-payments .tw td:nth-child(6),#v-payments .tw td:nth-child(7){grid-column:1 / -1;display:inline;font-size:13px;color:var(--muted,#6b7280)}
+  #v-payments .tw td:nth-child(5){grid-row:3}
+  #v-payments .tw td:nth-child(6){grid-row:4}
+  #v-payments .tw td:nth-child(7){grid-row:5}
+  #v-payments .tw td[colspan]{grid-column:1 / -1}
+}
+</style>
+</head>
+<body class="agent-on">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4h11l-2 4 2 4H5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></symbol>
+  <symbol id="i-bank" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 010 6.4M18 14.8c2 .7 3.2 2.5 3.6 5.2"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 8M21 11v6h-6"/></symbol>
+  <symbol id="i-cash" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="13" rx="2"/><path d="M2.5 10h19M16 14.5h2"/></symbol>
+  <symbol id="i-set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.2 5.7l2.1 2.1M17.7 16.2l2.1 2.1M2.5 12h3M18.5 12h3M4.2 18.3l2.1-2.1M17.7 7.8l2.1-2.1"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 12.5h.01M15 12.5h.01M9.5 16h5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5L4 12z"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+</svg>
+
+<div class="app">
+  <aside class="side" id="side">
+    <div class="logo"><div class="mk">SD</div><div><b>SalesDoc</b><span>Финансист</span></div></div>
+    <nav class="nav" aria-label="Разделы">
+      <h4>Аналитика</h4>
+      <button data-go="overview" aria-current="page"><svg class="i"><use href="#i-home"/></svg>Обзор</button>
+      <button data-go="questions"><svg class="i"><use href="#i-flag"/></svg>Вопросы агента<span class="badge" id="nav-q">4</span></button>
+      <button data-go="payments"><svg class="i"><use href="#i-list"/></svg>Спорные записи</button>
+      <button data-go="accounts"><svg class="i"><use href="#i-bank"/></svg>Счета</button>
+      <button data-go="people"><svg class="i"><use href="#i-users"/></svg>Команда</button>
+      <button data-go="churn"><svg class="i"><use href="#i-down"/></svg>Отток</button>
+      <button data-go="cash"><svg class="i"><use href="#i-cash"/></svg>Касса и прогноз</button>
+      <h4>Система</h4>
+      <button data-go="settings"><svg class="i"><use href="#i-set"/></svg>Правила и цели</button>
+    </nav>
+    <div class="side-foot"><span class="live"></span>База обновлена 25 сент, 18:40</div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <div class="content">
+    <header class="bar">
+      <button class="burger" id="burger" aria-label="Меню"><svg class="i"><use href="#i-menu"/></svg></button>
+      <div class="crumbs"><span class="hide-m">Финансы / </span><b id="crumb">Обзор</b></div>
+      <div class="ctl hide-m"><svg class="i" style="width:15px;height:15px"><use href="#i-cal"/></svg>Сентябрь 2026</div>
+      <button class="agent-btn" id="agent-btn" aria-pressed="true"><svg class="i" style="width:16px;height:16px"><use href="#i-bot"/></svg><span class="hide-m">Агент</span></button>
+      <div class="ava hide-m" title="Мырзахыт">М</div>
+    </header>
+
+    <div class="scroll" id="scroll"><div class="page">
+
+    <!-- ОБЗОР -->
+    <section class="view on" id="v-overview" data-title="Обзор">
+      <div class="ph"><div><h1>Обзор за сентябрь</h1><p>Данные по 25 сентября, 312 платежей</p></div>
+        <div class="sp"><button class="btn"><svg class="i" style="width:15px;height:15px"><use href="#i-dl"/></svg>Выгрузить</button></div></div>
+
+      <div class="insight">
+        <div class="av"><svg class="i"><use href="#i-bot"/></svg></div>
+        <div><b>Месяц в плюсе, но зарплатный фонд растёт втрое быстрее выручки</b>
+        <p>Выручка +6%, ФОТ +20%. Прибыль ниже августа на <span data-m="111500"></span>. При таком темпе маржа в октябре уйдёт ниже 15%.</p></div>
+        <button class="btn act" data-go="questions">4 вопроса ждут решения</button>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-h"><h2>Выручка и расходы</h2><span>6 месяцев</span></div>
+          <div class="panel-b"><div class="chart" id="chart-pl"></div>
+            <div class="legend"><span><i style="background:var(--accent)"></i>Выручка</span><span><i style="background:var(--muted);opacity:.55"></i>Расходы</span></div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-h"><h2>Рентабельность команды</h2><button class="link r" data-go="people">Подробно</button></div>
+          <div class="tm" id="team-mini"></div>
+          <div class="tm-note"><b>Интеграция в минусе второй месяц.</b> Двое новых пока не окупаются, в ноябре подниму вопрос снова.</div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-h"><h2>Вопросы агента</h2><span id="q-left">4 открыто</span><button class="link r" data-go="questions">Все вопросы</button></div>
+          <div class="qlist" id="q-preview"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-h"><h2>Касса на 30 дней</h2><button class="link r" data-go="cash">Прогноз</button></div>
+          <div class="panel-b">
+            <div style="font-size:13px;color:var(--muted)">Минимальный остаток</div>
+            <div style="font-size:22px;font-weight:600" class="neg" data-m="-83000"></div>
+            <div style="font-size:13px;margin:2px 0 12px">20 октября, вторая часть зарплаты</div>
+            <div class="chart" id="chart-cash-mini"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ВОПРОСЫ -->
+    <section class="view" id="v-questions" data-title="Вопросы агента">
+      <div class="ph"><div><h1>Вопросы агента</h1><p>Агент не меняет такие записи сам, пока ты не решишь</p></div></div>
+      <div class="panel"><div class="qlist" id="q-full"></div></div>
+    </section>
+
+    <!-- СПОРНЫЕ ЗАПИСИ -->
+    <section class="view" id="v-payments" data-title="Спорные записи">
+      <div class="ph"><div><h1>Спорные записи</h1><p>Только платежи, к которым у агента есть вопросы. Полный список оплат — в разделе «Оплаты»</p></div>
+        <div class="sp"><button class="btn"><svg class="i" style="width:15px;height:15px"><use href="#i-list"/></svg>Открыть все оплаты</button><button class="btn"><svg class="i" style="width:15px;height:15px"><use href="#i-dl"/></svg>Выгрузить</button></div></div>
+      <div class="panel">
+        <div class="toolbar">
+          <input id="f-q" placeholder="Поиск по клиенту" aria-label="Поиск по клиенту">
+          <select id="f-st" aria-label="Тип расхождения"><option value="">Все расхождения</option><option value="bank">Не тот счёт</option><option value="dup">Возможный дубль</option><option value="dec">Не по декаде</option></select>
+          <select id="f-cat" aria-label="Категория"><option value="">Все категории</option></select>
+          <select id="f-bank" aria-label="Счёт"><option value="">Все счета</option></select>
+        </div>
+        <div class="tw"><table>
+          <thead><tr><th>Дата</th><th>Клиент</th><th>Что не так</th><th class="r">Сумма</th><th>Категория</th><th>Счёт</th><th>Менеджер</th></tr></thead>
+          <tbody id="pay-body"></tbody>
+        </table></div>
+        <div class="tfoot-note" id="pay-foot"></div>
+      </div>
+    </section>
+
+    <!-- СЧЕТА -->
+    <section class="view" id="v-accounts" data-title="Счета">
+      <div class="ph"><div><h1>Счета</h1><p>Движение по записям в базе</p></div></div>
+      <div class="insight">
+        <div class="av"><svg class="i"><use href="#i-bot"/></svg></div>
+        <div><b>6 лицензионных платежей зачислены на счёт услуг</b>
+        <p>Сумма <span data-m="92000"></span>. До твоего решения считаю их по категории, а не по банку.</p></div>
+      </div>
+      <div class="panel"><div class="tw"><table>
+        <thead><tr><th>Счёт</th><th class="r">Приход</th><th class="r">Расход</th><th class="r">Итог месяца</th><th>Спорные</th></tr></thead>
+        <tbody>
+          <tr><td>М-банк лицензии<span class="sub">лицензии и абонплата</span></td><td class="r" data-m="2646000"></td><td class="r" data-m="990000"></td><td class="r pos" data-m="1656000" data-sign></td><td><span class="st ok">нет</span></td></tr>
+          <tr><td>М-банк услуги<span class="sub">внедрение, интеграции, доработки</span></td><td class="r" data-m="1540400"></td><td class="r" data-m="2412900"></td><td class="r neg" data-m="-872500"></td><td><span class="st bad">6 платежей</span></td></tr>
+        </tbody>
+        <tfoot><tr><td>Итого</td><td class="r" data-m="4186400"></td><td class="r" data-m="3402900"></td><td class="r pos" data-m="783500" data-sign></td><td></td></tr></tfoot>
+      </table></div></div>
+      <p class="note">Остатки на счетах в базу не попадают. Сверка с банковской выпиской остаётся за тобой.</p>
+    </section>
+
+    <!-- КОМАНДА -->
+    <section class="view" id="v-people" data-title="Команда">
+      <div class="ph"><div><h1>Рентабельность команды</h1><p>Личный P&amp;L: выручка минус зарплата и доля общих расходов</p></div></div>
+      <div class="insight">
+        <div class="av"><svg class="i"><use href="#i-bot"/></svg></div>
+        <div><b>Интеграция в минусе второй месяц</b>
+        <p>Двое новых с августа пока не окупаются. Первые 2–3 месяца это нормально, в ноябре подниму вопрос снова.</p></div>
+      </div>
+      <div class="panel"><div class="tw"><table>
+        <thead><tr><th>Сотрудник</th><th class="r">Выручка</th><th class="r">Зарплата и бонусы</th><th class="r">Доля общих</th><th class="r">Результат</th><th>Статус</th></tr></thead>
+        <tbody>
+          <tr><td>Бекзат<span class="sub">Продажи, Бишкек</span></td><td class="r" data-m="1240000"></td><td class="r" data-m="240000"></td><td class="r" data-m="70000"></td><td class="r pos" data-m="930000" data-sign></td><td><span class="st ok">окупается</span></td></tr>
+          <tr><td>Нурлан<span class="sub">Продажи, Ош</span></td><td class="r" data-m="860000"></td><td class="r" data-m="225000"></td><td class="r" data-m="70000"></td><td class="r pos" data-m="565000" data-sign></td><td><span class="st ok">окупается</span></td></tr>
+          <tr><td>Интеграция<span class="sub">3 человека</span></td><td class="r" data-m="512000"></td><td class="r" data-m="540000"></td><td class="r" data-m="100000"></td><td class="r neg" data-m="-128000"></td><td><span class="st bad">в минусе</span></td></tr>
+          <tr><td>Поддержка<span class="sub">5 человек, удержание</span></td><td class="r muted">нет прямой</td><td class="r" data-m="360000"></td><td class="r" data-m="60000"></td><td class="r" data-m="-420000"></td><td><span class="st wr">центр затрат</span></td></tr>
+        </tbody>
+      </table></div></div>
+      <p class="note">Общие расходы делю по числу сотрудников, рекламу и amoCRM только на продажи. Логику можно поменять в разделе «Правила и цели».</p>
+    </section>
+
+    <!-- ОТТОК -->
+    <section class="view" id="v-churn" data-title="Отток">
+      <div class="ph"><div><h1>Отток в деньгах</h1><p>Потеря ежемесячной выручки за сентябрь</p></div></div>
+      <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <div class="panel kpi"><small>Потеря в месяц</small><strong class="neg" data-m="-91200"></strong><span class="muted" style="font-size:12.5px">3 ухода и 3 сокращения</span></div>
+        <div class="panel kpi"><small>Новая выручка в месяц</small><strong class="pos" data-m="146000" data-sign></strong><span class="muted" style="font-size:12.5px">7 новых клиентов</span></div>
+        <div class="panel kpi"><small>Чистый прирост</small><strong class="pos" data-m="54800" data-sign></strong><span class="muted" style="font-size:12.5px">в августе был выше</span></div>
+      </div>
+      <div class="panel"><div class="tw"><table>
+        <thead><tr><th>Клиент</th><th>Событие</th><th>Причина</th><th class="r">Лицензий</th><th class="r">Потеря в месяц</th></tr></thead>
+        <tbody>
+          <tr><td>ОсОО «Фрукт Опт»<span class="sub">Бишкек</span></td><td><span class="st bad">ушёл</span></td><td>отказ</td><td class="r">20 → 0</td><td class="r neg" data-m="-24000"></td></tr>
+          <tr><td>ОсОО «Сары-Озон»<span class="sub">Кант</span></td><td><span class="st bad">ушёл</span></td><td>отказ</td><td class="r">18 → 0</td><td class="r neg" data-m="-21600"></td></tr>
+          <tr><td>ОсОО «Каракол Дистрибуция»<span class="sub">Каракол</span></td><td><span class="st bad">ушёл</span></td><td>долг</td><td class="r">14 → 0</td><td class="r neg" data-m="-16800"></td></tr>
+          <tr><td>ОсОО «Чуй Опт»<span class="sub">Токмок</span></td><td><span class="st wr">сократил</span></td><td>—</td><td class="r">30 → 20</td><td class="r neg" data-m="-12000"></td></tr>
+          <tr><td>ОсОО «Эко Продукт»<span class="sub">Бишкек</span></td><td><span class="st wr">сократил</span></td><td>—</td><td class="r">25 → 16</td><td class="r neg" data-m="-10800"></td></tr>
+          <tr><td>ОсОО «Ош Трейд»<span class="sub">Ош</span></td><td><span class="st wr">сократил</span></td><td>—</td><td class="r">12 → 7</td><td class="r neg" data-m="-6000"></td></tr>
+        </tbody>
+        <tfoot><tr><td>Итого</td><td></td><td></td><td class="r">−81</td><td class="r neg" data-m="-91200"></td></tr></tfoot>
+      </table></div></div>
+    </section>
+
+    <!-- КАССА -->
+    <section class="view" id="v-cash" data-title="Касса и прогноз">
+      <div class="ph"><div><h1>Касса и прогноз</h1><p>От остатка, который ты ввёл 25 сентября, и среднего темпа поступлений</p></div>
+        <div class="sp"><button class="btn pri">Ввести остатки</button></div></div>
+      <div class="insight">
+        <div class="av"><svg class="i"><use href="#i-bot"/></svg></div>
+        <div><b>20 октября не хватит около <span data-m="83000"></span></b>
+        <p>Зарплату сдвигать не советую. Проще до 15-го напомнить трём клиентам с продлением до 18 октября.</p></div>
+      </div>
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-h"><h2>Остаток на всех счетах</h2><span>26 сентября — 26 октября</span></div>
+        <div class="panel-b"><div class="chart" id="chart-cash"></div></div>
+      </div>
+      <div class="panel"><div class="tw"><table>
+        <thead><tr><th>Дата</th><th>Движение</th><th>Тип</th><th class="r">Сумма</th></tr></thead>
+        <tbody>
+          <tr><td>1 окт</td><td>Аренда офиса и коммуналка</td><td>плановое</td><td class="r neg" data-m="-180000"></td></tr>
+          <tr><td>5 окт</td><td>Налоги</td><td>плановое</td><td class="r neg" data-m="-240000"></td></tr>
+          <tr><td>10 окт</td><td>Зарплата, первая часть</td><td>плановое</td><td class="r neg" data-m="-900000"></td></tr>
+          <tr><td>15 окт</td><td>amoCRM, телефония, WhatsApp</td><td>плановое</td><td class="r neg" data-m="-95000"></td></tr>
+          <tr style="background:var(--neg-soft)"><td><b>20 окт</b></td><td><b>Зарплата, вторая часть</b></td><td>плановое</td><td class="r neg" data-m="-1000000"></td></tr>
+          <tr><td>ежедневно</td><td>Продления и новые оплаты</td><td>среднее за 90 дней</td><td class="r pos" data-m="38000" data-sign></td></tr>
+        </tbody>
+      </table></div></div>
+    </section>
+
+    <!-- НАСТРОЙКИ -->
+    <section class="view" id="v-settings" data-title="Правила и цели">
+      <div class="ph"><div><h1>Правила и цели</h1><p>По этим правилам агент проверяет данные. Менять можно здесь или словами в чате</p></div></div>
+      <div class="panel" style="margin-bottom:16px"><div class="panel-h"><h2>Правило декад</h2><span>применяется при каждой активации и продлении</span></div>
+        <div class="tw"><table>
+          <thead><tr><th>Дата активации</th><th>Считается как</th><th class="r">Цена за лицензию</th></tr></thead>
+          <tbody>
+            <tr><td>с 1 по 9 число</td><td>30 дней</td><td class="r muted">ждёт твоих цен</td></tr>
+            <tr><td>с 10 по 19 число</td><td>20 дней</td><td class="r muted">ждёт твоих цен</td></tr>
+            <tr><td>с 20 числа до конца месяца</td><td>10 дней</td><td class="r muted">ждёт твоих цен</td></tr>
+          </tbody></table></div></div>
+      <div class="panel" style="margin-bottom:16px"><div class="panel-h"><h2>Целевые показатели</h2><span>вырабатываются вместе с агентом</span></div>
+        <div class="tw"><table>
+          <thead><tr><th>Показатель</th><th class="r">Сейчас</th><th class="r">Цель</th><th>Статус</th></tr></thead>
+          <tbody>
+            <tr><td>ФОТ от выручки</td><td class="r">52%</td><td class="r muted">не задана</td><td><span class="st wr">предложено 45%</span></td></tr>
+            <tr><td>Маржа</td><td class="r">18,7%</td><td class="r muted">не задана</td><td><span class="st wr">обсудить</span></td></tr>
+            <tr><td>Отток в деньгах</td><td class="r">2,2% в мес.</td><td class="r muted">не задана</td><td><span class="st wr">обсудить</span></td></tr>
+          </tbody></table></div></div>
+      <div class="panel"><div class="panel-h"><h2>Распределение общих расходов</h2></div>
+        <div class="tw"><table>
+          <thead><tr><th>Статья</th><th>На кого делится</th><th>Как</th></tr></thead>
+          <tbody>
+            <tr><td>Аренда, коммуналка, вода</td><td>все сотрудники</td><td>поровну</td></tr>
+            <tr><td>amoCRM</td><td>продажи</td><td>по числу аккаунтов</td></tr>
+            <tr><td>Реклама и таргет</td><td>продажи</td><td>пропорционально новым клиентам</td></tr>
+            <tr><td>Телефония, WhatsApp, сим-карты</td><td>продажи и поддержка</td><td>поровну</td></tr>
+            <tr><td>Такси</td><td>по факту</td><td>на того, кто ездил</td></tr>
+          </tbody></table></div></div>
+    </section>
+
+    </div></div>
+  </div>
+
+  <aside class="agent" id="agent" aria-label="Чат с агентом">
+    <div class="agent-h"><div class="av"><svg class="i" style="width:16px;height:16px"><use href="#i-bot"/></svg></div>
+      <div><b>Финансист</b><span>видит всю базу SalesDoc</span></div>
+      <button class="x" id="agent-x" aria-label="Закрыть"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="msgs" id="msgs">
+      <div class="m a">Сентябрь закрываем в плюсе, но радоваться рано: прибыль ниже августа, хотя выручка выросла.<span class="t">09:12</span></div>
+      <div class="m u">Выручка же выросла, значит всё нормально?<span class="t">09:14</span></div>
+      <div class="m a">Нет, не согласен. Рост выручки на 6% съеден ростом ФОТ на 20%. Если смотреть только на выручку, проблема станет видна через два-три месяца. Давай зададим цель по ФОТ, и я буду следить за ней каждую неделю.<span class="t">09:14</span></div>
+    </div>
+    <div class="chips" id="chips">
+      <button>Почему упала маржа?</button>
+      <button>Хватит ли денег на зарплату 20-го?</button>
+      <button>Кто из клиентов может уйти?</button>
+    </div>
+    <form class="composer" id="composer" onsubmit="return false">
+      <input id="inp" placeholder="Спроси или скажи голосом" aria-label="Сообщение" autocomplete="off">
+      <button type="submit" aria-label="Отправить"><svg class="i" style="width:17px;height:17px"><use href="#i-send"/></svg></button>
+    </form>
+  </aside>
+</div>
+
+<script>
+const RATE={som:1}; const cur='som';
+const money=(n,sign)=>{const v=Math.round(n); const s=Math.abs(v).toLocaleString('ru-RU'); return (v<0?'−':(sign&&v>0?'+':''))+s+' сом';};
+const short=v=>(v/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1})+' млн';
+function paintMoney(){document.querySelectorAll('[data-m]').forEach(el=>el.textContent=money(+el.dataset.m, el.hasAttribute('data-sign')));}
+
+const months=[{m:'апр',r:3520000,e:3010000},{m:'май',r:3610000,e:3050000},{m:'июн',r:3740000,e:3120000},{m:'июл',r:3800000,e:3080000},{m:'авг',r:3950000,e:3055000},{m:'сен',r:4186400,e:3402900}];
+
+function spark(vals, good){
+  const mn=Math.min(...vals), mx=Math.max(...vals), W=72,H=24;
+  const p=vals.map((v,i)=>`${(W-2)*i/(vals.length-1)+1},${H-2-(H-4)*(v-mn)/((mx-mn)||1)}`).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${p}" fill="none" stroke="${good?'var(--pos)':'var(--neg)'}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+function drawKpis(){
+  const k=[
+    {l:'Выручка', v:money(4186400), d:'+6,0%', g:true, s:months.map(x=>x.r)},
+    {l:'Расходы', v:money(3402900), d:'+11,6%', g:false, s:months.map(x=>x.e)},
+    {l:'Прибыль', v:money(783500), d:'−12,5%', g:false, s:months.map(x=>x.r-x.e)},
+    {l:'Маржа', v:'18,7%', d:'−4,0 п.п.', g:false, s:[14.5,15.5,16.6,18.9,22.7,18.7]},
+    {l:'ФОТ от выручки', v:'52%', d:'+6 п.п.', g:false, s:[45,44,46,45,46,52]}
+  ];
+  document.getElementById('kpis').innerHTML=k.map(x=>`<div class="panel kpi"><small>${x.l}</small><strong>${x.v}</strong><div class="row"><span class="pill ${x.g?'pos':'neg'} ${x.g?'pos':'neg'}">${x.d}</span>${spark(x.s,x.g)}</div></div>`).join('');
+}
+
+function drawPL(){
+  const W=640,H=220,L=56,B=26,T=8,k=RATE[cur];
+  const step=5e5*k, max=Math.ceil(Math.max(...months.map(d=>d.r))*k*1.08/step)*step;
+  const ih=H-B-T, gw=(W-L)/months.length, bw=Math.min(24,gw/3.6);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Выручка и расходы по месяцам">`;
+  for(let i=0;i<=4;i++){const y=T+ih-ih*i/4; s+=`<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--line2)"/><text x="${L-8}" y="${y+4}" text-anchor="end" font-size="11" fill="var(--muted)">${short(max*i/4)}</text>`;}
+  months.forEach((d,i)=>{const cx=L+gw*i+gw/2, hr=ih*d.r*k/max, he=ih*d.e*k/max;
+    s+=`<rect x="${cx-bw-2}" y="${T+ih-hr}" width="${bw}" height="${hr}" rx="2.5" fill="var(--accent)"><title>Выручка ${money(d.r)}</title></rect>`;
+    s+=`<rect x="${cx+2}" y="${T+ih-he}" width="${bw}" height="${he}" rx="2.5" fill="var(--muted)" opacity=".5"><title>Расходы ${money(d.e)}</title></rect>`;
+    s+=`<text x="${cx}" y="${H-7}" text-anchor="middle" font-size="12" fill="${i===5?'var(--ink)':'var(--muted)'}" font-weight="${i===5?600:400}">${d.m}</text>`;});
+  document.getElementById('chart-pl').innerHTML=s+'</svg>';
+}
+
+function cashSeries(){const out=[]; let b=1420000; const ev={5:-180000,9:-240000,14:-900000,19:-95000,24:-1000000};
+  for(let d=0;d<=30;d++){if(d>0)b+=38000; if(ev[d])b+=ev[d]; out.push(b);} return out;}
+function drawCash(id, mini){
+  const data=cashSeries(), k=RATE[cur], W=640, H=mini?120:230, L=mini?4:56, B=mini?4:26, T=8, max=1.8e6, min=-4e5, ih=H-B-T;
+  const X=i=>L+(W-L-6)*i/30, Y=v=>T+ih*(max-v)/(max-min);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Прогноз остатка">`;
+  s+=`<rect x="${L}" y="${Y(0)}" width="${W-L}" height="${Y(min)-Y(0)}" fill="var(--neg-soft)"/>`;
+  if(!mini)[-4e5,0,6e5,1.2e6,1.8e6].forEach(v=>{s+=`<line x1="${L}" x2="${W}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v===0?'var(--muted)':'var(--line2)'}"/><text x="${L-8}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${v===0?'0':short(v*k)}</text>`;});
+  else s+=`<line x1="${L}" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--muted)" stroke-dasharray="3 3"/>`;
+  s+=`<polyline points="${data.map((v,i)=>`${X(i)},${Y(v)}`).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="${mini?2.4:2}" stroke-linejoin="round"/>`;
+  data.forEach((v,i)=>{if(v<0)s+=`<circle cx="${X(i)}" cy="${Y(v)}" r="${mini?5:4}" fill="var(--neg)"><title>${money(v)}</title></circle>`;});
+  if(!mini)[[0,'26 сен'],[5,'1 окт'],[14,'10 окт'],[24,'20 окт'],[30,'26 окт']].forEach(([i,t])=>{s+=`<text x="${X(i)}" y="${H-7}" text-anchor="middle" font-size="12" fill="${i===24?'var(--neg)':'var(--muted)'}" font-weight="${i===24?600:400}">${t}</text>`;});
+  document.getElementById(id).innerHTML=s+'</svg>';
+}
+
+/* рентабельность команды: выручка, затраты (зарплата + доля общих) */
+const team=[['Бекзат','Продажи',1240000,310000],['Нурлан','Продажи',860000,295000],['Интеграция','3 человека',512000,640000],['Поддержка','5 человек',0,420000]];
+function drawTeam(){
+  const mx=Math.max(...team.map(t=>Math.max(t[2],t[3])));
+  document.getElementById('team-mini').innerHTML=team.map(([n,r,rev,cost])=>{
+    const res=rev-cost, k=rev?(rev/cost):null;
+    const tag=!rev?'<span class="st wr">центр затрат</span>':res>=0?`<span class="st ok">окупается ×${k.toLocaleString('ru-RU',{maximumFractionDigits:1})}</span>`:'<span class="st bad">в минусе</span>';
+    return `<div class="tm-row"><div class="tm-name">${n}<span>${r}</span></div>
+      <div class="tm-bars" aria-hidden="true"><i class="rv" style="width:${rev/mx*100}%"></i><i class="cs" style="width:${cost/mx*100}%"></i></div>
+      <div class="tm-res ${res>=0?'pos':'neg'}">${money(res,true)}</div><div class="tm-tag">${tag}</div></div>`;}).join('')
+   +'<div class="tm-leg"><span><i class="rv"></i>Принёс</span><span><i class="cs"></i>Стоит компании</span></div>';
+}
+
+/* questions */
+const Q=[
+  {ty:'bank',tl:'Счёт',t:'Лицензия пришла на счёт услуг',d:'ОсОО «Алтын Дистрибьюшн», 12 сентября. Категория лицензия, банк М-банк услуги. Скорее всего менеджер выбрал не тот счёт.',m:18400,a:['Верно по категории','Верно по банку','Обсудить'],r:['Засчитал как лицензию, в отчёте по счетам пометил перенос.','Перенёс в услуги и поменял категорию.','Поставил на разбор, напомню в понедельник.']},
+  {ty:'dec',tl:'Декады',t:'Сумма не по правилу декад',d:'ОсОО «Орион Трейд», 12 лицензий, активация 22 сентября. По правилу это 10 дней, внесено как за 30. Разница 9 600 сом: аванс на октябрь или ошибка.',m:14400,a:['Это аванс','Это ошибка','Обсудить'],r:['Записал разницу на баланс клиента в счёт октября.','Помечено к пересчёту, менеджер получит уведомление.','Поставил на разбор.']},
+  {ty:'dup',tl:'Дубль',t:'Похоже на двойную запись',d:'ОсОО «Нур Маркет», два платежа по 36 000 сом 14 сентября, оба внесены вручную с разницей 4 минуты.',m:36000,a:['Это дубль','Разные платежи','Обсудить'],r:['Второй платёж исключил из выручки.','Оставил оба, больше не спрошу по этой паре.','Поставил на разбор.']},
+  {ty:'goal',tl:'Цель',t:'Задать цель по ФОТ',d:'Сейчас ФОТ 52% выручки. Без цели мне не с чем сравнивать. Предлагаю 45%: столько было в среднем с апреля по июль.',m:null,a:['Принять 45%','Своя цифра','Обсудить'],r:['Цель 45% сохранена, буду предупреждать при превышении.','Напиши цифру в чате агента.','Поставил на разбор.']}
+];
+const done={};
+function qHtml(i){const q=Q[i];
+  return `<div class="qi ${done[i]!=null?'done':''}" data-i="${i}"><span class="ty ${q.ty}">${q.tl}</span><h3>${q.t}</h3><span class="amt">${q.m?money(q.m):''}</span><p>${q.d}</p>${done[i]!=null?`<div class="res">${q.r[done[i]]}</div>`:`<div class="acts">${q.a.map((a,j)=>`<button class="btn ${j===0?'pri':''}" data-j="${j}">${a}</button>`).join('')}</div>`}</div>`;}
+function drawQs(){
+  document.getElementById('q-full').innerHTML=Q.map((_,i)=>qHtml(i)).join('');
+  const open=Q.map((_,i)=>i).filter(i=>done[i]==null);
+  document.getElementById('q-preview').innerHTML=open.length?open.slice(0,2).map(qHtml).join(''):'<div class="panel-b muted">Все вопросы решены.</div>';
+  document.getElementById('q-left').textContent=open.length+' открыто';
+  const b=document.getElementById('nav-q'); b.textContent=open.length; b.style.display=open.length?'':'none';
+  document.querySelectorAll('.qi .acts button').forEach(btn=>btn.addEventListener('click',()=>{done[+btn.closest('.qi').dataset.i]=+btn.dataset.j; drawQs();}));
+}
+
+/* payments */
+const P=[
+ ['25.09','ОсОО «Кулан Трейд»','Лицензия','М-банк лицензии','Бекзат','бот',24000,'ok'],
+ ['24.09','ОсОО «Ала-Тоо Дистрибьюшн»','Внедрение','М-банк услуги','Бекзат','вручную',85000,'ok'],
+ ['22.09','ОсОО «Орион Трейд»','Лицензия','М-банк лицензии','Нурлан','вручную',14400,'dec'],
+ ['21.09','ОсОО «Бай-Тушум Фуд»','Интеграция','М-банк услуги','Бекзат','бот',42000,'ok'],
+ ['19.09','ОсОО «Жалал-Абад Маркет»','Лицензия','М-банк лицензии','Нурлан','бот',36000,'ok'],
+ ['17.09','ОсОО «Нарын Агро»','Доработка','М-банк услуги','Бекзат','вручную',18000,'ok'],
+ ['14.09','ОсОО «Нур Маркет»','Лицензия','М-банк лицензии','Бекзат','вручную',36000,'dup'],
+ ['14.09','ОсОО «Нур Маркет»','Лицензия','М-банк лицензии','Бекзат','вручную',36000,'dup'],
+ ['12.09','ОсОО «Алтын Дистрибьюшн»','Лицензия','М-банк услуги','Бекзат','вручную',18400,'bank'],
+ ['10.09','ОсОО «Иссык-Куль Снаб»','Внедрение','М-банк услуги','Нурлан','бот',120000,'ok'],
+ ['08.09','ОсОО «Эко Продукт»','Лицензия','М-банк лицензии','Бекзат','бот',48000,'ok'],
+ ['05.09','ОсОО «Токмок Сервис»','Лицензия','М-банк услуги','Бекзат','вручную',9600,'bank'],
+ ['03.09','ОсОО «Чуй Опт»','Лицензия','М-банк лицензии','Нурлан','импорт',60000,'ok'],
+ ['02.09','ОсОО «Ош Трейд»','Подписка','М-банк лицензии','Бекзат','бот',14000,'ok'],
+ ['23.09','ОсОО «Каракол Опт»','Интеграция','М-банк лицензии','Нурлан','вручную',35000,'bank'],
+ ['18.09','ОсОО «Кант Фуд»','Лицензия','М-банк лицензии','Бекзат','вручную',21600,'dec'],
+ ['11.09','ОсОО «Ала-Тоо Дистрибьюшн»','Внедрение','М-банк услуги','Бекзат','вручную',85000,'dup'],
+ ['06.09','ОсОО «Суйор»','Доработка','М-банк лицензии','Нурлан','вручную',12480,'bank']
+];
+const ST={ok:['ok','сходится'],dec:['bad','не по декаде'],dup:['bad','возможен дубль'],bank:['wr','не тот счёт']};
+function fillSel(id,col){const s=document.getElementById(id); [...new Set(P.filter(r=>r[7]!=='ok').map(r=>r[col]))].forEach(v=>s.insertAdjacentHTML('beforeend',`<option>${v}</option>`));}
+fillSel('f-cat',2); fillSel('f-bank',3);
+function drawPay(){
+  const q=document.getElementById('f-q').value.toLowerCase(), st=document.getElementById('f-st').value, c=document.getElementById('f-cat').value, b=document.getElementById('f-bank').value;
+  const rows=P.filter(r=>r[7]!=='ok').filter(r=>(!q||r[1].toLowerCase().includes(q))&&(!c||r[2]===c)&&(!b||r[3]===b)&&(!st||r[7]===st));
+  document.getElementById('pay-body').innerHTML=rows.sort((a,b)=>b[0].split('.').reverse().join('').localeCompare(a[0].split('.').reverse().join(''))).map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td><span class="st ${ST[r[7]][0]}">${ST[r[7]][1]}</span></td><td class="r">${money(r[6])}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`).join('')||'<tr><td colspan="7" class="muted">Спорных записей по этому фильтру нет.</td></tr>';
+  document.getElementById('pay-foot').textContent=`Спорных ${P.filter(r=>r[7]!=='ok').length} из 312 платежей за сентябрь. Показано ${rows.length}. Остальные проверены и вопросов не вызывают.`;
+}
+['f-q','f-st','f-cat','f-bank'].forEach(id=>document.getElementById(id).addEventListener('input',drawPay));
+
+/* nav */
+function go(v){
+  document.querySelectorAll('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
+  document.querySelectorAll('.nav [data-go]').forEach(b=>{ if(b.dataset.go===v) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+  document.getElementById('crumb').textContent=document.getElementById('v-'+v).dataset.title;
+  document.getElementById('scroll').scrollTop=0;
+  document.body.classList.remove('nav-on');
+}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-go]'); if(t) go(t.dataset.go);});
+document.getElementById('burger').onclick=()=>document.body.classList.add('nav-on');
+document.getElementById('scrim').onclick=()=>document.body.classList.remove('nav-on');
+
+const ab=document.getElementById('agent-btn');
+function setAgent(on){document.body.classList.toggle('agent-on',on); ab.setAttribute('aria-pressed',on);}
+ab.onclick=()=>setAgent(!document.body.classList.contains('agent-on'));
+document.getElementById('agent-x').onclick=()=>setAgent(false);
+if(window.matchMedia('(max-width:1280px)').matches) setAgent(false);
+
+
+/* chat */
+const replies={
+ 'Почему упала маржа?':'Выручка выросла на 6%, ФОТ на 20%. Основной прирост дали двое новых в интеграции: команда в минусе на 128 000 сом. Выручка тут ни при чём.',
+ 'Хватит ли денег на зарплату 20-го?':'Нет. По текущему темпу 20 октября не хватит около 83 000 сом. Зарплату не сдвигай: до 15-го напомни трём клиентам с продлением до 18-го, это около 110 000 сом.',
+ 'Кто из клиентов может уйти?':'Трое: у них сократились лицензии два месяца подряд и есть просрочка. Самый крупный ОсОО «Чуй Опт», 20 лицензий. Я бы позвонил им на этой неделе.'
+};
+const msgs=document.getElementById('msgs');
+const now=()=>new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+function add(t,w){const d=document.createElement('div'); d.className='m '+w; d.textContent=t; const s=document.createElement('span'); s.className='t'; s.textContent=now(); d.appendChild(s); msgs.appendChild(d); msgs.scrollTop=msgs.scrollHeight;}
+function ask(t){if(!t.trim())return; add(t,'u'); setTimeout(()=>add(replies[t]||'Это прототип. В рабочей версии ответит агент по живым данным из базы.','a'),500);}
+document.getElementById('chips').addEventListener('click',e=>{if(e.target.tagName==='BUTTON')ask(e.target.textContent);});
+document.getElementById('composer').addEventListener('submit',()=>{const i=document.getElementById('inp'); ask(i.value); i.value='';});
+
+function renderAll(){paintMoney(); drawKpis(); drawPL(); drawCash('chart-cash'); drawCash('chart-cash-mini',true); drawTeam(); drawQs(); drawPay();}
+renderAll();
+</script>
+</body>
+</html>

@@ -7,10 +7,10 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v1004</title>
+<title>SalesDoc — Финансовый Дашборд v1005</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* GOLD TEXT EFFECT — matching the image */
 .gold-text{
@@ -8163,6 +8163,228 @@ body.light #view-dashboard .dash-pnl .glow{ display:none; }
 body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
 /* конец v966 «Бумага» */
 </style>
+<style id="fz-css">
+/* ============================================================
+   v1005: «Финансы → Финансист». Закрытая вкладка владельца и бухгалтера.
+   Всё под .fz, токены свои (--fz-*), шрифт Onest, акцент бирюзовый.
+   Макет: docs/finansist-prototype.html
+   ============================================================ */
+#view-finansist{margin:-20px -24px}
+@media(max-width:1024px){#view-finansist{margin:-16px}}
+.fz{
+ --fz-bg:#F4F6F6;--fz-surface:#FFFFFF;--fz-sunk:#EEF1F1;--fz-ink:#162024;--fz-ink2:#34424A;--fz-muted:#66757B;--fz-line:#DEE4E4;--fz-line2:#E9EEEE;
+ --fz-side:#18242A;--fz-side-ink:#C9D4D7;--fz-side-muted:#7F9197;--fz-side-hi:#23343B;
+ --fz-accent:#1E6072;--fz-accent-ink:#FFFFFF;--fz-accent-soft:#E1EEF1;
+ --fz-pos:#1B7A4A;--fz-pos-soft:#E1F2E8;--fz-neg:#B42C22;--fz-neg-soft:#FBE6E3;--fz-warn:#8A5A00;--fz-warn-soft:#F6EDDA;
+ height:calc(100vh - 60px);min-height:480px;display:grid;grid-template-columns:220px minmax(0,1fr) auto;
+ background:var(--fz-bg);color:var(--fz-ink);font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums;box-sizing:border-box;position:relative;overflow:hidden}
+.fz,.fz *{font-family:'Onest',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif!important;box-sizing:border-box}
+.fz button,.fz input{font:inherit;color:inherit}
+.fz button{cursor:pointer}
+.fz :focus-visible{outline:2px solid var(--fz-accent);outline-offset:2px}
+.fz svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.fz .num{white-space:nowrap}.fz .pos{color:var(--fz-pos)}.fz .neg{color:var(--fz-neg)}.fz .muted{color:var(--fz-muted)}
+
+/* внутренний тёмный сайдбар */
+.fz-side{background:var(--fz-side);color:var(--fz-side-ink);display:flex;flex-direction:column;min-height:0}
+.fz-logo{display:flex;align-items:center;gap:10px;padding:18px 18px 14px}
+.fz-logo .mk{width:30px;height:30px;border-radius:7px;background:var(--fz-accent);color:var(--fz-accent-ink);display:grid;place-items:center;font-weight:700;font-size:13px}
+.fz-logo b{display:block;font-size:14px;color:#fff;font-weight:600}
+.fz-logo span{display:block;font-size:12px;color:var(--fz-side-muted)}
+.fz-nav{flex:1;overflow-y:auto;padding:4px 10px}
+.fz-nav h4{font-size:12px;font-weight:500;color:var(--fz-side-muted);margin:14px 10px 6px}
+.fz-nav button{width:100%;display:flex;align-items:center;gap:10px;border:0;background:none;color:var(--fz-side-ink);padding:8px 10px;border-radius:7px;font-size:14px;text-align:left}
+.fz-nav button:hover{background:var(--fz-side-hi)}
+.fz-nav button[aria-current="page"]{background:var(--fz-side-hi);color:#fff;box-shadow:inset 3px 0 0 var(--fz-accent)}
+.fz-nav .badge{margin-left:auto;background:var(--fz-neg);color:#fff;font-size:11px;font-weight:600;border-radius:999px;padding:1px 7px}
+.fz-side-foot{padding:12px 18px;border-top:1px solid var(--fz-side-hi);font-size:12px;color:var(--fz-side-muted);display:flex;align-items:center;gap:8px}
+.fz-live{width:7px;height:7px;border-radius:50%;background:#4DC38A;flex:none}
+
+/* контент */
+.fz-content{display:flex;flex-direction:column;min-width:0;min-height:0}
+.fz-bar{display:flex;align-items:center;gap:10px;padding:0 20px;height:54px;border-bottom:1px solid var(--fz-line);background:var(--fz-surface);flex:none}
+.fz-burger{display:none;border:0;background:none;padding:6px;margin-left:-6px;color:var(--fz-ink)}
+.fz-crumbs{font-size:14px;color:var(--fz-muted);margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fz-crumbs b{color:var(--fz-ink);font-weight:600}
+.fz-month{display:flex;align-items:center;border:1px solid var(--fz-line);border-radius:7px;background:var(--fz-surface);font-size:13px;color:var(--fz-ink2);overflow:hidden}
+.fz-month button{border:0;background:none;padding:5px 8px;color:var(--fz-muted);line-height:1}
+.fz-month button:hover{background:var(--fz-sunk);color:var(--fz-ink)}
+.fz-month span{padding:0 6px;min-width:112px;text-align:center;font-weight:500}
+.fz-agent-btn{display:flex;align-items:center;gap:7px;border:1px solid var(--fz-accent);background:var(--fz-surface);color:var(--fz-accent);border-radius:7px;padding:6px 12px;font-size:13px;font-weight:500}
+.fz-agent-btn[aria-pressed="true"]{background:var(--fz-accent);color:var(--fz-accent-ink)}
+.fz-scroll{flex:1;overflow-y:auto;min-height:0;-webkit-overflow-scrolling:touch}
+.fz-page{padding:20px 20px 48px;max-width:1320px}
+.fz-view{display:none}.fz-view.on{display:block}
+.fz-ph{display:flex;align-items:flex-end;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.fz-ph h1{font-size:21px;font-weight:600;margin:0;letter-spacing:-.01em;color:var(--fz-ink)}
+.fz-ph p{margin:2px 0 0;color:var(--fz-muted);font-size:13px}
+.fz-ph .sp{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.fz-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--fz-line);background:var(--fz-surface);border-radius:7px;padding:6px 12px;font-size:13px;font-weight:500;color:var(--fz-ink2);line-height:1.3;text-decoration:none}
+.fz-btn:hover{border-color:var(--fz-muted)}
+.fz-btn.pri{background:var(--fz-accent);border-color:var(--fz-accent);color:var(--fz-accent-ink)}
+.fz-btn svg.i{width:15px;height:15px}
+.fz-panel{background:var(--fz-surface);border:1px solid var(--fz-line);border-radius:9px;min-width:0}
+.fz-panel-h{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--fz-line2)}
+.fz-panel-h h2{font-size:14px;font-weight:600;margin:0;color:var(--fz-ink)}
+.fz-panel-h span{font-size:12px;color:var(--fz-muted)}
+.fz-panel-h .r{margin-left:auto}
+.fz-panel-b{padding:16px}
+.fz-link{border:0;background:none;color:var(--fz-accent);font-size:13px;font-weight:500;padding:0}
+.fz-note{font-size:12.5px;color:var(--fz-muted);margin:12px 2px 0}
+.fz-empty{padding:22px 16px;color:var(--fz-muted);font-size:13.5px;text-align:center}
+.fz-loading{padding:48px 16px;color:var(--fz-muted);text-align:center;font-size:13.5px}
+.fz-err{margin:16px 0;padding:14px 16px;border-radius:9px;background:var(--fz-neg-soft);color:var(--fz-ink2);font-size:13.5px}
+.fz-err b{color:var(--fz-neg)}
+
+/* плитки */
+.fz-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.fz-kpis.k3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.fz-kpi{padding:14px 16px 12px}
+.fz-kpi small{font-size:12.5px;color:var(--fz-muted);display:block}
+.fz-kpi strong{display:block;font-size:21px;font-weight:600;letter-spacing:-.01em;margin:3px 0 6px;color:var(--fz-ink)}
+.fz-kpi .row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:24px}
+.fz-kpi .sub{font-size:12.5px;color:var(--fz-muted)}
+.fz-pill{font-size:12px;font-weight:600;padding:1px 7px;border-radius:5px;white-space:nowrap}
+.fz-pill.pos{background:var(--fz-pos-soft);color:var(--fz-pos)}.fz-pill.neg{background:var(--fz-neg-soft);color:var(--fz-neg)}.fz-pill.mu{background:var(--fz-sunk);color:var(--fz-muted)}
+.fz-kpi svg.spark{width:72px;height:24px;flex:none}
+.fz-grid2{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
+.fz-chart svg{width:100%;height:auto;display:block}
+.fz-legend{display:flex;gap:16px;font-size:12px;color:var(--fz-muted);margin-top:6px;flex-wrap:wrap}
+.fz-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+
+/* команда — полосы */
+.fz-tm{display:flex;flex-direction:column;padding:4px 16px 0}
+.fz-tm-row{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"n r" "b t";gap:8px 14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--fz-line2)}
+.fz-tm-row:last-of-type{border-bottom:0}
+.fz-tm-name{grid-area:n;font-size:13.5px;font-weight:500}
+.fz-tm-name span{display:block;font-size:12px;color:var(--fz-muted);font-weight:400}
+.fz-tm-bars{grid-area:b;display:flex;flex-direction:column;gap:3px}
+.fz-tm-bars i,.fz-tm-leg i{display:block;height:6px;border-radius:3px;min-width:2px}
+.fz-tm-bars .rv,.fz-tm-leg .rv{background:var(--fz-accent)}
+.fz-tm-bars .cs,.fz-tm-leg .cs{background:var(--fz-muted);opacity:.45}
+.fz-tm-res{grid-area:r;font-size:14px;font-weight:600;text-align:right;white-space:nowrap}
+.fz-tm-tag{grid-area:t;text-align:right}
+.fz-tm-leg{display:flex;gap:16px;font-size:12px;color:var(--fz-muted);padding:10px 0 12px}
+.fz-tm-leg span{display:flex;align-items:center;gap:6px}
+.fz-tm-leg i{width:14px}
+
+/* вопросы */
+.fz-qlist{display:flex;flex-direction:column}
+.fz-qi{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 14px;padding:14px 16px;border-bottom:1px solid var(--fz-line2);align-items:start}
+.fz-qi:last-child{border-bottom:0}
+.fz-qi .ty{grid-row:span 2;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:5px;white-space:nowrap;margin-top:1px}
+.fz .ty.bank{background:var(--fz-warn-soft);color:var(--fz-warn)}
+.fz .ty.dec{background:var(--fz-accent-soft);color:var(--fz-accent)}
+.fz .ty.dup{background:var(--fz-neg-soft);color:var(--fz-neg)}
+.fz .ty.goal{background:var(--fz-sunk);color:var(--fz-ink2)}
+.fz-qi h3{font-size:14px;font-weight:600;margin:0;color:var(--fz-ink)}
+.fz-qi p{margin:0;font-size:13px;color:var(--fz-muted);grid-column:2}
+.fz-qi .amt{font-weight:600;text-align:right;white-space:nowrap}
+.fz-qi .acts{grid-column:2 / -1;display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.fz-qi .res{grid-column:2 / -1;font-size:13px;color:var(--fz-pos);font-weight:500;margin-top:6px}
+.fz-qi.done{opacity:.7}
+
+/* таблицы */
+.fz-toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--fz-line2);align-items:center}
+.fz-toolbar input{border:1px solid var(--fz-line);background:var(--fz-surface);border-radius:7px;padding:6px 10px;font-size:13px;flex:1;min-width:160px;color:var(--fz-ink)}
+.fz-dd{position:relative}
+.fz-dd-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--fz-line);background:var(--fz-surface);border-radius:7px;padding:6px 10px;font-size:13px;color:var(--fz-ink2);white-space:nowrap}
+.fz-dd-btn::after{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);opacity:.6}
+.fz-dd.on .fz-dd-btn{border-color:var(--fz-accent)}
+.fz-dd-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:20;min-width:180px;background:var(--fz-surface);border:1px solid var(--fz-line);border-radius:8px;box-shadow:0 8px 24px rgba(22,32,36,.12);padding:4px;max-height:280px;overflow-y:auto}
+.fz-dd.on .fz-dd-menu{display:block}
+.fz-dd-menu button{display:flex;width:100%;border:0;background:none;text-align:left;padding:7px 10px;border-radius:6px;font-size:13px;color:var(--fz-ink2);gap:8px;justify-content:space-between}
+.fz-dd-menu button:hover{background:var(--fz-sunk)}
+.fz-dd-menu button[aria-selected="true"]{color:var(--fz-accent);font-weight:600}
+.fz-dd-menu button span{color:var(--fz-muted);font-weight:400}
+.fz-tw{overflow-x:auto}
+.fz table{width:100%;border-collapse:collapse;font-size:13.5px;margin:0}
+.fz th,.fz td{padding:10px 16px;text-align:left;border-bottom:1px solid var(--fz-line2);white-space:nowrap;vertical-align:middle;color:var(--fz-ink)}
+.fz th{font-size:12px;font-weight:500;color:var(--fz-muted);background:var(--fz-sunk);position:sticky;top:0;z-index:1}
+.fz td.r,.fz th.r{text-align:right}
+.fz tbody tr:hover{background:var(--fz-sunk)}
+.fz tfoot td{font-weight:600;border-top:1px solid var(--fz-line);border-bottom:0}
+.fz td .sub{display:block;font-size:12px;color:var(--fz-muted);white-space:normal}
+.fz td.wrap{white-space:normal}
+.fz .st{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;padding:2px 8px;border-radius:5px;white-space:nowrap}
+.fz .st::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.fz .st.ok{color:var(--fz-pos);background:var(--fz-pos-soft)}
+.fz .st.bad{color:var(--fz-neg);background:var(--fz-neg-soft)}
+.fz .st.wr{color:var(--fz-warn);background:var(--fz-warn-soft)}
+.fz .st.mu{color:var(--fz-muted);background:var(--fz-sunk)}
+.fz .st+.st{margin-left:4px}
+.fz-tfoot{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;font-size:12.5px;color:var(--fz-muted);border-top:1px solid var(--fz-line2)}
+.fz-tfoot .fz-btn{margin-left:auto}
+.fz-mb{margin-bottom:16px}
+.fz-bal{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fz-bal input{border:1px solid var(--fz-line);background:var(--fz-surface);border-radius:7px;padding:6px 10px;font-size:14px;width:160px;color:var(--fz-ink);text-align:right}
+.fz-bal small{color:var(--fz-muted);font-size:12.5px}
+
+/* чат-оболочка справа */
+.fz-agent{width:0;overflow:hidden;background:var(--fz-surface);border-left:1px solid var(--fz-line);display:flex;flex-direction:column;min-height:0;transition:width .2s}
+.fz.agent-on .fz-agent{width:360px}
+.fz-agent-h{height:54px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--fz-line);min-width:360px}
+.fz-agent-h .av{width:28px;height:28px;border-radius:7px;background:var(--fz-accent);color:var(--fz-accent-ink);display:grid;place-items:center;flex:none}
+.fz-agent-h b{font-size:14px;display:block}
+.fz-agent-h span{font-size:12px;color:var(--fz-muted);display:block}
+.fz-agent-h .x{margin-left:auto;border:0;background:none;color:var(--fz-muted);padding:6px}
+.fz-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;min-height:0;min-width:360px}
+.fz-m{max-width:92%;font-size:13.5px;line-height:1.45}
+.fz-m.a{align-self:flex-start;background:var(--fz-sunk);padding:9px 12px;border-radius:10px 10px 10px 3px}
+.fz-m.u{align-self:flex-end;background:var(--fz-accent);color:var(--fz-accent-ink);padding:8px 12px;border-radius:10px 10px 3px 10px}
+.fz-m .t{display:block;font-size:11px;color:var(--fz-muted);margin-top:3px}
+.fz-m.u .t{color:inherit;opacity:.75}
+.fz-composer{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--fz-line);min-width:360px}
+.fz-composer input{flex:1;min-width:0;border:1px solid var(--fz-line);background:var(--fz-bg);border-radius:8px;padding:9px 12px;font-size:13.5px;color:var(--fz-ink)}
+.fz-composer button{border:0;background:var(--fz-accent);color:var(--fz-accent-ink);border-radius:8px;width:40px;display:grid;place-items:center;flex:none}
+.fz-scrim{display:none}
+
+@media(max-width:1280px){
+ .fz{grid-template-columns:220px minmax(0,1fr)}
+ .fz-agent{position:absolute;top:0;right:0;bottom:0;z-index:50;box-shadow:-12px 0 32px rgba(0,0,0,.14)}
+ .fz.agent-on .fz-agent{width:min(400px,100%)}
+ .fz-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:900px){
+ .fz{grid-template-columns:minmax(0,1fr)}
+ .fz-side{position:absolute;top:0;left:0;bottom:0;width:250px;z-index:60;transform:translateX(-100%);transition:transform .2s}
+ .fz.nav-on .fz-side{transform:none}
+ .fz.nav-on .fz-scrim{display:block;position:absolute;inset:0;background:rgba(0,0,0,.35);z-index:55}
+ .fz-burger{display:block}
+ .fz-bar{padding:0 12px;gap:8px}
+ .fz-hide-m{display:none!important}
+ .fz-page{padding:14px 12px 40px}
+ .fz-kpis,.fz-kpis.k3{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .fz-kpis .fz-kpi:first-child{grid-column:1 / -1}
+ .fz-grid2{grid-template-columns:1fr}
+ .fz-ph .sp{margin-left:0}
+ .fz.agent-on .fz-agent{width:100%}
+ .fz-agent-h,.fz-msgs,.fz-composer{min-width:0}
+ .fz-qi{grid-template-columns:minmax(0,1fr) auto}
+ .fz-qi .ty{grid-row:auto;grid-column:1 / -1;justify-self:start}
+ .fz-qi p,.fz-qi .acts,.fz-qi .res{grid-column:1 / -1}
+ .fz-month span{min-width:96px}
+}
+@media(max-width:768px){.fz{height:calc(100vh - 60px)}}
+@media(max-width:640px){
+ /* спорные записи — карточки вместо строк */
+ #v-payments .fz-tw table,#v-payments .fz-tw tbody{display:block;width:100%}
+ #v-payments .fz-tw thead{display:none}
+ #v-payments .fz-tw tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:12px 14px;border-bottom:1px solid var(--fz-line2)}
+ #v-payments .fz-tw td{display:block;padding:0;border:0;white-space:normal}
+ #v-payments .fz-tw td:nth-child(1){grid-column:2;grid-row:1;color:var(--fz-muted);font-size:13px;text-align:right}
+ #v-payments .fz-tw td:nth-child(2){grid-column:1;grid-row:1;font-weight:600}
+ #v-payments .fz-tw td:nth-child(3){grid-column:1;grid-row:2}
+ #v-payments .fz-tw td:nth-child(4){grid-column:2;grid-row:2;font-weight:600;text-align:right}
+ #v-payments .fz-tw td:nth-child(5),#v-payments .fz-tw td:nth-child(6),#v-payments .fz-tw td:nth-child(7){grid-column:1 / -1;font-size:13px;color:var(--fz-muted)}
+ #v-payments .fz-tw td:nth-child(5)::before{content:"Статья: "}
+ #v-payments .fz-tw td:nth-child(6)::before{content:"Счёт: "}
+ #v-payments .fz-tw td:nth-child(7)::before{content:"Менеджер: "}
+ #v-payments .fz-tw td[colspan]{grid-column:1 / -1}
+ .fz-tfoot .fz-btn{margin-left:0}
+}
+@media(prefers-reduced-motion:reduce){.fz-side,.fz-agent{transition:none}}
+</style>
 </head>
 <body class="light">
 <!-- v571: ранний inline-скрипт. ВАЖНО: вешаем на DOMContentLoaded и window.load безусловно —
@@ -8245,6 +8467,7 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
  <div class="nav-item" data-view="payments" onclick="showView('payments')">Оплаты</div>
  <div class="nav-item" data-view="expenses" onclick="showView('expenses')">Расходы</div>
  <div class="nav-item" data-view="cashflow" onclick="showView('cashflow')">Прогноз денег</div>
+ <div class="nav-item" data-view="finansist" onclick="showView('finansist')">Финансист</div><!-- v1005: только владелец и бухгалтер -->
  <div class="nav-item" data-view="plan" onclick="showView('plan')">Планы</div>
  </div>
  </div>
@@ -10739,6 +10962,235 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
  <!-- /MORNING VIEW -->
 
  <!-- v270: ПРОГНОЗ CASH-FLOW -->
+<!-- ============================================================
+     v1005: «Финансы → Финансист» — закрытая вкладка владельца и бухгалтера.
+     Только отображение цифр из базы (/api/finansist + расходы из Sheets), без выводов.
+     Восемь разделов, идентификаторы как в макете docs/finansist-prototype.html.
+     Логика: fzInit()/fzLoad() (блок «FINANSIST MODULE» внизу файла).
+     ============================================================ -->
+<div id="view-finansist" style="display:none">
+<div class="fz" id="fz-root">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+ <symbol id="fzi-home" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+ <symbol id="fzi-flag" viewBox="0 0 24 24"><path d="M5 21V4h11l-2 4 2 4H5"/></symbol>
+ <symbol id="fzi-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></symbol>
+ <symbol id="fzi-bank" viewBox="0 0 24 24"><path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/></symbol>
+ <symbol id="fzi-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.8a3.5 3.5 0 010 6.4M18 14.8c2 .7 3.2 2.5 3.6 5.2"/></symbol>
+ <symbol id="fzi-down" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 8M21 11v6h-6"/></symbol>
+ <symbol id="fzi-cash" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="13" rx="2"/><path d="M2.5 10h19M16 14.5h2"/></symbol>
+ <symbol id="fzi-set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.2 5.7l2.1 2.1M17.7 16.2l2.1 2.1M2.5 12h3M18.5 12h3M4.2 18.3l2.1-2.1M17.7 7.8l2.1-2.1"/></symbol>
+ <symbol id="fzi-chat" viewBox="0 0 24 24"><path d="M4 5.5h16v10H9l-5 4v-4z"/></symbol>
+ <symbol id="fzi-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+ <symbol id="fzi-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+ <symbol id="fzi-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5L4 12z"/></symbol>
+ <symbol id="fzi-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+ <symbol id="fzi-left" viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></symbol>
+ <symbol id="fzi-right" viewBox="0 0 24 24"><path d="M10 6l6 6-6 6"/></symbol>
+</svg>
+
+ <aside class="fz-side" id="fz-side">
+  <div class="fz-logo"><div class="mk">SD</div><div><b>Финансист</b><span>Финансы · KG</span></div></div>
+  <nav class="fz-nav" aria-label="Разделы">
+   <h4>Аналитика</h4>
+   <button data-fz-go="overview" aria-current="page"><svg class="i"><use href="#fzi-home"/></svg>Обзор</button>
+   <button data-fz-go="questions"><svg class="i"><use href="#fzi-flag"/></svg>Вопросы агента<span class="badge" id="fz-nav-q" style="display:none">0</span></button>
+   <button data-fz-go="payments"><svg class="i"><use href="#fzi-list"/></svg>Спорные записи</button>
+   <button data-fz-go="accounts"><svg class="i"><use href="#fzi-bank"/></svg>Счета</button>
+   <button data-fz-go="people"><svg class="i"><use href="#fzi-users"/></svg>Команда</button>
+   <button data-fz-go="churn"><svg class="i"><use href="#fzi-down"/></svg>Отток</button>
+   <button data-fz-go="cash"><svg class="i"><use href="#fzi-cash"/></svg>Касса и прогноз</button>
+   <h4>Система</h4>
+   <button data-fz-go="settings"><svg class="i"><use href="#fzi-set"/></svg>Правила и цели</button>
+  </nav>
+  <div class="fz-side-foot"><span class="fz-live"></span><span id="fz-updated">База: загрузка</span></div>
+ </aside>
+ <div class="fz-scrim" id="fz-scrim"></div>
+
+ <div class="fz-content">
+  <header class="fz-bar">
+   <button class="fz-burger" id="fz-burger" aria-label="Разделы"><svg class="i"><use href="#fzi-menu"/></svg></button>
+   <div class="fz-crumbs"><span class="fz-hide-m">Финансы / </span><b id="fz-crumb">Обзор</b></div>
+   <div class="fz-month"><button id="fz-prev" aria-label="Прошлый месяц"><svg class="i" style="width:14px;height:14px"><use href="#fzi-left"/></svg></button><span id="fz-month-label">—</span><button id="fz-next" aria-label="Следующий месяц"><svg class="i" style="width:14px;height:14px"><use href="#fzi-right"/></svg></button></div>
+   <button class="fz-agent-btn" id="fz-agent-btn" aria-pressed="false"><svg class="i" style="width:16px;height:16px"><use href="#fzi-chat"/></svg><span class="fz-hide-m">Агент</span></button>
+  </header>
+
+  <div class="fz-scroll" id="fz-scroll"><div class="fz-page">
+   <div id="fz-status"></div>
+
+   <!-- ОБЗОР -->
+   <section class="fz-view on" id="v-overview" data-title="Обзор">
+    <div class="fz-ph"><div><h1 id="fz-ov-title">Обзор</h1><p id="fz-ov-sub">—</p></div>
+     <div class="sp"><button class="fz-btn" data-fz-export="overview"><svg class="i"><use href="#fzi-dl"/></svg>Выгрузить</button></div></div>
+    <div class="fz-kpis" id="fz-kpis"></div>
+    <div class="fz-grid2">
+     <div class="fz-panel">
+      <div class="fz-panel-h"><h2>Выручка и расходы</h2><span>6 месяцев</span></div>
+      <div class="fz-panel-b"><div class="fz-chart" id="fz-chart-pl"></div>
+       <div class="fz-legend"><span><i style="background:var(--fz-accent)"></i>Выручка</span><span><i style="background:var(--fz-muted);opacity:.55"></i>Расходы</span></div></div>
+     </div>
+     <div class="fz-panel">
+      <div class="fz-panel-h"><h2>Рентабельность команды</h2><button class="fz-link r" data-fz-go="people">Подробно</button></div>
+      <div class="fz-tm" id="fz-team-mini"></div>
+     </div>
+    </div>
+    <div class="fz-grid2">
+     <div class="fz-panel">
+      <div class="fz-panel-h"><h2>Вопросы агента</h2><span id="fz-q-left">—</span><button class="fz-link r" data-fz-go="questions">Все вопросы</button></div>
+      <div class="fz-qlist" id="fz-q-preview"></div>
+     </div>
+     <div class="fz-panel">
+      <div class="fz-panel-h"><h2>Касса на 30 дней</h2><button class="fz-link r" data-fz-go="cash">Прогноз</button></div>
+      <div class="fz-panel-b" id="fz-cash-mini"></div>
+     </div>
+    </div>
+   </section>
+
+   <!-- ВОПРОСЫ -->
+   <section class="fz-view" id="v-questions" data-title="Вопросы агента">
+    <div class="fz-ph"><div><h1>Вопросы агента</h1><p>Пока заготовка: вопросы собираются из расхождений за месяц. Записи в базе не меняются</p></div></div>
+    <div class="fz-panel"><div class="fz-qlist" id="fz-q-full"></div></div>
+   </section>
+
+   <!-- СПОРНЫЕ ЗАПИСИ -->
+   <section class="fz-view" id="v-payments" data-title="Спорные записи">
+    <div class="fz-ph"><div><h1>Спорные записи</h1><p>Только платежи с расхождениями. Полный список — в разделе «Оплаты»</p></div>
+     <div class="sp"><button class="fz-btn" onclick="showView('payments')"><svg class="i"><use href="#fzi-list"/></svg>Открыть все оплаты</button><button class="fz-btn" data-fz-export="disputes"><svg class="i"><use href="#fzi-dl"/></svg>Выгрузить</button></div></div>
+    <div class="fz-panel">
+     <div class="fz-toolbar">
+      <input id="fz-f-q" placeholder="Поиск по клиенту" aria-label="Поиск по клиенту" autocomplete="off">
+      <div class="fz-dd" data-fz-dd="type"><button class="fz-dd-btn" type="button">Все расхождения</button><div class="fz-dd-menu"></div></div>
+      <div class="fz-dd" data-fz-dd="cat"><button class="fz-dd-btn" type="button">Все статьи</button><div class="fz-dd-menu"></div></div>
+      <div class="fz-dd" data-fz-dd="bank"><button class="fz-dd-btn" type="button">Все счета</button><div class="fz-dd-menu"></div></div>
+     </div>
+     <div class="fz-tw"><table>
+      <thead><tr><th>Дата</th><th>Клиент</th><th>Что не так</th><th class="r">Сумма</th><th>Статья</th><th>Счёт</th><th>Менеджер</th></tr></thead>
+      <tbody id="fz-pay-body"></tbody>
+     </table></div>
+     <div class="fz-tfoot"><span id="fz-pay-foot"></span><button class="fz-btn" onclick="showView('payments')">Все оплаты</button></div>
+    </div>
+   </section>
+
+   <!-- СЧЕТА -->
+   <section class="fz-view" id="v-accounts" data-title="Счета">
+    <div class="fz-ph"><div><h1>Счета</h1><p>Движение по записям в базе: приход из оплат, расход из таблицы расходов</p></div></div>
+    <div class="fz-panel"><div class="fz-tw"><table>
+     <thead><tr><th>Счёт</th><th class="r">Приход</th><th class="r">Расход</th><th class="r">Итог месяца</th><th>Спорные</th></tr></thead>
+     <tbody id="fz-acc-body"></tbody>
+     <tfoot id="fz-acc-foot"></tfoot>
+    </table></div></div>
+    <p class="fz-note">Остатки на счетах в базу не попадают. Сверка с банковской выпиской остаётся за вами.</p>
+   </section>
+
+   <!-- КОМАНДА -->
+   <section class="fz-view" id="v-people" data-title="Команда">
+    <div class="fz-ph"><div><h1>Рентабельность команды</h1><p>Выручка по менеджеру минус его зарплата из расходов и доля общих расходов</p></div></div>
+    <div class="fz-panel"><div class="fz-tw"><table>
+     <thead><tr><th>Сотрудник</th><th class="r">Выручка</th><th class="r">Зарплата</th><th class="r">Доля общих</th><th class="r">Результат</th><th>Статус</th></tr></thead>
+     <tbody id="fz-people-body"></tbody>
+     <tfoot id="fz-people-foot"></tfoot>
+    </table></div></div>
+    <p class="fz-note" id="fz-people-note"></p>
+   </section>
+
+   <!-- ОТТОК -->
+   <section class="fz-view" id="v-churn" data-title="Отток">
+    <div class="fz-ph"><div><h1>Отток в деньгах</h1><p id="fz-churn-sub">—</p></div></div>
+    <div class="fz-kpis k3" id="fz-churn-kpis"></div>
+    <div class="fz-panel fz-mb">
+     <div class="fz-panel-h"><h2>Ушли и сократились</h2><span>по карточкам клиентов</span></div>
+     <div class="fz-tw"><table>
+      <thead><tr><th>Клиент</th><th>Событие</th><th>Причина</th><th>Когда</th><th class="r">Потеря в месяц</th></tr></thead>
+      <tbody id="fz-churn-body"></tbody>
+      <tfoot id="fz-churn-foot"></tfoot>
+     </table></div>
+    </div>
+    <div class="fz-panel" id="fz-churn-billing"></div>
+   </section>
+
+   <!-- КАССА -->
+   <section class="fz-view" id="v-cash" data-title="Касса и прогноз">
+    <div class="fz-ph"><div><h1>Касса и прогноз</h1><p>От остатка, который вы ввели, среднего темпа поступлений и расходов прошлого месяца</p></div></div>
+    <div class="fz-panel fz-mb"><div class="fz-panel-b fz-bal">
+     <span>Остаток на всех счетах сегодня</span>
+     <input id="fz-balance" type="text" inputmode="numeric" placeholder="0" aria-label="Остаток на счетах">
+     <span>сом</span>
+     <small id="fz-balance-note"></small>
+    </div></div>
+    <div class="fz-kpis k3" id="fz-cash-kpis"></div>
+    <div class="fz-panel fz-mb">
+     <div class="fz-panel-h"><h2>Остаток по дням</h2><span id="fz-cash-range">30 дней</span></div>
+     <div class="fz-panel-b"><div class="fz-chart" id="fz-chart-cash"></div></div>
+    </div>
+    <div class="fz-grid2">
+     <div class="fz-panel">
+      <div class="fz-panel-h"><h2>Плановые расходы</h2><span>как в прошлом месяце, по тем же дням</span></div>
+      <div class="fz-tw"><table>
+       <thead><tr><th>Дата</th><th>Движение</th><th class="r">Сумма</th></tr></thead>
+       <tbody id="fz-cash-out"></tbody>
+      </table></div>
+     </div>
+     <div class="fz-panel">
+      <div class="fz-panel-h"><h2>Ожидаемые продления</h2><span id="fz-cash-in-sub"></span></div>
+      <div class="fz-tw"><table>
+       <thead><tr><th>Дата</th><th>Клиент</th><th class="r">Прошлая оплата</th></tr></thead>
+       <tbody id="fz-cash-in"></tbody>
+      </table></div>
+     </div>
+    </div>
+   </section>
+
+   <!-- ПРАВИЛА -->
+   <section class="fz-view" id="v-settings" data-title="Правила и цели">
+    <div class="fz-ph"><div><h1>Правила и цели</h1><p>По этим правилам собираются спорные записи и считается команда</p></div></div>
+    <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Правило декад</h2><span>для активации нового клиента</span></div>
+     <div class="fz-tw"><table>
+      <thead><tr><th>Дата оплаты</th><th>Первый месяц считается как</th><th class="r">Цена за лицензию</th></tr></thead>
+      <tbody>
+       <tr><td>с 1 по 9 число</td><td>30 дней</td><td class="r muted">ждёт ваших цен</td></tr>
+       <tr><td>с 10 по 19 число</td><td>20 дней</td><td class="r muted">ждёт ваших цен</td></tr>
+       <tr><td>с 20 числа до конца месяца</td><td>10 дней</td><td class="r muted">ждёт ваших цен</td></tr>
+      </tbody></table></div>
+     <p class="fz-note" style="margin:10px 16px 14px">Дата активации в базе KG не заполняется, поэтому правило проверяется по дате оплаты со статьёй «Новый клиент».</p></div>
+    <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Что считается расхождением</h2></div>
+     <div class="fz-tw"><table>
+      <thead><tr><th>Тип</th><th>Правило</th></tr></thead>
+      <tbody>
+       <tr><td><span class="ty bank">Счёт</span></td><td class="wrap">Внедрение, интеграция и доработка должны приходить на «М-банк услуги»; абонплата, новые и доп. лицензии — на «М-банк лицензии». Считается с 1 января 2026: раньше отдельного счёта услуг не было.</td></tr>
+       <tr><td><span class="ty dup">Дубль</span></td><td class="wrap">Два платежа одного клиента с одинаковой суммой и статьёй в пределах 3 дней.</td></tr>
+       <tr><td><span class="ty dec">Декады</span></td><td class="wrap">Новый клиент оплатил 10-го числа или позже, а сумма внесена как за полные месяцы (лицензии × цена × месяцы) без правила декад.</td></tr>
+      </tbody></table></div></div>
+    <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Целевые показатели</h2><span>цели пока не заданы</span></div>
+     <div class="fz-tw"><table>
+      <thead><tr><th>Показатель</th><th class="r">Сейчас</th><th class="r">Цель</th></tr></thead>
+      <tbody id="fz-goals-body"></tbody></table></div></div>
+    <div class="fz-panel"><div class="fz-panel-h"><h2>Распределение общих расходов</h2><span>так считается «Команда»</span></div>
+     <div class="fz-tw"><table>
+      <thead><tr><th>Статья</th><th>На кого делится</th><th>Как</th></tr></thead>
+      <tbody>
+       <tr><td>Зарплата (статья «ЗП»)</td><td>на того, кто в примечании</td><td>по имени в примечании</td></tr>
+       <tr><td>Аренда, связь, услуги, банк, оборудование</td><td>все, кто получает зарплату</td><td>поровну</td></tr>
+       <tr><td>Такси</td><td>все, кто получает зарплату</td><td>поровну (по факту — позже)</td></tr>
+       <tr><td>Перенос между счетами</td><td>никто</td><td>не расход</td></tr>
+      </tbody></table></div></div>
+   </section>
+  </div></div>
+ </div>
+
+ <aside class="fz-agent" id="fz-agent" aria-label="Чат с агентом">
+  <div class="fz-agent-h"><div class="av"><svg class="i" style="width:16px;height:16px"><use href="#fzi-chat"/></svg></div>
+   <div><b>Финансист</b><span>чат подключим позже</span></div>
+   <button class="x" id="fz-agent-x" aria-label="Закрыть"><svg class="i"><use href="#fzi-x"/></svg></button></div>
+  <div class="fz-msgs" id="fz-msgs">
+   <div class="fz-m a">Здесь будет чат по цифрам этой страницы. Пока это оболочка: сообщения никуда не уходят.</div>
+  </div>
+  <form class="fz-composer" id="fz-composer" onsubmit="return false">
+   <input id="fz-inp" placeholder="Напишите вопрос" aria-label="Сообщение" autocomplete="off">
+   <button type="submit" aria-label="Отправить"><svg class="i" style="width:17px;height:17px"><use href="#fzi-send"/></svg></button>
+  </form>
+ </aside>
+</div>
+</div>
+
  <div id="view-cashflow" style="display:none">
  <!-- v289: iOS-style header + hero -->
  <div class="cf-toprow">
@@ -11162,6 +11614,7 @@ const ACCESS_KEYS = [
  { key:'view_acts', label:'Акты работ', group:'Финансы' },
  { key:'view_plan', label:'Выполнение плана', group:'Финансы' },
  { key:'view_expenses', label:'Расходы', group:'Финансы' },
+ { key:'view_finansist', label:'Финансист', group:'Финансы' }, // v1005: владелец и бухгалтер
  { key:'view_reports', label:'Отчёты', group:'Финансы' },
  { key:'view_keyclients', label:'Ключевые клиенты', group:'Клиенты' },
  { key:'view_kanban', label:'Внедрение (канбан)', group:'Клиенты' },
@@ -11196,7 +11649,7 @@ const ACCESS_KEYS = [
 const ACCESS_UI_GROUPS = [
  { title:'Клиенты', keys:['view_kanban','view_activeclients','view_supportdash','view_integrations','view_keyclients','view_newclients'] },
  { title:'Задачи и команда', keys:['view_calendar','view_mytasks','view_planning','view_academy','view_income','view_knowledge','view_reports','view_statistics','view_tests'] },
- { title:'Финансы', keys:['view_dashboard','view_payments','view_acts','view_plan','view_expenses'] },
+ { title:'Финансы', keys:['view_dashboard','view_payments','view_acts','view_plan','view_expenses','view_finansist'] },
  { title:'Маркетинг и управление', keys:['view_marketing','view_employees','view_settings','view_botadmin','add_payments','add_acts','edit_plans','manage_employees','view_cabinet'] },
 ];
 // Скрыты из UI: statistics/tests/keyclients/newclients выключены APP_FEATURES (v762),
@@ -11219,14 +11672,14 @@ const ROLE_LABELS = {
 // accountant: финансы и расходы — без канбана/маркетинга/HR
 // viewer: только просмотр финансов и команды
 const ROLE_DEFAULTS = {
- admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:1,view_wig:1,view_income:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,view_income:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
- rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,view_income:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,view_income:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
- operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:1,view_reports:0,view_kanban:1,view_statistics:0,view_planning:0,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:0,view_income:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
- targetolog: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:0,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:0,view_calendar:0,view_mytasks:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:0,view_income:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 }, // v977: таргетолог — только Маркетинг (свой кабинет) и профиль
- accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:1,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,view_income:1,add_payments:1,add_acts:1,edit_plans:0,manage_employees:0 },
- viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:0,view_mytasks:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,view_income:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ admin: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:1,view_wig:1,view_finansist:1,view_income:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ head: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:1,view_integrations:1,view_tests:1,view_employees:1,view_cabinet:1,view_settings:1,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:1,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,view_finansist:0,view_income:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:1 },
+ rop: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:1,view_employees:1,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:1,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:1,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,view_finansist:0,view_income:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ manager: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:1,view_academy:1,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:1,view_finansist:0,view_income:1,add_payments:1,add_acts:1,edit_plans:1,manage_employees:0 },
+ operator: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:1,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:1,view_reports:0,view_kanban:1,view_statistics:0,view_planning:0,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:1,view_newclients:1,view_botadmin:0,view_wig:0,view_finansist:0,view_income:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
+ targetolog: { view_dashboard:0,view_payments:0,view_acts:0,view_plan:0,view_keyclients:0,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:1,view_knowledge:0,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:0,view_calendar:0,view_mytasks:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:0,view_finansist:0,view_income:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 }, // v977: таргетолог — только Маркетинг (свой кабинет) и профиль
+ accountant: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:0,view_keyclients:1,view_expenses:1,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:0,view_academy:0,view_reports:1,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:1,view_mytasks:1,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,view_finansist:1,view_income:1,add_payments:1,add_acts:1,edit_plans:0,manage_employees:0 },
+ viewer: { view_dashboard:1,view_payments:1,view_acts:1,view_plan:1,view_keyclients:1,view_expenses:0,view_integrations:0,view_tests:0,view_employees:0,view_cabinet:1,view_settings:0,view_marketing:0,view_knowledge:1,view_academy:0,view_reports:0,view_kanban:0,view_statistics:0,view_planning:1,view_calendar:0,view_mytasks:0,view_supportdash:0,view_activeclients:0,view_newclients:0,view_botadmin:0,view_wig:1,view_finansist:0,view_income:0,add_payments:0,add_acts:0,edit_plans:0,manage_employees:0 },
 };
 
 
@@ -11789,7 +12242,7 @@ let profile={name:'',role:'',email:'',company:'SalesDoc'};
 // v449: «4D» (fdx) видна всем у кого view_wig; редактирование внутри — isWigEditorAllowed.
 // v844: «Настройки» видны ВСЕМ (решение CEO). У кого нет права view_settings —
 // открывается личная часть: профиль и смена пароля. Раньше клик отбрасывал на «Клиентов».
-const NAV_VIEW_MAP = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',income:'view_income',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',mytasks:'view_mytasks',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',fdx:'view_wig',dues:'view_activeclients'};
+const NAV_VIEW_MAP = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',keyclients:'view_keyclients',stats:'view_dashboard',cabinet:'view_cabinet',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',finansist:'view_finansist',integrations:'view_integrations',tests:'view_tests',knowledge:'view_knowledge',academy:'view_academy',income:'view_income',reports:'view_reports',kanban:'view_kanban',statistics:'view_statistics',planning:'view_planning',calendar:'view_calendar',mytasks:'view_mytasks',supportdash:'view_supportdash',activeclients:'view_activeclients',newclients:'view_newclients',botadmin:'view_botadmin',fdx:'view_wig',dues:'view_activeclients'};
 // v924 SEC: разделы, открытые всем осознанно. «Настройки» внутри режутся по правам (v844),
 // «Клиенты» — контейнер вкладок, каждая со своим правом, «Профиль» — личная страница.
 // Всё, чего нет ни здесь, ни в NAV_VIEW_MAP, теперь СКРЫТО: раньше новый пункт меню
@@ -16241,7 +16694,7 @@ function showView(v) {
  // v180: 'dashboard' тоже под проверкой — операторы (Айдос/Самат/Акбар) дашборд не видят.
  if (currentUser) {
  // v449: старые «Цель» и «4Д» объединены в одну кнопку «4D» (fdx). Внутри 5 вкладок.
- var _accessMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',integrations:'view_integrations',knowledge:'view_knowledge',academy:'view_academy',income:'view_income',reports:'view_reports',planning:'view_planning',calendar:'view_calendar',mytasks:'view_mytasks',supportdash:'view_supportdash',activeclients:'view_activeclients',churn:'view_activeclients',botadmin:'view_botadmin',fdx:'view_wig',tickets:'view_kanban',dues:'view_activeclients'}; // v844: settings открыт всем, внутри режется по правам; v838: dues по праву «Действующие»; v886: ключи удалённых разделов убраны
+ var _accessMap = {dashboard:'view_dashboard',payments:'view_payments',acts:'view_acts',plan:'view_plan',marketing:'view_marketing',expenses:'view_expenses',cashflow:'view_expenses',finansist:'view_finansist',integrations:'view_integrations',knowledge:'view_knowledge',academy:'view_academy',income:'view_income',reports:'view_reports',planning:'view_planning',calendar:'view_calendar',mytasks:'view_mytasks',supportdash:'view_supportdash',activeclients:'view_activeclients',churn:'view_activeclients',botadmin:'view_botadmin',fdx:'view_wig',tickets:'view_kanban',dues:'view_activeclients'}; // v844: settings открыт всем, внутри режется по правам; v838: dues по праву «Действующие»; v886: ключи удалённых разделов убраны
  var _need = _accessMap[v];
  if (_need && currentUser.access && currentUser.access[_need] !== 1 && currentUser.access[_need] !== true) {
  try { showNotif('Нет доступа', 'Раздел недоступен для вашей роли.'); } catch(_){}
@@ -16255,7 +16708,7 @@ function showView(v) {
  try { console.warn('[showView] экран view-' + v + ' не найден, открываю ' + _fb); } catch(_){}
  v = _fb;
  }
- ['dashboard','payments','plan','cabinet','settings','marketing','expenses','cashflow','integrations','knowledge','academy','income','reports','route','tickets','planning','calendar','mytasks','activeclients','botadmin','fdx','dues'].forEach(x=>{
+ ['dashboard','payments','plan','cabinet','settings','marketing','expenses','cashflow','finansist','integrations','knowledge','academy','income','reports','route','tickets','planning','calendar','mytasks','activeclients','botadmin','fdx','dues'].forEach(x=>{
  const el=document.getElementById('view-'+x);
  if(el){ el.style.display = (x===v) ? 'block' : 'none'; }
  });
@@ -16323,7 +16776,7 @@ function showView(v) {
  var rtCard = document.getElementById('view-route-card');
  if(rtCard) { rtCard.style.display='none'; document.body.style.overflow=''; }
  // v886-hotfix: добавлены dues/mytasks/cashflow/fdx/churn — без них в шапке светился техничный id («dues»)
- const titles={dashboard:'Обзор финансов',payments:'Оплаты',plan:'Планы',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',cashflow:'Прогноз денег',integrations:'Клиенты',knowledge:'База знаний',academy:'Академия',income:'Мой доход',reports:'Отчёты',calendar:'Задачи',mytasks:'Мои задачи',supportdash:'Тех.поддержка',activeclients:'Клиенты',route:'Клиенты',tickets:'Клиенты',dues:'Клиенты',churn:'Отток и спады',fdx:'Цели',planning:'Планёрки'};
+ const titles={dashboard:'Обзор финансов',payments:'Оплаты',finansist:'Финансист',plan:'Планы',assistant:'Ассистент',cabinet:'Профиль',settings:'Настройки',marketing:'Маркетинг',expenses:'Расходы',cashflow:'Прогноз денег',integrations:'Клиенты',knowledge:'База знаний',academy:'Академия',income:'Мой доход',reports:'Отчёты',calendar:'Задачи',mytasks:'Мои задачи',supportdash:'Тех.поддержка',activeclients:'Клиенты',route:'Клиенты',tickets:'Клиенты',dues:'Клиенты',churn:'Отток и спады',fdx:'Цели',planning:'Планёрки'};
  document.getElementById('page-title').textContent=titles[v]||v;
  // Подсветка активного пункта в nav
  document.querySelectorAll('.nav-item[data-view]').forEach(function(el){
@@ -16380,6 +16833,7 @@ function showView(v) {
  if(v==='knowledge') { /* показываем 2 кнопки -- оргсхема и материалы */ }
  if(v==='academy') acadLoad();
  if(v==='income' && typeof incomeLoad === 'function') { try { incomeLoad(); } catch(e){ console.error('[income]', e); } } // v993
+ if(v==='finansist' && typeof fzInit === 'function') { try { fzInit(); } catch(e){ console.error('[finansist]', e); } } // v1005
  if(v==='reports') reportsInit();
  if(v==='route'){ routeLoad(); }
  // v769: ветка v==='botadmin' удалена — недостижима (redirect на 'settings' выше), init зовёт switchSettingsTab
@@ -45914,6 +46368,378 @@ window.amoToggleFunnelLeads = function(detailsId, linkEl){
   var n=0, iv=setInterval(function(){ if(build()||++n>40) clearInterval(iv); }, 600);
   if(document.readyState!=='loading') build(); else document.addEventListener('DOMContentLoaded', build);
 })();
+</script>
+<script>
+// ============================================================
+// FINANSIST MODULE — v1005. «Финансы → Финансист» (владелец и бухгалтер).
+// Только отображение: цифры приходят готовыми из /api/finansist (право view_finansist
+// проверяет сервер), расходы — из таблицы расходов (loadExpenses → expensesData, право
+// view_expenses). Никаких выводов и правок базы. Макет: docs/finansist-prototype.html.
+// ============================================================
+var _fz = { inited:false, month:null, data:null, view:'overview', busy:false, err:null,
+  filters:{ q:'', type:'', cat:'', bank:'' }, done:{}, balance:null, expReady:false };
+
+var FZ_CAT = { implementation:'Внедрение', integration:'Интеграция', subscription:'Абонплата', license:'Новый клиент', revision:'Доработка', extra:'Доп. лицензии', other:'Прочее' };
+var FZ_TYPE = { bank:['wr','не тот счёт','Счёт'], dup:['bad','возможен дубль','Дубль'], dec:['bad','не по декаде','Декады'] };
+var FZ_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+var FZ_MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+var FZ_MONTHS_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+
+function fzEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function fzMoney(n, sign){ var v = Math.round(+n || 0); var s = Math.abs(v).toLocaleString('ru-RU'); return (v < 0 ? '−' : (sign && v > 0 ? '+' : '')) + s + ' сом'; }
+function fzShort(v){ v = +v || 0; if (Math.abs(v) >= 1e6) return (v/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1}) + ' млн'; if (Math.abs(v) >= 1e3) return Math.round(v/1e3).toLocaleString('ru-RU') + ' тыс'; return String(Math.round(v)); }
+function fzPct(n, d){ return d ? Math.round(n / d * 1000) / 10 : null; }
+function fzPctTxt(p){ return p == null ? '—' : p.toLocaleString('ru-RU',{maximumFractionDigits:1}) + '%'; }
+function fzDelta(cur, prev){ if (!prev) return null; return Math.round((cur - prev) / Math.abs(prev) * 1000) / 10; }
+function fzDeltaPill(d, goodUp){ if (d == null) return '<span class="fz-pill mu">нет прошлого</span>'; var good = goodUp ? d >= 0 : d <= 0; return '<span class="fz-pill ' + (good ? 'pos' : 'neg') + '">' + (d > 0 ? '+' : (d < 0 ? '−' : '')) + Math.abs(d).toLocaleString('ru-RU',{maximumFractionDigits:1}) + '%</span>'; }
+function fzDay(iso){ if (!iso) return '—'; return parseInt(iso.slice(8,10),10) + ' ' + FZ_MONTHS_GEN[parseInt(iso.slice(5,7),10) - 1]; }
+function fzDDMM(iso){ return iso ? iso.slice(8,10) + '.' + iso.slice(5,7) : '—'; }
+function fzMonthKey(m){ return m.y + '-' + String(m.mo).padStart(2,'0'); }
+function fzMonthShift(m, k){ var d = new Date(m.y, m.mo - 1 + k, 1); return { y:d.getFullYear(), mo:d.getMonth() + 1 }; }
+function fzBankKey(bank){ var s = String(bank || '').toLowerCase().replace(/\s+/g,''); if (!s) return 'none'; if (/усл/.test(s)) return 'services'; if (/мбизнес|м-банк|мбанк|mbank|mbusiness/.test(s)) return 'license'; if (/касса|налич/.test(s)) return 'cash'; return 'other'; }
+var FZ_BANK_LABEL = { license:'М-банк лицензии', services:'М-банк услуги', cash:'Касса', other:'Другие счета', none:'Счёт не указан' };
+var FZ_BANK_SUB = { license:'абонплата, новые и доп. лицензии', services:'внедрение, интеграции, доработки', cash:'наличные', other:'', none:'' };
+function fzNameKey(s){ var w = String(s || '').trim().toLowerCase().split(/[\s,.(]+/)[0] || ''; return w.slice(0,4); }
+function fzIsSalary(e){ return /^зп\b|зарплат|оклад/i.test(String((e && e.category) || '')); }
+
+// ---------- расходы (из expensesData, лист текущего года) ----------
+function fzExpRows(m){
+ if (!m || m.y !== new Date().getFullYear()) return null; // лист расходов ведётся по текущему году
+ if (typeof expensesData === 'undefined' || !Array.isArray(expensesData)) return null;
+ var rows = expensesData.filter(function(e){ return e.month === m.mo - 1 && (e.year == null || e.year === m.y) && !expIsTransfer(e); });
+ return rows;
+}
+function fzExpSum(rows){ return (rows || []).reduce(function(s, e){ return s + (+e.amount || 0); }, 0); }
+function fzExpSalary(rows){ return (rows || []).filter(fzIsSalary); }
+// зарплаты по людям: ключ = первые 4 буквы имени из примечания («Амир за вычетом аванса» → «амир»)
+function fzSalaryByPerson(rows){
+ var o = {};
+ fzExpSalary(rows).forEach(function(e){ var k = fzNameKey(e.note); if (!k) k = 'без имени'; if (!o[k]) o[k] = { key:k, name:(String(e.note||'').trim().split(/[\s,]+/)[0] || 'Без имени'), sum:0, n:0 }; o[k].sum += +e.amount || 0; o[k].n++; });
+ return o;
+}
+
+// строки «Команды»: выручка по менеджеру (сервер) + зарплата и доля общих (расходы)
+function fzTeamRows(){
+ var d = _fz.data; if (!d) return { rows:[], hasExp:false, shared:0, head:0 };
+ var exp = fzExpRows(_fz.month);
+ var hasExp = exp != null;
+ var sal = hasExp ? fzSalaryByPerson(exp) : {};
+ var salTotal = 0; Object.keys(sal).forEach(function(k){ salTotal += sal[k].sum; });
+ var shared = hasExp ? fzExpSum(exp) - salTotal : 0;
+ var head = Object.keys(sal).length;
+ var share = head ? shared / head : 0;
+ var rows = {};
+ (d.team || []).forEach(function(t){ var k = fzNameKey(t.name); rows[k] = { name:t.name, revenue:t.revenue, prev:t.prev_revenue, count:t.count, newc:t.new_clients, salary:0, share:0, hasSalary:false }; });
+ Object.keys(sal).forEach(function(k){ if (!rows[k]) rows[k] = { name:sal[k].name, revenue:0, prev:0, count:0, newc:0, salary:0, share:0, hasSalary:false }; rows[k].salary = sal[k].sum; rows[k].share = share; rows[k].hasSalary = true; });
+ var list = Object.keys(rows).map(function(k){ var r = rows[k]; r.cost = r.salary + r.share; r.res = r.revenue - r.cost; return r; });
+ list.sort(function(a, b){ return b.revenue - a.revenue || b.cost - a.cost; });
+ return { rows:list, hasExp:hasExp, shared:shared, head:head, salTotal:salTotal };
+}
+function fzTeamTag(r){
+ if (!r.hasSalary && r.revenue > 0) return '<span class="st mu">зарплаты в расходах нет</span>';
+ if (r.revenue <= 0) return '<span class="st wr">центр затрат</span>';
+ if (r.res >= 0) return '<span class="st ok">окупается ×' + (r.cost ? (r.revenue / r.cost).toLocaleString('ru-RU',{maximumFractionDigits:1}) : '∞') + '</span>';
+ return '<span class="st bad">в минусе</span>';
+}
+
+// ---------- init / load ----------
+function fzInit(){
+ var root = document.getElementById('fz-root'); if (!root) return;
+ if (!_fz.inited) {
+  _fz.inited = true;
+  var now = new Date(); _fz.month = { y:now.getFullYear(), mo:now.getMonth() + 1 };
+  try { _fz.done = JSON.parse(localStorage.getItem('fz_q_done') || '{}') || {}; } catch(_){ _fz.done = {}; }
+  try { var b = localStorage.getItem('fz_balance_KG'); _fz.balance = b != null && b !== '' ? +b : null; } catch(_){}
+  root.addEventListener('click', function(e){
+   var go = e.target.closest('[data-fz-go]'); if (go) { fzGo(go.getAttribute('data-fz-go')); return; }
+   var ex = e.target.closest('[data-fz-export]'); if (ex) { fzExport(ex.getAttribute('data-fz-export')); return; }
+   var ddb = e.target.closest('.fz-dd-btn'); if (ddb) { var dd = ddb.parentNode; var was = dd.classList.contains('on'); root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); }); if (!was) dd.classList.add('on'); return; }
+   var ddi = e.target.closest('.fz-dd-menu button'); if (ddi) { var dd2 = ddi.closest('.fz-dd'); _fz.filters[dd2.getAttribute('data-fz-dd')] = ddi.getAttribute('data-v') || ''; dd2.classList.remove('on'); fzRenderDisputes(); return; }
+   var qa = e.target.closest('.fz-qi .acts button'); if (qa) { var qi = qa.closest('.fz-qi'); fzQuestionAnswer(qi.getAttribute('data-q'), +qa.getAttribute('data-j')); return; }
+   if (!e.target.closest('.fz-dd')) root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); });
+  });
+  document.getElementById('fz-burger').onclick = function(){ root.classList.add('nav-on'); };
+  document.getElementById('fz-scrim').onclick = function(){ root.classList.remove('nav-on'); };
+  document.getElementById('fz-agent-btn').onclick = function(){ fzAgent(!root.classList.contains('agent-on')); };
+  document.getElementById('fz-agent-x').onclick = function(){ fzAgent(false); };
+  document.getElementById('fz-prev').onclick = function(){ _fz.month = fzMonthShift(_fz.month, -1); fzLoad(); };
+  document.getElementById('fz-next').onclick = function(){ _fz.month = fzMonthShift(_fz.month, 1); fzLoad(); };
+  document.getElementById('fz-f-q').addEventListener('input', function(){ _fz.filters.q = this.value.trim().toLowerCase(); fzRenderDisputes(); });
+  document.getElementById('fz-balance').addEventListener('input', function(){ var v = parseFloat(String(this.value).replace(/\s/g,'').replace(',','.')); _fz.balance = isNaN(v) ? null : v; try { localStorage.setItem('fz_balance_KG', _fz.balance == null ? '' : String(_fz.balance)); } catch(_){} fzRenderCash(); fzRenderCashMini(); });
+  document.getElementById('fz-composer').addEventListener('submit', function(){ var i = document.getElementById('fz-inp'); var t = i.value.trim(); if (!t) return; fzChatAdd(t, 'u'); i.value = ''; setTimeout(function(){ fzChatAdd('Чат ещё не подключён. Сообщение никуда не ушло.', 'a'); }, 300); });
+  if (_fz.balance != null) document.getElementById('fz-balance').value = Math.round(_fz.balance).toLocaleString('ru-RU');
+ }
+ fzLoad();
+}
+function fzAgent(on){ var root = document.getElementById('fz-root'); root.classList.toggle('agent-on', on); document.getElementById('fz-agent-btn').setAttribute('aria-pressed', on ? 'true' : 'false'); }
+function fzChatAdd(t, who){ var box = document.getElementById('fz-msgs'); var d = document.createElement('div'); d.className = 'fz-m ' + who; d.textContent = t; var s = document.createElement('span'); s.className = 't'; s.textContent = new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}); d.appendChild(s); box.appendChild(d); box.scrollTop = box.scrollHeight; }
+function fzGo(v){
+ var sec = document.getElementById('v-' + v); if (!sec) return;
+ _fz.view = v;
+ document.querySelectorAll('#fz-root .fz-view').forEach(function(s){ s.classList.toggle('on', s.id === 'v-' + v); });
+ document.querySelectorAll('#fz-root .fz-nav [data-fz-go]').forEach(function(b){ if (b.getAttribute('data-fz-go') === v) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+ document.getElementById('fz-crumb').textContent = sec.getAttribute('data-title');
+ document.getElementById('fz-scroll').scrollTop = 0;
+ document.getElementById('fz-root').classList.remove('nav-on');
+}
+
+async function fzLoad(){
+ var m = _fz.month;
+ document.getElementById('fz-month-label').textContent = FZ_MONTHS[m.mo - 1] + ' ' + m.y;
+ var st = document.getElementById('fz-status');
+ st.innerHTML = '<div class="fz-loading">Считаю за ' + FZ_MONTHS[m.mo - 1].toLowerCase() + '…</div>';
+ _fz.busy = true; _fz.err = null;
+ try {
+  var tasks = [ sbFetch('/api/finansist?month=' + fzMonthKey(m)) ];
+  if (!_fz.expReady && typeof loadExpenses === 'function') tasks.push(loadExpenses().catch(function(e){ console.warn('[finansist] расходы:', e); }));
+  var res = await Promise.all(tasks);
+  _fz.expReady = true;
+  var r = res[0];
+  if (!r || !r.ok) { _fz.err = (r && r.error) || 'Сервер не ответил'; _fz.data = null; }
+  else if (r.month !== fzMonthKey(_fz.month)) { return; } // пока ждали — месяц переключили
+  else _fz.data = r;
+ } catch(e) { _fz.err = e && e.message || String(e); _fz.data = null; }
+ _fz.busy = false;
+ if (_fz.err) { st.innerHTML = '<div class="fz-err"><b>Не удалось загрузить.</b> ' + fzEsc(_fz.err) + '</div>'; fzRenderEmpty(); return; }
+ st.innerHTML = '';
+ fzRenderAll();
+}
+function fzRenderEmpty(){
+ ['fz-kpis','fz-team-mini','fz-q-preview','fz-q-full','fz-pay-body','fz-acc-body','fz-people-body','fz-churn-body','fz-cash-out','fz-cash-in','fz-churn-kpis','fz-cash-kpis'].forEach(function(id){ var el = document.getElementById(id); if (el) el.innerHTML = ''; });
+ document.getElementById('fz-updated').textContent = 'База: нет данных';
+}
+function fzRenderAll(){
+ var d = _fz.data;
+ var lp = d.meta && d.meta.last_paid_at;
+ document.getElementById('fz-updated').textContent = 'База: оплаты по ' + (lp ? fzDay(lp) : '—');
+ fzRenderOverview(); fzRenderQuestions(); fzRenderDisputes(); fzRenderAccounts(); fzRenderPeople(); fzRenderChurn(); fzRenderCash(); fzRenderCashMini(); fzRenderGoals();
+}
+
+// ---------- обзор ----------
+function fzSpark(vals, good){
+ var v = vals.filter(function(x){ return x != null; }); if (v.length < 2) return '<svg class="spark" viewBox="0 0 72 24" aria-hidden="true"></svg>';
+ var mn = Math.min.apply(null, v), mx = Math.max.apply(null, v), W = 72, H = 24;
+ var pts = v.map(function(x, i){ return ((W-2)*i/(v.length-1)+1) + ',' + (H-2-(H-4)*(x-mn)/((mx-mn)||1)); }).join(' ');
+ return '<svg class="spark" viewBox="0 0 72 24" aria-hidden="true"><polyline points="' + pts + '" fill="none" stroke="' + (good ? 'var(--fz-pos)' : 'var(--fz-neg)') + '" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+}
+function fzSeries(){
+ var d = _fz.data; var out = [];
+ d.months.forEach(function(mo, i){ var k = mo.key.split('-'); var m = { y:+k[0], mo:+k[1] }; var exp = fzExpRows(m); var e = exp ? fzExpSum(exp) : null; var sal = exp ? fzExpSum(fzExpSalary(exp)) : null;
+  out.push({ key:mo.key, label:FZ_MONTHS_SHORT[m.mo-1], revenue:mo.revenue, count:mo.count, expense:e, profit:e == null ? null : mo.revenue - e, margin:(e == null || !mo.revenue) ? null : (mo.revenue - e)/mo.revenue*100, fot:(sal == null || !mo.revenue) ? null : sal/mo.revenue*100 }); });
+ return out;
+}
+function fzRenderOverview(){
+ var d = _fz.data, m = _fz.month, s = fzSeries(), cur = s[s.length-1], prev = s[s.length-2];
+ document.getElementById('fz-ov-title').textContent = 'Обзор за ' + FZ_MONTHS[m.mo-1].toLowerCase() + ' ' + m.y;
+ var lp = d.meta.last_paid_at;
+ document.getElementById('fz-ov-sub').textContent = 'Оплаты по ' + (lp ? fzDay(lp) : '—') + ', ' + d.period.count + ' ' + fzPlural(d.period.count, 'платёж','платежа','платежей') + ' за месяц' + (cur.expense == null ? '. Расходы за этот месяц в таблице не найдены' : '');
+ var k = [
+  { l:'Выручка', v:fzMoney(cur.revenue), p:fzDeltaPill(fzDelta(cur.revenue, prev && prev.revenue), true), s:s.map(function(x){ return x.revenue; }), g:(cur.revenue >= (prev ? prev.revenue : 0)) },
+  { l:'Расходы', v:cur.expense == null ? '—' : fzMoney(cur.expense), p:fzDeltaPill(prev && prev.expense != null && cur.expense != null ? fzDelta(cur.expense, prev.expense) : null, false), s:s.map(function(x){ return x.expense; }), g:!(prev && prev.expense != null && cur.expense != null && cur.expense > prev.expense) },
+  { l:'Прибыль', v:cur.profit == null ? '—' : fzMoney(cur.profit), p:fzDeltaPill(prev && prev.profit != null && cur.profit != null ? fzDelta(cur.profit, prev.profit) : null, true), s:s.map(function(x){ return x.profit; }), g:cur.profit != null && cur.profit >= 0 },
+  { l:'Маржа', v:cur.margin == null ? '—' : fzPctTxt(Math.round(cur.margin*10)/10), p:prev && prev.margin != null && cur.margin != null ? '<span class="fz-pill ' + (cur.margin >= prev.margin ? 'pos' : 'neg') + '">' + (cur.margin - prev.margin > 0 ? '+' : '−') + Math.abs(Math.round((cur.margin - prev.margin)*10)/10).toLocaleString('ru-RU') + ' п.п.</span>' : '<span class="fz-pill mu">нет прошлого</span>', s:s.map(function(x){ return x.margin; }), g:cur.margin != null && (!prev || prev.margin == null || cur.margin >= prev.margin) },
+  { l:'Зарплаты от выручки', v:cur.fot == null ? '—' : fzPctTxt(Math.round(cur.fot)), p:prev && prev.fot != null && cur.fot != null ? '<span class="fz-pill ' + (cur.fot <= prev.fot ? 'pos' : 'neg') + '">' + (cur.fot - prev.fot > 0 ? '+' : '−') + Math.abs(Math.round(cur.fot - prev.fot)) + ' п.п.</span>' : '<span class="fz-pill mu">нет прошлого</span>', s:s.map(function(x){ return x.fot; }), g:cur.fot != null && (!prev || prev.fot == null || cur.fot <= prev.fot) }
+ ];
+ document.getElementById('fz-kpis').innerHTML = k.map(function(x){ return '<div class="fz-panel fz-kpi"><small>' + x.l + '</small><strong>' + x.v + '</strong><div class="row">' + x.p + fzSpark(x.s, x.g) + '</div></div>'; }).join('');
+ fzDrawPL(s);
+ fzRenderTeamMini();
+}
+function fzPlural(n, a, b, c){ n = Math.abs(n) % 100; var n1 = n % 10; if (n > 10 && n < 20) return c; if (n1 > 1 && n1 < 5) return b; if (n1 === 1) return a; return c; }
+function fzDrawPL(s){
+ var W = 640, H = 220, L = 60, B = 26, T = 8;
+ var maxV = Math.max.apply(null, s.map(function(x){ return Math.max(x.revenue || 0, x.expense || 0); }).concat([1]));
+ var step = Math.pow(10, Math.floor(Math.log10(maxV))) / 2; var max = Math.ceil(maxV * 1.08 / step) * step || 1;
+ var ih = H - B - T, gw = (W - L) / s.length, bw = Math.min(24, gw / 3.6);
+ var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Выручка и расходы по месяцам">';
+ for (var i = 0; i <= 4; i++) { var y = T + ih - ih * i / 4; svg += '<line x1="' + L + '" x2="' + W + '" y1="' + y + '" y2="' + y + '" stroke="var(--fz-line2)"/><text x="' + (L-8) + '" y="' + (y+4) + '" text-anchor="end" font-size="11" fill="var(--fz-muted)">' + fzShort(max*i/4) + '</text>'; }
+ s.forEach(function(d, i){ var cx = L + gw*i + gw/2, hr = ih * Math.max(0, d.revenue) / max, he = d.expense == null ? 0 : ih * d.expense / max; var last = i === s.length - 1;
+  svg += '<rect x="' + (cx-bw-2) + '" y="' + (T+ih-hr) + '" width="' + bw + '" height="' + hr + '" rx="2.5" fill="var(--fz-accent)"><title>Выручка ' + fzMoney(d.revenue) + '</title></rect>';
+  if (d.expense != null) svg += '<rect x="' + (cx+2) + '" y="' + (T+ih-he) + '" width="' + bw + '" height="' + he + '" rx="2.5" fill="var(--fz-muted)" opacity=".5"><title>Расходы ' + fzMoney(d.expense) + '</title></rect>';
+  else svg += '<text x="' + (cx+2+bw/2) + '" y="' + (T+ih-4) + '" text-anchor="middle" font-size="10" fill="var(--fz-muted)">нет</text>';
+  svg += '<text x="' + cx + '" y="' + (H-7) + '" text-anchor="middle" font-size="12" fill="' + (last ? 'var(--fz-ink)' : 'var(--fz-muted)') + '" font-weight="' + (last ? 600 : 400) + '">' + d.label + '</text>'; });
+ document.getElementById('fz-chart-pl').innerHTML = svg + '</svg>';
+}
+function fzRenderTeamMini(){
+ var t = fzTeamRows(); var el = document.getElementById('fz-team-mini');
+ if (!t.rows.length) { el.innerHTML = '<div class="fz-empty">За месяц нет ни оплат по менеджерам, ни зарплат в расходах.</div>'; return; }
+ var rows = t.rows.slice(0, 6); var mx = Math.max.apply(null, rows.map(function(r){ return Math.max(r.revenue, r.cost, 1); }));
+ el.innerHTML = rows.map(function(r){ return '<div class="fz-tm-row"><div class="fz-tm-name">' + fzEsc(r.name) + '<span>' + (r.count ? r.count + ' ' + fzPlural(r.count,'оплата','оплаты','оплат') : 'без оплат') + (r.hasSalary ? '' : ' · зарплаты нет') + '</span></div><div class="fz-tm-bars" aria-hidden="true"><i class="rv" style="width:' + (r.revenue/mx*100) + '%"></i><i class="cs" style="width:' + (r.cost/mx*100) + '%"></i></div><div class="fz-tm-res ' + (r.res >= 0 ? 'pos' : 'neg') + '">' + fzMoney(r.res, true) + '</div><div class="fz-tm-tag">' + fzTeamTag(r) + '</div></div>'; }).join('')
+  + '<div class="fz-tm-leg"><span><i class="rv"></i>Принёс</span><span><i class="cs"></i>Стоит компании</span>' + (t.hasExp ? '' : '<span>расходов за месяц нет</span>') + '</div>';
+}
+
+// ---------- вопросы (заготовка из расхождений) ----------
+function fzQuestions(){
+ var d = _fz.data, c = d.disputes.counts, list = d.disputes.list, m = fzMonthKey(_fz.month), out = [];
+ var sum = function(t){ return list.filter(function(p){ return p.issues.some(function(i){ return i.type === t; }); }).reduce(function(s, p){ return s + p.amount; }, 0); };
+ if (c.bank) out.push({ id:m+':bank', ty:'bank', tl:'Счёт', t:c.bank + ' ' + fzPlural(c.bank,'платёж','платежа','платежей') + ' не на том счёте', d:'Статья говорит одно, счёт — другое. Список — в «Спорных записях», фильтр «Не тот счёт».', m:sum('bank'), a:['Верно по статье','Верно по счёту','Позже'], r:['Отмечено: считать по статье. Записи не менялись.','Отмечено: считать по счёту. Записи не менялись.','Отложено.'] });
+ if (c.dup) out.push({ id:m+':dup', ty:'dup', tl:'Дубль', t:c.dup + ' ' + fzPlural(c.dup,'платёж похож','платежа похожи','платежей похожи') + ' на двойную запись', d:'Один клиент, одинаковая сумма и статья в пределах 3 дней. Список — в «Спорных записях», фильтр «Возможный дубль».', m:sum('dup'), a:['Проверю в оплатах','Это разные платежи','Позже'], r:['Откройте раздел «Оплаты», там правки.','Отмечено: разные платежи.','Отложено.'] });
+ if (c.dec) out.push({ id:m+':dec', ty:'dec', tl:'Декады', t:c.dec + ' ' + fzPlural(c.dec,'оплата нового клиента','оплаты новых клиентов','оплат новых клиентов') + ' без правила декад', d:'Оплата с 10-го числа и позже, а сумма внесена как за полные месяцы. Список — в «Спорных записях», фильтр «Не по декаде».', m:sum('dec'), a:['Это аванс','Это ошибка','Позже'], r:['Отмечено: аванс на следующий месяц.','Отмечено: к пересчёту.','Отложено.'] });
+ var s = fzSeries(), cur = s[s.length-1];
+ out.push({ id:m+':goal', ty:'goal', tl:'Цель', t:'Задать цель по доле зарплат', d:cur.fot == null ? 'За этот месяц зарплат в расходах нет, сравнивать не с чем.' : 'Сейчас зарплаты — ' + Math.round(cur.fot) + '% выручки. Цель пока не задана.', m:null, a:['Принять 45%','Своя цифра','Позже'], r:['Отмечено: 45%. Цели пока хранятся только на этом устройстве.','Напишите цифру в чате, когда он появится.','Отложено.'] });
+ return out;
+}
+function fzQHtml(q){ var done = _fz.done[q.id]; return '<div class="fz-qi' + (done != null ? ' done' : '') + '" data-q="' + fzEsc(q.id) + '"><span class="ty ' + q.ty + '">' + q.tl + '</span><h3>' + fzEsc(q.t) + '</h3><span class="amt">' + (q.m ? fzMoney(q.m) : '') + '</span><p>' + fzEsc(q.d) + '</p>' + (done != null ? '<div class="res">' + fzEsc(q.r[done] || '') + '</div>' : '<div class="acts">' + q.a.map(function(a, j){ return '<button class="fz-btn' + (j === 0 ? ' pri' : '') + '" data-j="' + j + '">' + fzEsc(a) + '</button>'; }).join('') + '</div>') + '</div>'; }
+function fzRenderQuestions(){
+ var Q = fzQuestions(); var open = Q.filter(function(q){ return _fz.done[q.id] == null; });
+ document.getElementById('fz-q-full').innerHTML = Q.length ? Q.map(fzQHtml).join('') : '<div class="fz-empty">Вопросов за месяц нет.</div>';
+ document.getElementById('fz-q-preview').innerHTML = open.length ? open.slice(0,2).map(fzQHtml).join('') : '<div class="fz-empty">Открытых вопросов нет.</div>';
+ document.getElementById('fz-q-left').textContent = open.length + ' ' + fzPlural(open.length,'открыт','открыто','открыто');
+ var b = document.getElementById('fz-nav-q'); b.textContent = open.length; b.style.display = open.length ? '' : 'none';
+}
+function fzQuestionAnswer(id, j){ _fz.done[id] = j; try { localStorage.setItem('fz_q_done', JSON.stringify(_fz.done)); } catch(_){} fzRenderQuestions(); }
+
+// ---------- спорные записи ----------
+function fzDDRender(key, label, items, cur){
+ var dd = document.querySelector('#fz-root .fz-dd[data-fz-dd="' + key + '"]'); if (!dd) return;
+ var sel = items.filter(function(i){ return i.v === cur; })[0];
+ dd.querySelector('.fz-dd-btn').textContent = sel && sel.v ? sel.l : label;
+ dd.querySelector('.fz-dd-menu').innerHTML = [{ v:'', l:label }].concat(items).map(function(i){ return '<button type="button" data-v="' + fzEsc(i.v) + '" aria-selected="' + (i.v === cur ? 'true' : 'false') + '">' + fzEsc(i.l) + (i.n != null ? '<span>' + i.n + '</span>' : '') + '</button>'; }).join('');
+}
+function fzRenderDisputes(){
+ var d = _fz.data; if (!d) return;
+ var list = d.disputes.list, f = _fz.filters;
+ var cnt = function(fn){ return list.filter(fn).length; };
+ fzDDRender('type', 'Все расхождения', ['bank','dup','dec'].map(function(t){ return { v:t, l:FZ_TYPE[t][1].replace(/^./, function(c){ return c.toUpperCase(); }), n:cnt(function(p){ return p.issues.some(function(i){ return i.type === t; }); }) }; }), f.type);
+ var cats = {}; list.forEach(function(p){ cats[p.category] = (cats[p.category] || 0) + 1; });
+ fzDDRender('cat', 'Все статьи', Object.keys(cats).map(function(c){ return { v:c, l:FZ_CAT[c] || c, n:cats[c] }; }), f.cat);
+ var banks = {}; list.forEach(function(p){ var b = p.bank || '—'; banks[b] = (banks[b] || 0) + 1; });
+ fzDDRender('bank', 'Все счета', Object.keys(banks).map(function(b){ return { v:b, l:b, n:banks[b] }; }), f.bank);
+ var rows = list.filter(function(p){ return (!f.q || String(p.company_name||'').toLowerCase().indexOf(f.q) >= 0) && (!f.type || p.issues.some(function(i){ return i.type === f.type; })) && (!f.cat || p.category === f.cat) && (!f.bank || (p.bank || '—') === f.bank); });
+ document.getElementById('fz-pay-body').innerHTML = rows.length ? rows.map(function(p){
+  var seen = {}; var chips = p.issues.filter(function(i){ if (seen[i.type]) return false; seen[i.type] = 1; return true; }).map(function(i){ return '<span class="st ' + FZ_TYPE[i.type][0] + '" title="' + fzEsc(i.text) + '">' + FZ_TYPE[i.type][1] + '</span>'; }).join('');
+  return '<tr><td>' + fzDDMM(p.paid_at) + '</td><td>' + fzEsc(p.company_name) + '</td><td>' + chips + '</td><td class="r">' + fzMoney(p.amount) + '</td><td>' + fzEsc(FZ_CAT[p.category] || p.category) + (p.category_raw ? '<span class="sub">' + fzEsc(p.category_raw) + '</span>' : '') + '</td><td>' + fzEsc(p.bank || '—') + '</td><td>' + fzEsc(p.manager_name || '—') + '</td></tr>'; }).join('')
+  : '<tr><td colspan="7" class="muted">Спорных записей по этому фильтру нет.</td></tr>';
+ document.getElementById('fz-pay-foot').textContent = 'Спорных ' + list.length + ' из ' + d.period.count + ' ' + fzPlural(d.period.count,'платежа','платежей','платежей') + ' за ' + FZ_MONTHS[_fz.month.mo-1].toLowerCase() + '. Показано ' + rows.length + '.';
+}
+
+// ---------- счета ----------
+function fzRenderAccounts(){
+ var d = _fz.data, exp = fzExpRows(_fz.month) || [], hasExp = fzExpRows(_fz.month) != null;
+ var acc = {};
+ d.banks.forEach(function(b){ acc[b.key] = { key:b.key, income:b.income, expense:0, disputed:b.disputed, disputed_sum:b.disputed_sum, raw:Object.keys(b.raw || {}) }; });
+ exp.forEach(function(e){ var k = fzBankKey(e.bank); if (!acc[k]) acc[k] = { key:k, income:0, expense:0, disputed:0, disputed_sum:0, raw:[] }; acc[k].expense += +e.amount || 0; if (e.bank && acc[k].raw.indexOf(e.bank) < 0) acc[k].raw.push(e.bank); });
+ var order = ['license','services','cash','other','none']; var list = order.filter(function(k){ return acc[k]; }).map(function(k){ return acc[k]; });
+ var ti = 0, te = 0;
+ document.getElementById('fz-acc-body').innerHTML = list.length ? list.map(function(a){ ti += a.income; te += a.expense; var net = a.income - a.expense;
+  return '<tr><td>' + FZ_BANK_LABEL[a.key] + '<span class="sub">' + fzEsc(FZ_BANK_SUB[a.key] || '') + (a.raw.length ? (FZ_BANK_SUB[a.key] ? ' · ' : '') + 'в базе: ' + fzEsc(a.raw.filter(Boolean).join(', ')) : '') + '</span></td><td class="r">' + fzMoney(a.income) + '</td><td class="r">' + (hasExp ? fzMoney(a.expense) : '<span class="muted">нет данных</span>') + '</td><td class="r ' + (net >= 0 ? 'pos' : 'neg') + '">' + (hasExp ? fzMoney(net, true) : fzMoney(a.income, true)) + '</td><td>' + (a.disputed ? '<span class="st bad">' + a.disputed + ' ' + fzPlural(a.disputed,'платёж','платежа','платежей') + '</span>' : '<span class="st ok">нет</span>') + '</td></tr>'; }).join('')
+  : '<tr><td colspan="5" class="muted">За месяц движений нет.</td></tr>';
+ document.getElementById('fz-acc-foot').innerHTML = list.length ? '<tr><td>Итого</td><td class="r">' + fzMoney(ti) + '</td><td class="r">' + (hasExp ? fzMoney(te) : '—') + '</td><td class="r ' + (ti - te >= 0 ? 'pos' : 'neg') + '">' + fzMoney(ti - te, true) + '</td><td></td></tr>' : '';
+}
+
+// ---------- команда ----------
+function fzRenderPeople(){
+ var t = fzTeamRows(); var body = document.getElementById('fz-people-body');
+ if (!t.rows.length) { body.innerHTML = '<tr><td colspan="6" class="muted">За месяц нет данных.</td></tr>'; document.getElementById('fz-people-foot').innerHTML = ''; document.getElementById('fz-people-note').textContent = ''; return; }
+ var tr = 0, ts = 0, tsh = 0;
+ body.innerHTML = t.rows.map(function(r){ tr += r.revenue; ts += r.salary; tsh += r.share;
+  return '<tr><td>' + fzEsc(r.name) + '<span class="sub">' + (r.count ? r.count + ' ' + fzPlural(r.count,'оплата','оплаты','оплат') + (r.newc ? ', новых клиентов: ' + r.newc : '') : 'оплат нет') + '</span></td><td class="r">' + fzMoney(r.revenue) + '</td><td class="r">' + (r.hasSalary ? fzMoney(r.salary) : '<span class="muted">нет</span>') + '</td><td class="r">' + (r.hasSalary ? fzMoney(r.share) : '<span class="muted">—</span>') + '</td><td class="r ' + (r.res >= 0 ? 'pos' : 'neg') + '">' + fzMoney(r.res, true) + '</td><td>' + fzTeamTag(r) + '</td></tr>'; }).join('');
+ document.getElementById('fz-people-foot').innerHTML = '<tr><td>Итого</td><td class="r">' + fzMoney(tr) + '</td><td class="r">' + fzMoney(ts) + '</td><td class="r">' + fzMoney(tsh) + '</td><td class="r ' + (tr - ts - tsh >= 0 ? 'pos' : 'neg') + '">' + fzMoney(tr - ts - tsh, true) + '</td><td></td></tr>';
+ document.getElementById('fz-people-note').textContent = t.hasExp
+  ? 'Зарплата — статья «ЗП» из таблицы расходов по имени в примечании. Общие расходы ' + fzMoney(t.shared) + ' поделены поровну на ' + t.head + ' ' + fzPlural(t.head,'человека','человек','человек') + ', кто получил зарплату в этом месяце. Выручка — по менеджеру в оплате.'
+  : 'Расходов за этот месяц в таблице нет, поэтому показана только выручка по менеджерам.';
+}
+
+// ---------- отток ----------
+function fzRenderChurn(){
+ var d = _fz.data, c = d.churn, m = _fz.month;
+ document.getElementById('fz-churn-sub').textContent = 'Потеря ежемесячной выручки за ' + FZ_MONTHS[m.mo-1].toLowerCase() + '. Сумма в месяц — по последней подписочной оплате клиента';
+ var churn = c.left.filter(function(x){ return x.kind === 'churn'; }).length, decl = c.left.length - churn;
+ var net = c.new_monthly - c.lost_monthly;
+ document.getElementById('fz-churn-kpis').innerHTML =
+  '<div class="fz-panel fz-kpi"><small>Потеря в месяц</small><strong class="' + (c.lost_monthly ? 'neg' : '') + '">' + fzMoney(-c.lost_monthly) + '</strong><span class="sub">' + churn + ' ' + fzPlural(churn,'уход','ухода','уходов') + ' и ' + decl + ' ' + fzPlural(decl,'сокращение','сокращения','сокращений') + '</span></div>' +
+  '<div class="fz-panel fz-kpi"><small>Новая выручка в месяц</small><strong class="pos">' + fzMoney(c.new_monthly, true) + '</strong><span class="sub">' + c.new_clients + ' ' + fzPlural(c.new_clients,'новый клиент','новых клиента','новых клиентов') + '</span></div>' +
+  '<div class="fz-panel fz-kpi"><small>Чистый прирост</small><strong class="' + (net >= 0 ? 'pos' : 'neg') + '">' + fzMoney(net, true) + '</strong><span class="sub">новые минус ушедшие</span></div>';
+ document.getElementById('fz-churn-body').innerHTML = c.left.length ? c.left.map(function(x){ return '<tr><td>' + fzEsc(x.company_name) + (x.city ? '<span class="sub">' + fzEsc(x.city) + '</span>' : '') + '</td><td>' + (x.kind === 'churn' ? '<span class="st bad">ушёл</span>' : '<span class="st wr">сократил</span>') + '</td><td class="wrap">' + fzEsc(x.reason || '—') + '</td><td>' + fzDDMM(x.when) + '</td><td class="r neg">' + (x.monthly ? fzMoney(-x.monthly) : '<span class="muted">оплат не было</span>') + '</td></tr>'; }).join('')
+  : '<tr><td colspan="5" class="muted">За ' + FZ_MONTHS[m.mo-1].toLowerCase() + ' в карточках клиентов уходов и сокращений не отмечено.</td></tr>';
+ document.getElementById('fz-churn-foot').innerHTML = c.left.length ? '<tr><td>Итого</td><td></td><td></td><td></td><td class="r neg">' + fzMoney(-c.lost_monthly) + '</td></tr>' : '';
+ var bl = document.getElementById('fz-churn-billing');
+ if (c.records.length || c.license_changes.length) {
+  bl.innerHTML = '<div class="fz-panel-h"><h2>Выгрузка из биллинга</h2><span>за ' + FZ_MONTHS[m.mo-1].toLowerCase() + '</span></div><div class="fz-tw"><table><thead><tr><th>Клиент</th><th>Событие</th><th>Причина</th><th class="r">Лицензий</th><th class="r">Сумма</th></tr></thead><tbody>'
+   + c.records.map(function(r){ return '<tr><td>' + fzEsc(r.company_name) + '</td><td>' + (r.kind === 'churn' ? '<span class="st bad">отток</span>' : '<span class="st wr">спад</span>') + '</td><td class="wrap">' + fzEsc(r.reason || '—') + '</td><td class="r">' + (r.prev_count != null ? r.prev_count + ' → ' + r.cur_count : '—') + '</td><td class="r">' + (r.prev_amount || r.cur_amount ? fzMoney(r.cur_amount - r.prev_amount, true) : '—') + '</td></tr>'; }).join('')
+   + c.license_changes.map(function(r){ return '<tr><td>' + fzEsc(r.company_key) + '</td><td><span class="st ' + (r.diff < 0 ? 'wr' : 'ok') + '">' + (r.diff < 0 ? 'меньше лицензий' : 'больше лицензий') + '</span></td><td>—</td><td class="r">' + r.before + ' → ' + r.after + '</td><td class="r">—</td></tr>'; }).join('')
+   + '</tbody></table></div>';
+ } else {
+  bl.innerHTML = '<div class="fz-panel-h"><h2>Выгрузка из биллинга</h2></div><div class="fz-empty">За этот месяц выгрузки нет' + (c.periods_available.length ? '. Есть за: ' + c.periods_available.map(function(p){ return FZ_MONTHS[parseInt(p.slice(5,7),10)-1].toLowerCase() + ' ' + p.slice(0,4); }).join(', ') : '') + '.</div>';
+ }
+}
+
+// ---------- касса ----------
+function fzCashPlan(){
+ var d = _fz.data, today = d.cash.today, m = _fz.month;
+ var prevExp = fzExpRows(fzMonthShift({ y:+today.slice(0,4), mo:+today.slice(5,7) }, -1)) || [];
+ var byDay = {}; prevExp.forEach(function(e){ var day = parseInt(String(e.date || '').slice(8,10), 10) || 1; var k = day + '|' + (fzIsSalary(e) ? 'Зарплата' : e.category); if (!byDay[k]) byDay[k] = { day:day, label:(fzIsSalary(e) ? 'Зарплата' : e.category), sum:0 }; byDay[k].sum += +e.amount || 0; });
+ var t0 = new Date(today + 'T00:00:00'); var out = [];
+ for (var i = 1; i <= 30; i++) { var dt = new Date(t0.getFullYear(), t0.getMonth(), t0.getDate() + i); var iso = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0'); var dd = dt.getDate();
+  Object.keys(byDay).forEach(function(k){ if (byDay[k].day === dd) out.push({ i:i, iso:iso, label:byDay[k].label, sum:byDay[k].sum }); }); }
+ out.sort(function(a, b){ return a.i - b.i || b.sum - a.sum; });
+ return { out:out, hasPrev:prevExp.length > 0 };
+}
+function fzCashSeries(){
+ var d = _fz.data, plan = fzCashPlan().out, bal = _fz.balance == null ? 0 : _fz.balance, avg = d.cash.daily_avg_90;
+ var series = [{ i:0, v:bal }], b = bal;
+ for (var i = 1; i <= 30; i++) { b += avg; plan.forEach(function(p){ if (p.i === i) b -= p.sum; }); series.push({ i:i, v:b }); }
+ return series;
+}
+function fzRenderCashMini(){
+ var d = _fz.data; if (!d) return; var el = document.getElementById('fz-cash-mini');
+ if (_fz.balance == null) { el.innerHTML = '<div style="font-size:13px;color:var(--fz-muted)">Введите остаток на счетах в разделе «Касса и прогноз» — тогда здесь появится прогноз на 30 дней.</div>'; return; }
+ var s = fzCashSeries(), mn = s.reduce(function(a, x){ return x.v < a.v ? x : a; }, s[0]);
+ var dt = new Date(d.cash.today + 'T00:00:00'); dt.setDate(dt.getDate() + mn.i);
+ el.innerHTML = '<div style="font-size:13px;color:var(--fz-muted)">Минимальный остаток</div><div style="font-size:22px;font-weight:600" class="' + (mn.v < 0 ? 'neg' : 'pos') + '">' + fzMoney(mn.v) + '</div><div style="font-size:13px;margin:2px 0 12px">' + dt.getDate() + ' ' + FZ_MONTHS_GEN[dt.getMonth()] + '</div><div class="fz-chart">' + fzCashSvg(s, true) + '</div>';
+}
+function fzCashSvg(s, mini){
+ var d = _fz.data, W = 640, H = mini ? 120 : 230, L = mini ? 4 : 64, B = mini ? 4 : 26, T = 8;
+ var vals = s.map(function(x){ return x.v; }); var max = Math.max.apply(null, vals.concat([1])), min = Math.min.apply(null, vals.concat([0])); if (max === min) max = min + 1;
+ var pad = (max - min) * 0.08; max += pad; min -= pad;
+ var ih = H - B - T, X = function(i){ return L + (W - L - 6) * i / 30; }, Y = function(v){ return T + ih * (max - v) / (max - min); };
+ var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Прогноз остатка">';
+ if (min < 0) svg += '<rect x="' + L + '" y="' + Y(0) + '" width="' + (W-L) + '" height="' + (Y(min) - Y(0)) + '" fill="var(--fz-neg-soft)"/>';
+ if (!mini) { for (var g = 0; g <= 4; g++) { var v = min + (max - min) * g / 4; svg += '<line x1="' + L + '" x2="' + W + '" y1="' + Y(v) + '" y2="' + Y(v) + '" stroke="var(--fz-line2)"/><text x="' + (L-8) + '" y="' + (Y(v)+4) + '" text-anchor="end" font-size="11" fill="var(--fz-muted)">' + fzShort(v) + '</text>'; } }
+ svg += '<line x1="' + L + '" x2="' + W + '" y1="' + Y(0) + '" y2="' + Y(0) + '" stroke="var(--fz-muted)" stroke-dasharray="3 3"/>';
+ svg += '<polyline points="' + s.map(function(x){ return X(x.i) + ',' + Y(x.v); }).join(' ') + '" fill="none" stroke="var(--fz-accent)" stroke-width="' + (mini ? 2.4 : 2) + '" stroke-linejoin="round"/>';
+ s.forEach(function(x){ if (x.v < 0) svg += '<circle cx="' + X(x.i) + '" cy="' + Y(x.v) + '" r="' + (mini ? 4 : 3.5) + '" fill="var(--fz-neg)"><title>' + fzMoney(x.v) + '</title></circle>'; });
+ if (!mini) { var t0 = new Date(d.cash.today + 'T00:00:00'); [0,10,20,30].forEach(function(i){ var dt = new Date(t0.getFullYear(), t0.getMonth(), t0.getDate() + i); svg += '<text x="' + X(i) + '" y="' + (H-7) + '" text-anchor="' + (i === 0 ? 'start' : (i === 30 ? 'end' : 'middle')) + '" font-size="12" fill="var(--fz-muted)">' + dt.getDate() + ' ' + FZ_MONTHS_SHORT[dt.getMonth()] + '</text>'; }); }
+ return svg + '</svg>';
+}
+function fzRenderCash(){
+ var d = _fz.data; if (!d) return; var c = d.cash, plan = fzCashPlan();
+ document.getElementById('fz-balance-note').textContent = _fz.balance == null ? 'Остаток в базу не попадает — введите его сами, он сохранится на этом устройстве' : 'Сохранено на этом устройстве';
+ var s = fzCashSeries(), mn = s.reduce(function(a, x){ return x.v < a.v ? x : a; }, s[0]); var dt = new Date(c.today + 'T00:00:00'); dt.setDate(dt.getDate() + mn.i);
+ var planSum = plan.out.reduce(function(a, p){ return a + p.sum; }, 0);
+ document.getElementById('fz-cash-kpis').innerHTML =
+  '<div class="fz-panel fz-kpi"><small>Поступления в день</small><strong>' + fzMoney(c.daily_avg_90) + '</strong><span class="sub">среднее за 90 дней, всего ' + fzMoney(c.inflow_90) + '</span></div>' +
+  '<div class="fz-panel fz-kpi"><small>Расходы на 30 дней</small><strong>' + (plan.hasPrev ? fzMoney(planSum) : '—') + '</strong><span class="sub">' + (plan.hasPrev ? 'как в прошлом месяце' : 'расходов прошлого месяца в таблице нет') + '</span></div>' +
+  '<div class="fz-panel fz-kpi"><small>Минимальный остаток</small><strong class="' + (_fz.balance == null ? '' : (mn.v < 0 ? 'neg' : 'pos')) + '">' + (_fz.balance == null ? '—' : fzMoney(mn.v)) + '</strong><span class="sub">' + (_fz.balance == null ? 'введите остаток' : dt.getDate() + ' ' + FZ_MONTHS_GEN[dt.getMonth()] + (c.overdue_count ? ' · просрочено ' + c.overdue_count + ' ' + fzPlural(c.overdue_count,'клиент','клиента','клиентов') : '')) + '</span></div>';
+ var t0 = new Date(c.today + 'T00:00:00'); var end = new Date(t0.getFullYear(), t0.getMonth(), t0.getDate() + 30);
+ document.getElementById('fz-cash-range').textContent = t0.getDate() + ' ' + FZ_MONTHS_GEN[t0.getMonth()] + ' — ' + end.getDate() + ' ' + FZ_MONTHS_GEN[end.getMonth()];
+ document.getElementById('fz-chart-cash').innerHTML = _fz.balance == null ? '<div class="fz-empty">Введите остаток на счетах — график построится от него.</div>' : fzCashSvg(s, false);
+ var outRows = plan.out.map(function(p){ return '<tr><td>' + fzDDMM(p.iso) + '</td><td>' + fzEsc(p.label) + '</td><td class="r neg">' + fzMoney(-p.sum) + '</td></tr>'; });
+ outRows.push('<tr><td>ежедневно</td><td>Продления и новые оплаты<span class="sub">среднее за 90 дней</span></td><td class="r pos">' + fzMoney(c.daily_avg_90, true) + '</td></tr>');
+ document.getElementById('fz-cash-out').innerHTML = outRows.join('');
+ var exp30 = c.expected.filter(function(e){ var diff = (new Date(e.date + 'T00:00:00') - t0) / 86400000; return diff <= 30; });
+ document.getElementById('fz-cash-in-sub').textContent = exp30.length + ' ' + fzPlural(exp30.length,'клиент','клиента','клиентов') + ' до ' + end.getDate() + ' ' + FZ_MONTHS_GEN[end.getMonth()] + ', по прошлым оплатам ≈ ' + fzMoney(c.expected_30);
+ document.getElementById('fz-cash-in').innerHTML = exp30.length ? exp30.map(function(e){ return '<tr><td>' + fzDDMM(e.date) + '</td><td>' + fzEsc(e.company_name) + '</td><td class="r">' + (e.est ? fzMoney(e.est) : '<span class="muted">нет</span>') + '</td></tr>'; }).join('') : '<tr><td colspan="3" class="muted">Продлений на 30 дней по датам биллинга нет.</td></tr>';
+}
+
+// ---------- правила и цели ----------
+function fzRenderGoals(){
+ var s = fzSeries(), cur = s[s.length-1], c = _fz.data.churn;
+ var rows = [
+  ['Зарплаты от выручки', cur.fot == null ? '—' : Math.round(cur.fot) + '%'],
+  ['Маржа', cur.margin == null ? '—' : fzPctTxt(Math.round(cur.margin*10)/10)],
+  ['Отток в деньгах', cur.revenue ? fzPctTxt(Math.round(c.lost_monthly / cur.revenue * 1000) / 10) + ' в мес.' : '—']
+ ];
+ document.getElementById('fz-goals-body').innerHTML = rows.map(function(r){ return '<tr><td>' + r[0] + '</td><td class="r">' + r[1] + '</td><td class="r muted">не задана</td></tr>'; }).join('');
+}
+
+// ---------- выгрузка ----------
+function fzExport(kind){
+ var d = _fz.data; if (!d) return; var rows = [], name = 'finansist-' + fzMonthKey(_fz.month);
+ if (kind === 'disputes') { rows.push(['Дата','Клиент','Что не так','Сумма','Статья','Счёт','Менеджер']); d.disputes.list.forEach(function(p){ rows.push([p.paid_at, p.company_name, p.issues.map(function(i){ return FZ_TYPE[i.type][1] + ': ' + i.text; }).join('; '), p.amount, FZ_CAT[p.category] || p.category, p.bank || '', p.manager_name || '']); }); name = 'спорные-' + fzMonthKey(_fz.month); }
+ else { rows.push(['Месяц','Выручка','Расходы','Прибыль','Маржа %','Зарплаты %']); fzSeries().forEach(function(x){ rows.push([x.key, Math.round(x.revenue), x.expense == null ? '' : Math.round(x.expense), x.profit == null ? '' : Math.round(x.profit), x.margin == null ? '' : Math.round(x.margin*10)/10, x.fot == null ? '' : Math.round(x.fot)]); }); name = 'обзор-' + fzMonthKey(_fz.month); }
+ var csv = '﻿' + rows.map(function(r){ return r.map(function(v){ v = String(v == null ? '' : v); return /[";\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; }).join(';'); }).join('\n');
+ var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' })); a.download = name + '.csv'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
 </script>
 </body>
 </html>
