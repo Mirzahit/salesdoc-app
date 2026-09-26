@@ -65,7 +65,10 @@ async function ensureFixtures() {
 
 const MOCK_SUPABASE = `import fs from 'fs'; import path from 'path';
 const D = ${JSON.stringify(FIX)};
-function table(t){ const f = path.join(D, t + '.json'); if (!fs.existsSync(f)) throw new Error('нет снимка ' + t); return JSON.parse(fs.readFileSync(f, 'utf8')); }
+// Таблицы без снимка (finansist_answers, finansist_settings) живут только в превью: пусто на старте, upsert пишет в файл.
+const LOCAL_TABLES = ['finansist_answers', 'finansist_settings'];
+function table(t){ const f = path.join(D, t + '.json'); if (!fs.existsSync(f)) { if (LOCAL_TABLES.includes(t)) return []; throw new Error('нет снимка ' + t); } return JSON.parse(fs.readFileSync(f, 'utf8')); }
+function save(t, rows){ fs.writeFileSync(path.join(D, t + '.json'), JSON.stringify(rows)); }
 export async function sbSelect(t, params){
   params = params || {}; let rows = table(t).slice();
   Object.keys(params).forEach(k => { if (['select','order','limit','offset'].includes(k)) return; const m = String(params[k]).match(/^eq\\.(.*)$/); if (m) rows = rows.filter(r => String(r[k]) === m[1]); });
@@ -75,7 +78,14 @@ export async function sbSelect(t, params){
   return rows;
 }
 export async function sbSelectAll(t, params){ const p = Object.assign({}, params || {}); delete p.limit; delete p.offset; return sbSelect(t, p); }
-export async function sbInsert(){ throw new Error('превью: только чтение'); } export const sbUpsert = sbInsert, sbUpdate = sbInsert, sbDelete = sbInsert, sbInsertIgnoreDup = sbInsert;
+export async function sbUpsert(t, rowOrRows, onConflict){
+  if (!LOCAL_TABLES.includes(t)) throw new Error('превью: только чтение (' + t + ')');
+  const rows = table(t); const keys = String(onConflict || 'id').split(',');
+  const list = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows]; const out = [];
+  list.forEach(r => { const i = rows.findIndex(x => keys.every(k => String(x[k]) === String(r[k]))); const row = Object.assign({ id: 'prev-' + Date.now() }, i >= 0 ? rows[i] : {}, r); if (i >= 0) rows[i] = row; else rows.push(row); out.push(row); });
+  save(t, rows); return out;
+}
+export async function sbInsert(){ throw new Error('превью: только чтение'); } export const sbUpdate = sbInsert, sbDelete = sbInsert, sbInsertIgnoreDup = sbInsert;
 `;
 fs.writeFileSync(path.join(MOCK, '_supabase.js'), MOCK_SUPABASE);
 

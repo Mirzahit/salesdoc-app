@@ -4,23 +4,29 @@
 // и изменений. Доступ — только тем, у кого есть право view_finansist (владелец и бухгалтер),
 // проверяется здесь, а не только скрытием пункта в меню.
 //
-// GET /api/finansist?month=2026-09   → { ok, month, meta, months[], period, disputes, banks, team, churn, cash }
+// GET  /api/finansist?month=2026-09        → { ok, month, meta, months[], period, disputes, banks, team, churn, cash, answers[], settings }
+// POST /api/finansist?action=answer        body { month, question_id, answer_idx, answer_text } → отметка ответа (кто/когда)
+// POST /api/finansist?action=balance       body { balance }                                    → остаток по счетам
+//   Ответы и остаток лежат в Supabase (finansist_answers, finansist_settings; RLS без политик — только через сервер),
+//   чтобы владелец с телефона и бухгалтер с компьютера видели одно и то же.
 //
 // Правила расхождений (то же описано на странице «Правила и цели»):
 //   bank — услуга (внедрение/интеграция/доработка) зачислена на счёт лицензий, или
 //          лицензия/абонплата/доп.лицензия — на счёт услуг. Считаем с 2026-01-01: раньше
 //          отдельного счёта услуг не было.
 //   dup  — два платежа одного клиента с одинаковой суммой и статьёй в пределах 3 дней.
-//   dec  — новый клиент (статья license) оплатил с 10-го числа и позже, а сумма внесена
-//          как за полные месяцы без правила декад (1–9 → 30 дней, 10–19 → 20, с 20-го → 10).
-//          Дата активации в KG не заполняется, поэтому берём дату оплаты.
+//   dec  — правило декад действует при каждой активации и каждом продлении (статьи license и
+//          subscription): оплата 1–9 числа → 30 дней, 10–19 → 20, с 20-го → 10. Помечаем оплаты
+//          с 10-го числа и позже, где сумма внесена как за полные месяцы. Это «проверить», не ошибка:
+//          у клиента мог быть остаток на балансе. Дата активации в KG не заполняется — берём дату оплаты.
 //
 // Расходы (Google Sheets) сюда не приходят — их фронт берёт своим путём через /api/sheets
 // с правом view_expenses и складывает с этими цифрами.
 
-import { sbSelect, sbSelectAll } from './_supabase.js';
+import { sbSelect, sbSelectAll, sbUpsert } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 import { requirePerm } from './_perm.js';
+import { callerName } from './_caller.js';
 import { almatyIso } from './_dates.js'; // «сегодня» по Бишкеку, не по UTC (ловушка toISOString)
 
 export const config = { maxDuration: 60 };
@@ -30,6 +36,7 @@ const SERVICE_CATS = ['implementation', 'integration', 'revision'];
 const LICENSE_CATS = ['subscription', 'license', 'extra'];
 const BANK_RULE_FROM = '2026-01-01';
 const DUP_WINDOW_DAYS = 3;
+const DECADE_CATS = ['license', 'subscription']; // доп. лицензии (extra) выравниваются по сроку и под правило не попадают
 
 export const BANK_LABELS = {
   license: 'М-банк лицензии',
@@ -111,9 +118,9 @@ function findDisputes(all, range) {
     }
   });
 
-  // не по декаде
+  // не по декаде — каждая активация и каждое продление
   all.forEach(p => {
-    if (p.category !== 'license') return;
+    if (!DECADE_CATS.includes(p.category)) return;
     const qty = num(p.qty), price = num(p.price), months = num(p.period_months), amount = num(p.amount);
     if (qty <= 0 || price <= 0 || months <= 0 || amount <= 0) return;
     const day = dayOf(p.paid_at);
@@ -122,7 +129,7 @@ function findDisputes(all, range) {
     if (Math.abs(amount - full) >= 1) return;
     const dd = decadeDays(day);
     const expected = Math.round(qty * price * (months - 1 + dd / 30));
-    push(p.id, 'dec', 'по декаде ' + dd + ' дн., ожидалось ' + expected + ', внесено за полные месяцы');
+    push(p.id, 'dec', 'проверить: по декаде ' + dd + ' дн., ожидалось ' + expected + ', внесено за полные месяцы (мог быть остаток на балансе)');
   });
 
   const list = all
@@ -159,6 +166,7 @@ export default async function handler(req, res) {
   if (!checkAuth(req, res)) return;
   const gate = await requirePerm(req, res, 'view_finansist');
   if (!gate.ok) return;
+  if (req.method === 'POST') return handlePost(req, res, gate.caller);
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'method not allowed' });
 
   try {
@@ -167,7 +175,7 @@ export default async function handler(req, res) {
     const range = monthRange(pm.y, pm.mo);
     const prev = monthRange(shiftMonth(pm.y, pm.mo, -1).y, shiftMonth(pm.y, pm.mo, -1).mo);
 
-    const [payments, clients, churnRows, licRows, licPeriods, employees] = await Promise.all([
+    const [payments, clients, churnRows, licRows, licPeriods, employees, answers, settingsRows] = await Promise.all([
       sbSelectAll('payments', {
         country: 'eq.' + COUNTRY,
         select: 'id,paid_at,company_name,client_id,category,category_raw,amount,qty,price,period_months,bank,manager_name,source,created_by,created_at',
@@ -182,6 +190,8 @@ export default async function handler(req, res) {
       sbSelectAll('churn_license_changes', { country: 'eq.' + COUNTRY, period_month: 'eq.' + range.from, select: 'period_month,company_key,license_type,m1_count,m2_count,diff' }),
       sbSelectAll('churn_license_changes', { country: 'eq.' + COUNTRY, select: 'period_month' }), // только даты выгрузок — для подсказки «есть за …»
       sbSelect('employees', { active: 'eq.true', select: 'name,pos,role,country,email', order: 'name', limit: '200' }),
+      sbSelect('finansist_answers', { country: 'eq.' + COUNTRY, month: 'eq.' + range.key, select: 'question_id,answer_idx,answer_text,answered_by,answered_by_name,answered_at', limit: '200' }),
+      sbSelect('finansist_settings', { key: 'eq.' + BALANCE_KEY, limit: '1' }),
     ]);
 
     const inRange = (p, r) => p.paid_at >= r.from && p.paid_at <= r.to;
@@ -327,9 +337,58 @@ export default async function handler(req, res) {
       team: Object.values(team).sort((a, b) => b.revenue - a.revenue),
       churn,
       cash,
+      answers,
+      settings: { balance: settingsRows.length ? Object.assign({}, settingsRows[0].value, { updated_by: settingsRows[0].updated_by, updated_by_name: settingsRows[0].updated_by_name, updated_at: settingsRows[0].updated_at }) : null },
     });
   } catch (e) {
     console.error('[api/finansist] error:', e);
+    return res.status(500).json({ ok: false, error: e.message || String(e) });
+  }
+}
+
+const BALANCE_KEY = 'balance_' + COUNTRY;
+
+async function readBody(req) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  return new Promise((resolve) => {
+    let chunks = '';
+    req.on('data', c => chunks += c);
+    req.on('end', () => { try { resolve(JSON.parse(chunks || '{}')); } catch { resolve({}); } });
+  });
+}
+
+// Отметки владельца/бухгалтера. Оплаты не трогаем — только запоминаем ответ и кто его дал.
+async function handlePost(req, res, caller) {
+  const action = String(req.query.action || '');
+  const body = await readBody(req);
+  const who = caller.email;
+  const whoName = callerName(req) || null;
+  try {
+    if (action === 'answer') {
+      const month = parseMonth(body.month) ? String(body.month) : null;
+      const qid = String(body.question_id || '').trim();
+      const idx = parseInt(body.answer_idx, 10);
+      if (!month || !qid || isNaN(idx)) return res.status(400).json({ ok: false, error: 'нужны month, question_id, answer_idx' });
+      const rows = await sbUpsert('finansist_answers', {
+        country: COUNTRY, month, question_id: qid, answer_idx: idx,
+        answer_text: body.answer_text ? String(body.answer_text).slice(0, 500) : null,
+        answered_by: who, answered_by_name: whoName, answered_at: new Date().toISOString(),
+      }, 'country,month,question_id');
+      return res.status(200).json({ ok: true, answer: rows[0] || null });
+    }
+    if (action === 'balance') {
+      const bal = body.balance == null || body.balance === '' ? null : Number(body.balance);
+      if (bal != null && !isFinite(bal)) return res.status(400).json({ ok: false, error: 'balance должен быть числом' });
+      const rows = await sbUpsert('finansist_settings', {
+        key: BALANCE_KEY, value: { balance: bal, entered_at: todayIso() },
+        updated_by: who, updated_by_name: whoName, updated_at: new Date().toISOString(),
+      }, 'key');
+      const r = rows[0] || {};
+      return res.status(200).json({ ok: true, balance: Object.assign({}, r.value, { updated_by: r.updated_by, updated_by_name: r.updated_by_name, updated_at: r.updated_at }) });
+    }
+    return res.status(400).json({ ok: false, error: 'неизвестное действие' });
+  } catch (e) {
+    console.error('[api/finansist] post error:', e);
     return res.status(500).json({ ok: false, error: e.message || String(e) });
   }
 }
