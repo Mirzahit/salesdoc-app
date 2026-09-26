@@ -9,6 +9,9 @@
 // POST ?action=missing_fill   { id, amount } → бухгалтер внесла сумму (учитывается в расчётах, пока в таблице нет настоящей строки)
 // POST ?action=missing_ignore { id }      → «такой статьи в этом месяце нет»
 // GET  ?action=spend                      → расход на API сегодня и лимит
+// GET  ?action=prepaid                    → предоплаченные расходы (app_settings.finansist_prepaid)
+// POST ?action=prepaid_add { label, item_key, amount, start:'YYYY-MM', months }  → добавить
+// POST ?action=prepaid_del { id }         → убрать
 
 import { checkAuth } from './_auth.js';
 import { requirePerm } from './_perm.js';
@@ -50,6 +53,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, month, items: r.items, check: r.check, incomplete: r.incomplete });
       }
       if (action === 'spend') return res.status(200).json({ ok: true, limit: await limitState() });
+      if (action === 'prepaid') return res.status(200).json({ ok: true, items: await C.loadPrepaid() });
       return res.status(400).json({ ok: false, error: 'неизвестное действие' });
     }
     if (req.method === 'POST') {
@@ -71,6 +75,28 @@ export default async function handler(req, res) {
         if (!body.id || isNaN(idx)) return res.status(400).json({ ok: false, error: 'нужны id и idx' });
         await answerQuestion(String(body.id), idx, caller);
         return res.status(200).json({ ok: true });
+      }
+      if (action === 'prepaid_add') {
+        const label = String(body.label || '').trim().slice(0, 80);
+        const amount = Number(String(body.amount == null ? '' : body.amount).replace(/\s/g, '').replace(',', '.'));
+        const months = parseInt(body.months, 10);
+        const start = String(body.start || '').slice(0, 7);
+        const itemKey = body.item_key && C.EXPECTED_ITEMS.some(i => i.key === body.item_key) ? String(body.item_key) : null;
+        if (!label) return res.status(400).json({ ok: false, error: 'укажите статью' });
+        if (!isFinite(amount) || amount <= 0) return res.status(400).json({ ok: false, error: 'сумма должна быть больше нуля' });
+        if (!months || months < 2 || months > 36) return res.status(400).json({ ok: false, error: 'срок — от 2 до 36 месяцев' });
+        if (!C.parseMonth(start)) return res.status(400).json({ ok: false, error: 'месяц начала в формате YYYY-MM' });
+        const items = await C.loadPrepaid();
+        const e = { id: 'pp-' + Date.now().toString(36), label, item_key: itemKey, amount, start, months, added_by: caller.email, added_by_name: caller.name, added_at: new Date().toISOString() };
+        items.push(e); await C.savePrepaid(items);
+        await C.saveDecision('prepaid:' + e.id, label + ' — предоплата ' + Math.round(amount) + ' сом за ' + months + ' мес. с ' + C.monthLabel(start) + ', в месяц ' + Math.round(amount / months) + ' сом', 'question', start, caller.email, caller.name);
+        return res.status(200).json({ ok: true, item: e, items });
+      }
+      if (action === 'prepaid_del') {
+        const items = await C.loadPrepaid(); const left = items.filter(e => e.id !== String(body.id || ''));
+        if (left.length === items.length) return res.status(404).json({ ok: false, error: 'запись не найдена' });
+        await C.savePrepaid(left);
+        return res.status(200).json({ ok: true, items: left });
       }
       if (action === 'missing_fill' || action === 'missing_ignore') {
         if (!body.id) return res.status(400).json({ ok: false, error: 'нужен id' });

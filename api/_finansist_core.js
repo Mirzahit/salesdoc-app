@@ -191,9 +191,41 @@ export async function loadManualRows(monthKeys) {
   return out;
 }
 export async function loadExpenses(monthKeys, opts) {
-  const [snaps, manual] = await Promise.all([Promise.all(monthKeys.map(k => loadExpenseMonth(k, opts))), loadManualRows(monthKeys)]);
+  const [snaps, manual, prepaid] = await Promise.all([Promise.all(monthKeys.map(k => loadExpenseMonth(k, opts))), loadManualRows(monthKeys), loadPrepaid()]);
   const byMonth = {};
   snaps.forEach(s => { byMonth[s.month] = { available: s.available, fetched_at: s.fetched_at, stale: !!s.stale, rows: (s.rows || []).concat(manual[s.month] || []) }; });
+  applyPrepaid(byMonth, prepaid);
+  return byMonth;
+}
+
+// ---------- предоплаченные расходы (CEO 27.09.2026: amoCRM 37 430 за 6 мес. = ~6 238 в месяц) ----------
+// Список — в app_settings.finansist_prepaid.items: { id, label, item_key|null, amount, start:'YYYY-MM', months, added_by, added_at }.
+// Правило: строка самой оплаты в месяце start из расходов убирается, вместо неё в каждый месяц срока
+// кладётся равная доля (source='prepaid'). Обязательная статья в эти месяцы считается закрытой.
+export async function loadPrepaid() {
+  try { const r = await sbSelect('app_settings', { key: 'eq.finansist_prepaid', limit: '1' }); return ((r[0] && r[0].value && r[0].value.items) || []).filter(e => e && e.amount > 0 && e.months > 0 && parseMonth(e.start)); } catch (_) { return []; }
+}
+export async function savePrepaid(items) {
+  await sbUpsert('app_settings', { key: 'finansist_prepaid', value: { items }, updated_at: new Date().toISOString() }, 'key');
+  return items;
+}
+export function prepaidEnd(e) { return shiftMonthKey(e.start, e.months - 1); }
+export function prepaidShare(e) { return Math.round(num(e.amount) / num(e.months) * 100) / 100; }
+export function applyPrepaid(byMonth, prepaid) {
+  (prepaid || []).forEach(e => {
+    const item = e.item_key ? EXPECTED_ITEMS.find(i => i.key === e.item_key) : null;
+    const share = prepaidShare(e);
+    const end = prepaidEnd(e);
+    Object.keys(byMonth).forEach(k => {
+      const m = byMonth[k]; if (!m) return;
+      if (k === e.start) {
+        // сама оплата: та же статья (или любая, если статья не задана) и сумма ±1% — убираем, вместо неё доля
+        m.rows = (m.rows || []).filter(r => !(r.source === 'sheet' && Math.abs(num(r.amount) - num(e.amount)) <= Math.max(1, num(e.amount) * 0.01) && (!item || itemMatches(item, r))));
+      }
+      if (k < e.start || k > end || !m.available) return;
+      m.rows = (m.rows || []).concat([{ id: 'prepaid:' + e.id + ':' + k, date: k + '-01', category: e.label, note: 'предоплата ' + round(e.amount) + ' сом за ' + e.months + ' мес. (' + monthLabel(e.start) + ' – ' + monthLabel(end) + '), доля месяца', amount: share, bank: e.bank || '', source: 'prepaid', item_key: e.item_key || null, prepaid_id: e.id }]);
+    });
+  });
   return byMonth;
 }
 export function expenseRows(byMonth, monthKey) { const m = byMonth[monthKey]; if (!m || !m.available) return null; const rows = m.rows.filter(e => !isTransfer(e)); return rows.length ? rows : null; }
@@ -331,19 +363,33 @@ export function cashForecast(base, days) {
 function median(arr) { const a = arr.slice().sort((x, y) => x - y); if (!a.length) return null; const m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; }
 // Проверка месяца: по каждой обязательной статье — нашлись ли строки в таблице, сколько, и как это соотносится
 // с медианой трёх прошлых месяцев, где данные были. Ручные суммы (source='manual') сюда не считаются как «настоящие».
+// Когда проверка не имеет смысла: месяца в таблице нет вовсе (другой год, лист пуст) — «нет данных», а не
+// «всё отсутствует»; текущий месяц до 20-го числа — статьи ещё могут быть просто не внесены («рано»).
+export const MISSING_CHECK_FROM_DAY = 20;
+export function missingCheckMode(byMonth, monthKey) {
+  const m = byMonth[monthKey];
+  if (!m || !m.available || !(m.rows || []).some(r => r.source === 'sheet')) return 'no_data';
+  if (monthKey === currentMonthKey() && parseInt(bishkekIso().slice(8, 10), 10) < MISSING_CHECK_FROM_DAY) return 'early';
+  return 'full';
+}
 export function checkMissing(byMonth, monthKey) {
   const prevKeys = [1, 2, 3, 4, 5, 6].map(k => shiftMonthKey(monthKey, -k));
+  const mode = missingCheckMode(byMonth, monthKey);
   const items = EXPECTED_ITEMS.map(item => {
     const cur = ((byMonth[monthKey] && byMonth[monthKey].rows) || []).filter(e => e.source !== 'manual' && itemMatches(item, e));
     const found = cur.reduce((a, e) => a + num(e.amount), 0);
+    const prepaid = cur.some(e => e.source === 'prepaid'); // доля предоплаты — сумма известна по построению, сравнивать не с чем
     const prev = [];
     prevKeys.forEach(k => { const m = byMonth[k]; if (!m || !m.available || prev.length >= 3) return; const s = m.rows.filter(e => e.source !== 'manual' && itemMatches(item, e)).reduce((a, e) => a + num(e.amount), 0); if (s > 0) prev.push({ month: k, sum: s }); });
     const med = median(prev.map(p => p.sum));
     let status = 'ok';
-    if (!cur.length) status = 'missing';
+    if (mode === 'no_data') status = 'no_data';
+    else if (!cur.length) status = mode === 'early' ? 'early' : 'missing';
+    else if (prepaid) status = 'ok';
     else if (!item.no_odd && med && Math.abs(found - med) / med > ODD_THRESHOLD) status = 'odd';
-    return { item_key: item.key, item_label: item.label, status, found_amount: found, found_rows: cur.map(e => ({ date: e.date, category: e.category, note: e.note, amount: e.amount })), expected_amount: med, prev, how: item.how };
+    return { item_key: item.key, item_label: item.label, status, prepaid, found_amount: found, found_rows: cur.map(e => ({ date: e.date, category: e.category, note: e.note, amount: e.amount, source: e.source })), expected_amount: med, prev, how: item.how };
   });
+  items.mode = mode;
   return items;
 }
 // Синхронизация с таблицей finansist_missing_data. Возвращает актуальный список и что изменилось
@@ -356,12 +402,13 @@ export async function syncMissing(byMonth, monthKey) {
   const now = new Date().toISOString();
   for (const it of found) {
     const ex = exMap[it.item_key];
+    if (it.status === 'no_data' || it.status === 'early') continue; // рано судить — ничего не заводим и не закрываем
     const note = it.status === 'missing'
       ? 'В таблице расходов за ' + monthLabel(monthKey) + ' нет строки «' + it.item_label + '». Спросить у Гульшан сумму' + (it.expected_amount ? ' (обычно около ' + round(it.expected_amount) + ' сом)' : '') + '.'
       : it.status === 'odd' ? '«' + it.item_label + '» за ' + monthLabel(monthKey) + ': ' + round(it.found_amount) + ' сом, обычно около ' + round(it.expected_amount) + ' сом. Уточнить у Гульшан, всё ли внесено.' : null;
     if (it.status === 'ok') {
       if (!ex) continue;
-      if (ex.status === 'filled') { await sbUpdate('finansist_missing_data', { id: 'eq.' + ex.id }, { status: 'superseded', found_amount: it.found_amount, note: 'В таблице появилась настоящая строка «' + it.item_label + '» на ' + round(it.found_amount) + ' сом — ручная сумма ' + round(ex.amount) + ' сом больше не учитывается.', updated_at: now }); changes.push({ type: 'superseded', item: it, prev: ex }); }
+      if (ex.status === 'filled') { await sbUpdate('finansist_missing_data', { id: 'eq.' + ex.id }, { status: 'superseded', found_amount: it.found_amount, note: (it.prepaid ? 'Статья «' + it.item_label + '» закрыта предоплатой (' + round(it.found_amount) + ' сом в месяц)' : 'В таблице появилась настоящая строка «' + it.item_label + '» на ' + round(it.found_amount) + ' сом') + ' — ручная сумма ' + round(ex.amount) + ' сом больше не учитывается.', updated_at: now }); changes.push({ type: 'superseded', item: it, prev: ex }); }
       else if (ex.status === 'missing' || ex.status === 'odd') { await sbDelete('finansist_missing_data', { id: 'eq.' + ex.id }); changes.push({ type: 'resolved', item: it, prev: ex }); }
       continue;
     }
@@ -373,7 +420,7 @@ export async function syncMissing(byMonth, monthKey) {
     if (ex.status !== it.status || round(ex.found_amount) !== round(it.found_amount)) { await sbUpdate('finansist_missing_data', { id: 'eq.' + ex.id }, { status: it.status, expected_amount: it.expected_amount, found_amount: it.found_amount, note, updated_at: now }); }
   }
   const rows = await sbSelect('finansist_missing_data', { country: 'eq.' + COUNTRY, month: 'eq.' + monthKey, order: 'item_key', limit: '100' });
-  return { items: rows, check: found, changes, incomplete: rows.some(r => r.status === 'missing' || r.status === 'odd') };
+  return { items: rows, check: found, mode: found.mode, changes, incomplete: rows.some(r => r.status === 'missing' || r.status === 'odd') };
 }
 
 // ---------- решения ----------
@@ -384,7 +431,7 @@ export async function saveDecision(key, text, source, month, who, whoName) {
 }
 
 // ---------- расход на API: дневной лимит ----------
-const DEFAULT_DAILY_LIMIT_USD = 10;
+const DEFAULT_DAILY_LIMIT_USD = 2; // CEO 27.09.2026: агент — один отчёт в день, не постоянные разговоры
 export async function getAgentLimits() {
   try { const r = await sbSelect('app_settings', { key: 'eq.finansist_agent_limits', limit: '1' }); const v = (r[0] && r[0].value) || {}; return { daily_usd: num(v.daily_usd) || DEFAULT_DAILY_LIMIT_USD }; } catch (_) { return { daily_usd: DEFAULT_DAILY_LIMIT_USD }; }
 }

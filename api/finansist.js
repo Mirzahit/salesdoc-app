@@ -45,12 +45,13 @@ export default async function handler(req, res) {
     const expKeys = monthKeys.indexOf(prevNowKey) < 0 ? monthKeys.concat([prevNowKey]) : monthKeys;
 
     const base = await C.loadBase();
-    const [expByMonth, churn, questions, settingsRows, agentLimit] = await Promise.all([
+    const [expByMonth, churn, questions, settingsRows, agentLimit, prepaid] = await Promise.all([
       C.loadExpenses(expKeys),
       C.churnForMonth(base, range),
       sbSelect('finansist_questions', { country: 'eq.' + C.COUNTRY, month: 'eq.' + range.key, order: 'created_at.desc', limit: '300' }),
       sbSelect('finansist_settings', { key: 'eq.' + BALANCE_KEY, limit: '1' }),
       limitState().catch(() => null),
+      C.loadPrepaid(),
     ]);
     const missing = await C.syncMissing(expByMonth, range.key);
 
@@ -110,8 +111,9 @@ export default async function handler(req, res) {
       team,
       churn, cash,
       expenses: expensesOut,
-      missing: { items: missing.items, incomplete: missing.incomplete },
+      missing: { items: missing.items, incomplete: missing.incomplete, mode: missing.mode },
       questions,
+      prepaid: prepaid.map(e => Object.assign({}, e, { end: C.prepaidEnd(e), per_month: C.prepaidShare(e) })),
       settings: { balance: settingsRows.length ? Object.assign({}, settingsRows[0].value, { updated_by: settingsRows[0].updated_by, updated_by_name: settingsRows[0].updated_by_name, updated_at: settingsRows[0].updated_at }) : null },
       agent: agentLimit,
     });

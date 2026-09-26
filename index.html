@@ -8221,7 +8221,7 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
 .fz-ph .sp{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
 .fz-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--fz-line);background:var(--fz-surface);border-radius:7px;padding:6px 12px;font-size:13px;font-weight:500;color:var(--fz-ink2);line-height:1.3;text-decoration:none}
 .fz-btn:hover{border-color:var(--fz-muted)}
-.fz .fz-btn.pri,.fz td .fz-btn.pri{background:var(--fz-accent)!important;border-color:var(--fz-accent)!important;color:var(--fz-accent-ink)!important} /* глобальные стили кнопок в таблицах перекрашивали её в белое */
+#fz-root .fz-btn.pri,#fz-root td .fz-btn.pri{background:var(--fz-accent)!important;border-color:var(--fz-accent)!important;color:var(--fz-accent-ink)!important} /* глобальные стили кнопок в таблицах перекрашивали её в белое */
 .fz-btn svg.i{width:15px;height:15px}
 .fz-panel{background:var(--fz-surface);border:1px solid var(--fz-line);border-radius:9px;min-width:0}
 .fz-panel-h{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--fz-line2)}
@@ -11064,6 +11064,21 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
       <tbody id="fz-missing-body"></tbody>
      </table></div>
     </div>
+    <div class="fz-panel fz-mb" id="fz-prepaid-panel">
+     <div class="fz-panel-h"><h2>Предоплаченные расходы</h2><span>оплата за несколько месяцев вперёд делится на срок равными частями; в конце срока агент напомнит</span></div>
+     <div class="fz-tw"><table>
+      <thead><tr><th>Статья</th><th class="r">Оплачено</th><th>Срок</th><th class="r">В месяц</th><th></th></tr></thead>
+      <tbody id="fz-prepaid-body"></tbody>
+     </table></div>
+     <div class="fz-toolbar" id="fz-prepaid-form" style="border-top:1px solid var(--fz-line2);border-bottom:0">
+      <div class="fz-dd" data-fz-pp="item"><button class="fz-dd-btn" type="button">Статья</button><div class="fz-dd-menu"></div></div>
+      <input id="fz-pp-label" placeholder="Название, если другое" aria-label="Название" autocomplete="off" style="flex:1;min-width:140px">
+      <input id="fz-pp-amount" class="fz-minp" placeholder="сумма" inputmode="numeric" aria-label="Сумма">
+      <input id="fz-pp-start" class="fz-minp" placeholder="2026-08" aria-label="Месяц начала" style="width:90px">
+      <input id="fz-pp-months" class="fz-minp" placeholder="мес." inputmode="numeric" aria-label="Срок в месяцах" style="width:64px">
+      <button class="fz-btn pri" id="fz-pp-add" type="button">Добавить</button>
+     </div>
+    </div>
     <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Открытые</h2><span id="fz-q-open-sub"></span></div><div class="fz-qlist" id="fz-q-full"></div></div>
     <div class="fz-panel"><div class="fz-panel-h"><h2>Отвеченные</h2><span id="fz-q-done-sub"></span></div><div class="fz-qlist" id="fz-q-done"></div></div>
    </section>
@@ -11182,7 +11197,7 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
      <div class="fz-tw"><table>
       <thead><tr><th>Показатель</th><th class="r">Сейчас</th><th class="r">Цель</th></tr></thead>
       <tbody id="fz-goals-body"></tbody></table></div></div>
-    <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Обязательные статьи месяца</h2><span>так агент ищет недостающие данные: нет строки — «нет», отличие от обычного больше чем на 40% — «проверить»</span></div>
+    <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Обязательные статьи месяца</h2><span>нет строки — «нет», отличие от обычного больше чем на 40% — «проверить»; текущий месяц проверяется с 20-го числа; статья, закрытая предоплатой, считается на месте</span></div>
      <div class="fz-tw"><table>
       <thead><tr><th>Статья</th><th>Какие строки таблицы считаются этой статьёй</th></tr></thead>
       <tbody id="fz-expected-body"></tbody></table></div></div>
@@ -11193,6 +11208,7 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
        <tr><td>Статьи «ЗП», «Бонусы», «Отпускные», «Аванс»</td><td class="wrap">зарплата человека по имени в примечании («Аванс Малика» — Малика)</td></tr>
        <tr><td>Статья «Услуги», примечание начинается с «Гульшан»</td><td class="wrap">зарплата Гульшан (бухгалтер). Исходные строки таблицы не меняются</td></tr>
        <tr><td>Статья «Перенос»</td><td class="wrap">не расход</td></tr>
+       <tr><td>Предоплата за несколько месяцев (amoCRM и подобное)</td><td class="wrap">сама оплата из месяца убирается, вместо неё в каждый месяц срока кладётся равная доля; список — в «Вопросах агента», блок «Предоплаченные расходы»</td></tr>
       </tbody></table></div></div>
     <div class="fz-panel"><div class="fz-panel-h"><h2>Распределение общих расходов</h2><span>пока не применяется: логику задаст агент, общие расходы показаны отдельной строкой</span></div>
      <div class="fz-tw"><table>
@@ -46493,6 +46509,10 @@ function fzInit(){
    if (e.target.closest('#fz-q-refresh')) { fzRefreshQuestions(); return; }
    var mf = e.target.closest('[data-fz-mfill]'); if (mf) { fzMissingAct(mf.getAttribute('data-fz-mfill'), 'fill'); return; }
    var mi = e.target.closest('[data-fz-mign]'); if (mi) { fzMissingAct(mi.getAttribute('data-fz-mign'), 'ignore'); return; }
+   if (e.target.closest('#fz-pp-add')) { fzPrepaidAdd(); return; }
+   var pd = e.target.closest('[data-fz-ppdel]'); if (pd) { fzPrepaidDel(pd.getAttribute('data-fz-ppdel')); return; }
+   var ppb = e.target.closest('.fz-dd[data-fz-pp] .fz-dd-btn'); if (ppb) { var pdd = ppb.parentNode; var pwas = pdd.classList.contains('on'); root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); }); if (!pwas) pdd.classList.add('on'); return; }
+   var ppi = e.target.closest('.fz-dd[data-fz-pp] .fz-dd-menu button'); if (ppi) { _fz.ppItem = ppi.getAttribute('data-v') || ''; ppi.closest('.fz-dd').classList.remove('on'); fzRenderPrepaidForm(); return; }
    if (!e.target.closest('.fz-dd')) root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); });
   });
   document.addEventListener('click', function(e){ if (!root.contains(e.target)) root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); }); });
@@ -46544,7 +46564,7 @@ async function fzLoad(){
 // Ответы на вопросы и остаток по счетам — общие для владельца и бухгалтера, приходят с сервера
 function fzApplyServerState(r){
  _fz.expLoaded = true; // v1006: расходы в ответе сервера
- _fz.questions = r.questions || []; _fz.missing = (r.missing && r.missing.items) || []; _fz.agent = r.agent || null;
+ _fz.questions = r.questions || []; _fz.missing = (r.missing && r.missing.items) || []; _fz.missingMode = (r.missing && r.missing.mode) || 'full'; _fz.agent = r.agent || null; _fz.prepaid = r.prepaid || [];
  var b = r.settings && r.settings.balance;
  _fz.balance = (b && b.balance != null) ? +b.balance : null; _fz.balanceMeta = b || null;
  var inp = document.getElementById('fz-balance'); if (inp && document.activeElement !== inp) inp.value = _fz.balance == null ? '' : Math.round(_fz.balance).toLocaleString('ru-RU');
@@ -46636,7 +46656,7 @@ function fzRenderQuestions(){
  document.getElementById('fz-q-preview').innerHTML = open.length ? open.slice(0,2).map(fzQHtml).join('') : '<div class="fz-empty">Открытых вопросов нет.</div>';
  document.getElementById('fz-q-left').textContent = open.length + ' ' + fzPlural(open.length,'открыт','открыто','открыто');
  var b = document.getElementById('fz-nav-q'); b.textContent = open.length; b.style.display = open.length ? '' : 'none';
- fzRenderMissing();
+ fzRenderMissing(); fzRenderPrepaid();
 }
 function fzQuestionAnswer(id, j){
  var q = (_fz.questions || []).filter(function(x){ return x.id === id; })[0]; if (!q) return;
@@ -46655,11 +46675,11 @@ function fzRefreshQuestions(){
   .catch(function(e){ try { sdToast('Обход не удался: ' + (e && e.message || e), 'error'); } catch(_){} })
   .then(function(){ btn.disabled = false; btn.innerHTML = old; });
 }
-var FZ_MSTATUS = { missing:['bad','нет строки'], odd:['wr','сумма отличается'], filled:['ok','внесено вручную'], superseded:['mu','заменено строкой таблицы'], ignored:['mu','в этом месяце нет'] };
+var FZ_MSTATUS = { missing:['bad','нет строки'], odd:['wr','сумма отличается'], filled:['ok','внесено вручную'], superseded:['mu','заменено строкой таблицы'], ignored:['mu','в этом месяце нет'] }; // доли предоплат приходят как обычные строки расходов (source=prepaid)
 function fzRenderMissing(){
  var items = _fz.missing || []; var body = document.getElementById('fz-missing-body'); if (!body) return;
  var openN = items.filter(function(i){ return i.status === 'missing' || i.status === 'odd'; }).length;
- document.getElementById('fz-missing-sub').textContent = openN ? openN + ' ' + fzPlural(openN,'статья требует','статьи требуют','статей требуют') + ' внимания — прибыль за месяц неполная' : 'все обязательные статьи на месте';
+ document.getElementById('fz-missing-sub').textContent = _fz.missingMode === 'no_data' ? 'за этот месяц расходов в таблице нет — проверять нечего' : (_fz.missingMode === 'early' ? 'месяц ещё идёт — проверка отсутствующих статей с 20-го числа' : (openN ? openN + ' ' + fzPlural(openN,'статья требует','статьи требуют','статей требуют') + ' внимания — прибыль за месяц неполная' : 'все обязательные статьи на месте'));
  body.innerHTML = items.length ? items.map(function(i){
   var st = FZ_MSTATUS[i.status] || ['mu', i.status];
   var act = (i.status === 'missing' || i.status === 'odd')
@@ -46674,6 +46694,38 @@ function fzMissingAct(id, kind){
  sbFetch('/api/finansist-agent?action=' + (kind === 'fill' ? 'missing_fill' : 'missing_ignore'), { method:'POST', body: JSON.stringify(body) })
   .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось'); return fzLoad(); })
   .catch(function(e){ try { sdToast('Не сохранилось: ' + (e && e.message || e), 'error'); } catch(_){} });
+}
+
+// ---------- предоплаченные расходы ----------
+function fzRenderPrepaidForm(){
+ var dd = document.querySelector('#fz-root .fz-dd[data-fz-pp="item"]'); if (!dd) return;
+ var items = ((_fz.data && _fz.data.meta && _fz.data.meta.expected_items) || []).map(function(i){ return { v:i.key, l:i.label }; }).concat([{ v:'other', l:'Другое' }]);
+ var cur = _fz.ppItem || ''; var sel = items.filter(function(i){ return i.v === cur; })[0];
+ dd.querySelector('.fz-dd-btn').textContent = sel ? sel.l : 'Статья';
+ dd.querySelector('.fz-dd-menu').innerHTML = items.map(function(i){ return '<button type="button" data-v="' + fzEsc(i.v) + '" aria-selected="' + (i.v === cur ? 'true' : 'false') + '">' + fzEsc(i.l) + '</button>'; }).join('');
+ var lab = document.getElementById('fz-pp-label'); if (lab) lab.style.display = (cur && cur !== 'other') ? 'none' : '';
+}
+function fzRenderPrepaid(){
+ var body = document.getElementById('fz-prepaid-body'); if (!body) return;
+ var items = _fz.prepaid || [];
+ body.innerHTML = items.length ? items.map(function(e){ return '<tr><td>' + fzEsc(e.label) + '<span class="sub">добавил ' + fzEsc(e.added_by_name || e.added_by || '') + '</span></td><td class="r">' + fzMoney(e.amount) + '</td><td>' + fzEsc(FZ_MONTHS[+e.start.slice(5,7)-1].toLowerCase() + ' ' + e.start.slice(0,4) + ' – ' + FZ_MONTHS[+e.end.slice(5,7)-1].toLowerCase() + ' ' + e.end.slice(0,4)) + '<span class="sub">' + e.months + ' ' + fzPlural(e.months,'месяц','месяца','месяцев') + '</span></td><td class="r">' + fzMoney(e.per_month) + '</td><td><button class="fz-btn" data-fz-ppdel="' + fzEsc(e.id) + '">Убрать</button></td></tr>'; }).join('')
+  : '<tr><td colspan="5" class="muted">Предоплат пока нет. Добавьте ниже: статья, сумма, месяц первой оплаты, срок.</td></tr>';
+ var st = document.getElementById('fz-pp-start'); if (st && !st.value) st.value = fzMonthKey(_fz.month);
+ fzRenderPrepaidForm();
+}
+function fzPrepaidAdd(){
+ var item = _fz.ppItem || ''; var exp = ((_fz.data && _fz.data.meta && _fz.data.meta.expected_items) || []).filter(function(i){ return i.key === item; })[0];
+ var label = exp ? exp.label : String(document.getElementById('fz-pp-label').value || '').trim();
+ var body = { label: label, item_key: exp ? exp.key : null, amount: document.getElementById('fz-pp-amount').value, start: document.getElementById('fz-pp-start').value.trim(), months: document.getElementById('fz-pp-months').value };
+ if (!label) { try { sdToast('Выберите статью или напишите название', 'error'); } catch(_){} return; }
+ sbFetch('/api/finansist-agent?action=prepaid_add', { method:'POST', body: JSON.stringify(body) })
+  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось'); document.getElementById('fz-pp-amount').value = ''; document.getElementById('fz-pp-months').value = ''; document.getElementById('fz-pp-label').value = ''; _fz.ppItem = ''; return fzLoad(); })
+  .catch(function(e){ try { sdToast('Не сохранилось: ' + (e && e.message || e), 'error'); } catch(_){} });
+}
+function fzPrepaidDel(id){
+ sbFetch('/api/finansist-agent?action=prepaid_del', { method:'POST', body: JSON.stringify({ id: id }) })
+  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не удалилось'); return fzLoad(); })
+  .catch(function(e){ try { sdToast('Не удалилось: ' + (e && e.message || e), 'error'); } catch(_){} });
 }
 
 // ---------- чат с агентом ----------
@@ -46694,7 +46746,7 @@ function fzChatRender(msgs){
  }).join('') : '<div class="fz-empty" id="fz-msgs-empty">Спросите про выручку, расходы, прибыль, людей или отток за любой период. Каждая цифра — из базы.</div>';
  if (_fz.chatBusy) box.insertAdjacentHTML('beforeend', '<div class="fz-typing">считаю…</div>');
  box.scrollTop = box.scrollHeight;
- var lim = _fz.agent; var sub = document.getElementById('fz-agent-sub'); if (sub && lim) sub.textContent = lim.exhausted ? 'дневной лимит исчерпан' : ('сегодня ' + (lim.spent_usd || 0).toFixed(2) + ' $ из ' + lim.daily_usd + ' $');
+ var lim = _fz.agent; var sub = document.getElementById('fz-agent-sub'); if (sub && lim) sub.textContent = lim.exhausted ? 'дневной лимит исчерпан' : ((lim.near ? 'лимит почти исчерпан · ' : 'сегодня ') + (lim.spent_usd || 0).toFixed(2) + ' $ из ' + lim.daily_usd + ' $');
 }
 var FZ_TOOL_RU = { get_summary:'сводка', get_payments:'оплаты', get_expenses:'расходы', get_team:'команда', get_disputes:'спорные', get_churn:'отток', get_client:'клиент', get_cash:'касса', get_missing_data:'недостающие', get_decisions:'решения', compare_periods:'сравнение', ask_question:'вопрос', note_missing_data:'пометка', record_decision:'решение' };
 function fzChatLoad(){
@@ -46706,7 +46758,7 @@ function fzChatSend(text){
  _fz.chat.push({ role:'user', content:text, author_email:(typeof currentUser !== 'undefined' && currentUser && currentUser.email) || '', author_name:(typeof currentUser !== 'undefined' && currentUser && currentUser.name) || '', created_at:new Date().toISOString() });
  _fz.chatBusy = true; fzChatRender(_fz.chat);
  sbFetch('/api/finansist-agent?action=chat', { method:'POST', body: JSON.stringify({ text: text }) })
-  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'нет ответа'); if (r.reply) _fz.chat.push(r.reply); if (r.limit) _fz.agent = Object.assign({}, _fz.agent || {}, r.limit, { exhausted: r.limit.spent_usd >= r.limit.daily_usd }); })
+  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'нет ответа'); if (r.reply) _fz.chat.push(r.reply); if (r.limit) _fz.agent = Object.assign({}, _fz.agent || {}, r.limit, { exhausted: r.limit.spent_usd >= r.limit.daily_usd, near: r.limit.spent_usd >= r.limit.daily_usd * 0.7 }); })
   .catch(function(e){ _fz.chat.push({ role:'assistant', content:'Не получилось ответить: ' + (e && e.message || e), created_at:new Date().toISOString() }); })
   .then(function(){ _fz.chatBusy = false; fzChatRender(_fz.chat); if (_fz.data) fzLoad(); });
 }

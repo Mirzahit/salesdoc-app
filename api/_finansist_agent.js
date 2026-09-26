@@ -1,8 +1,8 @@
 // v1006 «Финансист»: мозг вкладки. Claude через API Anthropic, только с сервера.
 //
-// Ключ: ANTHROPIC_API_KEY_FINANSIST (отдельный, чтобы видеть расход агента), запасной — ANTHROPIC_API_KEY.
+// Ключ: только ANTHROPIC_API_KEY_FINANSIST (CEO 27.09.2026: без него агент честно пишет, что не подключён; запасного ключа нет).
 // Модель: claude-opus-5-5. Дневной лимит расходов — app_settings.finansist_agent_limits.daily_usd
-// (по умолчанию 10 $): при превышении агент не зовёт модель, а отвечает, что лимит исчерпан.
+// (по умолчанию 2 $): при 70% лимита агент предупреждает и отвечает коротко, при превышении модель не зовёт.
 //
 // Инструменты — только чтение рабочих таблиц через _finansist_core (страна KG зашита, период обязателен
 // и не длиннее 400 дней, выборки ≤ 200 строк). Писать агент может только в свои таблицы:
@@ -21,9 +21,10 @@ import * as C from './_finansist_core.js';
 export const MODEL = 'claude-opus-5-5';
 const PRICE = { input: 4, output: 20, cache_read: 0.2, cache_write: 5 }; // $ за 1M токенов
 const MAX_ROUNDS = 8;
+const NEAR_LIMIT_SHARE = 0.7; // с этой доли лимита — короткие ответы и предупреждение
 const HISTORY_MESSAGES = 12;
 
-function apiKey() { return (process.env.ANTHROPIC_API_KEY_FINANSIST || process.env.ANTHROPIC_API_KEY || '').trim(); }
+function apiKey() { return (process.env.ANTHROPIC_API_KEY_FINANSIST || '').trim(); }
 let _client = null;
 export function client() { if (!apiKey()) throw new Error('Не задан ключ ANTHROPIC_API_KEY_FINANSIST'); if (!_client) _client = new Anthropic({ apiKey: apiKey(), maxRetries: 2, timeout: 120000 }); return _client; }
 
@@ -45,7 +46,7 @@ function agentConfig() {
 export async function limitState() {
   const day = C.bishkekIso();
   const [lim, sp] = await Promise.all([C.getAgentLimits(), C.getSpend(day)]);
-  return { day, daily_usd: lim.daily_usd, spent_usd: sp.usd, exhausted: sp.usd >= lim.daily_usd };
+  return { day, daily_usd: lim.daily_usd, spent_usd: sp.usd, exhausted: sp.usd >= lim.daily_usd, near: sp.usd >= lim.daily_usd * NEAR_LIMIT_SHARE };
 }
 export function limitMessage(st) { return 'Дневной лимит расходов на агента исчерпан: ' + st.spent_usd.toFixed(2) + ' $ из ' + st.daily_usd + ' $. Завтра продолжим. Цифры на странице считаются без меня и остаются актуальными.'; }
 
@@ -61,6 +62,7 @@ export const TOOLS = [
   { name: 'get_client', description: 'Карточка клиента по части названия: статус, даты биллинга, куратор, последние 12 оплат.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'], additionalProperties: false }, strict: true },
   { name: 'get_cash', description: 'Касса: введённый остаток, средние поступления в день за 90 дней, ожидаемые продления, просрочка, расходы по образцу прошлого месяца.', input_schema: { type: 'object', properties: { days: { type: ['integer', 'null'], description: '7–90, по умолчанию 30' } }, required: ['days'], additionalProperties: false }, strict: true },
   { name: 'get_missing_data', description: 'Обязательные статьи месяца (аренда, amo, реклама, телефония, WhatsApp, вода, такси, сим-карты): что найдено, чего нет, что резко отличается, что внесено вручную.', input_schema: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' } }, required: ['month'], additionalProperties: false }, strict: true },
+  { name: 'get_prepaid', description: 'Предоплаченные расходы (например amoCRM за 6 месяцев): сумма, срок, доля в месяц. Такие оплаты в расходах разнесены равными долями по месяцам срока.', input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false }, strict: true },
   { name: 'get_decisions', description: 'Прошлые решения владельца и бухгалтера (ответы на вопросы и договорённости из чата). Не задавать вопросы, на которые уже есть решение.', input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false }, strict: true },
   { name: 'compare_periods', description: 'Две сводки рядом с разницей в сомах и процентах.', input_schema: { type: 'object', properties: { a_from: { type: 'string' }, a_to: { type: 'string' }, b_from: { type: 'string' }, b_to: { type: 'string' } }, required: ['a_from', 'a_to', 'b_from', 'b_to'], additionalProperties: false }, strict: true },
   { name: 'ask_question', description: 'Вынести спорное на решение владельца: создать вопрос во вкладке «Вопросы агента». Только когда решение нельзя принять по правилам. Ключ устойчивый — повтор с тем же ключом обновит вопрос.', input_schema: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' }, key: { type: 'string', description: 'короткий устойчивый ключ, латиница' }, type: { type: 'string', description: 'bank|dup|dec|missing|goal|other' }, title: { type: 'string' }, body: { type: 'string', description: 'объяснение с цифрами и откуда они' }, options: { type: 'array', items: { type: 'string' }, description: '2–3 варианта ответа' }, amount: { type: ['number', 'null'] } }, required: ['month', 'key', 'type', 'title', 'body', 'options', 'amount'], additionalProperties: false }, strict: true },
@@ -148,6 +150,7 @@ export async function runTool(name, input, ctx) {
       const r = await C.syncMissing(byMonth, key);
       return rounded({ month: key, incomplete: r.incomplete, items: r.check.map(it => Object.assign({}, it, { found_rows: it.found_rows.slice(0, 10), saved: (r.items.find(x => x.item_key === it.item_key) || null) })) });
     }
+    case 'get_prepaid': { const items = await C.loadPrepaid(); return { count: items.length, items: items.map(e => ({ id: e.id, label: e.label, item_key: e.item_key, amount: e.amount, start: e.start, end: C.prepaidEnd(e), months: e.months, per_month: C.prepaidShare(e), added_by: e.added_by_name || e.added_by })) }; }
     case 'get_decisions': { const d = await C.loadDecisions(); return { count: d.length, decisions: d.map(x => ({ key: x.key, text: x.text, source: x.source, month: x.month, by: x.decided_by_name || x.decided_by, at: x.created_at })) }; }
     case 'compare_periods': {
       const a = period(input.a_from, input.a_to), b = period(input.b_from, input.b_to);
@@ -200,7 +203,7 @@ export async function chatTurn(text, caller) {
   const userRow = { country: C.COUNTRY, role: 'user', content: String(text).slice(0, 4000), author_email: caller.email, author_name: caller.name || null, created_at: new Date().toISOString() };
   await sbInsert('finansist_chat_messages', userRow);
   if (st.exhausted) { const a = await saveAssistant(limitMessage(st), null, null, 0); return { reply: a, limit: st }; }
-  if (!apiKey()) { const a = await saveAssistant('Агент ещё не подключён: на сервере нет ключа ANTHROPIC_API_KEY_FINANSIST. Цифры на странице считаются без него.', null, null, 0); return { reply: a, limit: st }; }
+  if (!apiKey()) { const a = await saveAssistant('Агент не подключён: на сервере нет ключа ANTHROPIC_API_KEY_FINANSIST. Цифры на странице считаются без него.', null, null, 0); return { reply: a, limit: st }; }
 
   const cfg = agentConfig();
   const [hist, ctx] = await Promise.all([
@@ -212,15 +215,16 @@ export async function chatTurn(text, caller) {
   while (messages.length && messages[0].role !== 'user') messages.shift();
   // подряд идущие одинаковые роли API склеивает сам
 
+  const near = st.near;
   const system = [
     { type: 'text', text: cfg.system_prompt, cache_control: { type: 'ephemeral', ttl: '1h' } },
-    { type: 'text', text: dynamicContext(ctx.decisions, ctx.openQ, ctx.missing) },
+    { type: 'text', text: dynamicContext(ctx.decisions, ctx.openQ, ctx.missing) + (near ? '\n\nДневной лимит расходов на тебя почти исчерпан (' + st.spent_usd.toFixed(2) + ' $ из ' + st.daily_usd + ' $). Отвечай коротко: одна-две фразы с цифрой, не больше двух инструментов, и в конце одной строкой предупреди, что лимит на сегодня почти исчерпан.' : '') },
   ];
   const usage = {}; const trace = []; let finalText = ''; let spentNow = 0;
   const day = st.day; let spentToday = st.spent_usd;
   for (let round = 0; round < MAX_ROUNDS; round++) {
     if (spentToday >= st.daily_usd) { finalText = (finalText ? finalText + '\n\n' : '') + limitMessage({ spent_usd: spentToday, daily_usd: st.daily_usd }); break; }
-    const resp = await client().messages.create({ model: cfg.model || MODEL, max_tokens: cfg.max_tokens || 4000, system, tools: TOOLS, messages, output_config: { effort: cfg.effort || 'medium' } });
+    const resp = await client().messages.create({ model: cfg.model || MODEL, max_tokens: near ? 1200 : (cfg.max_tokens || 4000), system, tools: TOOLS, messages, output_config: { effort: near ? 'low' : (cfg.effort || 'medium') } });
     addUsage(usage, resp.usage); const c = costOf(resp.usage); spentNow += c; spentToday += c;
     const textParts = resp.content.filter(b => b.type === 'text').map(b => b.text);
     const toolUses = resp.content.filter(b => b.type === 'tool_use');
@@ -256,8 +260,9 @@ const OPTIONS = {
   missing: ['Внесу сумму', 'Такой статьи в этом месяце нет'],
   odd: ['Всё верно', 'Проверю с Гульшан'],
   superseded: ['Понятно'],
+  prepaid_end: ['Продлили — добавлю новую предоплату', 'Больше не платим'],
 };
-function candidates(monthKey, disputes, missingSync) {
+function candidates(monthKey, disputes, missingSync, opts_prepaid) {
   const out = [];
   disputes.list.forEach(p => {
     const seen = {};
@@ -271,10 +276,11 @@ function candidates(monthKey, disputes, missingSync) {
   (missingSync.items || []).forEach(r => {
     if (r.status === 'missing' || r.status === 'odd') out.push({ key: r.status + ':' + r.item_key, type: 'missing', amount: r.status === 'odd' ? r.found_amount : r.expected_amount, fact: r.note, options: OPTIONS[r.status], evidence: { item_key: r.item_key, status: r.status, found_amount: r.found_amount, expected_amount: r.expected_amount } });
   });
+  (opts_prepaid || []).forEach(e => { const endKey = C.prepaidEnd(e); if (monthKey === C.shiftMonthKey(endKey, 1)) out.push({ key: 'prepaid_end:' + e.id, type: 'other', amount: e.amount, fact: 'Предоплата «' + e.label + '» ' + C.round(e.amount) + ' сом за ' + e.months + ' мес. закончилась в ' + C.monthLabel(endKey) + '. Продлили или больше не платим?', options: OPTIONS.prepaid_end, evidence: { prepaid_id: e.id, label: e.label, amount: e.amount, start: e.start, months: e.months } }); });
   (missingSync.changes || []).forEach(ch => { if (ch.type === 'superseded') out.push({ key: 'superseded:' + ch.item.item_key + ':' + monthKey, type: 'missing', amount: ch.prev.amount, fact: 'Ручная сумма ' + C.round(ch.prev.amount) + ' сом по статье «' + ch.item.item_label + '» больше не учитывается: в таблице появилась настоящая строка на ' + C.round(ch.item.found_amount) + ' сом.', options: OPTIONS.superseded, evidence: { item_key: ch.item.item_key, manual: ch.prev.amount, found: ch.item.found_amount } }); });
   return out;
 }
-const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', dec: 'Проверить по правилу декад', missing: 'Не хватает данных по расходам' };
+const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', dec: 'Проверить по правилу декад', missing: 'Не хватает данных по расходам', other: 'Предоплата закончилась' };
 
 export async function sweepMonth(monthKey, opts) {
   opts = opts || {};
@@ -284,7 +290,8 @@ export async function sweepMonth(monthKey, opts) {
   const keys = [0, -1, -2, -3, -4, -5, -6].map(k => C.shiftMonthKey(monthKey, k));
   const byMonth = await C.loadExpenses(keys, { force: !!opts.force });
   const missingSync = await C.syncMissing(byMonth, monthKey);
-  const cands = candidates(monthKey, disputes, missingSync);
+  const prepaid = await C.loadPrepaid();
+  const cands = candidates(monthKey, disputes, missingSync, prepaid);
   const existing = await sbSelect('finansist_questions', { country: 'eq.' + C.COUNTRY, month: 'eq.' + monthKey, limit: '500' });
   const exMap = {}; existing.forEach(q => { exMap[q.key] = q; });
   const decisions = await C.loadDecisions();
