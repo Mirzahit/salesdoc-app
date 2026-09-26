@@ -190,7 +190,7 @@ export default async function handler(req, res) {
       sbSelectAll('churn_license_changes', { country: 'eq.' + COUNTRY, period_month: 'eq.' + range.from, select: 'period_month,company_key,license_type,m1_count,m2_count,diff' }),
       sbSelectAll('churn_license_changes', { country: 'eq.' + COUNTRY, select: 'period_month' }), // только даты выгрузок — для подсказки «есть за …»
       sbSelect('employees', { active: 'eq.true', select: 'name,pos,role,country,email', order: 'name', limit: '200' }),
-      sbSelect('finansist_answers', { country: 'eq.' + COUNTRY, month: 'eq.' + range.key, select: 'question_id,answer_idx,answer_text,answered_by,answered_by_name,answered_at', limit: '200' }),
+      Promise.resolve([]), // v1005-hotfix: таблица finansist_answers удалена миграцией под агента (v1006) — ответы придут из finansist_questions после слияния
       sbSelect('finansist_settings', { key: 'eq.' + BALANCE_KEY, limit: '1' }),
     ]);
 
@@ -365,6 +365,7 @@ async function handlePost(req, res, caller) {
   const whoName = callerName(req) || null;
   try {
     if (action === 'answer') {
+      return res.status(410).json({ ok: false, error: 'Ответы на вопросы-заготовки больше не сохраняются: скоро их заменит агент' }); // v1005-hotfix: finansist_answers удалена
       const month = parseMonth(body.month) ? String(body.month) : null;
       const qid = String(body.question_id || '').trim();
       const idx = parseInt(body.answer_idx, 10);
