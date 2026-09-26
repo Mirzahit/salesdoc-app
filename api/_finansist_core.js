@@ -84,11 +84,11 @@ export const EXPECTED_ITEMS = [
   { key: 'rent', label: 'Аренда и коммуналка', category: /аренд|коммунал/i, note: /аренд|коммунал|технопарк/i, how: 'статья «Аренда» или примечание с «аренда», «коммуналка», «Технопарк»' }, // «офис»/«склад» нарочно нет: ловили мебель («Пуфик в офис»)
   { key: 'amo', label: 'amoCRM', category: /amo|амо/i, note: /\bamo|амо\s*срм|амосрм|amocrm/i, how: 'примечание с «amo», «амо», «amoCRM»' },
   { key: 'ads', label: 'Реклама и таргет', category: /реклам|таргет|маркет/i, note: /таргет|реклам|facebook|фейсбук|meta|инстаграм|instagram/i, how: 'статья «Реклама/Таргет» или примечание с «таргет», «реклама», «Facebook», «Instagram»' },
-  { key: 'telephony', label: 'Виртуальная телефония', category: /телефони/i, note: /телефони|onlinepbx|pbx|sipuni|zadarma|(^|[^а-яё])атс([^а-яё]|$)/i, how: 'примечание с «телефония», «АТС», «PBX», «Sipuni», «Zadarma» (например «Атс Билайн»)' }, // \b в JS не знает кириллицу — границы слова вручную
+  { key: 'telephony', label: 'Виртуальная телефония', category: /телефони/i, note: /телефони|onlinepbx|pbx|sipuni|zadarma|билайн|beeline|(^|[^а-яё])атс([^а-яё]|$)/i, how: 'примечание с «телефония», «АТС», «Билайн» (счёт за АТС), «PBX», «Sipuni», «Zadarma»' }, // \b в JS не знает кириллицу — границы слова вручную
   { key: 'whatsapp', label: 'Платный WhatsApp', category: /whatsapp|ватсап|ваззап|wazzup/i, note: /whatsapp|ватсап|ваззап|wazzup/i, how: 'примечание с «WhatsApp», «Ватсап», «Wazzup»' },
   { key: 'water', label: 'Вода', category: /^вод[аы]?$/i, note: /(^|[^а-яё])вод[аыу]([^а-яё]|$)|кулер/i, how: 'статья «Вода» или примечание с «вода», «кулер» (например «Офис / Алтын Булак вода»)' },
-  { key: 'taxi', label: 'Такси', category: /такси/i, note: /такси|яндекс/i, how: 'статья «Такси» или примечание с «такси», «Яндекс»' },
-  { key: 'sim', label: 'Сим-карты и связь', category: /связ|сим/i, note: /сим|\bsim\b|мегаком|megacom|\bo!\b|nur\s*telecom|мобильн/i, exclude: /атс|телефони/i, how: 'статья «Связь» или примечание с «сим», «Мегаком», «O!», «мобильный», кроме строк про АТС (они — телефония)' },
+  { key: 'taxi', label: 'Такси', category: /такси/i, note: /такси|яндекс/i, no_odd: true, how: 'статья «Такси» или примечание с «такси», «Яндекс»; сумма не сравнивается — такси каждый месяц разное' },
+  { key: 'sim', label: 'Сим-карты и связь', category: /связ|сим/i, note: /сим|\bsim\b|мегаком|megacom|\bo!\b|nur\s*telecom|мобильн/i, exclude: /атс|телефони|билайн|beeline/i, how: 'статья «Связь» или примечание с «сим», «Мегаком», «O!», «мобильный», кроме АТС и Билайна (они — телефония)' },
 ];
 export const ODD_THRESHOLD = 0.4; // отклонение от медианы прошлых месяцев больше 40% — «сумма резко отличается»
 
@@ -341,7 +341,7 @@ export function checkMissing(byMonth, monthKey) {
     const med = median(prev.map(p => p.sum));
     let status = 'ok';
     if (!cur.length) status = 'missing';
-    else if (med && Math.abs(found - med) / med > ODD_THRESHOLD) status = 'odd';
+    else if (!item.no_odd && med && Math.abs(found - med) / med > ODD_THRESHOLD) status = 'odd';
     return { item_key: item.key, item_label: item.label, status, found_amount: found, found_rows: cur.map(e => ({ date: e.date, category: e.category, note: e.note, amount: e.amount })), expected_amount: med, prev, how: item.how };
   });
   return items;
