@@ -119,7 +119,7 @@ export const SALARY_PAID_BY_DAY = 15; // до этого числа следую
 // между отделами с отметкой pool пропорционально числу людей. Налоги, банк и прочее общее — отдельной строкой.
 // Выручка: внедрение и интеграция — Интеграции, остальная — Продажам. Меняется на «Правилах и целях» (finansist_rules.departments).
 export const DEPT_DEFAULTS = [
-  { key: 'sales', name: 'Продажи', people: ['амир', 'асел', 'айби'], groups: [], items: ['amo', 'telephony', 'whatsapp', 'ads'], pool: true, revenue: ['rest'] },
+  { key: 'sales', name: 'Продажи', people: ['амир', 'асел', 'айби'], groups: [], items: ['amo', 'telephony', 'whatsapp', 'ads', 'mobile_sales'], pool: true, revenue: ['rest'] },
   { key: 'support', name: 'Поддержка', people: ['мали', 'элиз'], groups: [], items: [], pool: true, revenue: [] },
   { key: 'integration', name: 'Интеграция', people: [], groups: ['Интеграция'], items: [], pool: false, revenue: ['services'] },
   { key: 'admin', name: 'Администрация', people: ['гуль', 'жибе'], groups: [], items: ['lawyer'], pool: false, revenue: [] },
@@ -127,8 +127,17 @@ export const DEPT_DEFAULTS = [
 // Что можно отнести на отдел напрямую, и что составляет общую долю офиса
 export const ALLOC_ITEMS = [
   { key: 'amo', label: 'amoCRM' }, { key: 'telephony', label: 'Телефония и АТС Билайн' }, { key: 'whatsapp', label: 'WhatsApp' },
-  { key: 'ads', label: 'Реклама и таргет' }, { key: 'lawyer', label: 'Юрист' },
+  { key: 'ads', label: 'Реклама и таргет' }, { key: 'mobile_sales', label: 'Мобильная связь менеджеров' }, { key: 'lawyer', label: 'Юрист' },
 ];
+// Состав отделов меняется с даты (CEO 27.09.2026): прошлые месяцы считаются по своему составу. finansist_rules.departments_history —
+// [{ from: 'YYYY-MM', departments }]; для месяца берётся последняя версия с from ≤ месяца, раньше первой — состав по умолчанию.
+export function deptVersionFor(monthKey) {
+  const R = currentRules(); let hist = Array.isArray(R.departments_history) ? R.departments_history.slice() : [];
+  if (!hist.length && Array.isArray(R.departments) && R.departments !== DEPT_DEFAULTS) hist = [{ from: '2000-01', departments: R.departments }]; // сохранено до v1009 без даты
+  hist.sort((a, b) => String(a.from).localeCompare(String(b.from)));
+  let v = null; hist.forEach(h => { if (String(h.from) <= String(monthKey)) v = h; });
+  return v ? { from: v.from, departments: v.departments, custom: true } : { from: null, departments: DEPT_DEFAULTS, custom: false };
+}
 export const POOL_ITEMS = [{ key: 'rent', label: 'Аренда' }, { key: 'office', label: 'Офис' }, { key: 'water', label: 'Вода' }];
 export const DEPT_REVENUE = [{ key: 'services', label: 'Внедрение и интеграция', cats: ['implementation', 'integration'] }, { key: 'rest', label: 'Остальная выручка', cats: null }];
 export const RULE_DEFAULTS = { integrators_kzt: 1500000, integrators_tolerance_pct: 3, safe_balance: null, owner_names: ['Мирзахит'], departments: DEPT_DEFAULTS };
@@ -337,7 +346,34 @@ export async function loadExpenses(monthKeys, opts) {
     const sh = sheets[k] || { available: false };
     byMonth[k] = { available: !!sh.available, fetched_at: sh.fetched_at, stale: !!sh.stale, next_available: !!(sheets[shiftMonthKey(k, 1)] && sheets[shiftMonthKey(k, 1)].available), rows: all.filter(r => r.work_month === k || r.pay_month === k) };
   });
-  if (!(opts && opts.no_expected)) await addExpectedSalary(byMonth, all, monthKeys);
+  if (!(opts && opts.no_expected)) { await addExpectedSalary(byMonth, all, monthKeys); await addExpectedTaxes(byMonth, monthKeys); }
+  return byMonth;
+}
+
+// ---------- ожидаемые налоги (CEO 27.09.2026) ----------
+// Налоги платят 20–25 числа того же месяца. Пока за текущий или прошлый месяц нет строки какого-то вида налога
+// (подоходный, страховые, ГНПФ, единый), подставляется ожидаемая сумма — среднее этого вида за три прошлых месяца
+// (сумма / 3). Пени и доплаты за другие месяцы («остаток от апреля и май») в среднее не берутся — это не налог месяца.
+// Как только строка вида налога появляется, ожидаемая по этому виду исчезает.
+export const TAX_KINDS_EXPECTED = ['Подоходный', 'Страховые', 'ГНПФ', 'Единый'];
+export function isTaxArrears(e, sheetKey) { const n = String((e && e.note) || '').toLowerCase(); if (/остат|долг|задолж/.test(n)) return true; const nm = namedMonth(n); return !!nm && nm !== parseMonth(sheetKey).mo; }
+export async function addExpectedTaxes(byMonth, monthKeys) {
+  const openFrom = shiftMonthKey(currentMonthKey(), -1);
+  for (const k of monthKeys) {
+    const m = byMonth[k]; if (!m || !m.available || k < openFrom) continue;
+    const have = new Set((m.rows || []).filter(e => e.source !== 'expected' && isTax(e) && (e.work_month || k) === k).map(e => taxKind(e.note)));
+    const missing = TAX_KINDS_EXPECTED.filter(t => !have.has(t)); if (!missing.length) continue;
+    const prev = [1, 2, 3].map(i => shiftMonthKey(k, -i));
+    const snaps = await Promise.all(prev.map(j => loadExpenseMonth(j)));
+    if (snaps.some(s => !s || !s.available)) continue; // без полной истории не угадываем
+    const sums = {};
+    snaps.forEach((s, i) => (s.rows || []).forEach(e => { if (!isTax(e) || isTaxArrears(e, prev[i])) return; const t = taxKind(e.note); if (TAX_KINDS_EXPECTED.indexOf(t) < 0) return; sums[t] = (sums[t] || 0) + num(e.amount); }));
+    const label = MONTHS_RU[parseMonth(prev[2]).mo - 1].toLowerCase() + '–' + MONTHS_RU[parseMonth(prev[0]).mo - 1].toLowerCase();
+    missing.forEach(t => {
+      if (!sums[t]) return; const avg = Math.round(sums[t] / 3);
+      m.rows.push({ id: 'expected-tax:' + k + ':' + t, source: 'expected', expected_kind: 'tax', category: 'Налоги', note: t + ' — ожидаемые, среднее за ' + label, amount: avg, date: null, sheet_month: k, work_month: k, pay_month: null, kind: 'shared', expected_name: t, expected_basis: 'среднее за ' + label, expected_total: avg, expected_class: { kind: 'shared', label: 'Налоги', tax_kind: t + ' (ожидаемые)' } });
+    });
+  }
   return byMonth;
 }
 
@@ -369,15 +405,17 @@ export async function addExpectedSalary(byMonth, all, monthKeys) {
       const isManager = !!(email && calc.assign && calc.assign[email]);
       const closed = isManager && calc.closed && calc.closed[k] && calc.closed[k][email];
       const usd = R.oklad_usd ? num(R.oklad_usd[p.key]) : 0;
-      let E = null, basis = '';
-      if (closed) { E = num(closed.total); basis = 'по «Моему доходу»'; }
+      let E = null, basis = '', parts = null;
+      const sp = n => round(n).toLocaleString('ru-RU');
+      if (closed) { E = num(closed.total); basis = 'по «Моему доходу»'; parts = { oklad: num(closed.oklad), percent: num(closed.bonus), kpi: num(closed.kpi) }; }
+      else if (isManager) { const mp = managerPlanPay(emp, k, calc, base.payments); if (mp) { E = mp.oklad + mp.percent; parts = { oklad: mp.oklad, percent: mp.percent }; basis = 'оклад ' + sp(mp.oklad) + ' + процент ' + sp(mp.percent) + ' (новые продажи ' + sp(mp.sales) + ', ' + mp.pct + '% плана, ставка ' + String(mp.coeff).replace('.', ',') + '%)' + (mp.kpi_bonus > 0 ? '; премия KPI не учтена — звонки и встречи в Светофоре' : ''); } }
       else if (usd > 0) { const fx = fxRateFor(rates, today, 'USD'); if (fx) { E = usd * fx.rate; basis = round(usd) + ' $ по курсу ' + String(fx.rate).replace('.', ',') + ' на ' + fmtDay(fx.date); } }
       if (E == null && R.oklad && num(R.oklad[p.key]) > 0) { E = num(R.oklad[p.key]); basis = isManager ? 'по окладу, «Мой доход» за месяц ещё не закрыт' : 'по окладу'; }
       if (E == null && p.prev > 0) { E = p.prev; basis = 'по выплате за ' + monthLabel(prevK) + (usd > 0 ? ' (курса доллара нет)' : ', оклад не задан'); }
       if (E == null) return;
       const add = Math.round(E - p.cur); if (add <= 0) return;
       const name = emp && /[а-яё]/i.test(emp.name) ? String(emp.name).trim() : (p.person ? p.person.charAt(0).toUpperCase() + p.person.slice(1) : p.key); // «Амиру аванс» → «Амир» из списка сотрудников
-      m.rows.push({ id: 'expected:' + k + ':' + p.key, source: 'expected', category: 'Ожидаемая зарплата', note: name + ' — ожидаемая, ' + basis, amount: add, date: null, sheet_month: k, work_month: k, pay_month: null, kind: 'salary', part: 'expected', expected_name: name, expected_basis: basis, expected_total: Math.round(E), expected_class: { kind: 'salary', person_key: p.key, person: p.person } });
+      m.rows.push({ id: 'expected:' + k + ':' + p.key, source: 'expected', category: 'Ожидаемая зарплата', note: name + ' — ожидаемая, ' + basis, amount: add, date: null, sheet_month: k, work_month: k, pay_month: null, kind: 'salary', part: 'expected', expected_name: name, expected_basis: basis, expected_total: Math.round(E), expected_parts: parts, expected_class: { kind: 'salary', person_key: p.key, person: p.person } });
     });
     if (k >= INTEGRATORS_PAID_FROM_KG_SINCE) {
       const g = GROUP_RULES[0].group;
@@ -430,16 +468,16 @@ export function cashRows(byMonth, monthKey) { const m = byMonth[monthKey]; if (!
 
 export function expenseSummary(rows) {
   // total — расходы компании: зарплаты людей + группы (интеграция) + общие. Изъятие владельца и переносы — не расход.
-  const o = { total: 0, salary_total: 0, people_salary_total: 0, salaries: {}, groups: {}, group_total: 0, shared_total: 0, shared_by_category: {}, taxes_by_kind: {}, tax_penalties: [], by_bank: {}, manual_total: 0, owner_total: 0, owner_rows: [], expected_total: 0, expected_rows: [] };
+  const o = { total: 0, salary_total: 0, people_salary_total: 0, salaries: {}, groups: {}, group_total: 0, shared_total: 0, shared_by_category: {}, taxes_by_kind: {}, tax_penalties: [], by_bank: {}, manual_total: 0, owner_total: 0, owner_rows: [], expected_total: 0, expected_rows: [], expected_tax_total: 0, expected_tax_rows: [] };
   (rows || []).forEach(e => {
     const a = num(e.amount); const k = classifyExpense(e);
     if (k.kind === 'transfer') return;
     if (k.kind === 'owner') { o.owner_total += a; o.owner_rows.push({ date: e.date, category: e.category, note: e.note, amount: a }); return; }
     o.total += a;
     if (e.source === 'manual') o.manual_total += a;
-    if (e.source === 'expected') { o.expected_total += a; o.expected_rows.push({ name: e.expected_name, amount: a, total: e.expected_total, basis: e.expected_basis }); }
+    if (e.source === 'expected') { if (e.expected_kind === 'tax') { o.expected_tax_total += a; o.expected_tax_rows.push({ name: e.expected_name, amount: a, basis: e.expected_basis }); } else { o.expected_total += a; o.expected_rows.push({ name: e.expected_name, amount: a, total: e.expected_total, basis: e.expected_basis, parts: e.expected_parts || null }); } }
     const bk = bankKey(e.bank); o.by_bank[bk] = (o.by_bank[bk] || 0) + a;
-    if (k.kind === 'salary') { o.salary_total += a; o.people_salary_total += a; const nm = k.person; if (!o.salaries[k.person_key]) o.salaries[k.person_key] = { key: k.person_key, name: nm ? nm.charAt(0).toUpperCase() + nm.slice(1) : 'Без имени', sum: 0, n: 0, advance: 0, rest: 0, bonus: 0, leave: 0, expected: 0, rows: [] }; const sp = o.salaries[k.person_key]; sp.sum += a; sp.n++; const part = e.part || salaryPart(e); sp[part] = (sp[part] || 0) + a; sp.rows.push({ date: e.date, note: e.note, amount: a, part, pay_month: e.pay_month || null }); }
+    if (k.kind === 'salary') { o.salary_total += a; o.people_salary_total += a; const nm = k.person; if (!o.salaries[k.person_key]) o.salaries[k.person_key] = { key: k.person_key, name: nm ? nm.charAt(0).toUpperCase() + nm.slice(1) : 'Без имени', sum: 0, n: 0, advance: 0, rest: 0, bonus: 0, leave: 0, expected: 0, rows: [] }; const sp = o.salaries[k.person_key]; sp.sum += a; sp.n++; const part = e.part || salaryPart(e); sp[part] = (sp[part] || 0) + a; if (e.expected_parts) sp.expected_parts = e.expected_parts; sp.rows.push({ date: e.date, note: e.note, amount: a, part, pay_month: e.pay_month || null }); }
     else if (k.kind === 'group') { o.salary_total += a; o.group_total += a; const g = o.groups[k.group] = o.groups[k.group] || { name: k.group, sum: 0, n: 0, expected: 0, rows: [] }; g.sum += a; g.n++; if (e.source === 'expected') g.expected += a; g.rows.push({ date: e.date, note: e.note, amount: a, expected: e.source === 'expected' }); }
     else { o.shared_by_category[k.label] = (o.shared_by_category[k.label] || 0) + a; o.shared_total += a; if (k.tax_kind) { o.taxes_by_kind[k.tax_kind] = (o.taxes_by_kind[k.tax_kind] || 0) + a; if (k.tax_kind === 'Пеня') o.tax_penalties.push({ date: e.date, note: e.note, amount: a }); } }
   });
@@ -500,6 +538,7 @@ export function periodSummary(base, range, expRowsOrNull) {
     taxes_by_kind: exp ? exp.taxes_by_kind : null, tax_penalties: exp ? exp.tax_penalties : [],
     retained: exp ? profit - exp.owner_total : null, // «Осталось в компании» = прибыль − изъятие владельца
     expected_salary: exp ? exp.expected_total : 0, expected_salary_rows: exp ? exp.expected_rows : [], // пока остаток не выплачен — прибыль «ожидаемая»
+    expected_taxes: exp ? exp.expected_tax_total : 0, expected_tax_rows: exp ? exp.expected_tax_rows : [], // налоги месяца ещё не заплачены — среднее за три месяца
     margin_pct: exp && revenue ? Math.round(profit / revenue * 1000) / 10 : null,
     salary_share_pct: exp && revenue ? Math.round(exp.salary_total / revenue * 100) : null,
   };
@@ -532,8 +571,22 @@ export async function loadSalaryCalc() {
   if (_calc && Date.now() - _calcTs < 60e3) return _calc;
   let closed = {}, grades = {};
   try { const r = await sbSelect('app_settings', { key: 'in.(salary_closed,salary_grades)', limit: '2' }); r.forEach(x => { if (x.key === 'salary_closed') closed = x.value || {}; if (x.key === 'salary_grades') grades = x.value || {}; }); } catch (_) {}
-  _calc = { closed, assign: (grades && grades.assign) || {} }; _calcTs = Date.now();
+  _calc = { closed, assign: (grades && grades.assign) || {}, grades: (grades && Array.isArray(grades.grades)) ? grades.grades : [] }; _calcTs = Date.now();
   return _calc;
+}
+// Ожидаемая зарплата менеджера, пока месяц в «Моём доходе» не закрыт (CEO 27.09.2026) — та же формула, что на экране
+// «Мой доход» (_incCalc): оклад грейда + процент с новых продаж месяца по шкале грейда. Новые продажи — оплаты, где
+// исходная статья содержит «нов» и не «абон» (правило v989), по первому слову имени менеджера. План — из грейда (план
+// из Светофора сервер не видит). Премия KPI зависит от звонков и встреч в Светофоре — при kpi_bonus > 0 не учитывается.
+export function isNewSale(p) { const raw = String((p && p.category_raw) || '').toLowerCase(); return raw.indexOf('нов') >= 0 && raw.indexOf('абон') < 0; }
+export function managerPlanPay(emp, monthKey, calc, payments) {
+  const email = String((emp && emp.email) || '').toLowerCase(); const gid = calc && calc.assign && calc.assign[email];
+  const g = gid && (calc.grades || []).find(x => x.id === gid); if (!g) return null;
+  const first = String(emp.name || '').trim().split(/\s+/)[0].toLowerCase();
+  const sales = (payments || []).filter(p => String(p.paid_at || '').slice(0, 7) === monthKey && isNewSale(p) && String(p.manager_name || '').trim().split(/\s+/)[0].toLowerCase() === first).reduce((a, p) => a + num(p.amount), 0);
+  const plan = num(g.sales_plan); const pct = plan > 0 ? Math.round(sales / plan * 100) : 0;
+  let coeff = 0; (g.scale || []).forEach(s => { if (pct >= num(s.min) && pct <= num(s.max)) coeff = num(s.pct); });
+  return { oklad: num(g.salary), percent: Math.round(sales * coeff / 100), sales, plan, pct, coeff, kpi_bonus: num(g.kpi_bonus), grade: g.title };
 }
 export function expectedPay(person, monthKey, employees, calc, rates) {
   const R = currentRules();
@@ -600,19 +653,21 @@ export function teamRows(base, range, expRowsOrNull) {
 export function allocItemOf(e) {
   const k = classifyExpense(e); if (k.kind !== 'shared') return null;
   if (k.label === 'Юрист, аутсорс') return 'lawyer';
+  if (/связ|сим/i.test(String(e.category || '')) && /менеджер/i.test(String(e.note || ''))) return 'mobile_sales'; // «мобильный менеджеров», «тарифы менеджеров»
   if (k.tax_kind || k.label === 'Налоги') return null;
   for (const key of ['water', 'rent', 'amo', 'telephony', 'whatsapp', 'ads']) { const it = EXPECTED_ITEMS.find(i => i.key === key); if (it && itemMatches(it, e)) return key; }
   if (/^офис/i.test(String(e.category || '').trim())) return 'office';
   return null;
 }
 export function departmentsFor(base, range, expRows) {
-  const depts = (currentRules().departments || DEPT_DEFAULTS).map(d => ({ key: d.key, name: d.name, people_keys: d.people || [], groups: d.groups || [], items: d.items || [], pool: !!d.pool, revenue_keys: d.revenue || [], people: [], salary: 0, salary_expected: 0, direct: {}, direct_total: 0, pooled: 0, revenue: 0, revenue_count: 0 }));
+  const ver = deptVersionFor(String(range.from).slice(0, 7));
+  const depts = (ver.departments || DEPT_DEFAULTS).map(d => ({ key: d.key, name: d.name, people_keys: d.people || [], groups: d.groups || [], items: d.items || [], pool: !!d.pool, revenue_keys: d.revenue || [], people: [], salary: 0, salary_expected: 0, direct: {}, direct_total: 0, pooled: 0, revenue: 0, revenue_count: 0 }));
   const exp = expRows ? expenseSummary(expRows) : null;
   const unassigned = { people: [], groups: [], salary: 0, revenue: 0 };
   const byPerson = k => depts.find(d => d.people_keys.indexOf(k) >= 0);
   const nice = (k, n) => { const e = (base.employees || []).find(x => nameKey(x.name) === k); return e && /[а-яё]/i.test(e.name) ? String(e.name).trim() : n; }; // «Амиру аванс» → «Амир»
   if (exp) {
-    Object.values(exp.salaries).forEach(s => { const d = byPerson(s.key); const row = { key: s.key, name: nice(s.key, s.name), salary: s.sum, expected: s.expected || 0 }; if (d) { d.people.push(row); d.salary += s.sum; d.salary_expected += s.expected || 0; } else { unassigned.people.push(row); unassigned.salary += s.sum; } });
+    Object.values(exp.salaries).forEach(s => { const d = byPerson(s.key); const row = { key: s.key, name: nice(s.key, s.name), salary: s.sum, expected: s.expected || 0, parts: s.expected_parts || null }; if (d) { d.people.push(row); d.salary += s.sum; d.salary_expected += s.expected || 0; } else { unassigned.people.push(row); unassigned.salary += s.sum; } });
     Object.values(exp.groups).forEach(g => { const d = depts.find(x => x.groups.indexOf(g.name) >= 0); const row = { key: 'group:' + g.name, name: g.name, salary: g.sum, expected: g.expected || 0, group: true }; if (d) { d.people.push(row); d.salary += g.sum; d.salary_expected += g.expected || 0; } else { unassigned.groups.push(row); unassigned.salary += g.sum; } });
   }
   const pool = { by_item: {}, total: 0, rows: [] }, undistributed = { by_label: {}, total: 0 };
@@ -622,7 +677,7 @@ export function departmentsFor(base, range, expRows) {
     const d = item && depts.find(x => x.items.indexOf(item) >= 0);
     if (d) { d.direct[item] = (d.direct[item] || 0) + a; d.direct_total += a; return; }
     if (item && POOL_ITEMS.some(p => p.key === item)) { pool.by_item[item] = (pool.by_item[item] || 0) + a; pool.total += a; return; }
-    const lab = item ? (ALLOC_ITEMS.find(x => x.key === item) || {}).label || item : k.label; undistributed.by_label[lab] = (undistributed.by_label[lab] || 0) + a; undistributed.total += a;
+    const lab = (item ? (ALLOC_ITEMS.find(x => x.key === item) || {}).label || item : k.label) + (e.source === 'expected' ? ' (ожидаемые)' : ''); undistributed.by_label[lab] = (undistributed.by_label[lab] || 0) + a; undistributed.total += a; if (e.source === 'expected') undistributed.expected = (undistributed.expected || 0) + a;
   });
   // доля офиса — по числу людей в отделах с отметкой pool (по составу из настроек)
   const poolDepts = depts.filter(d => d.pool && d.people_keys.length > 0); const heads = poolDepts.reduce((a, d) => a + d.people_keys.length, 0);
@@ -633,7 +688,7 @@ export function departmentsFor(base, range, expRows) {
   base.payments.filter(p => inRange(p, range)).forEach(p => { const key = svc.indexOf(p.category) >= 0 ? 'services' : 'rest'; const d = depts.find(x => x.revenue_keys.indexOf(key) >= 0); const a = num(p.amount); if (d) { d.revenue += a; d.revenue_count++; } else unassigned.revenue += a; });
   depts.forEach(d => { d.allocated = d.direct_total + d.pooled; d.cost = d.salary + d.allocated; d.result = d.revenue - d.cost; d.heads = d.people_keys.length; });
   const total_result = depts.reduce((a, d) => a + d.result, 0) + unassigned.revenue - unassigned.salary - undistributed.total;
-  return { has_expenses: !!exp, departments: depts, pool: Object.assign(pool, { heads }), undistributed, unassigned, company_profit: exp ? total_result : null, company_expenses: exp ? exp.total : null };
+  return { composition_from: ver.from, composition_custom: ver.custom, has_expenses: !!exp, departments: depts, pool: Object.assign(pool, { heads }), undistributed, unassigned, company_profit: exp ? total_result : null, company_expenses: exp ? exp.total : null };
 }
 
 // ---------- отток ----------

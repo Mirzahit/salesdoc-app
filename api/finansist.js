@@ -62,7 +62,7 @@ export default async function handler(req, res) {
       const exRows = C.expenseRows(expByMonth, k);
       const s = C.periodSummary(base, r, exRows);
       const ss = C.salaryState(expByMonth, k);
-      return { key: k, revenue: s.revenue, count: rows.length, by_category: s.by_category, expenses: s.expenses, salaries: s.salaries, profit: s.profit, owner_draws: s.owner_draws, retained: s.retained, margin_pct: s.margin_pct, salary_share_pct: s.salary_share_pct, expenses_available: !!exRows, salary_pending: ss.pending, expected_salary: s.expected_salary || 0 };
+      return { key: k, revenue: s.revenue, count: rows.length, by_category: s.by_category, expenses: s.expenses, salaries: s.salaries, profit: s.profit, owner_draws: s.owner_draws, retained: s.retained, margin_pct: s.margin_pct, salary_share_pct: s.salary_share_pct, expenses_available: !!exRows, salary_pending: ss.pending, expected_salary: s.expected_salary || 0, expected_taxes: s.expected_taxes || 0 };
     });
 
     // --- период ---
@@ -118,6 +118,7 @@ export default async function handler(req, res) {
         salary_rules: C.SALARY_RULES.map(r => ({ person: r.person, cat_label: r.cat_label, note_label: r.note_label })),
         group_rules: C.GROUP_RULES.map(g => ({ group: g.group, how: g.how, revenue_cats: g.revenue_cats })),
         shared_label_rules: C.SHARED_LABEL_RULES.map(r => ({ label: r.label, how: r.how })),
+        departments_for_month: C.deptVersionFor(range.key), departments_history: (Array.isArray(C.currentRules().departments_history) ? C.currentRules().departments_history : []).map(h => ({ from: h.from, names: (h.departments || []).map(d => d.name), saved_by: h.saved_by || null })),
         alloc_items: C.ALLOC_ITEMS, pool_items: C.POOL_ITEMS, dept_revenue: C.DEPT_REVENUE.map(r => ({ key: r.key, label: r.label })), dept_groups: C.GROUP_RULES.map(g => g.group),
         settings: C.currentRules(),
         people,

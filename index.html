@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v1008</title>
+<title>SalesDoc — Финансовый Дашборд v1009</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11213,8 +11213,9 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
      </tbody></table></div>
      <div class="fz-tfoot"><span id="fz-set-note"></span><button class="fz-btn pri" id="fz-set-save" type="button">Сохранить</button></div></div>
     <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Отделы</h2><span>общие расходы делятся по отделам, не по людям</span></div>
+     <div class="fz-tfoot" style="border-top:0"><span id="fz-dept-ver"></span></div>
      <div id="fz-dept-edit"></div>
-     <div class="fz-tfoot"><span>Нажмите на имя или статью, чтобы перенести в отдел. Доля аренды, офиса и воды делится между отделами с этой отметкой по числу людей. Налоги, банк и прочее не распределяются.</span><button class="fz-btn" id="fz-dept-add" type="button">Добавить отдел</button><button class="fz-btn pri" id="fz-dept-save" type="button">Сохранить отделы</button></div></div>
+     <div class="fz-tfoot"><span>Нажмите на имя или статью, чтобы перенести в отдел. Доля аренды, офиса и воды делится между отделами с этой отметкой по числу людей. Налоги, банк и прочее не распределяются. Новый состав действует с указанного месяца, прошлые месяцы считаются по прежнему.</span><button class="fz-btn" id="fz-dept-add" type="button">Добавить отдел</button><label style="display:inline-flex;align-items:center;gap:6px">действует с <input class="fz-minp" id="fz-dept-from" placeholder="2026-10" aria-label="Месяц начала" style="width:90px;text-align:left"></label><button class="fz-btn pri" id="fz-dept-save" type="button">Сохранить отделы</button></div></div>
     <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Оклады</h2><span>сверка: аванс + остаток на руки против оклада; разница меньше 3 000 сом или «удержание», «штраф», «опоздание» в примечании — без вопроса</span></div>
      <div class="fz-tw"><table><thead><tr><th>Сотрудник</th><th class="r">Оклад, сом или «$»</th></tr></thead><tbody id="fz-oklad-body"></tbody></table></div>
      <div class="fz-tfoot"><span id="fz-oklad-note"></span><button class="fz-btn pri" id="fz-oklad-save" type="button">Сохранить оклады</button></div></div>
@@ -46528,7 +46529,7 @@ function fzTeamRows(){
 // «предварительная» — зарплата за месяц ещё не выплачена; «завышена ≈ X» — нет обязательной статьи; «неполная» — сумма статьи отличается
 function fzProfitPill(p){
  if (!p) return '';
- if (p.expected_salary > 0) return ' <span class="fz-pill neg" title="Остаток зарплаты за месяц ещё не выплачен — вместо него стоит ожидаемая: по окладам, «Моему доходу», без оклада — по прошлому месяцу">ожидаемая</span>';
+ if (p.expected_salary > 0 || p.expected_taxes > 0) return ' <span class="fz-pill neg" title="' + [p.expected_salary > 0 ? 'остаток зарплаты ещё не выплачен — стоит ожидаемая ' + fzMoney(p.expected_salary) : '', p.expected_taxes > 0 ? 'налоги ещё не заплачены — стоят ожидаемые ' + fzMoney(p.expected_taxes) + ' (среднее за три месяца)' : ''].filter(Boolean).join('; ') + '">ожидаемая</span>';
  if (p.salary_state && p.salary_state.pending) return ' <span class="fz-pill neg" title="Зарплата за месяц ещё не выплачена полностью">предварительная</span>';
  if (p.missing_estimate) return ' <span class="fz-pill neg" title="Нет обязательной статьи расходов — см. «Вопросы агента»">завышена ≈ ' + fzShort(p.missing_estimate) + '</span>';
  if (p.profit_incomplete) return ' <span class="fz-pill neg" title="Сумма обязательной статьи отличается от обычной — см. «Вопросы агента»">неполная</span>';
@@ -46944,7 +46945,7 @@ function fzRenderDepts(){
  var d = _fz.data, t = d.team && d.team.departments, body = document.getElementById('fz-dept-body'), foot = document.getElementById('fz-dept-foot'); if (!body) return;
  var panel = document.getElementById('fz-dept-panel'); if (!t || !t.has_expenses) { if (panel) panel.style.display = 'none'; return; } if (panel) panel.style.display = '';
  var rows = t.departments.map(function(x){
-  var ppl = x.people.map(function(p){ return fzEsc(p.name) + (p.expected ? ' (ожидается)' : ''); }).join(', ');
+  var ppl = x.people.map(function(p){ return fzEsc(p.name) + (p.parts && p.expected ? ': оклад ' + fzMoney(p.parts.oklad) + ' + процент ' + fzMoney(p.parts.percent) + ' (ожидается)' : (p.expected ? ' (ожидается)' : '')); }).join(', ');
   var alloc = Object.keys(x.direct).map(function(k){ return fzDeptItemLabel(k).toLowerCase() + ' ' + fzMoney(x.direct[k]); });
   if (x.pooled) alloc.push('доля аренды, офиса и воды ' + fzMoney(x.pooled) + ' (' + x.pool_heads + ' из ' + t.pool.heads + ' чел.)');
   var noRev = !x.revenue_keys.length;
@@ -46960,7 +46961,8 @@ function fzRenderDepts(){
  body.innerHTML = rows;
  foot.innerHTML = '<tr><td>Прибыль компании' + fzProfitPill(d.period) + '</td><td></td><td></td><td></td><td class="r ' + (t.company_profit >= 0 ? 'pos' : 'neg') + '">' + fzMoney(t.company_profit) + '</td></tr>';
 }
-function fzDeptDraftFromSettings(){ var st = (_fz.data.meta && _fz.data.meta.settings) || {}; return JSON.parse(JSON.stringify(st.departments || [])); }
+function fzDeptDraftFromSettings(){ var v = (_fz.data.meta && _fz.data.meta.departments_for_month) || {}; return JSON.parse(JSON.stringify(v.departments || [])); }
+function fzMonthWord(key){ if (!key || key === '2000-01') return ''; var mo = +String(key).slice(5, 7); return FZ_MONTHS[mo - 1].toLowerCase() + ' ' + String(key).slice(0, 4); }
 function fzDeptSyncNames(){ document.querySelectorAll('#fz-dept-edit [data-fz-dept-name]').forEach(function(inp){ var i = +inp.getAttribute('data-fz-dept-name'); if (_fz.deptDraft[i]) _fz.deptDraft[i].name = inp.value; }); }
 function fzDeptToggle(i, spec){
  fzDeptSyncNames(); var p = spec.indexOf(':'), field = spec.slice(0, p), val = spec.slice(p + 1), d = _fz.deptDraft[i]; if (!d) return;
@@ -46970,7 +46972,10 @@ function fzDeptToggle(i, spec){
 }
 function fzRenderDeptEditor(){
  var box = document.getElementById('fz-dept-edit'); if (!box || !_fz.data) return;
- if (!_fz.deptDirty || !_fz.deptDraft) _fz.deptDraft = fzDeptDraftFromSettings();
+ var mk = fzMonthKey(_fz.month); if (!_fz.deptDirty || !_fz.deptDraft || _fz.deptMonth !== mk) { _fz.deptDraft = fzDeptDraftFromSettings(); _fz.deptDirty = false; _fz.deptMonth = mk; }
+ var ver = (_fz.data.meta && _fz.data.meta.departments_for_month) || {}, hist = (_fz.data.meta && _fz.data.meta.departments_history) || [];
+ var vi = document.getElementById('fz-dept-ver'); if (vi) vi.innerHTML = 'Состав на ' + fzMonthWord(mk) + ': ' + (ver.from && ver.from !== '2000-01' ? 'действует с ' + fzMonthWord(ver.from) : 'исходный') + (hist.length ? '. Смены состава: ' + hist.filter(function(x){ return x.from !== '2000-01'; }).map(function(x){ return 'с ' + fzMonthWord(x.from); }).join(', ') : '') + '.';
+ var fi = document.getElementById('fz-dept-from'); if (fi && document.activeElement !== fi && !_fz.deptDirty) fi.value = mk;
  if (box.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return; // не мешать вводу названия
  var m = _fz.data.meta || {}, people = (m.people || []).map(function(p){ return { key: p.key, name: p.name }; });
  _fz.deptDraft.forEach(function(d){ (d.people || []).forEach(function(k){ if (!people.some(function(p){ return p.key === k; })) people.push({ key: k, name: k.charAt(0).toUpperCase() + k.slice(1) + '…' }); }); });
@@ -46986,7 +46991,8 @@ function fzRenderDeptEditor(){
 }
 function fzDeptSave(){
  fzDeptSyncNames(); var btn = document.getElementById('fz-dept-save'); if (btn) btn.disabled = true;
- sbFetch('/api/finansist-agent?action=rules_save', { method:'POST', body: JSON.stringify({ departments: _fz.deptDraft }) })
+ var from = String((document.getElementById('fz-dept-from') || {}).value || fzMonthKey(_fz.month)).trim();
+ sbFetch('/api/finansist-agent?action=rules_save', { method:'POST', body: JSON.stringify({ departments: _fz.deptDraft, from: from }) })
   .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось'); _fz.deptDirty = false; try { sdToast('Отделы сохранены', 'success'); } catch(_){} return fzLoad(); })
   .catch(function(e){ try { sdToast('Не сохранилось: ' + (e && e.message || e), 'error'); } catch(_){} })
   .then(function(){ if (btn) btn.disabled = false; });

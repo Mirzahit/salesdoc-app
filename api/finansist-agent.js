@@ -111,7 +111,13 @@ export default async function handler(req, res) {
             const uniq = (arr, allowed, taken) => (Array.isArray(arr) ? arr : []).map(x => String(x).trim().slice(0, 12)).filter(x => x && (!allowed || allowed.indexOf(x) >= 0) && !taken.has(x) && (taken.add(x), true));
             out.push({ key, name, people: uniq(d0.people, null, takenP), groups: uniq(d0.groups, groups, takenG), items: uniq(d0.items, items, takenI), pool: !!d0.pool, revenue: uniq(d0.revenue, revs, takenR) });
           }
-          patch.departments = out;
+          // версия состава с месяца: прошлые месяцы не пересчитываются (CEO 27.09.2026)
+          const from = String(body.from || C.currentMonthKey()).slice(0, 7); if (!/^\d{4}-\d{2}$/.test(from)) return res.status(400).json({ ok: false, error: 'месяц начала — ГГГГ-ММ' });
+          const r1 = await C.loadRules(true); let hist = Array.isArray(r1.departments_history) ? r1.departments_history.filter(h => h && h.from !== from) : [];
+          if (!hist.length && Array.isArray(r1.departments) && r1.departments !== C.DEPT_DEFAULTS && from !== '2000-01') hist.push({ from: '2000-01', departments: r1.departments }); // старое сохранение без даты — действует до новой версии
+          hist.push({ from, departments: out, saved_by: caller.name || caller.email, saved_at: new Date().toISOString() });
+          hist.sort((a, b) => String(a.from).localeCompare(String(b.from)));
+          patch.departments_history = hist;
         }
         if ('owner_names' in body) { const arr = (Array.isArray(body.owner_names) ? body.owner_names : String(body.owner_names || '').split(',')).map(x => String(x).trim()).filter(Boolean).slice(0, 5); if (!arr.length) return res.status(400).json({ ok: false, error: 'укажите имя владельца, как оно пишется в примечаниях' }); patch.owner_names = arr; }
         const rules = await C.saveRules(patch);
