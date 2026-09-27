@@ -16,6 +16,8 @@ import { requirePermSoft, requirePerm, PAYMENTS_KEYS } from './_perm.js';
 
 // v924 SEC: Apps Script закрывается секретом (см. docs/APPS_SCRIPT_SECURE.md) — серверные
 // вызовы должны его нести, иначе импорт из «Доходов» перестанет работать после закрытия скрипта.
+// Секрет для скрипта записи в «Доходы» (appendPayment/setSeated/setCategory) — в теле POST; скрипт сверяет его со свойством SHEETS_TOKEN.
+function _gsTokenValue() { return (process.env.SHEETS_TOKEN || '').trim() || undefined; }
 function _gsToken() {
   const t = (process.env.SHEETS_TOKEN || '').trim();
   return t ? '&token=' + encodeURIComponent(t) : '';
@@ -168,7 +170,7 @@ async function _mirrorPaymentToSheet(payment, body) {
       headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // text/plain — Apps Script без preflight
       signal: ctrl.signal,
       body: JSON.stringify({
-        action: 'appendPayment',
+        action: 'appendPayment', token: _gsTokenValue(),
         spreadsheetId: cfg.sheet_id,
         sheet: sheetTab,
         // v824: строка 1-в-1 как пишет телеграм-бот (salesdoc-bot services/sheets.py add_payment):
@@ -957,7 +959,7 @@ async function handleSetSeated(req, res) {
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       signal: ctrl.signal,
       body: JSON.stringify({
-        action: 'setSeated',
+        action: 'setSeated', token: _gsTokenValue(),
         spreadsheetId: p.sheet_id,
         sheet: p.sheet_tab,
         row: p.sheet_row,
@@ -1015,7 +1017,7 @@ async function handleSetCategory(req, res) {
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       signal: ctrl.signal,
       body: JSON.stringify({
-        action: 'setCategory',
+        action: 'setCategory', token: _gsTokenValue(),
         spreadsheetId: p.sheet_id,
         sheet: p.sheet_tab,
         row: p.sheet_row,
