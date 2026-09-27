@@ -27,7 +27,17 @@ const WORK = path.join(os.tmpdir(), 'salesdoc-finansist-preview');
 const FIX = path.join(WORK, 'fixtures');
 const MOCK = path.join(ROOT, '.preview-mock'); // внутри репо, чтобы import '@anthropic-ai/sdk' находил node_modules
 fs.mkdirSync(FIX, { recursive: true }); fs.mkdirSync(MOCK, { recursive: true });
+// .env.local: берём только непустые значения (Vercel CLI кладёт туда пустые строки). Так сюда можно положить
+// ANTHROPIC_API_KEY_FINANSIST и прогнать настоящую модель на локальном снимке, не трогая боевую базу.
+try {
+  for (const line of fs.readFileSync(path.join(ROOT, '.env.local'), 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^([A-Z0-9_]+)=(.*)$/); if (!m) continue;
+    const v = m[2].trim().replace(/^"(.*)"$/, '$1');
+    if (v && process.env[m[1]] == null) process.env[m[1]] = v;
+  }
+} catch (_) {}
 process.env.APP_TOKEN = process.env.APP_TOKEN || TOKEN;
+console.log('ключ Финансиста для модели:', process.env.ANTHROPIC_API_KEY_FINANSIST ? 'есть' : 'нет — чат ответит «не подключён»');
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 
