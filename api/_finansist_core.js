@@ -152,12 +152,22 @@ export function taxKind(note) {
   return 'Прочие налоги';
 }
 export function isTax(e) { return /^налог/i.test(String((e && e.category) || '').trim()); }
-// Изъятие владельца, кроме зарплатных строк с его именем: статья «Прочее» с именем владельца в примечании
-// (июль 2026: «мебель для дома Мирзахита», «обои для дома…», «Мирзахит подотчет»). Решение CEO 27.09.2026.
-export function isOwnerOther(e) {
+// Статья «Прочее» с именем владельца (июль 2026: «мебель для дома Мирзахита», «Мирзахит подотчет»): НЕ изъятие
+// автоматически (CEO 27.09.2026, вечер). Пока нет ответа — расход компании и вопрос «изъятие или расход?». Ответ
+// хранится в app_settings.finansist_rules.owner_other { ключ похожести: 'owner' | 'company' } и применяется к похожим строкам.
+export function isOwnerOtherCandidate(e) {
   if (!/^прочее$/i.test(String((e && e.category) || '').trim())) return false;
   const n = String((e && e.note) || '').toLowerCase();
   return (currentRules().owner_names || []).some(x => { const k = String(x || '').trim().toLowerCase(); return k.length >= 4 && n.indexOf(k) >= 0; });
+}
+// Ключ похожести: «для дома» (мебель, обои, посуда для дома), «подотчет», иначе текст без имени и цифр.
+export function ownerOtherKey(e) {
+  let n = String((e && e.note) || '').toLowerCase();
+  (currentRules().owner_names || []).forEach(x => { const k = String(x || '').trim().toLowerCase(); if (k.length >= 4) n = n.split(k).join(' '); });
+  n = n.replace(/[0-9.,$«»"'()]+/g, ' ').replace(/(^|\s)[а-яё]{1,2}(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+  if (/для\s+дома/.test(n)) return 'для дома';
+  if (/подотч/.test(n)) return 'подотчет';
+  return n.slice(0, 40) || 'прочее';
 }
 export function isOwnerName(name) { const k = nameKey(name); return !!k && (currentRules().owner_names || []).some(n => nameKey(n) === k); }
 // Изъятие владельца: строка, похожая на зарплату, с именем владельца. Это не расход компании.
@@ -165,7 +175,7 @@ export function isOwnerDraw(e) { return isSalary(e) && !sharedLabelRule(e) && is
 // Вид строки расходов: transfer | shared | salary | group | owner
 export function classifyExpense(e) {
   if (isTransfer(e)) return { kind: 'transfer' };
-  if (isOwnerOther(e)) return { kind: 'owner' };
+  if (isOwnerOtherCandidate(e)) { const key = ownerOtherKey(e); const d = (currentRules().owner_other || {})[key]; if (d === 'owner') return { kind: 'owner', owner_other: key }; return { kind: 'shared', label: String(e.category || 'Прочее').trim(), owner_other: key, owner_decided: d || null }; }
   if (isTax(e)) return { kind: 'shared', label: 'Налоги', tax_kind: taxKind(e.note) };
   const lab = sharedLabelRule(e); if (lab) return { kind: 'shared', label: lab.label };
   const g = groupRule(e); if (g) return { kind: 'group', group: g.group };
@@ -181,7 +191,7 @@ export const EXPECTED_ITEMS = [
   { key: 'ads', label: 'Реклама и таргет', category: /реклам|таргет|маркет/i, note: /таргет|реклам|facebook|фейсбук|meta|инстаграм|instagram/i, how: 'статья «Реклама/Таргет» или примечание с «таргет», «реклама», «Facebook», «Instagram»' },
   { key: 'telephony', label: 'Виртуальная телефония', category: /телефони/i, note: /телефони|onlinepbx|pbx|sipuni|zadarma|билайн|beeline|(^|[^а-яё])атс([^а-яё]|$)/i, how: 'примечание с «телефония», «АТС», «Билайн» (счёт за АТС), «PBX», «Sipuni», «Zadarma»' }, // \b в JS не знает кириллицу — границы слова вручную
   { key: 'whatsapp', label: 'Платный WhatsApp', category: /whatsapp|ватсап|ваззап|wazzup/i, note: /whatsapp|ватсап|ваззап|wazzup/i, how: 'примечание с «WhatsApp», «Ватсап», «Wazzup»' },
-  { key: 'water', label: 'Вода', category: /^вод[аы]?$/i, note: /(^|[^а-яё])вод[аыу]([^а-яё]|$)|кулер/i, how: 'статья «Вода» или примечание с «вода», «кулер» (например «Офис / Алтын Булак вода»)' },
+  { key: 'water', label: 'Вода', category: /^вод[аы]?$/i, note: /(^|[^а-яё])вод[аыу]([^а-яё]|$)|кулер/i, not_monthly: true, track_last: true, max_gap_months: 2, how: 'статья «Вода» или примечание с «вода», «кулер» (например «Офис / Алтын Булак вода»); покупают не каждый месяц — показываем последнюю покупку, вопрос, если больше 2 месяцев без строки' },
   { key: 'taxi', label: 'Такси', category: /такси/i, note: /такси|яндекс/i, no_odd: true, how: 'статья «Такси» или примечание с «такси», «Яндекс»; сумма не сравнивается — такси каждый месяц разное' },
   { key: 'sim', label: 'Сим-карты и связь', category: /связ|сим/i, note: /сим|\bsim\b|мегаком|megacom|\bo!\b|nur\s*telecom|мобильн/i, exclude: /атс|телефони|билайн|beeline/i, how: 'статья «Связь» или примечание с «сим», «Мегаком», «O!», «мобильный», кроме АТС и Билайна (они — телефония)' },
 ];
@@ -315,6 +325,7 @@ export async function savePrepaid(items) {
   return items;
 }
 export function prepaidEnd(e) { return shiftMonthKey(e.start, e.months - 1); }
+// поля предоплаты: note — пометка («уточняется»), renew_date — до какого числа оплачено (напоминание за месяц)
 export function prepaidShare(e) { return Math.round(num(e.amount) / num(e.months) * 100) / 100; }
 export function applyPrepaid(byMonth, prepaid) {
   (prepaid || []).forEach(e => {
@@ -328,7 +339,7 @@ export function applyPrepaid(byMonth, prepaid) {
         m.rows = (m.rows || []).filter(r => !(r.source === 'sheet' && Math.abs(num(r.amount) - num(e.amount)) <= Math.max(1, num(e.amount) * 0.01) && (!item || itemMatches(item, r))));
       }
       if (k < e.start || k > end || !m.available) return;
-      m.rows = (m.rows || []).concat([{ id: 'prepaid:' + e.id + ':' + k, date: k + '-01', category: e.label, note: 'предоплата ' + round(e.amount) + ' сом за ' + e.months + ' мес. (' + monthLabel(e.start) + ' – ' + monthLabel(end) + '), доля месяца', amount: share, bank: e.bank || '', source: 'prepaid', item_key: e.item_key || null, prepaid_id: e.id }]);
+      m.rows = (m.rows || []).concat([{ id: 'prepaid:' + e.id + ':' + k, date: k + '-01', category: e.label, note: 'предоплата ' + round(e.amount) + ' сом за ' + e.months + ' мес.' + (e.note ? ', ' + e.note : '') + ' (' + monthLabel(e.start) + ' – ' + monthLabel(end) + '), доля месяца', amount: share, bank: e.bank || '', source: 'prepaid', item_key: e.item_key || null, prepaid_id: e.id }]);
     });
   });
   return byMonth;
@@ -557,11 +568,19 @@ export function checkMissing(byMonth, monthKey) {
     prevKeys.forEach(k => { const m = byMonth[k]; if (!m || !m.available || prev.length >= 3) return; const s = m.rows.filter(e => e.source !== 'manual' && (e.work_month || k) === k && itemMatches(item, e)).reduce((a, e) => a + num(e.amount), 0); if (s > 0) prev.push({ month: k, sum: s }); });
     const med = median(prev.map(p => p.sum));
     let status = 'ok';
+    let track = null;
+    if (item.track_last) {
+      // последняя покупка — по всем загруженным месяцам не позже текущего
+      const ks = Object.keys(byMonth).filter(k => k <= monthKey).sort().reverse();
+      for (const k of ks) { const rr = (byMonth[k].rows || []).filter(e => e.source !== 'manual' && (e.work_month || k) === k && itemMatches(item, e)); if (rr.length) { const last = rr.map(e => String(e.date).slice(0, 10)).sort().pop(); const a = parseMonth(k), b = parseMonth(monthKey); track = { last_date: last, last_month: k, months_since: (b.y - a.y) * 12 + (b.mo - a.mo), amount: rr.reduce((x, e) => x + num(e.amount), 0), searched_from: ks[ks.length - 1] }; break; } }
+      if (!track) track = { last_date: null, last_month: null, months_since: null, searched_from: ks[ks.length - 1] || monthKey };
+    }
     if (mode === 'no_data') status = 'no_data';
+    else if (item.track_last) status = (track.months_since == null || track.months_since > (item.max_gap_months || 2)) ? (mode === 'early' ? 'early' : 'missing') : 'ok';
     else if (!cur.length) status = item.not_monthly ? 'ok' : (mode === 'early' ? 'early' : 'missing');
     else if (prepaid) status = 'ok';
     else if (!item.no_odd && med && Math.abs(found - med) / med > ODD_THRESHOLD) status = 'odd';
-    return { item_key: item.key, item_label: item.label, status, prepaid, found_amount: found, found_rows: cur.map(e => ({ date: e.date, category: e.category, note: e.note, amount: e.amount, source: e.source })), expected_amount: med, prev, how: item.how };
+    return { item_key: item.key, item_label: item.label, status, prepaid, track, found_amount: found, found_rows: cur.map(e => ({ date: e.date, category: e.category, note: e.note, amount: e.amount, source: e.source })), expected_amount: med, prev, how: item.how };
   });
   items.mode = mode;
   return items;
@@ -580,7 +599,7 @@ export async function syncMissing(byMonth, monthKey) {
       if (ex && (ex.status === 'missing' || ex.status === 'odd')) { await sbDelete('finansist_missing_data', { id: 'eq.' + ex.id }); changes.push({ type: 'resolved', item: it, prev: ex }); }
       continue;
     }
-    const note = it.status === 'missing'
+    const note = (it.track && it.status === 'missing') ? (it.track.last_date ? 'Последняя покупка «' + it.item_label + '» — ' + fmtDay(it.track.last_date) + ', прошло ' + it.track.months_since + ' мес. Спросить у Гульшан: покупали ли и не забыли ли записать.' : 'Строк «' + it.item_label + '» нет с ' + monthLabel(it.track.searched_from) + '. Спросить у Гульшан: покупали ли и не забыли ли записать.') : it.status === 'missing'
       ? 'В таблице расходов за ' + monthLabel(monthKey) + ' нет строки «' + it.item_label + '». Спросить у Гульшан, почему её нет и какая сумма' + (it.expected_amount ? ' (обычно около ' + round(it.expected_amount) + ' сом). Пока не внесена, прибыль месяца завышена примерно на эту сумму' : '') + '.'
       : it.status === 'odd' ? '«' + it.item_label + '» за ' + monthLabel(monthKey) + ': ' + round(it.found_amount) + ' сом, обычно около ' + round(it.expected_amount) + ' сом. Уточнить у Гульшан, всё ли внесено.' : null;
     if (it.status === 'ok') {
@@ -597,7 +616,9 @@ export async function syncMissing(byMonth, monthKey) {
     if (ex.status !== it.status || round(ex.found_amount) !== round(it.found_amount) || round(ex.expected_amount) !== round(it.expected_amount) || (ex.note || '') !== (note || '')) { await sbUpdate('finansist_missing_data', { id: 'eq.' + ex.id }, { status: it.status, expected_amount: it.expected_amount, found_amount: it.found_amount, note, updated_at: now }); }
   }
   const rows = await sbSelect('finansist_missing_data', { country: 'eq.' + COUNTRY, month: 'eq.' + monthKey, order: 'item_key', limit: '100' });
-  return { items: rows, check: found, mode: found.mode, changes, incomplete: rows.some(r => r.status === 'missing' || r.status === 'odd') };
+  const tracked = found.filter(it => it.track).map(it => ({ item_key: it.item_key, item_label: it.item_label, status: it.status, last_date: it.track.last_date, months_since: it.track.months_since, amount: it.track.amount || null }));
+  // статьи «по последней покупке» не делают прибыль неполной — их нельзя ждать каждый месяц
+  return { items: rows, check: found, tracked, mode: found.mode, changes, incomplete: rows.some(r => (r.status === 'missing' || r.status === 'odd') && !(EXPECTED_ITEMS.find(i => i.key === r.item_key) || {}).track_last) };
 }
 
 // ---------- решения ----------

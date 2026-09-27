@@ -73,7 +73,7 @@ export default async function handler(req, res) {
       prev_revenue: prevRows.reduce((a, p) => a + C.num(p.amount), 0),
       last_paid_at: (function () { const t = C.bishkekIso(); const p = base.payments.find(x => x.paid_at && x.paid_at <= t); return p ? p.paid_at : (base.payments[0] ? base.payments[0].paid_at : null); })(),
       profit_incomplete: missing.incomplete || salaryState.pending,
-      missing_estimate: (missing.items || []).filter(i => i.status === 'missing' && i.expected_amount).reduce((a, i) => a + C.num(i.expected_amount), 0), // прибыль завышена примерно на эту сумму
+      missing_estimate: (missing.items || []).filter(i => i.status === 'missing' && i.expected_amount && !(C.EXPECTED_ITEMS.find(x => x.key === i.item_key) || {}).track_last).reduce((a, i) => a + C.num(i.expected_amount), 0), // прибыль завышена примерно на эту сумму; вода и прочее «по последней покупке» не в счёт
       missing_incomplete: missing.incomplete,
       salary_state: salaryState,
     });
@@ -129,7 +129,7 @@ export default async function handler(req, res) {
       team,
       churn, cash,
       expenses: expensesOut,
-      missing: { items: missing.items, incomplete: missing.incomplete, mode: missing.mode },
+      missing: { items: missing.items, tracked: missing.tracked, incomplete: missing.incomplete, mode: missing.mode },
       questions,
       prepaid: prepaid.map(e => Object.assign({}, e, { end: C.prepaidEnd(e), per_month: C.prepaidShare(e) })),
       settings: { balance: settingsRows.length ? Object.assign({}, settingsRows[0].value, { updated_by: settingsRows[0].updated_by, updated_by_name: settingsRows[0].updated_by_name, updated_at: settingsRows[0].updated_at }) : null },

@@ -275,6 +275,9 @@ const OPTIONS = {
   no_advance: ['Аванс не давали', 'Внесём аванс в таблицу'],
   wrong_sheet: ['Перенесу на нужный лист', 'Так и должно быть'],
   tax_penalty: ['Знаю, уже закрыли', 'Разберёмся с Гульшан'],
+  owner_other: ['Изъятие владельца', 'Расход компании'],
+  water_supplier: ['Сверю с поставщиком', 'Воду покупаем не каждый месяц'],
+  prepaid_renew: ['Продлим', 'Не будем продлевать'],
   fx_over: ['Так и должно быть', 'Разберусь с конвертацией'],
   low_balance: ['Знаю', 'Сократим расходы', 'Ускорим оплаты клиентов'],
 };
@@ -292,11 +295,12 @@ function candidates(monthKey, disputes, missingSync, opts_prepaid) {
   (missingSync.items || []).forEach(r => {
     if (r.status === 'missing' || r.status === 'odd') out.push({ key: r.status + ':' + r.item_key, type: 'missing', amount: r.status === 'odd' ? r.found_amount : r.expected_amount, fact: r.note, options: OPTIONS[r.status], evidence: { item_key: r.item_key, status: r.status, found_amount: r.found_amount, expected_amount: r.expected_amount } });
   });
-  (opts_prepaid || []).forEach(e => { const endKey = C.prepaidEnd(e); if (monthKey === C.shiftMonthKey(endKey, 1)) out.push({ key: 'prepaid_end:' + e.id, type: 'other', amount: e.amount, fact: 'Предоплата «' + e.label + '» ' + C.round(e.amount) + ' сом за ' + e.months + ' мес. закончилась в ' + C.monthLabel(endKey) + '. Продлили или больше не платим?', options: OPTIONS.prepaid_end, evidence: { prepaid_id: e.id, label: e.label, amount: e.amount, start: e.start, months: e.months } }); });
+  (opts_prepaid || []).forEach(e => { if (e.renew_date && monthKey === C.shiftMonthKey(String(e.renew_date).slice(0, 7), -1)) out.push({ key: 'prepaid_renew:' + e.id + ':' + e.renew_date, type: 'other', kind: 'prepaid_renew', amount: e.amount, fact: '«' + e.label + '» оплачен до ' + C.fmtDay(e.renew_date) + ' ' + String(e.renew_date).slice(0, 4) + '. Продлеваем?', options: OPTIONS.prepaid_renew, evidence: { prepaid_id: e.id, renew_date: e.renew_date } }); });
+  (opts_prepaid || []).forEach(e => { if (e.renew_date) return; const endKey = C.prepaidEnd(e); if (monthKey === C.shiftMonthKey(endKey, 1)) out.push({ key: 'prepaid_end:' + e.id, type: 'other', amount: e.amount, fact: 'Предоплата «' + e.label + '» ' + C.round(e.amount) + ' сом за ' + e.months + ' мес. закончилась в ' + C.monthLabel(endKey) + '. Продлили или больше не платим?', options: OPTIONS.prepaid_end, evidence: { prepaid_id: e.id, label: e.label, amount: e.amount, start: e.start, months: e.months } }); });
   (missingSync.changes || []).forEach(ch => { if (ch.type === 'superseded') out.push({ key: 'superseded:' + ch.item.item_key + ':' + monthKey, type: 'missing', amount: ch.prev.amount, fact: 'Ручная сумма ' + C.round(ch.prev.amount) + ' сом по статье «' + ch.item.item_label + '» больше не учитывается: в таблице появилась настоящая строка на ' + C.round(ch.item.found_amount) + ' сом.', options: OPTIONS.superseded, evidence: { item_key: ch.item.item_key, manual: ch.prev.amount, found: ch.item.found_amount } }); });
   return out;
 }
-const FALLBACK_TITLE_MORE = { tax_penalty: 'Появилась пеня по налогам', pay_less: 'Выплата меньше оклада', pay_more: 'Выплата больше оклада — бонус?', no_advance: 'Аванс не найден', wrong_sheet: 'Строка не на своём листе', fx_over: 'Ушло больше, чем нужно по курсу' };
+const FALLBACK_TITLE_MORE = { owner_other: 'Изъятие или расход компании?', water_supplier: 'Сверить доставки воды с поставщиком', prepaid_renew: 'Подписка скоро кончается', tax_penalty: 'Появилась пеня по налогам', pay_less: 'Выплата меньше оклада', pay_more: 'Выплата больше оклада — бонус?', no_advance: 'Аванс не найден', wrong_sheet: 'Строка не на своём листе', fx_over: 'Ушло больше, чем нужно по курсу' };
 const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', dec: 'Проверить по правилу декад', missing: 'Не хватает данных по расходам', other: 'Предоплата закончилась', owner: 'Изъято больше, чем заработано', balance: 'Остаток ниже безопасного' };
 
 // Изъятие владельца с начала квартала против прибыли за тот же период + остаток на счетах против безопасного.
@@ -339,7 +343,7 @@ export async function sweepMonth(monthKey, opts) {
   // исчезнувшие расхождения — закрываем
   const candKeys = new Set(cands.map(c => c.key));
   let closed = 0;
-  for (const q of existing) if (q.status === 'open' && !candKeys.has(q.key) && !q.key.startsWith('superseded:') && !q.key.startsWith('prepaid_end:') && q.type !== 'goal' && (q.type !== 'other' || /^(owner_over|low_balance|pay_less|pay_more|fx_over):/.test(q.key))) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Расхождение исчезло само', updated_at: now }); closed++; }
+  for (const q of existing) if (q.status === 'open' && !candKeys.has(q.key) && !q.key.startsWith('superseded:') && !q.key.startsWith('prepaid_end:') && !q.key.startsWith('prepaid_renew:') && q.key !== 'water_supplier' && q.type !== 'goal' && (q.type !== 'other' || /^(owner_over|low_balance|pay_less|pay_more|fx_over|owner_other|tax_penalty):/.test(q.key))) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Расхождение исчезло само', updated_at: now }); closed++; }
   // обновляем сумму/доказательства у открытых
   // у открытых обновляем сумму, доказательства и текст (если текст шаблонный — равен прошлому факту)
   for (const c of cands) { const q = exMap[c.key]; if (q && q.status === 'open') { const keepModel = !!(q.evidence && q.evidence.model_text); const patch = { amount: c.amount == null ? null : C.round(c.amount), evidence: Object.assign({}, c.evidence, keepModel ? { model_text: true } : {}), updated_at: now }; if (q.body !== c.fact && !keepModel) patch.body = c.fact; await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, patch); } }
@@ -377,6 +381,7 @@ export async function answerQuestion(id, idx, caller) {
   const now = new Date().toISOString();
   await sbUpdate('finansist_questions', { id: 'eq.' + id }, { status: 'answered', answer_idx: idx, answer_text: text, answered_by: caller.email, answered_by_name: caller.name || null, answered_at: now, updated_at: now });
   await C.saveDecision(q.key, q.title + ' — ' + text, 'question', q.month, caller.email, caller.name);
+  if (q.key.startsWith('owner_other:')) { const key = q.key.slice('owner_other:'.length); const cur = Object.assign({}, (await C.loadRules(true)).owner_other || {}); cur[key] = idx === 0 ? 'owner' : 'company'; await C.saveRules({ owner_other: cur }); }
   return { ok: true };
 }
 
@@ -407,6 +412,24 @@ async function payAndSheetChecks(base, monthKey, byMonth) {
     const dm = C.parseMonth(String(e.date).slice(0, 7)), sm = C.parseMonth(e.sheet_month);
     out.push({ key, type: 'missing', kind: 'wrong_sheet', amount: e.amount, fact: 'Строка «' + e.note + '» на ' + C.round(e.amount) + ' сом от ' + C.fmtDay(e.date) + ' записана на лист «' + C.MONTHS_RU[sm.mo - 1] + '». Считаю её ' + (e.part === 'advance' ? 'авансом' : 'расходом') + ' за ' + C.monthLabel(e.work_month || String(e.date).slice(0, 7)) + '. Перенесите строку на лист «' + C.MONTHS_RU[dm.mo - 1] + '» и ведите там остальные строки этого месяца.', options: OPTIONS.wrong_sheet, evidence: { date: e.date, note: e.note, amount: e.amount, sheet: e.sheet_month } });
   });
+  // «Прочее» с именем владельца без решения — один вопрос на ключ похожести (пока нет ответа — расход компании)
+  const oo = {};
+  (C.expenseRows(byMonth, monthKey) || []).forEach(e => { const k = C.classifyExpense(e); if (!k.owner_other || k.owner_decided || k.kind === 'owner') return; (oo[k.owner_other] = oo[k.owner_other] || []).push(e); });
+  for (const key of Object.keys(oo)) {
+    const other = await sbSelect('finansist_questions', { country: 'eq.' + C.COUNTRY, key: 'eq.owner_other:' + key, status: 'eq.open', limit: '5' });
+    if (other.some(q => q.month !== monthKey)) continue; // уже спрашиваем в другом месяце
+    const rows = oo[key]; const sum = rows.reduce((a, e) => a + C.num(e.amount), 0);
+    out.push({ key: 'owner_other:' + key, type: 'other', kind: 'owner_other', amount: sum, fact: 'Статья «Прочее» с именем владельца за ' + C.monthLabel(monthKey) + ': ' + rows.map(e => '«' + e.note + '» ' + C.round(e.amount)).join(', ') + ' — всего ' + C.round(sum) + ' сом. Это изъятие владельца или расход компании? Ответ запомню для похожих строк («' + key + '»). Пока считаю расходом компании.', options: OPTIONS.owner_other, evidence: { similarity_key: key, rows: rows.map(e => ({ date: e.date, note: e.note, amount: e.amount })) } });
+  }
+  // вода: разовый вопрос сверить доставки с поставщиком (один на всё время)
+  const water = C.checkMissing(byMonth, monthKey).find(i => i.item_key === 'water');
+  if (water && monthKey === C.currentMonthKey()) {
+    const asked = await sbSelect('finansist_questions', { country: 'eq.' + C.COUNTRY, key: 'eq.water_supplier', limit: '1' });
+    if (!asked.length || asked[0].month === monthKey) {
+      const hist = Object.keys(byMonth).filter(k => k <= monthKey).sort().map(k => { const s = (byMonth[k].rows || []).filter(e => e.source !== 'manual' && (e.work_month || k) === k && /(^|[^а-яё])вод[аыу]([^а-яё]|$)|кулер/i.test(String(e.category) + ' ' + String(e.note))).reduce((a, e) => a + C.num(e.amount), 0); return C.monthLabel(k) + ' — ' + (s ? C.round(s) + ' сом' : 'нет'); });
+      out.push({ key: 'water_supplier', type: 'missing', kind: 'water_supplier', amount: null, fact: 'Вода в таблице встречается не каждый месяц: ' + hist.join('; ') + '. Сверьте с поставщиком воды, сколько доставок было за последние полгода — чтобы понять, это реальная периодичность или пропуски в записи.', options: OPTIONS.water_supplier, evidence: { history: hist } });
+    }
+  }
   // пени по налогам — по месяцу выплаты
   C.expenseSummary(C.cashRows(byMonth, monthKey) || []).tax_penalties.forEach(t => {
     out.push({ key: 'tax_penalty:' + t.date + ':' + C.round(t.amount), type: 'other', kind: 'tax_penalty', amount: t.amount, fact: C.fmtDay(t.date) + ' заплачена пеня ' + C.round(t.amount) + ' сом («' + t.note + '»). Пеня — это просрочка налога: за что она и закрыта ли причина?', options: OPTIONS.tax_penalty, evidence: t });

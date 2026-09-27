@@ -53,7 +53,7 @@ export default async function handler(req, res) {
         const keys = [3, 2, 1, 0, -1, -2, -3, -4, -5, -6].map(k => C.shiftMonthKey(month, k)).filter(k => k <= C.currentMonthKey());
         const byMonth = await C.loadExpenses(keys);
         const r = await C.syncMissing(byMonth, month);
-        return res.status(200).json({ ok: true, month, items: r.items, check: r.check, incomplete: r.incomplete });
+        return res.status(200).json({ ok: true, month, items: r.items, check: r.check, tracked: r.tracked, incomplete: r.incomplete });
       }
       if (action === 'spend') return res.status(200).json({ ok: true, limit: await limitState() });
       if (action === 'prepaid') return res.status(200).json({ ok: true, items: await C.loadPrepaid() });
@@ -116,7 +116,9 @@ export default async function handler(req, res) {
         if (!months || months < 2 || months > 36) return res.status(400).json({ ok: false, error: 'срок — от 2 до 36 месяцев' });
         if (!C.parseMonth(start)) return res.status(400).json({ ok: false, error: 'месяц начала в формате YYYY-MM' });
         const items = await C.loadPrepaid();
-        const e = { id: 'pp-' + Date.now().toString(36), label, item_key: itemKey, amount, start, months, added_by: caller.email, added_by_name: caller.name, added_at: new Date().toISOString() };
+        const note = body.note ? String(body.note).trim().slice(0, 120) : null;
+        const renew = /^\d{4}-\d{2}-\d{2}$/.test(String(body.renew_date || '')) ? String(body.renew_date) : null;
+        const e = { id: 'pp-' + Date.now().toString(36), label, item_key: itemKey, amount, start, months, note, renew_date: renew, added_by: caller.email, added_by_name: caller.name, added_at: new Date().toISOString() };
         items.push(e); await C.savePrepaid(items);
         await C.saveDecision('prepaid:' + e.id, label + ' — предоплата ' + Math.round(amount) + ' сом за ' + months + ' мес. с ' + C.monthLabel(start) + ', в месяц ' + Math.round(amount / months) + ' сом', 'question', start, caller.email, caller.name);
         return res.status(200).json({ ok: true, item: e, items });

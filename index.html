@@ -11077,6 +11077,8 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
       <input id="fz-pp-amount" class="fz-minp" placeholder="сумма" inputmode="numeric" aria-label="Сумма">
       <input id="fz-pp-start" class="fz-minp" placeholder="2026-08" aria-label="Месяц начала" style="width:90px">
       <input id="fz-pp-months" class="fz-minp" placeholder="мес." inputmode="numeric" aria-label="Срок в месяцах" style="width:64px">
+      <input id="fz-pp-renew" class="fz-minp" placeholder="оплачено до 2027-04-07" aria-label="Оплачено до" style="width:170px;text-align:left">
+      <input id="fz-pp-note" class="fz-minp" placeholder="пометка, например «уточняется»" aria-label="Пометка" style="width:200px;text-align:left">
       <button class="fz-btn pri" id="fz-pp-add" type="button">Добавить</button>
      </div>
     </div>
@@ -11231,7 +11233,8 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
        <tr><td>Статья «Перенос»</td><td class="wrap">не расход</td></tr>
        <tr><td>Статья «Услуги», в примечании «интеграторам»</td><td class="wrap">зарплата команды интеграции в Казахстане — группа «Интеграция» в «Команде», её выручка — оплаты по статьям внедрение и интеграция</td></tr>
        <tr><td>Статья «Услуги», в примечании слово «юрист»</td><td class="wrap">внешний подрядчик, не сотрудник: статья «Юрист, аутсорс» в общих расходах. Сопоставление по слову «юрист», не по имени</td></tr>
-       <tr><td>Строки зарплаты с именем владельца; статья «Прочее» с его именем</td><td class="wrap">изъятие владельца: не расход и не зарплата (мебель, обои для дома, подотчёт — тоже изъятие), показывается под прибылью — «Прибыль → Изъятие владельца → Осталось в компании»</td></tr>
+       <tr><td>Строки зарплаты с именем владельца</td><td class="wrap">изъятие владельца: не расход и не зарплата, показывается под прибылью — «Прибыль → Изъятие владельца → Осталось в компании»</td></tr>
+       <tr><td>Статья «Прочее» с именем владельца</td><td class="wrap">в первый раз — вопрос «изъятие или расход компании», пока нет ответа — расход компании. Ответ запоминается для похожих строк: «для дома» (мебель, обои…), «подотчёт», остальные — по тексту примечания</td></tr>
        <tr><td>Статья «Налоги»</td><td class="wrap">налоги компании, отдельной статьёй в общих расходах по видам: подоходный, страховые, ГНПФ, единый, пеня. К людям не привязываются: официально оформлен только владелец, остальные — ИП. Любая пеня — вопрос</td></tr>
        <tr><td>Интеграторы до августа 2026</td><td class="wrap">платили из Казахстана — в расходах KG их нет; статью «Интеграция» до и после августа напрямую не сравнивать</td></tr>
        <tr><td>Предоплата за несколько месяцев (amoCRM и подобное)</td><td class="wrap">сама оплата из месяца убирается, вместо неё в каждый месяц срока кладётся равная доля; список — в «Вопросах агента», блок «Предоплаченные расходы»</td></tr>
@@ -46620,7 +46623,7 @@ async function fzLoad(){
 // Ответы на вопросы и остаток по счетам — общие для владельца и бухгалтера, приходят с сервера
 function fzApplyServerState(r){
  _fz.expLoaded = true; // v1006: расходы в ответе сервера
- _fz.questions = r.questions || []; _fz.missing = (r.missing && r.missing.items) || []; _fz.missingMode = (r.missing && r.missing.mode) || 'full'; _fz.agent = r.agent || null; _fz.prepaid = r.prepaid || [];
+ _fz.questions = r.questions || []; _fz.missing = (r.missing && r.missing.items) || []; _fz.missingMode = (r.missing && r.missing.mode) || 'full'; _fz.tracked = (r.missing && r.missing.tracked) || []; _fz.agent = r.agent || null; _fz.prepaid = r.prepaid || [];
  var b = r.settings && r.settings.balance;
  _fz.balance = (b && b.balance != null) ? +b.balance : null; _fz.balanceMeta = b || null;
  var inp = document.getElementById('fz-balance'); if (inp && document.activeElement !== inp) inp.value = _fz.balance == null ? '' : Math.round(_fz.balance).toLocaleString('ru-RU');
@@ -46755,6 +46758,7 @@ function fzRenderMissing(){
    : (i.status === 'filled' ? fzMoney(i.amount) + '<span class="sub">' + fzEsc((i.filled_by_name || i.filled_by || '') + (i.filled_at ? ', ' + fzWhen(i.filled_at) : '')) + '</span>' : '');
   return '<tr><td>' + fzEsc(i.item_label) + '</td><td class="wrap"><span class="st ' + st[0] + '">' + st[1] + '</span>' + (i.note ? '<span class="sub">' + fzEsc(i.note) + '</span>' : '') + '</td><td class="r">' + (i.expected_amount ? fzMoney(i.expected_amount) : '<span class="muted">—</span>') + '</td><td class="r">' + (i.found_amount ? fzMoney(i.found_amount) : '<span class="muted">нет</span>') + '</td><td>' + act + '</td></tr>';
  }).join('') : '<tr><td colspan="5" class="muted">Все обязательные статьи за месяц на месте.</td></tr>';
+ body.innerHTML += (_fz.tracked || []).filter(function(t){ return !items.some(function(i){ return i.item_key === t.item_key && (i.status === 'missing' || i.status === 'odd' || i.status === 'filled'); }); }).map(function(t){ return '<tr><td>' + fzEsc(t.item_label) + '</td><td class="wrap"><span class="st ok">по последней покупке</span><span class="sub">' + (t.last_date ? 'последняя покупка ' + fzDDMM(t.last_date) + '.' + t.last_date.slice(0,4) + ', прошло ' + t.months_since + ' ' + fzPlural(t.months_since,'месяц','месяца','месяцев') : 'покупок не найдено') + '; вопрос, если больше 2 месяцев без строки</span></td><td class="r"><span class="muted">—</span></td><td class="r">' + (t.amount ? fzMoney(t.amount) : '<span class="muted">—</span>') + '</td><td></td></tr>'; }).join('');
 }
 function fzMissingAct(id, kind){
  var body = { id: id };
@@ -46800,7 +46804,7 @@ function fzRenderPrepaidForm(){
 function fzRenderPrepaid(){
  var body = document.getElementById('fz-prepaid-body'); if (!body) return;
  var items = _fz.prepaid || [];
- body.innerHTML = items.length ? items.map(function(e){ return '<tr><td>' + fzEsc(e.label) + '<span class="sub">добавил ' + fzEsc(e.added_by_name || e.added_by || '') + '</span></td><td class="r">' + fzMoney(e.amount) + '</td><td>' + fzEsc(FZ_MONTHS[+e.start.slice(5,7)-1].toLowerCase() + ' ' + e.start.slice(0,4) + ' – ' + FZ_MONTHS[+e.end.slice(5,7)-1].toLowerCase() + ' ' + e.end.slice(0,4)) + '<span class="sub">' + e.months + ' ' + fzPlural(e.months,'месяц','месяца','месяцев') + '</span></td><td class="r">' + fzMoney(e.per_month) + '</td><td><button class="fz-btn" data-fz-ppdel="' + fzEsc(e.id) + '">Убрать</button></td></tr>'; }).join('')
+ body.innerHTML = items.length ? items.map(function(e){ return '<tr><td>' + fzEsc(e.label) + (e.note ? ' <span class="fz-pill mu">' + fzEsc(e.note) + '</span>' : '') + '<span class="sub">добавил ' + fzEsc(e.added_by_name || e.added_by || '') + (e.renew_date ? ' · оплачено до ' + fzDDMM(e.renew_date) + '.' + e.renew_date.slice(0,4) : '') + '</span></td><td class="r">' + fzMoney(e.amount) + '</td><td>' + fzEsc(FZ_MONTHS[+e.start.slice(5,7)-1].toLowerCase() + ' ' + e.start.slice(0,4) + ' – ' + FZ_MONTHS[+e.end.slice(5,7)-1].toLowerCase() + ' ' + e.end.slice(0,4)) + '<span class="sub">' + e.months + ' ' + fzPlural(e.months,'месяц','месяца','месяцев') + '</span></td><td class="r">' + fzMoney(e.per_month) + '</td><td><button class="fz-btn" data-fz-ppdel="' + fzEsc(e.id) + '">Убрать</button></td></tr>'; }).join('')
   : '<tr><td colspan="5" class="muted">Предоплат пока нет. Добавьте ниже: статья, сумма, месяц первой оплаты, срок.</td></tr>';
  var st = document.getElementById('fz-pp-start'); if (st && !st.value) st.value = fzMonthKey(_fz.month);
  fzRenderPrepaidForm();
@@ -46808,10 +46812,10 @@ function fzRenderPrepaid(){
 function fzPrepaidAdd(){
  var item = _fz.ppItem || ''; var exp = ((_fz.data && _fz.data.meta && _fz.data.meta.expected_items) || []).filter(function(i){ return i.key === item; })[0];
  var label = exp ? exp.label : String(document.getElementById('fz-pp-label').value || '').trim();
- var body = { label: label, item_key: exp ? exp.key : null, amount: document.getElementById('fz-pp-amount').value, start: document.getElementById('fz-pp-start').value.trim(), months: document.getElementById('fz-pp-months').value };
+ var body = { label: label, item_key: exp ? exp.key : null, amount: document.getElementById('fz-pp-amount').value, start: document.getElementById('fz-pp-start').value.trim(), months: document.getElementById('fz-pp-months').value, renew_date: document.getElementById('fz-pp-renew').value.trim(), note: document.getElementById('fz-pp-note').value.trim() };
  if (!label) { try { sdToast('Выберите статью или напишите название', 'error'); } catch(_){} return; }
  sbFetch('/api/finansist-agent?action=prepaid_add', { method:'POST', body: JSON.stringify(body) })
-  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось'); document.getElementById('fz-pp-amount').value = ''; document.getElementById('fz-pp-months').value = ''; document.getElementById('fz-pp-label').value = ''; _fz.ppItem = ''; return fzLoad(); })
+  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось'); document.getElementById('fz-pp-amount').value = ''; document.getElementById('fz-pp-months').value = ''; document.getElementById('fz-pp-renew').value = ''; document.getElementById('fz-pp-note').value = ''; document.getElementById('fz-pp-label').value = ''; _fz.ppItem = ''; return fzLoad(); })
   .catch(function(e){ try { sdToast('Не сохранилось: ' + (e && e.message || e), 'error'); } catch(_){} });
 }
 function fzPrepaidDel(id){
