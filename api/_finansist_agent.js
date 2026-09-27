@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
-import { sbSelect, sbInsert, sbUpsert, sbUpdate } from './_supabase.js';
+import { sbSelect, sbInsert, sbUpsert, sbUpdate, sbDelete } from './_supabase.js';
 import * as C from './_finansist_core.js';
 
 export const MODEL = 'claude-opus-5-5';
@@ -274,6 +274,7 @@ async function saveAssistant(text, trace, usage, cost, model) {
 const OPTIONS = {
   bank: ['Ошибка в счёте', 'Ошибка в статье', 'Так и должно быть'],
   dup: ['Это дубль, разберусь в оплатах', 'Разные платежи'],
+  miss: ['Удалить из программы', 'Строку вернут в таблицу'],
   missing: ['Внесу сумму', 'Такой статьи в этом месяце нет'],
   odd: ['Всё верно', 'Проверю с Гульшан'],
   superseded: ['Понятно'],
@@ -313,7 +314,7 @@ function candidates(monthKey, disputes, missingSync, opts_prepaid) {
   return out;
 }
 const FALLBACK_TITLE_MORE = { advance_date: 'Аванс: за какой месяц?', oklad_missing: 'Какой у вас оклад?', owner_other: 'Изъятие или расход компании?', water_supplier: 'Сверить доставки воды с поставщиком', prepaid_renew: 'Подписка скоро кончается', tax_penalty: 'Появилась пеня по налогам', pay_less: 'Выплата меньше оклада', pay_more: 'Выплата больше оклада — бонус?', no_advance: 'Аванс не найден', wrong_sheet: 'Строка не на своём листе', fx_over: 'Ушло больше, чем нужно по курсу' };
-const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', missing: 'Не хватает данных по расходам', other: 'Предоплата закончилась', owner: 'Изъято больше, чем заработано', balance: 'Остаток ниже безопасного' };
+const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', miss: 'Оплаты нет в таблице «Доходы»', missing: 'Не хватает данных по расходам', other: 'Предоплата закончилась', owner: 'Изъято больше, чем заработано', balance: 'Остаток ниже безопасного' };
 
 // Изъятие владельца с начала квартала против прибыли за тот же период + остаток на счетах против безопасного.
 // Прибыль берём только за месяцы, где есть расходы (иначе сравнивать не с чем).
@@ -405,6 +406,8 @@ export async function answerQuestion(id, idx, caller) {
   await sbUpdate('finansist_questions', { id: 'eq.' + id }, { status: 'answered', answer_idx: idx, answer_text: text, answered_by: caller.email, answered_by_name: caller.name || null, answered_at: now, updated_at: now });
   await C.saveDecision(q.key, q.title + ' — ' + text, 'question', q.month, caller.email, caller.name);
   if (q.key.startsWith('advance_date:') && q.evidence && q.evidence.row_key) { const cur = Object.assign({}, (await C.loadRules(true)).advance_month || {}); cur[q.evidence.row_key] = idx === 0 ? q.evidence.sheet_month : q.evidence.date_month; await C.saveRules({ advance_month: cur }); }
+  // v1011: оплата пропала из листа — удаляем из программы только по ответу и только если пометка ещё стоит
+  if (q.key.startsWith('miss:') && idx === 0) { const pid = q.key.slice(5); const pr = await sbSelect('payments', { id: 'eq.' + pid, select: 'id,sheet_missing_at', limit: '1' }); if (pr[0] && pr[0].sheet_missing_at) await sbDelete('payments', { id: 'eq.' + pid }); }
   if (q.key.startsWith('owner_other:')) { const key = q.key.slice('owner_other:'.length); const cur = Object.assign({}, (await C.loadRules(true)).owner_other || {}); cur[key] = idx === 0 ? 'owner' : 'company'; await C.saveRules({ owner_other: cur }); }
   return { ok: true };
 }

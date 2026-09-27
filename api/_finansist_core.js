@@ -249,7 +249,7 @@ let _base = null, _baseTs = 0;
 export async function loadBase(force) {
   if (!force && _base && Date.now() - _baseTs < 60e3) return _base;
   const [payments, clients, employees] = await Promise.all([
-    sbSelectAll('payments', { country: 'eq.' + COUNTRY, select: 'id,paid_at,company_name,client_id,category,category_raw,amount,qty,price,period_months,bank,manager_name,source,created_by,created_at,comment', order: 'paid_at.desc,id' }),
+    sbSelectAll('payments', { country: 'eq.' + COUNTRY, select: 'id,paid_at,company_name,client_id,category,category_raw,amount,qty,price,period_months,bank,manager_name,source,created_by,created_at,comment,receipt_path,sheet_tab,sheet_row,sheet_missing_at', order: 'paid_at.desc,id' }),
     sbSelectAll('clients', { country: 'eq.' + COUNTRY, select: 'client_id,company_name,city,status,next_billing_at,access_until,access_status,pay_reason,pay_reason_note,pay_reason_at,churned_at,subscription_period_months,support_operator,curator_operator,first_payment_date,last_payment_date', order: 'client_id' }),
     sbSelect('employees', { active: 'eq.true', select: 'name,pos,role,country,email', order: 'name', limit: '200' }),
   ]);
@@ -512,12 +512,15 @@ export function findDisputes(all, range) {
       push(b.id, 'dup', 'такой же платёж ' + fmtDay(a.paid_at), { pair });
     }
   });
+  // v1011: оплата пропала из листа «Доходы» — импорт её не удаляет, а помечает; здесь она становится спорной записью
+  // и вопросом «удалить из программы или строку вернут». Удаление — только по ответу (answerQuestion).
+  all.forEach(p => { if (p.sheet_missing_at) push(p.id, 'miss', 'строки нет в таблице «Доходы» с ' + fmtDay(String(p.sheet_missing_at).slice(0, 10)) + (p.sheet_tab ? ' (была на листе «' + p.sheet_tab + '»' + (p.sheet_row ? ', строка ' + p.sheet_row : '') + ')' : '') + (p.receipt_path ? '; у оплаты есть чек' : '')); });
   // Проверка по правилу декад удалена по решению CEO 27.09.2026: дни клиенту иногда дарят сознательно
   // (заплатил 20-го как за полный месяц — подарили 10 дней). Деньги считаем по факту оплаты.
   const list = all.filter(p => issues[p.id] && (!range || (p.paid_at >= range.from && p.paid_at <= range.to)))
     .map(p => ({ id: p.id, paid_at: p.paid_at, company_name: p.company_name, client_id: p.client_id, category: p.category, category_raw: p.category_raw, amount: num(p.amount), bank: p.bank, bank_key: bankKey(p.bank), manager_name: p.manager_name, source: p.source, created_by: p.created_by, issues: issues[p.id] }))
     .sort((a, b) => a.paid_at < b.paid_at ? 1 : -1);
-  const counts = { bank: 0, dup: 0 };
+  const counts = { bank: 0, dup: 0, miss: 0 };
   list.forEach(p => { const seen = {}; p.issues.forEach(i => { if (!seen[i.type]) { counts[i.type]++; seen[i.type] = 1; } }); });
   return { list, issues, counts };
 }

@@ -46492,7 +46492,7 @@ var _fz = { inited:false, month:null, data:null, view:'overview', busy:false, er
   filters:{ q:'', type:'', cat:'', bank:'' }, done:{}, balance:null, balanceMeta:null, balanceTimer:null, expReady:false, expLoaded:false }; // done и balance приходят с сервера (finansist_answers / finansist_settings), на устройстве не храним
 
 var FZ_CAT = { implementation:'Внедрение', integration:'Интеграция', subscription:'Абонплата', license:'Новый клиент', revision:'Доработка', extra:'Доп. лицензии', other:'Прочее' };
-var FZ_TYPE = { bank:['wr','не тот счёт','Счёт'], dup:['bad','возможный дубль','Дубль'] }; // проверка по декадам удалена (CEO 27.09.2026)
+var FZ_TYPE = { bank:['wr','не тот счёт','Счёт'], dup:['bad','возможный дубль','Дубль'], miss:['bad','нет в таблице «Доходы»','Нет в таблице'] }; // проверка по декадам удалена (CEO 27.09.2026)
 var FZ_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 var FZ_MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 var FZ_MONTHS_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
@@ -47020,7 +47020,7 @@ function fzRenderDisputes(){
  var d = _fz.data; if (!d) return;
  var list = d.disputes.list, f = _fz.filters;
  var cnt = function(fn){ return list.filter(fn).length; };
- fzDDRender('type', 'Все расхождения', ['bank','dup'].map(function(t){ return { v:t, l:FZ_TYPE[t][1].replace(/^./, function(c){ return c.toUpperCase(); }), n:cnt(function(p){ return p.issues.some(function(i){ return i.type === t; }); }) }; }), f.type);
+ fzDDRender('type', 'Все расхождения', ['bank','dup','miss'].map(function(t){ return { v:t, l:FZ_TYPE[t][1].replace(/^./, function(c){ return c.toUpperCase(); }), n:cnt(function(p){ return p.issues.some(function(i){ return i.type === t; }); }) }; }), f.type);
  var cats = {}; list.forEach(function(p){ cats[p.category] = (cats[p.category] || 0) + 1; });
  fzDDRender('cat', 'Все статьи', Object.keys(cats).map(function(c){ return { v:c, l:FZ_CAT[c] || c, n:cats[c] }; }), f.cat);
  var banks = {}; list.forEach(function(p){ var b = p.bank || '—'; banks[b] = (banks[b] || 0) + 1; });

@@ -11,6 +11,7 @@
 // DELETE /api/payments?id=UUID                                  → удалить (только manual)
 
 import { sbSelect, sbSelectAll, sbInsert, sbUpdate, sbDelete, sbUpsert } from './_supabase.js';
+import { planTabSync } from './_sheet_sync.js';
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { requirePermSoft, requirePerm, PAYMENTS_KEYS } from './_perm.js';
 
@@ -354,6 +355,9 @@ async function _fetchSheet(sheetName, cfg) {
 // логика не расходилась. dryRun=true → ничего не пишет, только сводка.
 // monthsBack — сколько последних месяцев перечитывать (current-first). Не задан/0 →
 // все месяцы с января (полный backfill). Крон передаёт 2 (текущий + прошлый).
+// v1011: для пробного прогона сопоставления на чтение (scripts/…) — разбор строк листа тем же кодом, что у импорта.
+export const _sheetSyncInternals = { parseRow: (...a) => _parseRow(...a), fetchSheet: (...a) => _fetchSheet(...a), config: SHEET_CONFIG };
+
 export async function importSheetsForCountry(country, dryRun, monthsBack, rebuild) {
   country = String(country || 'KG').toUpperCase();
   if (!ALLOWED_COUNTRIES.includes(country)) {
@@ -470,6 +474,7 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
   // tab/row — без sheet_id они путаются. Существующие тянем С ПАГИНАЦИЕЙ (обход лимита 1000).
   // Строим карту ДО dry-run, чтобы отчёт (вставка/обновление/удаление) был точным.
   const existingMap = new Map(); // key -> строка (id + поля для сравнения)
+  const existingAll = []; // v1011: все строки, в т.ч. пропавшие из листа (sheet_row может быть null)
   {
     const PAGE = 1000;
     let offset = 0;
@@ -477,12 +482,12 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
       const pageRows = await sbSelect('payments', {
         country: 'eq.' + country,
         source: 'eq.sheets_import',
-        select: 'id,sheet_id,sheet_tab,sheet_row,company_name,client_id,amount,seated,category,category_raw,paid_at,manager_name,bank,activation_date,period_months,qty,price,tech_support,receipt_path',
+        select: 'id,sheet_id,sheet_tab,sheet_row,company_name,client_id,amount,seated,category,category_raw,paid_at,manager_name,bank,activation_date,period_months,qty,price,tech_support,receipt_path,op_id,sheet_missing_at',
         order: 'id.desc',
         limit: String(PAGE),
         offset: String(offset)
       });
-      pageRows.forEach(r => existingMap.set(`${r.sheet_id}::${r.sheet_tab}::${r.sheet_row}`, r));
+      pageRows.forEach(r => { existingAll.push(r); if (r.sheet_row != null) existingMap.set(`${r.sheet_id}::${r.sheet_tab}::${r.sheet_row}`, r); });
       if (pageRows.length < PAGE) break;
       offset += PAGE;
     }
@@ -596,123 +601,96 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
   const manualMap = new Map();
   manualRows.forEach(r => { if (!manualMap.has(manualKey(r))) manualMap.set(manualKey(r), r); });
 
+  // v1011: СОПОСТАВЛЕНИЕ ПО СОДЕРЖАНИЮ С УЧЁТОМ КОЛИЧЕСТВА (api/_sheet_sync.js, решение CEO 27.09.2026).
+  // Раньше — по номеру строки, а «сироты» удалялись: 23.09 после удаления строк Б июля крон молча стёр 51 оплату с чеками.
+  // Теперь: переезд строки меняет только номер; правка на месте — обновление; оплата, которой нет ни в одной строке
+  // вкладки, НЕ удаляется — ей ставится sheet_missing_at, и в «Финансисте» появляется вопрос «удалить или вернуть строку».
+  // Удаление — только по ответу. Строку вернули — пометка снимается сама. Больше 30% пропавших за раз — вкладку не трогаем.
   const toInsert = [];
   const toUpdate = []; // { id, patch }
+  const toRelease = []; // id — сначала освободить номер строки (уникальный индекс country+sheet_id+tab+row)
+  const toMark = [];    // id — пометить «пропала из таблицы»
+  const syncByTab = {};
+  const guardSkipped = [];
   let mergedManual = 0;
-  for (const row of cleanRows) {
-    const ex = existingMap.get(`${row.sheet_id}::${row.sheet_tab}::${row.sheet_row}`);
-    if (!ex) {
+  const existingByTab = {};
+  for (const ex of existingAll) { if (ex.sheet_id !== cfg.sheet_id) continue; (existingByTab[ex.sheet_tab] = existingByTab[ex.sheet_tab] || []).push(ex); }
+  const parsedByTab = {};
+  for (const row of cleanRows) (parsedByTab[row.sheet_tab] = parsedByTab[row.sheet_tab] || []).push(row);
+  for (const tab of fetchedTabsOk) {
+    const S = parsedByTab[tab] || [], E = existingByTab[tab] || [];
+    const plan = planTabSync(S, E, physicalKeysByTab[tab] || new Set());
+    syncByTab[tab] = { sheet: S.length, db: E.length, same: plan.pairs.filter(x => x.how === 'same').length, moved: plan.moves.length, edited: plan.pairs.filter(x => x.how === 'edited').length, new: plan.inserts.length, missing: plan.newlyMissing.length, restored: plan.restored.length, untouched: plan.untouched.length };
+    if (plan.guard) { guardSkipped.push({ tab, existing: E.length, would_mark: plan.newlyMissing.length }); continue; } // похоже на битую загрузку листа
+    for (const pr of plan.pairs) {
+      const patch = {};
+      for (const f of CMP) if (nrm(f, pr.s[f]) !== nrm(f, pr.e[f])) patch[f] = pr.s[f];
+      if (pr.s.sheet_row !== pr.e.sheet_row) { patch.sheet_row = pr.s.sheet_row; toRelease.push(pr.e.id); }
+      if (pr.e.sheet_missing_at) patch.sheet_missing_at = null; // строку вернули в лист
+      if (Object.keys(patch).length) toUpdate.push({ id: pr.e.id, patch });
+    }
+    for (const id of plan.release) if (!toRelease.includes(id)) toRelease.push(id);
+    for (const e of plan.newlyMissing) toMark.push(e.id);
+    for (const row of plan.inserts) {
       const mine = manualMap.get(manualKey(row));
       if (mine) {
-        manualMap.delete(manualKey(row)); // одна строка листа — одна ручная запись
+        manualMap.delete(manualKey(row)); // одна строка листа — одна ручная запись (v877)
         const patch = { sheet_id: row.sheet_id, sheet_tab: row.sheet_tab, sheet_row: row.sheet_row, source: 'sheets_import' };
-        for (const f of CMP) {
-          // чек в листе не хранится — не затираем его тем, что пришло из таблицы
-          if (f === 'receipt_path') continue;
-          if (nrm(f, row[f]) !== nrm(f, mine[f])) patch[f] = row[f];
-        }
+        for (const f of CMP) if (nrm(f, row[f]) !== nrm(f, mine[f])) patch[f] = row[f];
         toUpdate.push({ id: mine.id, patch });
         mergedManual++;
         continue;
       }
       toInsert.push(row);
-      continue;
     }
-    const patch = {};
-    for (const f of CMP) {
-      if (nrm(f, row[f]) !== nrm(f, ex[f])) patch[f] = row[f];
-    }
-    if (Object.keys(patch).length) toUpdate.push({ id: ex.id, patch });
-  }
-
-  // v624: СИРОТЫ — строки базы той же таблицы (cfg.sheet_id), чьей позиции (sheet_row) в листе
-  // больше нет. Раньше импорт их не удалял → копились фантомы (удалили/сдвинули строку в листе,
-  // а в базе она висит). Удаляем только по вкладкам, реально прочитанным в этом прогоне
-  // (fetchedTabsOk), и только из текущей таблицы — архивную (старый sheet_id) не трогаем.
-  const existingByTab = {};
-  for (const ex of existingMap.values()) {
-    if (ex.sheet_id !== cfg.sheet_id) continue; // чужую/архивную таблицу не трогаем
-    (existingByTab[ex.sheet_tab] = existingByTab[ex.sheet_tab] || []).push(ex);
-  }
-  const toDelete = [];
-  const deleteGuardSkipped = [];
-  for (const tab of Object.keys(existingByTab)) {
-    if (!fetchedTabsOk.has(tab)) continue; // вкладка не загрузилась в этом прогоне — не трогаем
-    const present = presentKeysByTab[tab] || new Set();
-    const physical = physicalKeysByTab[tab] || new Set();
-    const exRows = existingByTab[tab];
-    // v628: сирота = строки нет в листе НИ как распарсенной, НИ как физически присутствующей.
-    // Если строка физически есть (непустая «Компания»), но не распарсилась — НЕ удаляем.
-    const orphans = exRows.filter(ex => !present.has(ex.sheet_row) && !physical.has(ex.sheet_row));
-    // Стоп-предохранитель: если вкладка вдруг хочет удалить >60% своих строк (и их заметно
-    // много) — это похоже на битую/частичную загрузку листа. Пропускаем и логируем.
-    if (exRows.length >= 20 && orphans.length > exRows.length * 0.6) {
-      deleteGuardSkipped.push({ tab, existing: exRows.length, would_delete: orphans.length });
-      continue;
-    }
-    orphans.forEach(o => toDelete.push(o));
   }
 
   const unmatched = toInsert.filter(p => !p.client_id);
+  const summary = { tabs: syncByTab, will_insert: toInsert.length, will_update: toUpdate.length, will_move: toUpdate.filter(u => u.patch.sheet_row != null && toRelease.includes(u.id)).length, will_mark_missing: toMark.length, merged_manual: mergedManual, guard_skipped: guardSkipped };
 
   if (dryRun) {
+    const byId = new Map(existingAll.map(e => [e.id, e]));
     return {
-      ok: true,
-      mode: 'dry_run',
-      country,
-      total_parsed: totalParsed,
-      will_insert: toInsert.length,
-      will_update: toUpdate.length,
-      will_delete: toDelete.length,
+      ok: true, mode: 'dry_run', country,
+      total_parsed: totalParsed, sum_by_month_sheets: sumByMonth, total_sum_parsed: totalSum,
+      ...summary,
+      will_delete: 0, // v1011: импорт больше ничего не удаляет
       will_be_unmatched: unmatched.length,
-      sum_by_month_sheets: sumByMonth,
-      total_sum_parsed: totalSum,
-      delete_guard_skipped: deleteGuardSkipped,
-      sample_delete: toDelete.slice(0, 25).map(o => ({
-        company_name: o.company_name, paid_at: o.paid_at, amount: o.amount, category_raw: o.category_raw, manager_name: o.manager_name, sheet_tab: o.sheet_tab, sheet_row: o.sheet_row
-      })),
-      sample_unmatched: unmatched.slice(0, 10).map(p => ({
-        company_name: p.company_name, paid_at: p.paid_at, amount: p.amount, category_raw: p.category_raw
-      })),
-      sample_insert: toInsert.slice(0, 5).map(p => ({
-        company_name: p.company_name, paid_at: p.paid_at, amount: p.amount, client_id: p.client_id, sheet_tab: p.sheet_tab, sheet_row: p.sheet_row
-      }))
+      sample_missing: toMark.slice(0, 25).map(id => { const o = byId.get(id) || {}; return { company_name: o.company_name, paid_at: o.paid_at, amount: o.amount, category_raw: o.category_raw, sheet_tab: o.sheet_tab, sheet_row: o.sheet_row, has_receipt: !!o.receipt_path }; }),
+      sample_insert: toInsert.slice(0, 10).map(p => ({ company_name: p.company_name, paid_at: p.paid_at, amount: p.amount, sheet_tab: p.sheet_tab, sheet_row: p.sheet_row }))
     };
   }
 
-  const inserted = [];
-  const updated = [];
-  const deleted = [];
-  const failed = [];
+  const inserted = [], updated = [], failed = [];
+  // 1) освобождаем номера строк у переезжающих и у пропавших, чьё место заняла другая оплата
+  for (const id of toRelease) {
+    try { await sbUpdate('payments', { id: 'eq.' + id }, { sheet_row: null }); }
+    catch (e) { failed.push({ id, op: 'release', error: e.message }); }
+  }
+  // 2) переезды и правки
+  for (const u of toUpdate) {
+    try { const r = await sbUpdate('payments', { id: 'eq.' + u.id }, u.patch); updated.push(...(r || [])); }
+    catch (e2) { failed.push({ id: u.id, op: 'update', error: e2.message }); }
+  }
+  // 3) новые строки листа
   const CHUNK = 200;
   for (let i = 0; i < toInsert.length; i += CHUNK) {
     const batch = toInsert.slice(i, i + CHUNK);
     try { const r = await sbInsert('payments', batch); inserted.push(...r); }
     catch (e) {
-      // батч не прошёл — построчно, чтобы одна плохая строка не валила весь импорт
       for (const row of batch) {
         try { const r = await sbInsert('payments', row); inserted.push(...r); }
-        catch (e2) { failed.push({ company_name: row.company_name, paid_at: row.paid_at, amount: row.amount, error: e2.message }); }
+        catch (e2) { failed.push({ company_name: row.company_name, paid_at: row.paid_at, amount: row.amount, op: 'insert', error: e2.message }); }
       }
     }
   }
-  for (const u of toUpdate) {
-    try { const r = await sbUpdate('payments', { id: 'eq.' + u.id }, u.patch); updated.push(...(r || [])); }
-    catch (e2) { failed.push({ id: u.id, error: e2.message }); }
+  // 4) пометка «пропала из таблицы» — не удаление
+  const nowIso = new Date().toISOString();
+  for (const id of toMark) {
+    try { await sbUpdate('payments', { id: 'eq.' + id }, { sheet_missing_at: nowIso }); }
+    catch (e) { failed.push({ id, op: 'mark_missing', error: e.message }); }
   }
-  // v624: удаляем сирот напрямую (sbDelete). Это sheets_import — управляется только синком,
-  // ручной DELETE-эндпоинт их и так не трогает.
-  // ВКЛ только при env SYNC_DELETE_ORPHANS=1 — чтобы после деплоя крон не начал чистить
-  // ДО проверки dry-run. Пока флаг выключен — считаем сирот, но не трогаем (would_delete).
-  // v979: включено по умолчанию — сверка листа и базы 16.09.2026 показала 0 сирот по всем вкладкам KG 2026,
-  // предохранители (только прочитанные вкладки, физически пустая строка, стоп при >60%) остаются. Выключить: SYNC_DELETE_ORPHANS=0.
-  const DELETE_ENABLED = String(process.env.SYNC_DELETE_ORPHANS || '1') !== '0';
-  if (DELETE_ENABLED) {
-    for (const o of toDelete) {
-      try { await sbDelete('payments', { id: 'eq.' + o.id }); deleted.push(o.id); }
-      catch (e2) { failed.push({ id: o.id, op: 'delete', error: e2.message }); }
-    }
-  }
+  console.log('[import_sheets] ' + country + ' sync', JSON.stringify({ inserted: inserted.length, updated: updated.length, moved: summary.will_move, marked_missing: toMark.length, merged_manual: mergedManual, guard_skipped: guardSkipped, failed: failed.length }));
 
   // v636: новые оплаты внедрения/интеграции → карты в Маршруте / записи в Очереди интеграции.
   const board = await _createBoardEntriesForPayments(inserted);
@@ -723,11 +701,12 @@ export async function importSheetsForCountry(country, dryRun, monthsBack, rebuil
     country,
     inserted_count: inserted.length,
     updated_count: updated.length,
-    merged_manual_count: mergedManual, // v877: сколько строк листа склеено с ручными записями вместо дублей
-    delete_enabled: DELETE_ENABLED,
-    deleted_count: deleted.length,
-    would_delete_count: toDelete.length,
-    delete_guard_skipped: deleteGuardSkipped,
+    merged_manual_count: mergedManual,
+    moved_count: summary.will_move,
+    missing_marked_count: toMark.length,
+    deleted_count: 0, // v1011: импорт больше ничего не удаляет
+    delete_guard_skipped: guardSkipped,
+    tabs: syncByTab,
     upserted_count: inserted.length + updated.length,
     failed_count: failed.length,
     failed_sample: failed.slice(0, 10),
