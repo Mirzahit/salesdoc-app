@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v1009</title>
+<title>SalesDoc — Финансовый Дашборд v1010</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8243,6 +8243,31 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
 .fz-kpis.k3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .fz-kpi{padding:14px 16px 12px}
 .fz-kpi small{font-size:12.5px;color:var(--fz-muted);display:block}
+/* v1010: карточки «Обзора» раскрываются по клику — модалка с расшифровкой (fzKpiOpen) */
+#fz-root .fz-kpi[data-fz-kpi]{cursor:pointer;transition:border-color .12s,box-shadow .12s}
+#fz-root .fz-kpi[data-fz-kpi]:hover{border-color:var(--fz-accent)}
+#fz-root .fz-kpi[data-fz-kpi]:focus-visible{outline:2px solid var(--fz-accent);outline-offset:2px}
+#fz-root .fz-km{position:fixed;inset:0;z-index:1200;background:rgba(15,23,26,.45);display:flex;align-items:flex-start;justify-content:center;padding:7vh 16px 24px;overflow-y:auto}
+#fz-root .fz-km[hidden]{display:none}
+#fz-root .fz-km-box{background:var(--fz-surface);color:var(--fz-ink);border-radius:12px;box-shadow:0 24px 60px rgba(10,20,24,.22);width:100%;max-width:640px}
+#fz-root .fz-km-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px 6px}
+#fz-root .fz-km-h h2{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+#fz-root .fz-km-h .per{display:block;font-size:12.5px;font-weight:400;color:var(--fz-muted);margin-top:2px}
+#fz-root .fz-km-x{border:0!important;background:transparent!important;box-shadow:none!important;color:var(--fz-muted)!important;font-size:24px;line-height:1;padding:2px 8px;border-radius:7px;cursor:pointer}
+#fz-root .fz-km-x:hover{background:var(--fz-sunk)!important;color:var(--fz-ink)!important}
+#fz-root .fz-km-lead{margin:6px 20px 14px;padding:10px 12px;background:var(--fz-sunk);border-radius:8px;font-size:13.5px;line-height:1.55;color:var(--fz-ink2)}
+#fz-root .fz-km-b table{width:100%;border-collapse:collapse}
+#fz-root .fz-km-b td{padding:8px 20px;border-top:1px solid var(--fz-line2);font-size:13.5px;vertical-align:top;background:transparent}
+#fz-root .fz-km-b td.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+#fz-root .fz-km-b tr.km-sec td{font-weight:600;padding-top:12px}
+#fz-root .fz-km-b tr.km-sub td:first-child{padding-left:36px;color:var(--fz-ink2)}
+#fz-root .fz-km-b tr.km-sub td{border-top-color:transparent;padding-top:4px;padding-bottom:4px}
+#fz-root .fz-km-b tr.km-tot td{font-weight:600;border-top:1px solid var(--fz-line)}
+#fz-root .fz-km-b td .sub{display:block;font-size:12px;color:var(--fz-muted);font-weight:400}
+#fz-root .fz-km-b .pos{color:var(--fz-pos)}#fz-root .fz-km-b .neg{color:var(--fz-neg)}
+#fz-root .fz-km-note{padding:12px 20px 18px;font-size:12.5px;line-height:1.5;color:var(--fz-muted);border-top:1px solid var(--fz-line2)}
+#fz-root .fz-pill.wr{background:var(--fz-warn-soft);color:var(--fz-warn)}
+@media(max-width:640px){#fz-root .fz-km{padding:0;align-items:flex-end}#fz-root .fz-km-box{border-radius:14px 14px 0 0;max-height:92vh;overflow-y:auto}#fz-root .fz-km-b td{padding-left:16px;padding-right:16px}#fz-root .fz-km-b tr.km-sub td:first-child{padding-left:28px}}
 .fz-kpi strong{display:block;font-size:21px;font-weight:600;letter-spacing:-.01em;margin:3px 0 6px;color:var(--fz-ink)}
 .fz-kpi .row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:24px}
 .fz-kpi .sub{font-size:12.5px;color:var(--fz-muted)}
@@ -46568,6 +46593,9 @@ function fzInit(){
   _fz.inited = true;
   var now = new Date(); _fz.month = { y:now.getFullYear(), mo:now.getMonth() + 1 };
   root.addEventListener('click', function(e){
+   if (e.target.closest('[data-fz-km-close]') || e.target.id === 'fz-km') { fzKmClose(); return; } // крестик или клик мимо окна
+   if (e.target.closest('#fz-km')) return;
+   var kpi = e.target.closest('[data-fz-kpi]'); if (kpi) { fzKpiOpen(kpi.getAttribute('data-fz-kpi'), kpi); return; }
    var go = e.target.closest('[data-fz-go]'); if (go) { fzGo(go.getAttribute('data-fz-go')); return; }
    var ex = e.target.closest('[data-fz-export]'); if (ex) { fzExport(ex.getAttribute('data-fz-export')); return; }
    var ddb = e.target.closest('.fz-dd-btn'); if (ddb) { var dd = ddb.parentNode; var was = dd.classList.contains('on'); root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); }); if (!was) dd.classList.add('on'); return; }
@@ -46590,7 +46618,7 @@ function fzInit(){
    if (!e.target.closest('.fz-dd')) root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); });
   });
   document.addEventListener('click', function(e){ if (!root.contains(e.target)) root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); }); });
-  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') { root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); }); root.classList.remove('nav-on'); } });
+  document.addEventListener('keydown', function(e){ var kf = e.target && e.target.closest && e.target.closest('[data-fz-kpi]'); if (kf && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); fzKpiOpen(kf.getAttribute('data-fz-kpi'), kf); return; } if (e.key === 'Escape' && document.getElementById('fz-km') && !document.getElementById('fz-km').hidden) { fzKmClose(); return; } if (e.key === 'Escape') { root.querySelectorAll('.fz-dd.on').forEach(function(x){ x.classList.remove('on'); }); root.classList.remove('nav-on'); } });
   document.getElementById('fz-burger').onclick = function(){ root.classList.add('nav-on'); };
   document.getElementById('fz-scrim').onclick = function(){ root.classList.remove('nav-on'); };
   document.getElementById('fz-agent-btn').onclick = function(){ fzAgent(!root.classList.contains('agent-on')); };
@@ -46675,13 +46703,13 @@ function fzRenderOverview(){
  var lp = d.meta.last_paid_at;
  document.getElementById('fz-ov-sub').textContent = 'Оплаты по ' + (lp ? fzDay(lp) : '—') + ', ' + d.period.count + ' ' + fzPlural(d.period.count, 'платёж','платежа','платежей') + ' за месяц' + (!_fz.expLoaded ? '. Расходы из таблицы ещё загружаются' : (cur.expense == null ? '. Расходы за месяц в таблицу ещё не внесены' : ''));
  var k = [
-  { l:'Выручка', v:fzMoney(cur.revenue), p:fzDeltaPill(fzDelta(cur.revenue, prev && prev.revenue), true), s:s.map(function(x){ return x.revenue; }), g:(cur.revenue >= (prev ? prev.revenue : 0)) },
-  { l:'Расходы', v:cur.expense == null ? '—' : fzMoney(cur.expense), p:fzDeltaPill(prev && prev.expense != null && cur.expense != null ? fzDelta(cur.expense, prev.expense) : null, false), s:s.map(function(x){ return x.expense; }), g:!(prev && prev.expense != null && cur.expense != null && cur.expense > prev.expense) },
-  { l:'Прибыль' + fzProfitPill(d.period), v:cur.profit == null ? '—' : fzMoney(cur.profit), p:fzDeltaPill(prev && prev.profit != null && cur.profit != null ? fzDelta(cur.profit, prev.profit) : null, true), s:s.map(function(x){ return x.profit; }), g:cur.profit != null && cur.profit >= 0 },
-  { l:'Прибыль от выручки', v:cur.margin == null ? '—' : fzPctTxt(Math.round(cur.margin*10)/10), p:prev && prev.margin != null && cur.margin != null ? '<span class="fz-pill ' + (cur.margin >= prev.margin ? 'pos' : 'neg') + '">было ' + fzPctTxt(Math.round(prev.margin*10)/10) + '</span>' : '<span class="fz-pill mu">нет прошлого месяца</span>', s:s.map(function(x){ return x.margin; }), g:cur.margin != null && (!prev || prev.margin == null || cur.margin >= prev.margin) },
-  { l:'Зарплаты от выручки', v:cur.fot == null ? '—' : fzPctTxt(Math.round(cur.fot)), p:prev && prev.fot != null && cur.fot != null ? '<span class="fz-pill ' + (cur.fot <= prev.fot ? 'pos' : 'neg') + '">было ' + Math.round(prev.fot) + '%</span>' : '<span class="fz-pill mu">нет прошлого месяца</span>', s:s.map(function(x){ return x.fot; }), g:cur.fot != null && (!prev || prev.fot == null || cur.fot <= prev.fot) }
+  { key:'revenue', l:'Выручка', v:fzMoney(cur.revenue), p:fzDeltaPill(fzDelta(cur.revenue, prev && prev.revenue), true), s:s.map(function(x){ return x.revenue; }), g:(cur.revenue >= (prev ? prev.revenue : 0)) },
+  { key:'expense', l:'Расходы', v:cur.expense == null ? '—' : fzMoney(cur.expense), p:fzDeltaPill(prev && prev.expense != null && cur.expense != null ? fzDelta(cur.expense, prev.expense) : null, false), s:s.map(function(x){ return x.expense; }), g:!(prev && prev.expense != null && cur.expense != null && cur.expense > prev.expense) },
+  { key:'profit', l:'Прибыль' + fzProfitPill(d.period), v:cur.profit == null ? '—' : fzMoney(cur.profit), p:fzDeltaPill(prev && prev.profit != null && cur.profit != null ? fzDelta(cur.profit, prev.profit) : null, true), s:s.map(function(x){ return x.profit; }), g:cur.profit != null && cur.profit >= 0 },
+  { key:'margin', l:'Прибыль от выручки', v:cur.margin == null ? '—' : fzPctTxt(Math.round(cur.margin*10)/10), p:prev && prev.margin != null && cur.margin != null ? '<span class="fz-pill ' + (cur.margin >= prev.margin ? 'pos' : 'neg') + '">было ' + fzPctTxt(Math.round(prev.margin*10)/10) + '</span>' : '<span class="fz-pill mu">нет прошлого месяца</span>', s:s.map(function(x){ return x.margin; }), g:cur.margin != null && (!prev || prev.margin == null || cur.margin >= prev.margin) },
+  { key:'fot', l:'Зарплаты от выручки', v:cur.fot == null ? '—' : fzPctTxt(Math.round(cur.fot)), p:prev && prev.fot != null && cur.fot != null ? '<span class="fz-pill ' + (cur.fot <= prev.fot ? 'pos' : 'neg') + '">было ' + Math.round(prev.fot) + '%</span>' : '<span class="fz-pill mu">нет прошлого месяца</span>', s:s.map(function(x){ return x.fot; }), g:cur.fot != null && (!prev || prev.fot == null || cur.fot <= prev.fot) }
  ];
- document.getElementById('fz-kpis').innerHTML = k.map(function(x){ return '<div class="fz-panel fz-kpi"><small>' + x.l + '</small><strong>' + x.v + '</strong><div class="row">' + x.p + fzSpark(x.s, x.g) + '</div></div>'; }).join('');
+ document.getElementById('fz-kpis').innerHTML = k.map(function(x){ return '<div class="fz-panel fz-kpi" data-fz-kpi="' + x.key + '" role="button" tabindex="0" aria-haspopup="dialog" aria-label="' + fzEsc(x.l.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) + ': подробнее"><small>' + x.l + '</small><strong>' + x.v + '</strong><div class="row">' + x.p + fzSpark(x.s, x.g) + '</div></div>'; }).join('');
  fzDrawPL(s);
  var op = document.getElementById('fz-owner-panel');
  if (op) {
@@ -46696,6 +46724,113 @@ function fzRenderOverview(){
  }
  fzRenderTeamMini();
 }
+// ---------- расшифровка карточек «Обзора» (v1010) ----------
+// По клику на карточку — модалка: что это за число простыми словами, из чего складывается, что ожидаемое.
+// Все суммы — с сервера (_fz.data.period, _fz.data.team), те же, что на карточках.
+function fzKmEl(){
+ var root = document.getElementById('fz-root'); var el = document.getElementById('fz-km');
+ if (!el) { el = document.createElement('div'); el.id = 'fz-km'; el.className = 'fz-km'; el.hidden = true;
+  el.innerHTML = '<div class="fz-km-box" role="dialog" aria-modal="true" aria-labelledby="fz-km-t"><div class="fz-km-h"><h2 id="fz-km-t"></h2><button type="button" class="fz-km-x" data-fz-km-close aria-label="Закрыть">×</button></div><div class="fz-km-lead" id="fz-km-lead"></div><div class="fz-km-b" id="fz-km-b"></div><div class="fz-km-note" id="fz-km-note"></div></div>';
+  root.appendChild(el); }
+ return el;
+}
+function fzKmClose(){ var el = document.getElementById('fz-km'); if (el && !el.hidden) { el.hidden = true; if (_fz.kmFrom && _fz.kmFrom.focus) _fz.kmFrom.focus(); } }
+function fzKmRow(label, v, o){ o = o || {};
+ return '<tr class="' + (o.cls || '') + '"><td>' + label + (o.sub ? '<span class="sub">' + o.sub + '</span>' : '') + '</td><td class="r' + (o.tone ? ' ' + o.tone : '') + '">' + (v == null ? '<span class="muted">—</span>' : fzMoney(v)) + (o.exp ? ' <span class="fz-pill wr">ожидается</span>' : '') + '</td></tr>'; }
+function fzKmPct(v){ return v == null ? '—' : String(Math.round(v * 10) / 10).replace('.', ',').replace('-', '−') + '%'; }
+function fzKpiOpen(key, from){
+ var d = _fz.data; if (!d) return; var p = d.period || {}, m = _fz.month;
+ var mon = FZ_MONTHS[m.mo-1].toLowerCase(), monGen = FZ_MONTHS_GEN[m.mo-1], sheet = FZ_MONTHS[m.mo-1];
+ var per = 'за ' + mon + ' ' + m.y + ', с 1 по ' + String(p.to || '').slice(8, 10).replace(/^0/, '') + ' ' + monGen;
+ var hasExp = p.expenses != null;
+ var expSal = +p.expected_salary || 0, expTax = +p.expected_taxes || 0;
+ var taxes = p.taxes_by_kind || {}, taxTotal = Object.keys(taxes).reduce(function(a, k){ return a + (+taxes[k] || 0); }, 0);
+ var other = hasExp ? (+p.shared || 0) - taxTotal : null;
+ var sal = hasExp ? (+p.salaries || 0) : null;
+ var title = '', lead = '', body = '', note = '';
+ var noExp = '<table><tbody><tr><td class="muted">Расходы за ' + mon + ' ещё не внесены в таблицу — считать не из чего.</td></tr></tbody></table>';
+ var s = fzSeries(), prev = s[s.length-2];
+ if (key === 'revenue') {
+  title = 'Выручка';
+  lead = 'Все деньги, которые клиенты заплатили за месяц. Считаются по дате оплаты — из оплат в программе (лист «' + sheet + '» таблицы «Доходы»). Возвраты клиентам уже вычтены. Ожидаемых сумм здесь нет: только то, что уже пришло на счета.';
+  var cats = p.by_category || {}, bank = p.by_bank || {}, bl = (d.meta && d.meta.bank_labels) || {};
+  body = '<table><tbody>' + fzKmRow('<b>Выручка</b>', p.revenue, { cls:'km-tot', sub: p.count + ' ' + fzPlural(p.count, 'оплата', 'оплаты', 'оплат') })
+   + '<tr class="km-sec"><td colspan="2">По статьям</td></tr>'
+   + Object.keys(cats).sort(function(a, b){ return cats[b] - cats[a]; }).map(function(k){ return fzKmRow(fzEsc(FZ_CAT[k] || k), cats[k], { cls:'km-sub' }); }).join('')
+   + '<tr class="km-sec"><td colspan="2">По счетам</td></tr>'
+   + Object.keys(bank).sort(function(a, b){ return bank[b] - bank[a]; }).map(function(k){ return fzKmRow(fzEsc(bl[k] || k), bank[k], { cls:'km-sub' }); }).join('')
+   + '</tbody></table>';
+  note = 'Внедрение и интеграция — разовые услуги, абонплата и новые клиенты — лицензии. Счёт — куда пришли деньги.';
+ } else if (key === 'expense') {
+  title = 'Расходы';
+  lead = 'Всё, что компания потратила за месяц. Зарплата относится к месяцу, когда человек работал, а не к дню выплаты: остаток за ' + mon + ' выдают в начале следующего месяца, и он всё равно считается расходом ' + monGen + '. «Ожидается» — то, что ещё не выплачено, но будет: мы подставляем сумму по окладу, а когда придёт настоящая выплата, она её заменит. Прочие расходы и налоги берутся с листа «' + sheet + '» таблицы расходов. Деньги, которые забрал владелец, и переводы между своими счетами — не расходы.';
+  if (!hasExp) body = noExp; else {
+   var t = d.team || {}, rows = (t.rows || []).filter(function(r){ return r.has_salary && !r.owner; }), groups = (t.groups || []).filter(function(g){ return g.cost; });
+   var ppl = rows.map(function(r){ var ex = (r.parts && r.parts.expected) || 0, paid = (+r.salary || 0) - ex; return { n: r.name, paid: paid, ex: ex, tot: +r.salary || 0 }; })
+    .concat(groups.map(function(g){ var ex = +g.cost_expected || 0; return { n: g.name === 'Интеграция' ? 'Интеграторы' : g.name, paid: (+g.cost || 0) - ex, ex: ex, tot: +g.cost || 0 }; }))
+    .sort(function(a, b){ return b.tot - a.tot; });
+   var cats2 = p.shared_by_category || {};
+   var otherCats = Object.keys(cats2).filter(function(k){ return k !== 'Налоги'; }).sort(function(a, b){ return cats2[b] - cats2[a]; });
+   var taxKeys = Object.keys(taxes).sort(function(a, b){ return taxes[b] - taxes[a]; });
+   body = '<table><tbody>' + fzKmRow('<b>Расходы всего</b>', p.expenses, { cls:'km-tot', sub: (expSal + expTax) ? 'из них ожидается ' + fzMoney(expSal + expTax) : '' })
+    + fzKmRow('<b>Зарплаты за ' + mon + '</b>', sal, { cls:'km-sec', sub: 'выплачено ' + fzMoney(sal - expSal) + (expSal ? ' · ожидается ' + fzMoney(expSal) : '') })
+    + ppl.map(function(x){ return fzKmRow(fzEsc(x.n), x.tot, { cls:'km-sub', exp: x.ex > 0 && x.paid <= 0, sub: x.ex > 0 && x.paid > 0 ? 'выплачено ' + fzMoney(x.paid) + ' · ожидается ' + fzMoney(x.ex) : (x.ex > 0 ? 'ещё не выплачено' : '') }); }).join('')
+    + fzKmRow('<b>Прочие расходы</b>', other, { cls:'km-sec', sub: 'по листу «' + sheet + '» таблицы расходов' })
+    + otherCats.map(function(k){ return fzKmRow(fzEsc(k), cats2[k], { cls:'km-sub' }); }).join('')
+    + fzKmRow('<b>Налоги</b>', taxTotal, { cls:'km-sec', sub: expTax ? 'уплачено ' + fzMoney(taxTotal - expTax) + ' · ожидается ' + fzMoney(expTax) : 'по листу «' + sheet + '»' })
+    + (taxKeys.length ? taxKeys.map(function(k){ var isExp = / \(ожидаемые\)$/.test(k); return fzKmRow(fzEsc(k.replace(/ \(ожидаемые\)$/, '')), taxes[k], { cls:'km-sub', exp: isExp, sub: isExp ? 'ещё не заплачено — среднее за три прошлых месяца' : '' }); }).join('') : fzKmRow('за месяц налогов нет', null, { cls:'km-sub' }))
+    + '</tbody></table>';
+   note = 'Зарплата людей — по окладу и выплатам, у менеджеров — оклад и процент с продаж по «Моему доходу». Налоги платят 20–25 числа; если строки налога ещё нет, стоит среднее этого налога за три прошлых месяца.';
+  }
+ } else if (key === 'profit') {
+  title = 'Прибыль';
+  lead = 'Сколько осталось после всех расходов: выручка минус расходы. Если зарплата или налоги за месяц ещё не выплачены, в расходах стоят ожидаемые суммы — поэтому и прибыль «ожидаемая»: когда придут настоящие выплаты, она уточнится. Деньги, которые забрал владелец, в расходы не входят — они вычитаются ниже отдельно.';
+  if (!hasExp) body = noExp; else {
+   body = '<table><tbody>' + fzKmRow('Выручка', p.revenue, { sub: 'все оплаты клиентов за месяц' })
+    + fzKmRow('− Зарплаты', -sal, { sub: expSal ? 'из них ожидается ' + fzMoney(expSal) : 'за месяц работы' })
+    + fzKmRow('− Прочие расходы', -other, { sub: 'по листу «' + sheet + '»' })
+    + fzKmRow('− Налоги', -taxTotal, { sub: expTax ? 'из них ожидается ' + fzMoney(expTax) : '' })
+    + fzKmRow('<b>Прибыль</b>' + fzProfitPill(p), p.profit, { cls:'km-tot', tone: p.profit >= 0 ? 'pos' : 'neg', sub: (expSal + expTax) ? 'в расходах ожидается ' + fzMoney(expSal + expTax) + ' — ещё не выплачено' : '' })
+    + fzKmRow('− Изъятие владельца', -(+p.owner_draws || 0), { sub: 'деньги, которые забрал владелец; не расход' })
+    + fzKmRow('<b>Осталось в компании</b>', p.retained, { cls:'km-tot', tone: p.retained >= 0 ? 'pos' : 'neg' })
+    + '</tbody></table>';
+   if (p.missing_estimate) note = 'В таблице расходов нет обязательной статьи — прибыль завышена примерно на ' + fzMoney(p.missing_estimate) + '. Подробнее — в «Вопросах агента».';
+  }
+ } else if (key === 'margin') {
+  title = 'Прибыль от выручки';
+  lead = 'Какая часть заработанных денег осталась компании после всех расходов. Считается так: прибыль ÷ выручка × 100. Например, 30% значит, что из каждых 100 сом выручки осталось 30.';
+  if (!hasExp) body = noExp; else {
+   body = '<table><tbody>' + fzKmRow('Прибыль', p.profit, { sub: (expSal + expTax) ? 'в расходах ожидается ' + fzMoney(expSal + expTax) : '' })
+    + fzKmRow('Выручка', p.revenue)
+    + '<tr class="km-tot"><td>Прибыль от выручки</td><td class="r ' + (p.margin_pct >= 0 ? 'pos' : 'neg') + '">' + fzKmPct(p.margin_pct) + '</td></tr>'
+    + (prev && prev.margin != null ? '<tr><td>' + FZ_MONTHS[m.mo === 1 ? 11 : m.mo-2] + '</td><td class="r">' + fzKmPct(prev.margin) + '</td></tr>' : '')
+    + '</tbody></table>';
+   if (expSal + expTax) note = 'В расходах этого месяца ' + fzMoney(expSal + expTax) + ' ожидаемых сумм: зарплата и налоги, которые ещё не выплачены. Когда придут настоящие выплаты, процент уточнится.';
+  }
+ } else if (key === 'fot') {
+  title = 'Зарплаты от выручки';
+  lead = 'Какую часть выручки забирают зарплаты команды вместе с интеграторами. Считается так: зарплаты ÷ выручка × 100. Зарплата относится к месяцу работы, а не к дню выплаты; «ожидается» — остаток, который ещё не выдан.';
+  if (!hasExp) body = noExp; else {
+   var grp = +p.group_salaries || 0;
+   body = '<table><tbody>' + fzKmRow('Зарплаты людей', sal - grp, { sub: 'оклады, проценты, бонусы, отпускные' })
+    + (grp ? fzKmRow('Интеграторы', grp) : '')
+    + fzKmRow('<b>Зарплаты всего</b>', sal, { cls:'km-tot', sub: 'выплачено ' + fzMoney(sal - expSal) + (expSal ? ' · ожидается ' + fzMoney(expSal) : '') })
+    + fzKmRow('Выручка', p.revenue)
+    + '<tr class="km-tot"><td>Зарплаты от выручки</td><td class="r">' + fzKmPct(p.salary_share_pct) + '</td></tr>'
+    + (prev && prev.fot != null ? '<tr><td>' + FZ_MONTHS[m.mo === 1 ? 11 : m.mo-2] + '</td><td class="r">' + fzKmPct(prev.fot) + '</td></tr>' : '')
+    + '</tbody></table>';
+   note = 'Изъятие владельца сюда не входит. Налоги — отдельно, в «Расходах».';
+  }
+ }
+ var el = fzKmEl();
+ document.getElementById('fz-km-t').innerHTML = fzEsc(title) + '<span class="per">' + fzEsc(per.charAt(0).toUpperCase() + per.slice(1)) + '</span>';
+ document.getElementById('fz-km-lead').textContent = lead;
+ document.getElementById('fz-km-b').innerHTML = body;
+ var nt = document.getElementById('fz-km-note'); nt.textContent = note; nt.style.display = note ? '' : 'none';
+ _fz.kmFrom = from || null; el.hidden = false;
+ var x = el.querySelector('.fz-km-x'); if (x) x.focus();
+}
+
 function fzPlural(n, a, b, c){ n = Math.abs(n) % 100; var n1 = n % 10; if (n > 10 && n < 20) return c; if (n1 > 1 && n1 < 5) return b; if (n1 === 1) return a; return c; }
 function fzDrawPL(s){
  var W = 640, H = 220, L = 60, B = 26, T = 8;
