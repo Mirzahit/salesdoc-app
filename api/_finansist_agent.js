@@ -405,7 +405,7 @@ async function payAndSheetChecks(base, monthKey, byMonth) {
   const rates = await C.loadFxRates();
   C.fxChecks(C.cashRows(byMonth, monthKey) || [], rates).forEach(f => {
     if (f.status !== 'over') return;
-    out.push({ key: 'fx_over:' + f.date + ':' + C.round(f.fact), type: 'other', kind: 'fx_over', amount: f.fact - f.expected, fact: 'Интеграторам ' + C.fmtDay(f.date) + ' ушло ' + C.round(f.fact) + ' сом. По курсу Нацбанка на ' + C.fmtDay(f.rate_date) + ' (' + String(f.rate).replace('.', ',') + ' сом за тенге) за ' + C.round(R.integrators_kzt) + ' тенге нужно ' + C.round(f.expected) + ' сом. Больше на ' + f.pct + '% при допуске ' + R.integrators_tolerance_pct + '%.', options: OPTIONS.fx_over, evidence: f });
+    out.push({ key: 'fx_over:' + f.date + ':' + C.round(f.fact), type: 'other', kind: 'fx_over', amount: f.fact - f.expected, fact: 'Интеграторам ' + C.fmtDay(f.date) + ' ушло ' + C.round(f.fact) + ' сом. По курсу Нацбанка на ' + C.fmtDay(f.rate_date) + ' (' + String(f.rate).replace('.', ',') + ' сом за тенге) за ' + C.round(R.integrators_kzt) + ' тенге нужно ' + C.round(f.expected) + ' сом. Больше на ' + String(f.pct).replace('.', ',') + '% при допуске ' + R.integrators_tolerance_pct + '%.', options: OPTIONS.fx_over, evidence: f });
   });
   return out;
 }
