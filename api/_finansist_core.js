@@ -70,13 +70,40 @@ export function bankKey(bank) {
 // ---------- зарплата (зеркало index.html: fzPersonWord / fzNameKey / fzIsSalary / FZ_SALARY_RULES) ----------
 export const NAME_ALIAS = { malika: 'малика', eliza: 'элиза', mirzahit: 'мирзахит', gulshan: 'гульшан', aselya: 'аселя', amir: 'амир' };
 export const SALARY_RULES = [
-  { person: 'Гульшан', category: /^услуг/i, note: /^гульшан/i, cat_label: 'Услуги', note_label: 'примечание начинается с «Гульшан»' },
+  { person: 'Гульшан', category: /^услуг/i, note: /гульшан/i, cat_label: 'Услуги', note_label: 'в примечании «Гульшан»' },
 ];
-export function personWord(s) { const ws = String(s || '').trim().split(/[\s,.(]+/).filter(Boolean); let w = ws[0] || ''; if (/^(аванс|зп|зарплата|премия|бонус|бонусы|отпускные)$/i.test(w) && ws[1]) w = ws[1]; return w; }
+export function personWord(s) { const ws = String(s || '').trim().split(/[\s,.(]+/).filter(Boolean); let i = 0; while (i < ws.length - 1 && /^(аванс|авансом|зп|зарплата|премия|бонус|бонусы|отпускные|расчет|расчёт|за|для|ост|остаток|отраб[а-яё]*)$/i.test(ws[i]) || (i < ws.length - 1 && namedMonthOf(ws[i]))) i++; return ws[i] || ''; }
 export function nameKey(s) { let w = personWord(s).toLowerCase(); w = NAME_ALIAS[w] || w; return w.slice(0, 4); }
 export function salaryRule(e) { const c = String((e && e.category) || '').trim(), n = String((e && e.note) || '').trim(); return SALARY_RULES.find(r => r.category.test(c) && r.note.test(n)) || null; }
 export function isSalary(e) { const c = String((e && e.category) || '').trim().toLowerCase(); return c === 'зп' || /^зп[\s./-]|зарплат|оклад|аванс|бонус|премия|отпускн/.test(c) || !!salaryRule(e); }
 export function isTransfer(e) { return /перенос/i.test(String((e && e.category) || '')); }
+
+// ---------- зарплата по месяцу работы (CEO 27.09.2026) ----------
+// Аванс дают 20–27 числа месяца, за который работали → месяц даты. Остаток дают ~10 числа следующего месяца →
+// строка до 15 числа относится к прошлому месяцу, после 15-го — к текущему. Если в примечании назван месяц
+// («июль», «расчет за июнь») — он главный. Изъятие владельца и все прочие строки — по дате выплаты.
+// Сотрудники — ИП: сумма на руки и есть полный расход компании по человеку.
+const MONTH_STEMS = ['янв', 'фев', 'мар', 'апр', 'ма[йя]', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+// «февр», «ост за февр», «июль», «марта»; длинные слова («маркетинг», «декларация») — не месяцы
+export function namedMonthOf(word) { const w = String(word || '').toLowerCase(); if (w.length > 8) return 0; for (let i = 0; i < 12; i++) if (new RegExp('^' + MONTH_STEMS[i] + '[а-яё]*$').test(w)) return i + 1; return 0; }
+export function namedMonth(note) { const ws = String(note || '').toLowerCase().split(/[^а-яё]+/).filter(Boolean); for (const w of ws) { const m = namedMonthOf(w); if (m) return m; } return 0; }
+export function salaryPart(e) {
+  const t = (String(e.category || '') + ' ' + String(e.note || '')).toLowerCase();
+  if (/бонус|преми/.test(t)) return 'bonus';
+  if (/отпускн/.test(t)) return 'leave';
+  if (/аванс/.test(t) && !/за\s*выч/.test(t)) return 'advance';
+  return 'rest';
+}
+export function payMonthOf(e) { const d = String(e.date || ''); return /^\d{4}-\d{2}/.test(d) ? d.slice(0, 7) : String(e.sheet_month || ''); } // по дате выплаты; лист может быть не тот (аванс Элизы 27.09 в листе августа)
+export function workMonthOf(e, kind) {
+  const pm = payMonthOf(e);
+  if (kind !== 'salary' && kind !== 'group') return payMonthOf(e);
+  const nm = namedMonth(e.note);
+  if (nm) { const base = parseMonth(pm) || parseMonth(payMonthOf(e)); let y = base.y; if (nm > base.mo) y -= 1; return y + '-' + pad2(nm); }
+  if (salaryPart(e) === 'advance') return pm;
+  return dayOf(e.date) <= 15 ? shiftMonthKey(pm, -1) : pm;
+}
+export const SALARY_PAID_BY_DAY = 15; // до этого числа следующего месяца остаток за месяц ещё может быть не выплачен
 
 // ---------- настройки правил (app_settings.finansist_rules; правятся на «Правилах и целях») ----------
 // Значения по умолчанию — только стартовые, до первого сохранения на странице (CEO 27.09.2026).
@@ -118,7 +145,7 @@ export function classifyExpense(e) {
   if (isTransfer(e)) return { kind: 'transfer' };
   const lab = sharedLabelRule(e); if (lab) return { kind: 'shared', label: lab.label };
   const g = groupRule(e); if (g) return { kind: 'group', group: g.group };
-  if (isSalary(e)) return isOwnerName(e.note) ? { kind: 'owner' } : { kind: 'salary', person_key: nameKey(e.note), person: personWord(e.note) };
+  if (isSalary(e)) { if (isOwnerName(e.note)) return { kind: 'owner' }; const r = salaryRule(e); return r ? { kind: 'salary', person_key: nameKey(r.person), person: r.person } : { kind: 'salary', person_key: nameKey(e.note), person: personWord(e.note) }; }
   return { kind: 'shared', label: String(e.category || 'Прочее').trim() };
 }
 
@@ -195,7 +222,7 @@ function _parseExpenseRows(json, monthKey) {
     const amount = typeof row[3] === 'number' ? row[3] : parseFloat(String(row[3]).replace(/[^0-9.,-]/g, '').replace(',', '.'));
     if (!amount || amount <= 0) return;
     const date = _parseSheetDate(row[0]) || (monthKey + '-01');
-    out.push({ id: monthKey + ':' + i, date, category: String(row[1] || 'Прочее').trim(), note: String(row[2] || '').trim(), amount, bank: String(row[4] || '').trim(), source: 'sheet' });
+    out.push({ id: monthKey + ':' + i, date, category: String(row[1] || 'Прочее').trim(), note: String(row[2] || '').trim(), amount, bank: String(row[4] || '').trim(), source: 'sheet', sheet_month: monthKey });
   });
   // дедуп как на фронте
   const seen = new Set();
@@ -234,11 +261,21 @@ export async function loadManualRows(monthKeys) {
   });
   return out;
 }
+// Строки каждого месяца: rows = всё, что относится к месяцу по работе ИЛИ по выплате; у строки есть
+// work_month и pay_month. Для прибыли и «Команды» — expenseRows (по работе), для «Счетов» и «Кассы» — cashRows (по выплате).
 export async function loadExpenses(monthKeys, opts) {
-  const [snaps, manual, prepaid] = await Promise.all([Promise.all(monthKeys.map(k => loadExpenseMonth(k, opts))), loadManualRows(monthKeys), loadPrepaid(), loadRules()]);
+  const sheetKeys = Array.from(new Set([].concat.apply([], monthKeys.map(k => [shiftMonthKey(k, -1), k, shiftMonthKey(k, 1)]))));
+  const [snaps, manual, prepaid] = await Promise.all([Promise.all(sheetKeys.map(k => loadExpenseMonth(k, opts))), loadManualRows(sheetKeys), loadPrepaid(), loadRules()]);
+  const sheets = {};
+  snaps.forEach(sn => { sheets[sn.month] = { available: sn.available, fetched_at: sn.fetched_at, stale: !!sn.stale, rows: (sn.rows || []).concat(manual[sn.month] || []) }; });
+  applyPrepaid(sheets, prepaid);
+  const all = [];
+  Object.keys(sheets).forEach(sk => (sheets[sk].rows || []).forEach(r => { const k = classifyExpense(r); const row = Object.assign({}, r, { sheet_month: r.sheet_month || sk }); row.kind = k.kind; row.pay_month = payMonthOf(row); row.work_month = workMonthOf(row, k.kind); if (k.kind === 'salary' || k.kind === 'group') row.part = salaryPart(row); all.push(row); }));
   const byMonth = {};
-  snaps.forEach(s => { byMonth[s.month] = { available: s.available, fetched_at: s.fetched_at, stale: !!s.stale, rows: (s.rows || []).concat(manual[s.month] || []) }; });
-  applyPrepaid(byMonth, prepaid);
+  monthKeys.forEach(k => {
+    const sh = sheets[k] || { available: false };
+    byMonth[k] = { available: !!sh.available, fetched_at: sh.fetched_at, stale: !!sh.stale, next_available: !!(sheets[shiftMonthKey(k, 1)] && sheets[shiftMonthKey(k, 1)].available), rows: all.filter(r => r.work_month === k || r.pay_month === k) };
+  });
   return byMonth;
 }
 
@@ -272,7 +309,8 @@ export function applyPrepaid(byMonth, prepaid) {
   });
   return byMonth;
 }
-export function expenseRows(byMonth, monthKey) { const m = byMonth[monthKey]; if (!m || !m.available) return null; const rows = m.rows.filter(e => !isTransfer(e)); return rows.length ? rows : null; } // изъятия владельца внутри; expenseSummary считает их отдельно
+export function expenseRows(byMonth, monthKey) { const m = byMonth[monthKey]; if (!m || !m.available) return null; const rows = m.rows.filter(e => !isTransfer(e) && (e.work_month || monthKey) === monthKey); return rows.length ? rows : null; } // по месяцу работы; изъятия владельца внутри, expenseSummary считает их отдельно
+export function cashRows(byMonth, monthKey) { const m = byMonth[monthKey]; if (!m || !m.available) return null; const rows = m.rows.filter(e => !isTransfer(e) && (e.pay_month || monthKey) === monthKey); return rows.length ? rows : null; } // по дате выплаты — для «Счетов» и «Кассы»
 
 export function expenseSummary(rows) {
   // total — расходы компании: зарплаты людей + группы (интеграция) + общие. Изъятие владельца и переносы — не расход.
@@ -284,7 +322,7 @@ export function expenseSummary(rows) {
     o.total += a;
     if (e.source === 'manual') o.manual_total += a;
     const bk = bankKey(e.bank); o.by_bank[bk] = (o.by_bank[bk] || 0) + a;
-    if (k.kind === 'salary') { o.salary_total += a; o.people_salary_total += a; const nm = k.person; if (!o.salaries[k.person_key]) o.salaries[k.person_key] = { key: k.person_key, name: nm ? nm.charAt(0).toUpperCase() + nm.slice(1) : 'Без имени', sum: 0, n: 0 }; o.salaries[k.person_key].sum += a; o.salaries[k.person_key].n++; }
+    if (k.kind === 'salary') { o.salary_total += a; o.people_salary_total += a; const nm = k.person; if (!o.salaries[k.person_key]) o.salaries[k.person_key] = { key: k.person_key, name: nm ? nm.charAt(0).toUpperCase() + nm.slice(1) : 'Без имени', sum: 0, n: 0, advance: 0, rest: 0, bonus: 0, leave: 0, rows: [] }; const sp = o.salaries[k.person_key]; sp.sum += a; sp.n++; const part = e.part || salaryPart(e); sp[part] = (sp[part] || 0) + a; sp.rows.push({ date: e.date, note: e.note, amount: a, part, pay_month: e.pay_month || null }); }
     else if (k.kind === 'group') { o.salary_total += a; o.group_total += a; const g = o.groups[k.group] = o.groups[k.group] || { name: k.group, sum: 0, n: 0, rows: [] }; g.sum += a; g.n++; g.rows.push({ date: e.date, note: e.note, amount: a }); }
     else { o.shared_by_category[k.label] = (o.shared_by_category[k.label] || 0) + a; o.shared_total += a; }
   });
@@ -354,12 +392,60 @@ export function periodSummary(base, range, expRowsOrNull) {
   return out;
 }
 
+// Зарплата за месяц считается выплаченной, когда наступило 15-е число следующего месяца, лист следующего месяца есть
+// и у каждого, кто получил аванс за месяц, есть остаток. До этого прибыль месяца — предварительная.
+export function salaryState(byMonth, monthKey) {
+  const next = shiftMonthKey(monthKey, 1);
+  const today = bishkekIso();
+  const due = next + '-' + pad2(SALARY_PAID_BY_DAY);
+  const rows = expenseRows(byMonth, monthKey) || [];
+  const s = expenseSummary(rows);
+  const noRest = Object.values(s.salaries).filter(p => p.advance > 0 && p.rest <= 0).map(p => p.name);
+  const noAdvance = Object.values(s.salaries).filter(p => p.rest > 0 && p.advance <= 0 && p.rows.some(r => /за\s*выч[а-яё]*\s+[а-яё,\s]*аванс/i.test(r.note))).map(p => p.name);
+  const pending = today < due || (byMonth[monthKey] && !byMonth[monthKey].next_available) || noRest.length > 0;
+  return { pending, due, no_rest: noRest, no_advance: noAdvance, reason: today < due ? 'остаток за ' + monthLabel(monthKey) + ' выдают до ' + dayOf(due) + ' ' + MONTHS_RU_GEN[parseInt(next.slice(5, 7), 10) - 1] : (noRest.length ? 'нет остатка: ' + noRest.join(', ') : '') };
+}
+
+// Сверка выплаты с окладом (CEO 27.09.2026). Менеджеры: оклад + расчёт «Моего дохода» (app_settings.salary_closed
+// за месяц, итог к выплате). Остальные: оклад из настроек. Сравниваем сумму на руки (аванс + остаток; у менеджеров
+// и бонусы). Разница меньше порога — молчим; если меньше и в примечании «удержание»/«штраф» — причина названа, молчим.
+export const PAY_TOLERANCE_SOM = 3000;
+let _calc = null, _calcTs = 0;
+export async function loadSalaryCalc() {
+  if (_calc && Date.now() - _calcTs < 60e3) return _calc;
+  let closed = {}, grades = {};
+  try { const r = await sbSelect('app_settings', { key: 'in.(salary_closed,salary_grades)', limit: '2' }); r.forEach(x => { if (x.key === 'salary_closed') closed = x.value || {}; if (x.key === 'salary_grades') grades = x.value || {}; }); } catch (_) {}
+  _calc = { closed, assign: (grades && grades.assign) || {} }; _calcTs = Date.now();
+  return _calc;
+}
+export function expectedPay(person, monthKey, employees, calc) {
+  const R = currentRules();
+  const emp = (employees || []).find(e => nameKey(e.name) === person.key);
+  const email = emp && emp.email ? String(emp.email).toLowerCase() : null;
+  const isManager = !!(email && calc && calc.assign && calc.assign[email]);
+  if (isManager) {
+    const c = calc.closed && calc.closed[monthKey] && calc.closed[monthKey][email];
+    if (!c) return { kind: 'calc', expected: null, note: 'расчёт «Моего дохода» за ' + monthLabel(monthKey) + ' не закрыт', fact: person.advance + person.rest + person.bonus };
+    return { kind: 'calc', expected: num(c.total), note: 'оклад ' + round(c.oklad) + ' + переменная ' + round(num(c.total) - num(c.oklad)) + ' по «Моему доходу»', fact: person.advance + person.rest + person.bonus };
+  }
+  const ok = R.oklad && R.oklad[person.key];
+  if (!ok) return { kind: 'oklad', expected: null, note: 'оклад не задан', fact: person.advance + person.rest };
+  return { kind: 'oklad', expected: num(ok), note: 'оклад ' + round(ok), fact: person.advance + person.rest };
+}
+export function payCheck(person, exp) {
+  if (exp.expected == null) return null;
+  const diff = exp.fact - exp.expected;
+  if (Math.abs(diff) < PAY_TOLERANCE_SOM) return null;
+  if (diff < 0 && person.rows.some(r => /удержан|штраф/i.test(r.note))) return null;
+  return { diff, direction: diff < 0 ? 'less' : 'more' };
+}
+
 export function teamRows(base, range, expRowsOrNull) {
   const cur = base.payments.filter(p => inRange(p, range));
   const exp = expRowsOrNull ? expenseSummary(expRowsOrNull) : null;
   const rows = {};
   cur.forEach(p => { const n = (p.manager_name || '').trim() || 'Без менеджера'; const k = nameKey(n); const t = rows[k] = rows[k] || { name: n, revenue: 0, count: 0, new_clients: 0, salary: 0, has_salary: false, owner: isOwnerName(n) }; t.revenue += num(p.amount); t.count++; if (p.category === 'license') t.new_clients++; });
-  if (exp) Object.keys(exp.salaries).forEach(k => { const s = exp.salaries[k]; const t = rows[k] = rows[k] || { name: s.name, revenue: 0, count: 0, new_clients: 0, salary: 0, has_salary: false, owner: false }; t.salary = s.sum; t.has_salary = true; });
+  if (exp) Object.keys(exp.salaries).forEach(k => { const s = exp.salaries[k]; const t = rows[k] = rows[k] || { name: s.name, revenue: 0, count: 0, new_clients: 0, salary: 0, has_salary: false, owner: false }; t.salary = s.sum; t.has_salary = true; t.parts = { advance: s.advance, rest: s.rest, bonus: s.bonus, leave: s.leave }; t.pay_rows = s.rows; t.person_key = k; });
   const statusOf = r => r.owner ? 'владелец' : ((!r.has_salary && r.revenue > 0) ? 'нет в расходах' : (r.revenue <= 0 ? 'без выручки' : (r.revenue - r.salary >= 0 ? 'окупается' : 'в минусе')));
   const list = Object.values(rows).map(r => Object.assign(r, { result: r.revenue - r.salary, status: statusOf(r) }));
   list.sort((a, b) => b.revenue - a.revenue || b.salary - a.salary);
@@ -436,11 +522,11 @@ export function checkMissing(byMonth, monthKey) {
   const prevKeys = [1, 2, 3, 4, 5, 6].map(k => shiftMonthKey(monthKey, -k));
   const mode = missingCheckMode(byMonth, monthKey);
   const items = EXPECTED_ITEMS.map(item => {
-    const cur = ((byMonth[monthKey] && byMonth[monthKey].rows) || []).filter(e => e.source !== 'manual' && itemMatches(item, e));
+    const cur = ((byMonth[monthKey] && byMonth[monthKey].rows) || []).filter(e => e.source !== 'manual' && (e.pay_month || monthKey) === monthKey && itemMatches(item, e));
     const found = cur.reduce((a, e) => a + num(e.amount), 0);
     const prepaid = cur.some(e => e.source === 'prepaid'); // доля предоплаты — сумма известна по построению, сравнивать не с чем
     const prev = [];
-    prevKeys.forEach(k => { const m = byMonth[k]; if (!m || !m.available || prev.length >= 3) return; const s = m.rows.filter(e => e.source !== 'manual' && itemMatches(item, e)).reduce((a, e) => a + num(e.amount), 0); if (s > 0) prev.push({ month: k, sum: s }); });
+    prevKeys.forEach(k => { const m = byMonth[k]; if (!m || !m.available || prev.length >= 3) return; const s = m.rows.filter(e => e.source !== 'manual' && (e.pay_month || k) === k && itemMatches(item, e)).reduce((a, e) => a + num(e.amount), 0); if (s > 0) prev.push({ month: k, sum: s }); });
     const med = median(prev.map(p => p.sum));
     let status = 'ok';
     if (mode === 'no_data') status = 'no_data';
@@ -507,4 +593,70 @@ export async function addSpend(dayIso, usd) {
   const keys = Object.keys(all).sort(); while (keys.length > 60) delete all[keys.shift()]; // храним два месяца
   await sbUpsert('app_settings', { key: 'finansist_agent_spend', value: all, updated_at: new Date().toISOString() }, 'key');
   return all[dayIso];
+}
+
+// ---------- сверка выплат по людям (для страницы и агента) ----------
+export async function enrichTeamPay(team, employees, monthKey) {
+  const calc = await loadSalaryCalc();
+  (team.rows || []).forEach(r => {
+    if (!r.has_salary || r.owner) return;
+    const person = { key: r.person_key, advance: (r.parts && r.parts.advance) || 0, rest: (r.parts && r.parts.rest) || 0, bonus: (r.parts && r.parts.bonus) || 0, rows: r.pay_rows || [] };
+    const exp = expectedPay(person, monthKey, employees, calc);
+    r.expected = exp.expected; r.expected_kind = exp.kind; r.expected_note = exp.note; r.fact_for_check = exp.fact;
+    r.pay_check = payCheck(person, exp);
+  });
+  return team;
+}
+// Люди из зарплатных строк за месяцы (для поля «оклад» на «Правилах и целях»)
+export async function payPeople(byMonth, employees, monthKey) {
+  const calc = await loadSalaryCalc();
+  const R = currentRules();
+  const o = {};
+  const win = monthKey ? [shiftMonthKey(monthKey, -2), shiftMonthKey(monthKey, -1), monthKey] : null; // три последних месяца работы — старые сотрудники не мешают
+  Object.values(byMonth).forEach(m => (m.rows || []).forEach(e => { if (e.kind !== 'salary') return; if (win && win.indexOf(e.work_month) < 0) return; const k = classifyExpense(e); if (!o[k.person_key]) o[k.person_key] = { key: k.person_key, name: k.person ? k.person.charAt(0).toUpperCase() + k.person.slice(1) : k.person_key }; }));
+  return Object.values(o).map(p => { const emp = (employees || []).find(e => nameKey(e.name) === p.key); const email = emp && emp.email ? String(emp.email).toLowerCase() : null; return Object.assign(p, { name: p.name, manager: !!(email && calc.assign && calc.assign[email]), oklad: R.oklad && R.oklad[p.key] != null ? num(R.oklad[p.key]) : null }); }).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+}
+
+// ---------- курс Нацбанка КР (тенге → сом) ----------
+// Источник — официальный https://www.nbkr.kg/XML/daily.xml: отдаёт только курс на сегодня, архива по дате нет.
+// Поэтому ночной крон каждый день сохраняет курс дня в app_settings.finansist_fx_rates; история копится с запуска.
+// Для даты оплаты берём курс этой даты, в выходные/праздники — последний опубликованный, но не старше 5 дней.
+// Курса нет — не угадываем: сверка «не проверено», Гульшан может вписать курс вручную на «Правилах и целях».
+export const FX_MAX_AGE_DAYS = 5;
+export async function loadFxRates() {
+  try { const r = await sbSelect('app_settings', { key: 'eq.finansist_fx_rates', limit: '1' }); return (r[0] && r[0].value) || {}; } catch (_) { return {}; }
+}
+export async function saveFxRate(date, kzt, src, who) {
+  const cur = await loadFxRates();
+  cur[date] = { KZT: kzt, src: src || 'nbkr', by: who || null, at: new Date().toISOString() };
+  const keys = Object.keys(cur).sort(); while (keys.length > 800) delete cur[keys.shift()];
+  await sbUpsert('app_settings', { key: 'finansist_fx_rates', value: cur, updated_at: new Date().toISOString() }, 'key');
+  return cur[date];
+}
+export function fxRateFor(rates, date) {
+  for (let d = 0; d <= FX_MAX_AGE_DAYS; d++) { const k = addDays(date, -d); if (rates[k] && num(rates[k].KZT) > 0) return { rate: num(rates[k].KZT), date: k, src: rates[k].src || 'nbkr' }; }
+  return null;
+}
+export async function fetchNbkrToday() {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const r = await fetch('https://www.nbkr.kg/XML/daily.xml', { signal: ctl.signal, headers: { 'User-Agent': 'Mozilla/5.0 SalesDoc' } });
+    if (!r.ok) throw new Error('НБКР ' + r.status);
+    const txt = Buffer.from(await r.arrayBuffer()).toString('latin1'); // windows-1251, но нужны только цифры и латиница
+    const dm = txt.match(/Date="(\d{2})\.(\d{2})\.(\d{4})"/);
+    const km = txt.match(/ISOCode="KZT">\s*<Nominal>(\d+)<\/Nominal>\s*<Value>([\d,\.]+)<\/Value>/);
+    if (!dm || !km) throw new Error('НБКР: не нашёл дату или курс тенге');
+    return { date: dm[3] + '-' + dm[2] + '-' + dm[1], KZT: parseFloat(km[2].replace(',', '.')) / (parseInt(km[1], 10) || 1) };
+  } finally { clearTimeout(t); }
+}
+// Сверка оплат интеграторам за месяц выплаты: сколько сом должно было уйти по курсу на дату оплаты.
+export function fxChecks(rows, rates) {
+  const R = currentRules();
+  const tol = num(R.integrators_tolerance_pct) || 0, kzt = num(R.integrators_kzt) || 0;
+  return (rows || []).filter(e => e.kind === 'group').map(e => {
+    const fx = fxRateFor(rates, String(e.date).slice(0, 10));
+    if (!fx) return { date: e.date, note: e.note, fact: num(e.amount), status: 'no_rate' };
+    const expected = kzt * fx.rate; const pct = expected ? (num(e.amount) - expected) / expected * 100 : null;
+    return { date: e.date, note: e.note, fact: num(e.amount), rate: fx.rate, rate_date: fx.date, rate_src: fx.src, expected: Math.round(expected), pct: pct == null ? null : Math.round(pct * 10) / 10, status: pct != null && pct > tol ? 'over' : 'ok' };
+  });
 }

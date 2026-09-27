@@ -60,16 +60,20 @@ export default async function handler(req, res) {
       const r = C.monthKeyToRange(k); const rows = base.payments.filter(p => C.inRange(p, r));
       const exRows = C.expenseRows(expByMonth, k);
       const s = C.periodSummary(base, r, exRows);
-      return { key: k, revenue: s.revenue, count: rows.length, by_category: s.by_category, expenses: s.expenses, salaries: s.salaries, profit: s.profit, owner_draws: s.owner_draws, retained: s.retained, margin_pct: s.margin_pct, salary_share_pct: s.salary_share_pct, expenses_available: !!exRows };
+      const ss = C.salaryState(expByMonth, k);
+      return { key: k, revenue: s.revenue, count: rows.length, by_category: s.by_category, expenses: s.expenses, salaries: s.salaries, profit: s.profit, owner_draws: s.owner_draws, retained: s.retained, margin_pct: s.margin_pct, salary_share_pct: s.salary_share_pct, expenses_available: !!exRows, salary_pending: ss.pending };
     });
 
     // --- период ---
     const curRows = base.payments.filter(p => C.inRange(p, range));
     const prevRows = base.payments.filter(p => C.inRange(p, C.monthKeyToRange(prevKey)));
+    const salaryState = C.salaryState(expByMonth, range.key);
     const period = Object.assign(C.periodSummary(base, range, C.expenseRows(expByMonth, range.key)), {
       prev_revenue: prevRows.reduce((a, p) => a + C.num(p.amount), 0),
       last_paid_at: (function () { const t = C.bishkekIso(); const p = base.payments.find(x => x.paid_at && x.paid_at <= t); return p ? p.paid_at : (base.payments[0] ? base.payments[0].paid_at : null); })(),
-      profit_incomplete: missing.incomplete,
+      profit_incomplete: missing.incomplete || salaryState.pending,
+      missing_incomplete: missing.incomplete,
+      salary_state: salaryState,
     });
 
     // --- спорные ---
@@ -86,6 +90,12 @@ export default async function handler(req, res) {
 
     // --- команда ---
     const team = C.teamRows(base, range, C.expenseRows(expByMonth, range.key));
+    await C.enrichTeamPay(team, base.employees, range.key);
+    if (salaryState.pending) team.rows.forEach(r => { r.pay_check = null; }); // пока зарплата за месяц не выплачена — не сверяем
+    const fxRates = await C.loadFxRates();
+    team.fx = C.fxChecks(C.cashRows(expByMonth, range.key) || [], fxRates); // сверка оплат интеграторам за месяц выплаты
+    team.salary_state = salaryState;
+    const people = await C.payPeople(expByMonth, base.employees, range.key);
     const teamPrev = {}; prevRows.forEach(p => { const n = (p.manager_name || '').trim() || 'Без менеджера'; teamPrev[n] = (teamPrev[n] || 0) + C.num(p.amount); });
     team.rows.forEach(r => { r.prev_revenue = teamPrev[r.name] || 0; });
 
@@ -93,7 +103,7 @@ export default async function handler(req, res) {
     const cash = C.cashForecast(base, 30);
 
     const expensesOut = {};
-    Object.keys(expByMonth).forEach(k => { const m = expByMonth[k]; expensesOut[k] = { available: m.available, fetched_at: m.fetched_at, stale: !!m.stale, rows: m.rows.map(e => Object.assign({ date: e.date, category: e.category, note: e.note, amount: e.amount, bank: e.bank, source: e.source, item_key: e.item_key || null }, C.classifyExpense(e))) }; });
+    Object.keys(expByMonth).forEach(k => { const m = expByMonth[k]; expensesOut[k] = { available: m.available, fetched_at: m.fetched_at, stale: !!m.stale, rows: m.rows.map(e => Object.assign({ date: e.date, category: e.category, note: e.note, amount: e.amount, bank: e.bank, source: e.source, item_key: e.item_key || null, pay_month: e.pay_month, work_month: e.work_month, sheet_month: e.sheet_month || null, part: e.part || null }, C.classifyExpense(e))) }; });
 
     return res.status(200).json({
       ok: true,
@@ -107,6 +117,9 @@ export default async function handler(req, res) {
         group_rules: C.GROUP_RULES.map(g => ({ group: g.group, how: g.how, revenue_cats: g.revenue_cats })),
         shared_label_rules: C.SHARED_LABEL_RULES.map(r => ({ label: r.label, how: r.how })),
         settings: C.currentRules(),
+        people,
+        fx_recent: Object.keys(fxRates).sort().slice(-12).reverse().map(d => ({ date: d, KZT: fxRates[d].KZT, src: fxRates[d].src, by: fxRates[d].by || null })),
+        pay_tolerance_som: C.PAY_TOLERANCE_SOM, salary_paid_by_day: C.SALARY_PAID_BY_DAY,
       },
       months, period,
       disputes: { list: d.list, counts: d.counts, total: d.list.length },

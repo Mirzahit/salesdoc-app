@@ -5,7 +5,7 @@
 // ENV: CRON_SECRET (Vercel шлёт сам), ANTHROPIC_API_KEY_FINANSIST (без ключа вопросы получат шаблонные тексты).
 
 import { sweepMonth } from './_finansist_agent.js';
-import { currentMonthKey, shiftMonthKey, bishkekIso } from './_finansist_core.js';
+import { currentMonthKey, shiftMonthKey, bishkekIso, fetchNbkrToday, saveFxRate } from './_finansist_core.js';
 
 export const config = { maxDuration: 300 };
 
@@ -14,6 +14,9 @@ export default async function handler(req, res) {
   if (!expected) return res.status(503).json({ ok: false, error: 'CRON_SECRET не настроен' });
   const got = String(req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
   if (got !== expected) return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  // курс тенге Нацбанка КР на сегодня — копим историю (архива по дате у Нацбанка нет)
+  let fx = null;
+  try { const r = await fetchNbkrToday(); await saveFxRate(r.date, r.KZT, 'nbkr', 'крон'); fx = r; } catch (e) { console.error('[cron-finansist] НБКР:', e.message); fx = { error: String(e.message || e) }; }
   const months = [currentMonthKey()];
   if (parseInt(bishkekIso().slice(8, 10), 10) <= 10) months.push(shiftMonthKey(months[0], -1));
   const out = [];
@@ -21,5 +24,5 @@ export default async function handler(req, res) {
     try { const r = await sweepMonth(m, { force: true }); out.push({ month: m, created: r.created, closed: r.closed, candidates: r.candidates, missing: r.missing.map(x => x.item_key + ':' + x.status), cost_usd: r.cost_usd }); }
     catch (e) { console.error('[cron-finansist]', m, e); out.push({ month: m, error: String(e && e.message || e) }); }
   }
-  return res.status(200).json({ ok: true, ran_at: new Date().toISOString(), months: out });
+  return res.status(200).json({ ok: true, ran_at: new Date().toISOString(), fx, months: out });
 }

@@ -79,12 +79,13 @@ function period(from, to) {
   return { from, to };
 }
 function monthsIn(from, to) { const out = []; let k = from.slice(0, 7); while (k <= to.slice(0, 7)) { out.push(k); k = C.shiftMonthKey(k, 1); } return out; }
+// rows — по месяцу работы (для прибыли и команды; зарплата аванс+остаток), cash — по дате выплаты (строки таблицы)
 async function expensesFor(from, to) {
   const keys = monthsIn(from, to);
   const byMonth = await C.loadExpenses(keys);
-  const rows = []; const missingMonths = [];
-  keys.forEach(k => { const m = byMonth[k]; if (!m || !m.available) { missingMonths.push(k); return; } m.rows.forEach(e => { if (!C.isTransfer(e) && e.date >= from && e.date <= to) rows.push(e); }); });
-  return { rows, byMonth, keys, missingMonths };
+  const rows = [], cash = [], seen = new Set(), seenCash = new Set(); const missingMonths = [];
+  keys.forEach(k => { const m = byMonth[k]; if (!m || !m.available) { missingMonths.push(k); return; } m.rows.forEach(e => { if (C.isTransfer(e)) return; if (keys.indexOf(e.work_month) >= 0 && !seen.has(e.id)) { seen.add(e.id); rows.push(e); } if (e.date >= from && e.date <= to && !seenCash.has(e.id)) { seenCash.add(e.id); cash.push(e); } }); });
+  return { rows, cash, byMonth, keys, missingMonths };
 }
 async function summaryFor(from, to) {
   const base = await C.loadBase();
@@ -119,13 +120,13 @@ export async function runTool(name, input, ctx) {
     }
     case 'get_expenses': {
       const p = period(input.from, input.to); const ex = await expensesFor(p.from, p.to);
-      let rows = ex.rows;
+      let rows = ex.cash;
       if (input.category) rows = rows.filter(e => String(e.category).toLowerCase().indexOf(String(input.category).toLowerCase()) >= 0);
       if (input.query) rows = rows.filter(e => String(e.note).toLowerCase().indexOf(String(input.query).toLowerCase()) >= 0);
       const byCat = {}; rows.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + C.num(e.amount); });
-      return { total_rows: rows.length, total_amount: C.round(rows.reduce((a, e) => a + C.num(e.amount), 0)), by_category: rounded(byCat), months_without_data: ex.missingMonths, shown: Math.min(200, rows.length), rows: rows.slice(0, 200).map(e => ({ date: e.date, category: e.category, note: e.note, amount: e.amount, bank: e.bank, source: e.source, salary: C.isSalary(e) })) };
+      return { total_rows: rows.length, total_amount: C.round(rows.reduce((a, e) => a + C.num(e.amount), 0)), by_category: rounded(byCat), months_without_data: ex.missingMonths, shown: Math.min(200, rows.length), rows: rows.slice(0, 200).map(e => ({ date: e.date, category: e.category, note: e.note, amount: e.amount, bank: e.bank, source: e.source, kind: e.kind, part: e.part || null, work_month: e.work_month })) };
     }
-    case 'get_team': { const p = period(input.from, input.to); const base = await C.loadBase(); const ex = await expensesFor(p.from, p.to); return rounded(Object.assign(C.teamRows(base, p, ex.rows.length ? ex.rows : null), { months_without_expenses: ex.missingMonths })); }
+    case 'get_team': { const p = period(input.from, input.to); const base = await C.loadBase(); const ex = await expensesFor(p.from, p.to); const team = C.teamRows(base, p, ex.rows.length ? ex.rows : null); const single = ex.keys.length === 1; if (single) await C.enrichTeamPay(team, base.employees, ex.keys[0]); return rounded(Object.assign(team, { months_without_expenses: ex.missingMonths, salary_state: single ? C.salaryState(ex.byMonth, ex.keys[0]) : ex.keys.map(k => Object.assign({ month: k }, C.salaryState(ex.byMonth, k))) })); }
     case 'get_disputes': {
       const p = period(input.from, input.to); const base = await C.loadBase(); const d = C.findDisputes(base.payments, p);
       let list = d.list; if (input.type) list = list.filter(x => x.issues.some(i => i.type === input.type));
@@ -265,6 +266,11 @@ const OPTIONS = {
   superseded: ['Понятно'],
   prepaid_end: ['Продлили — добавлю новую предоплату', 'Больше не платим'],
   owner_over: ['Знаю, так и задумано', 'Верну часть в компанию'],
+  pay_less: ['Так и должно быть', 'Недоплатили — доплатим', 'Поправлю оклад'],
+  pay_more: ['Это бонус', 'Переплата', 'Поправлю оклад'],
+  no_advance: ['Аванс не давали', 'Внесём аванс в таблицу'],
+  wrong_sheet: ['Перенесу на нужный лист', 'Так и должно быть'],
+  fx_over: ['Так и должно быть', 'Разберусь с конвертацией'],
   low_balance: ['Знаю', 'Сократим расходы', 'Ускорим оплаты клиентов'],
 };
 function candidates(monthKey, disputes, missingSync, opts_prepaid) {
@@ -285,6 +291,7 @@ function candidates(monthKey, disputes, missingSync, opts_prepaid) {
   (missingSync.changes || []).forEach(ch => { if (ch.type === 'superseded') out.push({ key: 'superseded:' + ch.item.item_key + ':' + monthKey, type: 'missing', amount: ch.prev.amount, fact: 'Ручная сумма ' + C.round(ch.prev.amount) + ' сом по статье «' + ch.item.item_label + '» больше не учитывается: в таблице появилась настоящая строка на ' + C.round(ch.item.found_amount) + ' сом.', options: OPTIONS.superseded, evidence: { item_key: ch.item.item_key, manual: ch.prev.amount, found: ch.item.found_amount } }); });
   return out;
 }
+const FALLBACK_TITLE_MORE = { pay_less: 'Выплата меньше оклада', pay_more: 'Выплата больше оклада — бонус?', no_advance: 'Аванс не найден', wrong_sheet: 'Строка не на своём листе', fx_over: 'Ушло больше, чем нужно по курсу' };
 const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', dec: 'Проверить по правилу декад', missing: 'Не хватает данных по расходам', other: 'Предоплата закончилась', owner: 'Изъято больше, чем заработано', balance: 'Остаток ниже безопасного' };
 
 // Изъятие владельца с начала квартала против прибыли за тот же период + остаток на счетах против безопасного.
@@ -317,6 +324,7 @@ export async function sweepMonth(monthKey, opts) {
   const prepaid = await C.loadPrepaid();
   const cands = candidates(monthKey, disputes, missingSync, prepaid);
   (await ownerAndBalanceChecks(base, monthKey, byMonth)).forEach(c => cands.push(c));
+  (await payAndSheetChecks(base, monthKey, byMonth)).forEach(c => cands.push(c));
   const existing = await sbSelect('finansist_questions', { country: 'eq.' + C.COUNTRY, month: 'eq.' + monthKey, limit: '500' });
   const exMap = {}; existing.forEach(q => { exMap[q.key] = q; });
   const decisions = await C.loadDecisions();
@@ -326,7 +334,7 @@ export async function sweepMonth(monthKey, opts) {
   // исчезнувшие расхождения — закрываем
   const candKeys = new Set(cands.map(c => c.key));
   let closed = 0;
-  for (const q of existing) if (q.status === 'open' && !candKeys.has(q.key) && !q.key.startsWith('superseded:') && !q.key.startsWith('prepaid_end:') && q.type !== 'goal' && (q.type !== 'other' || /^(owner_over|low_balance):/.test(q.key))) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Расхождение исчезло само', updated_at: now }); closed++; }
+  for (const q of existing) if (q.status === 'open' && !candKeys.has(q.key) && !q.key.startsWith('superseded:') && !q.key.startsWith('prepaid_end:') && q.type !== 'goal' && (q.type !== 'other' || /^(owner_over|low_balance|pay_less|pay_more|fx_over):/.test(q.key))) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Расхождение исчезло само', updated_at: now }); closed++; }
   // обновляем сумму/доказательства у открытых
   for (const c of cands) { const q = exMap[c.key]; if (q && q.status === 'open') await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { amount: c.amount == null ? null : C.round(c.amount), evidence: c.evidence, updated_at: now }); }
 
@@ -349,7 +357,7 @@ export async function sweepMonth(monthKey, opts) {
   let created = 0;
   for (const c of fresh) {
     const t = texts[c.key] || {};
-    await sbUpsert('finansist_questions', { country: C.COUNTRY, month: monthKey, key: c.key, type: c.type, title: t.title || FALLBACK_TITLE[c.kind] || FALLBACK_TITLE[c.type] || 'Вопрос', body: t.body || c.fact, options: c.options, evidence: c.evidence, amount: c.amount == null ? null : C.round(c.amount), status: 'open', created_at: now, updated_at: now }, 'country,month,key');
+    await sbUpsert('finansist_questions', { country: C.COUNTRY, month: monthKey, key: c.key, type: c.type, title: t.title || FALLBACK_TITLE_MORE[c.kind] || FALLBACK_TITLE[c.kind] || FALLBACK_TITLE[c.type] || 'Вопрос', body: t.body || c.fact, options: c.options, evidence: c.evidence, amount: c.amount == null ? null : C.round(c.amount), status: 'open', created_at: now, updated_at: now }, 'country,month,key');
     created++;
   }
   return { month: monthKey, candidates: cands.length, created, closed, missing: missingSync.items, missing_changes: missingSync.changes, disputes: disputes.counts, model_used: modelUsed, cost_usd: cost, usage };
@@ -364,4 +372,40 @@ export async function answerQuestion(id, idx, caller) {
   await sbUpdate('finansist_questions', { id: 'eq.' + id }, { status: 'answered', answer_idx: idx, answer_text: text, answered_by: caller.email, answered_by_name: caller.name || null, answered_at: now, updated_at: now });
   await C.saveDecision(q.key, q.title + ' — ' + text, 'question', q.month, caller.email, caller.name);
   return { ok: true };
+}
+
+// Выплаты людям (после того как зарплата за месяц выплачена), аванс не найден, строка не на своём листе, курс интеграторам.
+async function payAndSheetChecks(base, monthKey, byMonth) {
+  const out = [];
+  const R = C.currentRules();
+  const ss = C.salaryState(byMonth, monthKey);
+  const rows = C.expenseRows(byMonth, monthKey);
+  if (rows && !ss.pending) {
+    const team = C.teamRows(base, C.monthKeyToRange(monthKey), rows);
+    await C.enrichTeamPay(team, base.employees, monthKey);
+    team.rows.forEach(r => {
+      if (!r.pay_check) return;
+      const k = r.pay_check.direction === 'less' ? 'pay_less' : 'pay_more';
+      const parts = r.parts || {};
+      const fact = 'Зарплата ' + r.name + ' за ' + C.monthLabel(monthKey) + ': аванс ' + C.round(parts.advance) + ' + остаток ' + C.round(parts.rest) + (r.expected_kind === 'calc' && parts.bonus ? ' + бонус ' + C.round(parts.bonus) : '') + ' = ' + C.round(r.fact_for_check) + ' сом. Ожидалось ' + C.round(r.expected) + ' (' + r.expected_note + '). ' + (k === 'pay_less' ? 'Меньше на ' + C.round(-r.pay_check.diff) + ' сом.' : 'Больше на ' + C.round(r.pay_check.diff) + ' сом — возможно, бонус.');
+      out.push({ key: k + ':' + monthKey + ':' + r.person_key, type: 'other', kind: k, amount: Math.abs(r.pay_check.diff), fact, options: OPTIONS[k], evidence: { person: r.name, month: monthKey, parts, expected: r.expected, expected_note: r.expected_note, fact: r.fact_for_check } });
+    });
+  }
+  const s = C.expenseSummary(rows || []);
+  ss.no_advance.forEach(name => { const p = Object.values(s.salaries).find(x => x.name === name); out.push({ key: 'no_advance:' + monthKey + ':' + (p ? p.key : name), type: 'missing', kind: 'no_advance', amount: p ? p.rest : null, fact: 'У ' + name + ' за ' + C.monthLabel(monthKey) + ' есть остаток «за вычетом аванса»' + (p ? ' на ' + C.round(p.rest) + ' сом' : '') + ', а самого аванса за этот месяц в таблице нет. Уточнить у Гульшан.', options: OPTIONS.no_advance, evidence: { person: name, month: monthKey } }); });
+  // строки не на своём листе (дата одного месяца, лист другого)
+  const seen = new Set();
+  (byMonth[monthKey] && byMonth[monthKey].rows || []).forEach(e => {
+    if (e.source !== 'sheet' || !e.sheet_month || String(e.date).slice(0, 7) === e.sheet_month) return;
+    const key = 'wrong_sheet:' + e.sheet_month + ':' + e.date + ':' + C.round(e.amount); if (seen.has(key)) return; seen.add(key);
+    const dm = C.parseMonth(String(e.date).slice(0, 7)), sm = C.parseMonth(e.sheet_month);
+    out.push({ key, type: 'missing', kind: 'wrong_sheet', amount: e.amount, fact: 'Строка «' + e.note + '» на ' + C.round(e.amount) + ' сом от ' + C.fmtDay(e.date) + ' записана на лист «' + C.MONTHS_RU[sm.mo - 1] + '». Считаю её ' + (e.part === 'advance' ? 'авансом' : 'расходом') + ' за ' + C.monthLabel(e.work_month || String(e.date).slice(0, 7)) + '. Перенесите строку на лист «' + C.MONTHS_RU[dm.mo - 1] + '» и ведите там остальные строки этого месяца.', options: OPTIONS.wrong_sheet, evidence: { date: e.date, note: e.note, amount: e.amount, sheet: e.sheet_month } });
+  });
+  // курс: оплаты интеграторам в месяц выплаты
+  const rates = await C.loadFxRates();
+  C.fxChecks(C.cashRows(byMonth, monthKey) || [], rates).forEach(f => {
+    if (f.status !== 'over') return;
+    out.push({ key: 'fx_over:' + f.date + ':' + C.round(f.fact), type: 'other', kind: 'fx_over', amount: f.fact - f.expected, fact: 'Интеграторам ' + C.fmtDay(f.date) + ' ушло ' + C.round(f.fact) + ' сом. По курсу Нацбанка на ' + C.fmtDay(f.rate_date) + ' (' + String(f.rate).replace('.', ',') + ' сом за тенге) за ' + C.round(R.integrators_kzt) + ' тенге нужно ' + C.round(f.expected) + ' сом. Больше на ' + f.pct + '% при допуске ' + R.integrators_tolerance_pct + '%.', options: OPTIONS.fx_over, evidence: f });
+  });
+  return out;
 }
