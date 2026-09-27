@@ -206,11 +206,15 @@ export function ownerOtherKey(e) {
 }
 export function isOwnerName(name) { const k = nameKey(name); return !!k && (currentRules().owner_names || []).some(n => nameKey(n) === k); }
 // Изъятие владельца: строка, похожая на зарплату, с именем владельца. Это не расход компании.
-export function isOwnerDraw(e) { return isSalary(e) && !sharedLabelRule(e) && isOwnerName(e.note); }
+export function isOwnerDraw(e) { return isOwnerDrawMarked(e) || (isSalary(e) && !sharedLabelRule(e) && isOwnerName(e.note)); }
+// Пометка «изъятие» в примечании (договорённость CEO с Гульшан 27.09.2026): деньги владельца, выданные через другого человека
+// (транзит). Строка — изъятие владельца, на чьё бы имя ни была оформлена; в зарплату, команду и сверку с окладом не идёт.
+export function isOwnerDrawMarked(e) { return /из[ъь]?ят/i.test(String((e && e.note) || '')); }
 // Вид строки расходов: transfer | shared | salary | group | owner
 export function classifyExpense(e) {
   if (e && e.source === 'expected' && e.expected_class) return e.expected_class; // ожидаемая зарплата — строка программы, не таблицы
   if (isTransfer(e)) return { kind: 'transfer' };
+  if (isOwnerDrawMarked(e)) return { kind: 'owner', marked: true }; // «изъятие» в примечании — изъятие владельца, имя не важно
   if (isOwnerOtherCandidate(e)) { const key = ownerOtherKey(e); const d = (currentRules().owner_other || {})[key]; if (d === 'owner') return { kind: 'owner', owner_other: key }; return { kind: 'shared', label: String(e.category || 'Прочее').trim(), owner_other: key, owner_decided: d || null }; }
   if (isTax(e)) return { kind: 'shared', label: 'Налоги', tax_kind: taxKind(e.note) };
   const lab = sharedLabelRule(e); if (lab) return { kind: 'shared', label: lab.label };
