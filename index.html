@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v1005</title>
+<title>SalesDoc — Финансовый Дашборд v1006</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11180,22 +11180,12 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
    <!-- ПРАВИЛА -->
    <section class="fz-view" id="v-settings" data-title="Правила и цели">
     <div class="fz-ph"><div><h1>Правила и цели</h1><p>По этим правилам собираются спорные записи и считается команда</p></div></div>
-    <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Правило декад</h2><span>при каждой активации, продлении и докупке лицензий</span></div>
-     <div class="fz-tw"><table>
-      <thead><tr><th>Дата оплаты</th><th>Первый месяц считается как</th><th class="r">Цена за лицензию</th></tr></thead>
-      <tbody>
-       <tr><td>с 1 по 9 число</td><td>30 дней</td><td class="r muted">не задана</td></tr>
-       <tr><td>с 10 по 19 число</td><td>20 дней</td><td class="r muted">не задана</td></tr>
-       <tr><td>с 20 числа до конца месяца</td><td>10 дней</td><td class="r muted">не задана</td></tr>
-      </tbody></table></div>
-     <p class="fz-note" style="margin:10px 16px 14px">Проверяются оплаты со статьями «Новый клиент», «Абонплата» и «Доп. лицензии». Дата подключения в программе не заполняется, поэтому смотрим дату оплаты. Расхождение помечается «проверить», а не как ошибка: у клиента мог быть остаток на балансе.</p></div>
     <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Что считается расхождением</h2></div>
      <div class="fz-tw"><table>
       <thead><tr><th>Тип</th><th>Правило</th></tr></thead>
       <tbody>
        <tr><td><span class="ty bank">Счёт</span></td><td class="wrap">Внедрение, интеграция и доработка должны приходить на «М-банк услуги»; абонплата, новые и доп. лицензии — на «М-банк лицензии». Считается с 1 января 2026: раньше отдельного счёта услуг не было.</td></tr>
        <tr><td><span class="ty dup">Дубль</span></td><td class="wrap">Два платежа одного клиента с одинаковой суммой и статьёй в пределах 3 дней.</td></tr>
-       <tr><td><span class="ty dec">Декады</span></td><td class="wrap">Новый клиент, абонплата или доп. лицензии оплачены 10-го числа или позже, а сумма внесена как за полные месяцы (лицензии × цена × месяцы) без правила декад. Это «проверить», не ошибка.</td></tr>
       </tbody></table></div></div>
     <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Целевые показатели</h2><span>ввод целей добавим позже</span></div>
      <div class="fz-tw"><table>
@@ -46457,7 +46447,7 @@ var _fz = { inited:false, month:null, data:null, view:'overview', busy:false, er
   filters:{ q:'', type:'', cat:'', bank:'' }, done:{}, balance:null, balanceMeta:null, balanceTimer:null, expReady:false, expLoaded:false }; // done и balance приходят с сервера (finansist_answers / finansist_settings), на устройстве не храним
 
 var FZ_CAT = { implementation:'Внедрение', integration:'Интеграция', subscription:'Абонплата', license:'Новый клиент', revision:'Доработка', extra:'Доп. лицензии', other:'Прочее' };
-var FZ_TYPE = { bank:['wr','не тот счёт','Счёт'], dup:['bad','возможный дубль','Дубль'], dec:['bad','не по декаде','Декады'] };
+var FZ_TYPE = { bank:['wr','не тот счёт','Счёт'], dup:['bad','возможный дубль','Дубль'] }; // проверка по декадам удалена (CEO 27.09.2026)
 var FZ_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 var FZ_MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 var FZ_MONTHS_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
@@ -46870,7 +46860,7 @@ function fzRenderDisputes(){
  var d = _fz.data; if (!d) return;
  var list = d.disputes.list, f = _fz.filters;
  var cnt = function(fn){ return list.filter(fn).length; };
- fzDDRender('type', 'Все расхождения', ['bank','dup','dec'].map(function(t){ return { v:t, l:FZ_TYPE[t][1].replace(/^./, function(c){ return c.toUpperCase(); }), n:cnt(function(p){ return p.issues.some(function(i){ return i.type === t; }); }) }; }), f.type);
+ fzDDRender('type', 'Все расхождения', ['bank','dup'].map(function(t){ return { v:t, l:FZ_TYPE[t][1].replace(/^./, function(c){ return c.toUpperCase(); }), n:cnt(function(p){ return p.issues.some(function(i){ return i.type === t; }); }) }; }), f.type);
  var cats = {}; list.forEach(function(p){ cats[p.category] = (cats[p.category] || 0) + 1; });
  fzDDRender('cat', 'Все статьи', Object.keys(cats).map(function(c){ return { v:c, l:FZ_CAT[c] || c, n:cats[c] }; }), f.cat);
  var banks = {}; list.forEach(function(p){ var b = p.bank || '—'; banks[b] = (banks[b] || 0) + 1; });

@@ -5,7 +5,7 @@
 // Apps Script со снимком в finansist_expenses_cache (Apps Script отвечает 10–20 с), плюс суммы, внесённые
 // бухгалтером в finansist_missing_data (status='filled'). Страна всегда KG.
 //
-// Правила расхождений и правило декад: см. комментарии в findDisputes. Зарплата: isSalary/SALARY_RULES —
+// Правила расхождений («не тот счёт», «возможный дубль»): см. комментарии в findDisputes. Зарплата: isSalary/SALARY_RULES —
 // зеркало функций fzIsSalary/FZ_SALARY_RULES в index.html, править синхронно.
 
 import { sbSelect, sbSelectAll, sbUpsert, sbUpdate, sbDelete, sbInsert } from './_supabase.js';
@@ -14,7 +14,6 @@ export const COUNTRY = 'KG';
 export const CURRENCY = 'сом';
 export const SERVICE_CATS = ['implementation', 'integration', 'revision'];
 export const LICENSE_CATS = ['subscription', 'license', 'extra'];
-export const DECADE_CATS = ['license', 'subscription', 'extra']; // CEO 26.09.2026: доп. лицензии тоже по декадам
 export const BANK_RULE_FROM = '2026-01-01';
 export const DUP_WINDOW_DAYS = 3;
 export const CAT_RU = { implementation: 'Внедрение', integration: 'Интеграция', subscription: 'Абонплата', license: 'Новый клиент', revision: 'Доработка', extra: 'Доп. лицензии', other: 'Прочее' };
@@ -55,7 +54,6 @@ export function monthLabel(key) { const m = parseMonth(key); return m ? MONTHS_R
 export function num(v) { const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 export function round(n) { return Math.round(+n || 0); }
 export function normName(s) { return String(s || '').toLowerCase().replace(/[«»"',.()]/g, ' ').replace(/\s+/g, ' ').trim(); }
-export function decadeDays(day) { return day >= 20 ? 10 : (day >= 10 ? 20 : 30); }
 
 // Поле bank менеджер заполняет руками: «М Бизнес», «МБизнес», «Мбизнес Услуги», «МБизнес Усл», «РСК», «Касса …», «M-Bank».
 export function bankKey(bank) {
@@ -388,19 +386,12 @@ export function findDisputes(all, range) {
       push(b.id, 'dup', 'такой же платёж ' + fmtDay(a.paid_at), { pair });
     }
   });
-  all.forEach(p => {
-    if (!DECADE_CATS.includes(p.category)) return;
-    const qty = num(p.qty), price = num(p.price), months = num(p.period_months), amount = num(p.amount);
-    if (qty <= 0 || price <= 0 || months <= 0 || amount <= 0) return;
-    const day = dayOf(p.paid_at); if (day < 10) return;
-    if (Math.abs(amount - qty * price * months) >= 1) return;
-    const dd = decadeDays(day); const expected = Math.round(qty * price * (months - 1 + dd / 30));
-    push(p.id, 'dec', 'проверить: по декаде ' + dd + ' дн., ожидалось ' + expected + ', внесено за полные месяцы (мог быть остаток на балансе)');
-  });
+  // Проверка по правилу декад удалена по решению CEO 27.09.2026: дни клиенту иногда дарят сознательно
+  // (заплатил 20-го как за полный месяц — подарили 10 дней). Деньги считаем по факту оплаты.
   const list = all.filter(p => issues[p.id] && (!range || (p.paid_at >= range.from && p.paid_at <= range.to)))
     .map(p => ({ id: p.id, paid_at: p.paid_at, company_name: p.company_name, client_id: p.client_id, category: p.category, category_raw: p.category_raw, amount: num(p.amount), bank: p.bank, bank_key: bankKey(p.bank), manager_name: p.manager_name, source: p.source, created_by: p.created_by, issues: issues[p.id] }))
     .sort((a, b) => a.paid_at < b.paid_at ? 1 : -1);
-  const counts = { bank: 0, dup: 0, dec: 0 };
+  const counts = { bank: 0, dup: 0 };
   list.forEach(p => { const seen = {}; p.issues.forEach(i => { if (!seen[i.type]) { counts[i.type]++; seen[i.type] = 1; } }); });
   return { list, issues, counts };
 }
@@ -581,7 +572,7 @@ export function checkMissing(byMonth, monthKey) {
     else if (item.track_last) status = (track.months_since == null || track.months_since > (item.max_gap_months || 2)) ? (mode === 'early' ? 'early' : 'missing') : 'ok';
     else if (!cur.length) status = item.not_monthly ? 'ok' : (mode === 'early' ? 'early' : 'missing');
     else if (prepaid) status = 'ok';
-    else if (!item.no_odd && med && Math.abs(found - med) / med > ODD_THRESHOLD) status = 'odd';
+    else if (!item.no_odd && !item.not_monthly && med && Math.abs(found - med) / med > ODD_THRESHOLD) status = 'odd'; // неежемесячные (amo, вода) платят за разные сроки — «обычной суммы» у них нет
     return { item_key: item.key, item_label: item.label, status, prepaid, track, found_amount: found, found_rows: cur.map(e => ({ date: e.date, category: e.category, note: e.note, amount: e.amount, source: e.source })), expected_amount: med, prev, how: item.how };
   });
   items.mode = mode;

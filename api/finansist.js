@@ -113,7 +113,7 @@ export default async function handler(req, res) {
       meta: {
         generated_at: new Date().toISOString(), country: C.COUNTRY, currency: 'KGS', payments_total: base.payments.length, last_paid_at: period.last_paid_at,
         employees: base.employees.map(e => ({ name: e.name, pos: e.pos, role: e.role, email: e.email })),
-        bank_labels: C.BANK_LABELS, rules: { bank_from: C.BANK_RULE_FROM, dup_window_days: C.DUP_WINDOW_DAYS, decade_cats: C.DECADE_CATS, odd_threshold: C.ODD_THRESHOLD },
+        bank_labels: C.BANK_LABELS, rules: { bank_from: C.BANK_RULE_FROM, dup_window_days: C.DUP_WINDOW_DAYS, odd_threshold: C.ODD_THRESHOLD },
         expected_items: C.EXPECTED_ITEMS.map(i => ({ key: i.key, label: i.label, how: i.how })),
         salary_rules: C.SALARY_RULES.map(r => ({ person: r.person, cat_label: r.cat_label, note_label: r.note_label })),
         group_rules: C.GROUP_RULES.map(g => ({ group: g.group, how: g.how, revenue_cats: g.revenue_cats })),

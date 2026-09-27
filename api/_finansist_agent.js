@@ -57,7 +57,7 @@ export const TOOLS = [
   { name: 'get_payments', description: 'Строки оплат за период с фильтрами. До 200 строк, сортировка по дате.', input_schema: { type: 'object', properties: Object.assign({}, PERIOD, { category: { type: ['string', 'null'], description: 'implementation|integration|subscription|license|revision|extra|other' }, bank: { type: ['string', 'null'], description: 'license|services|cash|other|none — нормализованный счёт' }, manager: { type: ['string', 'null'], description: 'имя менеджера как в оплате' }, client: { type: ['string', 'null'], description: 'часть названия клиента' }, limit: { type: ['integer', 'null'], description: 'до 200' } }), required: ['from', 'to', 'category', 'bank', 'manager', 'client', 'limit'], additionalProperties: false }, strict: true },
   { name: 'get_expenses', description: 'Строки расходов за период из таблицы расходов плюс суммы, внесённые бухгалтером вручную (source=manual). Переносы между счетами исключены.', input_schema: { type: 'object', properties: Object.assign({}, PERIOD, { category: { type: ['string', 'null'], description: 'часть названия статьи' }, query: { type: ['string', 'null'], description: 'часть примечания' } }), required: ['from', 'to', 'category', 'query'], additionalProperties: false }, strict: true },
   { name: 'get_team', description: 'Рентабельность людей за период: выручка по менеджеру, его зарплата (ЗП, бонусы, отпускные, аванс по имени в примечании; Гульшан — по правилу), разница. Общие расходы отдельно, на людей не делятся.', input_schema: { type: 'object', properties: PERIOD, required: ['from', 'to'], additionalProperties: false }, strict: true },
-  { name: 'get_disputes', description: 'Спорные оплаты за период: bank (не тот счёт), dup (возможный дубль), dec (правило декад — «проверить», не ошибка).', input_schema: { type: 'object', properties: Object.assign({}, PERIOD, { type: { type: ['string', 'null'], description: 'bank|dup|dec или null' } }), required: ['from', 'to', 'type'], additionalProperties: false }, strict: true },
+  { name: 'get_disputes', description: 'Спорные оплаты за период: bank (не тот счёт), dup (возможный дубль). Правила декад нет — дни клиентам иногда дарят сознательно.', input_schema: { type: 'object', properties: Object.assign({}, PERIOD, { type: { type: ['string', 'null'], description: 'bank|dup или null' } }), required: ['from', 'to', 'type'], additionalProperties: false }, strict: true },
   { name: 'get_churn', description: 'Отток за месяц: ушедшие и отказавшиеся клиенты с потерей в месяц, новая выручка в месяц, выгрузка биллинга если есть.', input_schema: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' } }, required: ['month'], additionalProperties: false }, strict: true },
   { name: 'get_client', description: 'Карточка клиента по части названия: статус, даты биллинга, куратор, последние 12 оплат.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'], additionalProperties: false }, strict: true },
   { name: 'get_cash', description: 'Касса: введённый остаток, средние поступления в день за 90 дней, ожидаемые продления, просрочка, расходы по образцу прошлого месяца.', input_schema: { type: 'object', properties: { days: { type: ['integer', 'null'], description: '7–90, по умолчанию 30' } }, required: ['days'], additionalProperties: false }, strict: true },
@@ -98,7 +98,11 @@ async function summaryFor(from, to) {
   s.by_bank_ru = Object.fromEntries(Object.entries(s.by_bank).map(([k, v]) => [C.BANK_LABELS[k] || k, C.round(v)]));
   s.expenses_months_without_data = ex.missingMonths;
   s.profit_incomplete = open.length > 0 || ex.missingMonths.length > 0;
-  s.missing_estimate = open.filter(r => r.status === 'missing' && r.expected_amount).reduce((a, r) => a + C.num(r.expected_amount), 0); // прибыль завышена примерно на эту сумму
+  s.missing_estimate = open.filter(r => r.status === 'missing' && r.expected_amount && !(C.EXPECTED_ITEMS.find(i => i.key === r.item_key) || {}).track_last).reduce((a, r) => a + C.num(r.expected_amount), 0); // прибыль завышена примерно на эту сумму; вода «по последней покупке» не в счёт
+  // как посчитаны расходы и выплачена ли зарплата — иначе модель гадает («остаток ещё не выплачен», «по дате выплаты»)
+  s.expenses_basis = 'Зарплата — по месяцу работы: аванс и остаток за месяц, даже если остаток выплачен в следующем месяце. Прочие расходы — по месяцу листа. Выручка — по дате оплаты.';
+  s.salary_state = ex.keys.map(k => Object.assign({ month: k }, C.salaryState(ex.byMonth, k)));
+  s.salary_pending_months = s.salary_state.filter(x => x.pending).map(x => x.month); // пока не пусто — прибыль этих месяцев предварительная
   s.profit_incomplete_reasons = open.map(r => r.month + ': ' + r.item_label + ' — ' + (r.status === 'missing' ? 'нет строки' : 'сумма резко отличается')).concat(ex.missingMonths.map(m => m + ': расходов в таблице нет'));
   return s;
 }
@@ -264,7 +268,6 @@ async function saveAssistant(text, trace, usage, cost, model) {
 const OPTIONS = {
   bank: ['Ошибка в счёте', 'Ошибка в статье', 'Так и должно быть'],
   dup: ['Это дубль, разберусь в оплатах', 'Разные платежи'],
-  dec: ['Это аванс', 'Проверю', 'Так и должно быть'],
   missing: ['Внесу сумму', 'Такой статьи в этом месяце нет'],
   odd: ['Всё верно', 'Проверю с Гульшан'],
   superseded: ['Понятно'],
@@ -303,7 +306,7 @@ function candidates(monthKey, disputes, missingSync, opts_prepaid) {
   return out;
 }
 const FALLBACK_TITLE_MORE = { owner_other: 'Изъятие или расход компании?', water_supplier: 'Сверить доставки воды с поставщиком', prepaid_renew: 'Подписка скоро кончается', tax_penalty: 'Появилась пеня по налогам', pay_less: 'Выплата меньше оклада', pay_more: 'Выплата больше оклада — бонус?', no_advance: 'Аванс не найден', wrong_sheet: 'Строка не на своём листе', fx_over: 'Ушло больше, чем нужно по курсу' };
-const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', dec: 'Проверить по правилу декад', missing: 'Не хватает данных по расходам', other: 'Предоплата закончилась', owner: 'Изъято больше, чем заработано', balance: 'Остаток ниже безопасного' };
+const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', missing: 'Не хватает данных по расходам', other: 'Предоплата закончилась', owner: 'Изъято больше, чем заработано', balance: 'Остаток ниже безопасного' };
 
 // Изъятие владельца с начала квартала против прибыли за тот же период + остаток на счетах против безопасного.
 // Прибыль берём только за месяцы, где есть расходы (иначе сравнивать не с чем).
@@ -345,6 +348,7 @@ export async function sweepMonth(monthKey, opts) {
   // исчезнувшие расхождения — закрываем
   const candKeys = new Set(cands.map(c => c.key));
   let closed = 0;
+  for (const q of existing) if (q.status === 'open' && q.key.startsWith('dec:')) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Проверка по декадам отключена', updated_at: now }); closed++; }
   for (const q of existing) if (q.status === 'open' && !candKeys.has(q.key) && !q.key.startsWith('superseded:') && !q.key.startsWith('prepaid_end:') && !q.key.startsWith('prepaid_renew:') && q.key !== 'water_supplier' && q.type !== 'goal' && (q.type !== 'other' || /^(owner_over|low_balance|pay_less|pay_more|fx_over|owner_other|tax_penalty):/.test(q.key))) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Расхождение исчезло само', updated_at: now }); closed++; }
   // обновляем сумму/доказательства у открытых
   // у открытых обновляем сумму, доказательства и текст (если текст шаблонный — равен прошлому факту)
@@ -361,7 +365,7 @@ export async function sweepMonth(monthKey, opts) {
         if (spentNow >= st.daily_usd) break;
         const chunk = fresh.slice(i, i + 10);
         try {
-          const ask = 'Сформулируй вопросы владельцу по фактам ниже. На каждый факт — короткий заголовок (до 60 знаков) и объяснение в 1–2 предложения с цифрами из факта, без выводов сверх фактов, по-русски, на «вы». Верни ТОЛЬКО JSON-массив объектов {"key","title","body"} для всех ключей.\n\n' + chunk.map(c => 'key=' + c.key + ' | тип=' + c.type + ' | ' + c.fact).join('\n');
+          const ask = 'Сформулируй вопросы владельцу по фактам ниже. На каждый факт — короткий заголовок (до 60 знаков) и объяснение в 1–2 предложения с цифрами из факта, без выводов сверх фактов, по-русски, на «вы». Имена людей пиши как в факте. Если в факте сказано уточнить у Гульшан — напиши «Уточните у Гульшан» один раз, без оборотов вроде «этот вопрос также уточняется». Верни ТОЛЬКО JSON-массив объектов {"key","title","body"} для всех ключей.\n\n' + chunk.map(c => 'key=' + c.key + ' | тип=' + c.type + ' | ' + c.fact).join('\n');
           const resp = await client().messages.create({ model: cfg.model || MODEL, max_tokens: 6000, system: [{ type: 'text', text: cfg.system_prompt, cache_control: { type: 'ephemeral', ttl: '1h' } }], messages: [{ role: 'user', content: ask }], output_config: { effort: 'low' } });
           addUsage(usage, resp.usage); const c1 = costOf(resp.usage); cost += c1; spentNow += c1; modelUsed = true;
           if (resp.stop_reason === 'max_tokens') console.error('[finansist-agent] sweep model: ответ обрезан, пачка ' + i);
