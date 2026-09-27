@@ -97,7 +97,8 @@ export function salaryPart(e) {
 export function payMonthOf(e) { const d = String(e.date || ''); return /^\d{4}-\d{2}/.test(d) ? d.slice(0, 7) : String(e.sheet_month || ''); } // по дате выплаты; лист может быть не тот (аванс Элизы 27.09 в листе августа)
 export function workMonthOf(e, kind) {
   const pm = payMonthOf(e);
-  if (kind !== 'salary' && kind !== 'group') return payMonthOf(e);
+  if (kind === 'owner') return payMonthOf(e); // изъятие — когда забрал
+  if (kind !== 'salary' && kind !== 'group') return String(e.sheet_month || payMonthOf(e)); // прочие расходы — месяц листа, как ведёт Гульшан (таргет 31.05 в листе июня = июнь)
   const nm = namedMonth(e.note);
   if (nm) { const base = parseMonth(pm) || parseMonth(payMonthOf(e)); let y = base.y; if (nm > base.mo) y -= 1; return y + '-' + pad2(nm); }
   if (salaryPart(e) === 'advance') return pm;
@@ -127,6 +128,8 @@ export async function saveRules(patch) {
 
 // Группы команды: расходы на отдел целиком, а не на человека (CEO 27.09.2026: зарплата интеграторов в КЗ,
 // платит кыргызская компания — это расход KG, связанный с выручкой по внедрению и интеграции).
+// До августа 2026 интеграторам платили из Казахстана (CEO 27.09.2026): статья «Интеграция» в KG начинается с августа.
+export const INTEGRATORS_PAID_FROM_KG_SINCE = '2026-08';
 export const GROUP_RULES = [
   { group: 'Интеграция', category: /^услуг/i, note: /интегратор/i, revenue_cats: ['implementation', 'integration'], how: 'статья «Услуги», в примечании «интеграторам»' },
 ];
@@ -137,12 +140,33 @@ export const SHARED_LABEL_RULES = [
 ];
 export function groupRule(e) { const c = String((e && e.category) || '').trim(), n = String((e && e.note) || '').trim(); return GROUP_RULES.find(r => r.category.test(c) && r.note.test(n)) || null; }
 export function sharedLabelRule(e) { const c = String((e && e.category) || '').trim(), n = String((e && e.note) || '').trim(); return SHARED_LABEL_RULES.find(r => r.category.test(c) && r.note.test(n)) || null; }
+// Налоги компании (CEO 27.09.2026): официально оформлен только владелец, остальные ИП — налоги отдельной статьёй
+// в общих расходах, к людям не привязываются. Вид — по примечанию; пеня — всегда вопрос.
+export function taxKind(note) {
+  const n = String(note || '').toLowerCase();
+  if (/пен[яи]/.test(n)) return 'Пеня';
+  if (/подоход/.test(n)) return 'Подоходный';
+  if (/стр?[ао]х/.test(n)) return 'Страховые'; // «Страховые», опечатка «Стаховые»
+  if (/гнпф/.test(n)) return 'ГНПФ';
+  if (/единый/.test(n)) return 'Единый';
+  return 'Прочие налоги';
+}
+export function isTax(e) { return /^налог/i.test(String((e && e.category) || '').trim()); }
+// Изъятие владельца, кроме зарплатных строк с его именем: статья «Прочее» с именем владельца в примечании
+// (июль 2026: «мебель для дома Мирзахита», «обои для дома…», «Мирзахит подотчет»). Решение CEO 27.09.2026.
+export function isOwnerOther(e) {
+  if (!/^прочее$/i.test(String((e && e.category) || '').trim())) return false;
+  const n = String((e && e.note) || '').toLowerCase();
+  return (currentRules().owner_names || []).some(x => { const k = String(x || '').trim().toLowerCase(); return k.length >= 4 && n.indexOf(k) >= 0; });
+}
 export function isOwnerName(name) { const k = nameKey(name); return !!k && (currentRules().owner_names || []).some(n => nameKey(n) === k); }
 // Изъятие владельца: строка, похожая на зарплату, с именем владельца. Это не расход компании.
 export function isOwnerDraw(e) { return isSalary(e) && !sharedLabelRule(e) && isOwnerName(e.note); }
 // Вид строки расходов: transfer | shared | salary | group | owner
 export function classifyExpense(e) {
   if (isTransfer(e)) return { kind: 'transfer' };
+  if (isOwnerOther(e)) return { kind: 'owner' };
+  if (isTax(e)) return { kind: 'shared', label: 'Налоги', tax_kind: taxKind(e.note) };
   const lab = sharedLabelRule(e); if (lab) return { kind: 'shared', label: lab.label };
   const g = groupRule(e); if (g) return { kind: 'group', group: g.group };
   if (isSalary(e)) { if (isOwnerName(e.note)) return { kind: 'owner' }; const r = salaryRule(e); return r ? { kind: 'salary', person_key: nameKey(r.person), person: r.person } : { kind: 'salary', person_key: nameKey(e.note), person: personWord(e.note) }; }
@@ -153,7 +177,7 @@ export function classifyExpense(e) {
 // Сопоставление со строками таблицы: по статье (category) и/или примечанию (note). Показано на «Правилах и целях».
 export const EXPECTED_ITEMS = [
   { key: 'rent', label: 'Аренда и коммуналка', category: /аренд|коммунал/i, note: /аренд|коммунал|технопарк/i, how: 'статья «Аренда» или примечание с «аренда», «коммуналка», «Технопарк»' }, // «офис»/«склад» нарочно нет: ловили мебель («Пуфик в офис»)
-  { key: 'amo', label: 'amoCRM', category: /amo|амо/i, note: /\bamo|амо\s*срм|амосрм|amocrm/i, how: 'примечание с «amo», «амо», «amoCRM»' },
+  { key: 'amo', label: 'amoCRM', category: /amo|амо/i, note: /\bamo|амо\s*срм|амосрм|amocrm/i, not_monthly: true, how: 'примечание с «amo», «амо», «amoCRM»; платится вперёд за несколько месяцев — пропуск не ищем, срок ведётся в «Предоплаченных расходах»' },
   { key: 'ads', label: 'Реклама и таргет', category: /реклам|таргет|маркет/i, note: /таргет|реклам|facebook|фейсбук|meta|инстаграм|instagram/i, how: 'статья «Реклама/Таргет» или примечание с «таргет», «реклама», «Facebook», «Instagram»' },
   { key: 'telephony', label: 'Виртуальная телефония', category: /телефони/i, note: /телефони|onlinepbx|pbx|sipuni|zadarma|билайн|beeline|(^|[^а-яё])атс([^а-яё]|$)/i, how: 'примечание с «телефония», «АТС», «Билайн» (счёт за АТС), «PBX», «Sipuni», «Zadarma»' }, // \b в JS не знает кириллицу — границы слова вручную
   { key: 'whatsapp', label: 'Платный WhatsApp', category: /whatsapp|ватсап|ваззап|wazzup/i, note: /whatsapp|ватсап|ваззап|wazzup/i, how: 'примечание с «WhatsApp», «Ватсап», «Wazzup»' },
@@ -314,7 +338,7 @@ export function cashRows(byMonth, monthKey) { const m = byMonth[monthKey]; if (!
 
 export function expenseSummary(rows) {
   // total — расходы компании: зарплаты людей + группы (интеграция) + общие. Изъятие владельца и переносы — не расход.
-  const o = { total: 0, salary_total: 0, people_salary_total: 0, salaries: {}, groups: {}, group_total: 0, shared_total: 0, shared_by_category: {}, by_bank: {}, manual_total: 0, owner_total: 0, owner_rows: [] };
+  const o = { total: 0, salary_total: 0, people_salary_total: 0, salaries: {}, groups: {}, group_total: 0, shared_total: 0, shared_by_category: {}, taxes_by_kind: {}, tax_penalties: [], by_bank: {}, manual_total: 0, owner_total: 0, owner_rows: [] };
   (rows || []).forEach(e => {
     const a = num(e.amount); const k = classifyExpense(e);
     if (k.kind === 'transfer') return;
@@ -324,7 +348,7 @@ export function expenseSummary(rows) {
     const bk = bankKey(e.bank); o.by_bank[bk] = (o.by_bank[bk] || 0) + a;
     if (k.kind === 'salary') { o.salary_total += a; o.people_salary_total += a; const nm = k.person; if (!o.salaries[k.person_key]) o.salaries[k.person_key] = { key: k.person_key, name: nm ? nm.charAt(0).toUpperCase() + nm.slice(1) : 'Без имени', sum: 0, n: 0, advance: 0, rest: 0, bonus: 0, leave: 0, rows: [] }; const sp = o.salaries[k.person_key]; sp.sum += a; sp.n++; const part = e.part || salaryPart(e); sp[part] = (sp[part] || 0) + a; sp.rows.push({ date: e.date, note: e.note, amount: a, part, pay_month: e.pay_month || null }); }
     else if (k.kind === 'group') { o.salary_total += a; o.group_total += a; const g = o.groups[k.group] = o.groups[k.group] || { name: k.group, sum: 0, n: 0, rows: [] }; g.sum += a; g.n++; g.rows.push({ date: e.date, note: e.note, amount: a }); }
-    else { o.shared_by_category[k.label] = (o.shared_by_category[k.label] || 0) + a; o.shared_total += a; }
+    else { o.shared_by_category[k.label] = (o.shared_by_category[k.label] || 0) + a; o.shared_total += a; if (k.tax_kind) { o.taxes_by_kind[k.tax_kind] = (o.taxes_by_kind[k.tax_kind] || 0) + a; if (k.tax_kind === 'Пеня') o.tax_penalties.push({ date: e.date, note: e.note, amount: a }); } }
   });
   return o;
 }
@@ -385,6 +409,7 @@ export function periodSummary(base, range, expRowsOrNull) {
     manual_expenses: exp ? exp.manual_total : 0,
     profit,
     owner_draws: exp ? exp.owner_total : null, owner_draw_rows: exp ? exp.owner_rows : [],
+    taxes_by_kind: exp ? exp.taxes_by_kind : null, tax_penalties: exp ? exp.tax_penalties : [],
     retained: exp ? profit - exp.owner_total : null, // «Осталось в компании» = прибыль − изъятие владельца
     margin_pct: exp && revenue ? Math.round(profit / revenue * 1000) / 10 : null,
     salary_share_pct: exp && revenue ? Math.round(exp.salary_total / revenue * 100) : null,
@@ -436,7 +461,7 @@ export function payCheck(person, exp) {
   if (exp.expected == null) return null;
   const diff = exp.fact - exp.expected;
   if (Math.abs(diff) < PAY_TOLERANCE_SOM) return null;
-  if (diff < 0 && person.rows.some(r => /удержан|штраф/i.test(r.note))) return null;
+  if (diff < 0 && person.rows.some(r => /удержан|штраф|оп[оа]зд/i.test(r.note))) return null; // причина названа: удержание, штраф, опоздание
   return { diff, direction: diff < 0 ? 'less' : 'more' };
 }
 
@@ -456,7 +481,9 @@ export function teamRows(base, range, expRowsOrNull) {
     const cost = exp && exp.groups[g.group] ? exp.groups[g.group].sum : 0;
     return { name: g.group, revenue, revenue_count: rev.length, revenue_cats: g.revenue_cats, cost, cost_rows: exp && exp.groups[g.group] ? exp.groups[g.group].rows : [], result: revenue - cost, status: !exp ? 'расходов нет' : (cost <= 0 ? 'нет в расходах' : (revenue - cost >= 0 ? 'окупается' : 'в минусе')) };
   });
-  return { rows: list, groups, has_expenses: !!exp, people_salary: exp ? exp.people_salary_total : null, shared: exp ? exp.shared_total : null, shared_by_category: exp ? exp.shared_by_category : null };
+  const firstKgMonth = INTEGRATORS_PAID_FROM_KG_SINCE;
+  groups.forEach(g => { if (g.name === 'Интеграция' && String(range.from).slice(0, 7) < firstKgMonth) g.note = 'до ' + monthLabel(firstKgMonth).replace(/^\S+/, m => MONTHS_RU_GEN[parseMonth(firstKgMonth).mo - 1]) + ' интеграторам платили из Казахстана — в расходах KG их нет, с августом сравнивать нельзя'; });
+  return { rows: list, groups, has_expenses: !!exp, people_salary: exp ? exp.people_salary_total : null, shared: exp ? exp.shared_total : null, shared_by_category: exp ? exp.shared_by_category : null, taxes_by_kind: exp ? exp.taxes_by_kind : null };
 }
 
 // ---------- отток ----------
@@ -519,18 +546,19 @@ export function missingCheckMode(byMonth, monthKey) {
   return 'full';
 }
 export function checkMissing(byMonth, monthKey) {
-  const prevKeys = [1, 2, 3, 4, 5, 6].map(k => shiftMonthKey(monthKey, -k));
+  // «обычная сумма» — медиана трёх ближайших месяцев с данными, и назад, и вперёд (для прошлых месяцев соседи с обеих сторон точнее)
+  const prevKeys = [-1, 1, -2, 2, -3, 3, -4, -5, -6].map(k => shiftMonthKey(monthKey, k)).filter(k => k <= currentMonthKey());
   const mode = missingCheckMode(byMonth, monthKey);
   const items = EXPECTED_ITEMS.map(item => {
-    const cur = ((byMonth[monthKey] && byMonth[monthKey].rows) || []).filter(e => e.source !== 'manual' && (e.pay_month || monthKey) === monthKey && itemMatches(item, e));
+    const cur = ((byMonth[monthKey] && byMonth[monthKey].rows) || []).filter(e => e.source !== 'manual' && (e.work_month || monthKey) === monthKey && itemMatches(item, e));
     const found = cur.reduce((a, e) => a + num(e.amount), 0);
     const prepaid = cur.some(e => e.source === 'prepaid'); // доля предоплаты — сумма известна по построению, сравнивать не с чем
     const prev = [];
-    prevKeys.forEach(k => { const m = byMonth[k]; if (!m || !m.available || prev.length >= 3) return; const s = m.rows.filter(e => e.source !== 'manual' && (e.pay_month || k) === k && itemMatches(item, e)).reduce((a, e) => a + num(e.amount), 0); if (s > 0) prev.push({ month: k, sum: s }); });
+    prevKeys.forEach(k => { const m = byMonth[k]; if (!m || !m.available || prev.length >= 3) return; const s = m.rows.filter(e => e.source !== 'manual' && (e.work_month || k) === k && itemMatches(item, e)).reduce((a, e) => a + num(e.amount), 0); if (s > 0) prev.push({ month: k, sum: s }); });
     const med = median(prev.map(p => p.sum));
     let status = 'ok';
     if (mode === 'no_data') status = 'no_data';
-    else if (!cur.length) status = mode === 'early' ? 'early' : 'missing';
+    else if (!cur.length) status = item.not_monthly ? 'ok' : (mode === 'early' ? 'early' : 'missing');
     else if (prepaid) status = 'ok';
     else if (!item.no_odd && med && Math.abs(found - med) / med > ODD_THRESHOLD) status = 'odd';
     return { item_key: item.key, item_label: item.label, status, prepaid, found_amount: found, found_rows: cur.map(e => ({ date: e.date, category: e.category, note: e.note, amount: e.amount, source: e.source })), expected_amount: med, prev, how: item.how };
@@ -553,7 +581,7 @@ export async function syncMissing(byMonth, monthKey) {
       continue;
     }
     const note = it.status === 'missing'
-      ? 'В таблице расходов за ' + monthLabel(monthKey) + ' нет строки «' + it.item_label + '». Спросить у Гульшан сумму' + (it.expected_amount ? ' (обычно около ' + round(it.expected_amount) + ' сом)' : '') + '.'
+      ? 'В таблице расходов за ' + monthLabel(monthKey) + ' нет строки «' + it.item_label + '». Спросить у Гульшан, почему её нет и какая сумма' + (it.expected_amount ? ' (обычно около ' + round(it.expected_amount) + ' сом). Пока не внесена, прибыль месяца завышена примерно на эту сумму' : '') + '.'
       : it.status === 'odd' ? '«' + it.item_label + '» за ' + monthLabel(monthKey) + ': ' + round(it.found_amount) + ' сом, обычно около ' + round(it.expected_amount) + ' сом. Уточнить у Гульшан, всё ли внесено.' : null;
     if (it.status === 'ok') {
       if (!ex) continue;
@@ -566,7 +594,7 @@ export async function syncMissing(byMonth, monthKey) {
       if (ex.status === 'superseded' && it.status === 'missing') { await sbUpdate('finansist_missing_data', { id: 'eq.' + ex.id }, { status: 'filled', note: 'Настоящая строка исчезла — снова учитываем ручную сумму.', updated_at: now }); changes.push({ type: 'refilled', item: it, prev: ex }); }
       continue;
     }
-    if (ex.status !== it.status || round(ex.found_amount) !== round(it.found_amount)) { await sbUpdate('finansist_missing_data', { id: 'eq.' + ex.id }, { status: it.status, expected_amount: it.expected_amount, found_amount: it.found_amount, note, updated_at: now }); }
+    if (ex.status !== it.status || round(ex.found_amount) !== round(it.found_amount) || round(ex.expected_amount) !== round(it.expected_amount) || (ex.note || '') !== (note || '')) { await sbUpdate('finansist_missing_data', { id: 'eq.' + ex.id }, { status: it.status, expected_amount: it.expected_amount, found_amount: it.found_amount, note, updated_at: now }); }
   }
   const rows = await sbSelect('finansist_missing_data', { country: 'eq.' + COUNTRY, month: 'eq.' + monthKey, order: 'item_key', limit: '100' });
   return { items: rows, check: found, mode: found.mode, changes, incomplete: rows.some(r => r.status === 'missing' || r.status === 'odd') };

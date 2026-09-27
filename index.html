@@ -11207,7 +11207,7 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
       <tr><td>Имя владельца в примечаниях расходов<span class="sub">такие строки — изъятие владельца, не зарплата и не расход</span></td><td class="r"><input class="fz-minp" id="fz-set-owner" style="width:140px;text-align:left"></td></tr>
      </tbody></table></div>
      <div class="fz-tfoot"><span id="fz-set-note"></span><button class="fz-btn pri" id="fz-set-save" type="button">Сохранить</button></div></div>
-    <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Оклады</h2><span>сверка: аванс + остаток на руки против оклада; разница меньше 3 000 сом или «удержание»/«штраф» в примечании — без вопроса</span></div>
+    <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Оклады</h2><span>сверка: аванс + остаток на руки против оклада; разница меньше 3 000 сом или «удержание», «штраф», «опоздание» в примечании — без вопроса</span></div>
      <div class="fz-tw"><table><thead><tr><th>Сотрудник</th><th class="r">Оклад, сом</th></tr></thead><tbody id="fz-oklad-body"></tbody></table></div>
      <div class="fz-tfoot"><span id="fz-oklad-note"></span><button class="fz-btn pri" id="fz-oklad-save" type="button">Сохранить оклады</button></div></div>
     <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Курс тенге, Нацбанк КР</h2><span>крон сохраняет официальный курс каждую ночь; архива по дате у Нацбанка нет — для прошлых дат курс можно вписать вручную</span></div>
@@ -11231,7 +11231,9 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
        <tr><td>Статья «Перенос»</td><td class="wrap">не расход</td></tr>
        <tr><td>Статья «Услуги», в примечании «интеграторам»</td><td class="wrap">зарплата команды интеграции в Казахстане — группа «Интеграция» в «Команде», её выручка — оплаты по статьям внедрение и интеграция</td></tr>
        <tr><td>Статья «Услуги», в примечании слово «юрист»</td><td class="wrap">внешний подрядчик, не сотрудник: статья «Юрист, аутсорс» в общих расходах. Сопоставление по слову «юрист», не по имени</td></tr>
-       <tr><td>Строки зарплаты с именем владельца</td><td class="wrap">изъятие владельца: не расход и не зарплата, показывается под прибылью — «Прибыль → Изъятие владельца → Осталось в компании»</td></tr>
+       <tr><td>Строки зарплаты с именем владельца; статья «Прочее» с его именем</td><td class="wrap">изъятие владельца: не расход и не зарплата (мебель, обои для дома, подотчёт — тоже изъятие), показывается под прибылью — «Прибыль → Изъятие владельца → Осталось в компании»</td></tr>
+       <tr><td>Статья «Налоги»</td><td class="wrap">налоги компании, отдельной статьёй в общих расходах по видам: подоходный, страховые, ГНПФ, единый, пеня. К людям не привязываются: официально оформлен только владелец, остальные — ИП. Любая пеня — вопрос</td></tr>
+       <tr><td>Интеграторы до августа 2026</td><td class="wrap">платили из Казахстана — в расходах KG их нет; статью «Интеграция» до и после августа напрямую не сравнивать</td></tr>
        <tr><td>Предоплата за несколько месяцев (amoCRM и подобное)</td><td class="wrap">сама оплата из месяца убирается, вместо неё в каждый месяц срока кладётся равная доля; список — в «Вопросах агента», блок «Предоплаченные расходы»</td></tr>
       </tbody></table></div></div>
     <div class="fz-panel"><div class="fz-panel-h"><h2>Распределение общих расходов</h2><span>пока не применяется: логику задаст агент, общие расходы показаны отдельной строкой</span></div>
@@ -46508,10 +46510,18 @@ function fzTeamRows(){
  var d = _fz.data; if (!d || !d.team) return { rows:[], groups:[], hasExp:false, shared:0, sharedBy:[], head:0, salTotal:0 };
  var t = d.team;
  var list = (t.rows || []).map(function(r){ return { name:r.name, revenue:+r.revenue || 0, prev:+r.prev_revenue || 0, count:r.count || 0, newc:r.new_clients || 0, salary:+r.salary || 0, hasSalary:!!r.has_salary, owner:!!r.owner, cost:+r.salary || 0, res:(+r.revenue || 0) - (+r.salary || 0), parts:r.parts || null, expected:r.expected, expectedNote:r.expected_note, check:r.pay_check || null }; });
- var groups = (t.groups || []).map(function(g){ return { name:g.name, revenue:+g.revenue || 0, count:g.revenue_count || 0, cost:+g.cost || 0, res:(+g.revenue || 0) - (+g.cost || 0), status:g.status, group:true }; });
+ var groups = (t.groups || []).map(function(g){ return { name:g.name, revenue:+g.revenue || 0, count:g.revenue_count || 0, cost:+g.cost || 0, res:(+g.revenue || 0) - (+g.cost || 0), status:g.status, group:true, note:g.note || '' }; });
  var sharedBy = Object.keys(t.shared_by_category || {}).map(function(c){ return { category:c, sum:t.shared_by_category[c] }; }).sort(function(a, b){ return b.sum - a.sum; });
  var salTotal = list.reduce(function(a, r){ return a + r.salary; }, 0);
- return { rows:list, groups:groups, hasExp:!!t.has_expenses, shared:+t.shared || 0, sharedBy:sharedBy, head:list.filter(function(r){ return r.hasSalary; }).length, salTotal:salTotal, salaryState:t.salary_state || null, fx:t.fx || [] };
+ return { rows:list, groups:groups, hasExp:!!t.has_expenses, shared:+t.shared || 0, sharedBy:sharedBy, head:list.filter(function(r){ return r.hasSalary; }).length, salTotal:salTotal, salaryState:t.salary_state || null, fx:t.fx || [], taxes:t.taxes_by_kind || {} };
+}
+// «предварительная» — зарплата за месяц ещё не выплачена; «завышена ≈ X» — нет обязательной статьи; «неполная» — сумма статьи отличается
+function fzProfitPill(p){
+ if (!p) return '';
+ if (p.salary_state && p.salary_state.pending) return ' <span class="fz-pill neg" title="Зарплата за месяц ещё не выплачена полностью">предварительная</span>';
+ if (p.missing_estimate) return ' <span class="fz-pill neg" title="Нет обязательной статьи расходов — см. «Вопросы агента»">завышена ≈ ' + fzShort(p.missing_estimate) + '</span>';
+ if (p.profit_incomplete) return ' <span class="fz-pill neg" title="Сумма обязательной статьи отличается от обычной — см. «Вопросы агента»">неполная</span>';
+ return '';
 }
 function fzPaySub(r){
  if (!r.parts || r.owner) return '';
@@ -46649,7 +46659,7 @@ function fzRenderOverview(){
  var k = [
   { l:'Выручка', v:fzMoney(cur.revenue), p:fzDeltaPill(fzDelta(cur.revenue, prev && prev.revenue), true), s:s.map(function(x){ return x.revenue; }), g:(cur.revenue >= (prev ? prev.revenue : 0)) },
   { l:'Расходы', v:cur.expense == null ? '—' : fzMoney(cur.expense), p:fzDeltaPill(prev && prev.expense != null && cur.expense != null ? fzDelta(cur.expense, prev.expense) : null, false), s:s.map(function(x){ return x.expense; }), g:!(prev && prev.expense != null && cur.expense != null && cur.expense > prev.expense) },
-  { l:'Прибыль' + (d.period.salary_state && d.period.salary_state.pending ? ' <span class="fz-pill neg" title="Зарплата за месяц ещё не выплачена полностью">предварительная</span>' : (d.period.profit_incomplete ? ' <span class="fz-pill neg" title="Не все обязательные статьи расходов внесены — см. «Вопросы агента»">неполная</span>' : '')), v:cur.profit == null ? '—' : fzMoney(cur.profit), p:fzDeltaPill(prev && prev.profit != null && cur.profit != null ? fzDelta(cur.profit, prev.profit) : null, true), s:s.map(function(x){ return x.profit; }), g:cur.profit != null && cur.profit >= 0 },
+  { l:'Прибыль' + fzProfitPill(d.period), v:cur.profit == null ? '—' : fzMoney(cur.profit), p:fzDeltaPill(prev && prev.profit != null && cur.profit != null ? fzDelta(cur.profit, prev.profit) : null, true), s:s.map(function(x){ return x.profit; }), g:cur.profit != null && cur.profit >= 0 },
   { l:'Прибыль от выручки', v:cur.margin == null ? '—' : fzPctTxt(Math.round(cur.margin*10)/10), p:prev && prev.margin != null && cur.margin != null ? '<span class="fz-pill ' + (cur.margin >= prev.margin ? 'pos' : 'neg') + '">было ' + fzPctTxt(Math.round(prev.margin*10)/10) + '</span>' : '<span class="fz-pill mu">нет прошлого месяца</span>', s:s.map(function(x){ return x.margin; }), g:cur.margin != null && (!prev || prev.margin == null || cur.margin >= prev.margin) },
   { l:'Зарплаты от выручки', v:cur.fot == null ? '—' : fzPctTxt(Math.round(cur.fot)), p:prev && prev.fot != null && cur.fot != null ? '<span class="fz-pill ' + (cur.fot <= prev.fot ? 'pos' : 'neg') + '">было ' + Math.round(prev.fot) + '%</span>' : '<span class="fz-pill mu">нет прошлого месяца</span>', s:s.map(function(x){ return x.fot; }), g:cur.fot != null && (!prev || prev.fot == null || cur.fot <= prev.fot) }
  ];
@@ -46661,7 +46671,7 @@ function fzRenderOverview(){
   else { op.style.display = '';
    var rowsHtml = (d.period.owner_draw_rows || []).map(function(x){ return fzDDMM(String(x.date || '').length >= 10 ? x.date : '') + ' ' + fzEsc(x.note) + ' — ' + fzMoney(x.amount); }).join('; ');
    op.innerHTML = '<div class="fz-tw"><table><tbody>'
-    + '<tr><td>Прибыль за ' + FZ_MONTHS[m.mo-1].toLowerCase() + (d.period.salary_state && d.period.salary_state.pending ? ' <span class="fz-pill neg">предварительная</span>' : (d.period.profit_incomplete ? ' <span class="fz-pill neg">неполная</span>' : '')) + '</td><td class="r ' + (cur.profit >= 0 ? 'pos' : 'neg') + '">' + fzMoney(cur.profit) + '</td></tr>'
+    + '<tr><td>Прибыль за ' + FZ_MONTHS[m.mo-1].toLowerCase() + fzProfitPill(d.period) + (d.period.missing_estimate ? '<span class="sub">не внесены обязательные статьи — прибыль завышена примерно на ' + fzMoney(d.period.missing_estimate) + '</span>' : '') + '</td><td class="r ' + (cur.profit >= 0 ? 'pos' : 'neg') + '">' + fzMoney(cur.profit) + '</td></tr>'
     + '<tr><td>Изъятие владельца' + (rowsHtml ? '<span class="sub">' + rowsHtml + '</span>' : '<span class="sub">за месяц не было</span>') + '</td><td class="r">' + (cur.draws ? fzMoney(-cur.draws) : fzMoney(0)) + '</td></tr>'
     + '<tr><td><b>Осталось в компании</b></td><td class="r ' + (cur.retained >= 0 ? 'pos' : 'neg') + '"><b>' + fzMoney(cur.retained) + '</b></td></tr>'
     + '</tbody></table></div>'; }
@@ -46895,7 +46905,7 @@ function fzRenderPeople(){
  var tg = 0;
  var groupHtml = t.groups.map(function(g){ tg += g.cost;
   var fxs = fzFxSub(t.fx);
-  return '<tr><td>' + fzEsc(g.name) + '<span class="sub">группа · выручка — оплаты по внедрению и интеграции (' + g.count + '), они же уже есть у менеджеров</span>' + (fxs ? '<span class="sub">сверка по курсу: ' + fzEsc(fxs) + '</span>' : '') + '</td><td class="r muted">' + fzMoney(g.revenue) + '</td><td class="r">' + (g.cost ? fzMoney(g.cost) : '<span class="muted">нет</span>') + '</td><td class="r ' + (g.res >= 0 ? 'pos' : 'neg') + '">' + fzMoney(g.res, true) + '</td><td>' + fzTeamTag(g) + '</td></tr>'; }).join('');
+  return '<tr><td>' + fzEsc(g.name) + '<span class="sub">группа · выручка — оплаты по внедрению и интеграции (' + g.count + '), они же уже есть у менеджеров</span>' + (fxs ? '<span class="sub">сверка по курсу: ' + fzEsc(fxs) + '</span>' : '') + (g.note ? '<span class="sub">' + fzEsc(g.note) + '</span>' : '') + '</td><td class="r muted">' + fzMoney(g.revenue) + '</td><td class="r">' + (g.cost ? fzMoney(g.cost) : '<span class="muted">нет</span>') + '</td><td class="r ' + (g.res >= 0 ? 'pos' : 'neg') + '">' + fzMoney(g.res, true) + '</td><td>' + fzTeamTag(g) + '</td></tr>'; }).join('');
  body.innerHTML = peopleHtml + groupHtml;
  var pend = document.getElementById('fz-people-pending'), ss = t.salaryState;
  if (pend) pend.innerHTML = (ss && ss.pending) ? '<div class="fz-err" style="background:var(--fz-warn-soft);margin:0 0 12px"><b style="color:var(--fz-warn)">Зарплата за ' + FZ_MONTHS[_fz.month.mo-1].toLowerCase() + ' ещё не выплачена.</b> ' + fzEsc((ss.reason || '').replace(/^./, function(c){ return c.toUpperCase(); })) + '. Прибыль месяца предварительная, сверка с окладами — после выплаты.' + (ss.no_advance && ss.no_advance.length ? ' Аванс не найден: ' + fzEsc(ss.no_advance.join(', ')) + '.' : '') + '</div>'
@@ -46906,7 +46916,7 @@ function fzRenderPeople(){
  document.getElementById('fz-people-note').textContent = t.hasExp
   ? 'Выручка — из оплат по менеджеру. Зарплата — строки «ЗП», «Бонусы», «Отпускные» из расходов по имени в примечании (Гульшан — по правилу). «Интеграция» — зарплата команды интеграции в Казахстане. Строки владельца — изъятие, здесь не считаются. Общие расходы ' + fzMoney(t.shared) + ' на людей не делятся, но в прибыли учтены.'
   : 'Расходы за месяц ещё не внесены, поэтому показана только выручка по менеджерам.';
- sb.innerHTML = t.hasExp ? (t.sharedBy.length ? t.sharedBy.map(function(x){ return '<tr><td>' + fzEsc(x.category) + '</td><td class="r">' + fzMoney(x.sum) + '</td></tr>'; }).join('') : '<tr><td colspan="2" class="muted">Общих расходов за месяц нет.</td></tr>') : '<tr><td colspan="2" class="muted">Расходы за месяц ещё не внесены.</td></tr>';
+ sb.innerHTML = t.hasExp ? (t.sharedBy.length ? t.sharedBy.map(function(x){ var tx = x.category === 'Налоги' ? Object.keys(t.taxes).sort(function(a, b){ return t.taxes[b] - t.taxes[a]; }).map(function(k){ return k.toLowerCase() + ' ' + fzMoney(t.taxes[k]); }).join(', ') : ''; return '<tr><td>' + fzEsc(x.category) + (tx ? '<span class="sub"' + (t.taxes['Пеня'] ? ' style="color:var(--fz-neg)"' : '') + '>налоги компании: ' + fzEsc(tx) + '</span>' : '') + '</td><td class="r">' + fzMoney(x.sum) + '</td></tr>'; }).join('') : '<tr><td colspan="2" class="muted">Общих расходов за месяц нет.</td></tr>') : '<tr><td colspan="2" class="muted">Расходы за месяц ещё не внесены.</td></tr>';
  sf.innerHTML = t.hasExp && t.sharedBy.length ? '<tr><td>Итого</td><td class="r">' + fzMoney(t.shared) + '</td></tr>' : '';
 }
 

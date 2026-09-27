@@ -17,8 +17,8 @@ export default async function handler(req, res) {
   // курс тенге Нацбанка КР на сегодня — копим историю (архива по дате у Нацбанка нет)
   let fx = null;
   try { const r = await fetchNbkrToday(); await saveFxRate(r.date, r.KZT, 'nbkr', 'крон'); fx = r; } catch (e) { console.error('[cron-finansist] НБКР:', e.message); fx = { error: String(e.message || e) }; }
-  const months = [currentMonthKey()];
-  if (parseInt(bishkekIso().slice(8, 10), 10) <= 10) months.push(shiftMonthKey(months[0], -1));
+  // текущий и два прошлых: зарплата за прошлый месяц закрывается ~10-го, а недостающие строки вносят с опозданием
+  const months = [currentMonthKey(), shiftMonthKey(currentMonthKey(), -1), shiftMonthKey(currentMonthKey(), -2)];
   const out = [];
   for (const m of months) {
     try { const r = await sweepMonth(m, { force: true }); out.push({ month: m, created: r.created, closed: r.closed, candidates: r.candidates, missing: r.missing.map(x => x.item_key + ':' + x.status), cost_usd: r.cost_usd }); }

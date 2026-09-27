@@ -50,7 +50,7 @@ export default async function handler(req, res) {
       }
       if (action === 'missing') {
         const month = C.parseMonth(req.query.month) ? String(req.query.month) : C.currentMonthKey();
-        const keys = [0, -1, -2, -3, -4, -5, -6].map(k => C.shiftMonthKey(month, k));
+        const keys = [3, 2, 1, 0, -1, -2, -3, -4, -5, -6].map(k => C.shiftMonthKey(month, k)).filter(k => k <= C.currentMonthKey());
         const byMonth = await C.loadExpenses(keys);
         const r = await C.syncMissing(byMonth, month);
         return res.status(200).json({ ok: true, month, items: r.items, check: r.check, incomplete: r.incomplete });

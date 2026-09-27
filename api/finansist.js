@@ -42,7 +42,8 @@ export default async function handler(req, res) {
     const prevKey = C.shiftMonthKey(range.key, -1);
     const monthKeys = [-5, -4, -3, -2, -1, 0].map(k => C.shiftMonthKey(range.key, k));
     const prevNowKey = C.shiftMonthKey(nowKey, -1); // для кассы: расходы прошлого календарного месяца
-    const expKeys = monthKeys.indexOf(prevNowKey) < 0 ? monthKeys.concat([prevNowKey]) : monthKeys;
+    const fwd = [1, 2, 3].map(k => C.shiftMonthKey(range.key, k)).filter(k => k <= nowKey); // для «обычной суммы» прошлых месяцев
+    const expKeys = Array.from(new Set(monthKeys.concat([prevNowKey], fwd)));
 
     const base = await C.loadBase();
     const [expByMonth, churn, questions, settingsRows, agentLimit, prepaid] = await Promise.all([
@@ -72,6 +73,7 @@ export default async function handler(req, res) {
       prev_revenue: prevRows.reduce((a, p) => a + C.num(p.amount), 0),
       last_paid_at: (function () { const t = C.bishkekIso(); const p = base.payments.find(x => x.paid_at && x.paid_at <= t); return p ? p.paid_at : (base.payments[0] ? base.payments[0].paid_at : null); })(),
       profit_incomplete: missing.incomplete || salaryState.pending,
+      missing_estimate: (missing.items || []).filter(i => i.status === 'missing' && i.expected_amount).reduce((a, i) => a + C.num(i.expected_amount), 0), // прибыль завышена примерно на эту сумму
       missing_incomplete: missing.incomplete,
       salary_state: salaryState,
     });

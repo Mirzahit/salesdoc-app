@@ -98,6 +98,7 @@ async function summaryFor(from, to) {
   s.by_bank_ru = Object.fromEntries(Object.entries(s.by_bank).map(([k, v]) => [C.BANK_LABELS[k] || k, C.round(v)]));
   s.expenses_months_without_data = ex.missingMonths;
   s.profit_incomplete = open.length > 0 || ex.missingMonths.length > 0;
+  s.missing_estimate = open.filter(r => r.status === 'missing' && r.expected_amount).reduce((a, r) => a + C.num(r.expected_amount), 0); // прибыль завышена примерно на эту сумму
   s.profit_incomplete_reasons = open.map(r => r.month + ': ' + r.item_label + ' — ' + (r.status === 'missing' ? 'нет строки' : 'сумма резко отличается')).concat(ex.missingMonths.map(m => m + ': расходов в таблице нет'));
   return s;
 }
@@ -147,7 +148,7 @@ export async function runTool(name, input, ctx) {
     }
     case 'get_missing_data': {
       const key = input.month; if (!C.parseMonth(key)) throw new Error('month: YYYY-MM');
-      const keys = [0, -1, -2, -3, -4, -5, -6].map(k => C.shiftMonthKey(key, k)); const byMonth = await C.loadExpenses(keys);
+      const keys = [3, 2, 1, 0, -1, -2, -3, -4, -5, -6].map(k => C.shiftMonthKey(key, k)).filter(k => k <= C.currentMonthKey()); const byMonth = await C.loadExpenses(keys);
       const r = await C.syncMissing(byMonth, key);
       return rounded({ month: key, incomplete: r.incomplete, items: r.check.map(it => Object.assign({}, it, { found_rows: it.found_rows.slice(0, 10), saved: (r.items.find(x => x.item_key === it.item_key) || null) })) });
     }
@@ -157,7 +158,10 @@ export async function runTool(name, input, ctx) {
       const a = period(input.a_from, input.a_to), b = period(input.b_from, input.b_to);
       const [sa, sb] = await Promise.all([summaryFor(a.from, a.to), summaryFor(b.from, b.to)]);
       const diff = {}; ['revenue', 'expenses', 'salaries', 'shared', 'profit'].forEach(k => { if (sa[k] != null && sb[k] != null) diff[k] = { a: C.round(sa[k]), b: C.round(sb[k]), delta: C.round(sb[k] - sa[k]), pct: sa[k] ? Math.round((sb[k] - sa[k]) / Math.abs(sa[k]) * 1000) / 10 : null }; });
-      return rounded({ a: sa, b: sb, diff });
+      const notes = [];
+      const kgSince = C.INTEGRATORS_PAID_FROM_KG_SINCE;
+      if ((a.from.slice(0, 7) < kgSince) !== (b.from.slice(0, 7) < kgSince) || (a.to.slice(0, 7) < kgSince) !== (b.to.slice(0, 7) < kgSince)) notes.push('Интеграция: до ' + kgSince + ' интеграторам платили из Казахстана, в расходах KG их нет — эту статью между периодами напрямую не сравнивать.');
+      return rounded({ a: sa, b: sb, diff, notes });
     }
     case 'ask_question': {
       if (!C.parseMonth(input.month)) throw new Error('month: YYYY-MM');
@@ -270,6 +274,7 @@ const OPTIONS = {
   pay_more: ['Это бонус', 'Переплата', 'Поправлю оклад'],
   no_advance: ['Аванс не давали', 'Внесём аванс в таблицу'],
   wrong_sheet: ['Перенесу на нужный лист', 'Так и должно быть'],
+  tax_penalty: ['Знаю, уже закрыли', 'Разберёмся с Гульшан'],
   fx_over: ['Так и должно быть', 'Разберусь с конвертацией'],
   low_balance: ['Знаю', 'Сократим расходы', 'Ускорим оплаты клиентов'],
 };
@@ -291,7 +296,7 @@ function candidates(monthKey, disputes, missingSync, opts_prepaid) {
   (missingSync.changes || []).forEach(ch => { if (ch.type === 'superseded') out.push({ key: 'superseded:' + ch.item.item_key + ':' + monthKey, type: 'missing', amount: ch.prev.amount, fact: 'Ручная сумма ' + C.round(ch.prev.amount) + ' сом по статье «' + ch.item.item_label + '» больше не учитывается: в таблице появилась настоящая строка на ' + C.round(ch.item.found_amount) + ' сом.', options: OPTIONS.superseded, evidence: { item_key: ch.item.item_key, manual: ch.prev.amount, found: ch.item.found_amount } }); });
   return out;
 }
-const FALLBACK_TITLE_MORE = { pay_less: 'Выплата меньше оклада', pay_more: 'Выплата больше оклада — бонус?', no_advance: 'Аванс не найден', wrong_sheet: 'Строка не на своём листе', fx_over: 'Ушло больше, чем нужно по курсу' };
+const FALLBACK_TITLE_MORE = { tax_penalty: 'Появилась пеня по налогам', pay_less: 'Выплата меньше оклада', pay_more: 'Выплата больше оклада — бонус?', no_advance: 'Аванс не найден', wrong_sheet: 'Строка не на своём листе', fx_over: 'Ушло больше, чем нужно по курсу' };
 const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', dec: 'Проверить по правилу декад', missing: 'Не хватает данных по расходам', other: 'Предоплата закончилась', owner: 'Изъято больше, чем заработано', balance: 'Остаток ниже безопасного' };
 
 // Изъятие владельца с начала квартала против прибыли за тот же период + остаток на счетах против безопасного.
@@ -318,7 +323,7 @@ export async function sweepMonth(monthKey, opts) {
   const base = await C.loadBase(true);
   const range = C.monthKeyToRange(monthKey);
   const disputes = C.findDisputes(base.payments, range);
-  const keys = [0, -1, -2, -3, -4, -5, -6].map(k => C.shiftMonthKey(monthKey, k));
+  const keys = [3, 2, 1, 0, -1, -2, -3, -4, -5, -6].map(k => C.shiftMonthKey(monthKey, k)).filter(k => k <= C.currentMonthKey());
   const byMonth = await C.loadExpenses(keys, { force: !!opts.force });
   const missingSync = await C.syncMissing(byMonth, monthKey);
   const prepaid = await C.loadPrepaid();
@@ -336,7 +341,8 @@ export async function sweepMonth(monthKey, opts) {
   let closed = 0;
   for (const q of existing) if (q.status === 'open' && !candKeys.has(q.key) && !q.key.startsWith('superseded:') && !q.key.startsWith('prepaid_end:') && q.type !== 'goal' && (q.type !== 'other' || /^(owner_over|low_balance|pay_less|pay_more|fx_over):/.test(q.key))) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Расхождение исчезло само', updated_at: now }); closed++; }
   // обновляем сумму/доказательства у открытых
-  for (const c of cands) { const q = exMap[c.key]; if (q && q.status === 'open') await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { amount: c.amount == null ? null : C.round(c.amount), evidence: c.evidence, updated_at: now }); }
+  // у открытых обновляем сумму, доказательства и текст (если текст шаблонный — равен прошлому факту)
+  for (const c of cands) { const q = exMap[c.key]; if (q && q.status === 'open') { const keepModel = !!(q.evidence && q.evidence.model_text); const patch = { amount: c.amount == null ? null : C.round(c.amount), evidence: Object.assign({}, c.evidence, keepModel ? { model_text: true } : {}), updated_at: now }; if (q.body !== c.fact && !keepModel) patch.body = c.fact; await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, patch); } }
 
   let texts = {}; let usage = null; let cost = 0; let modelUsed = false;
   if (fresh.length) {
@@ -357,7 +363,7 @@ export async function sweepMonth(monthKey, opts) {
   let created = 0;
   for (const c of fresh) {
     const t = texts[c.key] || {};
-    await sbUpsert('finansist_questions', { country: C.COUNTRY, month: monthKey, key: c.key, type: c.type, title: t.title || FALLBACK_TITLE_MORE[c.kind] || FALLBACK_TITLE[c.kind] || FALLBACK_TITLE[c.type] || 'Вопрос', body: t.body || c.fact, options: c.options, evidence: c.evidence, amount: c.amount == null ? null : C.round(c.amount), status: 'open', created_at: now, updated_at: now }, 'country,month,key');
+    await sbUpsert('finansist_questions', { country: C.COUNTRY, month: monthKey, key: c.key, type: c.type, title: t.title || FALLBACK_TITLE_MORE[c.kind] || FALLBACK_TITLE[c.kind] || FALLBACK_TITLE[c.type] || 'Вопрос', body: t.body || c.fact, options: c.options, evidence: Object.assign({}, c.evidence, t.body ? { model_text: true } : {}), amount: c.amount == null ? null : C.round(c.amount), status: 'open', created_at: now, updated_at: now }, 'country,month,key');
     created++;
   }
   return { month: monthKey, candidates: cands.length, created, closed, missing: missingSync.items, missing_changes: missingSync.changes, disputes: disputes.counts, model_used: modelUsed, cost_usd: cost, usage };
@@ -396,10 +402,14 @@ async function payAndSheetChecks(base, monthKey, byMonth) {
   // строки не на своём листе (дата одного месяца, лист другого)
   const seen = new Set();
   (byMonth[monthKey] && byMonth[monthKey].rows || []).forEach(e => {
-    if (e.source !== 'sheet' || !e.sheet_month || String(e.date).slice(0, 7) === e.sheet_month) return;
+    if (e.source !== 'sheet' || e.kind !== 'salary' || !e.sheet_month || String(e.date).slice(0, 7) === e.sheet_month) return; // только зарплатные строки: по ним месяц решает дата
     const key = 'wrong_sheet:' + e.sheet_month + ':' + e.date + ':' + C.round(e.amount); if (seen.has(key)) return; seen.add(key);
     const dm = C.parseMonth(String(e.date).slice(0, 7)), sm = C.parseMonth(e.sheet_month);
     out.push({ key, type: 'missing', kind: 'wrong_sheet', amount: e.amount, fact: 'Строка «' + e.note + '» на ' + C.round(e.amount) + ' сом от ' + C.fmtDay(e.date) + ' записана на лист «' + C.MONTHS_RU[sm.mo - 1] + '». Считаю её ' + (e.part === 'advance' ? 'авансом' : 'расходом') + ' за ' + C.monthLabel(e.work_month || String(e.date).slice(0, 7)) + '. Перенесите строку на лист «' + C.MONTHS_RU[dm.mo - 1] + '» и ведите там остальные строки этого месяца.', options: OPTIONS.wrong_sheet, evidence: { date: e.date, note: e.note, amount: e.amount, sheet: e.sheet_month } });
+  });
+  // пени по налогам — по месяцу выплаты
+  C.expenseSummary(C.cashRows(byMonth, monthKey) || []).tax_penalties.forEach(t => {
+    out.push({ key: 'tax_penalty:' + t.date + ':' + C.round(t.amount), type: 'other', kind: 'tax_penalty', amount: t.amount, fact: C.fmtDay(t.date) + ' заплачена пеня ' + C.round(t.amount) + ' сом («' + t.note + '»). Пеня — это просрочка налога: за что она и закрыта ли причина?', options: OPTIONS.tax_penalty, evidence: t });
   });
   // курс: оплаты интеграторам в месяц выплаты
   const rates = await C.loadFxRates();
