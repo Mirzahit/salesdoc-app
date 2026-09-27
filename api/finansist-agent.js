@@ -99,6 +99,20 @@ export default async function handler(req, res) {
           }
           patch.oklad = cur; patch.oklad_usd = curUsd;
         }
+        if ('departments' in body) {
+          // отделы с «Правил и целей»: состав людей, что относим на отдел, доля офиса, какая выручка
+          if (!Array.isArray(body.departments) || body.departments.length > 12) return res.status(400).json({ ok: false, error: 'отделы — список, не больше 12' });
+          const items = C.ALLOC_ITEMS.map(i => i.key), revs = C.DEPT_REVENUE.map(r => r.key), groups = C.GROUP_RULES.map(g => g.group);
+          const takenP = new Set(), takenG = new Set(), takenI = new Set(), takenR = new Set(), keys = new Set();
+          const out = [];
+          for (const d0 of body.departments) {
+            const name = String((d0 && d0.name) || '').trim().slice(0, 40); if (!name) return res.status(400).json({ ok: false, error: 'у отдела должно быть название' });
+            let key = String((d0 && d0.key) || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 24) || ('d' + Date.now().toString(36) + out.length); while (keys.has(key)) key += 'x'; keys.add(key);
+            const uniq = (arr, allowed, taken) => (Array.isArray(arr) ? arr : []).map(x => String(x).trim().slice(0, 12)).filter(x => x && (!allowed || allowed.indexOf(x) >= 0) && !taken.has(x) && (taken.add(x), true));
+            out.push({ key, name, people: uniq(d0.people, null, takenP), groups: uniq(d0.groups, groups, takenG), items: uniq(d0.items, items, takenI), pool: !!d0.pool, revenue: uniq(d0.revenue, revs, takenR) });
+          }
+          patch.departments = out;
+        }
         if ('owner_names' in body) { const arr = (Array.isArray(body.owner_names) ? body.owner_names : String(body.owner_names || '').split(',')).map(x => String(x).trim()).filter(Boolean).slice(0, 5); if (!arr.length) return res.status(400).json({ ok: false, error: 'укажите имя владельца, как оно пишется в примечаниях' }); patch.owner_names = arr; }
         const rules = await C.saveRules(patch);
         await C.saveDecision('rules:' + Object.keys(patch).sort().join(','), 'Настройки правил: ' + Object.entries(patch).map(([k, v]) => k + '=' + (Array.isArray(v) ? v.join(', ') : v)).join('; '), 'chat', null, caller.email, caller.name);
