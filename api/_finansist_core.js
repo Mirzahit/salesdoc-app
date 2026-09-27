@@ -506,6 +506,9 @@ export function salaryState(byMonth, monthKey) {
 // за месяц, итог к выплате). Остальные: оклад из настроек. Сравниваем сумму на руки (аванс + остаток; у менеджеров
 // и бонусы). Разница меньше порога — молчим; если меньше и в примечании «удержание»/«штраф» — причина названа, молчим.
 export const PAY_TOLERANCE_SOM = 3000;
+// Сверка выплат с окладом — только с августа 2026 (CEO 27.09.2026): оклады введены сейчас, какими они были раньше, неизвестно.
+export const PAY_CHECK_FROM = '2026-08';
+export const PAY_CHECK_BEFORE_NOTE = 'до начала сверки окладов';
 let _calc = null, _calcTs = 0;
 export async function loadSalaryCalc() {
   if (_calc && Date.now() - _calcTs < 60e3) return _calc;
@@ -726,6 +729,7 @@ export async function enrichTeamPay(team, employees, monthKey) {
   const [calc, rates] = await Promise.all([loadSalaryCalc(), loadFxRates()]);
   (team.rows || []).forEach(r => {
     if (!r.has_salary || r.owner) return;
+    if (String(monthKey) < PAY_CHECK_FROM) { r.expected = null; r.expected_note = PAY_CHECK_BEFORE_NOTE + ' (с ' + MONTHS_RU_GEN[parseMonth(PAY_CHECK_FROM).mo - 1] + ' ' + PAY_CHECK_FROM.slice(0, 4) + ')'; r.pay_check = null; return; }
     const person = { key: r.person_key, advance: (r.parts && r.parts.advance) || 0, rest: (r.parts && r.parts.rest) || 0, bonus: (r.parts && r.parts.bonus) || 0, rows: r.pay_rows || [] };
     const exp = expectedPay(person, monthKey, employees, calc, rates);
     r.expected = exp.expected; r.expected_kind = exp.kind; r.expected_note = exp.note; r.fact_for_check = exp.fact; r.usd_paid = exp.usd_paid || null; r.usd_expected = exp.usd_expected || null; r.pay_unchecked = !!exp.unchecked;
