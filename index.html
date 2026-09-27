@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v1006</title>
+<title>SalesDoc — Финансовый Дашборд v1007</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11200,13 +11200,14 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
      </tbody></table></div>
      <div class="fz-tfoot"><span id="fz-set-note"></span><button class="fz-btn pri" id="fz-set-save" type="button">Сохранить</button></div></div>
     <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Оклады</h2><span>сверка: аванс + остаток на руки против оклада; разница меньше 3 000 сом или «удержание», «штраф», «опоздание» в примечании — без вопроса</span></div>
-     <div class="fz-tw"><table><thead><tr><th>Сотрудник</th><th class="r">Оклад, сом</th></tr></thead><tbody id="fz-oklad-body"></tbody></table></div>
+     <div class="fz-tw"><table><thead><tr><th>Сотрудник</th><th class="r">Оклад, сом или «$»</th></tr></thead><tbody id="fz-oklad-body"></tbody></table></div>
      <div class="fz-tfoot"><span id="fz-oklad-note"></span><button class="fz-btn pri" id="fz-oklad-save" type="button">Сохранить оклады</button></div></div>
     <div class="fz-panel fz-mb"><div class="fz-panel-h"><h2>Курс тенге, Нацбанк КР</h2><span>крон сохраняет официальный курс каждую ночь; архива по дате у Нацбанка нет — для прошлых дат курс можно вписать вручную</span></div>
-     <div class="fz-tw"><table><thead><tr><th>Дата</th><th class="r">Сом за 1 тенге</th><th>Откуда</th></tr></thead><tbody id="fz-fx-body"></tbody></table></div>
+     <div class="fz-tw"><table><thead><tr><th>Дата</th><th class="r">Сом за 1 тенге</th><th class="r">Сом за 1 $</th><th>Откуда</th></tr></thead><tbody id="fz-fx-body"></tbody></table></div>
      <div class="fz-toolbar" style="border-top:1px solid var(--fz-line2);border-bottom:0">
       <input id="fz-fx-date" class="fz-minp" placeholder="2026-09-09" aria-label="Дата" style="width:110px;text-align:left">
-      <input id="fz-fx-rate" class="fz-minp" placeholder="0,1980" inputmode="decimal" aria-label="Курс" style="width:90px">
+      <input id="fz-fx-rate" class="fz-minp" placeholder="тенге 0,1980" inputmode="decimal" aria-label="Курс тенге" style="width:110px">
+      <input id="fz-fx-usd" class="fz-minp" placeholder="доллар 87,45" inputmode="decimal" aria-label="Курс доллара" style="width:110px">
       <button class="fz-btn pri" id="fz-fx-add" type="button">Вписать курс</button>
       <span class="muted" style="font-size:12.5px">курс с сайта Нацбанка на дату оплаты интеграторам</span>
      </div></div>
@@ -46484,7 +46485,7 @@ function fzExpRows(m, cash){
  // для «Счетов» и «Кассы»). Изъятие владельца и переносы — не расход компании.
  var d = _fz.data; if (!d || !d.expenses) return null;
  var key = fzMonthKey(m); var e = d.expenses[key]; if (!e || !e.available) return null;
- var rows = e.rows.filter(function(x){ return x.kind !== 'transfer' && x.kind !== 'owner' && !expIsTransfer(x) && ((cash ? x.pay_month : x.work_month) || key) === key; });
+ var rows = e.rows.filter(function(x){ return x.kind !== 'transfer' && x.kind !== 'owner' && !expIsTransfer(x) && !(cash && x.source === 'expected') && ((cash ? x.pay_month : x.work_month) || key) === key; }); // ожидаемая зарплата — только в прибыли, в «Кассе» и «Счетах» её нет
  return rows.length ? rows : null;
 }
 function fzExpSum(rows){ return (rows || []).reduce(function(s, e){ return s + (+e.amount || 0); }, 0); }
@@ -46511,6 +46512,7 @@ function fzTeamRows(){
 // «предварительная» — зарплата за месяц ещё не выплачена; «завышена ≈ X» — нет обязательной статьи; «неполная» — сумма статьи отличается
 function fzProfitPill(p){
  if (!p) return '';
+ if (p.expected_salary > 0) return ' <span class="fz-pill neg" title="Остаток зарплаты за месяц ещё не выплачен — вместо него стоит ожидаемая: по окладам, «Моему доходу», без оклада — по прошлому месяцу">ожидаемая</span>';
  if (p.salary_state && p.salary_state.pending) return ' <span class="fz-pill neg" title="Зарплата за месяц ещё не выплачена полностью">предварительная</span>';
  if (p.missing_estimate) return ' <span class="fz-pill neg" title="Нет обязательной статьи расходов — см. «Вопросы агента»">завышена ≈ ' + fzShort(p.missing_estimate) + '</span>';
  if (p.profit_incomplete) return ' <span class="fz-pill neg" title="Сумма обязательной статьи отличается от обычной — см. «Вопросы агента»">неполная</span>';
@@ -46519,7 +46521,7 @@ function fzProfitPill(p){
 function fzPaySub(r){
  if (!r.parts || r.owner) return '';
  var p = r.parts, bits = [];
- if (p.advance) bits.push('аванс ' + fzMoney(p.advance)); if (p.rest) bits.push('остаток ' + fzMoney(p.rest)); if (p.bonus) bits.push('бонус ' + fzMoney(p.bonus)); if (p.leave) bits.push('отпускные ' + fzMoney(p.leave));
+ if (p.advance) bits.push('аванс ' + fzMoney(p.advance)); if (p.rest) bits.push('остаток ' + fzMoney(p.rest)); if (p.expected) bits.push('ожидается ' + fzMoney(p.expected)); if (p.bonus) bits.push('бонус ' + fzMoney(p.bonus)); if (p.leave) bits.push('отпускные ' + fzMoney(p.leave));
  var out = bits.join(' + ');
  if (r.expected != null) out += ' · ожидалось ' + fzMoney(r.expected);
  else if (r.expectedNote) out += ' · ' + r.expectedNote;
@@ -46776,9 +46778,9 @@ function fzSaveOklad(){
   .catch(function(e){ if (note) note.textContent = ''; try { sdToast('Не сохранилось: ' + (e && e.message || e), 'error'); } catch(_){} });
 }
 function fzSaveFx(){
- var date = String(document.getElementById('fz-fx-date').value || '').trim(), rate = String(document.getElementById('fz-fx-rate').value || '').trim();
- sbFetch('/api/finansist-agent?action=fx_save', { method:'POST', body: JSON.stringify({ date: date, rate: rate }) })
-  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось'); document.getElementById('fz-fx-rate').value = ''; return fzLoad(); })
+ var date = String(document.getElementById('fz-fx-date').value || '').trim(), rate = String(document.getElementById('fz-fx-rate').value || '').trim(), usd = String(document.getElementById('fz-fx-usd').value || '').trim();
+ sbFetch('/api/finansist-agent?action=fx_save', { method:'POST', body: JSON.stringify({ date: date, rate: rate, usd: usd }) })
+  .then(function(r){ if (!r || !r.ok) throw new Error((r && r.error) || 'не сохранилось'); document.getElementById('fz-fx-rate').value = ''; document.getElementById('fz-fx-usd').value = ''; return fzLoad(); })
   .catch(function(e){ try { sdToast('Не сохранилось: ' + (e && e.message || e), 'error'); } catch(_){} });
 }
 
@@ -47008,9 +47010,9 @@ function fzRenderGoals(){
  var st = (_fz.data.meta && _fz.data.meta.settings) || {}; var setv = function(id, v){ var el = document.getElementById(id); if (el && document.activeElement !== el) el.value = v == null ? '' : v; };
  setv('fz-set-kzt', st.integrators_kzt != null ? Math.round(st.integrators_kzt).toLocaleString('ru-RU') : ''); setv('fz-set-tol', st.integrators_tolerance_pct); setv('fz-set-safe', st.safe_balance != null ? Math.round(st.safe_balance).toLocaleString('ru-RU') : ''); setv('fz-set-owner', (st.owner_names || []).join(', '));
  var people = (_fz.data.meta && _fz.data.meta.people) || []; var ob = document.getElementById('fz-oklad-body');
- if (ob && !ob.contains(document.activeElement)) ob.innerHTML = people.length ? people.map(function(pp){ return '<tr><td>' + fzEsc(pp.name) + (pp.manager ? '<span class="sub">менеджер: сверка с расчётом «Моего дохода» (оклад + KPI и процент)</span>' : '') + '</td><td class="r">' + (pp.manager ? '<span class="muted">из «Моего дохода»</span>' : '<input class="fz-minp" data-fz-oklad="' + fzEsc(pp.key) + '" inputmode="numeric" placeholder="не задан" style="width:120px" value="' + (pp.oklad != null ? Math.round(pp.oklad).toLocaleString('ru-RU') : '') + '">') + '</td></tr>'; }).join('') : '<tr><td colspan="2" class="muted">Зарплатных строк за последние месяцы нет.</td></tr>';
+ if (ob && !ob.contains(document.activeElement)) ob.innerHTML = people.length ? people.map(function(pp){ return '<tr><td>' + fzEsc(pp.name) + (pp.manager ? '<span class="sub">менеджер: сверка с расчётом «Моего дохода» (оклад + KPI и процент)</span>' : '') + '</td><td class="r">' + (pp.manager ? '<span class="muted">из «Моего дохода»' + (pp.oklad ? '; пока месяц не закрыт — оклад ' + fzMoney(pp.oklad) : '') + '</span>' : '<input class="fz-minp" data-fz-oklad="' + fzEsc(pp.key) + '" placeholder="не задан" title="Сумма в сомах; оклад в долларах — с «$», например 1000 $" style="width:120px" value="' + (pp.oklad_usd != null ? Math.round(pp.oklad_usd).toLocaleString('ru-RU') + ' $' : (pp.oklad != null ? Math.round(pp.oklad).toLocaleString('ru-RU') : '')) + '">') + '</td></tr>'; }).join('') : '<tr><td colspan="2" class="muted">Зарплатных строк за последние месяцы нет.</td></tr>';
  var fb = document.getElementById('fz-fx-body'); var fr = (_fz.data.meta && _fz.data.meta.fx_recent) || [];
- if (fb) fb.innerHTML = fr.length ? fr.map(function(x){ return '<tr><td>' + fzDDMM(x.date) + '.' + x.date.slice(0,4) + '</td><td class="r">' + String(x.KZT).replace('.', ',') + '</td><td>' + (x.src === 'manual' ? 'вписан вручную' + (x.by ? ' · ' + fzEsc(x.by) : '') : 'Нацбанк') + '</td></tr>'; }).join('') : '<tr><td colspan="3" class="muted">Курсов ещё нет: первый сохранит ночной крон после запуска.</td></tr>';
+ if (fb) fb.innerHTML = fr.length ? fr.map(function(x){ return '<tr><td>' + fzDDMM(x.date) + '.' + x.date.slice(0,4) + '</td><td class="r">' + (x.KZT ? String(x.KZT).replace('.', ',') : '<span class="muted">—</span>') + '</td><td class="r">' + (x.USD ? String(x.USD).replace('.', ',') : '<span class="muted">—</span>') + '</td><td>' + (x.src === 'manual' ? 'вписан вручную' + (x.by ? ' · ' + fzEsc(x.by) : '') : 'Нацбанк') + '</td></tr>'; }).join('') : '<tr><td colspan="4" class="muted">Курсов ещё нет: первый сохранит ночной крон после запуска.</td></tr>';
  var ex = (_fz.data.meta && _fz.data.meta.expected_items) || []; var eb = document.getElementById('fz-expected-body'); if (eb) eb.innerHTML = ex.map(function(i){ return '<tr><td>' + fzEsc(i.label) + '</td><td class="wrap">' + fzEsc(i.how) + '</td></tr>'; }).join('');
 }
 

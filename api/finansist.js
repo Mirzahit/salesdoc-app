@@ -62,7 +62,7 @@ export default async function handler(req, res) {
       const exRows = C.expenseRows(expByMonth, k);
       const s = C.periodSummary(base, r, exRows);
       const ss = C.salaryState(expByMonth, k);
-      return { key: k, revenue: s.revenue, count: rows.length, by_category: s.by_category, expenses: s.expenses, salaries: s.salaries, profit: s.profit, owner_draws: s.owner_draws, retained: s.retained, margin_pct: s.margin_pct, salary_share_pct: s.salary_share_pct, expenses_available: !!exRows, salary_pending: ss.pending };
+      return { key: k, revenue: s.revenue, count: rows.length, by_category: s.by_category, expenses: s.expenses, salaries: s.salaries, profit: s.profit, owner_draws: s.owner_draws, retained: s.retained, margin_pct: s.margin_pct, salary_share_pct: s.salary_share_pct, expenses_available: !!exRows, salary_pending: ss.pending, expected_salary: s.expected_salary || 0 };
     });
 
     // --- период ---
@@ -120,7 +120,7 @@ export default async function handler(req, res) {
         shared_label_rules: C.SHARED_LABEL_RULES.map(r => ({ label: r.label, how: r.how })),
         settings: C.currentRules(),
         people,
-        fx_recent: Object.keys(fxRates).sort().slice(-12).reverse().map(d => ({ date: d, KZT: fxRates[d].KZT, src: fxRates[d].src, by: fxRates[d].by || null })),
+        fx_recent: Object.keys(fxRates).sort().slice(-12).reverse().map(d => ({ date: d, KZT: fxRates[d].KZT || null, USD: fxRates[d].USD || null, src: fxRates[d].src, by: fxRates[d].by || null })),
         pay_tolerance_som: C.PAY_TOLERANCE_SOM, salary_paid_by_day: C.SALARY_PAID_BY_DAY,
       },
       months, period,

@@ -10,7 +10,7 @@
 // POST ?action=missing_ignore { id }      → «такой статьи в этом месяце нет»
 // GET  ?action=spend                      → расход на API сегодня и лимит
 // GET  ?action=rules                      → настройки правил (app_settings.finansist_rules)
-// POST ?action=fx_save { date, rate }      → курс тенге вручную (когда Нацбанк недоступен или дата до запуска)
+// POST ?action=fx_save { date, rate, usd } → курс тенге и/или доллара вручную (когда Нацбанк недоступен или дата до запуска)
 // POST ?action=rules_save  { integrators_kzt, integrators_tolerance_pct, safe_balance, owner_names } → сохранить
 // GET  ?action=prepaid                    → предоплаченные расходы (app_settings.finansist_prepaid)
 // POST ?action=prepaid_add { label, item_key, amount, start:'YYYY-MM', months }  → добавить
@@ -88,9 +88,16 @@ export default async function handler(req, res) {
         if ('safe_balance' in body) { const v = numOrNull(body.safe_balance); if (isNaN(v) || (v != null && v < 0)) return res.status(400).json({ ok: false, error: 'безопасный остаток — число не меньше нуля или пусто' }); patch.safe_balance = v; }
         if ('oklad' in body) {
           if (!body.oklad || typeof body.oklad !== 'object') return res.status(400).json({ ok: false, error: 'оклад — объект { человек: сумма }' });
-          const cur = Object.assign({}, (await C.loadRules(true)).oklad || {});
-          for (const [k, v] of Object.entries(body.oklad)) { const key = String(k).slice(0, 12); if (v == null || String(v).trim() === '') { delete cur[key]; continue; } const n = numOrNull(v); if (isNaN(n) || n <= 0) return res.status(400).json({ ok: false, error: 'оклад должен быть больше нуля' }); cur[key] = n; }
-          patch.oklad = cur;
+          const r0 = await C.loadRules(true);
+          const cur = Object.assign({}, r0.oklad || {}), curUsd = Object.assign({}, r0.oklad_usd || {});
+          for (const [k, v] of Object.entries(body.oklad)) {
+            const key = String(k).slice(0, 12); const s = String(v == null ? '' : v).trim();
+            if (!s) { delete cur[key]; delete curUsd[key]; continue; }
+            const isUsd = /\$|usd|долл/i.test(s); // «1000 $» — оклад в долларах, выплата в сомах по курсу
+            const n = numOrNull(s.replace(/\$|usd|долл[а-яё]*/ig, '')); if (isNaN(n) || n == null || n <= 0) return res.status(400).json({ ok: false, error: 'оклад должен быть больше нуля' });
+            if (isUsd) { curUsd[key] = n; delete cur[key]; } else { cur[key] = n; delete curUsd[key]; }
+          }
+          patch.oklad = cur; patch.oklad_usd = curUsd;
         }
         if ('owner_names' in body) { const arr = (Array.isArray(body.owner_names) ? body.owner_names : String(body.owner_names || '').split(',')).map(x => String(x).trim()).filter(Boolean).slice(0, 5); if (!arr.length) return res.status(400).json({ ok: false, error: 'укажите имя владельца, как оно пишется в примечаниях' }); patch.owner_names = arr; }
         const rules = await C.saveRules(patch);
@@ -99,10 +106,13 @@ export default async function handler(req, res) {
       }
       if (action === 'fx_save') {
         const date = String(body.date || '').slice(0, 10);
-        const rate = Number(String(body.rate == null ? '' : body.rate).replace(',', '.'));
+        const numIn = v => { const s = String(v == null ? '' : v).trim(); return s ? Number(s.replace(',', '.')) : null; };
+        const rate = numIn(body.rate), usd = numIn(body.usd);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ ok: false, error: 'дата в формате ГГГГ-ММ-ДД' });
-        if (!isFinite(rate) || rate <= 0 || rate > 1) return res.status(400).json({ ok: false, error: 'курс тенге в сомах, например 0,1980' });
-        const saved = await C.saveFxRate(date, rate, 'manual', caller.name || caller.email);
+        if (rate == null && usd == null) return res.status(400).json({ ok: false, error: 'впишите курс тенге или доллара' });
+        if (rate != null && (!isFinite(rate) || rate <= 0 || rate > 1)) return res.status(400).json({ ok: false, error: 'курс тенге в сомах, например 0,1980' });
+        if (usd != null && (!isFinite(usd) || usd < 20 || usd > 500)) return res.status(400).json({ ok: false, error: 'курс доллара в сомах, например 87,45' });
+        const saved = await C.saveFxRate(date, { KZT: rate, USD: usd }, 'manual', caller.name || caller.email);
         return res.status(200).json({ ok: true, date, rate: saved });
       }
       if (action === 'prepaid_add') {

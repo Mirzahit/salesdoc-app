@@ -26,6 +26,7 @@ const HISTORY_MESSAGES = 12;
 
 function apiKey() { return (process.env.ANTHROPIC_API_KEY_FINANSIST || '').trim(); }
 let _client = null;
+const CHAT_DEADLINE_MS = 240000;
 export function client() { if (!apiKey()) throw new Error('Не задан ключ ANTHROPIC_API_KEY_FINANSIST'); if (!_client) _client = new Anthropic({ apiKey: apiKey(), maxRetries: 2, timeout: 120000 }); return _client; }
 
 export function costOf(u) {
@@ -100,7 +101,7 @@ async function summaryFor(from, to) {
   s.profit_incomplete = open.length > 0 || ex.missingMonths.length > 0;
   s.missing_estimate = open.filter(r => r.status === 'missing' && r.expected_amount && !(C.EXPECTED_ITEMS.find(i => i.key === r.item_key) || {}).track_last).reduce((a, r) => a + C.num(r.expected_amount), 0); // прибыль завышена примерно на эту сумму; вода «по последней покупке» не в счёт
   // как посчитаны расходы и выплачена ли зарплата — иначе модель гадает («остаток ещё не выплачен», «по дате выплаты»)
-  s.expenses_basis = 'Зарплата — по месяцу работы: аванс и остаток за месяц, даже если остаток выплачен в следующем месяце. Прочие расходы — по месяцу листа. Выручка — по дате оплаты.';
+  s.expenses_basis = 'Зарплата — по месяцу работы: аванс и остаток за месяц, даже если остаток выплачен в следующем месяце. Пока остаток не выплачен, вместо него стоит ожидаемая зарплата (expected_salary_rows: по окладу, «Моему доходу», у Жибек 1 000 $ по курсу, без оклада — по прошлому месяцу), прибыль такого месяца — «ожидаемая». Прочие расходы — по месяцу листа. Выручка — по дате оплаты.';
   s.salary_state = ex.keys.map(k => Object.assign({ month: k }, C.salaryState(ex.byMonth, k)));
   s.salary_pending_months = s.salary_state.filter(x => x.pending).map(x => x.month); // пока не пусто — прибыль этих месяцев предварительная
   s.profit_incomplete_reasons = open.map(r => r.month + ': ' + r.item_label + ' — ' + (r.status === 'missing' ? 'нет строки' : 'сумма резко отличается')).concat(ex.missingMonths.map(m => m + ': расходов в таблице нет'));
@@ -234,9 +235,14 @@ export async function chatTurn(text, caller) {
   ];
   const usage = {}; const trace = []; let finalText = ''; let spentNow = 0;
   const day = st.day; let spentToday = st.spent_usd;
+  // Общий предел на ответ: Vercel обрывает запрос через 300 с, а модель иногда отвечает минутами (27.09 локально — 577 с).
+  const t0 = Date.now(); const SLOW = 'Модель сейчас отвечает медленно, ответ не успел собраться. Спросите ещё раз через минуту.';
   for (let round = 0; round < MAX_ROUNDS; round++) {
     if (spentToday >= st.daily_usd) { finalText = (finalText ? finalText + '\n\n' : '') + limitMessage({ spent_usd: spentToday, daily_usd: st.daily_usd }); break; }
-    const resp = await client().messages.create({ model: cfg.model || MODEL, max_tokens: near ? 1200 : (cfg.max_tokens || 4000), system, tools: TOOLS, messages, output_config: { effort: near ? 'low' : (cfg.effort || 'medium') } });
+    const left = CHAT_DEADLINE_MS - (Date.now() - t0); if (left < 15000) { finalText = SLOW; break; }
+    let resp;
+    try { resp = await client().messages.create({ model: cfg.model || MODEL, max_tokens: near ? 1200 : (cfg.max_tokens || 4000), system, tools: TOOLS, messages, output_config: { effort: near ? 'low' : (cfg.effort || 'medium') } }, { timeout: left, maxRetries: left > 90000 ? 1 : 0 }); }
+    catch (e) { if (/timeout|timed out|abort/i.test(String(e && (e.name + ' ' + e.message)))) { finalText = SLOW; break; } throw e; }
     addUsage(usage, resp.usage); const c = costOf(resp.usage); spentNow += c; spentToday += c;
     const textParts = resp.content.filter(b => b.type === 'text').map(b => b.text);
     const toolUses = resp.content.filter(b => b.type === 'tool_use');
@@ -277,6 +283,7 @@ const OPTIONS = {
   pay_more: ['Это бонус', 'Переплата', 'Поправлю оклад'],
   no_advance: ['Аванс не давали', 'Внесём аванс в таблицу'],
   wrong_sheet: ['Перенесу на нужный лист', 'Так и должно быть'],
+  oklad_missing: ['Впишу оклад на «Правилах и целях»', 'Оклада нет, плачу по факту'],
   tax_penalty: ['Знаю, уже закрыли', 'Разберёмся с Гульшан'],
   owner_other: ['Изъятие владельца', 'Расход компании'],
   water_supplier: ['Сверю с поставщиком', 'Воду покупаем не каждый месяц'],
@@ -305,7 +312,7 @@ function candidates(monthKey, disputes, missingSync, opts_prepaid) {
   (missingSync.changes || []).forEach(ch => { if (ch.type === 'superseded') out.push({ key: 'superseded:' + ch.item.item_key + ':' + monthKey, type: 'missing', amount: ch.prev.amount, fact: 'Ручная сумма ' + C.round(ch.prev.amount) + ' сом по статье «' + ch.item.item_label + '» больше не учитывается: в таблице появилась настоящая строка на ' + C.round(ch.item.found_amount) + ' сом.', options: OPTIONS.superseded, evidence: { item_key: ch.item.item_key, manual: ch.prev.amount, found: ch.item.found_amount } }); });
   return out;
 }
-const FALLBACK_TITLE_MORE = { owner_other: 'Изъятие или расход компании?', water_supplier: 'Сверить доставки воды с поставщиком', prepaid_renew: 'Подписка скоро кончается', tax_penalty: 'Появилась пеня по налогам', pay_less: 'Выплата меньше оклада', pay_more: 'Выплата больше оклада — бонус?', no_advance: 'Аванс не найден', wrong_sheet: 'Строка не на своём листе', fx_over: 'Ушло больше, чем нужно по курсу' };
+const FALLBACK_TITLE_MORE = { advance_date: 'Аванс: за какой месяц?', oklad_missing: 'Какой у вас оклад?', owner_other: 'Изъятие или расход компании?', water_supplier: 'Сверить доставки воды с поставщиком', prepaid_renew: 'Подписка скоро кончается', tax_penalty: 'Появилась пеня по налогам', pay_less: 'Выплата меньше оклада', pay_more: 'Выплата больше оклада — бонус?', no_advance: 'Аванс не найден', wrong_sheet: 'Строка не на своём листе', fx_over: 'Ушло больше, чем нужно по курсу' };
 const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', missing: 'Не хватает данных по расходам', other: 'Предоплата закончилась', owner: 'Изъято больше, чем заработано', balance: 'Остаток ниже безопасного' };
 
 // Изъятие владельца с начала квартала против прибыли за тот же период + остаток на счетах против безопасного.
@@ -349,6 +356,7 @@ export async function sweepMonth(monthKey, opts) {
   // исчезнувшие расхождения — закрываем
   const candKeys = new Set(cands.map(c => c.key));
   let closed = 0;
+  for (const q of existing) if (q.status === 'open' && /^pay_(less|more):/.test(q.key) && q.month < C.PAY_CHECK_FROM) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'До начала сверки окладов', updated_at: now }); closed++; q.status = 'dismissed'; }
   for (const q of existing) if (q.status === 'open' && q.key.startsWith('owner_other:') && (C.currentRules().owner_other || {})[q.key.slice(12)]) { const d = C.currentRules().owner_other[q.key.slice(12)]; await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: d === 'owner' ? 'Решение принято: изъятие владельца' : 'Решение принято: расход компании', updated_at: now }); closed++; q.status = 'dismissed'; }
   for (const q of existing) if (q.status === 'open' && q.key.startsWith('dec:')) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Проверка по декадам отключена', updated_at: now }); closed++; }
   for (const q of existing) if (q.status === 'open' && !candKeys.has(q.key) && !q.key.startsWith('superseded:') && !q.key.startsWith('prepaid_end:') && !q.key.startsWith('prepaid_renew:') && q.key !== 'water_supplier' && q.type !== 'goal' && (q.type !== 'other' || /^(owner_over|low_balance|pay_less|pay_more|fx_over|owner_other|tax_penalty):/.test(q.key))) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Расхождение исчезло само', updated_at: now }); closed++; }
@@ -367,8 +375,8 @@ export async function sweepMonth(monthKey, opts) {
         if (spentNow >= st.daily_usd) break;
         const chunk = fresh.slice(i, i + 10);
         try {
-          const ask = 'Сформулируй вопросы владельцу по фактам ниже. На каждый факт — короткий заголовок (до 60 знаков) и объяснение в 1–2 предложения с цифрами из факта, без выводов сверх фактов, по-русски, на «вы». Имена людей пиши как в факте. Если в факте сказано уточнить у Гульшан — напиши «Уточните у Гульшан» один раз, без оборотов вроде «этот вопрос также уточняется». Верни ТОЛЬКО JSON-массив объектов {"key","title","body"} для всех ключей.\n\n' + chunk.map(c => 'key=' + c.key + ' | тип=' + c.type + ' | ' + c.fact).join('\n');
-          const resp = await client().messages.create({ model: cfg.model || MODEL, max_tokens: 6000, system: [{ type: 'text', text: cfg.system_prompt, cache_control: { type: 'ephemeral', ttl: '1h' } }], messages: [{ role: 'user', content: ask }], output_config: { effort: 'low' } });
+          const ask = 'Сформулируй вопросы владельцу по фактам ниже. На каждый факт — короткий заголовок (до 60 знаков) и объяснение в 1–2 предложения с цифрами из факта, без выводов сверх фактов, по-русски, на «вы». Имена людей пиши как в факте. Если факт начинается с «Вопрос для <Имя>», обращайся прямо к этому человеку на «вы»: заголовок начни с «<Имя>, …», в тексте не пиши «уточните у <Имя>». Если в факте сказано уточнить у Гульшан — напиши «Уточните у Гульшан» один раз, без оборотов вроде «этот вопрос также уточняется». Верни ТОЛЬКО JSON-массив объектов {"key","title","body"} для всех ключей.\n\n' + chunk.map(c => 'key=' + c.key + ' | тип=' + c.type + ' | ' + c.fact).join('\n');
+          const resp = await client().messages.create({ model: cfg.model || MODEL, max_tokens: 6000, system: [{ type: 'text', text: cfg.system_prompt, cache_control: { type: 'ephemeral', ttl: '1h' } }], messages: [{ role: 'user', content: ask }], output_config: { effort: 'low' } }, { timeout: 90000, maxRetries: 1 });
           addUsage(usage, resp.usage); const c1 = costOf(resp.usage); cost += c1; spentNow += c1; modelUsed = true;
           if (resp.stop_reason === 'max_tokens') console.error('[finansist-agent] sweep model: ответ обрезан, пачка ' + i);
           const txt = resp.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
@@ -396,6 +404,7 @@ export async function answerQuestion(id, idx, caller) {
   const now = new Date().toISOString();
   await sbUpdate('finansist_questions', { id: 'eq.' + id }, { status: 'answered', answer_idx: idx, answer_text: text, answered_by: caller.email, answered_by_name: caller.name || null, answered_at: now, updated_at: now });
   await C.saveDecision(q.key, q.title + ' — ' + text, 'question', q.month, caller.email, caller.name);
+  if (q.key.startsWith('advance_date:') && q.evidence && q.evidence.row_key) { const cur = Object.assign({}, (await C.loadRules(true)).advance_month || {}); cur[q.evidence.row_key] = idx === 0 ? q.evidence.sheet_month : q.evidence.date_month; await C.saveRules({ advance_month: cur }); }
   if (q.key.startsWith('owner_other:')) { const key = q.key.slice('owner_other:'.length); const cur = Object.assign({}, (await C.loadRules(true)).owner_other || {}); cur[key] = idx === 0 ? 'owner' : 'company'; await C.saveRules({ owner_other: cur }); }
   return { ok: true };
 }
@@ -413,7 +422,9 @@ async function payAndSheetChecks(base, monthKey, byMonth) {
       if (!r.pay_check) return;
       const k = r.pay_check.direction === 'less' ? 'pay_less' : 'pay_more';
       const parts = r.parts || {};
-      const fact = 'Зарплата ' + r.name + ' за ' + C.monthLabel(monthKey) + ': аванс ' + C.round(parts.advance) + ' + остаток ' + C.round(parts.rest) + (r.expected_kind === 'calc' && parts.bonus ? ' + бонус ' + C.round(parts.bonus) : '') + ' = ' + C.round(r.fact_for_check) + ' сом. Ожидалось ' + C.round(r.expected) + ' (' + r.expected_note + '). ' + (k === 'pay_less' ? 'Меньше на ' + C.round(-r.pay_check.diff) + ' сом.' : 'Больше на ' + C.round(r.pay_check.diff) + ' сом — возможно, бонус.');
+      const fact = r.expected_kind === 'usd'
+        ? 'Зарплата ' + r.name + ' за ' + C.monthLabel(monthKey) + ': ' + (r.pay_rows || []).filter(x => x.part === 'advance' || x.part === 'rest').map(x => (x.part === 'advance' ? 'аванс ' : 'остаток ') + C.round(x.amount) + ' сом ' + C.fmtDay(x.date)).join(' + ') + ' = ' + C.round(r.fact_for_check) + ' сом ≈ ' + String(r.usd_paid).replace('.', ',') + ' $ по курсу Нацбанка на даты выплат. Оклад ' + C.round(r.usd_expected) + ' $. ' + (k === 'pay_less' ? 'Меньше' : 'Больше') + ' на ' + String(Math.abs(r.pay_check.pct)).replace('.', ',') + '% при допуске ' + (R.integrators_tolerance_pct || 3) + '%' + (k === 'pay_more' ? ' — возможно, бонус.' : '.')
+        : 'Зарплата ' + r.name + ' за ' + C.monthLabel(monthKey) + ': аванс ' + C.round(parts.advance) + ' + остаток ' + C.round(parts.rest) + (r.expected_kind === 'calc' && parts.bonus ? ' + бонус ' + C.round(parts.bonus) : '') + ' = ' + C.round(r.fact_for_check) + ' сом. Ожидалось ' + C.round(r.expected) + ' (' + r.expected_note + '). ' + (k === 'pay_less' ? 'Меньше на ' + C.round(-r.pay_check.diff) + ' сом.' : 'Больше на ' + C.round(r.pay_check.diff) + ' сом — возможно, бонус.');
       out.push({ key: k + ':' + monthKey + ':' + r.person_key, type: 'other', kind: k, amount: Math.abs(r.pay_check.diff), fact, options: OPTIONS[k], evidence: { person: r.name, month: monthKey, parts, expected: r.expected, expected_note: r.expected_note, fact: r.fact_for_check } });
     });
   }
@@ -423,10 +434,36 @@ async function payAndSheetChecks(base, monthKey, byMonth) {
   const seen = new Set();
   (byMonth[monthKey] && byMonth[monthKey].rows || []).forEach(e => {
     if (e.source !== 'sheet' || e.kind !== 'salary' || !e.sheet_month || String(e.date).slice(0, 7) === e.sheet_month) return; // только зарплатные строки: по ним месяц решает дата
+    if (C.isAdvanceDateSuspect(e)) return; // аванс с датой следующего месяца — отдельный вопрос про опечатку в дате
     const key = 'wrong_sheet:' + e.sheet_month + ':' + e.date + ':' + C.round(e.amount); if (seen.has(key)) return; seen.add(key);
     const dm = C.parseMonth(String(e.date).slice(0, 7)), sm = C.parseMonth(e.sheet_month);
     out.push({ key, type: 'missing', kind: 'wrong_sheet', amount: e.amount, fact: 'Строка «' + e.note + '» на ' + C.round(e.amount) + ' сом от ' + C.fmtDay(e.date) + ' записана на лист «' + C.MONTHS_RU[sm.mo - 1] + '». Считаю её ' + (e.part === 'advance' ? 'авансом' : 'расходом') + ' за ' + C.monthLabel(e.work_month || String(e.date).slice(0, 7)) + '. Перенесите строку на лист «' + C.MONTHS_RU[dm.mo - 1] + '» и ведите там остальные строки этого месяца.', options: OPTIONS.wrong_sheet, evidence: { date: e.date, note: e.note, amount: e.amount, sheet: e.sheet_month } });
   });
+  // Аванс на листе месяца с датой следующего месяца (CEO 27.09.2026, Элиза): вопрос Гульшан — опечатка в дате или аванс следующего месяца.
+  // Пока ответа нет, аванс считается за месяц листа (так у всех: аванс 10 000 + остаток «за вычетом аванса» 50 000).
+  const advSeen = new Set();
+  (byMonth[monthKey] && byMonth[monthKey].rows || []).forEach(e => {
+    if (!C.isAdvanceDateSuspect(e) || e.sheet_month !== monthKey) return;
+    const rk = C.advanceRowKey(e); if (advSeen.has(rk) || (R.advance_month || {})[rk]) return; advSeen.add(rk);
+    const cls = C.classifyExpense(e); const sm = C.parseMonth(e.sheet_month), dm = C.parseMonth(String(e.date).slice(0, 7));
+    const who = cls.person ? cls.person.charAt(0).toUpperCase() + cls.person.slice(1) : 'сотрудника';
+    const restRows = (C.expenseRows(byMonth, monthKey) || []).filter(x => x.kind === 'salary' && x.part === 'rest' && C.classifyExpense(x).person_key === cls.person_key);
+    const rest = restRows.reduce((a, x) => a + C.num(x.amount), 0);
+    const typoDay = String(e.date).slice(8, 10) + '.' + C.pad2(sm.mo);
+    out.push({ key: 'advance_date:' + rk, type: 'missing', kind: 'advance_date', amount: e.amount, fact: 'Вопрос для Гульшан. ' + who + ': ' + (rest ? 'остаток за ' + C.monthLabel(monthKey) + ' ' + C.round(rest) + ' сом «за вычетом аванса», ' : '') + 'аванса с датой ' + C.MONTHS_RU_GEN[sm.mo - 1] + ' нет, а на листе «' + C.MONTHS_RU[sm.mo - 1] + '» есть строка «' + e.note + '» от ' + C.fmtDay(e.date) + ' на ' + C.round(e.amount) + ' сом. Это аванс за ' + C.MONTHS_RU[sm.mo - 1].toLowerCase() + ' с датой ' + typoDay + ' или за ' + C.MONTHS_RU[dm.mo - 1].toLowerCase() + '? Пока считаю его авансом за ' + C.MONTHS_RU[sm.mo - 1].toLowerCase() + '.', options: ['Аванс за ' + C.MONTHS_RU[sm.mo - 1].toLowerCase() + ', дата ' + typoDay, 'Аванс за ' + C.MONTHS_RU[dm.mo - 1].toLowerCase()], evidence: { row_key: rk, sheet_month: e.sheet_month, date_month: String(e.date).slice(0, 7), date: e.date, note: e.note, amount: e.amount, rest } });
+  });
+  // Оклад не задан (CEO 27.09.2026: Гульшан — вопрос ей самой). Один раз на человека, в текущем месяце; пока нет — ожидаемая по прошлому месяцу.
+  if (monthKey === C.currentMonthKey()) {
+    const people = await C.payPeople(byMonth, base.employees, monthKey);
+    const recent = new Set(); const prevK = C.shiftMonthKey(monthKey, -1); // только те, кому платили в этом или прошлом месяце (Арслан ушёл в июле — не спрашиваем)
+    Object.values(byMonth).forEach(m => (m.rows || []).forEach(e => { if (e.kind === 'salary' && e.source !== 'expected' && (e.work_month === monthKey || e.work_month === prevK)) recent.add(C.classifyExpense(e).person_key); }));
+    for (const pp of people) {
+      if (!recent.has(pp.key) || pp.manager || pp.oklad != null || pp.oklad_usd != null || C.isOwnerName(pp.name)) continue;
+      const asked = await sbSelect('finansist_questions', { country: 'eq.' + C.COUNTRY, key: 'eq.oklad_missing:' + pp.key, limit: '1' });
+      if (asked.length && asked[0].month !== monthKey) continue;
+      out.push({ key: 'oklad_missing:' + pp.key, type: 'missing', kind: 'oklad_missing', amount: null, fact: 'Вопрос для ' + pp.name + '. Какой у вас оклад в месяц? Без оклада выплаты не с чем сравнить, а пока месяц не закрыт, ваша зарплата в прибыли берётся по выплате за прошлый месяц.', options: OPTIONS.oklad_missing, evidence: { person: pp.name, person_key: pp.key } });
+    }
+  }
   // «Прочее» с именем владельца без решения — один вопрос на ключ похожести (пока нет ответа — расход компании)
   const oo = {};
   (C.expenseRows(byMonth, monthKey) || []).forEach(e => { const k = C.classifyExpense(e); if (!k.owner_other || k.owner_decided || k.kind === 'owner') return; (oo[k.owner_other] = oo[k.owner_other] || []).push(e); });
