@@ -298,7 +298,7 @@ export async function loadManualRows(monthKeys) {
 // Строки каждого месяца: rows = всё, что относится к месяцу по работе ИЛИ по выплате; у строки есть
 // work_month и pay_month. Для прибыли и «Команды» — expenseRows (по работе), для «Счетов» и «Кассы» — cashRows (по выплате).
 export async function loadExpenses(monthKeys, opts) {
-  const sheetKeys = Array.from(new Set([].concat.apply([], monthKeys.map(k => [shiftMonthKey(k, -1), k, shiftMonthKey(k, 1)]))));
+  const sheetKeys = Array.from(new Set([].concat.apply([], monthKeys.map(k => [shiftMonthKey(k, -1), k, shiftMonthKey(k, 1)])))).filter(k => k <= currentMonthKey()); // листа будущего месяца ещё нет
   const [snaps, manual, prepaid] = await Promise.all([Promise.all(sheetKeys.map(k => loadExpenseMonth(k, opts))), loadManualRows(sheetKeys), loadPrepaid(), loadRules()]);
   const sheets = {};
   snaps.forEach(sn => { sheets[sn.month] = { available: sn.available, fetched_at: sn.fetched_at, stale: !!sn.stale, rows: (sn.rows || []).concat(manual[sn.month] || []) }; });
@@ -367,7 +367,7 @@ export function expenseSummary(rows) {
 // ---------- расхождения ----------
 export function findDisputes(all, range) {
   const issues = {};
-  const push = (id, type, text) => { (issues[id] = issues[id] || []).push({ type, text }); };
+  const push = (id, type, text, extra) => { (issues[id] = issues[id] || []).push(Object.assign({ type, text }, extra || {})); };
   all.forEach(p => {
     if (p.paid_at < BANK_RULE_FROM || num(p.amount) <= 0) return;
     const bk = bankKey(p.bank);
@@ -383,8 +383,9 @@ export function findDisputes(all, range) {
       const a = rows[i], b = rows[j];
       if (daysBetween(a.paid_at, b.paid_at) > DUP_WINDOW_DAYS) break;
       if (a.category !== b.category || num(a.amount) !== num(b.amount)) continue;
-      push(a.id, 'dup', 'такой же платёж ' + fmtDay(b.paid_at));
-      push(b.id, 'dup', 'такой же платёж ' + fmtDay(a.paid_at));
+      const pair = [String(a.id), String(b.id)].sort().join('+'); // один вопрос на пару, а не на каждую сторону
+      push(a.id, 'dup', 'такой же платёж ' + fmtDay(b.paid_at), { pair });
+      push(b.id, 'dup', 'такой же платёж ' + fmtDay(a.paid_at), { pair });
     }
   });
   all.forEach(p => {
@@ -416,6 +417,7 @@ export function periodSummary(base, range, expRowsOrNull) {
   const out = {
     from: range.from, to: range.to, count: cur.length, revenue,
     by_category: sumBy(cur, p => p.category), by_bank: sumBy(cur, p => bankKey(p.bank)), by_manager: sumBy(cur, p => p.manager_name),
+    other_by_raw: sumBy(cur.filter(p => p.category === 'other'), p => p.category_raw || 'статья не указана'), // что внутри «Прочего» по исходной статье из таблицы
     expenses: exp ? exp.total : null, salaries: exp ? exp.salary_total : null, group_salaries: exp ? exp.group_total : null, shared: exp ? exp.shared_total : null, shared_by_category: exp ? exp.shared_by_category : null,
     manual_expenses: exp ? exp.manual_total : 0,
     profit,

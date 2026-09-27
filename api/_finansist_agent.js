@@ -190,7 +190,7 @@ function dynamicContext(decisions, openQuestions, missing) {
   const lines = ['Сегодня ' + C.fmtDay(today) + ' ' + today.slice(0, 4) + ' (Бишкек). Текущий месяц ' + C.currentMonthKey() + '. Валюта — сом, страна — Кыргызстан.',
     'Настройки правил: интеграторам ' + R.integrators_kzt + ' тенге в месяц, допуск ' + R.integrators_tolerance_pct + '%; безопасный остаток на счетах — ' + (R.safe_balance == null ? 'не задан' : R.safe_balance + ' сом') + '; владелец в примечаниях расходов — ' + (R.owner_names || []).join(', ') + '.'];
   if (decisions.length) { lines.push('Действующие решения владельца и бухгалтера (применяй, не переспрашивай):'); decisions.slice(0, 30).forEach(d => lines.push('- ' + d.text + (d.month ? ' (' + d.month + ')' : ''))); }
-  if (openQuestions.length) { lines.push('Открытые вопросы во вкладке «Вопросы агента» (' + openQuestions.length + '): ' + openQuestions.slice(0, 10).map(q => q.title).join('; ')); }
+  if (openQuestions.length) { lines.push('Открытые вопросы во вкладке «Вопросы агента» (' + openQuestions.length + '), не дублируй их:'); openQuestions.slice(0, 40).forEach(q => lines.push('- [' + q.month + '] ' + q.key + ' — ' + q.title + (q.amount ? ' (' + Math.round(q.amount) + ' сом)' : ''))); }
   if (missing && missing.length) { lines.push('Незакрытые недостающие данные: ' + missing.map(m => m.month + ' ' + m.item_label + ' (' + (m.status === 'missing' ? 'нет строки' : 'сумма отличается') + ')').join('; ') + '. Прибыль за эти месяцы неполная — говори об этом.'); }
   return lines.join('\n');
 }
@@ -199,7 +199,7 @@ async function contextBundle() {
   await C.loadRules();
   const [decisions, openQ, missing] = await Promise.all([
     C.loadDecisions(),
-    sbSelect('finansist_questions', { country: 'eq.' + C.COUNTRY, status: 'eq.open', order: 'created_at.desc', limit: '30' }),
+    sbSelect('finansist_questions', { country: 'eq.' + C.COUNTRY, status: 'eq.open', order: 'created_at.desc', limit: '40', select: 'month,key,title,amount' }),
     sbSelect('finansist_missing_data', { country: 'eq.' + C.COUNTRY, status: 'in.(missing,odd)', order: 'month.desc', limit: '30' }),
   ]);
   return { decisions, openQ, missing };
@@ -283,12 +283,14 @@ const OPTIONS = {
 };
 function candidates(monthKey, disputes, missingSync, opts_prepaid) {
   const out = [];
+  const seenPairs = new Set();
   disputes.list.forEach(p => {
     const seen = {};
     p.issues.forEach(i => {
       if (seen[i.type]) return; seen[i.type] = 1;
-      const key = i.type + ':' + p.id;
-      const fact = C.fmtDay(p.paid_at) + ', ' + p.company_name + ', ' + (C.CAT_RU[p.category] || p.category) + ', ' + C.round(p.amount) + ' сом, счёт «' + (p.bank || '—') + '», менеджер ' + (p.manager_name || '—') + '. ' + i.text;
+      if (i.type === 'dup' && i.pair) { if (seenPairs.has(i.pair)) return; seenPairs.add(i.pair); }
+      const key = i.type === 'dup' && i.pair ? 'dup:' + i.pair : i.type + ':' + p.id;
+      const fact = C.fmtDay(p.paid_at) + ', ' + p.company_name + ', ' + (C.CAT_RU[p.category] || p.category) + ', ' + C.round(p.amount) + ' сом, счёт «' + (p.bank || '—') + '», менеджер ' + (p.manager_name || '—') + '. ' + i.text + (i.type === 'dup' ? ' (одна пара — один вопрос)' : '');
       out.push({ key, type: i.type, amount: p.amount, fact, options: OPTIONS[i.type], evidence: { payment_id: p.id, date: p.paid_at, client: p.company_name, category: p.category, amount: p.amount, bank: p.bank, manager: p.manager_name, issue: i.text } });
     });
   });
@@ -352,16 +354,23 @@ export async function sweepMonth(monthKey, opts) {
   if (fresh.length) {
     const st = await limitState();
     if (!st.exhausted && apiKey()) {
-      try {
-        const cfg = agentConfig();
-        const ask = 'Сформулируй вопросы владельцу по фактам ниже. На каждый факт — короткий заголовок (до 60 знаков) и объяснение в 1–2 предложения с цифрами из факта, без выводов сверх фактов, по-русски, на «вы». Верни ТОЛЬКО JSON-массив объектов {"key","title","body"} для всех ключей.\n\n' + fresh.map(c => 'key=' + c.key + ' | тип=' + c.type + ' | ' + c.fact).join('\n');
-        const resp = await client().messages.create({ model: cfg.model || MODEL, max_tokens: 4000, system: [{ type: 'text', text: cfg.system_prompt, cache_control: { type: 'ephemeral', ttl: '1h' } }], messages: [{ role: 'user', content: ask }], output_config: { effort: 'low' } });
-        usage = resp.usage; cost = costOf(resp.usage); modelUsed = true;
-        const txt = resp.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-        const m = txt.match(/\[[\s\S]*\]/);
-        if (m) JSON.parse(m[0]).forEach(x => { if (x && x.key) texts[x.key] = { title: String(x.title || '').slice(0, 200), body: String(x.body || '').slice(0, 2000) }; });
-        if (cost > 0) await C.addSpend(st.day, cost);
-      } catch (e) { console.error('[finansist-agent] sweep model:', e.message); }
+      const cfg = agentConfig();
+      // пачками по 10 фактов: на 30 фактах ответ модели обрезался по длине и тексты терялись, а деньги списывались
+      let spentNow = st.spent_usd; usage = {};
+      for (let i = 0; i < fresh.length; i += 10) {
+        if (spentNow >= st.daily_usd) break;
+        const chunk = fresh.slice(i, i + 10);
+        try {
+          const ask = 'Сформулируй вопросы владельцу по фактам ниже. На каждый факт — короткий заголовок (до 60 знаков) и объяснение в 1–2 предложения с цифрами из факта, без выводов сверх фактов, по-русски, на «вы». Верни ТОЛЬКО JSON-массив объектов {"key","title","body"} для всех ключей.\n\n' + chunk.map(c => 'key=' + c.key + ' | тип=' + c.type + ' | ' + c.fact).join('\n');
+          const resp = await client().messages.create({ model: cfg.model || MODEL, max_tokens: 6000, system: [{ type: 'text', text: cfg.system_prompt, cache_control: { type: 'ephemeral', ttl: '1h' } }], messages: [{ role: 'user', content: ask }], output_config: { effort: 'low' } });
+          addUsage(usage, resp.usage); const c1 = costOf(resp.usage); cost += c1; spentNow += c1; modelUsed = true;
+          if (resp.stop_reason === 'max_tokens') console.error('[finansist-agent] sweep model: ответ обрезан, пачка ' + i);
+          const txt = resp.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+          const mm = txt.match(/\[[\s\S]*\]/);
+          if (mm) { try { JSON.parse(mm[0]).forEach(x => { if (x && x.key) texts[x.key] = { title: String(x.title || '').slice(0, 200), body: String(x.body || '').slice(0, 2000) }; }); } catch (pe) { console.error('[finansist-agent] sweep model JSON:', pe.message); } }
+          if (c1 > 0) await C.addSpend(st.day, c1);
+        } catch (e) { console.error('[finansist-agent] sweep model:', e.message); }
+      }
     }
   }
   let created = 0;

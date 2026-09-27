@@ -127,6 +127,7 @@ export default async function handler(req, res) {
         const items = await C.loadPrepaid(); const left = items.filter(e => e.id !== String(body.id || ''));
         if (left.length === items.length) return res.status(404).json({ ok: false, error: 'запись не найдена' });
         await C.savePrepaid(left);
+        try { await sbUpdate('finansist_decisions', { country: 'eq.' + C.COUNTRY, key: 'eq.prepaid:' + String(body.id || '') }, { active: false }); } catch (_) {} // старое решение про эту предоплату больше не действует
         return res.status(200).json({ ok: true, items: left });
       }
       if (action === 'missing_fill' || action === 'missing_ignore') {
