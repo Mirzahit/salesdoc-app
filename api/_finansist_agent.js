@@ -329,6 +329,7 @@ async function ownerAndBalanceChecks(base, monthKey, byMonthHint) {
 
 export async function sweepMonth(monthKey, opts) {
   opts = opts || {};
+  await C.loadRules(true); // решения по «Прочему» владельца и оклады — свежие
   const base = await C.loadBase(true);
   const range = C.monthKeyToRange(monthKey);
   const disputes = C.findDisputes(base.payments, range);
@@ -348,6 +349,7 @@ export async function sweepMonth(monthKey, opts) {
   // исчезнувшие расхождения — закрываем
   const candKeys = new Set(cands.map(c => c.key));
   let closed = 0;
+  for (const q of existing) if (q.status === 'open' && q.key.startsWith('owner_other:') && (C.currentRules().owner_other || {})[q.key.slice(12)]) { const d = C.currentRules().owner_other[q.key.slice(12)]; await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: d === 'owner' ? 'Решение принято: изъятие владельца' : 'Решение принято: расход компании', updated_at: now }); closed++; q.status = 'dismissed'; }
   for (const q of existing) if (q.status === 'open' && q.key.startsWith('dec:')) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Проверка по декадам отключена', updated_at: now }); closed++; }
   for (const q of existing) if (q.status === 'open' && !candKeys.has(q.key) && !q.key.startsWith('superseded:') && !q.key.startsWith('prepaid_end:') && !q.key.startsWith('prepaid_renew:') && q.key !== 'water_supplier' && q.type !== 'goal' && (q.type !== 'other' || /^(owner_over|low_balance|pay_less|pay_more|fx_over|owner_other|tax_penalty):/.test(q.key))) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Расхождение исчезло само', updated_at: now }); closed++; }
   // обновляем сумму/доказательства у открытых

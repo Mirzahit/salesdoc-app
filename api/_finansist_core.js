@@ -107,13 +107,16 @@ export const SALARY_PAID_BY_DAY = 15; // до этого числа следую
 // ---------- настройки правил (app_settings.finansist_rules; правятся на «Правилах и целях») ----------
 // Значения по умолчанию — только стартовые, до первого сохранения на странице (CEO 27.09.2026).
 export const RULE_DEFAULTS = { integrators_kzt: 1500000, integrators_tolerance_pct: 3, safe_balance: null, owner_names: ['Мирзахит'] };
+// Принятые решения по «Прочему» с именем владельца (CEO 27.09.2026): июль 2026 — мебель и обои «для дома Мирзахита»
+// 199 500 и «Мирзахит подотчет» 100 000 — изъятие владельца. Действуют и для похожих строк; ответ в настройках их перекрывает.
+export const OWNER_OTHER_DECIDED = { 'для дома': 'owner', 'подотчет': 'owner' };
 let _rules = null, _rulesTs = 0;
-export function currentRules() { return _rules || RULE_DEFAULTS; }
+export function currentRules() { return _rules || Object.assign({}, RULE_DEFAULTS, { owner_other: Object.assign({}, OWNER_OTHER_DECIDED) }); }
 export async function loadRules(force) {
   if (!force && _rules && Date.now() - _rulesTs < 60e3) return _rules;
   let v = {};
   try { const r = await sbSelect('app_settings', { key: 'eq.finansist_rules', limit: '1' }); v = (r[0] && r[0].value) || {}; } catch (_) {}
-  _rules = Object.assign({}, RULE_DEFAULTS, v); _rulesTs = Date.now();
+  _rules = Object.assign({}, RULE_DEFAULTS, v, { owner_other: Object.assign({}, OWNER_OTHER_DECIDED, v.owner_other || {}) }); _rulesTs = Date.now();
   return _rules;
 }
 export async function saveRules(patch) {
@@ -475,7 +478,10 @@ export function teamRows(base, range, expRowsOrNull) {
   const rows = {};
   cur.forEach(p => { const n = (p.manager_name || '').trim() || 'Без менеджера'; const k = nameKey(n); const t = rows[k] = rows[k] || { name: n, revenue: 0, count: 0, new_clients: 0, salary: 0, has_salary: false, owner: isOwnerName(n) }; t.revenue += num(p.amount); t.count++; if (p.category === 'license') t.new_clients++; });
   if (exp) Object.keys(exp.salaries).forEach(k => { const s = exp.salaries[k]; const t = rows[k] = rows[k] || { name: s.name, revenue: 0, count: 0, new_clients: 0, salary: 0, has_salary: false, owner: false }; t.salary = s.sum; t.has_salary = true; t.parts = { advance: s.advance, rest: s.rest, bonus: s.bonus, leave: s.leave }; t.pay_rows = s.rows; t.person_key = k; });
-  const statusOf = r => r.owner ? 'владелец' : ((!r.has_salary && r.revenue > 0) ? 'нет в расходах' : (r.revenue <= 0 ? 'без выручки' : (r.revenue - r.salary >= 0 ? 'окупается' : 'в минусе')));
+  // роль — из списка сотрудников (CEO 27.09.2026: Асель — менеджер по продажам, не поддержка; нет оплат за месяц — «выручки за месяц нет»)
+  const roleOf = r => { const k = r.person_key || nameKey(r.name); const e = (base.employees || []).find(x => nameKey(x.name) === k); if (!e) return null; if (e.role === 'manager') return 'менеджер по продажам'; if (e.role === 'accountant') return 'бухгалтер'; if (e.role === 'admin') return 'руководитель'; if (e.role === 'operator') return /supp|sapp|поддерж/i.test(e.pos || '') ? 'поддержка' : 'оператор'; return null; };
+  Object.values(rows).forEach(r => { r.role = r.owner ? 'владелец' : roleOf(r); });
+  const statusOf = r => r.owner ? 'владелец' : ((!r.has_salary && r.revenue > 0) ? 'нет в расходах' : (r.revenue <= 0 ? (r.role === 'менеджер по продажам' ? 'выручки за месяц нет' : 'без выручки') : (r.revenue - r.salary >= 0 ? 'окупается' : 'в минусе')));
   const list = Object.values(rows).map(r => Object.assign(r, { result: r.revenue - r.salary, status: statusOf(r) }));
   list.sort((a, b) => b.revenue - a.revenue || b.salary - a.salary);
   // группы: выручка — оплаты по связанным статьям (эти же оплаты уже есть у менеджеров, в итог не добавляется)

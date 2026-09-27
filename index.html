@@ -46502,7 +46502,7 @@ function fzSalaryByPerson(rows){
 function fzTeamRows(){
  var d = _fz.data; if (!d || !d.team) return { rows:[], groups:[], hasExp:false, shared:0, sharedBy:[], head:0, salTotal:0 };
  var t = d.team;
- var list = (t.rows || []).map(function(r){ return { name:r.name, revenue:+r.revenue || 0, prev:+r.prev_revenue || 0, count:r.count || 0, newc:r.new_clients || 0, salary:+r.salary || 0, hasSalary:!!r.has_salary, owner:!!r.owner, cost:+r.salary || 0, res:(+r.revenue || 0) - (+r.salary || 0), parts:r.parts || null, expected:r.expected, expectedNote:r.expected_note, check:r.pay_check || null }; });
+ var list = (t.rows || []).map(function(r){ return { name:r.name, revenue:+r.revenue || 0, prev:+r.prev_revenue || 0, count:r.count || 0, newc:r.new_clients || 0, salary:+r.salary || 0, hasSalary:!!r.has_salary, owner:!!r.owner, role:r.role || null, status:r.status || '', cost:+r.salary || 0, res:(+r.revenue || 0) - (+r.salary || 0), parts:r.parts || null, expected:r.expected, expectedNote:r.expected_note, check:r.pay_check || null }; });
  var groups = (t.groups || []).map(function(g){ return { name:g.name, revenue:+g.revenue || 0, count:g.revenue_count || 0, cost:+g.cost || 0, res:(+g.revenue || 0) - (+g.cost || 0), status:g.status, group:true, note:g.note || '' }; });
  var sharedBy = Object.keys(t.shared_by_category || {}).map(function(c){ return { category:c, sum:t.shared_by_category[c] }; }).sort(function(a, b){ return b.sum - a.sum; });
  var salTotal = list.reduce(function(a, r){ return a + r.salary; }, 0);
@@ -46535,7 +46535,7 @@ function fzTeamTag(r){
  if (r.owner) return '<span class="st mu">владелец</span>';
  if (r.group) return r.status === 'нет в расходах' ? '<span class="st mu">нет в расходах</span>' : (r.res >= 0 ? '<span class="st ok">окупается' + (r.cost ? ' ×' + (r.revenue / r.cost).toLocaleString('ru-RU',{maximumFractionDigits:1}) : '') + '</span>' : '<span class="st bad">в минусе</span>');
  if (!r.hasSalary && r.revenue > 0) return '<span class="st mu">нет в расходах</span>';
- if (r.revenue <= 0) return '<span class="st wr">без выручки</span>';
+ if (r.revenue <= 0) return r.status === 'выручки за месяц нет' ? '<span class="st wr">выручки за месяц нет</span>' : '<span class="st wr">без выручки</span>';
  if (r.res >= 0) return '<span class="st ok">окупается' + (r.cost ? ' ×' + (r.revenue / r.cost).toLocaleString('ru-RU',{maximumFractionDigits:1}) : '') + '</span>';
  return '<span class="st bad">в минусе</span>';
 }
