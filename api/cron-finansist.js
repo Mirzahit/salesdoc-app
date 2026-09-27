@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   if (got !== expected) return res.status(401).json({ ok: false, error: 'Unauthorized' });
   // курс тенге Нацбанка КР на сегодня — копим историю (архива по дате у Нацбанка нет)
   let fx = null;
-  try { const r = await fetchNbkrToday(); await saveFxRate(r.date, r.KZT, 'nbkr', 'крон'); fx = r; } catch (e) { console.error('[cron-finansist] НБКР:', e.message); fx = { error: String(e.message || e) }; }
+  try { const r = await fetchNbkrToday(); await saveFxRate(r.date, { KZT: r.KZT, USD: r.USD }, 'nbkr', 'крон'); fx = r; } catch (e) { console.error('[cron-finansist] НБКР:', e.message); fx = { error: String(e.message || e) }; }
   // текущий и два прошлых: зарплата за прошлый месяц закрывается ~10-го, а недостающие строки вносят с опозданием
   const months = [currentMonthKey(), shiftMonthKey(currentMonthKey(), -1), shiftMonthKey(currentMonthKey(), -2)];
   const out = [];
