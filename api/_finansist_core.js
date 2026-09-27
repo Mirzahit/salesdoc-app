@@ -78,6 +78,50 @@ export function salaryRule(e) { const c = String((e && e.category) || '').trim()
 export function isSalary(e) { const c = String((e && e.category) || '').trim().toLowerCase(); return c === 'зп' || /^зп[\s./-]|зарплат|оклад|аванс|бонус|премия|отпускн/.test(c) || !!salaryRule(e); }
 export function isTransfer(e) { return /перенос/i.test(String((e && e.category) || '')); }
 
+// ---------- настройки правил (app_settings.finansist_rules; правятся на «Правилах и целях») ----------
+// Значения по умолчанию — только стартовые, до первого сохранения на странице (CEO 27.09.2026).
+export const RULE_DEFAULTS = { integrators_kzt: 1500000, integrators_tolerance_pct: 3, safe_balance: null, owner_names: ['Мирзахит'] };
+let _rules = null, _rulesTs = 0;
+export function currentRules() { return _rules || RULE_DEFAULTS; }
+export async function loadRules(force) {
+  if (!force && _rules && Date.now() - _rulesTs < 60e3) return _rules;
+  let v = {};
+  try { const r = await sbSelect('app_settings', { key: 'eq.finansist_rules', limit: '1' }); v = (r[0] && r[0].value) || {}; } catch (_) {}
+  _rules = Object.assign({}, RULE_DEFAULTS, v); _rulesTs = Date.now();
+  return _rules;
+}
+export async function saveRules(patch) {
+  const cur = await loadRules(true);
+  const next = Object.assign({}, cur, patch);
+  await sbUpsert('app_settings', { key: 'finansist_rules', value: next, updated_at: new Date().toISOString() }, 'key');
+  _rules = next; _rulesTs = Date.now();
+  return next;
+}
+
+// Группы команды: расходы на отдел целиком, а не на человека (CEO 27.09.2026: зарплата интеграторов в КЗ,
+// платит кыргызская компания — это расход KG, связанный с выручкой по внедрению и интеграции).
+export const GROUP_RULES = [
+  { group: 'Интеграция', category: /^услуг/i, note: /интегратор/i, revenue_cats: ['implementation', 'integration'], how: 'статья «Услуги», в примечании «интеграторам»' },
+];
+// Отдельные статьи внутри общих расходов. Юрист — внешний подрядчик, не сотрудник: сопоставляем по статье
+// и слову «юрист», а не по имени (у сотрудницы Жибек и юриста одно имя).
+export const SHARED_LABEL_RULES = [
+  { label: 'Юрист, аутсорс', category: /^услуг/i, note: /юрист/i, how: 'статья «Услуги», в примечании слово «юрист»' },
+];
+export function groupRule(e) { const c = String((e && e.category) || '').trim(), n = String((e && e.note) || '').trim(); return GROUP_RULES.find(r => r.category.test(c) && r.note.test(n)) || null; }
+export function sharedLabelRule(e) { const c = String((e && e.category) || '').trim(), n = String((e && e.note) || '').trim(); return SHARED_LABEL_RULES.find(r => r.category.test(c) && r.note.test(n)) || null; }
+export function isOwnerName(name) { const k = nameKey(name); return !!k && (currentRules().owner_names || []).some(n => nameKey(n) === k); }
+// Изъятие владельца: строка, похожая на зарплату, с именем владельца. Это не расход компании.
+export function isOwnerDraw(e) { return isSalary(e) && !sharedLabelRule(e) && isOwnerName(e.note); }
+// Вид строки расходов: transfer | shared | salary | group | owner
+export function classifyExpense(e) {
+  if (isTransfer(e)) return { kind: 'transfer' };
+  const lab = sharedLabelRule(e); if (lab) return { kind: 'shared', label: lab.label };
+  const g = groupRule(e); if (g) return { kind: 'group', group: g.group };
+  if (isSalary(e)) return isOwnerName(e.note) ? { kind: 'owner' } : { kind: 'salary', person_key: nameKey(e.note), person: personWord(e.note) };
+  return { kind: 'shared', label: String(e.category || 'Прочее').trim() };
+}
+
 // ---------- обязательные статьи месяца (что должно быть в расходах каждый месяц) ----------
 // Сопоставление со строками таблицы: по статье (category) и/или примечанию (note). Показано на «Правилах и целях».
 export const EXPECTED_ITEMS = [
@@ -93,7 +137,7 @@ export const EXPECTED_ITEMS = [
 export const ODD_THRESHOLD = 0.4; // отклонение от медианы прошлых месяцев больше 40% — «сумма резко отличается»
 
 export function itemMatches(item, e) {
-  if (!e || isTransfer(e) || isSalary(e)) return false;
+  if (!e || isTransfer(e) || isSalary(e) || groupRule(e)) return false;
   const c = String(e.category || ''), n = String(e.note || '');
   if (item.exclude && (item.exclude.test(n) || item.exclude.test(c))) return false;
   return item.category.test(c) || item.note.test(n);
@@ -191,7 +235,7 @@ export async function loadManualRows(monthKeys) {
   return out;
 }
 export async function loadExpenses(monthKeys, opts) {
-  const [snaps, manual, prepaid] = await Promise.all([Promise.all(monthKeys.map(k => loadExpenseMonth(k, opts))), loadManualRows(monthKeys), loadPrepaid()]);
+  const [snaps, manual, prepaid] = await Promise.all([Promise.all(monthKeys.map(k => loadExpenseMonth(k, opts))), loadManualRows(monthKeys), loadPrepaid(), loadRules()]);
   const byMonth = {};
   snaps.forEach(s => { byMonth[s.month] = { available: s.available, fetched_at: s.fetched_at, stale: !!s.stale, rows: (s.rows || []).concat(manual[s.month] || []) }; });
   applyPrepaid(byMonth, prepaid);
@@ -228,16 +272,21 @@ export function applyPrepaid(byMonth, prepaid) {
   });
   return byMonth;
 }
-export function expenseRows(byMonth, monthKey) { const m = byMonth[monthKey]; if (!m || !m.available) return null; const rows = m.rows.filter(e => !isTransfer(e)); return rows.length ? rows : null; }
+export function expenseRows(byMonth, monthKey) { const m = byMonth[monthKey]; if (!m || !m.available) return null; const rows = m.rows.filter(e => !isTransfer(e)); return rows.length ? rows : null; } // изъятия владельца внутри; expenseSummary считает их отдельно
 
 export function expenseSummary(rows) {
-  const o = { total: 0, salary_total: 0, salaries: {}, shared_total: 0, shared_by_category: {}, by_bank: {}, manual_total: 0 };
+  // total — расходы компании: зарплаты людей + группы (интеграция) + общие. Изъятие владельца и переносы — не расход.
+  const o = { total: 0, salary_total: 0, people_salary_total: 0, salaries: {}, groups: {}, group_total: 0, shared_total: 0, shared_by_category: {}, by_bank: {}, manual_total: 0, owner_total: 0, owner_rows: [] };
   (rows || []).forEach(e => {
-    const a = num(e.amount); o.total += a;
+    const a = num(e.amount); const k = classifyExpense(e);
+    if (k.kind === 'transfer') return;
+    if (k.kind === 'owner') { o.owner_total += a; o.owner_rows.push({ date: e.date, category: e.category, note: e.note, amount: a }); return; }
+    o.total += a;
     if (e.source === 'manual') o.manual_total += a;
     const bk = bankKey(e.bank); o.by_bank[bk] = (o.by_bank[bk] || 0) + a;
-    if (isSalary(e)) { o.salary_total += a; const k = nameKey(e.note); const nm = personWord(e.note); if (!o.salaries[k]) o.salaries[k] = { key: k, name: nm ? nm.charAt(0).toUpperCase() + nm.slice(1) : 'Без имени', sum: 0, n: 0 }; o.salaries[k].sum += a; o.salaries[k].n++; }
-    else { const c = String(e.category || 'Прочее').trim(); o.shared_by_category[c] = (o.shared_by_category[c] || 0) + a; o.shared_total += a; }
+    if (k.kind === 'salary') { o.salary_total += a; o.people_salary_total += a; const nm = k.person; if (!o.salaries[k.person_key]) o.salaries[k.person_key] = { key: k.person_key, name: nm ? nm.charAt(0).toUpperCase() + nm.slice(1) : 'Без имени', sum: 0, n: 0 }; o.salaries[k.person_key].sum += a; o.salaries[k.person_key].n++; }
+    else if (k.kind === 'group') { o.salary_total += a; o.group_total += a; const g = o.groups[k.group] = o.groups[k.group] || { name: k.group, sum: 0, n: 0, rows: [] }; g.sum += a; g.n++; g.rows.push({ date: e.date, note: e.note, amount: a }); }
+    else { o.shared_by_category[k.label] = (o.shared_by_category[k.label] || 0) + a; o.shared_total += a; }
   });
   return o;
 }
@@ -290,13 +339,16 @@ export function periodSummary(base, range, expRowsOrNull) {
   const cur = base.payments.filter(p => inRange(p, range));
   const revenue = cur.reduce((a, p) => a + num(p.amount), 0);
   const exp = expRowsOrNull ? expenseSummary(expRowsOrNull) : null;
+  const profit = exp ? revenue - exp.total : null;
   const out = {
     from: range.from, to: range.to, count: cur.length, revenue,
     by_category: sumBy(cur, p => p.category), by_bank: sumBy(cur, p => bankKey(p.bank)), by_manager: sumBy(cur, p => p.manager_name),
-    expenses: exp ? exp.total : null, salaries: exp ? exp.salary_total : null, shared: exp ? exp.shared_total : null, shared_by_category: exp ? exp.shared_by_category : null,
+    expenses: exp ? exp.total : null, salaries: exp ? exp.salary_total : null, group_salaries: exp ? exp.group_total : null, shared: exp ? exp.shared_total : null, shared_by_category: exp ? exp.shared_by_category : null,
     manual_expenses: exp ? exp.manual_total : 0,
-    profit: exp ? revenue - exp.total : null,
-    margin_pct: exp && revenue ? Math.round((revenue - exp.total) / revenue * 1000) / 10 : null,
+    profit,
+    owner_draws: exp ? exp.owner_total : null, owner_draw_rows: exp ? exp.owner_rows : [],
+    retained: exp ? profit - exp.owner_total : null, // «Осталось в компании» = прибыль − изъятие владельца
+    margin_pct: exp && revenue ? Math.round(profit / revenue * 1000) / 10 : null,
     salary_share_pct: exp && revenue ? Math.round(exp.salary_total / revenue * 100) : null,
   };
   return out;
@@ -306,11 +358,19 @@ export function teamRows(base, range, expRowsOrNull) {
   const cur = base.payments.filter(p => inRange(p, range));
   const exp = expRowsOrNull ? expenseSummary(expRowsOrNull) : null;
   const rows = {};
-  cur.forEach(p => { const n = (p.manager_name || '').trim() || 'Без менеджера'; const k = nameKey(n); const t = rows[k] = rows[k] || { name: n, revenue: 0, count: 0, new_clients: 0, salary: 0, has_salary: false }; t.revenue += num(p.amount); t.count++; if (p.category === 'license') t.new_clients++; });
-  if (exp) Object.keys(exp.salaries).forEach(k => { const s = exp.salaries[k]; const t = rows[k] = rows[k] || { name: s.name, revenue: 0, count: 0, new_clients: 0, salary: 0, has_salary: false }; t.salary = s.sum; t.has_salary = true; });
-  const list = Object.values(rows).map(r => Object.assign(r, { result: r.revenue - r.salary, status: (!r.has_salary && r.revenue > 0) ? 'нет в расходах' : (r.revenue <= 0 ? 'без выручки' : (r.revenue - r.salary >= 0 ? 'окупается' : 'в минусе')) }));
+  cur.forEach(p => { const n = (p.manager_name || '').trim() || 'Без менеджера'; const k = nameKey(n); const t = rows[k] = rows[k] || { name: n, revenue: 0, count: 0, new_clients: 0, salary: 0, has_salary: false, owner: isOwnerName(n) }; t.revenue += num(p.amount); t.count++; if (p.category === 'license') t.new_clients++; });
+  if (exp) Object.keys(exp.salaries).forEach(k => { const s = exp.salaries[k]; const t = rows[k] = rows[k] || { name: s.name, revenue: 0, count: 0, new_clients: 0, salary: 0, has_salary: false, owner: false }; t.salary = s.sum; t.has_salary = true; });
+  const statusOf = r => r.owner ? 'владелец' : ((!r.has_salary && r.revenue > 0) ? 'нет в расходах' : (r.revenue <= 0 ? 'без выручки' : (r.revenue - r.salary >= 0 ? 'окупается' : 'в минусе')));
+  const list = Object.values(rows).map(r => Object.assign(r, { result: r.revenue - r.salary, status: statusOf(r) }));
   list.sort((a, b) => b.revenue - a.revenue || b.salary - a.salary);
-  return { rows: list, has_expenses: !!exp, shared: exp ? exp.shared_total : null, shared_by_category: exp ? exp.shared_by_category : null };
+  // группы: выручка — оплаты по связанным статьям (эти же оплаты уже есть у менеджеров, в итог не добавляется)
+  const groups = GROUP_RULES.map(g => {
+    const rev = cur.filter(p => g.revenue_cats.includes(p.category));
+    const revenue = rev.reduce((a, p) => a + num(p.amount), 0);
+    const cost = exp && exp.groups[g.group] ? exp.groups[g.group].sum : 0;
+    return { name: g.group, revenue, revenue_count: rev.length, revenue_cats: g.revenue_cats, cost, cost_rows: exp && exp.groups[g.group] ? exp.groups[g.group].rows : [], result: revenue - cost, status: !exp ? 'расходов нет' : (cost <= 0 ? 'нет в расходах' : (revenue - cost >= 0 ? 'окупается' : 'в минусе')) };
+  });
+  return { rows: list, groups, has_expenses: !!exp, people_salary: exp ? exp.people_salary_total : null, shared: exp ? exp.shared_total : null, shared_by_category: exp ? exp.shared_by_category : null };
 }
 
 // ---------- отток ----------

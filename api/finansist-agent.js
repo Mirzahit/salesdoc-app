@@ -9,6 +9,8 @@
 // POST ?action=missing_fill   { id, amount } → бухгалтер внесла сумму (учитывается в расчётах, пока в таблице нет настоящей строки)
 // POST ?action=missing_ignore { id }      → «такой статьи в этом месяце нет»
 // GET  ?action=spend                      → расход на API сегодня и лимит
+// GET  ?action=rules                      → настройки правил (app_settings.finansist_rules)
+// POST ?action=rules_save  { integrators_kzt, integrators_tolerance_pct, safe_balance, owner_names } → сохранить
 // GET  ?action=prepaid                    → предоплаченные расходы (app_settings.finansist_prepaid)
 // POST ?action=prepaid_add { label, item_key, amount, start:'YYYY-MM', months }  → добавить
 // POST ?action=prepaid_del { id }         → убрать
@@ -54,6 +56,7 @@ export default async function handler(req, res) {
       }
       if (action === 'spend') return res.status(200).json({ ok: true, limit: await limitState() });
       if (action === 'prepaid') return res.status(200).json({ ok: true, items: await C.loadPrepaid() });
+      if (action === 'rules') return res.status(200).json({ ok: true, rules: await C.loadRules(true) });
       return res.status(400).json({ ok: false, error: 'неизвестное действие' });
     }
     if (req.method === 'POST') {
@@ -75,6 +78,17 @@ export default async function handler(req, res) {
         if (!body.id || isNaN(idx)) return res.status(400).json({ ok: false, error: 'нужны id и idx' });
         await answerQuestion(String(body.id), idx, caller);
         return res.status(200).json({ ok: true });
+      }
+      if (action === 'rules_save') {
+        const patch = {};
+        const numOrNull = v => { if (v == null || String(v).trim() === '') return null; const n = Number(String(v).replace(/\s/g, '').replace(',', '.')); return isFinite(n) ? n : NaN; };
+        if ('integrators_kzt' in body) { const v = numOrNull(body.integrators_kzt); if (v == null || isNaN(v) || v <= 0) return res.status(400).json({ ok: false, error: 'сумма интеграторам в тенге должна быть больше нуля' }); patch.integrators_kzt = v; }
+        if ('integrators_tolerance_pct' in body) { const v = numOrNull(body.integrators_tolerance_pct); if (v == null || isNaN(v) || v < 0 || v > 50) return res.status(400).json({ ok: false, error: 'допуск — от 0 до 50%' }); patch.integrators_tolerance_pct = v; }
+        if ('safe_balance' in body) { const v = numOrNull(body.safe_balance); if (isNaN(v) || (v != null && v < 0)) return res.status(400).json({ ok: false, error: 'безопасный остаток — число не меньше нуля или пусто' }); patch.safe_balance = v; }
+        if ('owner_names' in body) { const arr = (Array.isArray(body.owner_names) ? body.owner_names : String(body.owner_names || '').split(',')).map(x => String(x).trim()).filter(Boolean).slice(0, 5); if (!arr.length) return res.status(400).json({ ok: false, error: 'укажите имя владельца, как оно пишется в примечаниях' }); patch.owner_names = arr; }
+        const rules = await C.saveRules(patch);
+        await C.saveDecision('rules:' + Object.keys(patch).sort().join(','), 'Настройки правил: ' + Object.entries(patch).map(([k, v]) => k + '=' + (Array.isArray(v) ? v.join(', ') : v)).join('; '), 'chat', null, caller.email, caller.name);
+        return res.status(200).json({ ok: true, rules });
       }
       if (action === 'prepaid_add') {
         const label = String(body.label || '').trim().slice(0, 80);

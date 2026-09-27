@@ -181,7 +181,9 @@ export async function runTool(name, input, ctx) {
 // ---------- системный промпт ----------
 function dynamicContext(decisions, openQuestions, missing) {
   const today = C.bishkekIso();
-  const lines = ['Сегодня ' + C.fmtDay(today) + ' ' + today.slice(0, 4) + ' (Бишкек). Текущий месяц ' + C.currentMonthKey() + '. Валюта — сом, страна — Кыргызстан.'];
+  const R = C.currentRules();
+  const lines = ['Сегодня ' + C.fmtDay(today) + ' ' + today.slice(0, 4) + ' (Бишкек). Текущий месяц ' + C.currentMonthKey() + '. Валюта — сом, страна — Кыргызстан.',
+    'Настройки правил: интеграторам ' + R.integrators_kzt + ' тенге в месяц, допуск ' + R.integrators_tolerance_pct + '%; безопасный остаток на счетах — ' + (R.safe_balance == null ? 'не задан' : R.safe_balance + ' сом') + '; владелец в примечаниях расходов — ' + (R.owner_names || []).join(', ') + '.'];
   if (decisions.length) { lines.push('Действующие решения владельца и бухгалтера (применяй, не переспрашивай):'); decisions.slice(0, 30).forEach(d => lines.push('- ' + d.text + (d.month ? ' (' + d.month + ')' : ''))); }
   if (openQuestions.length) { lines.push('Открытые вопросы во вкладке «Вопросы агента» (' + openQuestions.length + '): ' + openQuestions.slice(0, 10).map(q => q.title).join('; ')); }
   if (missing && missing.length) { lines.push('Незакрытые недостающие данные: ' + missing.map(m => m.month + ' ' + m.item_label + ' (' + (m.status === 'missing' ? 'нет строки' : 'сумма отличается') + ')').join('; ') + '. Прибыль за эти месяцы неполная — говори об этом.'); }
@@ -189,6 +191,7 @@ function dynamicContext(decisions, openQuestions, missing) {
 }
 
 async function contextBundle() {
+  await C.loadRules();
   const [decisions, openQ, missing] = await Promise.all([
     C.loadDecisions(),
     sbSelect('finansist_questions', { country: 'eq.' + C.COUNTRY, status: 'eq.open', order: 'created_at.desc', limit: '30' }),
@@ -261,6 +264,8 @@ const OPTIONS = {
   odd: ['Всё верно', 'Проверю с Гульшан'],
   superseded: ['Понятно'],
   prepaid_end: ['Продлили — добавлю новую предоплату', 'Больше не платим'],
+  owner_over: ['Знаю, так и задумано', 'Верну часть в компанию'],
+  low_balance: ['Знаю', 'Сократим расходы', 'Ускорим оплаты клиентов'],
 };
 function candidates(monthKey, disputes, missingSync, opts_prepaid) {
   const out = [];
@@ -280,7 +285,26 @@ function candidates(monthKey, disputes, missingSync, opts_prepaid) {
   (missingSync.changes || []).forEach(ch => { if (ch.type === 'superseded') out.push({ key: 'superseded:' + ch.item.item_key + ':' + monthKey, type: 'missing', amount: ch.prev.amount, fact: 'Ручная сумма ' + C.round(ch.prev.amount) + ' сом по статье «' + ch.item.item_label + '» больше не учитывается: в таблице появилась настоящая строка на ' + C.round(ch.item.found_amount) + ' сом.', options: OPTIONS.superseded, evidence: { item_key: ch.item.item_key, manual: ch.prev.amount, found: ch.item.found_amount } }); });
   return out;
 }
-const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', dec: 'Проверить по правилу декад', missing: 'Не хватает данных по расходам', other: 'Предоплата закончилась' };
+const FALLBACK_TITLE = { bank: 'Оплата не на том счёте', dup: 'Похоже на двойную запись', dec: 'Проверить по правилу декад', missing: 'Не хватает данных по расходам', other: 'Предоплата закончилась', owner: 'Изъято больше, чем заработано', balance: 'Остаток ниже безопасного' };
+
+// Изъятие владельца с начала квартала против прибыли за тот же период + остаток на счетах против безопасного.
+// Прибыль берём только за месяцы, где есть расходы (иначе сравнивать не с чем).
+async function ownerAndBalanceChecks(base, monthKey, byMonthHint) {
+  const out = [];
+  const m = C.parseMonth(monthKey); const qStartMo = Math.floor((m.mo - 1) / 3) * 3 + 1; const q = Math.floor((m.mo - 1) / 3) + 1;
+  const keys = []; for (let mo = qStartMo; mo <= m.mo; mo++) keys.push(m.y + '-' + C.pad2(mo));
+  const byMonth = await C.loadExpenses(keys);
+  let profit = 0, draws = 0, months = 0;
+  keys.forEach(k => { const rows = C.expenseRows(byMonth, k); if (!rows) return; const s = C.periodSummary(base, C.monthKeyToRange(k), rows); profit += s.profit; draws += s.owner_draws; months++; });
+  if (months && draws > 0 && draws > profit) out.push({ key: 'owner_over:' + m.y + '-Q' + q, type: 'other', kind: 'owner', amount: draws, fact: 'С начала ' + q + '-го квартала ' + m.y + ' изъято ' + C.round(draws) + ' сом, а прибыль за те же месяцы ' + C.round(profit) + ' сом. Изъято на ' + C.round(draws - profit) + ' сом больше, чем заработано.', options: OPTIONS.owner_over, evidence: { quarter: m.y + '-Q' + q, months: keys, draws: C.round(draws), profit: C.round(profit) } });
+  const R = C.currentRules();
+  if (R.safe_balance != null) {
+    const bal = await sbSelect('finansist_settings', { key: 'eq.balance_' + C.COUNTRY, limit: '1' });
+    const b = bal[0] && bal[0].value && bal[0].value.balance;
+    if (b != null && b < R.safe_balance) out.push({ key: 'low_balance:' + (bal[0].value.entered_at || C.bishkekIso()), type: 'other', kind: 'balance', amount: b, fact: 'Остаток на счетах ' + C.round(b) + ' сом (введён ' + C.fmtDay(bal[0].value.entered_at || '') + '), это ниже безопасного ' + C.round(R.safe_balance) + ' сом' + (draws > 0 ? '. Изъятие владельца с начала квартала — ' + C.round(draws) + ' сом.' : '.'), options: OPTIONS.low_balance, evidence: { balance: b, safe_balance: R.safe_balance, draws_qtd: C.round(draws) } });
+  }
+  return out;
+}
 
 export async function sweepMonth(monthKey, opts) {
   opts = opts || {};
@@ -292,6 +316,7 @@ export async function sweepMonth(monthKey, opts) {
   const missingSync = await C.syncMissing(byMonth, monthKey);
   const prepaid = await C.loadPrepaid();
   const cands = candidates(monthKey, disputes, missingSync, prepaid);
+  (await ownerAndBalanceChecks(base, monthKey, byMonth)).forEach(c => cands.push(c));
   const existing = await sbSelect('finansist_questions', { country: 'eq.' + C.COUNTRY, month: 'eq.' + monthKey, limit: '500' });
   const exMap = {}; existing.forEach(q => { exMap[q.key] = q; });
   const decisions = await C.loadDecisions();
@@ -301,7 +326,7 @@ export async function sweepMonth(monthKey, opts) {
   // исчезнувшие расхождения — закрываем
   const candKeys = new Set(cands.map(c => c.key));
   let closed = 0;
-  for (const q of existing) if (q.status === 'open' && !candKeys.has(q.key) && !q.key.startsWith('superseded:') && q.type !== 'goal' && q.type !== 'other') { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Расхождение исчезло само', updated_at: now }); closed++; }
+  for (const q of existing) if (q.status === 'open' && !candKeys.has(q.key) && !q.key.startsWith('superseded:') && !q.key.startsWith('prepaid_end:') && q.type !== 'goal' && (q.type !== 'other' || /^(owner_over|low_balance):/.test(q.key))) { await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { status: 'dismissed', answer_text: 'Расхождение исчезло само', updated_at: now }); closed++; }
   // обновляем сумму/доказательства у открытых
   for (const c of cands) { const q = exMap[c.key]; if (q && q.status === 'open') await sbUpdate('finansist_questions', { id: 'eq.' + q.id }, { amount: c.amount == null ? null : C.round(c.amount), evidence: c.evidence, updated_at: now }); }
 
@@ -324,7 +349,7 @@ export async function sweepMonth(monthKey, opts) {
   let created = 0;
   for (const c of fresh) {
     const t = texts[c.key] || {};
-    await sbUpsert('finansist_questions', { country: C.COUNTRY, month: monthKey, key: c.key, type: c.type, title: t.title || FALLBACK_TITLE[c.type] || 'Вопрос', body: t.body || c.fact, options: c.options, evidence: c.evidence, amount: c.amount == null ? null : C.round(c.amount), status: 'open', created_at: now, updated_at: now }, 'country,month,key');
+    await sbUpsert('finansist_questions', { country: C.COUNTRY, month: monthKey, key: c.key, type: c.type, title: t.title || FALLBACK_TITLE[c.kind] || FALLBACK_TITLE[c.type] || 'Вопрос', body: t.body || c.fact, options: c.options, evidence: c.evidence, amount: c.amount == null ? null : C.round(c.amount), status: 'open', created_at: now, updated_at: now }, 'country,month,key');
     created++;
   }
   return { month: monthKey, candidates: cands.length, created, closed, missing: missingSync.items, missing_changes: missingSync.changes, disputes: disputes.counts, model_used: modelUsed, cost_usd: cost, usage };

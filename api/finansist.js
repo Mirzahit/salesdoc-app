@@ -60,7 +60,7 @@ export default async function handler(req, res) {
       const r = C.monthKeyToRange(k); const rows = base.payments.filter(p => C.inRange(p, r));
       const exRows = C.expenseRows(expByMonth, k);
       const s = C.periodSummary(base, r, exRows);
-      return { key: k, revenue: s.revenue, count: rows.length, by_category: s.by_category, expenses: s.expenses, salaries: s.salaries, profit: s.profit, margin_pct: s.margin_pct, salary_share_pct: s.salary_share_pct, expenses_available: !!exRows };
+      return { key: k, revenue: s.revenue, count: rows.length, by_category: s.by_category, expenses: s.expenses, salaries: s.salaries, profit: s.profit, owner_draws: s.owner_draws, retained: s.retained, margin_pct: s.margin_pct, salary_share_pct: s.salary_share_pct, expenses_available: !!exRows };
     });
 
     // --- период ---
@@ -93,7 +93,7 @@ export default async function handler(req, res) {
     const cash = C.cashForecast(base, 30);
 
     const expensesOut = {};
-    Object.keys(expByMonth).forEach(k => { const m = expByMonth[k]; expensesOut[k] = { available: m.available, fetched_at: m.fetched_at, stale: !!m.stale, rows: m.rows.map(e => ({ date: e.date, category: e.category, note: e.note, amount: e.amount, bank: e.bank, source: e.source, item_key: e.item_key || null })) }; });
+    Object.keys(expByMonth).forEach(k => { const m = expByMonth[k]; expensesOut[k] = { available: m.available, fetched_at: m.fetched_at, stale: !!m.stale, rows: m.rows.map(e => Object.assign({ date: e.date, category: e.category, note: e.note, amount: e.amount, bank: e.bank, source: e.source, item_key: e.item_key || null }, C.classifyExpense(e))) }; });
 
     return res.status(200).json({
       ok: true,
@@ -104,6 +104,9 @@ export default async function handler(req, res) {
         bank_labels: C.BANK_LABELS, rules: { bank_from: C.BANK_RULE_FROM, dup_window_days: C.DUP_WINDOW_DAYS, decade_cats: C.DECADE_CATS, odd_threshold: C.ODD_THRESHOLD },
         expected_items: C.EXPECTED_ITEMS.map(i => ({ key: i.key, label: i.label, how: i.how })),
         salary_rules: C.SALARY_RULES.map(r => ({ person: r.person, cat_label: r.cat_label, note_label: r.note_label })),
+        group_rules: C.GROUP_RULES.map(g => ({ group: g.group, how: g.how, revenue_cats: g.revenue_cats })),
+        shared_label_rules: C.SHARED_LABEL_RULES.map(r => ({ label: r.label, how: r.how })),
+        settings: C.currentRules(),
       },
       months, period,
       disputes: { list: d.list, counts: d.counts, total: d.list.length },
