@@ -28,7 +28,7 @@ import { requirePerm } from './_perm.js'; // v979 SEC
 // v964: autopause — {enabled:bool, days:30}: действующий клиент без оплаты дольше N дней → «На паузе» (крон)
 // v993: salary_grades — грейды менеджеров (оклад, премия KPI, план, шкала бонуса, веса, штраф, кто на каком грейде);
 //   salary_manual — то, что РОП ставит руками по месяцам: балл CRM и нарушения {'YYYY-MM':{email:{crm,late,noreport,complaint}}}.
-const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_text_codes', 'mkt_ad_sources', 'mkt_exclude_ads', 'tg_digest', 'company_plans', 'plan_history', 'route_stages', 'autopause', 'salary_grades', 'salary_manual', 'salary_closed'];
+const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_text_codes', 'mkt_ad_sources', 'mkt_exclude_ads', 'tg_digest', 'company_plans', 'plan_history', 'route_stages', 'autopause', 'salary_grades', 'salary_manual', 'salary_closed', 'finansist_agent_limits', 'finansist_expected_items']; // v1006: лимит агента ($/день) и обязательные статьи
 // v1001: salary_closed — закрытые месяцы: {'YYYY-MM':{email:{closed_at,by,total,oklad,kpi,bonus,minus,sales_fact,sales_pct}}}; расчёт заморожен.
 
 // v993 SEC: кто видит зарплаты всех (руководители, РОП, бухгалтер) и кто их правит (без бухгалтера)
