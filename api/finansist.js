@@ -118,6 +118,7 @@ export default async function handler(req, res) {
         salary_rules: C.SALARY_RULES.map(r => ({ person: r.person, cat_label: r.cat_label, note_label: r.note_label })),
         group_rules: C.GROUP_RULES.map(g => ({ group: g.group, how: g.how, revenue_cats: g.revenue_cats })),
         shared_label_rules: C.SHARED_LABEL_RULES.map(r => ({ label: r.label, how: r.how })),
+        alloc_items: C.ALLOC_ITEMS, pool_items: C.POOL_ITEMS, dept_revenue: C.DEPT_REVENUE.map(r => ({ key: r.key, label: r.label })), dept_groups: C.GROUP_RULES.map(g => g.group),
         settings: C.currentRules(),
         people,
         fx_recent: Object.keys(fxRates).sort().slice(-12).reverse().map(d => ({ date: d, KZT: fxRates[d].KZT || null, USD: fxRates[d].USD || null, src: fxRates[d].src, by: fxRates[d].by || null })),

@@ -113,7 +113,25 @@ export const SALARY_PAID_BY_DAY = 15; // до этого числа следую
 
 // ---------- настройки правил (app_settings.finansist_rules; правятся на «Правилах и целях») ----------
 // Значения по умолчанию — только стартовые, до первого сохранения на странице (CEO 27.09.2026).
-export const RULE_DEFAULTS = { integrators_kzt: 1500000, integrators_tolerance_pct: 3, safe_balance: null, owner_names: ['Мирзахит'] };
+// Отделы (CEO 27.09.2026): общие расходы делятся по отделам, не по людям. Продажи — прямые расходы (amo, телефония и АТС
+// Билайн, WhatsApp, реклама) и доля офиса/аренды/воды; Поддержка — доля офиса/аренды/воды; Интеграция — только зарплата
+// (работают удалённо из Казахстана); Администрация — Гульшан, Жибек и юрист, ничего не распределяется. Доля офиса делится
+// между отделами с отметкой pool пропорционально числу людей. Налоги, банк и прочее общее — отдельной строкой.
+// Выручка: внедрение и интеграция — Интеграции, остальная — Продажам. Меняется на «Правилах и целях» (finansist_rules.departments).
+export const DEPT_DEFAULTS = [
+  { key: 'sales', name: 'Продажи', people: ['амир', 'асел', 'айби'], groups: [], items: ['amo', 'telephony', 'whatsapp', 'ads'], pool: true, revenue: ['rest'] },
+  { key: 'support', name: 'Поддержка', people: ['мали', 'элиз'], groups: [], items: [], pool: true, revenue: [] },
+  { key: 'integration', name: 'Интеграция', people: [], groups: ['Интеграция'], items: [], pool: false, revenue: ['services'] },
+  { key: 'admin', name: 'Администрация', people: ['гуль', 'жибе'], groups: [], items: ['lawyer'], pool: false, revenue: [] },
+];
+// Что можно отнести на отдел напрямую, и что составляет общую долю офиса
+export const ALLOC_ITEMS = [
+  { key: 'amo', label: 'amoCRM' }, { key: 'telephony', label: 'Телефония и АТС Билайн' }, { key: 'whatsapp', label: 'WhatsApp' },
+  { key: 'ads', label: 'Реклама и таргет' }, { key: 'lawyer', label: 'Юрист' },
+];
+export const POOL_ITEMS = [{ key: 'rent', label: 'Аренда' }, { key: 'office', label: 'Офис' }, { key: 'water', label: 'Вода' }];
+export const DEPT_REVENUE = [{ key: 'services', label: 'Внедрение и интеграция', cats: ['implementation', 'integration'] }, { key: 'rest', label: 'Остальная выручка', cats: null }];
+export const RULE_DEFAULTS = { integrators_kzt: 1500000, integrators_tolerance_pct: 3, safe_balance: null, owner_names: ['Мирзахит'], departments: DEPT_DEFAULTS };
 // Принятые решения по «Прочему» с именем владельца (CEO 27.09.2026): июль 2026 — мебель и обои «для дома Мирзахита»
 // 199 500 и «Мирзахит подотчет» 100 000 — изъятие владельца. Действуют и для похожих строк; ответ в настройках их перекрывает.
 export const OWNER_OTHER_DECIDED = { 'для дома': 'owner', 'подотчет': 'owner' };
@@ -574,7 +592,48 @@ export function teamRows(base, range, expRowsOrNull) {
   });
   const firstKgMonth = INTEGRATORS_PAID_FROM_KG_SINCE;
   groups.forEach(g => { if (g.name === 'Интеграция' && String(range.from).slice(0, 7) < firstKgMonth) g.note = 'до ' + monthLabel(firstKgMonth).replace(/^\S+/, m => MONTHS_RU_GEN[parseMonth(firstKgMonth).mo - 1]) + ' интеграторам платили из Казахстана — в расходах KG их нет, с августом сравнивать нельзя'; });
-  return { rows: list, groups, has_expenses: !!exp, people_salary: exp ? exp.people_salary_total : null, shared: exp ? exp.shared_total : null, shared_by_category: exp ? exp.shared_by_category : null, taxes_by_kind: exp ? exp.taxes_by_kind : null };
+  return { rows: list, groups, has_expenses: !!exp, people_salary: exp ? exp.people_salary_total : null, shared: exp ? exp.shared_total : null, shared_by_category: exp ? exp.shared_by_category : null, taxes_by_kind: exp ? exp.taxes_by_kind : null, departments: departmentsFor(base, range, expRowsOrNull) };
+}
+
+// ---------- отделы (CEO 27.09.2026) ----------
+// Статья общего расхода → ключ распределения. Налоги и всё, что не узнали, не распределяется.
+export function allocItemOf(e) {
+  const k = classifyExpense(e); if (k.kind !== 'shared') return null;
+  if (k.label === 'Юрист, аутсорс') return 'lawyer';
+  if (k.tax_kind || k.label === 'Налоги') return null;
+  for (const key of ['water', 'rent', 'amo', 'telephony', 'whatsapp', 'ads']) { const it = EXPECTED_ITEMS.find(i => i.key === key); if (it && itemMatches(it, e)) return key; }
+  if (/^офис/i.test(String(e.category || '').trim())) return 'office';
+  return null;
+}
+export function departmentsFor(base, range, expRows) {
+  const depts = (currentRules().departments || DEPT_DEFAULTS).map(d => ({ key: d.key, name: d.name, people_keys: d.people || [], groups: d.groups || [], items: d.items || [], pool: !!d.pool, revenue_keys: d.revenue || [], people: [], salary: 0, salary_expected: 0, direct: {}, direct_total: 0, pooled: 0, revenue: 0, revenue_count: 0 }));
+  const exp = expRows ? expenseSummary(expRows) : null;
+  const unassigned = { people: [], groups: [], salary: 0, revenue: 0 };
+  const byPerson = k => depts.find(d => d.people_keys.indexOf(k) >= 0);
+  const nice = (k, n) => { const e = (base.employees || []).find(x => nameKey(x.name) === k); return e && /[а-яё]/i.test(e.name) ? String(e.name).trim() : n; }; // «Амиру аванс» → «Амир»
+  if (exp) {
+    Object.values(exp.salaries).forEach(s => { const d = byPerson(s.key); const row = { key: s.key, name: nice(s.key, s.name), salary: s.sum, expected: s.expected || 0 }; if (d) { d.people.push(row); d.salary += s.sum; d.salary_expected += s.expected || 0; } else { unassigned.people.push(row); unassigned.salary += s.sum; } });
+    Object.values(exp.groups).forEach(g => { const d = depts.find(x => x.groups.indexOf(g.name) >= 0); const row = { key: 'group:' + g.name, name: g.name, salary: g.sum, expected: g.expected || 0, group: true }; if (d) { d.people.push(row); d.salary += g.sum; d.salary_expected += g.expected || 0; } else { unassigned.groups.push(row); unassigned.salary += g.sum; } });
+  }
+  const pool = { by_item: {}, total: 0, rows: [] }, undistributed = { by_label: {}, total: 0 };
+  (expRows || []).forEach(e => {
+    const k = classifyExpense(e); if (k.kind !== 'shared') return; const a = num(e.amount);
+    const item = allocItemOf(e);
+    const d = item && depts.find(x => x.items.indexOf(item) >= 0);
+    if (d) { d.direct[item] = (d.direct[item] || 0) + a; d.direct_total += a; return; }
+    if (item && POOL_ITEMS.some(p => p.key === item)) { pool.by_item[item] = (pool.by_item[item] || 0) + a; pool.total += a; return; }
+    const lab = item ? (ALLOC_ITEMS.find(x => x.key === item) || {}).label || item : k.label; undistributed.by_label[lab] = (undistributed.by_label[lab] || 0) + a; undistributed.total += a;
+  });
+  // доля офиса — по числу людей в отделах с отметкой pool (по составу из настроек)
+  const poolDepts = depts.filter(d => d.pool && d.people_keys.length > 0); const heads = poolDepts.reduce((a, d) => a + d.people_keys.length, 0);
+  if (pool.total && heads) poolDepts.forEach(d => { d.pooled = pool.total * d.people_keys.length / heads; d.pool_heads = d.people_keys.length; });
+  else if (pool.total) { undistributed.by_label['Офис, аренда и вода'] = pool.total; undistributed.total += pool.total; }
+  // выручка: внедрение и интеграция — отделу с «services», остальное — с «rest»
+  const svc = (DEPT_REVENUE.find(r => r.key === 'services') || {}).cats || [];
+  base.payments.filter(p => inRange(p, range)).forEach(p => { const key = svc.indexOf(p.category) >= 0 ? 'services' : 'rest'; const d = depts.find(x => x.revenue_keys.indexOf(key) >= 0); const a = num(p.amount); if (d) { d.revenue += a; d.revenue_count++; } else unassigned.revenue += a; });
+  depts.forEach(d => { d.allocated = d.direct_total + d.pooled; d.cost = d.salary + d.allocated; d.result = d.revenue - d.cost; d.heads = d.people_keys.length; });
+  const total_result = depts.reduce((a, d) => a + d.result, 0) + unassigned.revenue - unassigned.salary - undistributed.total;
+  return { has_expenses: !!exp, departments: depts, pool: Object.assign(pool, { heads }), undistributed, unassigned, company_profit: exp ? total_result : null, company_expenses: exp ? exp.total : null };
 }
 
 // ---------- отток ----------
