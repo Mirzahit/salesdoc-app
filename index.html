@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
 <link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v1012</title>
+<title>SalesDoc — Финансовый Дашборд v1013</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8162,6 +8162,34 @@ body.light #view-dashboard .dash-pnl .pcard, body.light #view-dashboard .dash-pn
 body.light #view-dashboard .dash-pnl .glow{ display:none; }
 body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
 /* конец v966 «Бумага» */
+</style>
+<style id="nw-css">
+/* v1013: окно «Что нового» — один раз после обновления, одна главная новинка. Код: NW_SPOTLIGHTS / nwSchedule */
+.nw-back{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000002;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s}
+.nw-back.in{opacity:1}
+.nw-box{position:relative;width:472px;max-width:calc(100vw - 32px);background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.28);overflow:hidden;transform:translateY(8px) scale(.98);transition:transform .2s;font-family:var(--font);color:var(--text)}
+.nw-back.in .nw-box{transform:none}
+.nw-art{position:relative;height:250px;max-height:340px;overflow:hidden;color:var(--accent)}
+.nw-art>svg{display:block;width:100%;height:100%}
+.nw-x{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(255,255,255,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-2);padding:0}
+.nw-x:hover{background:#fff}
+.nw-grip{display:none}
+.nw-body{padding:20px 36px 24px;text-align:center}
+.nw-t{font-size:18px;line-height:26px;font-weight:600;margin:0;text-wrap:balance;letter-spacing:-.01em;color:var(--text)}
+.nw-p{font-size:13px;line-height:20px;color:var(--text-soft);margin:12px 0 0;white-space:pre-line}
+.nw-go{margin-top:24px;height:36px;min-width:160px;padding:0 20px;border:0;border-radius:10px;background:var(--accent);color:#fff;font:600 13.5px var(--font);cursor:pointer}
+.nw-go:hover{background:var(--accent-hover)}
+.nw-links{margin-top:10px;font-size:12.5px;color:var(--text-faint)}
+.nw-links button{border:0;background:none;font:inherit;color:inherit;cursor:pointer;padding:4px 6px}
+.nw-links button:hover{color:var(--text-soft)}
+@media (max-width:640px){
+ .nw-back{align-items:flex-end}
+ .nw-box{width:100%;max-width:none;border-radius:20px 20px 0 0;border-bottom:0;transform:translateY(100%)}
+ .nw-grip{display:block;position:absolute;top:8px;left:50%;margin-left:-18px;width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.8);z-index:2}
+ .nw-art{height:200px}
+ .nw-body{padding:20px 24px calc(24px + env(safe-area-inset-bottom))}
+ .nw-go{width:100%}
+}
 </style>
 <style id="fz-css">
 /* ============================================================
@@ -18028,6 +18056,117 @@ function incomeAfterLogin(){
   if(p && p.classList.contains('active')) settingsGradesRender();
  } catch(e){ console.error('[income] after login:', e); }
 }
+// ============================================================
+// v1013: окно «Что нового». Показывает ОДНУ главную новинку релиза, один раз.
+// Как выпустить анонс: добавить запись В НАЧАЛО NW_SPOTLIGHTS с build = номер выкатываемой
+// версии (тот же, что в <title> и sw.js), art = ключ картинки в NW_ART, need = право на раздел.
+// Нет записи — релиз выходит молча. Анонс добавляется только по решению владельца.
+// Номер сборки берём из <title> этого же файла (как проверка обновлений выше), а не с сервера:
+// у кого закэширован старый index.html, тот не увидит анонс функции, которой у него ещё нет.
+// Отметка «видел» — localStorage.sd_news_seen = build последнего показанного анонса.
+// ============================================================
+var NW_BUILD = parseInt((document.title.match(/v(\d{3,4})/) || [])[1] || '0', 10);
+var NW_KEY = 'sd_news_seen';
+var NW_SPOTLIGHTS = [
+ { build: 1013, art: 'income', need: 'view_income', go: 'income',
+   title: 'Видно, сколько вы заработали',
+   text: 'В разделе «Мой доход» зарплата считается сама: оклад, процент с оплат, звонки и встречи.\nМожно заранее посмотреть, сколько добавит следующая продажа.',
+   cta: 'Открыть «Мой доход»' }
+];
+var NW_ART = {
+ income: '<svg viewBox="0 0 472 250" preserveAspectRatio="xMidYMid slice" aria-hidden="true">'
+  + '<defs><linearGradient id="nwg-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E4F2EE"/><stop offset="1" stop-color="#F6F1E4"/></linearGradient>'
+  + '<radialGradient id="nwg-glow" cx=".5" cy=".55" r=".5"><stop offset="0" stop-color="currentColor" stop-opacity=".22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient>'
+  + '<linearGradient id="nwg-bar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="currentColor"/><stop offset="1" stop-color="currentColor" stop-opacity=".55"/></linearGradient>'
+  + '<filter id="nwf-sh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#1C1B18" flood-opacity=".12"/></filter></defs>'
+  + '<rect width="472" height="250" fill="url(#nwg-bg)"/>'
+  + '<g stroke="currentColor" stroke-opacity=".07" stroke-width="28"><line x1="236" y1="300" x2="-40" y2="-20"/><line x1="236" y1="300" x2="120" y2="-40"/><line x1="236" y1="300" x2="352" y2="-40"/><line x1="236" y1="300" x2="512" y2="-20"/></g>'
+  + '<ellipse cx="236" cy="140" rx="200" ry="120" fill="url(#nwg-glow)"/>'
+  + '<g filter="url(#nwf-sh)"><rect x="126" y="44" width="220" height="168" rx="14" fill="#FFFFFF"/></g>'
+  + '<text x="146" y="72" font-family="Golos Text" font-size="10" font-weight="600" fill="#9C978C" letter-spacing=".6">МОЙ ДОХОД · СЕНТЯБРЬ</text>'
+  + '<text x="146" y="102" font-family="JetBrains Mono" font-size="24" font-weight="600" fill="#1C1B18">84 300</text>'
+  + '<text x="253" y="102" font-family="Golos Text" font-size="12" fill="#5E5A52">сом</text>'
+  + '<g fill="url(#nwg-bar)"><rect x="146" y="164" width="22" height="30" rx="4" opacity=".45"/><rect x="176" y="150" width="22" height="44" rx="4" opacity=".55"/><rect x="206" y="156" width="22" height="38" rx="4" opacity=".65"/><rect x="236" y="138" width="22" height="56" rx="4" opacity=".8"/><rect x="266" y="122" width="22" height="72" rx="4"/></g>'
+  + '<rect x="296" y="142" width="22" height="52" rx="4" fill="currentColor" fill-opacity=".14" stroke="currentColor" stroke-opacity=".5" stroke-dasharray="3 3"/>'
+  + '<text x="146" y="206" font-family="Golos Text" font-size="8.5" fill="#9C978C">май</text><text x="266" y="206" font-family="Golos Text" font-size="8.5" fill="#9C978C">сен</text>'
+  + '<g filter="url(#nwf-sh)"><rect x="28" y="70" width="118" height="38" rx="10" fill="#FFFFFF" fill-opacity=".86" stroke="#FFFFFF"/><rect x="330" y="58" width="116" height="38" rx="10" fill="#FFFFFF" fill-opacity=".86" stroke="#FFFFFF"/><rect x="326" y="160" width="124" height="38" rx="10" fill="#FFFFFF" fill-opacity=".86" stroke="#FFFFFF"/></g>'
+  + '<text x="40" y="86" font-family="Golos Text" font-size="9" fill="#9C978C">Процент с оплат</text><text x="40" y="100" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="currentColor">+32 400</text>'
+  + '<text x="342" y="74" font-family="Golos Text" font-size="9" fill="#9C978C">План месяца</text><text x="342" y="88" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="#1C1B18">78%</text>'
+  + '<rect x="382" y="82" width="52" height="5" rx="2.5" fill="currentColor" fill-opacity=".15"/><rect x="382" y="82" width="41" height="5" rx="2.5" fill="currentColor"/>'
+  + '<text x="338" y="176" font-family="Golos Text" font-size="9" fill="#9C978C">Ещё одна продажа</text><text x="338" y="190" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="currentColor">+6 500 сом</text>'
+  + '</svg>'
+};
+var _nwTimer = null;
+function _nwReadSeen(){ try { var v = localStorage.getItem(NW_KEY); if (v == null) return null; var n = Number(v); return isFinite(n) ? n : null; } catch(_){ return null; } }
+function _nwWriteSeen(b){ try { localStorage.setItem(NW_KEY, String(b)); } catch(_){} }
+function _nwHasAccess(s){ var a = currentUser && currentUser.access; return !s.need || !!(a && (a[s.need] === 1 || a[s.need] === true)); }
+// Самый свежий анонс, уже вошедший в код (build <= NW_BUILD). Пропустил три релиза — увидит один последний.
+function _nwLatest(){ var best = null; NW_SPOTLIGHTS.forEach(function(s){ if (s.build <= NW_BUILD && (!best || s.build > best.build)) best = s; }); return best; }
+// Что-то уже открыто поверх экрана — анонс ждёт, чтобы не лечь сверху (выглядело бы как баг)
+function _nwOtherModalOpen(){
+ var list = document.querySelectorAll('.modal-overlay.open, .cfa-bg, .ct-modal-bg, .crm-modal-bg, [role="dialog"]');
+ for (var i = 0; i < list.length; i++) { if (!list[i].classList.contains('nw-back') && list[i].getClientRects().length) return true; }
+ return false;
+}
+// Вызывается после входа. Решает, показывать ли окно, и ставит показ через 1,5 с.
+function nwSchedule(){
+ try {
+  if (_nwTimer) { clearTimeout(_nwTimer); _nwTimer = null; }
+  if (!currentUser || !NW_BUILD) return;
+  var top = _nwLatest(); if (!top) return;
+  var seen = _nwReadSeen();
+  if (seen != null && seen >= top.build) return;
+  if (seen == null) {
+   // Новичку (учётке меньше суток) всё новое: окно «мы добавили X» в первый день сбивает с толку
+   var created = Date.parse(currentUser.created_at || '');
+   if (isFinite(created) && Date.now() - created < 24 * 3600 * 1000) { _nwWriteSeen(NW_BUILD); return; }
+  }
+  var tries = 0;
+  var tryShow = function(){
+   _nwTimer = null;
+   if (!currentUser || document.querySelector('.nw-back')) return;
+   if (_nwOtherModalOpen()) {
+    if (tries++ < 10) _nwTimer = setTimeout(tryShow, 3000);
+    return; // не дождались ~30 с — до следующего входа, отметку не ставим
+   }
+   // Право проверяем в момент показа: раздел закрыт — окна нет, отметку не ставим (дадут доступ — увидит)
+   if (!_nwHasAccess(top)) return;
+   nwShow(top);
+  };
+  _nwTimer = setTimeout(tryShow, 1500);
+ } catch(e){ console.error('[news] schedule:', e); }
+}
+function nwShow(s){
+ var back = document.createElement('div');
+ back.className = 'nw-back';
+ back.setAttribute('role', 'dialog');
+ back.setAttribute('aria-label', 'Что нового');
+ back.innerHTML = '<div class="nw-box">'
+  + '<div class="nw-art"><span class="nw-grip"></span>' + (NW_ART[s.art] || '')
+  + '<button type="button" class="nw-x" data-nw="close" aria-label="Закрыть"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>'
+  + '<div class="nw-body"><h2 class="nw-t">' + sanitize(s.title) + '</h2><p class="nw-p">' + sanitize(s.text) + '</p>'
+  + '<button type="button" class="nw-go" data-nw="go">' + sanitize(s.cta) + '</button>'
+  + '<div class="nw-links"><button type="button" data-nw="close">Позже</button></div></div></div>';
+ var onKey = function(e){ if (e.key === 'Escape' || e.keyCode === 27) { e.stopPropagation(); e.preventDefault(); close(); } };
+ // Любое закрытие = «показано», второй раз не надоедаем
+ var close = function(after){
+  _nwWriteSeen(s.build);
+  document.removeEventListener('keydown', onKey, true);
+  back.classList.remove('in');
+  setTimeout(function(){ back.remove(); }, 200);
+  if (after) { try { after(); } catch(e){ console.error('[news] go:', e); } }
+ };
+ back.addEventListener('click', function(e){
+  if (e.target === back) return close();
+  var b = e.target.closest('[data-nw]'); if (!b) return;
+  if (b.getAttribute('data-nw') === 'go') close(function(){ showView(s.go); });
+  else close();
+ });
+ document.addEventListener('keydown', onKey, true);
+ document.body.appendChild(back);
+ requestAnimationFrame(function(){ back.classList.add('in'); });
+}
+
 function _enterAppAsCurrentUser(){
  document.getElementById('login-screen').style.display = 'none';
  document.getElementById('sidebar').style.display = 'flex';
@@ -18070,6 +18209,7 @@ function _enterAppAsCurrentUser(){
  setSyncStatus('loading', 'Загрузка ' + COUNTRY_CONFIG[currentCountry].label + '...');
  syncFromSheets();
  maybeForcePasswordChange();
+ nwSchedule(); // v1013: «Что нового» — после смены пароля, если она открылась (ждёт её закрытия)
 }
 
 async function doLogin() {

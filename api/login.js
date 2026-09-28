@@ -12,7 +12,7 @@ import { issueSession } from './_session.js';
 function normEmail(s) { return String(s || '').trim().toLowerCase(); }
 function sha256(s) { return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex'); }
 function publicEmp(e) {
-  return { id: e.id, name: e.name, pos: e.pos, email: e.email, role: e.role, bonus: e.bonus, active: e.active, country: e.country, is_temp: e.is_temp };
+  return { id: e.id, name: e.name, pos: e.pos, email: e.email, role: e.role, bonus: e.bonus, active: e.active, country: e.country, is_temp: e.is_temp, created_at: e.created_at }; // v1013: created_at — новичкам не показываем «Что нового»
 }
 
 // v847 SEC: запрос на восстановление пароля. Раньше браузер сам дёргал api.telegram.org
