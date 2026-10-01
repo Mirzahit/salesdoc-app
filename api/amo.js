@@ -104,6 +104,13 @@ async function amoFetch(path, env, method){
       // v1015: сеть до amo упала — это ошибка amo, а не нашей программы
       const code = (e && e.cause && e.cause.code) || (e && e.name) || '';
       console.error(`[amo] NET ${m} ${amoLogPath(path)} code=${code} attempt=${attempt}`);
+      // v1016: единичный обрыв соединения (amo закрыл сокет) — повторяем один раз через 1,5 с.
+      // Только чтение (GET): запись повторять нельзя — может задвоиться. Таймаут и «не открылось
+      // соединение» не повторяем: это похоже на блокировку, туда нужна пауза, а не ещё запрос.
+      if(attempt === 0 && m === 'GET' && code !== 'TimeoutError' && code !== 'UND_ERR_CONNECT_TIMEOUT'){
+        await new Promise(ok => setTimeout(ok, 1500));
+        continue;
+      }
       _amoDownUntil.set(sub, Date.now() + 20000);
       const err = new Error('amo недоступен: ' + (e.message || String(e)) + (code ? ' (' + code + ')' : ''));
       err.status = 0; err.upstream = 'amo'; err.cause_code = code || null;
