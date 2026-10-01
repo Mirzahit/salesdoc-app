@@ -13,8 +13,6 @@
 // ENV: CRON_SECRET (Vercel Cron шлёт его сам), APP_TOKEN (для вызова своих же
 // эндпоинтов), META_LEADS_TOKEN (доступ к заявкам лидформ).
 
-import { bishkekIso } from './_dates.js'; // v1015
-
 export const config = { maxDuration: 300 };
 
 export default async function handler(req, res) {
@@ -50,12 +48,11 @@ export default async function handler(req, res) {
   } catch (e) { out.forms = { error: e.message || String(e) }; }
 
   // Прогреваем отчёт за текущий месяц, чтобы экран открывался сразу, а не через 40 с.
-  // v1015: месяц — по Бишкеку (раньше по UTC: с 00:00 до 06:00 1-го числа грелся прошлый месяц);
-  // греем тот же вариант, что открывает экран: v=2, продукт SalesDoc.
   try {
-    const until = bishkekIso(Date.now()), since = until.slice(0, 8) + '01';
-    const r = await call(`action=targ_report&country=KG&since=${since}&until=${until}&fresh=1&v=2&product=SD`);
-    out.warm = { ok: !r.error, targetologs: (r.targetologs || []).length, errors: (r.errors || []).length };
+    const d = new Date(); const y = d.getUTCFullYear(), m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const since = `${y}-${m}-01`, until = `${y}-${m}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    const r = await call(`action=targ_report&country=KG&since=${since}&until=${until}&fresh=1`);
+    out.warm = { ok: !r.error, targetologs: (r.targetologs || []).length };
   } catch (e) { out.warm = { error: e.message || String(e) }; }
   console.log('[cron-ad-touches]', JSON.stringify(out));
   return res.status(200).json({ ok: true, ...out });

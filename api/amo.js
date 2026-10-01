@@ -12,15 +12,8 @@
 
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { requirePermSoft } from './_perm.js';
-import { sbSelect, sbSelectAll, sbInsertIgnoreDup } from './_supabase.js';
-import { localIso, tzOffsetH, dayStartMs, dayEndMs } from './_dates.js';
-import { normalizePhone } from './_phone.js'; // v1015: один разбор телефона KG+KZ вместо четырёх копий
-import { DEFAULT_PRODUCTS, loadProducts, classifyCampaign, classifyForm, productOfLead, productParam, PRODUCT_CODES,
-  buildStageModel, reachedFromVisited, reachedFlags, stageRef, computeArrival, touchRef, NEAR_SEC,
-  amoErrOf } from './_mkt.js'; // v1015
-
-// v1015: отчёты Маркетинга тяжёлые (amo + Meta), даём запас по времени.
-export const config = { maxDuration: 300 };
+import { sbSelect, sbInsertIgnoreDup } from './_supabase.js';
+import { almatyIso } from './_dates.js';
 
 function bad(res, code, msg, extra){
   res.status(code).json({ error: msg, ...(extra || {}) });
@@ -32,26 +25,12 @@ async function amoFetch(path, env){
   const token = String(env.AMO_TOKEN || '').replace(/\s+/g, '');
   const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
   const url = `https://${sub}.amocrm.ru/api/v4${path}`;
-  let r;
-  for(let attempt = 0; ; attempt++){
-    try {
-      r = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-    } catch(e){
-      // v1015: сеть до amo упала — это ошибка amo, а не нашей программы
-      const err = new Error('amo недоступен: ' + (e.message || String(e)));
-      err.status = 0; err.upstream = 'amo';
-      throw err;
+  const r = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
     }
-    // v1015: amo ограничивает частоту (7 запросов/с) — на 429 ждём и повторяем до 2 раз
-    if(r.status !== 429 || attempt >= 2) break;
-    const ra = Number(r.headers && r.headers.get ? r.headers.get('retry-after') : 0);
-    await new Promise(ok => setTimeout(ok, ra > 0 ? Math.min(ra * 1000, 5000) : 1200));
-  }
+  });
   if(r.status === 204) return null; // empty response (no records)
   const text = await r.text();
   let data;
@@ -60,17 +39,9 @@ async function amoFetch(path, env){
     const err = new Error(`amo ${r.status}: ${data.title || data.detail || data['validation-errors'] || text.slice(0,200)}`);
     err.status = r.status;
     err.data = data;
-    err.upstream = 'amo'; // v1015: наверх уходит как 502 amo_auth/amo_error, а не как наш 401
     throw err;
   }
   return data;
-}
-
-// v1015: ошибку amo отдаём фронту как 502 с кодом. Раньше 401 от amo пробрасывался
-// как есть, и экран думал, что истекла СВОЯ сессия, — а на деле устарел ключ amo.
-function amoFail(res, e){
-  const s = Number(e && e.status);
-  return res.status(502).json({ error: (e && e.message) || 'amo error', code: (s === 401 || s === 403) ? 'amo_auth' : 'amo_error' });
 }
 
 async function getPipelines(env){
@@ -346,7 +317,6 @@ async function amoMutate(method, path, body, env){
     const err = new Error(`amo ${method} ${r.status}: ${data.title || data.detail || text.slice(0,200)}`);
     err.status = r.status;
     err.data = data;
-    err.upstream = 'amo'; // v1015
     throw err;
   }
   return data;
@@ -383,29 +353,31 @@ function _lrSet(k, v){ _lrCache.set(k, { t: Date.now(), v }); }
 // окружением; заголовок используется только если он из списка своих доменов.
 const _SELF_HOSTS = new Set(['salesdoc-app.vercel.app', 'salesdoc-app-office-2203s-projects.vercel.app', 'salesdoc-app-git-main-office-2203s-projects.vercel.app']);
 function selfBase(req){
-  // v1015: на превью-сборке ходим в саму превью-сборку, а не в прод — иначе проверяли бы чужой код
-  const vu = String(process.env.VERCEL_URL || '').trim().replace(/\/+$/, '');
-  if(process.env.VERCEL_ENV === 'preview' && vu) return 'https://' + vu.replace(/^https?:\/\//, '');
   const env = String(process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
   if(env) return env;
   const h = String((req && req.headers && (req.headers['x-forwarded-host'] || req.headers.host)) || '').split(',')[0].trim().toLowerCase();
   return 'https://' + (_SELF_HOSTS.has(h) ? h : 'salesdoc-app.vercel.app');
 }
 const _trCache = new Map(); // v946: готовые отчёты по таргетологам
+async function buildLeadReport(env, fromTs, toTs){
+  const pipelines = await getPipelines(env);
+  const p = pipelines.find(x => /^лид/i.test(x.name || '')) || pipelines.find(x => x.is_main) || pipelines[0];
+  if(!p) return { error: 'no pipelines found' };
 
-// ── v1015: общие куски отчётов Маркетинга ───────────────────────────────────
-// Свой же эндпоинт: отдаём и статус, и тело — чтобы отличить «нет данных» от «упало».
-async function selfFetch(base, path, extraHeaders){
-  const hdr = Object.assign({ 'x-app-token': String(process.env.APP_TOKEN || '').trim(), 'x-user-email': 'cron@salesdoc.io' }, extraHeaders || {});
-  try {
-    const r = await fetch(`${base}${path}`, { headers: hdr });
-    const json = await r.json().catch(() => null);
-    return { status: r.status, json };
-  } catch(e){ return { status: 0, json: { error: e.message || String(e) } }; }
-}
-function selfFailed(r){ return !r || !r.json || r.status >= 400 || r.status === 0 || !!r.json.error; }
+  const isLossStatus = (st) => Number(st.id) === 143 || Number(st.sort) === 11000 || /закрыт.*не.*реализ|не реализ/i.test(String(st.name||''));
+  const isWonStatus  = (st) => Number(st.id) === 142 || Number(st.sort) === 10000 || /успешн.*реализ/i.test(String(st.name||''));
+  // «Живые» этапы по порядку. Отказ и успех в этот список не входят: отказ не значит
+  // «прошёл всю воронку», успех наоборот засчитываем как пройденную воронку целиком.
+  const flow = p.statuses.filter(st => !isLossStatus(st) && !isWonStatus(st)).sort((a,b) => a.sort - b.sort);
+  const maxFlowSort = flow.length ? Number(flow[flow.length - 1].sort) : 0;
+  const sortById = {}, nameById = {};
+  p.statuses.forEach(st => {
+    nameById[st.id] = st.name;
+    if(isLossStatus(st)) return;
+    sortById[st.id] = isWonStatus(st) ? maxFlowSort : Number(st.sort);
+  });
 
-async function fetchUsers(env, incomplete){
+  // менеджеры (id → имя)
   const userNameById = {};
   try {
     for(let up = 1; up <= 5; up++){
@@ -414,213 +386,57 @@ async function fetchUsers(env, incomplete){
       arr.forEach(u => { userNameById[u.id] = u.name; });
       if(arr.length < 250) break;
     }
-  } catch(e){
-    // v1015: без имён менеджеров отчёт всё равно верный — это «неполные данные», не ошибка
-    if(Number(e.status) === 401 || Number(e.status) === 403) throw e;
-    if(incomplete) incomplete.push({ source: 'amo', what: 'managers', detail: 'имена менеджеров не загрузились' });
-  }
-  return userNameById;
-}
+  } catch(_){}
 
-// История смен этапа. Мало сделок — спрашиваем историю каждой (по 10 за запрос, вся жизнь
-// сделки); много — листаем общий журнал аккаунта с начала периода, как раньше.
-// Возвращает {visited: Map<lead_id, Set<status_id>>, scanned, truncated, error}.
-async function scanStatusEvents(env, ids, fromTs, toTs){
-  const visited = new Map();
-  let scanned = 0, truncated = false, error = null;
-  const take = (batch) => batch.forEach(e => {
-    const id = Number(e.entity_id);
-    if(!ids.has(id)) return;
-    const after = (e.value_after && e.value_after[0] && e.value_after[0].lead_status) || null;
-    if(!after) return;
-    if(!visited.has(id)) visited.set(id, new Set());
-    visited.get(id).add(after.id);
-  });
-  const nowS = Math.floor(Date.now()/1000);
-  const globalScan = async () => {
-    const evTo = Math.min(nowS, (toTs ? toTs + 90*86400 : nowS));
-    for(let page = 1; page <= 40; page++){
-      const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&filter[created_at][to]=${evTo}&limit=100&page=${page}`, env);
-      if(!ev) break;
-      const batch = (ev._embedded && ev._embedded.events) || [];
-      if(!batch.length) break;
-      scanned += batch.length;
-      take(batch);
-      if(batch.length < 100) break;
-      if(page === 40) truncated = true;
-    }
-  };
-  try {
-    if(!ids.size){ /* нечего смотреть */ }
-    else if(ids.size <= 60){
-      const arr = [...ids];
-      try {
-        for(let i = 0; i < arr.length; i += 10){
-          const q = arr.slice(i, i + 10).map(x => `filter[entity_id][]=${x}`).join('&');
-          for(let page = 1; page <= 5; page++){
-            const ev = await amoFetch(`/events?filter[entity]=lead&${q}&filter[type][]=lead_status_changed&limit=100&page=${page}`, env);
-            if(!ev) break;
-            const batch = (ev._embedded && ev._embedded.events) || [];
-            if(!batch.length) break;
-            scanned += batch.length;
-            take(batch);
-            if(batch.length < 100) break;
-            if(page === 5) truncated = true;
-          }
-        }
-      } catch(e){
-        if(Number(e.status) !== 400) throw e;
-        await globalScan(); // фильтр по сделкам не принят — общий журнал
-      }
-    } else await globalScan();
-  } catch(e){ error = e; }
-  return { visited, scanned, truncated, error };
-}
-function reachedOf(model, lead, sc){
-  const v = sc && sc.visited.get(lead.id);
-  return reachedFromVisited(model, [lead.status_id].concat(v ? [...v] : []));
-}
-
-// Сделки по номерам — пачками по 50 вместо запроса на каждую.
-async function fetchLeadsByIds(env, ids, withParam, errors){
-  const out = {};
-  const arr = [...new Set([...ids].map(Number).filter(Boolean))];
-  let failed = 0;
-  for(let i = 0; i < arr.length; i += 50){
-    const q = arr.slice(i, i + 50).map((x, k) => `filter[id][${k}]=${x}`).join('&');
-    try {
-      const r = await amoFetch(`/leads?${q}&limit=250${withParam ? '&with=' + withParam : ''}`, env);
-      ((r && r._embedded && r._embedded.leads) || []).forEach(l => { out[l.id] = l; });
-    } catch(e){
-      if(Number(e.status) === 401 || Number(e.status) === 403) throw e;
-      failed += Math.min(50, arr.length - i);
-      if(errors) errors.push(amoErrOf(e, 'сделки'));
-    }
-  }
-  return { leads: out, failed };
-}
-
-// Рекламные касания за [fromMs, toMs). PostgREST отдаёт ≤1000 строк — берём все страницы.
-// Верхнюю границу режем в коде: sbSelect хранит один фильтр на колонку.
-async function loadTouches(country, fromMs, toMs){
-  const rows = await sbSelectAll('ad_touches', {
-    country: 'eq.' + country,
-    touched_at: 'gte.' + new Date(fromMs).toISOString(),
-    order: 'touched_at.asc,message_id.asc'
-  });
-  return rows.filter(t => { const ms = Date.parse(t.touched_at); return Number.isFinite(ms) && ms < toMs; });
-}
-
-// v1015: одно правило месяца — по дате обращения. Сделка из рекламы относится к месяцу
-// касания, остальные — к дате создания (правило в _mkt.js computeArrival).
-//   L1 — сделки воронки, созданные в периоде (если нужны и «без рекламы»);
-//   L2 — сделки, которых коснулась реклама в периоде, но созданы они раньше/позже.
-async function buildArrivals(env, country, fromTs, toTs, opts){
-  const o = opts || {};
-  const errors = [], incomplete = [];
-  let touches = [];
-  try {
-    // v1015: и на 7 дней после периода — сделка 30.08 с касанием 02.09 это реклама (обращение 30.08)
-    touches = await loadTouches(country, (fromTs - NEAR_SEC) * 1000, ((toTs || Math.floor(Date.now()/1000)) + NEAR_SEC + 1) * 1000);
-  } catch(e){ errors.push({ source: 'db', kind: 'other', message: 'рекламные касания: ' + String(e.message || e).slice(0, 200) }); }
-  const byLead = new Map();
-  touches.forEach(t => { if(!t.lead_id) return; const id = Number(t.lead_id); if(!byLead.has(id)) byLead.set(id, []); byLead.get(id).push(t); });
-  const leads = {};
+  // 1) лиды, созданные в периоде
+  let dateFilter = `&filter[created_at][from]=${fromTs}`;
+  if(toTs) dateFilter += `&filter[created_at][to]=${toTs}`;
+  const raw = [];
   let truncated = false;
-  if(o.includeOrganic && o.pipelineId){
-    let dateFilter = `&filter[created_at][from]=${fromTs}`;
-    if(toTs) dateFilter += `&filter[created_at][to]=${toTs}`;
-    for(let page = 1; page <= 12; page++){
-      const data = await amoFetch(`/leads?filter[pipeline_id]=${o.pipelineId}${dateFilter}&limit=250&page=${page}`, env);
-      if(!data) break;
-      const batch = (data._embedded && data._embedded.leads) || [];
-      if(!batch.length) break;
-      batch.forEach(l => { leads[l.id] = l; });
-      if(batch.length < 250) break;
-      if(page === 12) truncated = true;
-    }
+  for(let page = 1; page <= 12; page++){
+    const data = await amoFetch(`/leads?filter[pipeline_id]=${p.id}${dateFilter}&limit=250&page=${page}`, env);
+    if(!data) break;
+    const batch = (data._embedded && data._embedded.leads) || [];
+    if(!batch.length) break;
+    raw.push(...batch);
+    if(batch.length < 250) break;
+    if(page === 12) truncated = true;
   }
-  const toS = (toTs || Infinity) + NEAR_SEC; // касание до 7 дней после периода может относиться к сделке периода
-  const touchedIds = new Set();
-  touches.forEach(t => {
-    const s = Math.floor(Date.parse(t.touched_at) / 1000);
-    if(t.lead_id && s >= fromTs && s <= toS) touchedIds.add(Number(t.lead_id));
-  });
-  const missing = [...touchedIds].filter(id => !leads[id]);
-  let failed = 0;
-  if(missing.length){
-    const r = await fetchLeadsByIds(env, missing, o.with || '', errors);
-    failed = r.failed;
-    Object.values(r.leads).forEach(l => { if(!o.pipelineId || !o.includeOrganic || l.pipeline_id === o.pipelineId) leads[l.id] = l; });
-  }
-  if(failed) incomplete.push({ source: 'amo', what: 'deals', detail: 'не загрузились сделки: ' + failed });
-  const items = [];
-  Object.values(leads).forEach(l => {
-    const tags = ((l._embedded && l._embedded.tags) || []).map(t => t.name).filter(Boolean);
-    const a = computeArrival({ created: l.created_at, tags }, byLead.get(Number(l.id)) || [], fromTs, toTs);
-    if(a) items.push({ lead: l, tags, arrival: a });
-  });
-  return { items, truncated, errors, incomplete, touches_total: touches.length };
-}
-
-async function buildLeadReport(env, fromTs, toTs, opts){
-  const o = opts || {};
-  const v2 = !!o.v2;
-  const country = o.country || 'KG';
-  const errors = [], incomplete = [];
-  const pipelines = await getPipelines(env);
-  const p = pipelines.find(x => /^лид/i.test(x.name || '')) || pipelines.find(x => x.is_main) || pipelines[0];
-  if(!p) return { error: 'no pipelines found' };
-
-  // «Живые» этапы по порядку. Отказ и успех в этот список не входят: отказ не значит
-  // «прошёл всю воронку», успех наоборот засчитываем как пройденную воронку целиком.
-  // v1015 (v=2): «Отложили на период» тоже не движение вперёд — убран из воронки, как отказ.
-  const model = buildStageModel(p.statuses, { honest: v2 });
-  const flow = model.flow, nameById = model.nameById;
-
-  // менеджеры (id → имя)
-  const userNameById = await fetchUsers(env, incomplete);
-
-  // 1) лиды периода: v1 — созданные в периоде; v2 — по дате обращения (реклама/создание)
-  let raw = [];
-  let truncated = false;
-  const arrivalById = new Map();
-  let cfg = DEFAULT_PRODUCTS;
-  if(v2){
-    cfg = o.cfg || DEFAULT_PRODUCTS;
-    const ar = await buildArrivals(env, country, fromTs, toTs, { pipelineId: p.id, includeOrganic: true });
-    errors.push(...ar.errors); incomplete.push(...ar.incomplete);
-    truncated = ar.truncated;
-    ar.items.forEach(x => { raw.push(x.lead); arrivalById.set(x.lead.id, x.arrival); });
-  } else {
-    let dateFilter = `&filter[created_at][from]=${fromTs}`;
-    if(toTs) dateFilter += `&filter[created_at][to]=${toTs}`;
-    for(let page = 1; page <= 12; page++){
-      const data = await amoFetch(`/leads?filter[pipeline_id]=${p.id}${dateFilter}&limit=250&page=${page}`, env);
-      if(!data) break;
-      const batch = (data._embedded && data._embedded.leads) || [];
-      if(!batch.length) break;
-      raw.push(...batch);
-      if(batch.length < 250) break;
-      if(page === 12) truncated = true;
-    }
-  }
-  if(truncated) incomplete.push({ source: 'amo', what: 'leads', detail: 'показаны первые 3000' });
   const known = new Set(raw.map(l => l.id));
 
   // 2) история смен этапа — иначе лид, который дошёл до встречи и слился, теряется
-  const sc = await scanStatusEvents(env, known, v2 ? fromTs - NEAR_SEC : fromTs, toTs);
-  if(sc.error){
-    if(Number(sc.error.status) === 401 || Number(sc.error.status) === 403) throw sc.error;
-    errors.push(amoErrOf(sc.error, 'история этапов'));
-  }
-  if(sc.truncated) incomplete.push({ source: 'amo', what: 'events', detail: 'история этапов просмотрена не полностью' });
+  const reached = new Map();
+  raw.forEach(l => { const s = sortById[l.status_id]; if(s !== undefined) reached.set(l.id, s); });
+  let eventsScanned = 0, eventsTruncated = false, eventsError = null;
+  try {
+    for(let page = 1; page <= 40; page++){
+      const evTo = Math.min(Math.floor(Date.now()/1000), (toTs ? toTs + 90*86400 : Math.floor(Date.now()/1000)));
+        const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&filter[created_at][to]=${evTo}&limit=100&page=${page}`, env);
+      if(!ev) break;
+      const batch = (ev._embedded && ev._embedded.events) || [];
+      if(!batch.length) break;
+      eventsScanned += batch.length;
+      batch.forEach(e => {
+        const id = Number(e.entity_id);
+        if(!known.has(id)) return;
+        const after = (e.value_after && e.value_after[0] && e.value_after[0].lead_status) || null;
+        if(!after) return;
+        const s = sortById[after.id];
+        if(s === undefined) return;
+        const prev = reached.get(id);
+        if(prev === undefined || s > prev) reached.set(id, s);
+      });
+      if(batch.length < 100) break;
+      if(page === 40) eventsTruncated = true;
+    }
+  } catch(e){ eventsError = e.message || String(e); }
 
-  const wonIds = model.wonIds, lostIds = model.lostIds;
+  const wonIds = new Set(p.statuses.filter(isWonStatus).map(st => st.id));
+  const lostIds = new Set(p.statuses.filter(isLossStatus).map(st => st.id));
   const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
 
   const leads = raw.map(l => {
-    const r = reachedOf(model, l, sc);
+    const r = reached.has(l.id) ? reached.get(l.id) : null;
     let deepest = null;
     if(r != null) for(const st of flow){ if(Number(st.sort) <= r) deepest = st; }
     // v900: поле «Источник сделки» в amo ЕСТЬ (в KG это field_id 2640473) — просто
@@ -637,7 +453,7 @@ async function buildLeadReport(env, fromTs, toTs, opts){
     // Кто завёл сделку: created_by = 0 значит интеграция (форма, сайт, бот), иначе менеджер.
     const byRobot = !Number(l.created_by);
     const tags = ((l._embedded && l._embedded.tags) || []).map(t => t.name).filter(Boolean);
-    const out = {
+    return {
       id: l.id,
       name: l.name || '(без названия)',
       created: l.created_at,
@@ -656,16 +472,7 @@ async function buildLeadReport(env, fromTs, toTs, opts){
       price: Number(l.price) || 0,
       url: `https://${sub}.amocrm.ru/leads/detail/${l.id}`
     };
-    if(v2){
-      const a = arrivalById.get(l.id);
-      out.arrival_at = a ? a.arrival_at : l.created_at;
-      out.arrival_kind = a ? a.arrival_kind : 'organic';
-      out.touch = a ? touchRef(a.touch) : null;
-      out.product = productOfLead(cfg, { tags }, a && a.touch);
-      out.is_postponed = model.postponedIds.has(l.status_id);
-    }
-    return out;
-  }).sort((a, b) => v2 ? (b.arrival_at - a.arrival_at) : (b.created - a.created));
+  }).sort((a, b) => b.created - a.created);
 
   const countReached = (sort) => leads.filter(x => x.reached_sort != null && x.reached_sort >= sort).length;
   const stages = flow.map(st => ({ id: st.id, name: st.name, sort: Number(st.sort), reached: countReached(Number(st.sort)) }));
@@ -695,7 +502,7 @@ async function buildLeadReport(env, fromTs, toTs, opts){
     bySource[k] = (bySource[k] || 0) + 1;
     if(l.source) withSource++;
   });
-  const out = {
+  return {
     pipeline: { id: p.id, name: p.name },
     origins, by_creator: byCreator,
     by_source: bySource, source_filled: withSource,
@@ -705,20 +512,8 @@ async function buildLeadReport(env, fromTs, toTs, opts){
     won: { count: wonLeads.length, sum: wonLeads.reduce((a, l) => a + l.price, 0) },
     lost: { count: leads.filter(l => l.is_lost).length },
     truncated,
-    events: { scanned: sc.scanned, truncated: sc.truncated, error: sc.error ? (sc.error.message || String(sc.error)) : null },
-    errors, incomplete
+    events: { scanned: eventsScanned, truncated: eventsTruncated, error: eventsError }
   };
-  if(v2){
-    const products = {}; PRODUCT_CODES.forEach(c => { products[c] = 0; });
-    leads.forEach(l => { products[l.product] = (products[l.product] || 0) + 1; });
-    out.qual_stage = stageRef(model.qualStage);
-    out.meet_stage = stageRef(model.meetStage);
-    out.inv_stage = stageRef(model.invStage);
-    out.postponed_now = leads.filter(l => l.is_postponed).length;
-    out.products = products;
-    out.month_rule = 'arrival';
-  }
-  return out;
 }
 
 export default async function handler(req, res){
@@ -846,10 +641,8 @@ export default async function handler(req, res){
       const period = String(req.query.period || 'this_month').toLowerCase();
       const pipelineId = req.query.pipeline_id ? Number(req.query.pipeline_id) : null;
       // период → unix-границы (сек) для filter[closed_at]
-      // v1015: год и месяц — по поясу страны (KG +6, KZ +5), а не по часам сервера (UTC)
       const now = new Date();
-      const _todayLocal = localIso(Date.now(), country);
-      const yy = Number(_todayLocal.slice(0, 4)), mm = Number(_todayLocal.slice(5, 7)) - 1;
+      const yy = now.getFullYear(), mm = now.getMonth();
       const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
       let fromDate, toDate, label;
       // v630: кастомный диапазон from/to (YYYY-MM-DD). Если валиден — приоритет над period.
@@ -858,11 +651,10 @@ export default async function handler(req, res){
       const _validDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
       // v922: границы считаем по Алматы (UTC+5), сервер Vercel живёт в UTC —
       // иначе сделки, закрытые 1-го числа до 05:00, улетали в прошлый месяц.
-      // v1015: для KG — по Бишкеку (UTC+6)
-      const almaty = (y, m, d) => new Date(Date.UTC(y, m, d) - tzOffsetH(country)*3600*1000);
+      const almaty = (y, m, d) => new Date(Date.UTC(y, m, d) - 5*3600*1000);
       if(_validDate(qFrom) && _validDate(qTo)){
-        fromDate = new Date(dayStartMs(qFrom, country));
-        toDate = new Date(dayEndMs(qTo, country) - 1000);
+        fromDate = new Date(qFrom + 'T00:00:00+05:00');
+        toDate = new Date(qTo + 'T23:59:59+05:00');
         label = qFrom + ' — ' + qTo;
       } else if(period === 'year'){ fromDate = almaty(yy,0,1); toDate = now; label = 'Год ' + yy; }
       else if(period === 'quarter'){ const q = Math.floor(mm/3); fromDate = almaty(yy, q*3, 1); toDate = now; label = 'Квартал ' + (q+1) + ' · ' + yy; }
@@ -926,7 +718,7 @@ export default async function handler(req, res){
             amount: Number(l.price)||0,
             manager: userNameById[l.responsible_user_id] || '—',
             reason: reason,
-            date: l.closed_at ? localIso(l.closed_at*1000, country) : '', // v817/v1015: дата по поясу страны
+            date: l.closed_at ? almatyIso(l.closed_at*1000) : '', // v817: сделки, закрытые ночью, падали во вчерашний день
             lead_id: l.id
           });
         });
@@ -968,7 +760,14 @@ export default async function handler(req, res){
       const toTs = req.query.to ? Number(req.query.to) : null;
       if(!sheetId) return bad(res, 400, 'Need ?sheet_id=...');
 
-      // v1015: normalizePhone — общий из _phone.js (KG + KZ)
+      function normalizePhone(p){
+        const digits = String(p||'').replace(/\D/g, '');
+        if(!digits) return null;
+        let n = digits;
+        if(n.startsWith('8') && n.length === 11) n = '7' + n.slice(1);
+        if(n.length === 10) n = '7' + n;
+        return n.length >= 10 ? n : null;
+      }
 
       // 1. Phones из Sheets (Meta Lead Forms)
       const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&range=A1:Z2000`;
@@ -976,8 +775,8 @@ export default async function handler(req, res){
       const csv = csvResp.ok ? await csvResp.text() : '';
       const sheetPhones = new Set();
       csv.split('\n').forEach(line => {
-        const m = line.match(/p:\+?(\d{9,12})/);
-        if(m){ const p = normalizePhone(m[1], country); if(p) sheetPhones.add(p); }
+        const m = line.match(/p:\+?(\d{10,11})/);
+        if(m){ const p = normalizePhone(m[1]); if(p) sheetPhones.add(p); }
       });
 
       // 2. Из amo за период берём ВСЕ лиды воронки «Лиды» + их теги (для marquiz cohort)
@@ -1121,11 +920,18 @@ export default async function handler(req, res){
       const csvResp = await fetch(csvUrl);
       if(!csvResp.ok) return bad(res, 502, `Sheets fetch failed: ${csvResp.status}`);
       const csv = await csvResp.text();
-      // v1015: normalizePhone — общий из _phone.js (KG + KZ)
+      function normalizePhone(p){
+        const digits = String(p||'').replace(/\D/g, '');
+        if(!digits) return null;
+        let n = digits;
+        if(n.startsWith('8') && n.length === 11) n = '7' + n.slice(1);
+        if(n.length === 10) n = '7' + n;
+        return n.length >= 10 ? n : null;
+      }
       const phones = new Set();
       csv.split('\n').forEach(line => {
-        const m = line.match(/p:\+?(\d{9,12})/);
-        if(m){ const p = normalizePhone(m[1], country); if(p) phones.add(p); }
+        const m = line.match(/p:\+?(\d{10,11})/);
+        if(m){ const p = normalizePhone(m[1]); if(p) phones.add(p); }
       });
 
       // 2. Для каждого телефона ищем lead в amo (с тегами)
@@ -1247,13 +1053,11 @@ export default async function handler(req, res){
             rawPhones.forEach(rp => {
               const n = normPhone(rp);
               if(!n) return;
-              // v1015: подозрительный — тот, что не разбирается ни как кыргызский (996…),
-              // ни как казахстанский (7…). Раньше все KG-номера (12 цифр) числились опечатками.
-              const norm = normalizePhone(rp, country);
-              if(norm === null){
+              // Подозрительный номер: длина не 10 (без кода страны) и не 11 (с 7)
+              if(n.length !== 10 && n.length !== 11){
                 badPhones.push({ contact_id: c.id, contact_name: c.name, raw_phone: rp, normalized: n, length: n.length });
               }
-              const key = norm || n; // группируем по разобранному номеру: 0555… и +996555… — один человек
+              const key = n.length >= 10 ? n.slice(-10) : n; // группируем по последним 10 цифр
               if(!phoneIndex.has(key)) phoneIndex.set(key, []);
               phoneIndex.get(key).push({
                 contact_id: c.id,
@@ -1266,8 +1070,6 @@ export default async function handler(req, res){
           if(batch.length < 250) break;
           if(page === 5 && batch.length === 250) truncated = true;
         } catch(e){
-          // v1015: ошибка amo — 502 с кодом (amo_auth/amo_error), а не 500
-          if(e.upstream === 'amo') return res.status(502).json({ error: 'fetch contacts failed page ' + page + ': ' + e.message, code: (e.status === 401 || e.status === 403) ? 'amo_auth' : 'amo_error' });
           return res.status(500).json({ error: 'fetch contacts failed page ' + page + ': ' + e.message });
         }
       }
@@ -1425,27 +1227,22 @@ export default async function handler(req, res){
       const nameForAcc = (acc) => targByAcc[acc] || targByAcc[String(acc).replace(/^act_/, '')] || null;
 
       const base = selfBase(req);
-      const tsErrors = [], tsIncomplete = []; // v1015: никаких тихих нулей
-      if(days > 31) tsIncomplete.push({ source: 'meta', what: 'ads_perf', detail: 'расход по дням взят за последние 31 день из ' + days });
+      const appTok = String(process.env.APP_TOKEN || '').trim();
+      const selfGet = async (qs) => {
+        const r = await fetch(`${base}/api/meta-ads?${qs}`, {
+          headers: { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' }
+        });
+        return r.json().catch(() => null);
+      };
 
       // 2) Карта «пост → объявления» и расход объявлений по дням (для правила «что крутилось в тот день»).
-      // v1015: дни — по поясу страны (KG — Бишкек), расход по дням тоже в бишкекских днях (v=2).
-      const until = localIso(Date.now(), country);
-      // v1015: расход по дням нужен только для выбора объявления — не больше 31 дня,
-      // иначе почасовой пересчёт кабинета Лос-Анджелеса не уложится по времени
-      const perfDays = Math.min(days, 31);
-      const sinceIso = localIso(Date.now() - perfDays * 86400000, country);
-      const [adsR, perfR] = await Promise.all([
-        selfFetch(base, '/api/meta-ads?endpoint=ads_map'),
-        selfFetch(base, `/api/meta-ads?endpoint=ads_perf&daily=1&since=${sinceIso}&until=${until}&country=${country}&v=2`)
+      const until = almatyIso(Date.now());
+      const sinceIso = almatyIso(Date.now() - days * 86400000);
+      const [adsJson, perfJson] = await Promise.all([
+        selfGet('endpoint=ads_map'),
+        selfGet(`endpoint=ads_perf&daily=1&since=${sinceIso}&until=${until}`)
       ]);
-      const adsJson = adsR.json, perfJson = selfFailed(perfR) ? null : perfR.json;
-      if(selfFailed(adsR) || !Array.isArray(adsJson.ads)) return res.status(502).json({ error: 'Не удалось получить карту объявлений (ads_map): ' + ((adsJson && adsJson.error) || adsR.status), code: (adsJson && adsJson.code) || 'meta_error' });
-      ((adsJson.errors) || []).forEach(e => tsErrors.push(e));
-      if(!perfJson){
-        tsErrors.push({ source: 'meta', kind: 'other', code: perfR.json && perfR.json.code, message: 'расход по дням: ' + ((perfR.json && perfR.json.error) || perfR.status) });
-        tsIncomplete.push({ source: 'meta', what: 'ads_perf', detail: 'без расхода по дням объявление выбрано по первому совпадению' });
-      }
+      if(!adsJson || !Array.isArray(adsJson.ads)) return bad(res, 502, 'Не удалось получить карту объявлений (ads_map)');
       const spendByAdDay = {}, kindByAdDay = {};
       ((perfJson && perfJson.days) || []).forEach(d => {
         spendByAdDay[d.ad_id + '|' + d.date] = d.spend;
@@ -1507,8 +1304,6 @@ export default async function handler(req, res){
       const events = await sbSelect('wazzup_events', {
         received_at: 'gte.' + since, order: 'received_at.asc', limit: 2000
       });
-      // v1015: упёрлись в потолок — свежие переписки не просмотрены (порядок чиним на этапе B)
-      if(events.length >= 2000) tsIncomplete.push({ source: 'db', what: 'chats', detail: 'просмотрены первые 2000 сообщений' });
 
       const shortCache = {};
       async function expandFbMe(code){
@@ -1531,7 +1326,7 @@ export default async function handler(req, res){
         const txt = String(e.message_text || '');
         const phone = e.phone ? String(e.phone) : null;
         if(!phone || phone.length > 15) continue; // групповые чаты приходят длинным id
-        const dayIso = localIso(Date.parse(e.received_at), country); // v1015: день по Бишкеку, а не по UTC
+        const dayIso = String(e.received_at || '').slice(0, 10);
         let list = null, src = null;
         const ig = txt.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
         const fb = txt.match(/fb\.me\/([A-Za-z0-9]+)/);
@@ -1565,7 +1360,7 @@ export default async function handler(req, res){
       const rowsToSave = [], skipped = [], notFound = [];
       let processed = 0;
       for(const t of touches){
-        if(processed >= maxPhones){ tsIncomplete.push({ source: 'amo', what: 'touches', detail: 'обработано ' + processed + ' из ' + touches.length }); break; }
+        if(processed >= maxPhones) break;
         processed++;
         const acc = t.ad.account;
         const targ = nameForAcc(acc);
@@ -1663,7 +1458,6 @@ export default async function handler(req, res){
         ad_link_no_deal: notFound,
         skipped: skipped,
         link_unknown: noLink,
-        errors: tsErrors, incomplete: tsIncomplete,
         message: dryRun
           ? `Ничего не записано. Готово к сохранению: ${rowsToSave.length} касаний. Применить — dry_run=false (и tags=1, если ставить теги в amo).`
           : `Сохранено касаний: ${saved}. Тегов проставлено: ${tagged}.`
@@ -1709,11 +1503,11 @@ export default async function handler(req, res){
       const nameForAcc = (acc) => targByAcc[acc] || targByAcc[String(acc).replace(/^act_/, '')] || null;
 
       const base = selfBase(req);
-      const tfErrors = [], tfIncomplete = []; // v1015
-      const adsR = await selfFetch(base, '/api/meta-ads?endpoint=ads_map');
-      const adsJson = adsR.json;
-      if(selfFailed(adsR) || !Array.isArray(adsJson.ads)) return res.status(502).json({ error: 'Не удалось получить список объявлений: ' + ((adsJson && adsJson.error) || adsR.status), code: (adsJson && adsJson.code) || 'meta_error' });
-      (adsJson.errors || []).forEach(e => tfErrors.push(e));
+      const adsResp = await fetch(`${base}/api/meta-ads?endpoint=ads_map`, {
+        headers: { 'x-app-token': String(process.env.APP_TOKEN || '').trim(), 'x-user-email': 'cron@salesdoc.io' }
+      });
+      const adsJson = await adsResp.json().catch(() => null);
+      if(!adsJson || !Array.isArray(adsJson.ads)) return bad(res, 502, 'Не удалось получить список объявлений');
 
       // Тянем заявки по каждому объявлению. Meta хранит их 90 дней.
       const phoneKeys = /phone|тел|номер/i;
@@ -1751,12 +1545,10 @@ export default async function handler(req, res){
           });
         } catch(e){ err = (err ? err + ' | ' : '') + e.message; }
         pageInfo.push({ page: pg, forms_added: added, error: err });
-        if(err) tfErrors.push({ source: 'meta', kind: /190/.test(err) ? 'token' : 'perm', message: 'страница ' + pg + ': ' + String(err).slice(0, 200) });
       }
       const targets = Object.keys(forms).length
         ? Object.keys(forms).map(fid => ({ kind: 'form', id: fid, ad: forms[fid] }))
         : adsJson.ads.map(a => ({ kind: 'ad', id: a.ad_id, ad: a }));
-      if(targets.length > 250) tfIncomplete.push({ source: 'meta', what: 'forms', detail: 'просмотрено 250 форм из ' + targets.length });
       for(const t of targets){
         if(scanned >= 250) break;
         scanned++;
@@ -1768,20 +1560,9 @@ export default async function handler(req, res){
             limit: 200
           }, pageTokens[t.ad && t.ad.page_id]);
           okCount++;
-          // v1015: заявок больше 200 — листаем дальше (только чтение), с потолком
-          let next = page && page.paging && page.paging.next;
-          for(let pn = 0; next && pn < 10; pn++){
-            const r = await fetch(next);
-            const j = await r.json().catch(() => null);
-            if(!r.ok || !j || j.error) throw Object.assign(new Error((j && j.error && j.error.message) || ('Meta ' + r.status)), { code: (j && j.error && j.error.code) || r.status });
-            page.data = (page.data || []).concat(j.data || []);
-            next = j.paging && j.paging.next;
-          }
-          if(next) tfIncomplete.push({ source: 'meta', what: 'form_leads', detail: 'форма ' + t.id + ': показаны первые 2200 заявок' });
         } catch(e){
           errCount++;
           if(adErrors.length < 5) adErrors.push({ kind: t.kind, id: t.id, name: t.ad.ad_name, code: e.code, error: e.message });
-          if(Number(e.code) === 190) tfErrors.push({ source: 'meta', code: 190, kind: 'token', message: 'заявки лидформ: ' + e.message });
           continue;
         }
         ((page && page.data) || []).forEach(l => {
@@ -1833,7 +1614,6 @@ export default async function handler(req, res){
         }
         if(!leads.length){
           notFound.push({ at: f.at, targetolog: targ, campaign: f.campaign, ad_name: f.ad_name,
-            form_id: f.form_id || null, campaign_id: f.campaign_id || null, // v1015: для продукта
             name: f.fname || '', phone_masked: f.phone.slice(0, 3) + ' ••• ' + f.phone.slice(-4), phone_tail: f.phone.slice(-4),
             phone_full: fullPhones ? f.phone : undefined,
             why: contacts.length ? 'контакт есть, сделки нет' : 'заявка есть в рекламе, а в amoCRM её нет' });
@@ -1867,9 +1647,6 @@ export default async function handler(req, res){
         matched: rowsToSave.length,
         saved, save_errors: saveErrors,
         ad_errors: adErrors,
-        errors: (errCount && okCount === 0 && !tfErrors.some(x => x.kind === 'token'))
-          ? tfErrors.concat([{ source: 'meta', kind: 'perm', message: 'заявки лидформ не отдал ни один источник (' + errCount + ')' }]) : tfErrors,
-        incomplete: tfIncomplete.concat(errCount && okCount ? [{ source: 'meta', what: 'forms', detail: 'не открылись формы: ' + errCount }] : []),
         touches: rowsToSave.map(r => ({ at: r.touched_at, targetolog: r.targetolog, campaign: r.campaign,
           ad_name: r.ad_name, lead_id: r.lead_id, lead_name: r._lead_name })),
         not_found: notFound,
@@ -1886,11 +1663,8 @@ export default async function handler(req, res){
       // контакта уже есть) и заявки лидформ Meta (имя из формы + хвост телефона).
       // Полный телефон отдаём только сотруднику с подписанной сессией и правом на
       // Маркетинг — APP_TOKEN публичный, а телефоны клиентов наружу утекать не должны.
-      // v1015: дни по поясу страны (KG — Бишкек), все страницы таблиц, ошибки — в errors[],
-      // у каждой строки продукт; ?product=SD|Z24|SHTURM — фильтр.
-      const since = String(req.query.since || localIso(Date.now() - 30 * 86400000, country));
-      const until = String(req.query.until || localIso(Date.now(), country));
-      const product = productParam(req.query);
+      const since = String(req.query.since || almatyIso(Date.now() - 30 * 86400000));
+      const until = String(req.query.until || almatyIso(Date.now()));
       const gate = await requirePermSoft(req, res, 'view_marketing');
       if(!gate.ok) return;
       // v958: полный список для выгрузки — по админ-коду CEO. Подписанная сессия
@@ -1905,14 +1679,17 @@ export default async function handler(req, res){
       }
       const trusted = !!(gate.caller && gate.caller.trusted) || adminOk;
       const mask = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length < 7 ? '' : d.slice(0, 3) + ' ••• ' + d.slice(-4); };
-      const fromMs = dayStartMs(since, country), toMs = dayEndMs(until, country);
-      const days = Math.min(90, Math.max(1, Math.ceil((Date.now() - fromMs) / 86400000) + 1));
-      const errors = [], incomplete = [];
-      const cfg = await loadProducts();
+      const days = Math.min(90, Math.max(1, Math.ceil((Date.now() - new Date(since).getTime()) / 86400000) + 1));
 
       const base = selfBase(req);
-      // админ-код пробрасываем дальше, чтобы лидформы тоже отдали полный номер
-      const extraHdr = adminOk ? { 'x-admin-token': String(req.headers['x-admin-token'] || '') } : null;
+      const appTok = String(process.env.APP_TOKEN || '').trim();
+      const selfGet = async (path) => {
+        const hdr = { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' };
+        // админ-код пробрасываем дальше, чтобы лидформы тоже отдали полный номер
+        if(adminOk) hdr['x-admin-token'] = String(req.headers['x-admin-token'] || '');
+        const r = await fetch(`${base}${path}`, { headers: hdr });
+        return r.json().catch(() => null);
+      };
       let targByAcc = {};
       try { const rows = await sbSelect('app_settings', { key: 'eq.mkt_targetologs', limit: '1' }); targByAcc = (rows.length && rows[0].value) || {}; } catch(_){}
       const nameForAcc = (acc) => targByAcc[acc] || targByAcc[String(acc).replace(/^act_/, '')] || ('кабинет ' + String(acc).replace(/^act_/, ''));
@@ -1920,29 +1697,22 @@ export default async function handler(req, res){
       const out = [];
       // 1) Переписки: сообщения со ссылкой на объявление, у которых нет касания в ad_touches.
       try {
-        const adsR = await selfFetch(base, '/api/meta-ads?endpoint=ads_map');
-        if(selfFailed(adsR)){
-          errors.push({ source: 'meta', kind: (adsR.json && adsR.json.code) === 'meta_token' ? 'token' : 'other', code: adsR.json && adsR.json.code, message: 'карта объявлений: ' + ((adsR.json && adsR.json.error) || adsR.status) });
-        } else (adsR.json.errors || []).forEach(e => errors.push(e));
-        const adsJson = selfFailed(adsR) ? null : adsR.json;
+        const adsJson = await selfGet('/api/meta-ads?endpoint=ads_map');
         const byShort = {}, byStory = {}, byPost = {};
         ((adsJson && adsJson.ads) || []).forEach(a => {
           if(a.ig_shortcode && !byShort[a.ig_shortcode]) byShort[a.ig_shortcode] = a;
           if(a.story_id && !byStory[a.story_id]) byStory[a.story_id] = a;
           if(a.post_id && !byPost[a.post_id]) byPost[a.post_id] = a;
         });
-        const events = (await sbSelectAll('wazzup_events', {
-          select: 'id,received_at,kind,direction,phone,message_text,contact_name',
-          received_at: 'gte.' + new Date(fromMs).toISOString(), order: 'received_at.asc,id.asc'
-        })).filter(e => Date.parse(e.received_at) < toMs);
-        const touched = new Set((await sbSelectAll('ad_touches', {
-          country: 'eq.' + country, select: 'phone,touched_at,message_id',
-          touched_at: 'gte.' + new Date(fromMs).toISOString(), order: 'touched_at.asc,message_id.asc'
-        })).map(r => String(r.phone)));
+        const events = await sbSelect('wazzup_events', {
+          received_at: 'gte.' + since + 'T00:00:00', order: 'received_at.asc', limit: 2000
+        });
+        const touched = new Set((await sbSelect('ad_touches', { country: 'eq.' + country, select: 'phone', touched_at: 'gte.' + since + 'T00:00:00', limit: 5000 })).map(r => String(r.phone)));
         const seen = new Set();
         const fbCache = {};
         for(const e of events){
           if(e.kind !== 'message' || e.direction === 'out') continue;
+          if(String(e.received_at).slice(0, 10) > until) continue;
           const phone = e.phone ? String(e.phone) : '';
           if(!phone || phone.length > 15 || seen.has(phone)) continue;
           const txt = String(e.message_text || '');
@@ -1966,45 +1736,29 @@ export default async function handler(req, res){
           out.push({ at: e.received_at, kind: 'переписка', name: e.contact_name || '',
             phone: trusted ? phone : mask(phone), phone_tail: phone.slice(-4),
             targetolog: ad ? nameForAcc(ad.account) : 'объявление не опознано', campaign: ad ? ad.campaign : null, ad_name: ad ? ad.ad_name : null,
-            first_line: txt.split('\n')[0].slice(0, 40),
-            product: ad ? classifyCampaign(cfg, { id: ad.campaign_id, name: ad.campaign }) : (cfg.default || 'SD') });
+            first_line: txt.split('\n')[0].slice(0, 40) });
         }
-      } catch(e){ errors.push({ source: 'db', kind: 'other', message: 'переписки: ' + String(e.message || e).slice(0, 200) }); }
+      } catch(e){ out.push({ error: 'переписки: ' + (e.message || String(e)) }); }
 
       // 2) Заявки лидформ без сделки — из сухого прогона.
       try {
-        const fR = await selfFetch(base, `/api/amo?action=targ_forms&country=${country}&days=${days}&limit=200`, extraHdr);
-        if(selfFailed(fR)){
-          errors.push({ source: 'meta', kind: (fR.json && fR.json.code) === 'meta_token' ? 'token' : 'other', code: fR.json && fR.json.code, message: 'заявки: ' + ((fR.json && fR.json.error) || fR.status) });
-        } else {
-          (fR.json.errors || []).forEach(x => errors.push(x));
-          (fR.json.incomplete || []).forEach(x => incomplete.push(x));
-        }
-        const f = selfFailed(fR) ? null : fR.json;
+        const f = await selfGet(`/api/amo?action=targ_forms&country=${country}&days=${days}&limit=200`);
         ((f && f.not_found) || []).forEach(x => {
-          const ms = Date.parse(x.at);
-          if(!Number.isFinite(ms) || ms < fromMs || ms >= toMs) return;
+          if(String(x.at || '').slice(0, 10) < since || String(x.at || '').slice(0, 10) > until) return;
           out.push({ at: x.at, kind: 'заявка', name: x.name || '', phone: (adminOk && x.phone_full) ? x.phone_full : (x.phone_masked || ''), phone_tail: x.phone_tail || '',
-            targetolog: x.targetolog, campaign: x.campaign, ad_name: x.ad_name, first_line: '',
-            product: x.form_id ? classifyForm(cfg, x.form_id, x.campaign || x.campaign_id ? { [x.form_id]: { campaign_id: x.campaign_id, campaign: x.campaign } } : null)
-              : classifyCampaign(cfg, { id: x.campaign_id, name: x.campaign }) });
+            targetolog: x.targetolog, campaign: x.campaign, ad_name: x.ad_name, first_line: '' });
         });
-      } catch(e){ errors.push({ source: 'meta', kind: 'other', message: 'заявки: ' + String(e.message || e).slice(0, 200) }); }
+      } catch(e){ out.push({ error: 'заявки: ' + (e.message || String(e)) }); }
 
-      const items = product === 'ALL' ? out : out.filter(x => x.product === product);
-      items.sort((a, b) => (b.at || '') < (a.at || '') ? -1 : 1);
+      out.sort((a, b) => (b.at || '') < (a.at || '') ? -1 : 1);
       const amoSub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
-      return res.status(200).json({ country, since, until, trusted, product, count: items.length,
-        amo_search: `https://${amoSub}.amocrm.ru/leads/list/?query=`, items, errors, incomplete });
+      return res.status(200).json({ country, since, until, trusted, count: out.filter(x => !x.error).length,
+        amo_search: `https://${amoSub}.amocrm.ru/leads/list/?query=`, items: out });
     }
     if(action === 'targ_report'){
-      // v1015: &v=2 — правило месяца «по дате обращения» и честные Квал/Встреча/Счёт;
-      // &product=SD|Z24|SHTURM — только объявления и сделки этого продукта.
-      const v2 = String(req.query.v || '') === '2';
-      const product = productParam(req.query);
       // v946: отчёт тяжёлый (Meta + amo по каждой сделке, до 40 с на холодном старте).
       // Держим готовый ответ 4 минуты: экран открывают чаще, чем меняются данные.
-      const trKey = [country, String(req.query.since || ''), String(req.query.until || ''), product, v2 ? 2 : 1].join('|');
+      const trKey = country + '|' + String(req.query.since || '') + '|' + String(req.query.until || '');
       const trHit = _trCache.get(trKey);
       if(trHit && Date.now() - trHit.t < 4 * 60 * 1000 && String(req.query.fresh || '') !== '1'){
         res.setHeader('X-Cache', 'HIT');
@@ -2016,69 +1770,42 @@ export default async function handler(req, res){
       // не взяли в работу, продали и на сколько. Считаем ПО ДАТЕ РЕКЛАМНОГО КАСАНИЯ:
       // если человека завели в августе, а вернула его сентябрьская реклама — продажа
       // ложится в сентябрь, туда же, где потрачены деньги (решение CEO 09.09.2026).
-      // v1015: дни по поясу страны (KG — Бишкек).
-      const since = String(req.query.since || localIso(Date.now() - 30 * 86400000, country));
-      const until = String(req.query.until || localIso(Date.now(), country));
-      const fromMs = dayStartMs(since, country), toMs = dayEndMs(until, country);
-      const fromS = Math.floor(fromMs / 1000), toS = Math.floor(toMs / 1000) - 1;
+      const since = String(req.query.since || almatyIso(Date.now() - 30 * 86400000));
+      const until = String(req.query.until || almatyIso(Date.now()));
       const base = selfBase(req);
-      const errors = [], incomplete = [];
+      const appTok = String(process.env.APP_TOKEN || '').trim();
+      const selfGet = async (qs) => {
+        const r = await fetch(`${base}/api/meta-ads?${qs}`, {
+          headers: { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' }
+        });
+        return r.json().catch(() => null);
+      };
 
-      const [perfR, mapR, settingsRows, pipelines, cfg] = await Promise.all([
-        selfFetch(base, `/api/meta-ads?endpoint=ads_perf&since=${since}&until=${until}&country=${country}${v2 ? '&v=2' : ''}`),
-        selfFetch(base, '/api/meta-ads?endpoint=ads_map'),
+      const [perf, map, settingsRows, pipelines] = await Promise.all([
+        selfGet(`endpoint=ads_perf&since=${since}&until=${until}`),
+        selfGet('endpoint=ads_map'),
         sbSelect('app_settings', { key: 'in.(mkt_targetologs,mkt_costs)' }).catch(() => []),
-        getPipelines(env),
-        loadProducts()
+        getPipelines(env)
       ]);
-      // v1015: реклама не ответила совсем — это ошибка, а не «0 потрачено»
-      if(selfFailed(perfR) || !Array.isArray(perfR.json.ads)){
-        const pj = perfR.json || {};
-        return res.status(502).json({ error: 'Реклама: ' + (pj.error || ('нет ответа ' + perfR.status)), code: pj.code || 'meta_error', errors: pj.errors || [] });
-      }
-      const perf = perfR.json;
-      (perf.errors || []).forEach(e => errors.push(e));
-      (perf.incomplete || []).forEach(e => incomplete.push(e));
-      const map = selfFailed(mapR) ? null : mapR.json;
-      if(!map) incomplete.push({ source: 'meta', what: 'ads_map', detail: 'картинки объявлений и формы не загрузились' });
       const sett = {};
       (settingsRows || []).forEach(r => { sett[r.key] = r.value; });
       const targByAcc = sett.mkt_targetologs || {};
       const nameForAcc = (acc) => targByAcc[acc] || targByAcc[String(acc).replace(/^act_/, '')] || null;
       const rate = Number(((sett.mkt_costs || {})[country] || {}).usd_rate) || 0;
 
-      const thumbByAd = {}, adsByForm = {};
-      (((map && map.ads) || [])).forEach(a => {
-        if(a.ad_id) thumbByAd[a.ad_id] = a.thumb || null;
-        if(a.form_id && !adsByForm[a.form_id]) adsByForm[a.form_id] = a;
-      });
+      const thumbByAd = {};
+      (((map && map.ads) || [])).forEach(a => { if(a.ad_id) thumbByAd[a.ad_id] = a.thumb || null; });
 
       // 1) Касания за период. Одна сделка — одно касание: если человек кликал несколько
       //    объявлений, заслуга у ПОСЛЕДНЕГО (решение CEO).
-      //    v1015 (v=2): касание засчитывается, только если оно и есть обращение в этом
-      //    периоде — новое (сделка создана в пределах 7 дней) или возврат клиента.
+      const touches = await sbSelect('ad_touches', {
+        country: 'eq.' + country,
+        touched_at: 'gte.' + since + 'T00:00:00',
+        order: 'touched_at.asc', limit: 5000
+      });
+      const inRange = touches.filter(t => String(t.touched_at).slice(0, 10) <= until);
       const lastByLead = new Map();
-      let leads = {};
-      let touchesTotal = 0;
-      if(v2){
-        const ar = await buildArrivals(env, country, fromS, toS, { includeOrganic: false, with: 'contacts' });
-        errors.push(...ar.errors); incomplete.push(...ar.incomplete);
-        touchesTotal = ar.touches_total;
-        ar.items.forEach(x => {
-          if(!x.arrival.touch) return;
-          lastByLead.set(Number(x.lead.id), Object.assign({}, x.arrival.touch, { _kind: x.arrival.arrival_kind }));
-          leads[x.lead.id] = x.lead;
-        });
-      } else {
-        let inRange = [];
-        try { inRange = await loadTouches(country, fromMs, toMs); }
-        catch(e){ errors.push({ source: 'db', kind: 'other', message: 'рекламные касания: ' + String(e.message || e).slice(0, 200) }); }
-        touchesTotal = inRange.length;
-        inRange.forEach(t => { if(t.lead_id) lastByLead.set(Number(t.lead_id), t); });
-        const fr = await fetchLeadsByIds(env, lastByLead.keys(), 'contacts', errors);
-        leads = fr.leads;
-        if(fr.failed) incomplete.push({ source: 'amo', what: 'deals', detail: 'не загрузились сделки: ' + fr.failed });
-      }
+      inRange.forEach(t => { if(t.lead_id) lastByLead.set(t.lead_id, t); });
 
       // 2) Этапы воронки: что считать «не взяли в работу», «в работе», «слились», «продажа».
       const p = pipelines.find(x => /^лид/i.test(x.name || '')) || pipelines.find(x => x.is_main) || pipelines[0];
@@ -2087,15 +1814,7 @@ export default async function handler(req, res){
       const flow = (p ? p.statuses : []).filter(st => !isLost(st) && !isWon(st)).sort((a, b) => a.sort - b.sort);
       const firstIds = new Set(flow.slice(0, 1).map(st => st.id)); // самый первый этап = ещё не взяли
       const stName = {};
-      pipelines.forEach(pl => pl.statuses.forEach(st => { if(stName[st.id] == null) stName[st.id] = st.name; }));
-      // v1015: честные Квал/Встреча/Счёт — по истории этапов, «Отложили» и отказ движением не считаются
-      const model = buildStageModel(p ? p.statuses : [], { honest: true });
-      const sc = await scanStatusEvents(env, new Set(Object.keys(leads).map(Number)), fromS - NEAR_SEC, toS);
-      if(sc.error){
-        if(Number(sc.error.status) === 401 || Number(sc.error.status) === 403) throw sc.error;
-        errors.push(amoErrOf(sc.error, 'история этапов'));
-      }
-      if(sc.truncated) incomplete.push({ source: 'amo', what: 'events', detail: 'история этапов просмотрена не полностью' });
+      (p ? p.statuses : []).forEach(st => { stName[st.id] = st.name; });
 
       // Причины отказа — их выбирает менеджер, когда закрывает сделку.
       let lossName = {};
@@ -2104,6 +1823,11 @@ export default async function handler(req, res){
         ((lr && lr._embedded && lr._embedded.loss_reasons) || []).forEach(x => { lossName[x.id] = x.name; });
       } catch(_){}
 
+      // 3) Тянем сами сделки.
+      const leads = {};
+      for(const id of lastByLead.keys()){
+        try { const l = await amoFetch(`/leads/${id}?with=contacts`, env); if(l) leads[id] = l; } catch(_){}
+      }
       // v947: имя клиента живёт в контакте и компании, а сделка часто называется
       // «Сделка #…» или «Facebook №…». Подтягиваем имена пачками, чтобы на экране
       // было «Нурсултан Табалдиев · Айчурок Фармацевтика», а не номер.
@@ -2136,22 +1860,17 @@ export default async function handler(req, res){
         return { client: cn, company: co };
       };
 
-      // 3) Раскладываем по объявлениям.
+      // 4) Раскладываем по объявлениям.
       const byAd = new Map();
       const slot = (adId) => {
         if(!byAd.has(adId)) byAd.set(adId, {
           crm_leads: 0, in_work: 0, not_taken: 0, lost: 0, won: 0, won_sum: 0,
-          qual: 0, meet: 0, inv: 0,
           loss_reasons: {}, deals: []
         });
         return byAd.get(adId);
       };
-      const amoSub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
       lastByLead.forEach((t, leadId) => {
         const l = leads[leadId];
-        const tags = ((l && l._embedded && l._embedded.tags) || []).map(x => x.name).filter(Boolean);
-        const prod = productOfLead(cfg, { tags }, t, adsByForm);
-        if(product !== 'ALL' && prod !== product) return;
         const s = slot(t.ad_id || ('camp:' + (t.campaign_id || t.account)));
         s.crm_leads++;
         if(!l) return;
@@ -2165,28 +1884,21 @@ export default async function handler(req, res){
         }
         else if(firstIds.has(l.status_id)){ bucket = 'not_taken'; s.not_taken++; }
         else { s.in_work++; }
-        const reached = reachedOf(model, l, sc);
-        const fl = reachedFlags(model, reached);
-        if(fl.qual) s.qual++;
-        if(fl.meet) s.meet++;
-        if(fl.inv) s.inv++;
         const who = clientOf(l, t);
+        const amoSub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
         s.deals.push({ lead_id: leadId, name: l.name, client: who.client, company: who.company,
           amo_url: `https://${amoSub}.amocrm.ru/leads/detail/${leadId}`, stage: stName[l.status_id] || '—',
           bucket, price: Number(l.price || 0), touched_at: t.touched_at,
-          lead_created: t.lead_created, ad_ambiguous: !!t.ad_ambiguous,
-          reached_sort: reached, qual: fl.qual, meet: fl.meet, inv: fl.inv, product: prod,
-          arrival_kind: t._kind || null });
+          lead_created: t.lead_created, ad_ambiguous: !!t.ad_ambiguous });
       });
 
-      // 4) Собираем ответ: у каждого таргетолога его объявления с расходом.
+      // 5) Собираем ответ: у каждого таргетолога его объявления с расходом.
       const out = {};
       ((perf && perf.ads) || []).forEach(a => {
-        if(product !== 'ALL' && classifyCampaign(cfg, { id: a.campaign_id, name: a.campaign }) !== product) return;
         const targ = nameForAcc(a.account) || ('кабинет ' + a.account);
         if(!out[targ]) out[targ] = { targetolog: targ, account: a.account, spend: 0,
           chats: 0, leads_meta: 0, link_clicks: 0,
-          crm_leads: 0, in_work: 0, not_taken: 0, lost: 0, won: 0, won_sum: 0, qual: 0, meet: 0, inv: 0, ads: [] };
+          crm_leads: 0, in_work: 0, not_taken: 0, lost: 0, won: 0, won_sum: 0, ads: [] };
         const t = out[targ];
         const s = byAd.get(a.ad_id) || null;
         t.spend += a.spend;
@@ -2196,17 +1908,15 @@ export default async function handler(req, res){
         else if(a.result_kind === 'Заявки') t.leads_meta += a.results;
         else t.link_clicks += a.results;
         if(s){ t.crm_leads += s.crm_leads; t.in_work += s.in_work; t.not_taken += s.not_taken;
-               t.lost += s.lost; t.won += s.won; t.won_sum += s.won_sum;
-               t.qual += s.qual; t.meet += s.meet; t.inv += s.inv; }
+               t.lost += s.lost; t.won += s.won; t.won_sum += s.won_sum; }
         t.ads.push({
           ad_id: a.ad_id, ad_name: a.ad_name, campaign: a.campaign, thumb: thumbByAd[a.ad_id] || null,
           spend: a.spend, results: a.results, result_kind: a.result_kind, cost_per_result: a.cost_per_result,
           impressions: a.impressions, reach: a.reach, ctr: a.ctr,
           crm: s ? { leads: s.crm_leads, in_work: s.in_work, not_taken: s.not_taken,
                      lost: s.lost, won: s.won, won_sum: Math.round(s.won_sum),
-                     qual: s.qual, meet: s.meet, inv: s.inv,
                      loss_reasons: s.loss_reasons, deals: s.deals }
-                 : { leads: 0, in_work: 0, not_taken: 0, lost: 0, won: 0, won_sum: 0, qual: 0, meet: 0, inv: 0, loss_reasons: {}, deals: [] }
+                 : { leads: 0, in_work: 0, not_taken: 0, lost: 0, won: 0, won_sum: 0, loss_reasons: {}, deals: [] }
         });
       });
       const list = Object.values(out).map(t => {
@@ -2219,17 +1929,15 @@ export default async function handler(req, res){
       }).sort((a, b) => b.spend - a.spend);
 
       const trOut = {
-        country, since, until, usd_rate: rate || null, product, month_rule: v2 ? 'arrival' : 'touch',
-        qual_stage: stageRef(model.qualStage), meet_stage: stageRef(model.meetStage), inv_stage: stageRef(model.invStage),
+        country, since, until, usd_rate: rate || null,
         targetologs: list,
-        touches_total: touchesTotal,
+        touches_total: inRange.length,
         leads_attributed: lastByLead.size,
-        errors, incomplete,
         note: 'Слева — цифры рекламного кабинета. Справа — только те люди, которых удалось узнать '
           + 'по ссылке на объявление в первом сообщении WhatsApp. Переписки копятся с 03.09.2026; '
           + 'заявки из Instagram Direct и звонки следа рекламы не несут и сюда не попадают.'
       };
-      if(!errors.length) _trCache.set(trKey, { t: Date.now(), v: trOut }); // v1015: сбой не кэшируем
+      _trCache.set(trKey, { t: Date.now(), v: trOut });
       return res.status(200).json(trOut);
     }
     if(action === 'lead_report'){
@@ -2239,18 +1947,14 @@ export default async function handler(req, res){
       const toTs = req.query.to ? Number(req.query.to) : null;
       if(!fromTs) return bad(res, 400, 'Need ?from=<unix> (&to=<unix>)');
       const slim = String(req.query.slim || '') === '1';
-      // v1015: &v=2 — лиды по дате обращения, честный «Квал», продукт у каждого лида.
-      // Отдаём ВСЕ продукты: фронт фильтрует сам, без нового запроса при переключении.
-      const v2 = String(req.query.v || '') === '2';
-      const key = country + '|' + fromTs + '|' + (toTs || 0) + '|' + (v2 ? 2 : 1);
+      const key = country + '|' + fromTs + '|' + (toTs || 0);
       let data = _lrGet(key);
       if(!data){
-        const cfg = v2 ? await loadProducts() : null;
-        data = await buildLeadReport(env, fromTs, toTs, { v2, country, cfg });
-        if(!data.error && !(data.errors && data.errors.length)) _lrSet(key, data); // сбой не кэшируем
+        data = await buildLeadReport(env, fromTs, toTs);
+        if(!data.error) _lrSet(key, data);
       }
       if(data.error) return bad(res, 500, data.error);
-      const out = Object.assign({ country: country, product: productParam(req.query) }, data, { _subdomain: env.AMO_SUBDOMAIN });
+      const out = Object.assign({ country: country }, data, { _subdomain: env.AMO_SUBDOMAIN });
       if(slim){ out.leads = []; out.leads_omitted = true; }
       return res.status(200).json(out);
     }
@@ -2267,17 +1971,22 @@ export default async function handler(req, res){
       const p = pipelines.find(x => /^лид/i.test(x.name || '')) || pipelines.find(x => x.is_main) || pipelines[0];
       if(!p) return bad(res, 500, 'no pipelines found');
 
+      const isLossStatus = (st) => Number(st.id) === 143 || Number(st.sort) === 11000 || /закрыт.*не.*реализ|не реализ/i.test(String(st.name||''));
+      const isWonStatus  = (st) => Number(st.id) === 142 || Number(st.sort) === 10000 || /успешн.*реализ/i.test(String(st.name||''));
+      const flow = p.statuses.filter(st => !isLossStatus(st) && !isWonStatus(st)).sort((a,b) => a.sort - b.sort);
       // Карта «этап → насколько далеко по воронке». Отказные этапы (sort 11000) НЕ значат,
       // что лид прошёл всю воронку — их reach берём только из истории смен статуса.
       // «Успешно реализовано» наоборот засчитываем как пройденную воронку целиком.
-      // v1015 (v=2): «Отложили на период» тоже не движение вперёд; добавлен «Квал».
-      const gqV2 = String(req.query.v || '') === '2';
-      const gqModel = buildStageModel(p.statuses, { honest: gqV2 });
-      const flow = gqModel.flow;
-      const isWonStatus = (st) => gqModel.wonIds.has(st.id);
-      const stMeeting = gqModel.meetStage;
-      const stInvoice = gqModel.invStage;
-      const stQual = gqModel.qualStage;
+      const maxFlowSort = flow.length ? Number(flow[flow.length - 1].sort) : 0;
+      const sortById = {};
+      p.statuses.forEach(st => {
+        if(isLossStatus(st)) return;
+        sortById[st.id] = isWonStatus(st) ? maxFlowSort : Number(st.sort);
+      });
+
+      const pick = (re) => flow.find(st => re.test(String(st.name||'').toLowerCase()));
+      const stMeeting = pick(/назначен.*встреч|встреч.*назначен/);
+      const stInvoice = pick(/сч[еёe]т.*выставл|выставл.*сч[еёe]т/);
 
       // 1) лиды, созданные в периоде
       let dateFilter = `&filter[created_at][from]=${fromTs}`;
@@ -2296,16 +2005,34 @@ export default async function handler(req, res){
       const leadIds = new Set(leads.map(l => l.id));
 
       // 2) история смен статуса с начала периода — чтобы поймать тех, кто прошёл этап и слился
-      // v1015: общий разбор истории (scanStatusEvents), как в lead_report и targ_report
-      const sc = await scanStatusEvents(env, leadIds, fromTs, toTs);
-      if(sc.error && (Number(sc.error.status) === 401 || Number(sc.error.status) === 403)) throw sc.error;
       const reachedSort = new Map(); // lead_id → максимальный sort этапа, где лид когда-либо был
-      leads.forEach(l => { const r = reachedOf(gqModel, l, sc); if(r != null) reachedSort.set(l.id, r); });
-      const eventsScanned = sc.scanned, eventsTruncated = sc.truncated, eventsError = sc.error ? (sc.error.message || String(sc.error)) : null;
-      const gqErrors = sc.error ? [amoErrOf(sc.error, 'история этапов')] : [];
-      const gqIncomplete = [];
-      if(truncated) gqIncomplete.push({ source: 'amo', what: 'leads', detail: 'показаны первые 2000' });
-      if(sc.truncated) gqIncomplete.push({ source: 'amo', what: 'events', detail: 'история этапов просмотрена не полностью' });
+      leads.forEach(l => {
+        const st = sortById[l.status_id];
+        if(st !== undefined) reachedSort.set(l.id, st);
+      });
+      let eventsScanned = 0, eventsTruncated = false, eventsError = null;
+      try {
+        for(let page = 1; page <= 40; page++){
+          const evTo = Math.min(Math.floor(Date.now()/1000), (toTs ? toTs + 90*86400 : Math.floor(Date.now()/1000)));
+        const ev = await amoFetch(`/events?filter[entity]=lead&filter[type][]=lead_status_changed&filter[created_at][from]=${fromTs}&filter[created_at][to]=${evTo}&limit=100&page=${page}`, env);
+          if(!ev) break;
+          const batch = (ev._embedded && ev._embedded.events) || [];
+          if(!batch.length) break;
+          eventsScanned += batch.length;
+          batch.forEach(e => {
+            const id = Number(e.entity_id);
+            if(!leadIds.has(id)) return;
+            const after = (e.value_after && e.value_after[0] && e.value_after[0].lead_status) || null;
+            if(!after) return;
+            const st = sortById[after.id];
+            if(st === undefined) return;
+            const prev = reachedSort.get(id);
+            if(prev === undefined || st > prev) reachedSort.set(id, st);
+          });
+          if(batch.length < 100) break;
+          if(page === 40) eventsTruncated = true;
+        }
+      } catch(e){ eventsError = e.message || String(e); }
 
       // 3) считаем: «дошёл до этапа» = максимальный достигнутый sort >= sort этапа.
       // «Успешно реализовано» (sort 10000) проходит все этапы автоматически.
@@ -2325,14 +2052,12 @@ export default async function handler(req, res){
         leads: leads.length,
         truncated: truncated,
         stages: {
-          ...(gqV2 ? { qual: stQual ? { id: stQual.id, name: stQual.name, sort: stQual.sort, count: countReached(stQual) } : null } : {}),
           meeting: stMeeting ? { id: stMeeting.id, name: stMeeting.name, sort: stMeeting.sort, count: countReached(stMeeting) } : null,
           invoice: stInvoice ? { id: stInvoice.id, name: stInvoice.name, sort: stInvoice.sort, count: countReached(stInvoice) } : null
         },
         won: { count: wonLeads.length, sum: wonLeads.reduce((a,l) => a + Number(l.price||0), 0) },
         flow: flow.map(st => ({ id: st.id, name: st.name, sort: st.sort })),
         events: { scanned: eventsScanned, truncated: eventsTruncated, error: eventsError },
-        errors: gqErrors, incomplete: gqIncomplete,
         _subdomain: env.AMO_SUBDOMAIN
       });
     }
@@ -2371,7 +2096,15 @@ export default async function handler(req, res){
       const csv = await csvResp.text();
 
       // 2. Парсим строки и извлекаем телефон + комментарий
-      // v1015: normalizePhone — общий из _phone.js (KG + KZ)
+      function normalizePhone(p){
+        const digits = String(p||'').replace(/\D/g, '');
+        if(!digits) return null;
+        // Казахстан: +7 / 8 → 7
+        let n = digits;
+        if(n.startsWith('8') && n.length === 11) n = '7' + n.slice(1);
+        if(n.length === 10) n = '7' + n;
+        return n.length >= 10 ? n : null;
+      }
 
       function classifyComment(line){
         const t = String(line||'').toLowerCase();
@@ -2388,9 +2121,9 @@ export default async function handler(req, res){
       const sheetLeads = [];
       lines.forEach(line => {
         // Извлекаем все p:+7XXX или p:7XXX и берём первый валидный
-        const phoneMatch = line.match(/p:\+?(\d{9,12})/);
+        const phoneMatch = line.match(/p:\+?(\d{10,11})/);
         if(!phoneMatch) return;
-        const phone = normalizePhone(phoneMatch[1], country);
+        const phone = normalizePhone(phoneMatch[1]);
         if(!phone) return;
         // Комментарий — берём ВСЮ строку для классификации (комментарии в разных колонках)
         const cls = classifyComment(line);
@@ -2414,7 +2147,7 @@ export default async function handler(req, res){
           cf.forEach(f => {
             if(f.field_code === 'PHONE' && Array.isArray(f.values)){
               f.values.forEach(v => {
-                const p = normalizePhone(v.value, country);
+                const p = normalizePhone(v.value);
                 if(p) amoPhones.set(p, c.id);
               });
             }
@@ -2523,8 +2256,6 @@ export default async function handler(req, res){
     }
     return bad(res, 400, 'Unknown action. Use ?action=pipelines | funnel | tag_breakdown');
   } catch(e){
-    // v1015: 401 от amo — это НЕ наша сессия; отдаём 502 с кодом, фронт покажет «ключ amo устарел»
-    if(e && e.upstream === 'amo') return amoFail(res, e);
     return bad(res, e.status || 500, e.message, { data: e.data });
   }
 }
