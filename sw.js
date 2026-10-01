@@ -1,8 +1,8 @@
 // ВАЖНО: при каждом значимом релизе бампать CACHE_NAME синхронно с <title> в index.html.
 // Иначе SW отдаёт пользователям закэшированный старый index.html и новые фичи (страницы, скрипты)
 // становятся видны только после ручного Ctrl+Shift+R. См. CLAUDE.md → раздел про SW.
-var CACHE_NAME = 'salesdoc-v1013';
-var PRECACHE = ['/', '/manifest.json', '/icon-192.svg'];
+var CACHE_NAME = 'salesdoc-v1014';
+var PRECACHE = ['/', '/manifest.json', '/icon-192.png'];
 
 self.addEventListener('install', function(e) {
   e.waitUntil(

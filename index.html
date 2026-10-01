@@ -2,12 +2,16 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#08090B">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#FBFAF7"><!-- v1014: цвет строки состояния телефона = шапка «Бумаги» (было тёмное с прошлой темы) -->
 <link rel="manifest" href="/manifest.json">
-<link rel="icon" type="image/svg+xml" href="/icon-192.svg">
-<link rel="apple-touch-icon" href="/icon-192.svg">
-<title>SalesDoc — Финансовый Дашборд v1013</title>
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png"><!-- айфон не понимает svg-значок и рисовал скриншот страницы -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="SalesDoc">
+<title>SalesDoc — Финансовый Дашборд v1014</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -8162,6 +8166,51 @@ body.light #view-dashboard .dash-pnl .pcard, body.light #view-dashboard .dash-pn
 body.light #view-dashboard .dash-pnl .glow{ display:none; }
 body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
 /* конец v966 «Бумага» */
+/* v1014 — телефон: нижняя панель разделов (sdm-*) и шапка в две строки. На компьютере не видно. */
+.sdm-bar, .sdm-sheet-bg{ display:none; }
+@media(max-width:768px){
+ body.sd-in .sdm-bar{ display:flex; position:fixed; left:0; right:0; bottom:0; z-index:190; background:var(--surface); border-top:1px solid var(--border); padding:4px 4px calc(4px + env(safe-area-inset-bottom)); justify-content:space-around; align-items:stretch; }
+ .sdm-tab{ flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; height:52px; background:none; border:0; border-radius:8px; color:var(--text-soft); font:500 10.5px/1.1 var(--font); cursor:pointer; -webkit-tap-highlight-color:transparent; }
+ .sdm-tab svg{ width:22px; height:22px; }
+ .sdm-tab svg *{ stroke:currentColor; }
+ .sdm-tab.on{ color:var(--accent); font-weight:600; }
+ .sdm-tab:active{ background:var(--surface-2); }
+ .sdm-tab.sdm-pay .sdm-pay-ic{ width:40px; height:28px; border-radius:8px; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; }
+ .sdm-tab.sdm-pay .sdm-pay-ic svg{ width:18px; height:18px; }
+ .sdm-tab.sdm-pay{ color:var(--text); }
+ .sdm-tab[hidden]{ display:none; }
+ body.sd-in .main{ padding-bottom:calc(64px + env(safe-area-inset-bottom)); }
+ /* меню-гармошка и кнопка его открытия на телефоне не нужны — разделы внизу */
+ #sidebar, #sidebar-overlay, #menu-toggle{ display:none!important; }
+ #sd-verbadge{ display:none!important; }
+ body.sd-in #fab-add{ display:none!important; } /* старая круглая «+» — её заменила «Оплата» в панели */
+ /* всплывающие сообщения — над панелью, а не поверх неё */
+ body.sd-in #notif, body.sd-in #sd-toast{ bottom:calc(80px + env(safe-area-inset-bottom))!important; left:16px!important; right:16px!important; max-width:none!important; }
+ /* шапка: 1-я строка — название, колокольчик, обновить; 2-я — месяц на всю ширину */
+ .topbar{ height:auto!important; min-height:52px; flex-wrap:wrap; row-gap:8px; column-gap:8px; padding:calc(8px + env(safe-area-inset-top)) 16px 8px!important; }
+ .topbar-right{ display:contents!important; }
+ .topbar .page-title{ order:1; flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:17px!important; }
+ #ntf-bell{ order:2; flex:none; width:36px!important; height:36px!important; }
+ #sync-btn{ order:3; flex:none; }
+ #period-selector{ order:4; flex:1 1 100%; min-width:0; }
+ #period-selector #period-trigger{ flex:1 1 auto; justify-content:center; }
+ #period-prev-btn, #period-next-btn{ width:36px!important; height:36px!important; flex:none; }
+ /* лист «Ещё» */
+ .sdm-sheet-bg{ position:fixed; inset:0; z-index:400; background:rgba(28,27,24,.45); }
+ .sdm-sheet-bg.open{ display:block; }
+ .sdm-sheet{ position:absolute; left:0; right:0; bottom:0; max-height:85vh; overflow-y:auto; background:var(--surface); border-radius:14px 14px 0 0; padding:8px 0 calc(12px + env(safe-area-inset-bottom)); -webkit-overflow-scrolling:touch; }
+ .sdm-grip{ width:36px; height:4px; border-radius:2px; background:var(--border-strong); margin:0 auto 8px; }
+ .sdm-me{ display:flex; align-items:center; gap:12px; padding:10px 16px 14px; border-bottom:1px solid var(--border-faint); cursor:pointer; }
+ .sdm-av{ width:40px; height:40px; border-radius:50%; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font:600 14px var(--font); flex:none; }
+ .sdm-me-n{ font:600 15px/1.2 var(--font); color:var(--text); }
+ .sdm-me-r{ font:400 12.5px/1.3 var(--font); color:var(--text-soft); margin-top:2px; }
+ .sdm-grp{ font:600 11px/1 var(--font); letter-spacing:.04em; text-transform:uppercase; color:var(--text-soft); padding:16px 16px 6px; }
+ .sdm-row{ display:flex; align-items:center; justify-content:space-between; width:100%; min-height:48px; padding:0 16px; background:none; border:0; border-bottom:1px solid var(--border-faint); font:500 15px var(--font); color:var(--text); text-align:left; cursor:pointer; }
+ .sdm-row:active{ background:var(--surface-2); }
+ .sdm-row.on{ color:var(--accent); font-weight:600; }
+ .sdm-row .sdm-chev{ color:var(--text-soft); font-size:18px; line-height:1; }
+ .sdm-row.sdm-out{ color:#B4432E; border-bottom:0; margin-top:8px; }
+}
 </style>
 <style id="nw-css">
 /* v1013: окно «Что нового» — один раз после обновления, одна главная новинка. Код: NW_SPOTLIGHTS / nwSchedule */
@@ -11382,6 +11431,18 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
       структуру, но ориентироваться на него нельзя: именно такой врущий комментарий стоил нам v888 -->
 </main>
 
+<!-- v1014: нижняя панель разделов на телефоне (на компьютере скрыта). Права — те же, что у бокового меню (sdmSync). -->
+<nav class="sdm-bar" id="sdm-bar" aria-label="Разделы">
+ <button type="button" class="sdm-tab" data-sdm="dashboard" onclick="sdmGo('dashboard')"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.5"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="4" rx="1.5"/><rect x="3" y="11" width="6" height="4" rx="1.5"/><rect x="11" y="9" width="6" height="8" rx="1.5"/></svg>Дашборд</button>
+ <button type="button" class="sdm-tab" data-sdm="clients" onclick="sdmGo('clients')"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M4 17c0-3 2.5-5 6-5s6 2 6 5"/></svg>Клиенты</button>
+ <button type="button" class="sdm-tab sdm-pay" data-sdm="pay" onclick="sdmPay()" hidden><span class="sdm-pay-ic"><svg viewBox="0 0 20 20" fill="none" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12" style="stroke:#fff"/></svg></span>Оплата</button>
+ <button type="button" class="sdm-tab" data-sdm="calendar" onclick="sdmGo('calendar')"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2.5V5M13 2.5V5"/><path d="M6.5 12l2 2 3.5-3.5"/></svg>Задачи</button>
+ <button type="button" class="sdm-tab" data-sdm="more" onclick="sdmMore(true)"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13"/></svg>Ещё</button>
+</nav>
+<div class="sdm-sheet-bg" id="sdm-sheet-bg" onclick="if(event.target===this)sdmMore(false)">
+ <div class="sdm-sheet" role="dialog" aria-label="Все разделы"><div class="sdm-grip"></div><div id="sdm-sheet-body"></div></div>
+</div>
+
 <!-- ADD RECORD MODAL -->
 <div class="modal-overlay" id="modal" onclick="if(event.target.id==='modal')closeModal()">
  <div class="modal">
@@ -12450,6 +12511,7 @@ function applyUserAccess() {
  // v418: после входа подтянуть число висящих тикетов и отрисовать кружок-индикатор
  // на табе «Поддержка». setTimeout чтоб не блокировать рендер сразу после логина.
  setTimeout(function(){ if(typeof ticketsLoadBadgeOnly === 'function') ticketsLoadBadgeOnly(); }, 500);
+ try { if(typeof sdmSync === 'function') sdmSync(); } catch(_){} // v1014: нижняя панель на телефоне — те же права
 }
 
 
@@ -18171,6 +18233,7 @@ function _enterAppAsCurrentUser(){
  document.getElementById('login-screen').style.display = 'none';
  document.getElementById('sidebar').style.display = 'flex';
  document.getElementById('main-app').style.display = 'block';
+ document.body.classList.add('sd-in'); // v1014: нижняя панель на телефоне — только после входа
  document.documentElement.removeAttribute('data-auto-login');
  var sp = document.getElementById('sd-splash'); if(sp) sp.remove();
  applyUserAccess();
@@ -18317,6 +18380,7 @@ function doLogout() {
  document.getElementById('sidebar').style.display = 'none';
  document.getElementById('main-app').style.display = 'none';
  document.getElementById('login-screen').style.display = 'flex';
+ document.body.classList.remove('sd-in'); try { sdmMore(false); } catch(_){} // v1014
 }
 
 function quickLogin(id) {
@@ -46495,6 +46559,7 @@ window.amoToggleFunnelLeads = function(detailsId, linkEl){
  if (!m) return;
  var b = document.createElement('div');
  b.textContent = 'v' + m[1];
+ b.id = 'sd-verbadge'; // v1014: на телефоне прячется — лежал поверх нижней панели
  b.title = document.title;
  b.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:99999;padding:3px 8px;font-family:Golos Text,system-ui,sans-serif;font-size:10px;color:var(--text-muted);background:rgba(120,120,128,.10);border:1px solid rgba(120,120,128,.18);border-radius:6px;font-variant-numeric:tabular-nums;pointer-events:auto;cursor:default;user-select:none;opacity:.55;transition:opacity .15s';
  b.addEventListener('mouseenter', function(){ b.style.opacity='1'; });
@@ -47373,6 +47438,65 @@ function fzExport(kind){
  var csv = '﻿' + rows.map(function(r){ return r.map(function(v){ v = String(v == null ? '' : v); if (/^[=+\-@]/.test(v) && isNaN(Number(v))) v = "'" + v; return /[";\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; }).join(';'); }).join('\n');
  var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' })); a.download = name + '.csv'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
+
+// ---------- v1014: телефон — нижняя панель разделов и лист «Ещё» ----------
+// Какие разделы показать — берём из бокового меню: _applyNavVisibility уже скрыл там всё, на что нет прав.
+var SDM_CLIENT_VIEWS = { clients:1, route:1, activeclients:1, tickets:1, integrations:1, supportdash:1, dues:1, 'route-card':1, 'integration-card':1, 'ticket-card':1 };
+var SDM_TASK_VIEWS = { calendar:1, mytasks:1, 'task-card':1 };
+var _sdmView = '';
+function sdmNavVisible(view){
+ var el = document.querySelector('#sidebar [data-view="' + view + '"]');
+ return !!(el && !el.classList.contains('hidden'));
+}
+function sdmSync(){
+ var bar = document.getElementById('sdm-bar'); if (!bar) return;
+ ['dashboard','clients','calendar'].forEach(function(v){ var t = bar.querySelector('[data-sdm="' + v + '"]'); if (t) t.hidden = !sdmNavVisible(v); });
+ var canPay = !!(typeof currentUser !== 'undefined' && currentUser && currentUser.access && currentUser.access.add_payments);
+ var p = bar.querySelector('[data-sdm="pay"]'); if (p) p.hidden = !canPay;
+ sdmMark();
+}
+function sdmMark(){
+ var bar = document.getElementById('sdm-bar'); if (!bar) return;
+ var v = _sdmView, key = 'more';
+ if (v === 'dashboard') key = 'dashboard'; else if (SDM_CLIENT_VIEWS[v]) key = 'clients'; else if (SDM_TASK_VIEWS[v]) key = 'calendar';
+ bar.querySelectorAll('.sdm-tab').forEach(function(t){ t.classList.toggle('on', t.getAttribute('data-sdm') === key); });
+}
+function sdmGo(v){ sdmMore(false); showView(v); window.scrollTo(0, 0); }
+function sdmPay(){ sdmMore(false); try { openModal('payment'); } catch(e){ console.error('[sdmPay]', e); } }
+function sdmMore(open){
+ var bg = document.getElementById('sdm-sheet-bg'); if (!bg) return;
+ if (!open) { bg.classList.remove('open'); return; }
+ var h = '', esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); };
+ var row = function(view, label){ return '<button type="button" class="sdm-row' + (view === _sdmView ? ' on' : '') + '" onclick="sdmGo(\'' + view + '\')"><span>' + esc(label) + '</span><span class="sdm-chev">›</span></button>'; };
+ var u = (typeof currentUser !== 'undefined' && currentUser) || {};
+ var ini = (document.getElementById('ub-avatar') || {}).textContent || '';
+ var role = (document.getElementById('ub-role') || {}).textContent || '';
+ h += '<div class="sdm-me" onclick="sdmGo(\'cabinet\')"><div class="sdm-av">' + esc(ini) + '</div><div><div class="sdm-me-n">' + esc(u.name || '') + '</div><div class="sdm-me-r">' + esc(role) + ' · профиль</div></div></div>';
+ var inBar = { dashboard:1, clients:1, calendar:1 };
+ var loose = '';
+ document.querySelectorAll('#sidebar .nav-section > .nav-item-solo[data-view], #sidebar .nav-section > .nav-group').forEach(function(el){
+  if (el.classList.contains('hidden')) return;
+  if (el.classList.contains('nav-group')) {
+   var items = [].filter.call(el.querySelectorAll('.nav-item[data-view]'), function(it){ return !it.classList.contains('hidden'); });
+   if (!items.length) return;
+   var t = el.querySelector('.nav-popup-title');
+   h += '<div class="sdm-grp">' + esc(t ? t.textContent : '') + '</div>';
+   items.forEach(function(it){ h += row(it.dataset.view, it.textContent.trim()); });
+  } else if (!inBar[el.dataset.view]) {
+   var l = el.querySelector('.nav-label');
+   loose += row(el.dataset.view, l ? l.textContent.trim() : el.dataset.view);
+  }
+ });
+ if (loose) h += '<div class="sdm-grp">Ещё</div>' + loose;
+ h += '<button type="button" class="sdm-row sdm-out" onclick="sdmMore(false);doLogout()"><span>Выйти</span></button>';
+ document.getElementById('sdm-sheet-body').innerHTML = h;
+ bg.classList.add('open');
+}
+// showView — общая точка входа во все разделы: запоминаем раздел и подсвечиваем вкладку
+(function(){
+ var _orig = window.showView; if (typeof _orig !== 'function') return;
+ window.showView = function(v){ var r = _orig.apply(this, arguments); _sdmView = (location.hash || '').slice(1) || v; /* showView сам переводит clients → вкладку и закрытое → доступное */ try { sdmMark(); } catch(_){} return r; };
+})();
 </script>
 </body>
 </html>
