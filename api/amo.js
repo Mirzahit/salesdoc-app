@@ -26,31 +26,97 @@ function bad(res, code, msg, extra){
   res.status(code).json({ error: msg, ...(extra || {}) });
 }
 
-async function amoFetch(path, env){
+// ── v1015: ограничитель частоты запросов к amo ──────────────────────────────
+// amo разрешает 7 запросов в секунду на аккаунт; за превышение отвечает 429, а при
+// повторах может на время заблокировать IP (инцидент после выкладки v1015: 3 минуты
+// все запросы падали «fetch failed»). Поэтому:
+//   • в одном экземпляре функции — не чаще 1 запроса в 210 мс (≤5 в секунду);
+//   • между экземплярами — общий счётчик в Upstash Redis (KV_REST_API_URL/TOKEN):
+//     не больше 6 запросов в секунду на поддомен; нет KV или он сбоит — только местный;
+//   • после сетевого сбоя 20 секунд не стучимся (сразу ошибка), чтобы не добивать amo.
+const AMO_GAP_MS = 210, AMO_SHARED_MAX = 6;
+let _amoNextAt = 0, _kvDownUntil = 0;
+const _amoDownUntil = new Map();
+const _sleep = (ms) => new Promise(ok => setTimeout(ok, ms));
+async function amoLocalSlot(){
+  const now = Date.now();
+  const at = Math.max(now, _amoNextAt);
+  _amoNextAt = at + AMO_GAP_MS;
+  if(at > now) await _sleep(at - now);
+}
+async function amoSharedSlot(sub){
+  const url = String(process.env.KV_REST_API_URL || '').trim().replace(/\/+$/, '');
+  const tok = String(process.env.KV_REST_API_TOKEN || '').trim();
+  if(!url || !tok || Date.now() < _kvDownUntil) return;
+  for(let i = 0; i < 20; i++){
+    const secNow = Math.floor(Date.now() / 1000);
+    const key = 'amo:rl:' + sub + ':' + secNow;
+    let n;
+    try {
+      const r = await fetch(url + '/pipeline', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+        body: JSON.stringify([['INCR', key], ['EXPIRE', key, '5']]),
+        signal: AbortSignal.timeout(800)
+      });
+      const j = await r.json();
+      n = Number(j && j[0] && j[0].result);
+      if(!r.ok || !Number.isFinite(n)) throw new Error('kv ' + r.status);
+    } catch(e){
+      _kvDownUntil = Date.now() + 60000; // KV сбоит — минуту живём на местном ограничителе
+      console.error('[amo] KV limiter off: ' + String(e.message || e).slice(0, 80));
+      return;
+    }
+    if(n <= AMO_SHARED_MAX) return;
+    await _sleep(1000 - (Date.now() % 1000) + 25); // ждём следующую секунду
+  }
+}
+// Путь для журнала: без значений, похожих на телефоны, и без поиска по номеру.
+function amoLogPath(path){
+  return String(path).replace(/([?&]query=)[^&]*/g, '$1***').replace(/\d{9,}/g, '#');
+}
+
+async function amoFetch(path, env, method){
   // v309: чистим whitespace из env-переменных. При вставке в Vercel UI часто
   //       копируются переносы строк, а в HTTP-заголовке они недопустимы.
   const token = String(env.AMO_TOKEN || '').replace(/\s+/g, '');
   const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
   const url = `https://${sub}.amocrm.ru/api/v4${path}`;
+  const m = method || 'GET';
+  if(Date.now() < (_amoDownUntil.get(sub) || 0)){
+    const err = new Error('amo недоступен: пауза после сбоя сети');
+    err.status = 0; err.upstream = 'amo'; err.cause_code = 'PAUSED';
+    throw err;
+  }
   let r;
   for(let attempt = 0; ; attempt++){
+    await amoLocalSlot();          // каждый запрос, и повтор тоже, — через ограничитель
+    await amoSharedSlot(sub);
     try {
       r = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        signal: AbortSignal.timeout(25000)
       });
     } catch(e){
       // v1015: сеть до amo упала — это ошибка amo, а не нашей программы
-      const err = new Error('amo недоступен: ' + (e.message || String(e)));
-      err.status = 0; err.upstream = 'amo';
+      const code = (e && e.cause && e.cause.code) || (e && e.name) || '';
+      console.error(`[amo] NET ${m} ${amoLogPath(path)} code=${code} attempt=${attempt}`);
+      _amoDownUntil.set(sub, Date.now() + 20000);
+      const err = new Error('amo недоступен: ' + (e.message || String(e)) + (code ? ' (' + code + ')' : ''));
+      err.status = 0; err.upstream = 'amo'; err.cause_code = code || null;
       throw err;
     }
-    // v1015: amo ограничивает частоту (7 запросов/с) — на 429 ждём и повторяем до 2 раз
+    if(!r.ok && r.status !== 204){
+      const raH = r.headers && r.headers.get ? r.headers.get('retry-after') : null;
+      console.error(`[amo] ${r.status} ${m} ${amoLogPath(path)} code= retry-after=${raH || ''} attempt=${attempt}`);
+    }
+    // amo ограничивает частоту — на 429 ждём (Retry-After или 1.2 с) и повторяем до 2 раз
     if(r.status !== 429 || attempt >= 2) break;
     const ra = Number(r.headers && r.headers.get ? r.headers.get('retry-after') : 0);
-    await new Promise(ok => setTimeout(ok, ra > 0 ? Math.min(ra * 1000, 5000) : 1200));
+    _amoNextAt = Math.max(_amoNextAt, Date.now() + (ra > 0 ? Math.min(ra * 1000, 5000) : 1200)); // пауза и для соседних запросов
   }
   if(r.status === 204) return null; // empty response (no records)
   const text = await r.text();
@@ -70,10 +136,31 @@ async function amoFetch(path, env){
 // как есть, и экран думал, что истекла СВОЯ сессия, — а на деле устарел ключ amo.
 function amoFail(res, e){
   const s = Number(e && e.status);
-  return res.status(502).json({ error: (e && e.message) || 'amo error', code: (s === 401 || s === 403) ? 'amo_auth' : 'amo_error' });
+  return res.status(502).json({ error: (e && e.message) || 'amo error', code: (s === 401 || s === 403) ? 'amo_auth' : 'amo_error',
+    cause: (e && e.cause_code) || (s ? String(s) : null) });
 }
 
-async function getPipelines(env){
+// v1015: общий кэш с объединением одинаковых запросов: два экрана, открытые разом,
+// строят отчёт один раз. Неудачный результат (isBad) не хранится.
+const _memo = new Map();
+function memo(key, ttlMs, fn, isBad){
+  const e = _memo.get(key);
+  if(e && Date.now() - e.t < ttlMs) return e.p;
+  const p = Promise.resolve().then(fn);
+  const ent = { t: Date.now(), p };
+  _memo.set(key, ent);
+  const drop = () => { if(_memo.get(key) === ent) _memo.delete(key); };
+  p.then(v => { if(isBad && isBad(v)) drop(); }, drop);
+  if(_memo.size > 200){ const old = _memo.keys().next().value; _memo.delete(old); }
+  return p;
+}
+
+// v1015: воронки меняются редко — держим 10 минут, чтобы каждый отчёт не спрашивал заново
+function getPipelines(env){
+  const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+  return memo('pl|' + sub, 10 * 60 * 1000, () => getPipelinesRaw(env));
+}
+async function getPipelinesRaw(env){
   const data = await amoFetch('/leads/pipelines', env);
   const pipelines = (data && data._embedded && data._embedded.pipelines) || [];
   return pipelines.map(p => ({
@@ -330,14 +417,26 @@ async function amoMutate(method, path, body, env){
   const token = String(env.AMO_TOKEN || '').replace(/\s+/g, '');
   const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
   const url = `https://${sub}.amocrm.ru/api/v4${path}`;
-  const r = await fetch(url, {
-    method: method,
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
+  await amoLocalSlot(); await amoSharedSlot(sub); // v1015: записи — через тот же ограничитель
+  let r;
+  try {
+    r = await fetch(url, {
+      method: method,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(25000)
+    });
+  } catch(e){
+    const code = (e && e.cause && e.cause.code) || (e && e.name) || '';
+    console.error(`[amo] NET ${method} ${amoLogPath(path)} code=${code} attempt=0`);
+    const err = new Error('amo недоступен: ' + (e.message || String(e)));
+    err.status = 0; err.upstream = 'amo'; err.cause_code = code || null;
+    throw err;
+  }
+  if(!r.ok && r.status !== 204) console.error(`[amo] ${r.status} ${method} ${amoLogPath(path)} code= retry-after=${(r.headers.get && r.headers.get('retry-after')) || ''} attempt=0`);
   if(r.status === 204) return null;
   const text = await r.text();
   let data;
@@ -369,10 +468,10 @@ async function readBody(req){
 // сколько дошло до каждого этапа, разрез по менеджерам и сумму успешных сделок.
 const _lrCache = new Map();
 const LR_TTL_MS = 10 * 60 * 1000;
-function _lrGet(k){
+function _lrGet(k, ttl){
   const e = _lrCache.get(k);
   if(!e) return null;
-  if(Date.now() - e.t > LR_TTL_MS){ _lrCache.delete(k); return null; }
+  if(Date.now() - e.t > (ttl || LR_TTL_MS)){ _lrCache.delete(k); return null; }
   return e.v;
 }
 function _lrSet(k, v){ _lrCache.set(k, { t: Date.now(), v }); }
@@ -397,6 +496,9 @@ const _trCache = new Map(); // v946: готовые отчёты по тарге
 // Свой же эндпоинт: отдаём и статус, и тело — чтобы отличить «нет данных» от «упало».
 async function selfFetch(base, path, extraHeaders){
   const hdr = Object.assign({ 'x-app-token': String(process.env.APP_TOKEN || '').trim(), 'x-user-email': 'cron@salesdoc.io' }, extraHeaders || {});
+  // v1015: на превью-сборке Vercel закрыт защитой — пропуск для своих же запросов
+  const bypass = String(process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '').trim();
+  if(bypass) hdr['x-vercel-protection-bypass'] = bypass;
   try {
     const r = await fetch(`${base}${path}`, { headers: hdr });
     const json = await r.json().catch(() => null);
@@ -405,15 +507,22 @@ async function selfFetch(base, path, extraHeaders){
 }
 function selfFailed(r){ return !r || !r.json || r.status >= 400 || r.status === 0 || !!r.json.error; }
 
-async function fetchUsers(env, incomplete){
+async function fetchUsersRaw(env){
   const userNameById = {};
+  for(let up = 1; up <= 5; up++){
+    const ud = await amoFetch(`/users?limit=250&page=${up}`, env);
+    const arr = (ud && ud._embedded && ud._embedded.users) || [];
+    arr.forEach(u => { userNameById[u.id] = u.name; });
+    if(arr.length < 250) break;
+  }
+  return userNameById;
+}
+async function fetchUsers(env, incomplete){
+  let userNameById = {};
   try {
-    for(let up = 1; up <= 5; up++){
-      const ud = await amoFetch(`/users?limit=250&page=${up}`, env);
-      const arr = (ud && ud._embedded && ud._embedded.users) || [];
-      arr.forEach(u => { userNameById[u.id] = u.name; });
-      if(arr.length < 250) break;
-    }
+    // v1015: менеджеры — 10 минут из памяти
+    const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+    userNameById = await memo('us|' + sub, 10 * 60 * 1000, () => fetchUsersRaw(env));
   } catch(e){
     // v1015: без имён менеджеров отчёт всё равно верный — это «неполные данные», не ошибка
     if(Number(e.status) === 401 || Number(e.status) === 403) throw e;
@@ -531,7 +640,7 @@ async function buildArrivals(env, country, fromTs, toTs, opts){
     let dateFilter = `&filter[created_at][from]=${fromTs}`;
     if(toTs) dateFilter += `&filter[created_at][to]=${toTs}`;
     for(let page = 1; page <= 12; page++){
-      const data = await amoFetch(`/leads?filter[pipeline_id]=${o.pipelineId}${dateFilter}&limit=250&page=${page}`, env);
+      const data = await amoFetch(`/leads?filter[pipeline_id]=${o.pipelineId}${dateFilter}&limit=250&page=${page}${o.with ? '&with=' + o.with : ''}`, env);
       if(!data) break;
       const batch = (data._embedded && data._embedded.leads) || [];
       if(!batch.length) break;
@@ -551,7 +660,7 @@ async function buildArrivals(env, country, fromTs, toTs, opts){
   if(missing.length){
     const r = await fetchLeadsByIds(env, missing, o.with || '', errors);
     failed = r.failed;
-    Object.values(r.leads).forEach(l => { if(!o.pipelineId || !o.includeOrganic || l.pipeline_id === o.pipelineId) leads[l.id] = l; });
+    Object.values(r.leads).forEach(l => { if(o.keepAllPipelines || !o.pipelineId || !o.includeOrganic || l.pipeline_id === o.pipelineId) leads[l.id] = l; });
   }
   if(failed) incomplete.push({ source: 'amo', what: 'deals', detail: 'не загрузились сделки: ' + failed });
   const items = [];
@@ -561,6 +670,22 @@ async function buildArrivals(env, country, fromTs, toTs, opts){
     if(a) items.push({ lead: l, tags, arrival: a });
   });
   return { items, truncated, errors, incomplete, touches_total: touches.length };
+}
+
+// v1015: основа периода — обращения и история этапов — одна на lead_report и targ_report
+// одной страны и периода: строится один раз (параллельные запросы ждут тот же результат),
+// хранится 10 минут. Со сбоем не хранится.
+function periodBase(env, country, fromTs, toTs){
+  const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+  return memo(['pb', sub, country, fromTs, toTs || 0].join('|'), 10 * 60 * 1000, async () => {
+    const pipelines = await getPipelines(env);
+    const p = pipelines.find(x => /^лид/i.test(x.name || '')) || pipelines.find(x => x.is_main) || pipelines[0];
+    if(!p) return { error: 'no pipelines found' };
+    const ar = await buildArrivals(env, country, fromTs, toTs, { pipelineId: p.id, includeOrganic: true, keepAllPipelines: true, with: 'contacts' });
+    const ids = new Set(ar.items.map(x => Number(x.lead.id)));
+    const sc = await scanStatusEvents(env, ids, fromTs - NEAR_SEC, toTs);
+    return { p, pipelines, ar, sc };
+  }, v => !!(v.error || v.ar.errors.length || v.sc.error));
 }
 
 async function buildLeadReport(env, fromTs, toTs, opts){
@@ -586,12 +711,16 @@ async function buildLeadReport(env, fromTs, toTs, opts){
   let truncated = false;
   const arrivalById = new Map();
   let cfg = DEFAULT_PRODUCTS;
+  let sc = null;
   if(v2){
     cfg = o.cfg || DEFAULT_PRODUCTS;
-    const ar = await buildArrivals(env, country, fromTs, toTs, { pipelineId: p.id, includeOrganic: true });
+    const base = await periodBase(env, country, fromTs, toTs);
+    if(base.error) return { error: base.error };
+    const ar = base.ar;
     errors.push(...ar.errors); incomplete.push(...ar.incomplete);
     truncated = ar.truncated;
-    ar.items.forEach(x => { raw.push(x.lead); arrivalById.set(x.lead.id, x.arrival); });
+    ar.items.forEach(x => { if(x.lead.pipeline_id !== p.id) return; raw.push(x.lead); arrivalById.set(x.lead.id, x.arrival); });
+    sc = base.sc;
   } else {
     let dateFilter = `&filter[created_at][from]=${fromTs}`;
     if(toTs) dateFilter += `&filter[created_at][to]=${toTs}`;
@@ -609,7 +738,7 @@ async function buildLeadReport(env, fromTs, toTs, opts){
   const known = new Set(raw.map(l => l.id));
 
   // 2) история смен этапа — иначе лид, который дошёл до встречи и слился, теряется
-  const sc = await scanStatusEvents(env, known, v2 ? fromTs - NEAR_SEC : fromTs, toTs);
+  if(!sc) sc = await scanStatusEvents(env, known, fromTs, toTs);
   if(sc.error){
     if(Number(sc.error.status) === 401 || Number(sc.error.status) === 403) throw sc.error;
     errors.push(amoErrOf(sc.error, 'история этапов'));
@@ -1581,10 +1710,9 @@ export default async function handler(req, res){
           } catch(e){ skipped.push({ phone: t.phone, why: 'поиск в amo не удался: ' + e.message }); leadCache.set(t.phone, null); continue; }
           const ids = [];
           contacts.forEach(c => ((c._embedded && c._embedded.leads) || []).forEach(l => { if(!ids.includes(l.id)) ids.push(l.id); }));
-          const leads = [];
-          for(const id of ids.slice(0, 8)){
-            try { const l = await amoFetch(`/leads/${id}`, env); if(l) leads.push(l); } catch(_){}
-          }
+          // v1015: сделки одним запросом, а не по одной
+          const lb = ids.length ? (await fetchLeadsByIds(env, ids.slice(0, 8), '', null)).leads : {};
+          const leads = ids.slice(0, 8).map(id => lb[id]).filter(Boolean);
           found = { contact_id: contacts.length ? contacts[0].id : null, contact_name: contacts.length ? contacts[0].name : null, leads };
           leadCache.set(t.phone, found);
         }
@@ -1804,33 +1932,52 @@ export default async function handler(req, res){
       }
 
       // По телефону ищем сделку — так же, как в переписках.
+      // v1015 (инцидент с частотой запросов): один поиск контакта на номер, не больше
+      // maxSearch поисков за запрос; сделки всех найденных — пачками по 50, а не по одной.
       const rowsToSave = [], notFound = [], skipped = [];
       const seen = new Set();
+      const maxSearch = Math.min(Math.max(Number(req.query.limit || 100), 1), 150);
+      const byTail = new Map();
+      const todo = [];
+      let searches = 0, capped = 0;
       for(const f of raw){
         if(seen.has(f.lead)) continue;
         seen.add(f.lead);
         const targ = nameForAcc(f.account);
         if(!targ){ skipped.push({ ad: f.ad_name, why: 'у кабинета ' + f.account + ' не вписано имя таргетолога' }); continue; }
-        const adTs = Math.floor(new Date(f.at).getTime() / 1000);
-        let contacts = [];
-        try {
-          // v957: ищем по ХВОСТУ номера. В форме телефон приходит как +996555…, а менеджер
-          // в amo сохраняет «0555…» или «555…» — полный номер не совпадал, и живые
-          // заявки числились «нет в CRM». Последние 9 цифр одинаковы в любом формате.
-          const tail = f.phone.length > 9 ? f.phone.slice(-9) : f.phone;
-          const r = await amoFetch(`/contacts?query=${encodeURIComponent(tail)}&limit=10&with=leads`, env);
-          contacts = (r && r._embedded && r._embedded.contacts) || [];
-          if(!contacts.length && tail !== f.phone){
-            const r2 = await amoFetch(`/contacts?query=${encodeURIComponent(f.phone)}&limit=10&with=leads`, env);
-            contacts = (r2 && r2._embedded && r2._embedded.contacts) || [];
+        // v957: ищем по ХВОСТУ номера. В форме телефон приходит как +996555…, а менеджер
+        // в amo сохраняет «0555…» или «555…» — полный номер не совпадал, и живые
+        // заявки числились «нет в CRM». Последние 9 цифр одинаковы в любом формате.
+        const tail = f.phone.length > 9 ? f.phone.slice(-9) : f.phone;
+        if(!byTail.has(tail)){
+          if(searches >= maxSearch){ capped++; continue; }
+          searches++;
+          try {
+            const r = await amoFetch(`/contacts?query=${encodeURIComponent(tail)}&limit=10&with=leads`, env);
+            byTail.set(tail, (r && r._embedded && r._embedded.contacts) || []);
+          } catch(e){
+            if(Number(e.status) === 401 || Number(e.status) === 403 || e.status === 0) throw e;
+            skipped.push({ ad: f.ad_name, why: 'поиск в amo не удался: ' + e.message });
+            byTail.set(tail, null);
+            continue;
           }
-        } catch(e){ skipped.push({ ad: f.ad_name, why: 'поиск в amo не удался: ' + e.message }); continue; }
-        const ids = [];
-        contacts.forEach(c => ((c._embedded && c._embedded.leads) || []).forEach(l => { if(!ids.includes(l.id)) ids.push(l.id); }));
-        const leads = [];
-        for(const id of ids.slice(0, 8)){
-          try { const l = await amoFetch(`/leads/${id}`, env); if(l) leads.push(l); } catch(_){}
         }
+        if(byTail.get(tail) === null) continue;
+        todo.push({ f, targ, tail });
+      }
+      if(capped) tfIncomplete.push({ source: 'amo', what: 'contacts', detail: 'не проверено заявок: ' + capped });
+      const idsOfTail = (tail) => {
+        const ids = [];
+        (byTail.get(tail) || []).forEach(c => ((c._embedded && c._embedded.leads) || []).forEach(l => { if(!ids.includes(l.id)) ids.push(l.id); }));
+        return ids.slice(0, 8);
+      };
+      const allIds = new Set();
+      todo.forEach(x => idsOfTail(x.tail).forEach(id => allIds.add(id)));
+      const leadById = allIds.size ? (await fetchLeadsByIds(env, allIds, '', null)).leads : {};
+      for(const { f, targ, tail } of todo){
+        const adTs = Math.floor(new Date(f.at).getTime() / 1000);
+        const contacts = byTail.get(tail) || [];
+        const leads = idsOfTail(tail).map(id => leadById[id]).filter(Boolean);
         if(!leads.length){
           notFound.push({ at: f.at, targetolog: targ, campaign: f.campaign, ad_name: f.ad_name,
             form_id: f.form_id || null, campaign_id: f.campaign_id || null, // v1015: для продукта
@@ -1973,7 +2120,10 @@ export default async function handler(req, res){
 
       // 2) Заявки лидформ без сделки — из сухого прогона.
       try {
-        const fR = await selfFetch(base, `/api/amo?action=targ_forms&country=${country}&days=${days}&limit=200`, extraHdr);
+        // v1015: заявки лидформ не спрашиваем на каждое открытие экрана — это сотни запросов
+        // в amo. Держим 30 минут; одинаковые запросы, пришедшие разом, ждут один ответ.
+        const fR = await memo(['tf', country, days, adminOk ? 1 : 0].join('|'), 30 * 60 * 1000,
+          () => selfFetch(base, `/api/amo?action=targ_forms&country=${country}&days=${days}&limit=200`, extraHdr), selfFailed);
         if(selfFailed(fR)){
           errors.push({ source: 'meta', kind: (fR.json && fR.json.code) === 'meta_token' ? 'token' : 'other', code: fR.json && fR.json.code, message: 'заявки: ' + ((fR.json && fR.json.error) || fR.status) });
         } else {
@@ -2060,8 +2210,13 @@ export default async function handler(req, res){
       const lastByLead = new Map();
       let leads = {};
       let touchesTotal = 0;
+      let sharedSc = null;
       if(v2){
-        const ar = await buildArrivals(env, country, fromS, toS, { includeOrganic: false, with: 'contacts' });
+        // v1015: та же основа периода, что у lead_report — без повторных запросов в amo
+        const base = await periodBase(env, country, fromS, toS);
+        if(base.error) return bad(res, 500, base.error);
+        const ar = base.ar;
+        sharedSc = base.sc;
         errors.push(...ar.errors); incomplete.push(...ar.incomplete);
         touchesTotal = ar.touches_total;
         ar.items.forEach(x => {
@@ -2090,7 +2245,7 @@ export default async function handler(req, res){
       pipelines.forEach(pl => pl.statuses.forEach(st => { if(stName[st.id] == null) stName[st.id] = st.name; }));
       // v1015: честные Квал/Встреча/Счёт — по истории этапов, «Отложили» и отказ движением не считаются
       const model = buildStageModel(p ? p.statuses : [], { honest: true });
-      const sc = await scanStatusEvents(env, new Set(Object.keys(leads).map(Number)), fromS - NEAR_SEC, toS);
+      const sc = sharedSc || await scanStatusEvents(env, new Set(Object.keys(leads).map(Number)), fromS - NEAR_SEC, toS);
       if(sc.error){
         if(Number(sc.error.status) === 401 || Number(sc.error.status) === 403) throw sc.error;
         errors.push(amoErrOf(sc.error, 'история этапов'));
@@ -2100,7 +2255,8 @@ export default async function handler(req, res){
       // Причины отказа — их выбирает менеджер, когда закрывает сделку.
       let lossName = {};
       try {
-        const lr = await amoFetch('/leads/loss_reasons?limit=250', env);
+        // v1015: справочник причин — 10 минут из памяти
+        const lr = await memo('lr|' + String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, ''), 10 * 60 * 1000, () => amoFetch('/leads/loss_reasons?limit=250', env));
         ((lr && lr._embedded && lr._embedded.loss_reasons) || []).forEach(x => { lossName[x.id] = x.name; });
       } catch(_){}
 
@@ -2243,7 +2399,8 @@ export default async function handler(req, res){
       // Отдаём ВСЕ продукты: фронт фильтрует сам, без нового запроса при переключении.
       const v2 = String(req.query.v || '') === '2';
       const key = country + '|' + fromTs + '|' + (toTs || 0) + '|' + (v2 ? 2 : 1);
-      let data = _lrGet(key);
+      // v1015: прошлый период (slim) меняется редко — держим 30 минут
+      let data = _lrGet(key, slim ? 30 * 60 * 1000 : LR_TTL_MS);
       if(!data){
         const cfg = v2 ? await loadProducts() : null;
         data = await buildLeadReport(env, fromTs, toTs, { v2, country, cfg });
@@ -2251,7 +2408,13 @@ export default async function handler(req, res){
       }
       if(data.error) return bad(res, 500, data.error);
       const out = Object.assign({ country: country, product: productParam(req.query) }, data, { _subdomain: env.AMO_SUBDOMAIN });
-      if(slim){ out.leads = []; out.leads_omitted = true; }
+      if(slim && v2){
+        // v1015: для сравнения с прошлым периодом фронту нужны лишь поля фильтров и этапов
+        out.leads = (data.leads || []).map(l => ({ id: l.id, name: l.name, created: l.created, manager: l.manager, origin: l.origin,
+          source: l.source, product: l.product, arrival_at: l.arrival_at, arrival_kind: l.arrival_kind, status_id: l.status_id,
+          reached_sort: l.reached_sort, is_won: l.is_won, is_lost: l.is_lost, price: l.price }));
+        out.leads_slim = true;
+      } else if(slim){ out.leads = []; out.leads_omitted = true; }
       return res.status(200).json(out);
     }
     if(action === 'geo_quals'){

@@ -20652,6 +20652,7 @@ function _mkdRenderIssues(){
  if(box) box.innerHTML = _mkdIssueBanner();
 }
 
+var _mkdAmoBusy = false; // v1015: пока идут запросы в amo, список «не нашли» сам не грузится
 window.mktLoadOverview = async function(force){
  var el = document.getElementById('mkt-dash'); if(!el) return;
  var seq = ++_mkdSeq;
@@ -20687,22 +20688,18 @@ window.mktLoadOverview = async function(force){
   // v897: лиды берём из amo — это источник правды. Meta не видит заявки из переписок
   // и с сайта тех стран, где кампании настроены на трафик: по Казахстану там всегда ноль.
   var reports = {}, prevs = {}, amoErr = {};
-  var jobs = [];
-  _MKD_AMO.filter(function(cc){ return !_mkdHidden[cc]; }).forEach(function(cc){
-   var u = _mktUnix(r, cc), pu = _mktUnix(pr, cc);
-   jobs.push(_mkdGetAmo('/api/amo?action=lead_report&country=' + cc + '&from=' + u.from + '&to=' + u.to + '&v=2', 'сделки amoCRM', force)
-    .then(function(x){
-     if(x.ok){ reports[cc] = x.data; _mkdIssuesFrom(x.data, issues, ''); }
-     else { amoErr[cc] = x.err.message; _mkdIssueAdd(issues.fail, _mkdErrText(x.err), ''); }
-    }));
-   jobs.push(_mkdGetAmo('/api/amo?action=lead_report&country=' + cc + '&from=' + pu.from + '&to=' + pu.to + '&v=2', 'сделки amoCRM', force)
-    .then(function(x){
-     if(x.ok){ prevs[cc] = x.data; _mkdIssuesFrom(x.data, issues, 'прошлый период'); }
-     else _mkdIssueAdd(issues.fail, _mkdErrText(x.err), 'прошлый период');
-    }));
-  });
-  await Promise.all(jobs);
-  if(seq !== _mkdSeq) return;
+  // v1015 (инцидент с частотой запросов к amo): тяжёлые запросы в amo — строго по очереди:
+  // сделки за период → воронка рекламы → прошлый период (облегчённый). Не разом.
+  var ccs = _MKD_AMO.filter(function(cc){ return !_mkdHidden[cc]; });
+  if(force) _mkdUnmKey = '';
+  _mkdAmoBusy = true;
+  for(var ci = 0; ci < ccs.length; ci++){
+   var cc0 = ccs[ci], u0 = _mktUnix(r, cc0);
+   var x0 = await _mkdGetAmo('/api/amo?action=lead_report&country=' + cc0 + '&from=' + u0.from + '&to=' + u0.to + '&v=2', 'сделки amoCRM', force);
+   if(seq !== _mkdSeq) return;
+   if(x0.ok){ reports[cc0] = x0.data; _mkdIssuesFrom(x0.data, issues, ''); }
+   else { amoErr[cc0] = x0.err.message; _mkdIssueAdd(issues.fail, _mkdErrText(x0.err), ''); }
+  }
   var quals = {};
   Object.keys(reports).forEach(function(cc){ quals[cc] = _lrQuals(reports[cc]); });
   _mkdData = { geo: geo, daily: daily, camps: camps, geoPrev: geoPrev, quals: quals,
@@ -20711,8 +20708,19 @@ window.mktLoadOverview = async function(force){
   _mkdFull = { geo: geo, geoPrev: geoPrev, camps: camps, daily: daily };
   _mkdApplyTarg();
   _mkdRender();
-  mktLoadAdsReport(true);
+  await mktLoadAdsReport(true);
+  if(seq !== _mkdSeq) return;
+  for(var pi = 0; pi < ccs.length; pi++){
+   var cc1 = ccs[pi], pu1 = _mktUnix(pr, cc1);
+   var x1 = await _mkdGetAmo('/api/amo?action=lead_report&country=' + cc1 + '&from=' + pu1.from + '&to=' + pu1.to + '&v=2&slim=1', 'сделки amoCRM', force);
+   if(seq !== _mkdSeq) return;
+   if(x1.ok){ prevs[cc1] = x1.data; _mkdIssuesFrom(x1.data, issues, 'прошлый период'); }
+   else _mkdIssueAdd(issues.fail, _mkdErrText(x1.err), 'прошлый период');
+  }
+  _mkdAmoBusy = false;
+  _mkdRender(); // теперь со сравнением с прошлым периодом
  } catch(e){
+  _mkdAmoBusy = false;
   if(seq !== _mkdSeq) return;
   console.warn('mktLoadOverview failed', e);
   el.innerHTML = '<div class="mkd-empty">Не удалось загрузить данные Маркетинга.</div>';
@@ -21141,7 +21149,9 @@ window.mktLoadAdsReport = async function(force){
  _mkdAdsLoading = false;
  _mkdRenderAds();
  _mkdRenderIssues();
- mktLoadUnmatched(force);
+ // v1015: список «обратились, но не нашли» тяжёлый для amo — грузим, только когда его
+ // открыли (кнопка «Показать») или прокрутили до него
+ _mkdRenderUnmatched(false);
 };
 function _mkdAdsFor(name){
  var list = ((_mkdAds || {}).targetologs) || [];
@@ -21504,8 +21514,25 @@ window.mkdExportUnmatched = async function(){
   sdToast('Выгружено: ' + rows.length + ' ' + _mkdPlural(rows.length, 'человек', 'человека', 'человек'), 'success');
  } catch(e){ sdToast('Не удалось выгрузить', 'error'); }
 };
+function _mkdUnmCurKey(){ var r = _mktSelRange(_mktSel); return r.since + '|' + r.until + '|' + _mkdProduct; }
+var _mkdUnmIO = null;
+function _mkdUnmObserve(box){
+ if(_mkdUnmIO){ _mkdUnmIO.disconnect(); _mkdUnmIO = null; }
+ if(_mkdAmoBusy || !('IntersectionObserver' in window)) return;
+ _mkdUnmIO = new IntersectionObserver(function(en){
+  if(!en.some(function(e){ return e.isIntersecting; })) return;
+  _mkdUnmIO.disconnect(); _mkdUnmIO = null;
+  if(!_mkdAmoBusy && _mkdUnmKey !== _mkdUnmCurKey()) mktLoadUnmatched();
+ });
+ _mkdUnmIO.observe(box);
+}
 function _mkdRenderUnmatched(loading){
  var box = document.getElementById('mkt-dash-unmatched'); if(!box) return;
+ if(_mkdUnmKey !== _mkdUnmCurKey()){ // v1015: ещё не запрашивали за этот период и продукт
+  box.innerHTML = '<div class="mkd-card"><div class="mkd-empty"><button class="mkd-retry" onclick="mktLoadUnmatched()">Показать</button></div></div>';
+  _mkdUnmObserve(box);
+  return;
+ }
  if(loading || !_mkdUnm){ box.innerHTML = '<div class="mkd-card"><div class="mkd-empty">' + (loading ? 'Собираем…' : 'Список не загрузился. Нажмите «Обновить».') + '</div></div>'; return; }
  var items = (_mkdUnm.items || []).filter(_mkdUnmPass); // v1015: и по продукту
  if(!items.length){
