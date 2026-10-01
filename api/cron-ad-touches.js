@@ -27,9 +27,10 @@ export default async function handler(req, res) {
   const base = (String(process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '')) || 'https://salesdoc-app.vercel.app';
   const appTok = String(process.env.APP_TOKEN || '').trim();
   const call = async (qs) => {
-    const r = await fetch(`${base}/api/amo?${qs}`, {
-      headers: { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' }
-    });
+    const hdr = { 'x-app-token': appTok, 'x-user-email': 'cron@salesdoc.io' };
+    const bypass = String(process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '').trim(); // v1015: превью под защитой
+    if (bypass) hdr['x-vercel-protection-bypass'] = bypass;
+    const r = await fetch(`${base}/api/amo?${qs}`, { headers: hdr });
     return r.json().catch(() => ({ error: 'нечитаемый ответ' }));
   };
 
