@@ -11,6 +11,11 @@
 //   GET /api/meta-ads?endpoint=ads&adset_id=456&period=last_30d
 
 import { checkAuth } from './_auth.js';
+import { tzOffsetH, dayStartMs, dayEndMs, addDaysIso, zonedToUtcMs, zonedIso, tzOffsetMinAt } from './_dates.js'; // v1015
+import { loadProducts, classifyCampaign, productParam, PRODUCT_CODES, metaErrOf, metaFailCode, bishkekShiftRows } from './_mkt.js'; // v1015
+
+// v1015: пересчёт кабинета Лос-Анджелеса в бишкекские дни — несколько запросов к Meta.
+export const config = { maxDuration: 120 };
 
 const META_API_VERSION = 'v21.0';
 // v885: вся реклама обеих стран крутится в ОДНОМ рекламном кабинете — это подтвердил CEO,
@@ -108,7 +113,7 @@ async function metaFetch(pathOrUrl, params, token) {
   });
   url.searchParams.set('access_token', token);
   const res = await fetch(url.toString());
-  const json = await res.json();
+  const json = await res.json().catch(() => ({ error: { code: res.status, message: 'нечитаемый ответ Meta (HTTP ' + res.status + ')' } })); // v1015
   if (!res.ok || json.error) {
     const msg = json.error ? `${json.error.code}/${json.error.error_subcode||'-'}: ${json.error.message}` : `HTTP ${res.status}`;
     const e = new Error(msg); e.metaError = json.error || null; e.status = res.status;
@@ -130,6 +135,8 @@ async function metaFetchAllPages(pathOrUrl, params, token, maxPages) {
     const next = json && json.paging && json.paging.next;
     if (!next) break;
     url = next;
+    // v1015: страницы кончились, а данные ещё есть — помечаем, чтобы экран сказал «неполные»
+    if (page === (maxPages || 20) - 1) out._truncated = true;
   }
   return out;
 }
@@ -154,14 +161,23 @@ async function resolveAccounts(token) {
   const hit = _acctCacheByTok.get(tk);
   if (hit && Date.now() - hit.t < CACHE_TTL_MS) return hit.v;
   let list = [];
+  let listErr = null;
   try {
-    const r = await metaFetch('/me/adaccounts', { fields: 'account_id,name,account_status', limit: 100 }, token);
-    list = ((r && r.data) || []).map(a => ({ id: a.id || ('act_' + a.account_id), name: a.name || null }));
-  } catch (_) { list = []; }
+    // v1015: ещё пояс и валюта кабинета — для пересчёта в бишкекские дни
+    const r = await metaFetch('/me/adaccounts', { fields: 'account_id,name,account_status,timezone_name,currency', limit: 100 }, token);
+    list = ((r && r.data) || []).map(a => ({ id: a.id || ('act_' + a.account_id), name: a.name || null,
+      timezone_name: a.timezone_name || null, currency: a.currency || null, account_status: a.account_status }));
+  } catch (e) {
+    // v1015: раньше ошибка глоталась молча — теперь уходит в errors[] ответа
+    list = [];
+    listErr = metaErrOf(e);
+    listErr.message = 'список кабинетов: ' + listErr.message;
+  }
   // Кабинет из env добавляем всегда: если /me/adaccounts не ответил, отчёт не должен опустеть.
   const fallback = (process.env.META_AD_ACCOUNT_ID || '').trim();
   if (fallback && !list.some(a => a.id === fallback)) list.unshift({ id: fallback, name: null });
-  if (list.length) _acctCacheByTok.set(tk, { t: Date.now(), v: list });
+  if (list.length && !listErr) _acctCacheByTok.set(tk, { t: Date.now(), v: list });
+  if (listErr) list._error = listErr;
   return list;
 }
 
@@ -262,6 +278,124 @@ function timeParams(range, period) {
   return range ? { time_range: JSON.stringify(range) } : { date_preset: period };
 }
 
+// v1015: ошибки кабинетов — в errors[] ответа (никаких тихих нулей).
+// Список кабинетов не открылся, но запасной кабинет из env ответил — это «данные неполные»,
+// а не красная ошибка: иначе ответ никогда не кэшировался бы и плашка висела бы всегда.
+function accErrors(accounts) { return []; } // eslint-disable-line no-unused-vars
+function placeListErr(accounts, cabinets, errors, incomplete) {
+  const le = accounts && accounts._error;
+  if (!le) return;
+  if ((cabinets || []).some(c => c.ok)) incomplete.push({ source: 'meta', what: 'accounts', detail: le.message });
+  else errors.unshift(le);
+}
+function noteShift(r, acc, incomplete) {
+  const nm = 'кабинет ' + (acc.name || acc.id);
+  if (r.truncated) incomplete.push({ source: 'meta', what: 'rows', detail: nm + ': показаны не все строки' });
+  if (r.approx) incomplete.push({ source: 'meta', what: 'hours', detail: nm + ': заявки по часам посчитаны примерно' });
+  if (r.tzUnknown) incomplete.push({ source: 'meta', what: 'timezone', detail: nm + ': пояс кабинета неизвестен, дни по кабинету' });
+}
+// v1015: продукт строки — по кампании (начало названия или список номеров из настроек).
+function productSplit(rows, cfg, product) {
+  const by = {};
+  PRODUCT_CODES.forEach(c => { by[c] = { spend: 0, leads: 0, msgs: 0 }; });
+  const keep = [];
+  rows.forEach(r => {
+    const p = classifyCampaign(cfg, { id: r.campaign_id, name: r.campaign_name });
+    const b = by[p] || (by[p] = { spend: 0, leads: 0, msgs: 0 });
+    b.spend += Number(r.spend || 0);
+    b.leads += summarizeLeads(r.actions, r.cost_per_action_type).count || 0;
+    b.msgs += Array.isArray(r.actions)
+      ? r.actions.filter(a => a.action_type === 'onsite_conversion.messaging_conversation_started_7d').reduce((s, a) => s + (parseFloat(a.value) || 0), 0)
+      : 0;
+    if (product === 'ALL' || p === product) keep.push(r);
+  });
+  Object.keys(by).forEach(k => { by[k].spend = Math.round(by[k].spend * 100) / 100; });
+  return { rows: keep, by_product: by };
+}
+
+// v1015: пояс кабинета. В /me/adaccounts он приходит сразу; для ручного списка спрашиваем отдельно.
+const _tzCache = new Map();
+async function accountTz(acc, token) {
+  if (acc.timezone_name) return acc.timezone_name;
+  if (_tzCache.has(acc.id)) return _tzCache.get(acc.id);
+  let tz = null;
+  try { const r = await metaFetch(`/${acc.id}`, { fields: 'timezone_name' }, token); tz = (r && r.timezone_name) || null; } catch (_) { tz = null; }
+  if (tz) { _tzCache.set(acc.id, tz); acc.timezone_name = tz; }
+  return tz;
+}
+
+// v1015: insights в днях страны (KG — Бишкек, UTC+6).
+// Кабинет act_105673026201294 живёт по Лос-Анджелесу: его «сутки» — с 11:00 (зимой 10:00)
+// по Бишкеку до того же часа следующего дня. Пояс кабинета не меняем (решение CEO),
+// пересчитываем сами:
+//   • дни кабинета целиком внутри периода (если нужен итог за период) — обычный запрос;
+//   • остальные дни — дневные строки нужного уровня (с разбивкой по странам), которые
+//     делим между двумя бишкекскими днями долями из ПОЧАСОВОЙ статистики всего кабинета
+//     (один лёгкий запрос, ≈24 строки на день; по каждому показателю своя доля).
+// Итог каждой строки сохраняется точно; охват — приблизительно.
+// Кабинет в поясе Бишкека (или без &v=2, или пресет вместо дат) — как раньше, одним запросом.
+const HOURLY_BREAKDOWN = 'hourly_stats_aggregated_by_advertiser_time_zone';
+function keyOfLevel(level) {
+  if (level === 'ad') return (r) => String(r.ad_id || '');
+  if (level === 'adset') return (r) => String(r.adset_id || r.adset_name || '');
+  if (level === 'campaign') return (r) => String(r.campaign_id || r.campaign_name || '');
+  return () => '';
+}
+async function insightsBishkek(acc, params, range, o) {
+  const path = `/${acc.id}/insights`;
+  const plain = async (extra) => {
+    const rows = await metaFetchAllPages(path, { ...params, ...timeParams(range, o.period), ...(o.daily ? { time_increment: 1 } : {}) }, o.token, o.maxPages);
+    return Object.assign({ rows, shifted: false, truncated: !!rows._truncated }, extra || {});
+  };
+  if (!range || !o.v2) return plain();
+  const tz = await accountTz(acc, o.token);
+  if (!tz) return plain({ tzUnknown: true });
+  const country = o.country;
+  const target = tzOffsetH(country) * 60;
+  const S = range.since, U = range.until;
+  const startUtc = dayStartMs(S, country), endUtc = dayEndMs(U, country);
+  let constant = true;
+  for (let t = startUtc - 86400000; t <= endUtc + 86400000; t += 3 * 3600000) {
+    if (tzOffsetMinAt(tz, t) !== target) { constant = false; break; }
+  }
+  if (constant) return plain();
+
+  const Lmin = zonedIso(tz, startUtc), Lmax = zonedIso(tz, endUtc - 1);
+  const days = [];
+  for (let d = Lmin; d <= Lmax; d = addDaysIso(d, 1)) days.push(d);
+  const lStart = (iso) => { const [y, m, dd] = iso.split('-').map(Number); return zonedToUtcMs(tz, y, m, dd, 0); };
+  const isInterior = (L) => lStart(L) >= startUtc && lStart(addDaysIso(L, 1)) <= endUtc;
+  const interior = o.daily ? [] : days.filter(isInterior);
+  const partial = o.daily ? days : days.filter(L => !isInterior(L));
+  // подряд идущие дни — одним запросом
+  const runs = [];
+  partial.forEach(L => {
+    const last = runs[runs.length - 1];
+    if (last && addDaysIso(last.until, 1) === L) last.until = L; else runs.push({ since: L, until: L });
+  });
+  let truncated = false;
+  const out = [];
+  if (interior.length) {
+    const rows = await metaFetchAllPages(path, { ...params, time_range: JSON.stringify({ since: interior[0], until: interior[interior.length - 1] }) }, o.token, o.maxPages);
+    truncated = truncated || !!rows._truncated;
+    out.push(...rows);
+  }
+  const hourlyRows = [], dayRows = [];
+  for (const run of runs) {
+    const tr = JSON.stringify(run);
+    // почасовая статистика ВСЕГО кабинета — без кампаний и стран, поэтому строк мало
+    const h = await metaFetchAllPages(path, { fields: 'spend,impressions,clicks,inline_link_clicks,actions', level: 'account',
+      breakdowns: HOURLY_BREAKDOWN, time_range: tr, time_increment: 1, limit: 500 }, o.token, 20);
+    const d = await metaFetchAllPages(path, { ...params, time_range: tr, time_increment: 1 }, o.token, o.maxPages);
+    truncated = truncated || !!h._truncated || !!d._truncated;
+    hourlyRows.push(...h); dayRows.push(...d);
+  }
+  const sh = bishkekShiftRows({ hourlyRows, dayRows, tz, country, since: S, until: U,
+    keyOf: keyOfLevel(params.level), daily: !!o.daily });
+  out.push(...sh.rows);
+  return { rows: out, shifted: true, approx: sh.approx, truncated };
+}
+
 export default async function handler(req, res) {
   // v626 SEC: эндпоинт same-origin. Убран wildcard CORS '*' (раньше любой сайт мог читать
   // рекламные бюджеты/эффективность кампаний). Добавлена проверка x-app-token (checkAuth).
@@ -298,6 +432,10 @@ export default async function handler(req, res) {
   const period = validatePeriod(String(req.query.period || 'last_30d'));
   const range = customRange(req.query);
   const excl = excludeList(req.query);
+  // v1015: &v=2 — дни по поясу страны и продукт; &product=SD|Z24|SHTURM (ALL — без фильтра)
+  const v2 = String(req.query.v || '') === '2';
+  const product = productParam(req.query);
+  const wantProd = v2 || product !== 'ALL';
   // v442: country явно префиксом — раньше попадал внутрь req.query, но порядок ключей
   // в JSON.stringify не гарантирован, что давало риск смешения кэша KZ и KG.
   // v786: country в верхний регистр — 'kz' и 'KZ' раньше плодили два кэша (двойные запросы к Meta)
@@ -493,38 +631,47 @@ export default async function handler(req, res) {
       // Зачем: кыргызские кампании крутятся внутри казахстанского кабинета, поэтому
       // переключатель KZ/KG показывал не то. Meta умеет breakdowns=country — берём оттуда.
       // scope=all — опрашиваем оба кабинета и складываем; упавший кабинет не роняет ответ.
+      // v1015: &v=2 — дни по Бишкеку (кабинет в поясе Лос-Анджелеса пересчитываем по часам),
+      // уровень кампании (чтобы узнать продукт), &product= и свод by_product.
       const daily = endpoint === 'geo_daily';
       const accounts = await resolveAccounts(TOKEN);
+      const errors = accErrors(accounts), incomplete = [];
       const cabinets = [];
       let rows = [];
       if (!accounts.length) {
-        return res.status(502).json({ error: 'Ни одного рекламного кабинета не доступно этому токену', cabinets });
+        placeListErr(accounts, cabinets, errors, incomplete);
+        return res.status(502).json({ error: 'Ни одного рекламного кабинета не доступно этому токену', code: metaFailCode(errors), cabinets, errors });
       }
+      const cfg = wantProd ? await loadProducts() : null;
       for (const acc of accounts) {
         try {
-          const data = await metaFetchAllPages(`/${acc.id}/insights`, {
-            fields: 'campaign_name,adset_name,spend,impressions,clicks,inline_link_clicks,ctr,reach,actions,cost_per_action_type,account_currency,date_start,date_stop',
-            ...timeParams(range, period),
-            level: excl.length ? 'adset' : 'account',
+          const r = await insightsBishkek(acc, {
+            fields: 'campaign_id,campaign_name,adset_id,adset_name,spend,impressions,clicks,inline_link_clicks,ctr,reach,actions,cost_per_action_type,account_currency,date_start,date_stop',
+            level: excl.length ? 'adset' : (wantProd ? 'campaign' : 'account'),
             breakdowns: 'country',
-            limit: 500,
-            ...(daily ? { time_increment: 1 } : {})
-          }, TOKEN, 40);
-          cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: true, rows: data.length });
+            limit: 500
+          }, range, { daily, country, token: TOKEN, maxPages: 40, v2, period });
+          const data = r.rows;
+          noteShift(r, acc, incomplete);
+          cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: true, rows: data.length, tz: acc.timezone_name || null, shifted: !!r.shifted });
           // v899: каждая строка помнит свой кабинет — по нему считаем работу таргетологов,
           // у каждого свой рекламный аккаунт.
           data.forEach(r => { r._acct = acc.id; r._acct_name = acc.name || acc.id; });
           rows.push(...data);
         } catch (e) {
           cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: false, error: e.message || String(e) });
+          errors.push(metaErrOf(e, acc.id));
         }
       }
-      const excluded = excludedSummary(rows, excl);
-      const allRows = rows;
-      rows = rows.filter(r => !isExcluded(r, excl));
-      if (!allRows.length && !cabinets.some(c => c.ok)) {
-        return res.status(502).json({ error: 'Реклама не отдала данные ни по одному кабинету', cabinets });
+      placeListErr(accounts, cabinets, errors, incomplete); // v1015
+      if (!cabinets.some(c => c.ok)) {
+        return res.status(502).json({ error: 'Реклама не отдала данные ни по одному кабинету', code: metaFailCode(errors), cabinets, errors });
       }
+      const excluded = excludedSummary(rows, excl);
+      rows = rows.filter(r => !isExcluded(r, excl));
+      const prodPart = cfg ? productSplit(rows, cfg, product) : null;
+      if (prodPart) rows = prodPart.rows;
+      const extra = { errors, incomplete, product, ...(prodPart ? { by_product: prodPart.by_product } : {}) };
       const currency = (rows.find(r => r.account_currency) || {}).account_currency || 'USD';
       if (daily) {
         const byDate = new Map();
@@ -562,7 +709,7 @@ export default async function handler(req, res) {
             delete by_country._acct;
             return { date, by_country, by_account };
           });
-        result = { period, currency, days, countries: [...seenCountries].sort(), cabinets, excluded };
+        result = { period, currency, days, countries: [...seenCountries].sort(), cabinets, excluded, ...extra };
       } else {
         const agg = new Map();
         rows.forEach(r => {
@@ -610,7 +757,7 @@ export default async function handler(req, res) {
             reach: prevC.reach + Number(r.reach || 0)
           };
         });
-        const accounts = [...accMap.values()].map(a => ({
+        const accountsOut = [...accMap.values()].map(a => ({
           ...a,
           spend: Math.round(a.spend * 100) / 100,
           cpl: a.leads > 0 ? Math.round((a.spend / a.leads) * 100) / 100 : null,
@@ -619,39 +766,51 @@ export default async function handler(req, res) {
         const totalSpend = countries.reduce((a, c) => a + c.spend, 0);
         const totalLeads = countries.reduce((a, c) => a + c.leads, 0);
         result = {
-          period, currency, countries, cabinets, accounts, excluded,
+          period, currency, countries, cabinets, accounts: accountsOut, excluded,
           total: {
             spend: Math.round(totalSpend * 100) / 100,
             leads: totalLeads,
             cpl: totalLeads > 0 ? Math.round((totalSpend / totalLeads) * 100) / 100 : null
-          }
+          },
+          ...extra
         };
       }
 
     } else if (endpoint === 'campaigns_geo') {
       // v884: кампании × страна аудитории. Берём insights уровня кампании с breakdowns=country,
       // а не /campaigns?fields=insights — иначе разбивки по странам не получить.
+      // v1015: &v=2 — дни по Бишкеку; &product=, by_product, errors[]/incomplete[].
       const accounts = await resolveAccounts(TOKEN);
+      const errors = accErrors(accounts), incomplete = [];
       const cabinets = [];
       let rows = [];
+      const cfg = wantProd ? await loadProducts() : null;
       for (const acc of accounts) {
         try {
-          const data = await metaFetchAllPages(`/${acc.id}/insights`, {
-            fields: 'campaign_id,campaign_name,adset_name,spend,impressions,clicks,actions,cost_per_action_type,account_currency',
-            ...timeParams(range, period),
+          const r = await insightsBishkek(acc, {
+            fields: 'campaign_id,campaign_name,adset_id,adset_name,spend,impressions,clicks,actions,cost_per_action_type,account_currency',
             level: excl.length ? 'adset' : 'campaign',
             breakdowns: 'country',
             limit: 500
-          }, TOKEN, 30);
+          }, range, { daily: false, country, token: TOKEN, maxPages: 30, v2, period });
+          const data = r.rows;
+          noteShift(r, acc, incomplete);
           cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: true, rows: data.length });
           data.forEach(r => { r._acct = acc.id; r._acct_name = acc.name || acc.id; });
           rows.push(...data);
         } catch (e) {
           cabinets.push({ code: acc.name || acc.id, account: acc.id, ok: false, error: e.message || String(e) });
+          errors.push(metaErrOf(e, acc.id));
         }
+      }
+      placeListErr(accounts, cabinets, errors, incomplete); // v1015
+      if (!cabinets.some(c => c.ok)) {
+        return res.status(502).json({ error: 'Реклама не отдала данные ни по одному кабинету', code: metaFailCode(errors), cabinets, errors });
       }
       const excluded = excludedSummary(rows, excl);
       rows = rows.filter(r => !isExcluded(r, excl));
+      const prodPart = cfg ? productSplit(rows, cfg, product) : null;
+      if (prodPart) rows = prodPart.rows;
       const byCamp = new Map();
       const seenCountries = new Set();
       rows.forEach(r => {
@@ -663,7 +822,8 @@ export default async function handler(req, res) {
           ? r.actions.filter(a => a.action_type === 'onsite_conversion.messaging_conversation_started_7d')
               .reduce((sum, a) => sum + (parseFloat(a.value) || 0), 0)
           : 0;
-        if (!byCamp.has(id)) byCamp.set(id, { id: id, name: r.campaign_name || '(без названия)', account: r._acct || null, spend: 0, leads: 0, msgs: 0, by_country: {} });
+        if (!byCamp.has(id)) byCamp.set(id, { id: id, name: r.campaign_name || '(без названия)', account: r._acct || null, spend: 0, leads: 0, msgs: 0, by_country: {},
+          ...(cfg ? { product: classifyCampaign(cfg, { id, name: r.campaign_name }) } : {}) });
         const c = byCamp.get(id);
         c.spend += Number(r.spend || 0);
         c.leads += leads.count || 0;
@@ -679,7 +839,8 @@ export default async function handler(req, res) {
       result = {
         period,
         currency: (rows.find(r => r.account_currency) || {}).account_currency || 'USD',
-        campaigns, countries: [...seenCountries].sort(), cabinets, excluded
+        campaigns, countries: [...seenCountries].sort(), cabinets, excluded,
+        errors, incomplete, product, ...(prodPart ? { by_product: prodPart.by_product } : {})
       };
 
     } else if (endpoint === 'campaign_detail') {
@@ -768,7 +929,9 @@ export default async function handler(req, res) {
       // хотя это переписки. У группы есть прямой ответ: destination_type говорит, куда
       // ведёт объявление (WHATSAPP / ON_AD), optimization_goal — на что оптимизируется.
       const adsetCfg = {};
-      for (const acc of await resolveAccounts(TOKEN)) {
+      const accounts = await resolveAccounts(TOKEN);
+      const errors = accErrors(accounts), incomplete = []; // v1015
+      for (const acc of accounts) {
         try {
           const rows = await metaFetchAllPages(`/${acc.id}/adsets`,
             { fields: 'id,destination_type,optimization_goal', limit: 400 }, TOKEN, 8);
@@ -782,26 +945,36 @@ export default async function handler(req, res) {
       // daily=1 — то же самое по дням: нужно, чтобы понять, какое из объявлений с одним
       // и тем же постом крутилось в день обращения клиента.
       const daily = String(req.query.daily || '') === '1';
-      const accounts = await resolveAccounts(TOKEN);
       const cabinets = [];
-      const rows = [];
+      let rows = [];
+      const cfg = wantProd ? await loadProducts() : null;
       for (const acc of accounts) {
         try {
-          const data = await metaFetchAllPages(`/${acc.id}/insights`, {
+          // v1015: &v=2 — дни по Бишкеку (кабинет Лос-Анджелеса пересчитываем по часам)
+          const r = await insightsBishkek(acc, {
             fields: 'ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,objective,spend,impressions,'
               + 'reach,clicks,inline_link_clicks,ctr,actions,cost_per_action_type,date_start',
-            ...timeParams(range, period),
             level: 'ad',
-            limit: 200,
-            ...(daily ? { time_increment: 1 } : {})
-          }, TOKEN, 25);
+            limit: 200
+          }, range, { daily, country, token: TOKEN, maxPages: 25, v2, period });
+          const data = r.rows;
+          noteShift(r, acc, incomplete);
           data.forEach(r => { r._acct = acc.id; });
           rows.push(...data);
           cabinets.push({ account: acc.id, name: acc.name || acc.id, ok: true, rows: data.length });
         } catch (e) {
           cabinets.push({ account: acc.id, name: acc.name || acc.id, ok: false, error: e.message || String(e) });
+          errors.push(metaErrOf(e, acc.id));
         }
       }
+      // v1015: ни один кабинет не ответил — это ошибка, а не «рекламы не было»
+      placeListErr(accounts, cabinets, errors, incomplete); // v1015
+      if (!cabinets.some(c => c.ok)) {
+        return res.status(502).json({ error: 'Реклама не отдала данные ни по одному кабинету', code: metaFailCode(errors), cabinets, errors });
+      }
+      const prodPart = cfg ? productSplit(rows, cfg, product) : null;
+      if (prodPart) rows = prodPart.rows;
+      const extra = { errors, incomplete, product, ...(prodPart ? { by_product: prodPart.by_product } : {}) };
       const actionSum = (actions, type) => Array.isArray(actions)
         ? actions.filter(a => a.action_type === type).reduce((s, a) => s + (parseFloat(a.value) || 0), 0)
         : 0;
@@ -835,7 +1008,7 @@ export default async function handler(req, res) {
             results: pr.count, result_kind: pr.kind
           };
         }).filter(d => d.spend > 0 || d.results > 0);
-        result = { cabinets, count: days.length, days };
+        result = { cabinets, count: days.length, days, ...extra };
       } else {
         const agg = new Map();
         rows.forEach(r => {
@@ -870,7 +1043,7 @@ export default async function handler(req, res) {
           cost_per_result: a.results > 0 ? Math.round((a.spend / a.results) * 100) / 100 : null,
           ctr: a.impressions > 0 ? Math.round((a.clicks / a.impressions) * 10000) / 100 : 0
         })).sort((x, y) => y.spend - x.spend);
-        result = { cabinets, count: ads.length, ads };
+        result = { cabinets, count: ads.length, ads, ...extra };
       }
 
     } else if (endpoint === 'ads_map') {
@@ -882,6 +1055,7 @@ export default async function handler(req, res) {
       // определяем по ссылке: тут собираем соответствие ссылки кабинету и кампании.
       // Только чтение: ничего никуда не пишем.
       const accounts = await resolveAccounts(TOKEN);
+      const errors = accErrors(accounts), incomplete = []; // v1015
       // v931: просим ещё и номер лидформы. Он лежит либо в цели группы объявлений
       // (promoted_object), либо в кнопке креатива. Читается обычным правом ads_read —
       // в отличие от самих заявок, для которых нужен доступ к Странице.
@@ -895,7 +1069,7 @@ export default async function handler(req, res) {
       const cabinets = [];
       const ads = [];
       for (const acc of accounts) {
-        let rows = null, used = 'full', err = null;
+        let rows = null, used = 'full', err = null, errObj = null;
         try {
           rows = await metaFetchAllPages(`/${acc.id}/ads`, { fields: FULL, limit: 50 }, TOKEN, 12);
         } catch (e) {
@@ -903,9 +1077,15 @@ export default async function handler(req, res) {
           try {
             rows = await metaFetchAllPages(`/${acc.id}/ads`, { fields: LEAN, limit: 50 }, TOKEN, 12);
             used = 'lean';
-          } catch (e2) { rows = null; err = (err || '') + ' | ' + (e2.message || String(e2)); }
+          } catch (e2) { rows = null; errObj = e2; err = (err || '') + ' | ' + (e2.message || String(e2)); }
         }
-        if (!rows) { cabinets.push({ account: acc.id, name: acc.name || acc.id, ok: false, error: err }); continue; }
+        if (!rows) {
+          // v1015: кабинет не ответил — в errors[]
+          cabinets.push({ account: acc.id, name: acc.name || acc.id, ok: false, error: err });
+          errors.push(Object.assign(metaErrOf(errObj, acc.id), { message: String(err).slice(0, 300) }));
+          continue;
+        }
+        if (rows._truncated) incomplete.push({ source: 'meta', what: 'ads', detail: 'кабинет ' + (acc.name || acc.id) + ': показаны первые 600 объявлений' });
         cabinets.push({ account: acc.id, name: acc.name || acc.id, ok: true, ads: rows.length, fields: used, warn: used === 'lean' ? err : null });
         rows.forEach(a => {
           const cr = a.creative || {};
@@ -964,7 +1144,11 @@ export default async function handler(req, res) {
           });
         });
       }
-      result = { cabinets, count: ads.length, ads };
+      placeListErr(accounts, cabinets, errors, incomplete); // v1015
+      if (!cabinets.some(c => c.ok)) {
+        return res.status(502).json({ error: 'Реклама не отдала объявления ни по одному кабинету', code: metaFailCode(errors), cabinets, errors });
+      }
+      result = { cabinets, count: ads.length, ads, errors, incomplete, product };
 
     } else {
       return res.status(400).json({ error: 'Unknown endpoint', allowed: ['account_summary','daily','campaigns','adsets','ads','all_ads','account_info','geo','geo_daily','campaigns_geo','campaign_detail','ads_map','ads_perf','token_info'] });
@@ -972,15 +1156,20 @@ export default async function handler(req, res) {
 
     // v442: метка страны в ответе — для отладки в DevTools Network видно какой кабинет ответил.
     result.country = country;
-    cacheSet(cacheKey, result);
+    // v1015: ответ со сбоем кабинета не кэшируем — «Повторить» должен спросить Meta заново
+    if (!(Array.isArray(result.errors) && result.errors.length)) cacheSet(cacheKey, result);
     res.setHeader('X-Cache', 'MISS');
     return res.status(200).json(result);
 
   } catch (err) {
     console.error('meta-ads error:', err);
-    return res.status(err.status || 500).json({
+    // v1015: любая ошибка Meta — 502 с кодом; 190 = ключ доступа устарел
+    const me = err.metaError || null;
+    return res.status(502).json({
       error: err.message || 'Meta API error',
-      meta: err.metaError || null
+      code: me && Number(me.code) === 190 ? 'meta_token' : 'meta_error',
+      meta: me,
+      errors: [metaErrOf(err)]
     });
   }
 }

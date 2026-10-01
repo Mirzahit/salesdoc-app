@@ -10,6 +10,7 @@
 import { sbSelect, sbUpsert } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 import { requirePerm } from './_perm.js'; // v979 SEC
+import { DEFAULT_PRODUCTS, validateProducts } from './_mkt.js'; // v1015
 
 // intg_fields (v796): настройка полей карты интеграции — {hidden:[стандартные ключи], custom:[{key,label}]}
 // mkt_lead_plan (v797): план лидов на месяц по странам — {KZ:{plan:200}, KG:{plan:80}}
@@ -28,7 +29,9 @@ import { requirePerm } from './_perm.js'; // v979 SEC
 // v964: autopause — {enabled:bool, days:30}: действующий клиент без оплаты дольше N дней → «На паузе» (крон)
 // v993: salary_grades — грейды менеджеров (оклад, премия KPI, план, шкала бонуса, веса, штраф, кто на каком грейде);
 //   salary_manual — то, что РОП ставит руками по месяцам: балл CRM и нарушения {'YYYY-MM':{email:{crm,late,noreport,complaint}}}.
-const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_text_codes', 'mkt_ad_sources', 'mkt_exclude_ads', 'tg_digest', 'company_plans', 'plan_history', 'route_stages', 'autopause', 'salary_grades', 'salary_manual', 'salary_closed', 'finansist_agent_limits', 'finansist_expected_items']; // v1006: лимит агента ($/день) и обязательные статьи
+const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_text_codes', 'mkt_ad_sources', 'mkt_exclude_ads', 'tg_digest', 'company_plans', 'plan_history', 'route_stages', 'autopause', 'salary_grades', 'salary_manual', 'salary_closed', 'finansist_agent_limits', 'finansist_expected_items', 'mkt_products']; // v1006: лимит агента ($/день) и обязательные статьи
+// v1015: mkt_products — какие кампании и формы Meta к какому продукту (SalesDoc / Zakaz24 / Штурм).
+//   Пока строки нет — отдаём значение по умолчанию из api/_mkt.js.
 // v1001: salary_closed — закрытые месяцы: {'YYYY-MM':{email:{closed_at,by,total,oklad,kpi,bonus,minus,sales_fact,sales_pct}}}; расчёт заморожен.
 
 // v993 SEC: кто видит зарплаты всех (руководители, РОП, бухгалтер) и кто их правит (без бухгалтера)
@@ -75,6 +78,7 @@ export default async function handler(req, res) {
       }
       const rows = await sbSelect('app_settings', { key: 'eq.' + key, limit: '1' });
       let value = rows.length ? rows[0].value : null;
+      if (key === 'mkt_products' && value == null) value = DEFAULT_PRODUCTS; // v1015
       if (caller && value && !salaryFullAccess(caller)) value = salaryOwnOnly(key, value, caller.email);
       return res.status(200).json({ ok: true, key: key, value: value });
     }
@@ -100,6 +104,11 @@ export default async function handler(req, res) {
       }
       if (body.value == null || typeof body.value !== 'object') {
         return res.status(400).json({ ok: false, error: 'value должен быть объектом' });
+      }
+      if (key === 'mkt_products') { // v1015: проверяем коды продуктов и номера кампаний/форм
+        const chk = validateProducts(body.value);
+        if (!chk.ok) return res.status(400).json({ ok: false, error: chk.error });
+        body.value = chk.value;
       }
       const rows = await sbUpsert('app_settings', {
         key: key, value: body.value, updated_at: new Date().toISOString()
