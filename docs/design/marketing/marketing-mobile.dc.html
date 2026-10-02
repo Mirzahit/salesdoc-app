@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Маркетинг — мобильная</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F4F1}
+a{color:#2457D6}a:hover{color:#1A3FA0}
+input[type=date]{font-family:inherit;font-size:14px;height:44px;padding:0 10px;border:1px solid #DCDCD6;border-radius:10px;background:#FFFFFF;color:#16181D;width:100%;box-sizing:border-box}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 5200px; font-family: Manrope, 'Segoe UI', system-ui, sans-serif; color: #16181D; background: #F4F4F1; font-variant-numeric: tabular-nums; padding: 24px 16px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+
+<div style="display: flex; flex-direction: column; gap: 4px; padding: 0 4px 4px">
+<div style="font-size: 12px; color: #5F6368">Дашборд SD / Маркетинг</div>
+<h1 style="margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em">Реклама и окупаемость</h1>
+<div style="font-size: 13px; color: #5F6368">{{productLabel}} · данные за {{periodLabel}}</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; background: #E9E9E4; padding: 4px; border-radius: 12px">
+<sc-for list="{{products}}" as="p" hint-placeholder-count="4">
+<button onClick="{{p.pick}}" style="{{p.style}}">{{p.label}}</button>
+</sc-for>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; background: #E9E9E4; padding: 4px; border-radius: 12px">
+<sc-for list="{{presets}}" as="p" hint-placeholder-count="4">
+<button onClick="{{p.pick}}" style="{{p.style}}">{{p.label}}</button>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<div style="display: flex; flex-direction: column; gap: 4px"><label for="m1" style="font-size: 12px; color: #5F6368">С даты</label><input id="m1" type="date" value="{{d1}}" onChange="{{onD1}}"></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><label for="m2" style="font-size: 12px; color: #5F6368">По дату</label><input id="m2" type="date" value="{{d2}}" onChange="{{onD2}}"></div>
+</div>
+<sc-if value="{{hasErr}}" hint-placeholder-val="{{false}}">
+<div style="font-size: 13px; color: #B42318">Дата окончания раньше начала. Поправь период.</div>
+</sc-if>
+
+<sc-if value="{{showError}}" hint-placeholder-val="{{false}}">
+<div style="background: #FDECEA; border: 1px solid #F3B8B1; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 14px; font-weight: 700; color: #8E1B12">Не загрузилось: amoCRM не пускает — ключ доступа устарел</div>
+<div style="font-size: 13px; color: #5C1610">Цифры ниже без данных amoCRM. Это не ноль, а нет связи.</div>
+<button style="font-family: inherit; font-size: 14px; font-weight: 600; height: 44px; border-radius: 10px; border: 1px solid #8E1B12; background: #FFFFFF; color: #8E1B12; cursor: pointer">Повторить</button>
+</div>
+</sc-if>
+
+<div style="background: #16181D; border-radius: 16px; padding: 20px; color: #FFFFFF; display: flex; justify-content: space-between; align-items: center; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 13px; color: #B9BCC2">Окупаемость</div>
+<div style="font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: #7EE2AE">{{roiTotal}}</div>
+</div>
+<div style="font-size: 13px; color: #B9BCC2; text-align: right; line-height: 1.5; max-width: 180px">{{roiNote}}</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 4px"><div style="font-size: 12px; color: #5F6368">Потрачено всего</div><div style="font-size: 22px; font-weight: 700">{{spend}}</div><div style="font-size: 11px; color: #5F6368">сом, с зарплатой · реклама ${{adUsd}}</div></div>
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 4px"><div style="font-size: 12px; color: #5F6368">Выручка</div><div style="font-size: 22px; font-weight: 700">{{revenue}}</div><div style="font-size: 11px; color: #5F6368">{{revenueNote}}</div></div>
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 4px"><div style="font-size: 12px; color: #5F6368">Лидов в CRM</div><div style="font-size: 22px; font-weight: 700">{{leads}}</div><div style="font-size: 11px; color: #5F6368">598 сом за лид</div></div>
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 4px"><div style="font-size: 12px; color: #5F6368">Квалов</div><div style="font-size: 22px; font-weight: 700">{{qual}}</div><div style="font-size: 11px; color: #5F6368">дошли до квалификации или дальше</div></div>
+</div>
+
+<div style="background: #FFF7E6; border: 1px solid #F1D9A6; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: center"><h2 style="margin: 0; font-size: 16px; font-weight: 700; color: #4A3200">Сверка Meta → amo</h2><span style="font-size: 12px; font-weight: 700; color: #B42318; background: #FFFFFF; padding: 4px 10px; border-radius: 999px">−10%</span></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div><div style="font-size: 12px; color: #8A5A00">Meta отдала</div><div style="font-size: 24px; font-weight: 700; color: #4A3200">{{metaLeads}}</div></div>
+<div><div style="font-size: 12px; color: #8A5A00">Долетело в amo</div><div style="font-size: 24px; font-weight: 700; color: #4A3200">{{leads}}</div></div>
+</div>
+<div style="font-size: 12px; color: #5C3D00; line-height: 1.6">{{lostLeads}} потеряно: форма не подключена — 19, дубли — 8, пустой номер — 4. Норма до 3%.</div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: center"><h2 style="margin: 0; font-size: 16px; font-weight: 700">Воронка рекламы</h2><span style="font-size: 12px; color: #2457D6; background: #E8EEFC; padding: 4px 10px; border-radius: 999px">Meta</span></div>
+<sc-for list="{{meta}}" as="s" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<sc-if value="{{s.hasConv}}" hint-placeholder-val="{{false}}"><div style="font-size: 12px; color: #5F6368; padding-left: 10px">↓ {{s.conv}}</div></sc-if>
+<div style="width: {{s.w}}; height: 44px; background: #2457D6; color: #FFFFFF; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; box-sizing: border-box; font-size: 14px; font-weight: 600; min-width: 160px"><span>{{s.name}}</span><span>{{s.val}}</span></div>
+</div>
+</sc-for>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: center"><h2 style="margin: 0; font-size: 16px; font-weight: 700">Воронка продаж</h2><span style="font-size: 12px; color: #137A4B; background: #E3F4EA; padding: 4px 10px; border-radius: 999px">amoCRM</span></div>
+<div style="font-size: 12px; color: #5F6368">12 этапов как в amo. Пройден, если сделка дошла до этапа или дальше.</div>
+<sc-for list="{{amo}}" as="s" hint-placeholder-count="12">
+<div style="display: flex; flex-direction: column; gap: 3px">
+<div style="display: flex; align-items: center; gap: 8px">
+<div style="{{s.barStyle}}"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{s.name}}</span><span>{{s.val}}</span></div>
+<span style="font-size: 12px; color: #5F6368; margin-left: auto; flex-shrink: 0">{{s.conv}}</span>
+</div>
+<sc-if value="{{s.hasStuck}}" hint-placeholder-val="{{false}}"><div style="font-size: 12px; font-weight: 600; color: #B42318; padding-left: 10px">{{s.stuck}} застряли · {{s.norm}}</div></sc-if>
+</div>
+</sc-for>
+<div style="display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid #EEEEEA">
+<div style="background: #F4F4F1; border-radius: 10px; padding: 10px 12px; display: flex; justify-content: space-between; font-size: 13px"><span>Отложили на период</span><span style="font-weight: 700">{{postponed}}</span></div>
+<div style="background: #FDECEA; border-radius: 10px; padding: 10px 12px; display: flex; justify-content: space-between; font-size: 13px; color: #5C1610"><span>Закрыто и не реализовано</span><span style="font-weight: 700">{{closedLost}}</span></div>
+<div style="font-size: 12px; color: #5F6368">Исходы не входят в воронку.</div>
+</div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><h2 style="margin: 0; font-size: 16px; font-weight: 700">Не взято в работу</h2><span style="font-size: 12px; color: #5F6368">Пн–Пт 9–18</span></div>
+<div style="display: flex; align-items: baseline; gap: 10px"><div style="font-size: 34px; font-weight: 700; color: #B42318">{{notTaken}}</div><div style="font-size: 13px; color: #5F6368">лидов никто не тронул</div></div>
+<div style="display: flex; gap: 6px; flex-wrap: wrap; font-size: 11px; font-weight: 600">
+<span style="background: #E3F4EA; color: #0B4A2D; padding: 4px 8px; border-radius: 999px">до 15 мин</span>
+<span style="background: #FFF4DA; color: #4A3200; padding: 4px 8px; border-radius: 999px">до 1 часа</span>
+<span style="background: #FDECEA; color: #5C1610; padding: 4px 8px; border-radius: 999px">дольше часа</span>
+</div>
+<sc-for list="{{ntRows}}" as="r" hint-placeholder-count="4">
+<div style="border-top: 1px solid #EEEEEA; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<span style="font-size: 14px; font-weight: 600">{{r.id}} <span style="{{r.waitStyle}}">ждёт {{r.wait}}</span></span>
+<span style="font-size: 12px; color: #5F6368; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{r.camp}} · {{r.time}}</span>
+</div>
+<button onClick="{{r.act}}" style="{{r.btnStyle}}">{{r.btn}}</button>
+</div>
+</sc-for>
+<div style="font-size: 13px; color: #5F6368; border-top: 1px solid #EEEEEA; padding-top: 10px">и ещё {{ntMore}} · <a href="#">показать все</a></div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700">Потерянные лиды</h2>
+<div style="display: flex; align-items: baseline; gap: 10px"><div style="font-size: 34px; font-weight: 700; color: #B42318">{{lostLeads}}</div><div style="font-size: 13px; color: #5F6368">есть в Meta, нет в amo</div></div>
+<sc-for list="{{lostRows}}" as="r" hint-placeholder-count="4">
+<div style="border-top: 1px solid #EEEEEA; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px">
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="font-size: 14px; font-weight: 600">{{r.id}} · <span style="color: #8A5A00">{{r.reason}}</span></span>
+<span style="font-size: 12px; color: #5F6368">{{r.camp}} · {{r.time}}</span>
+</div>
+<button onClick="{{r.act}}" style="{{r.btnStyle}}">{{r.btn}}</button>
+</div>
+</sc-for>
+<div style="font-size: 13px; color: #5F6368; border-top: 1px solid #EEEEEA; padding-top: 10px">и ещё {{lostMore}} · <a href="#">показать все</a></div>
+<button style="font-family: inherit; font-size: 14px; font-weight: 600; height: 44px; border-radius: 10px; border: 1px solid #DCDCD6; background: #FFFFFF; color: #16181D; cursor: pointer">Выгрузить в Excel</button>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0 0 4px; font-size: 16px; font-weight: 700">Конверсия по менеджерам</h2>
+<div style="font-size: 12px; color: #5F6368; margin-bottom: 4px">По ответственному в сделке amoCRM</div>
+<sc-for list="{{mgr}}" as="m" hint-placeholder-count="3">
+<div style="border-top: 1px solid #EEEEEA; padding: 12px 0; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 15px; font-weight: 700; {{m.nameStyle}}">{{m.name}}</span><span style="font-size: 15px; font-weight: 700">{{m.conv}}</span></div>
+<div style="height: 8px; background: #F0F0EC; border-radius: 4px"><div style="{{m.bar}}"></div></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; font-size: 13px; color: #5F6368">
+<div>Взял <span style="color: #16181D; font-weight: 600">{{m.taken}}</span></div>
+<div>Квал <span style="color: #16181D; font-weight: 600">{{m.qual}}</span></div>
+<div>Успешно <span style="color: #16181D; font-weight: 600">{{m.paid}}</span></div>
+<div>Реакция <span style="font-weight: 600; {{m.speedStyle}}">{{m.speed}}</span></div>
+</div>
+</div>
+</sc-for>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700">Куда ушли деньги</h2>
+<div style="display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 3px"><div style="width: 71%; background: #2457D6"></div><div style="width: 24%; background: #E0662B"></div><div style="width: 5%; background: #9A9DA3"></div></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 3px; background: #2457D6"></span>Реклама в Meta</span><span style="font-weight: 600">{{adSpend}}</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 3px; background: #E0662B"></span>Зарплата таргетолога</span><span style="font-weight: 600">{{salary}}</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 3px; background: #9A9DA3"></span>Сервисы и комиссии</span><span style="font-weight: 600">{{services}}</span></div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700">Почему закрыли · {{notQual}}</h2>
+<sc-for list="{{lost}}" as="l" hint-placeholder-count="5">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span>{{l.name}}</span><span style="font-weight: 600">{{l.val}}</span></div>
+<div style="height: 8px; background: #F0F0EC; border-radius: 4px"><div style="width: {{l.w}}; height: 8px; background: #E0662B; border-radius: 4px"></div></div>
+</div>
+</sc-for>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E4E0; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0 0 4px; font-size: 16px; font-weight: 700">Какая реклама работает</h2>
+<div style="font-size: 12px; color: #5F6368; margin-bottom: 4px">{{campNote}}</div>
+<sc-for list="{{camp}}" as="c" hint-placeholder-count="4">
+<div style="border-top: 1px solid #EEEEEA; padding: 14px 0; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 8px"><div style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><div style="font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{c.name}}</div><div style="font-size: 12px; color: #5F6368">{{c.sub}}</div></div><span style="{{c.badge}}">{{c.decision}}</span></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; font-size: 13px; color: #5F6368">
+<div>Стоимость <span style="color: #16181D; font-weight: 600">{{c.full}}</span></div>
+<div>Лиды <span style="color: #16181D; font-weight: 600">{{c.leads}}</span></div>
+<div>Квал <span style="color: #16181D; font-weight: 600">{{c.qual}}</span></div>
+<div>Цена квала <span style="color: #16181D; font-weight: 600">{{c.cpq}}</span></div>
+<div>Успешно <span style="color: #16181D; font-weight: 600">{{c.paid}}</span></div>
+<div>Выручка <span style="color: #16181D; font-weight: 600">{{c.rev}}</span></div>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span style="color: #5F6368">Окупаемость</span><span style="font-weight: 700; {{c.roiStyle}}">{{c.roi}}</span></div>
+</div>
+</sc-for>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"paymentsLinked":{"editor":"boolean","default":false},"showError":{"editor":"boolean","default":false},"$preview":{"width":390,"height":5200}}'>
+class Component extends DCLogic {
+  constructor(p){ super(p); this.state = { f: 1, preset: 'sep', product: 'sd', d1: '2026-09-01', d2: '2026-09-30', err: false, assigned: {}, added: {} }; }
+  setDates(d1, d2){
+    const a = new Date(d1), z = new Date(d2);
+    if (isNaN(a) || isNaN(z) || z < a) { this.setState({ d1, d2, err: true, preset: 'custom' }); return; }
+    this.setState({ d1, d2, err: false, preset: 'custom', f: ((z - a) / 864e5 + 1) / 30 });
+  }
+  renderVals() {
+    const linked = this.props.paymentsLinked ?? false;
+    const prodRaw = [['sd','SalesDoc',1],['z24','Zakaz24',0.18],['shturm','Штурм',0.06],['all','Все',1.24]];
+    const pr = prodRaw.find(p => p[0] === this.state.product) || prodRaw[0];
+    const products = prodRaw.map(p => ({ label: p[1], style: 'font-family: inherit; font-size: 12px; font-weight: 600; height: 44px; padding: 0 2px; border: 0; border-radius: 9px; cursor: pointer; ' + (this.state.product === p[0] ? 'background: #2457D6; color: #FFFFFF' : 'background: transparent; color: #3C4043'), pick: () => this.setState({ product: p[0] }) }));
+    const f = this.state.f * pr[2];
+    const n = v => Math.round(v * f).toLocaleString('ru-RU');
+    const presetsRaw = [['d7','7 дней',0.23],['aug','Август',0.85],['sep','Сентябрь',1],['custom','Свои',null]];
+    const presets = presetsRaw.map(p => {
+      const on = this.state.preset === p[0];
+      return { label: p[1], style: 'font-family: inherit; font-size: 13px; font-weight: 600; height: 44px; padding: 0 4px; border: 0; border-radius: 9px; cursor: pointer; ' + (on ? 'background: #16181D; color: #FFFFFF' : 'background: transparent; color: #3C4043'),
+        pick: () => p[2] === null ? this.setDates(this.state.d1, this.state.d2) : this.setState({ preset: p[0], f: p[2], err: false }) };
+    });
+    const labels = { d7: 'последние 7 дней', aug: 'август', sep: 'сентябрь', custom: 'выбранный период' };
+    const metaRaw = [['Показы',412000,100,''],['Клики',6180,70,'1,5% кликнули'],['Лиды',312,46,'5% оставили заявку']];
+    const meta = metaRaw.map(s => ({ name: s[0], val: n(s[1]), w: s[2] + '%', conv: s[3], hasConv: !!s[3] }));
+    const amoRaw = [['Неразобранное',281,13,'не взяты'],['Взят в работу',268,22,'> 3 дней'],['Квалификация пройдена',28,0,''],['Назначена встреча',20,4,'> 7 дней'],['Встреча проведена',16,0,''],['КП/материалы направлены',12,3,'> 5 дней'],['Клиент думает / согласует',9,2,'> 14 дней'],['Реквизиты получены',6,0,''],['Договор согласован',5,0,''],['Счет выставлен',4,1,'> 7 дней'],['Предоплата',3,0,''],['Успешно реализовано',3,0,'']];
+    const amo = amoRaw.map((s, i) => {
+      const last = i === amoRaw.length - 1, qualRow = i === 2;
+      const w = Math.max(62, s[1] / 281 * 88);
+      return { name: s[0], val: n(s[1]), stuck: n(s[2]), norm: s[3], hasStuck: s[2] > 0,
+        conv: i > 0 ? Math.round(s[1] / amoRaw[i-1][1] * 100) + '%' : '100%',
+        barStyle: 'width: ' + w + '%; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; box-sizing: border-box; font-size: 12px; font-weight: 600; min-width: 0; ' + (last ? 'background: #137A4B; color: #FFFFFF' : qualRow ? 'background: #B7E2C8; color: #0B4A2D' : 'background: #E3F4EA; color: #0B4A2D') };
+    });
+    const lostRaw = [['Не ЛПР',22],['Нет бюджета',18],['Не дозвонились',17],['Не наш профиль',10],['Спам, ошибка в номере',5],['Причина не указана',54]];
+    const lost = lostRaw.map(l => ({ name: l[0], val: n(l[1]), w: (l[1] / 54 * 100) + '%' }));
+    const tone = { ok: ['#137A4B','#E3F4EA','#0B4A2D'], mid: ['#9A6200','#FFF4DA','#4A3200'], bad: ['#B42318','#FDECEA','#5C1610'] };
+    const campRaw = [['SD_KG_LF_IH_2026-09','Лид-формы',96600,148,18,2,166000,'1,7x','ok','ok'],['SD_KG_SITE_IH_2026-09','Сайт',25500,39,7,1,83000,'3,3x','ok','ok'],['Лиды - KG','Cliq, старое название',34700,57,2,0,0,'0x','bad','bad'],['SD_KG_CHAT_IH_2026-09','Переписки',11200,37,1,0,0,'0x','bad','mid']];
+    const decText = { ok: 'Масштабировать', mid: 'Оптимизировать', bad: 'Отключить' };
+    const camp = campRaw.map(c => { const t = linked ? c[8] : c[9]; return { name: c[0], sub: c[1], full: n(c[2]), leads: n(c[3]), qual: n(c[4]), cpq: Math.round(c[2] / c[4]).toLocaleString('ru-RU'), paid: n(c[5]), rev: linked ? n(c[6]) : '—', roi: linked ? c[7] : '—', decision: decText[t],
+      roiStyle: 'color: ' + (linked ? tone[c[8]][0] : '#9A9DA3'),
+      badge: 'font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; white-space: nowrap; flex-shrink: 0; background: ' + tone[t][1] + '; color: ' + tone[t][2] }; });
+    const btn = on => 'font-family: inherit; font-size: 13px; font-weight: 600; height: 44px; padding: 0 12px; border-radius: 10px; cursor: pointer; white-space: nowrap; flex-shrink: 0; ' + (on ? 'background: #E3F4EA; color: #0B4A2D; border: 1px solid #BFE3CD' : 'background: #16181D; color: #FFFFFF; border: 1px solid #16181D');
+    const waitStyle = t => 'font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; background: ' + tone[t][1] + '; color: ' + tone[t][2];
+    const ntRaw = [['Лид 48213','SD_KG_LF','сегодня 14:02','9 мин','ok'],['Лид 48207','SD_KG_SITE','сегодня 13:20','51 мин','mid'],['Лид 48190','SD_KG_LF','вчера 21:40, отсчёт с 9:00','5 ч 11 мин','bad'],['Лид 48176','Лиды - KG','вчера 11:30','1 д 2 ч','bad']];
+    const ntRows = ntRaw.map(r => { const on = !!this.state.assigned[r[0]]; return { id: r[0], camp: r[1], time: r[2], wait: r[3], waitStyle: waitStyle(r[4]), btn: on ? 'Назначен' : 'Назначить', btnStyle: btn(on), act: () => this.setState({ assigned: { ...this.state.assigned, [r[0]]: !on } }) }; });
+    const lostRawRows = [['Заявка …7841','SD - август','13 сен','Форма не подключена'],['Заявка …2406','SD - август','12 сен','Форма не подключена'],['Заявка …0930','Cliq','26 сен','Пустой номер'],['Заявка …5445','tokmok','14 сен','Нет в amo']];
+    const lostRows = lostRawRows.map(r => { const on = !!this.state.added[r[0]]; return { id: r[0], camp: r[1], time: r[2], reason: r[3], btn: on ? 'Заведён' : 'В amo', btnStyle: btn(on), act: () => this.setState({ added: { ...this.state.added, [r[0]]: !on } }) }; });
+    const mgrRaw = [['Амир',142,16,2,'12 мин','ok'],['Асель',126,12,1,'48 мин','mid'],['Без ответственного',13,0,0,'не взяты','bad']];
+    const mgr = mgrRaw.map(m => { const c = m[1] ? m[3] / m[1] * 100 : 0; return { name: m[0], taken: n(m[1]), qual: n(m[2]), paid: n(m[3]), speed: m[4], conv: m[5] === 'bad' ? '—' : c.toFixed(1).replace('.', ',') + '%',
+      bar: 'width: ' + Math.min(100, c / 10 * 100) + '%; height: 8px; border-radius: 4px; background: ' + tone[m[5]][0],
+      nameStyle: m[5] === 'bad' ? 'color: #B42318' : '', speedStyle: 'color: ' + tone[m[5]][0] }; });
+    return {
+      ntRows, lostRows, mgr, notTaken: n(13), ntMore: Math.max(0, Math.round(13 * f) - 4), lostMore: Math.max(0, Math.round(31 * f) - 4),
+      presets, products, productLabel: ({ sd: 'SalesDoc с Cliq', z24: 'Zakaz24', shturm: 'Штурм', all: 'все продукты' })[this.state.product], showError: this.props.showError ?? false,
+      periodLabel: labels[this.state.preset], d1: this.state.d1, d2: this.state.d2, hasErr: this.state.err,
+      onD1: e => this.setDates(e.target.value, this.state.d2), onD2: e => this.setDates(this.state.d1, e.target.value),
+      spend: n(168000), adUsd: n(1380), leads: n(281), qual: n(28), metaLeads: n(312), lostLeads: n(31), notQual: n(126),
+      postponed: n(18), closedLost: n(126),
+      revenue: linked ? n(249000) : '—', revenueNote: linked ? n(3) + ' успешных, по оплатам' : 'после связки оплат',
+      roiTotal: linked ? '1,5x' : '—', roiNote: linked ? 'вложил 1 сом — вернул 1,5' : 'появится после связки оплат с amo',
+      campNote: linked ? 'С учётом доли зарплаты и сервисов' : 'Пока нет оплат, решение по цене квала: норма до 10 000 сом, от 15 000 — красная зона',
+      adSpend: n(120000), salary: n(40000), services: n(8000),
+      meta, amo, lost, camp
+    };
+  }
+}
+</script>
+</body>
+</html>
