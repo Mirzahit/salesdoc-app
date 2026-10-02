@@ -19626,7 +19626,7 @@ async function _settingsWaTplDraw(reload){
   + '<button type="button" class="mkb-hadd" onclick="settingsWaTplEdit(-1,event)">Добавить</button>';
 }
 function _settingsWaTplSave(){
- _setWaTpl.list = _setWaTpl.list.map(function(x){ return String(x).trim().slice(0, 500); }).filter(function(x, i, a){ return x && a.indexOf(x) === i; });
+ _setWaTpl.list = _setWaTpl.list.map(function(x){ return String(x).trim().slice(0, 300); }).filter(function(x, i, a){ return x && a.indexOf(x) === i; });
  _mktSaveSetting('wa_autoreply_templates', _setWaTpl.list.slice()).then(function(ok){ if(!ok) _settingsWaTplDraw(); }); // не сохранилось — показываем то, что на сервере
  _settingsWaTplDraw(false);
 }
@@ -19638,7 +19638,7 @@ window.settingsWaTplEdit = function(i, ev){
  var rect = ev.currentTarget.getBoundingClientRect();
  var dd = document.createElement('div');
  dd.className = 'ct-dd mkb-pop mkb-tplpop';
- dd.innerHTML = '<div class="lab">' + (i < 0 ? 'Новый автоответ' : 'Автоответ') + '</div><textarea maxlength="500" rows="4" placeholder="Текст сообщения, как его отправляет программа"></textarea>'
+ dd.innerHTML = '<div class="lab">' + (i < 0 ? 'Новый автоответ' : 'Автоответ') + '</div><textarea maxlength="300" rows="4" placeholder="Текст сообщения, как его отправляет программа"></textarea>'
   + '<div class="acts"><button type="button" class="mkb-bt" data-x>Отмена</button><button type="button" class="mkb-bt pri" data-go>Сохранить</button></div>';
  document.body.appendChild(dd);
  var ta = dd.querySelector('textarea');
@@ -20819,7 +20819,7 @@ function _mktSaveSetting(key, value){
  return sbFetch('/api/settings', { method:'PATCH', body: JSON.stringify({ key: key, value: value }) })
   .then(function(d){
    if(_sdPreviewBlocked(d)) return false; // v1017: превью-сборка Vercel не пишет
-   if(!d.ok) throw new Error(d.error || 'не сохранилось'); if(typeof showNotif === 'function') showNotif('Сохранено', 'Настройка обновлена'); return true;
+   if(!d.ok) throw new Error(d.error || 'не сохранилось'); _sdPreviewWriteOk(); if(typeof showNotif === 'function') showNotif('Сохранено', 'Настройка обновлена'); return true;
   })
   .catch(function(e){ if(typeof showNotif === 'function') showNotif('Ошибка', e.message || String(e)); return false; });
 }
@@ -20828,8 +20828,14 @@ function _mktSaveSetting(key, value){
 function _sdIsVercelPreview(){
  var h = String(location.hostname || '');
  if(/[?&]as_preview=1/.test(location.search)) return true; // проверка пометки локально
- return /\.vercel\.app$/i.test(h) && h !== 'salesdoc-app.vercel.app';
+ h = h.toLowerCase();
+ // боевые адреса (алиасы прода) — не превью
+ if(['salesdoc-app.vercel.app', 'salesdoc-app-office-2203s-projects.vercel.app', 'salesdoc-app-git-main-office-2203s-projects.vercel.app'].indexOf(h) >= 0) return false;
+ // превью-сборки: salesdoc-app-git-<ветка>-office-2203s-projects.vercel.app и salesdoc-app-<хеш>-office-2203s-projects.vercel.app
+ return /^salesdoc-app-(git-[a-z0-9-]+|[a-z0-9]+)-office-2203s-projects\.vercel\.app$/.test(h);
 }
+// сохранение прошло — значит запись открыта, пометку «превью» убираем (главный признак — ответ preview_readonly)
+function _sdPreviewWriteOk(){ var n = document.getElementById('sd-preview-note'); if(n) n.remove(); window._sdWriteOk = true; }
 function _sdPreviewBlocked(d){
  if(!d || !(d.code === 'preview_readonly' || /В превью запись отключена/.test(String(d.error || '')))) return false;
  sdToast('В превью сохранение отключено', 'err');
@@ -20837,7 +20843,7 @@ function _sdPreviewBlocked(d){
 }
 (function(){
  function mark(){
-  if(!_sdIsVercelPreview() || document.getElementById('sd-preview-note')) return;
+  if(!_sdIsVercelPreview() || window._sdWriteOk || document.getElementById('sd-preview-note')) return;
   var n = document.createElement('div');
   n.id = 'sd-preview-note';
   n.textContent = 'Превью: сохранение отключено, данные боевые';
@@ -22620,6 +22626,7 @@ window.mkbLostClose = function(id, ev){
   var already = d && (d.already || d.code === 'conflict' || /уже|already|409/i.test(msg));
   if(msg && !already){ busy = false; go.disabled = false; go.textContent = 'Сохранить'; sdToast('Не удалось сохранить: ' + msg.slice(0, 120), 'err'); return; }
   close();
+  if(!msg) _sdPreviewWriteOk();
   // заявка уходит из списка, но остаётся в цифрах сверки (там она «разобрана»)
   var R = _mkbRecon;
   if(R && R.state === 'ok' && R.data){

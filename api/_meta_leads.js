@@ -27,6 +27,11 @@ export const IN_AMO_STATUSES = ['matched', 'renamed', 'manual'];
 export const LOST_STATUSES = ['not_found', 'bad_phone'];
 export const RESOLUTIONS = ['added_to_amo', 'no_answer', 'not_our_client'];
 export const RECHECK_DAYS = 14;
+export const PHONE_DEAL_BEFORE_SEC = 86400, PHONE_DEAL_AFTER_SEC = 14 * 86400; // v1017 (QA): окно сделки по телефону
+// v1017 (QA): текст ошибки базы без «Failing row contains (…)» — там вся строка с телефоном и именем.
+export function cleanErr(e) {
+  return String((e && e.message) || e || '').split(/Failing row/i)[0].replace(/[\s,:;(]+$/, '').slice(0, 200);
+}
 const META_LEAD_FIELDS = 'id,created_time,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,field_data,is_organic,platform';
 const DAY = 86400000;
 
@@ -104,9 +109,12 @@ export function decideMatch(row, c) {
   const dupOf = _get(ctx.matchedPhones, row.phone_norm);
   if (dupOf && String(dupOf) !== String(row.meta_lead_id)) return Object.assign(out, { match_status: 'duplicate', lost_reason: 'duplicate' });
   const pd = _get(ctx.phoneDeals, row.phone_norm);
-  if (pd && pd.deals && pd.deals.length) {
-    const ct = Math.floor(Date.parse(row.created_time) / 1000) || 0;
-    const best = pd.deals.slice().sort((a, b) => Math.abs(Number(a.created_at || 0) - ct) - Math.abs(Number(b.created_at || 0) - ct))[0];
+  // v1017 (QA): сделка по телефону засчитывается, только если создана от суток ДО заявки до 14 дней
+  // ПОСЛЕ неё. Старая сделка 2025 года — это прошлое обращение, а не эта заявка (заявка потеряна).
+  const ct = Math.floor(Date.parse(row.created_time) / 1000) || 0;
+  const near = pd && pd.deals ? pd.deals.filter(x => { const c = Number(x.created_at) || 0; return c >= ct - PHONE_DEAL_BEFORE_SEC && c <= ct + PHONE_DEAL_AFTER_SEC; }) : [];
+  if (near.length) {
+    const best = near.slice().sort((a, b) => Math.abs(Number(a.created_at || 0) - ct) - Math.abs(Number(b.created_at || 0) - ct))[0];
     return Object.assign(out, { match_status: Number(best.created_by) ? 'manual' : 'renamed', match_method: 'phone',
       amo_lead_id: Number(best.id), amo_contact_id: pd.contact_id ? Number(pd.contact_id) : null, amo_created_at: _iso(best.created_at) });
   }
@@ -182,7 +190,7 @@ function metaUrl(path, params, tok) {
   return `https://graph.facebook.com/v21.0${path}?${qs.toString()}`;
 }
 const metaErr = (e, what) => ({ source: 'meta', kind: Number(e.code) === 190 ? 'token' : ((Number(e.code) === 10 || (Number(e.code) >= 200 && Number(e.code) <= 299)) ? 'perm' : 'other'),
-  code: e.code, message: (what ? what + ': ' : '') + String(e.message || e).slice(0, 200) });
+  code: e.code, message: (what ? what + ': ' : '') + cleanErr(e) });
 
 // Тянет заявки всех форм всех доступных Страниц, созданные после sinceMs.
 // Возвращает [{ raw, form_name, page_id }].
@@ -214,6 +222,7 @@ export async function pullMetaLeads(ctx, sinceMs, stats, errors, incomplete) {
       forms = (r && r.data) || [];
     } catch (e) { errors.push(metaErr(e, 'формы страницы ' + pg.id)); continue; }
     for (const fm of forms) {
+      if (ctx.timeUp && ctx.timeUp()) { incomplete.push({ source: 'meta', what: 'forms', detail: 'не хватило времени на все формы' }); return out; } // v1017 (QA)
       try {
         let j = await metaGetRaw(metaUrl('/' + fm.id + '/leads', {
           fields: META_LEAD_FIELDS,
@@ -266,7 +275,7 @@ function contactHasTail(c, tail) {
 }
 
 // ── Синхронизация (крон раз в час) ──────────────────────────────────────────
-const EXIST_COLS = 'meta_lead_id,created_time,product,page_id,form_id,form_name,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,account_id,platform,is_organic,full_name,phone_raw,phone_norm,answers,match_status,match_method,amo_lead_id,recheck_until,last_checked_at,resolution';
+const EXIST_COLS = 'meta_lead_id,created_time,product,page_id,form_id,form_name,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,account_id,platform,is_organic,full_name,phone_raw,phone_norm,answers,match_status,lost_reason,match_method,amo_lead_id,recheck_until,last_checked_at,resolution';
 const ENRICH_COLS = ['product', 'page_id', 'form_name', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name', 'ad_id', 'ad_name', 'account_id', 'platform', 'is_organic', 'full_name', 'phone_raw', 'answers'];
 
 // ctx: { env, country, amoFetch, fetchLeadsByIds, adsMap():Promise<{ads:[]}>, now() }.
@@ -289,7 +298,7 @@ export async function syncMetaLeads(ctx, opts) {
   // 0) что уже есть в таблице
   let existing;
   try { existing = await sbSelectAll('meta_leads', { select: EXIST_COLS, order: 'created_time.asc,meta_lead_id.asc' }); }
-  catch (e) { return { error: 'meta_leads: ' + String(e.message || e).slice(0, 200) }; }
+  catch (e) { return { error: 'meta_leads: ' + cleanErr(e) }; }
   const byId = new Map(existing.map(r => [String(r.meta_lead_id), r]));
 
   // 1) новые заявки из Meta. Пустая таблица или 03:00 по Бишкеку — все 90 дней (Meta хранит 90).
@@ -306,7 +315,7 @@ export async function syncMetaLeads(ctx, opts) {
     return adsCache;
   };
   const mstats = { meta: 0 };
-  const pulled = await pullMetaLeads(Object.assign({}, ctx, { adsPageIds: async () => (await adsMap()).ads.map(a => a.page_id).filter(Boolean) }), sinceMs, mstats, errors, incomplete);
+  const pulled = await pullMetaLeads(Object.assign({}, ctx, { timeUp, adsPageIds: async () => (await adsMap()).ads.map(a => a.page_id).filter(Boolean) }), sinceMs, mstats, errors, incomplete);
   stats.meta += mstats.meta;
   const fresh = [], enrich = [];
   const seenPull = new Set();
@@ -328,7 +337,7 @@ export async function syncMetaLeads(ctx, opts) {
   if (!dry && newRows.length) {
     for (let i = 0; i < newRows.length; i += 200) {
       try { const ins = await sbInsertIgnoreDup('meta_leads', newRows.slice(i, i + 200), 'meta_lead_id'); inserted += ins.length; stats.db_writes++; }
-      catch (e) { errors.push({ source: 'db', kind: 'other', message: 'запись заявок: ' + String(e.message || e).slice(0, 200) }); }
+      catch (e) { errors.push({ source: 'db', kind: 'other', message: 'запись заявок: ' + cleanErr(e) }); }
     }
   }
   for (const p of enrich) {
@@ -340,7 +349,7 @@ export async function syncMetaLeads(ctx, opts) {
     Object.assign(ex, patch);
     if (!dry) {
       try { await sbUpdate('meta_leads', { meta_lead_id: 'eq.' + ex.meta_lead_id }, patch); stats.db_writes++; enriched++; }
-      catch (e) { errors.push({ source: 'db', kind: 'other', message: 'дополнение заявки: ' + String(e.message || e).slice(0, 200) }); }
+      catch (e) { errors.push({ source: 'db', kind: 'other', message: 'дополнение заявки: ' + cleanErr(e) }); }
     } else enriched++;
   }
   newRows.forEach(r => byId.set(r.meta_lead_id, r));
@@ -384,7 +393,7 @@ export async function syncMetaLeads(ctx, opts) {
       await scanRobotDeals(ctx, Math.floor(w.min / 1000) - 3600, Math.floor(Math.min(now, w.max + 3 * DAY) / 1000), acc, stats, incomplete);
     } catch (e) {
       if (Number(e.status) === 401 || Number(e.status) === 403) { amoAuthErr = e; break; }
-      errors.push({ source: 'amo', kind: 'other', code: e.status, message: 'сделки интеграции: ' + String(e.message || e).slice(0, 200) });
+      errors.push({ source: 'amo', kind: 'other', code: e.status, message: 'сделки интеграции: ' + cleanErr(e) });
       w.failed = true;
     }
   }
@@ -430,7 +439,7 @@ export async function syncMetaLeads(ctx, opts) {
         tails.set(tail, cs);
       } catch (e) {
         if (Number(e.status) === 401 || Number(e.status) === 403) { amoAuthErr = e; errors.push({ source: 'amo', kind: 'token', code: e.status, message: 'amo: ' + String(e.message).slice(0, 200) }); break; }
-        errors.push({ source: 'amo', kind: 'other', code: e.status, message: 'поиск по номеру: ' + String(e.message || e).slice(0, 200) });
+        errors.push({ source: 'amo', kind: 'other', code: e.status, message: 'поиск по номеру: ' + cleanErr(e) });
         tails.set(tail, null);
       }
     }
@@ -478,13 +487,33 @@ export async function syncMetaLeads(ctx, opts) {
     if (dry) continue;
     if (timeUp()) { incomplete.push({ source: 'db', what: 'write', detail: 'не хватило времени записать все решения' }); break; }
     try { await sbUpdate('meta_leads', { meta_lead_id: 'eq.' + r.meta_lead_id }, patch); stats.db_writes++; }
-    catch (e) { errors.push({ source: 'db', kind: 'other', message: 'запись решения: ' + String(e.message || e).slice(0, 200) }); }
+    catch (e) { errors.push({ source: 'db', kind: 'other', message: 'запись решения: ' + cleanErr(e) }); }
   }
+
+  // 5) Поправки без amo (только база):
+  //   а) форма, по которой теперь пришла сделка «Facebook №…», подключена — её старые потери
+  //      «форма не подключена» становятся «нет сделки» (первые порции решались, когда это было неизвестно);
+  //   б) номер нашёлся в amo по другой заявке — ранние «не нашли» с тем же номером становятся дублями.
+  const fixed = { forms: 0, duplicates: 0 };
+  const statusNow = (r) => { const d = decisions.get(r.meta_lead_id); return d ? d.match_status : r.match_status; };
+  const reasonNow = (r) => { const d = decisions.get(r.meta_lead_id); return d ? d.lost_reason : r.lost_reason; };
+  const staleForms = [...new Set(all.filter(r => statusNow(r) === 'not_found' && reasonNow(r) === 'form_not_connected' && r.form_id && connectedForms.has(String(r.form_id))).map(r => String(r.form_id)))];
+  const dupRows = all.filter(r => statusNow(r) === 'not_found' && r.phone_norm && matchedPhones.has(r.phone_norm) && matchedPhones.get(r.phone_norm) !== r.meta_lead_id);
+  if (!dry && !timeUp()) {
+    for (const f of staleForms) {
+      try { const u = await sbUpdate('meta_leads', { form_id: 'eq.' + f, match_status: 'eq.not_found', lost_reason: 'eq.form_not_connected' }, { lost_reason: 'no_deal' }); fixed.forms += u.length; stats.db_writes++; }
+      catch (e) { errors.push({ source: 'db', kind: 'other', message: 'поправка форм: ' + cleanErr(e) }); }
+    }
+    for (const r of dupRows) {
+      try { await sbUpdate('meta_leads', { meta_lead_id: 'eq.' + r.meta_lead_id, match_status: 'eq.not_found' }, { match_status: 'duplicate', lost_reason: 'duplicate', last_checked_at: nowIso }); fixed.duplicates++; stats.db_writes++; }
+      catch (e) { errors.push({ source: 'db', kind: 'other', message: 'поправка дублей: ' + cleanErr(e) }); }
+    }
+  } else { fixed.forms = staleForms.length; fixed.duplicates = dupRows.length; }
   return {
     country: ctx.country, dry_run: dry, mode: night ? 'night' : 'day', full_pull: full,
     since: new Date(sinceMs).toISOString(),
     pulled: seenPull.size, inserted: dry ? 0 : inserted, would_insert: dry ? newRows.length : undefined, enriched,
-    checked, by_status: byStatus, backfill_pending: backfillPending,
+    checked, by_status: byStatus, backfill_pending: backfillPending, fixed,
     requests: { meta: stats.meta, amo: stats.amo, ads_map: stats.self, db_writes: stats.db_writes },
     elapsed_ms: Date.now() - started,
     errors, incomplete
@@ -541,6 +570,12 @@ export async function buildRecon(q) {
   const rows = rowsAll.filter(inProduct);
   const cnt = (f) => rows.filter(f).length;
   const st = (s) => cnt(r => r.match_status === s);
+  // v1017 (QA): «форма не подключена» считаем на лету — если по форме хоть раз пришла сделка
+  // «Facebook №…» (match_method lead_id), она подключена, и потеря — «нет сделки».
+  try {
+    const conn = new Set((await sbSelectAll('meta_leads', { select: 'form_id', match_method: 'eq.lead_id', order: 'form_id.asc' })).map(r => String(r.form_id)).filter(Boolean));
+    rows.forEach(r => { if (r.match_status === 'not_found' && r.lost_reason === 'form_not_connected' && conn.has(String(r.form_id))) r.lost_reason = 'no_deal'; });
+  } catch (e) { incomplete.push({ source: 'db', what: 'forms', detail: 'подключённые формы не проверены' }); }
   const lostRows = rows.filter(r => LOST_STATUSES.includes(r.match_status));
   const nonTest = rows.filter(r => r.match_status !== 'test');
   const lostTotal = lostRows.length;

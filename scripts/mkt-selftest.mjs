@@ -10,7 +10,7 @@ import {
 } from '../api/_mkt.js';
 import { normalizeHolidays, workMinutesBetween, toneOf, firstHumanAction, candidatesOf, collectTasks, collectWhatsapp, isAutoReply, normWaText,
   validateWaTemplates, WA_TEMPLATES_DEFAULT, piiAllowed, maskTail, applyWorkPii } from '../api/_mkt_work.js'; // v1017
-import { leadIdFromDealName, decideMatch, mergeTouches, parseMetaLead, fxByDay, lgTouchToRow, maskPhone } from '../api/_meta_leads.js'; // v1017
+import { leadIdFromDealName, decideMatch, mergeTouches, parseMetaLead, fxByDay, lgTouchToRow, maskPhone, cleanErr } from '../api/_meta_leads.js'; // v1017
 
 let pass = 0, fail = 0;
 function t(name, fn) {
@@ -403,6 +403,20 @@ t('WhatsApp по шаблону автоответа — не считается
   whatsapp: [wa(10, 'out', 'Phone', 'Здравствуйте. Не смогли принять ваш вызов. Но непременно ответим')], wa: { responsibleId: 22, templates: WA_TEMPLATES_DEFAULT } })), null));
 t('WhatsApp без автора и входящие — не считаются', () => assert.equal(firstHumanAction(C0, candidatesOf({
   whatsapp: [wa(10, 'out', '', 'Любой текст'), wa(20, 'in', 'Клиент', 'Привет')], wa: { responsibleId: 22 } })), null));
+
+// ── v1017 (QA) ──
+t('сверка: старая сделка по телефону (2025) — заявка потеряна, а не «manual»', () => {
+  const d = decideMatch(mrow(), { connectedForms: new Set(['111111']), phoneDeals: new Map([['996555123456', { contact_id: 3, deals: [{ id: 12, created_at: ctS - 200 * 86400, created_by: 7 }, { id: 13, created_at: ctS + 20 * 86400, created_by: 0 }] }]]) });
+  assert.equal(d.match_status, 'not_found'); assert.equal(d.lost_reason, 'no_deal');
+});
+t('сверка: сделка за 23 ч до заявки и через 13 дней — в окне', () => {
+  assert.equal(decideMatch(mrow(), { phoneDeals: new Map([['996555123456', { deals: [{ id: 1, created_at: ctS - 23 * 3600, created_by: 7 }] }]]) }).match_status, 'manual');
+  assert.equal(decideMatch(mrow(), { phoneDeals: new Map([['996555123456', { deals: [{ id: 1, created_at: ctS + 13 * 86400, created_by: 0 }] }]]) }).match_status, 'renamed');
+});
+t('ошибка базы без «Failing row» (там телефон)', () => {
+  assert.equal(cleanErr(new Error('INSERT-IGNORE meta_leads failed [400]: {"message":"null value", "details":"Failing row contains (123, 996555123456, Азамат)"}')).includes('996555123456'), false);
+  assert.equal(cleanErr('ok text'), 'ok text');
+});
 
 console.log(`\n${pass} ok, ${fail} fail`);
 process.exit(fail ? 1 : 0);

@@ -20,7 +20,7 @@ import { DEFAULT_PRODUCTS, loadProducts, classifyCampaign, productOfLead, produc
   buildStageModel, reachedFromVisited, reachedFlags, stageRef, computeArrival, touchRef, NEAR_SEC,
   amoErrOf } from './_mkt.js'; // v1015
 import { requirePerm } from './_perm.js'; // v1017: закрыть потерянную заявку — только сотрудник с подписанной сессией
-import { callerName } from './_caller.js';
+import { callerName, resolveCaller } from './_caller.js';
 import { syncMetaLeads, importLgRows, buildRecon, closeLost, mergeTouches } from './_meta_leads.js'; // v1017: заявки лидформ и сверка
 import { buildWork, applyWorkPii, piiAllowed } from './_mkt_work.js'; // v1017: «Не взято в работу», кто видит телефоны
 
@@ -503,6 +503,19 @@ function selfBase(req){
   return 'https://' + (_SELF_HOSTS.has(h) ? h : 'salesdoc-app.vercel.app');
 }
 const _trCache = new Map(); // v946: готовые отчёты по таргетологам
+// v1017: номера переписок, по которым недавно искали и не нашли сделку (номер → когда искали)
+const _tsMiss = new Map();
+const TS_MISS_TTL_MS = 6 * 3600 * 1000;
+// v1017: сильный пропуск для записи и диагностики — секрет крона (Bearer), админ-код или
+// подписанная сессия администратора. Общий APP_TOKEN (он лежит в странице) здесь не годится.
+async function strongGate(req){
+  const cron = String(process.env.CRON_SECRET || '').trim();
+  const bearer = String(req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
+  if(cron && bearer && bearer === cron) return true;
+  if(req.headers['x-admin-token'] && checkAdminToken(req).ok) return true;
+  const c = await resolveCaller(req);
+  return !!(c && c.trusted && c.active !== false && c.role === 'admin');
+}
 
 // ── v1015: общие куски отчётов Маркетинга ───────────────────────────────────
 // Свой же эндпоинт: отдаём и статус, и тело — чтобы отличить «нет данных» от «упало».
@@ -1013,6 +1026,7 @@ export default async function handler(req, res){
       if(!gate.ok) return;
       const dryRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
       const dryRun = dryRaw !== '0' && dryRaw !== 'false';
+      if(!dryRun && !(await strongGate(req))) return bad(res, 403, 'Запись заявок — только крон или админ-код');
       const base = selfBase(req);
       const nightQ = req.query.night == null ? null : String(req.query.night) === '1';
       const out = await syncMetaLeads({
@@ -1080,8 +1094,7 @@ export default async function handler(req, res){
       // v1017: диагностика для правил «Не взято в работу» — какие примечания/события реально есть
       // у контакта и сделки. Только чтение, через ограничитель amo. Номера телефонов и ссылки на
       // записи разговоров НЕ отдаём: телефон — последние 4 цифры, ссылку выбрасываем.
-      const adminOk = !!(req.headers['x-admin-token'] && checkAdminToken(req).ok);
-      if(!adminOk){ const gate = await requirePermSoft(req, res, 'view_marketing'); if(!gate.ok) return; }
+      if(!(await strongGate(req))) return bad(res, 403, 'Диагностика — только админ-код или вход администратора');
       const users = await fetchUsers(env, []);
       const who = (id) => Number(id) ? (users[id] || ('id ' + id)) : 'робот/интеграция';
       if(action === 'lead_events'){
@@ -1872,7 +1885,7 @@ export default async function handler(req, res){
         if(shortCache[code] !== undefined) return shortCache[code];
         let out = null;
         try {
-          const r = await fetch('https://fb.me/' + code, { redirect: 'manual' });
+          const r = await fetch('https://fb.me/' + code, { redirect: 'manual', signal: AbortSignal.timeout(5000) }); // v1017
           const loc = r.headers.get('location') || '';
           const story = loc.match(/story_fbid=(\d+)/);
           const pid = loc.match(/[?&]id=(\d+)/);
@@ -1920,11 +1933,18 @@ export default async function handler(req, res){
       //    засчитываем его старую сделку и помечаем это как возврат клиента.
       const leadCache = new Map();
       const rowsToSave = [], skipped = [], notFound = [];
-      let processed = 0;
-      const todoTouches = touches.filter(t => !savedIds.has(String(t.message_id))); // v1017: только новые, свежие первыми
+      let processed = 0, cappedTouches = 0;
+      // v1017: только несохранённые касания; сначала номера, которые ещё ни разу не искали (свежие первыми),
+      // потом остальные. Номер, по которому за последние 6 ч сделки не нашлось, не ищем снова —
+      // иначе каждый час перебирались бы одни и те же 60 свежих переписок, а старые не доходили бы никогда.
+      const nowMs = Date.now();
+      const recentMiss = (ph) => { const at = _tsMiss.get(ph); return at != null && nowMs - at < TS_MISS_TTL_MS; };
+      const pending = touches.filter(t => !savedIds.has(String(t.message_id)) && !recentMiss(t.phone));
+      const todoTouches = pending.filter(t => !_tsMiss.has(t.phone)).concat(pending.filter(t => _tsMiss.has(t.phone)));
       for(const t of todoTouches){
-        if(processed >= maxPhones){ tsIncomplete.push({ source: 'amo', what: 'touches', detail: 'обработано ' + processed + ' из ' + todoTouches.length + ' новых' }); break; }
-        processed++;
+        const willSearch = leadCache.get(t.phone) === undefined; // в лимит считаем только поиски в amo
+        if(willSearch && processed >= maxPhones){ cappedTouches++; continue; }
+        if(willSearch) processed++;
         const acc = t.ad.account;
         const targ = nameForAcc(acc);
         if(!targ){ skipped.push({ phone: t.phone, why: 'у кабинета ' + acc + ' не вписано имя таргетолога' }); continue; }
@@ -1944,6 +1964,8 @@ export default async function handler(req, res){
           const leads = ids.slice(0, 8).map(id => lb[id]).filter(Boolean);
           found = { contact_id: contacts.length ? contacts[0].id : null, contact_name: contacts.length ? contacts[0].name : null, leads };
           leadCache.set(t.phone, found);
+          if(leads.length) _tsMiss.delete(t.phone); else _tsMiss.set(t.phone, Date.now());
+          if(_tsMiss.size > 5000) [..._tsMiss.keys()].slice(0, 1000).forEach(k => _tsMiss.delete(k));
         }
         if(!found || !found.leads.length){
           notFound.push({ phone: t.phone, at: t.at, targetolog: targ, campaign: t.ad.campaign,
@@ -1967,6 +1989,7 @@ export default async function handler(req, res){
         });
       }
 
+      if(cappedTouches) tsIncomplete.push({ source: 'amo', what: 'touches', detail: 'не проверено новых касаний: ' + cappedTouches + ' (лимит поисков ' + maxPhones + ')' });
       // 5) Запись. Касания в свою таблицу — по одному на сообщение, повторный прогон дублей не плодит.
       let saved = 0; const saveErrors = [];
       let tagged = 0; const tagErrors = [];
@@ -2323,7 +2346,7 @@ export default async function handler(req, res){
           if(!ad && fb){
             if(fbCache[fb[1]] === undefined){
               try {
-                const r = await fetch('https://fb.me/' + fb[1], { redirect: 'manual' });
+                const r = await fetch('https://fb.me/' + fb[1], { redirect: 'manual', signal: AbortSignal.timeout(5000) }); // v1017
                 const loc = r.headers.get('location') || '';
                 const st = loc.match(/story_fbid=(\d+)/), pid = loc.match(/[?&]id=(\d+)/);
                 fbCache[fb[1]] = st ? (byStory[(pid ? pid[1] : '') + '_' + st[1]] || byPost[st[1]] || null) : null;
