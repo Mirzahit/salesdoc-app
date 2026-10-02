@@ -1788,13 +1788,19 @@ export default async function handler(req, res){
         rangeFromMs = dayStartMs(qSince, country); rangeToMs = dayEndMs(qUntil, country);
         if(rangeToMs <= rangeFromMs) return bad(res, 400, 'until раньше since');
         if((rangeToMs - rangeFromMs) / 86400000 > 45) return bad(res, 400, 'Период дозаливки — не больше 45 дней');
+        if(qSince > localIso(Date.now(), country)) return bad(res, 400, 'since позже сегодняшнего дня');
+        if(rangeToMs > Date.now()) rangeToMs = Date.now(); // v1017 (QA): не дальше «сейчас»
       }
+      const rangeUntilEff = range ? (qUntil < localIso(Date.now(), country) ? qUntil : localIso(Date.now(), country)) : null;
+      const tsT0 = Date.now();
+      const tsBudgetMs = Math.min(200, Math.max(20, Number(req.query.budget || 200))) * 1000; // v1017 (QA): время функции на дозаливку
       const days = range ? Math.max(1, Math.ceil((Date.now() - rangeFromMs) / 86400000))
         : Math.min(Math.max(Number(req.query.days || 30), 1), 180);
-      const maxPhones = Math.min(Math.max(Number(req.query.max || req.query.limit || 60), 1), 200);
+      // v1017 (QA): в дозаливке не больше 120 номеров за вызов
+      const maxPhones = Math.min(Math.max(Number(req.query.max || req.query.limit || 60), 1), range ? 120 : 200);
       const dryRunRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
       const dryRun = dryRunRaw !== '0' && dryRunRaw !== 'false';
-      if(range && !dryRun && !(await strongGate(req))) return bad(res, 403, 'Дозаливка переписок — только крон или админ-код');
+      if(range && !(await strongGate(req))) return bad(res, 403, 'Дозаливка переписок — только крон или админ-код');
       const markDone = range && !dryRun && String(req.query.mark || '') === '1';
       const writeTags = String(req.query.tags || '') === '1' && !dryRun;
       // Права разведены намеренно: складывать касания в СВОЮ таблицу — обычная работа
@@ -1897,18 +1903,36 @@ export default async function handler(req, res){
       // 3) Переписки из приёмника Wazzup: ссылка на объявление лежит в первом сообщении.
       // v1017: все сообщения окна (sbSelectAll, без потолка 1000/2000), СВЕЖИЕ ПЕРВЫМИ — раньше брались
       // первые 2000 по возрастанию, и свежие переписки не доходили до разбора.
+      // v1017 (QA): дозаливка идёт от СТАРЫХ к новым и помнит, докуда дошла
+      // (app_settings.mkt_chat_backfill_progress {from,to,cursor_at,…}) — каждую ночь продолжает с курсора.
+      let progress = null, cursorMs = range ? rangeFromMs : null;
+      if(range){
+        try {
+          const pr = await sbSelect('app_settings', { key: 'eq.mkt_chat_backfill_progress', limit: '1' });
+          progress = (pr[0] && pr[0].value) || null;
+          if(progress && progress.from === qSince && progress.to === qUntil && progress.cursor_at){
+            const c = Date.parse(progress.cursor_at);
+            if(Number.isFinite(c) && c > cursorMs) cursorMs = Math.min(c, rangeToMs);
+          } else progress = null;
+        } catch(_){ progress = null; }
+      }
       const since = new Date(range ? rangeFromMs : Date.now() - days * 86400000).toISOString();
-      const events = (await sbSelectAll('wazzup_events', {
-        select: 'id,received_at,kind,direction,phone,message_text,ad_source_id,message_id',
-        received_at: 'gte.' + since, order: 'received_at.desc,id.desc'
-      })).filter(e => !range || Date.parse(e.received_at) < rangeToMs);
+      const events = range
+        ? await sbSelectAll('wazzup_events', {
+            select: 'id,received_at,kind,direction,phone,message_text,ad_source_id,message_id',
+            and: '(received_at.gte.' + new Date(cursorMs).toISOString() + ',received_at.lt.' + new Date(rangeToMs).toISOString() + ')',
+            order: 'received_at.asc,id.asc' })
+        : await sbSelectAll('wazzup_events', {
+            select: 'id,received_at,kind,direction,phone,message_text,ad_source_id,message_id',
+            received_at: 'gte.' + since, order: 'received_at.desc,id.desc' });
       // уже сохранённые касания: их не разбираем повторно и в лимит не считаем
       let savedIds = new Set(), savedPhones = new Set();
       try {
-        const sv = await sbSelectAll('ad_touches', { select: 'message_id,phone', country: 'eq.' + country,
+        const sv = await sbSelectAll('ad_touches', { select: 'message_id,phone,touched_at', country: 'eq.' + country,
           touched_at: 'gte.' + since, order: 'message_id.asc' });
         savedIds = new Set(sv.map(r => String(r.message_id)));
-        savedPhones = new Set(sv.map(r => String(r.phone || '')).filter(Boolean)); // v1017 (b2): дозаливка пропускает уже размеченные номера
+        // v1017 (QA): дозаливка пропускает номера, размеченные ВНУТРИ периода
+        if(range) savedPhones = new Set(sv.filter(r => { const t = Date.parse(r.touched_at); return t >= rangeFromMs && t < rangeToMs; }).map(r => String(r.phone || '')).filter(Boolean));
       } catch(e){ tsIncomplete.push({ source: 'db', what: 'touches', detail: 'сохранённые касания не прочитались — разбираем всё подряд' }); }
 
       const shortCache = {};
@@ -1964,21 +1988,13 @@ export default async function handler(req, res){
       //    засчитываем его старую сделку и помечаем это как возврат клиента.
       const leadCache = new Map();
       const rowsToSave = [], skipped = [], notFound = [];
-      let processed = 0, cappedTouches = 0;
-      // v1017: только несохранённые касания; сначала номера, которые ещё ни разу не искали (свежие первыми),
-      // потом остальные. Номер, по которому за последние 6 ч сделки не нашлось, не ищем снова —
-      // иначе каждый час перебирались бы одни и те же 60 свежих переписок, а старые не доходили бы никогда.
-      const nowMs = Date.now();
-      const recentMiss = (ph) => { const at = _tsMiss.get(ph); return at != null && nowMs - at < TS_MISS_TTL_MS; };
-      const pending = touches.filter(t => !savedIds.has(String(t.message_id)) && !recentMiss(t.phone) && !(range && savedPhones.has(String(t.phone))));
-      const todoTouches = pending.filter(t => !_tsMiss.has(t.phone)).concat(pending.filter(t => _tsMiss.has(t.phone)));
-      for(const t of todoTouches){
-        const willSearch = leadCache.get(t.phone) === undefined; // в лимит считаем только поиски в amo
-        if(willSearch && processed >= maxPhones){ cappedTouches++; continue; }
-        if(willSearch) processed++;
+      let processed = 0, cappedTouches = 0, searchFailed = 0;
+      // Одно касание: поиск сделки по номеру (один раз за вызов на номер) → строка для ad_touches или null.
+      // failed=true — поиск в amo не удался (такое касание нельзя считать проверенным).
+      async function resolveTouch(t){
         const acc = t.ad.account;
         const targ = nameForAcc(acc);
-        if(!targ){ skipped.push({ phone: t.phone, why: 'у кабинета ' + acc + ' не вписано имя таргетолога' }); continue; }
+        if(!targ){ skipped.push({ phone: t.phone, why: 'у кабинета ' + acc + ' не вписано имя таргетолога' }); return { row: null }; }
         const adTs = Math.floor(new Date(t.at).getTime() / 1000);
         let found = leadCache.get(t.phone);
         if(found === undefined){
@@ -1987,27 +2003,32 @@ export default async function handler(req, res){
             const tail = t.phone.length > 9 ? t.phone.slice(-9) : t.phone;
             const r = await amoFetch(`/contacts?query=${encodeURIComponent(tail)}&limit=10&with=leads`, env);
             contacts = (r && r._embedded && r._embedded.contacts) || [];
-          } catch(e){ skipped.push({ phone: t.phone, why: 'поиск в amo не удался: ' + e.message }); leadCache.set(t.phone, null); continue; }
+          } catch(e){ skipped.push({ phone: t.phone, why: 'поиск в amo не удался: ' + e.message }); leadCache.set(t.phone, null); searchFailed++; return { row: null, failed: true }; }
           const ids = [];
           contacts.forEach(c => ((c._embedded && c._embedded.leads) || []).forEach(l => { if(!ids.includes(l.id)) ids.push(l.id); }));
           // v1015: сделки одним запросом, а не по одной
-          const lb = ids.length ? (await fetchLeadsByIds(env, ids.slice(0, 8), '', null)).leads : {};
+          const fl = [];
+          const lb = ids.length ? (await fetchLeadsByIds(env, ids.slice(0, 8), '', fl)).leads : {};
+          if(fl.length){ skipped.push({ phone: t.phone, why: 'сделки не загрузились' }); leadCache.set(t.phone, null); searchFailed++; return { row: null, failed: true }; }
           const leads = ids.slice(0, 8).map(id => lb[id]).filter(Boolean);
           found = { contact_id: contacts.length ? contacts[0].id : null, contact_name: contacts.length ? contacts[0].name : null, leads };
           leadCache.set(t.phone, found);
-          if(leads.length) _tsMiss.delete(t.phone); else _tsMiss.set(t.phone, Date.now());
-          if(_tsMiss.size > 5000) [..._tsMiss.keys()].slice(0, 1000).forEach(k => _tsMiss.delete(k));
+          if(!range){ // v1017 (QA): шестичасовая память — только для обычного часового прогона
+            if(leads.length) _tsMiss.delete(t.phone); else _tsMiss.set(t.phone, Date.now());
+            if(_tsMiss.size > 5000) [..._tsMiss.keys()].slice(0, 1000).forEach(k => _tsMiss.delete(k));
+          }
         }
-        if(!found || !found.leads.length){
+        if(found === null) return { row: null, failed: true };
+        if(!found.leads.length){
           notFound.push({ phone: t.phone, at: t.at, targetolog: targ, campaign: t.ad.campaign,
-            contact_id: (found && found.contact_id) || null, contact_name: (found && found.contact_name) || null,
-            why: (found && found.contact_id) ? 'контакт есть, сделки нет' : 'ни контакта, ни сделки' });
-          continue;
+            contact_id: found.contact_id || null, contact_name: found.contact_name || null,
+            why: found.contact_id ? 'контакт есть, сделки нет' : 'ни контакта, ни сделки' });
+          return { row: null };
         }
         const best = found.leads.slice().sort((a, b) =>
           Math.abs(Number(a.created_at || 0) - adTs) - Math.abs(Number(b.created_at || 0) - adTs))[0];
         const gap = Math.abs(Number(best.created_at || 0) - adTs);
-        rowsToSave.push({
+        return { row: {
           country: country, message_id: t.message_id, phone: t.phone,
           touched_at: t.at, account: acc, targetolog: targ,
           campaign_id: t.ad.campaign_id || null, campaign: t.ad.campaign || null,
@@ -2017,19 +2038,82 @@ export default async function handler(req, res){
           lead_created: new Date(Number(best.created_at || 0) * 1000).toISOString(),
           _lead_name: best.name, _returning: gap > 7 * 86400,
           _tags: ((best._embedded && best._embedded.tags) || []).map(x => String(x.name || ''))
-        });
+        } };
+      }
+      const cleanRow = (r) => { const c = Object.assign({}, r); delete c._lead_name; delete c._returning; delete c._tags; return c; };
+      let saved = 0; const saveErrors = [];
+      let tagged = 0; const tagErrors = [];
+      let backfillMark = null, rangeStop = null, cursorOut = null;
+
+      if(range){
+        // v1017 (QA): дозаливка — от старых к новым, с курсора; запись пачками по 25 и курсор после каждой пачки;
+        // стоп по времени (budget), по лимиту номеров или на первом сбое поиска (курсор остаётся до него).
+        const todo = touches.filter(t => !savedIds.has(String(t.message_id)) && !savedPhones.has(String(t.phone)));
+        let batch = [], lastDoneMs = null;
+        const prevChecked = progress ? (Number(progress.checked) || 0) : 0, prevMatched = progress ? (Number(progress.matched) || 0) : 0;
+        const flush = async () => {
+          if(dryRun || !batch.length){ batch = []; return true; }
+          try { await sbInsertIgnoreDup('ad_touches', batch.map(cleanRow), 'country,message_id'); saved += batch.length; batch = []; return true; }
+          catch(e){ saveErrors.push(String(e.message || e).split(/Failing row/i)[0].slice(0, 200)); return false; }
+        };
+        const saveCursor = async (ms) => {
+          cursorOut = new Date(ms).toISOString();
+          if(dryRun) return;
+          try { await sbUpsert('app_settings', { key: 'mkt_chat_backfill_progress', value: { from: qSince, to: qUntil, cursor_at: cursorOut,
+            checked: prevChecked + processed, matched: prevMatched + rowsToSave.length, updated_at: new Date().toISOString() }, updated_at: new Date().toISOString() }, 'key'); }
+          catch(e){ tsErrors.push({ source: 'db', kind: 'other', message: 'курсор дозаливки не записался' }); }
+        };
+        for(const t of todo){
+          if(Date.now() - tsT0 > tsBudgetMs){ rangeStop = 'time'; break; }
+          const willSearch = leadCache.get(t.phone) === undefined;
+          if(willSearch && processed >= maxPhones){ rangeStop = 'max'; break; }
+          if(willSearch) processed++;
+          const r = await resolveTouch(t);
+          if(r.failed){ rangeStop = 'amo_failed'; break; }
+          if(r.row){ rowsToSave.push(r.row); batch.push(r.row); }
+          lastDoneMs = Date.parse(t.at);
+          if(batch.length >= 25){
+            if(!(await flush())){ rangeStop = 'save_failed'; break; }
+            await saveCursor(lastDoneMs);
+          }
+        }
+        const okSave = await flush();
+        if(!okSave && !rangeStop) rangeStop = 'save_failed';
+        if(!rangeStop){
+          await saveCursor(rangeToMs); // период пройден целиком
+          if(markDone){
+            backfillMark = { from: qSince, to: rangeUntilEff, done_at: new Date().toISOString(), matched: prevMatched + rowsToSave.length, checked: prevChecked + processed };
+            try {
+              const prevRow = await sbSelect('app_settings', { key: 'eq.mkt_chat_backfill', limit: '1' }).catch(() => []);
+              backfillMark = mergeBackfillMark((prevRow[0] && prevRow[0].value) || null, backfillMark);
+              await sbUpsert('app_settings', { key: 'mkt_chat_backfill', value: backfillMark, updated_at: new Date().toISOString() }, 'key');
+            } catch(e){ backfillMark = null; tsErrors.push({ source: 'db', kind: 'other', message: 'отметка дозаливки не записалась' }); }
+          }
+        } else {
+          if(lastDoneMs != null && okSave) await saveCursor(lastDoneMs);
+          const why = { time: 'не хватило времени', max: 'лимит ' + maxPhones + ' номеров', amo_failed: 'поиск в amo не удался', save_failed: 'запись не удалась' }[rangeStop];
+          tsIncomplete.push({ source: rangeStop === 'save_failed' ? 'db' : 'amo', what: 'touches', detail: 'дозаливка остановилась: ' + why + ' — продолжит с ' + (cursorOut || new Date(cursorMs).toISOString()) });
+        }
+      } else {
+      // v1017: только несохранённые касания; сначала номера, которые ещё ни разу не искали (свежие первыми),
+      // потом остальные. Номер, по которому за последние 6 ч сделки не нашлось, не ищем снова —
+      // иначе каждый час перебирались бы одни и те же 60 свежих переписок, а старые не доходили бы никогда.
+      const nowMs = Date.now();
+      const recentMiss = (ph) => { const at = _tsMiss.get(ph); return at != null && nowMs - at < TS_MISS_TTL_MS; };
+      const pending = touches.filter(t => !savedIds.has(String(t.message_id)) && !recentMiss(t.phone));
+      const todoTouches = pending.filter(t => !_tsMiss.has(t.phone)).concat(pending.filter(t => _tsMiss.has(t.phone)));
+      for(const t of todoTouches){
+        const willSearch = leadCache.get(t.phone) === undefined; // в лимит считаем только поиски в amo
+        if(willSearch && processed >= maxPhones){ cappedTouches++; continue; }
+        if(willSearch) processed++;
+        const r = await resolveTouch(t);
+        if(r.row) rowsToSave.push(r.row);
       }
 
       if(cappedTouches) tsIncomplete.push({ source: 'amo', what: 'touches', detail: 'не проверено новых касаний: ' + cappedTouches + ' (лимит поисков ' + maxPhones + ')' });
       // 5) Запись. Касания в свою таблицу — по одному на сообщение, повторный прогон дублей не плодит.
-      let saved = 0; const saveErrors = [];
-      let tagged = 0; const tagErrors = [];
       if(!dryRun){
-        const clean = rowsToSave.map(r => {
-          const c = Object.assign({}, r);
-          delete c._lead_name; delete c._returning; delete c._tags;
-          return c;
-        });
+        const clean = rowsToSave.map(cleanRow);
         try {
           if(clean.length) await sbInsertIgnoreDup('ad_touches', clean, 'country,message_id');
           saved = clean.length;
@@ -2055,17 +2139,6 @@ export default async function handler(req, res){
           }
         }
       }
-
-      // v1017 (b2): весь период пройден (не упёрлись в лимит, запись без ошибок) — отмечаем дозаливку
-      let backfillMark = null;
-      if(markDone && !cappedTouches && !saveErrors.length){
-        backfillMark = { from: qSince, to: qUntil, done_at: new Date().toISOString(), matched: rowsToSave.length, checked: processed };
-        try {
-          // соседние ночные куски склеиваем в одну отметку
-          const prevRow = await sbSelect('app_settings', { key: 'eq.mkt_chat_backfill', limit: '1' }).catch(() => []);
-          backfillMark = mergeBackfillMark((prevRow[0] && prevRow[0].value) || null, backfillMark);
-          await sbUpsert('app_settings', { key: 'mkt_chat_backfill', value: backfillMark, updated_at: new Date().toISOString() }, 'key'); }
-        catch(e){ backfillMark = null; tsErrors.push({ source: 'db', kind: 'other', message: 'отметка дозаливки не записалась' }); }
       }
       return res.status(200).json({
         country, days, dry_run: dryRun, write_tags: writeTags,
@@ -2086,7 +2159,7 @@ export default async function handler(req, res){
         skipped: skipped,
         link_unknown: noLink,
         errors: tsErrors, incomplete: tsIncomplete,
-        range: range ? { since: qSince, until: qUntil, max: maxPhones } : null, backfill_mark: backfillMark, checked_phones: processed,
+        range: range ? { since: qSince, until: qUntil, until_effective: rangeUntilEff, max: maxPhones, stop: rangeStop, cursor_at: cursorOut, done: !rangeStop } : null, backfill_mark: backfillMark, checked_phones: processed, search_failed: searchFailed,
         message: dryRun
           ? `Ничего не записано. Готово к сохранению: ${rowsToSave.length} касаний. Применить — dry_run=false (и tags=1, если ставить теги в amo).`
           : `Сохранено касаний: ${saved}. Тегов проставлено: ${tagged}.`

@@ -171,6 +171,17 @@ export function mergeBackfillMark(prev, next) {
     done_at: next.done_at || prev.done_at || null,
     matched: (Number(prev.matched) || 0) + (Number(next.matched) || 0), checked: (Number(prev.checked) || 0) + (Number(next.checked) || 0) };
 }
+// v1017 (QA): следующий кусок дозаливки (≤45 дней): с конца отметки, если она покрывает начало заявки,
+// иначе с начала заявки; не дальше конца заявки и сегодняшнего дня. Нечего делать — null.
+export function backfillPiece(request, mark, todayIso) {
+  if (!request || !request.from || !request.to) return null;
+  let from = request.from;
+  if (mark && mark.from && mark.to && mark.from <= request.from && mark.to >= request.from) from = addDaysIso(mark.to, 1);
+  const last = todayIso && todayIso < request.to ? todayIso : request.to;
+  if (from > last) return null;
+  const cap = addDaysIso(from, 44);
+  return { from, to: cap < last ? cap : last };
+}
 // Нужна ли ещё дозаливка по заявке mkt_chat_backfill_request.
 export function backfillNeeded(request, mark) {
   if (!request || !request.from || !request.to) return false;

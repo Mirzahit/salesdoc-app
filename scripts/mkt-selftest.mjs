@@ -6,7 +6,7 @@ import { localIso, dayStartMs, dayEndMs, addDaysIso, zonedToUtcMs, tzOffsetMinAt
 import {
   DEFAULT_PRODUCTS, classifyCampaign, classifyForm, formIdFromTags, productOfLead, validateProducts,
   buildStageModel, reachedFromVisited, reachedFlags, computeArrival, splitInt, splitMoney,
-  shiftHourToDay, bishkekShiftRows, metaErrKind, classifyMetaLead, cpqTone, campaignDecision, sourceTypeOf, mergeBackfillMark, backfillNeeded
+  shiftHourToDay, bishkekShiftRows, metaErrKind, classifyMetaLead, cpqTone, campaignDecision, sourceTypeOf, mergeBackfillMark, backfillNeeded, backfillPiece
 } from '../api/_mkt.js';
 import { normalizeHolidays, workMinutesBetween, toneOf, firstHumanAction, candidatesOf, collectTasks, collectWhatsapp, isAutoReply, normWaText,
   validateWaTemplates, WA_TEMPLATES_DEFAULT, piiAllowed, maskTail, applyWorkPii } from '../api/_mkt_work.js'; // v1017
@@ -455,6 +455,16 @@ t('нужна ли дозаливка', () => {
   assert.equal(backfillNeeded(rq, { from: '2026-09-10', to: '2026-09-30' }), true);
   assert.equal(backfillNeeded(rq, { from: '2026-09-01', to: '2026-10-01' }), false);
   assert.equal(backfillNeeded(null, null), false);
+});
+
+t('дозаливка: куски ≤45 дней с конца отметки, не дальше сегодня', () => {
+  const rq = { from: '2026-07-01', to: '2026-09-30' };
+  assert.deepEqual(backfillPiece(rq, null, '2026-10-03'), { from: '2026-07-01', to: '2026-08-14' });
+  assert.deepEqual(backfillPiece(rq, { from: '2026-07-01', to: '2026-08-14' }, '2026-10-03'), { from: '2026-08-15', to: '2026-09-28' });
+  assert.deepEqual(backfillPiece(rq, { from: '2026-07-01', to: '2026-09-28' }, '2026-10-03'), { from: '2026-09-29', to: '2026-09-30' });
+  assert.equal(backfillPiece(rq, { from: '2026-06-01', to: '2026-09-30' }, '2026-10-03'), null);
+  assert.deepEqual(backfillPiece({ from: '2026-09-09', to: '2026-10-10' }, null, '2026-10-03'), { from: '2026-09-09', to: '2026-10-03' });
+  assert.deepEqual(backfillPiece(rq, { from: '2026-08-01', to: '2026-08-20' }, '2026-10-03'), { from: '2026-07-01', to: '2026-08-14' });
 });
 
 console.log(`\n${pass} ok, ${fail} fail`);

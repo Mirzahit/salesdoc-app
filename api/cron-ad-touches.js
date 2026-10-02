@@ -17,7 +17,7 @@ import './_preview_guard.js'; // v1017: в превью-сборке запис�
 
 import { bishkekIso } from './_dates.js'; // v1015
 import { sbSelect } from './_supabase.js';
-import { backfillNeeded } from './_mkt.js'; // v1017 (b2)
+import { backfillPiece } from './_mkt.js'; // v1017 (b2)
 // v1017 (QA): в журнал — без «Failing row contains (…)» (там телефон и имя клиента)
 const cleanErr = (m) => String(m || '').split(/Failing row/i)[0].trim().slice(0, 200);
 
@@ -45,8 +45,9 @@ export default async function handler(req, res) {
   const out = {};
   // v1017 (b2): дозаливка старых переписок — сам крон в прогоне 06:30 по Бишкеку (после ночной загрузки
   // заявок и Финансиста), если в app_settings лежит заявка mkt_chat_backfill_request = {from, to}
-  // и отметка mkt_chat_backfill её ещё не покрывает. Не успела за ночь (лимит 200 номеров) —
-  // продолжит следующей ночью: уже размеченные номера пропускаются.
+  // и отметка mkt_chat_backfill её ещё не покрывает. Идёт от старых переписок к новым с курсора
+  // (app_settings.mkt_chat_backfill_progress); не успела за ночь (время, 120 номеров, сбой amo) —
+  // следующей ночью продолжит с курсора. Отметка пишется, когда кусок пройден целиком.
   const T0 = Date.now(), BUDGET_MS = 270000;
   const left = () => BUDGET_MS - (Date.now() - T0);
   const hourB = new Date(Date.now() + 6 * 3600000).getUTCHours();
@@ -56,19 +57,17 @@ export default async function handler(req, res) {
       const rows = await sbSelect('app_settings', { key: 'in.(mkt_chat_backfill_request,mkt_chat_backfill)' });
       const v = {}; rows.forEach(r => { v[r.key] = r.value; });
       const rq = v.mkt_chat_backfill_request;
-      if (rq && /^\d{4}-\d{2}-\d{2}$/.test(String(rq.from || '')) && /^\d{4}-\d{2}-\d{2}$/.test(String(rq.to || '')) && backfillNeeded(rq, v.mkt_chat_backfill)) bfReq = rq;
+      // длинная заявка режется на куски ≤45 дней; каждую ночь — следующий кусок (курсор внутри куска — в amo.js)
+      if (rq && /^\d{4}-\d{2}-\d{2}$/.test(String(rq.from || '')) && /^\d{4}-\d{2}-\d{2}$/.test(String(rq.to || ''))) bfReq = backfillPiece(rq, v.mkt_chat_backfill, bishkekIso(Date.now()));
     } catch (e) { out.backfill = { error: 'заявка на дозаливку не прочиталась' }; }
   }
 
   // Переписки: смотрим неделю назад. Человек мог написать вчера, а сделку ему завели сегодня —
-  // короткое окно такие пары всё равно поймает. В прогон с дозаливкой пропускаем: вместе
-  // с заявками и дозаливкой (до 120 + 160 + 200 с) не уложились бы в ~270 с.
-  if (!bfReq) {
-    try {
-      const chats = await call('action=targ_sync&country=KG&days=7&limit=60&dry_run=false', 120000);
-      out.chats = { matched: chats.matched || 0, saved: chats.saved || 0, errors: (chats.save_errors || []).map(cleanErr) };
-    } catch (e) { out.chats = { error: e.message || String(e) }; }
-  } else out.chats = { skipped: 'дозаливка переписок' };
+  // короткое окно такие пары всё равно поймает. Идёт всегда, и в ночь дозаливки тоже.
+  try {
+    const chats = await call('action=targ_sync&country=KG&days=7&limit=60&dry_run=false', bfReq ? 60000 : 120000);
+    out.chats = { matched: chats.matched || 0, saved: chats.saved || 0, errors: (chats.save_errors || []).map(cleanErr) };
+  } catch (e) { out.chats = { error: e.message || String(e) }; }
 
   try {
     // v1017: заявки лидформ — в свою таблицу meta_leads (а не в ad_touches) и поиск их сделок в amo.
@@ -81,13 +80,16 @@ export default async function handler(req, res) {
 
   if (bfReq) {
     const tmo = Math.min(200000, left() - 5000);
-    if (tmo < 60000) out.backfill = { skipped: 'не хватило времени, следующей ночью' };
+    if (tmo < 45000) out.backfill = { skipped: 'не хватило времени, следующей ночью' };
     else {
       try {
-        const b = await call(`action=targ_sync&country=KG&since=${bfReq.from}&until=${bfReq.to}&max=200&mark=1&dry_run=false`, tmo, true);
-        const inc = (b.incomplete || []).filter(x => x && x.what === 'touches').length > 0;
+        // сама дозаливка останавливается по своему бюджету (budget, с) чуть раньше таймаута вызова и запоминает курсор
+        const budgetS = Math.max(20, Math.floor((tmo - 15000) / 1000));
+        const b = await call(`action=targ_sync&country=KG&since=${bfReq.from}&until=${bfReq.to}&max=120&mark=1&dry_run=false&budget=${budgetS}`, tmo, true);
+        const rg = b.range || {};
         out.backfill = { from: bfReq.from, to: bfReq.to, checked: b.checked_phones || 0, matched: b.matched || 0, saved: b.saved || 0,
-          incomplete: inc || !!b.error, marked: !!b.backfill_mark, error: b.error ? cleanErr(b.error) : undefined };
+          incomplete: !rg.done || !!b.error, stop: rg.stop || null, cursor_at: rg.cursor_at || null, search_failed: b.search_failed || 0,
+          marked: !!b.backfill_mark, error: b.error ? cleanErr(b.error) : undefined };
       } catch (e) { out.backfill = { error: e.message || String(e) }; }
     }
   } else {

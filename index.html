@@ -22358,11 +22358,12 @@ function _mkbModel(){
  m.cpl = (m.spendSom != null && m.adLeads.length) ? m.spendSom / m.adLeads.length : null;
  m.cpq = (m.spendSom != null && m.adQual) ? m.spendSom / m.adQual : null;
  // откуда сделки в amo: формы / WhatsApp / звонки / вручную (сервер даёт sources, иначе считаем по source_type)
- var src = rp && rp.sources && typeof rp.sources === 'object' ? rp.sources : null;
- if(!src && m.allLeads.some(function(l){ return l.source_type; })){
+ // сначала считаем по сделкам выбранного продукта — части всегда сходятся с «всего в amo»; rp.sources — запасной
+ var src = null;
+ if(m.allLeads.some(function(l){ return l.source_type; })){
   src = { form: 0, chat: 0, call: 0, manual: 0 };
   m.allLeads.forEach(function(l){ if(src[l.source_type] != null) src[l.source_type]++; });
- }
+ } else if(rp && rp.sources && typeof rp.sources === 'object') src = rp.sources;
  m.sources = src;
  // ── кто взял лид ──
  var wk = _mkbWork && _mkbWork.state === 'ok' ? _mkbWork.data : null;
@@ -22383,7 +22384,10 @@ function _mkbModel(){
   var pr = _mktSelRange(_mktSel), uf = String(rec.chat_unmarked_from).slice(0, 10);
   var bf = rec.chat_backfill || null;
   var needFrom = pr.since > uf ? pr.since : uf;
-  var covered = !!(bf && bf.from && bf.to && String(bf.from).slice(0, 10) <= needFrom && String(bf.to).slice(0, 10) >= pr.until);
+  // последние 7 дней размечает ежечасная синхронизация — догрузке достаточно дойти до «сегодня − 7»
+  var wk7 = _mktAddDays(_mktIso(_mktBkToday()), -7);
+  var needTo = pr.until < wk7 ? pr.until : wk7;
+  var covered = !!(bf && bf.from && bf.to && String(bf.from).slice(0, 10) <= needFrom && String(bf.to).slice(0, 10) >= needTo);
   m.unmarked = pr.until >= uf && !covered;
  }
  return m;
