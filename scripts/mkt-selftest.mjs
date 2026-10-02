@@ -385,5 +385,24 @@ t('решение по кампании по цене квала', () => {
   assert.equal(cpqTone(9999), 'ok'); assert.equal(cpqTone(14999), 'mid'); assert.equal(cpqTone(15000), 'bad');
 });
 
+// ── v1017: утверждённое «тронул» ──
+t('звонок call_out недозвон (status 6, 0 с) — считается', () => {
+  const r = firstHumanAction(C0, candidatesOf({ contactNotes: [{ created_at: C0 + 240, created_by: 8, note_type: 'call_out', params: { call_status: 6, duration: 0, source: 'amo_beeline_kg' } }] }));
+  assert.deepEqual(r, { at: C0 + 240, by: 8, kind: 'call' });
+});
+t('входящий call_in — не считается', () => assert.equal(firstHumanAction(C0, candidatesOf({ contactNotes: [{ created_at: C0 + 60, created_by: 8, note_type: 'call_in', params: { call_status: 4 } }] })), null));
+t('примечание человека на контакте — считается, робота (ответы формы) — нет', () => {
+  assert.equal(firstHumanAction(C0, candidatesOf({ contactNotes: [{ created_at: C0 + 1, created_by: 0, note_type: 'common' }] })), null);
+  assert.equal(firstHumanAction(C0, candidatesOf({ contactNotes: [{ created_at: C0 + 90, created_by: 4, note_type: 'common' }] })).kind, 'note');
+});
+t('WhatsApp Phone — считается и засчитывается ответственному', () => {
+  const r = firstHumanAction(C0, candidatesOf({ whatsapp: [wa(120, 'out', 'Phone', 'Добрый день, вы оставляли заявку?')], wa: { responsibleId: 22 } }));
+  assert.deepEqual(r, { at: C0 + 120, by: 22, kind: 'whatsapp', by_name: 'Phone' });
+});
+t('WhatsApp по шаблону автоответа — не считается (и с Phone)', () => assert.equal(firstHumanAction(C0, candidatesOf({
+  whatsapp: [wa(10, 'out', 'Phone', 'Здравствуйте. Не смогли принять ваш вызов. Но непременно ответим')], wa: { responsibleId: 22, templates: WA_TEMPLATES_DEFAULT } })), null));
+t('WhatsApp без автора и входящие — не считаются', () => assert.equal(firstHumanAction(C0, candidatesOf({
+  whatsapp: [wa(10, 'out', '', 'Любой текст'), wa(20, 'in', 'Клиент', 'Привет')], wa: { responsibleId: 22 } })), null));
+
 console.log(`\n${pass} ok, ${fail} fail`);
 process.exit(fail ? 1 : 0);

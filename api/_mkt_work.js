@@ -15,7 +15,8 @@ import './_preview_guard.js'; // v1017: в превью-сборке запис�
 // проверяет scripts/mkt-selftest.mjs. Сеть — только detectTaken/buildWork, и только
 // через переданный ограничитель amo (ctx.amoFetch).
 
-import { sbSelect } from './_supabase.js';
+import { sbSelect, sbSelectAll } from './_supabase.js';
+import { normalizePhone } from './_phone.js';
 
 export const WORK_DEFAULT = { startH: 9, endH: 18, offH: 6, days: [1, 2, 3, 4, 5] };
 export const NORM_OK_MIN = 15, NORM_LATE_MIN = 60;
@@ -68,11 +69,14 @@ export function toneOf(min) {
 // Каждый сборщик превращает свой источник в список кандидатов [{at, kind, human, by, by_name}]
 // (время — секунды unix). Выбор (firstHumanAction) не знает об источниках: сборщик можно
 // добавить или поменять, не трогая выбор. Действия до создания сделки не считаются.
-// v1017: какие типы примечаний считать звонком/действием — ЕЩЁ НЕ УТВЕРЖДЕНО CEO;
-// правила вынесены сюда, чтобы поменять их в одном месте.
+// v1017 (утверждено CEO): «тронул» = первое действие человека (created_by ≠ 0) по сделке или её контактам:
+//   примечания 'common' и исходящие звонки 'call_out' (любой call_status — недозвон тоже попытка);
+//   звонки живут в примечаниях КОНТАКТА (amo_beeline_kg). Входящие 'call_in' не считаются.
+//   Плюс смена этапа, задача (поставил человек или закрыта), исходящий WhatsApp (см. collectWhatsapp).
+//   Не считаются: created_by 0 (роботы, интеграции, автоназначение, SalesBot), смена ответственного.
 export const NOTE_RULES = {
-  lead: { common: 'note', call_out: 'call' },   // примечания сделки
-  contact: { call_out: 'call' }                // примечания главного контакта (звонки живут там)
+  lead: { common: 'note', call_out: 'call' },    // примечания сделки
+  contact: { common: 'note', call_out: 'call' }  // примечания всех контактов сделки
 };
 export function collectStatus(statusEv) {
   return (statusEv || []).map(ev => ({ at: Number(ev.created_at), kind: 'status', human: !!Number(ev.created_by), by: Number(ev.created_by) || null }));
@@ -130,8 +134,8 @@ export async function loadWaTemplates() {
     return v && v.ok ? v.value : WA_TEMPLATES_DEFAULT;
   } catch (_) { return WA_TEMPLATES_DEFAULT; }
 }
-// WhatsApp (наша таблица wazzup_events), события одного номера. Правило CEO (ЗА ФЛАГОМ
-// use_whatsapp, пока не подтверждено): исходящее
+// WhatsApp (наша таблица wazzup_events), события номеров контактов сделки. Правило CEO (утверждено,
+// включено по умолчанию; выключить — use_whatsapp=0): исходящее
 //   • текст совпал с шаблоном автоответа → бот;
 //   • authorName пустой → бот Wazzup;
 //   • authorName 'Phone' (написали с телефона) → человек, засчитываем ответственному сделки;
@@ -233,6 +237,32 @@ async function listByIds(ctx, ids, build, key, stats, errors, what) {
   return out;
 }
 
+// Телефоны контактов (для WhatsApp) — пачками по 50 через ограничитель amo, держим сутки.
+const _phoneCache = new Map();
+async function contactPhones(ctx, cids, stats, errors) {
+  const out = new Map(), need = [];
+  cids.forEach(c => { const h = _phoneCache.get(ctx.sub + '|' + c); if (h && Date.now() - h.t < TAKEN_TTL_MS) out.set(c, h.v); else need.push(c); });
+  for (let i = 0; i < need.length; i += 50) {
+    const part = need.slice(i, i + 50);
+    try {
+      stats.requests++;
+      const r = await ctx.amoFetch('/contacts?' + part.map((x, k) => `filter[id][${k}]=${x}`).join('&') + '&limit=250', ctx.env);
+      const got = new Set();
+      ((r && r._embedded && r._embedded.contacts) || []).forEach(c => {
+        const ph = [];
+        (c.custom_fields_values || []).forEach(f => { if (String(f.field_code || '') === 'PHONE') (f.values || []).forEach(v => { if (v && v.value) ph.push(String(v.value)); }); });
+        out.set(Number(c.id), ph); got.add(Number(c.id)); _phoneCache.set(ctx.sub + '|' + c.id, { t: Date.now(), v: ph });
+      });
+      part.forEach(c => { if (!got.has(c)) { out.set(c, []); _phoneCache.set(ctx.sub + '|' + c, { t: Date.now(), v: [] }); } });
+    } catch (e) {
+      if (Number(e.status) === 401 || Number(e.status) === 403) throw e;
+      errors.push({ source: 'amo', kind: 'other', message: 'телефоны контактов: ' + String(e.message || e).slice(0, 200) });
+    }
+  }
+  if (_phoneCache.size > 20000) [..._phoneCache.keys()].slice(0, 5000).forEach(k => _phoneCache.delete(k));
+  return out;
+}
+
 // leads — сделки amo (с _embedded.contacts), sc — история этапов (scanStatusEvents с firstHuman).
 // opts: { useWhatsapp, phoneBy: {leadId: phone}, managers: {имя: id}, templates: [...] }.
 // Возвращает { taken: Map<id,{at,by,kind}>, requests, errors, incomplete }.
@@ -250,29 +280,36 @@ export async function detectTaken(ctx, leads, sc, opts) {
   }
   if (todo.length) {
     const ids = todo.map(l => Number(l.id));
-    const mainContact = {};
-    todo.forEach(l => {
-      const cs = (l._embedded && l._embedded.contacts) || [];
-      const m = cs.find(c => c.is_main) || cs[0];
-      if (m) mainContact[l.id] = Number(m.id);
-    });
-    const cids = [...new Set(Object.values(mainContact).filter(Boolean))];
+    // v1017 (решение CEO): действия по сделке ИЛИ по любому её контакту
+    const contactsOf = {};
+    todo.forEach(l => { contactsOf[l.id] = [...new Set(((l._embedded && l._embedded.contacts) || []).map(c => Number(c.id)).filter(Boolean))]; });
+    const cids = [...new Set(Object.values(contactsOf).flat())];
     const q = (arr) => arr.map(x => 'filter[entity_id][]=' + x).join('&');
     const types = (rules) => Object.keys(rules).map(t => '&filter[note_type][]=' + t).join('');
     const notes = await listByIds(ctx, ids, (p) => '/leads/notes?' + q(p) + types(NOTE_RULES.lead), 'notes', stats, errors, 'примечания сделок');
     const cnotes = cids.length ? await listByIds(ctx, cids, (p) => '/contacts/notes?' + q(p) + types(NOTE_RULES.contact), 'notes', stats, errors, 'звонки контактов') : [];
     const tasks = await listByIds(ctx, ids, (p) => '/tasks?filter[entity_type]=leads&' + q(p), 'tasks', stats, errors, 'задачи');
-    // WhatsApp — из нашей таблицы wazzup_events, только за флагом (правило ещё не утверждено CEO)
-    const waBy = new Map();
-    if (o.useWhatsapp && o.phoneBy) {
-      const phones = [...new Set(todo.map(l => String(o.phoneBy[l.id] || '').replace(/\D/g, '')).filter(p => p.length >= 9))];
+    // WhatsApp: исходящие из нашей wazzup_events по телефонам контактов сделки (последние 9 цифр)
+    const waByTail = new Map();
+    const tailsOf = {};
+    if (o.useWhatsapp) {
+      const phonesByContact = await contactPhones(ctx, cids, stats, errors);
+      const full = new Set();
+      todo.forEach(l => {
+        const t = new Set();
+        const add = (raw) => { const d = String(raw || '').replace(/\D/g, ''); if (d.length < 9) return; t.add(d.slice(-9)); full.add(d); const n = normalizePhone(raw); if (n) full.add(n); };
+        contactsOf[l.id].forEach(c => (phonesByContact.get(c) || []).forEach(add));
+        if (o.phoneBy && o.phoneBy[l.id]) add(o.phoneBy[l.id]);
+        tailsOf[l.id] = [...t];
+      });
+      const phones = [...full];
       const minCreated = todo.reduce((m, l) => Math.min(m, Number(l.created_at) || m), Infinity);
       try {
         for (let i = 0; i < phones.length; i += 100) {
-          const rows = await sbSelect('wazzup_events', { select: 'phone,received_at,direction,kind,message_text,raw',
-            phone: 'in.(' + phones.slice(i, i + 100).join(',') + ')', received_at: 'gte.' + new Date((minCreated - 86400) * 1000).toISOString(),
-            order: 'received_at.asc', limit: '1000' });
-          rows.forEach(r => { const k = String(r.phone); if (!waBy.has(k)) waBy.set(k, []); waBy.get(k).push(r); });
+          const rows = await sbSelectAll('wazzup_events', { select: 'id,phone,received_at,direction,kind,message_text,raw',
+            phone: 'in.(' + phones.slice(i, i + 100).join(',') + ')', direction: 'eq.out',
+            received_at: 'gte.' + new Date(minCreated * 1000).toISOString(), order: 'received_at.asc,id.asc' });
+          rows.forEach(r => { const k = String(r.phone || '').replace(/\D/g, '').slice(-9); if (!waByTail.has(k)) waByTail.set(k, []); waByTail.get(k).push(r); });
         }
       } catch (e) { incomplete.push({ source: 'db', what: 'whatsapp', detail: 'переписки WhatsApp не загрузились' }); }
     }
@@ -283,13 +320,13 @@ export async function detectTaken(ctx, leads, sc, opts) {
     const fh = (sc && sc.firstHuman) || new Map();
     todo.forEach(l => {
       const st = fh.get(Number(l.id));
-      const ph = o.phoneBy ? String(o.phoneBy[l.id] || '').replace(/\D/g, '') : '';
+      const wa = o.useWhatsapp ? (tailsOf[l.id] || []).flatMap(t => waByTail.get(t) || []) : null;
       const r = firstHumanAction(l.created_at, candidatesOf({
         statusEv: st ? [{ created_at: st.at, created_by: st.by }] : [],
         notes: notesBy.get(Number(l.id)) || [],
-        contactNotes: mainContact[l.id] ? (cnotesBy.get(mainContact[l.id]) || []) : [],
+        contactNotes: contactsOf[l.id].flatMap(c => cnotesBy.get(c) || []),
         tasks: tasksBy.get(Number(l.id)) || [],
-        whatsapp: o.useWhatsapp && ph ? (waBy.get(ph) || []) : null,
+        whatsapp: wa,
         wa: { managers: o.managers, templates: o.templates, responsibleId: l.responsible_user_id }
       }));
       if (r) { taken.set(l.id, r); _takenCache.set(ck(l.id), { t: Date.now(), v: r }); }
@@ -302,7 +339,7 @@ export async function detectTaken(ctx, leads, sc, opts) {
 }
 
 // Отчёт «Не взято в работу» за период. ctx: { env, sub, country, amoFetch, fetchUsers, periodBase, now }.
-// opts: { useWhatsapp }. Полный номер лежит в скрытом поле _phone — наружу его отдаёт только
+// opts: { useWhatsapp } (по умолчанию включён). Полный номер лежит в скрытом поле _phone — наружу его отдаёт только
 // applyWorkPii (по правам вызывающего), поэтому сам отчёт можно держать в общем кэше.
 export async function buildWork(ctx, fromTs, toTs, opts) {
   const o = opts || {};
@@ -338,8 +375,9 @@ export async function buildWork(ctx, fromTs, toTs, opts) {
 
   const managers = {};
   Object.keys(users || {}).forEach(id => { const n = String(users[id] || '').trim().toLowerCase(); if (n) managers[n] = Number(id); });
-  const templates = o.useWhatsapp ? await loadWaTemplates() : null;
-  const det = await detectTaken(ctx, leads, sc, { useWhatsapp: !!o.useWhatsapp, phoneBy, managers, templates });
+  const useWa = o.useWhatsapp !== false;
+  const templates = useWa ? await loadWaTemplates() : null;
+  const det = await detectTaken(ctx, leads, sc, { useWhatsapp: useWa, phoneBy, managers, templates });
   errors.push(...det.errors); incomplete.push(...det.incomplete);
 
   const out = {};
@@ -371,7 +409,7 @@ export async function buildWork(ctx, fromTs, toTs, opts) {
     country: ctx.country, from: fromTs, to: toTs || null, now: Math.floor(now / 1000),
     work: { start: '09:00', end: '18:00', tz: 6, holidays },
     norms: { ok: NORM_OK_MIN, late: NORM_LATE_MIN },
-    sources: { whatsapp: !!o.useWhatsapp },
+    sources: { whatsapp: o.useWhatsapp !== false },
     leads: out, managers: mgrList,
     scanned: { leads: items.length, requests: det.requests },
     errors, incomplete

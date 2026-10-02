@@ -1065,8 +1065,8 @@ export default async function handler(req, res){
       const gate = await requirePermSoft(req, res, 'view_marketing');
       if(!gate.ok) return;
       const adminOk = !!(req.headers['x-admin-token'] && checkAdminToken(req).ok);
-      // WhatsApp как «взял в работу» — за флагом, пока CEO не подтвердит правило
-      const useWa = String(req.query.use_whatsapp || '') === '1';
+      // WhatsApp как «взял в работу» — включён (правило утверждено CEO); use_whatsapp=0 — без него
+      const useWa = String(req.query.use_whatsapp == null ? '1' : req.query.use_whatsapp) !== '0';
       const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
       const data = await memo(['mw', sub, fromTs, toTs || 0, useWa ? 1 : 0].join('|'), 3 * 60 * 1000, () => buildWork({
         env, sub, country, amoFetch,

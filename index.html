@@ -22236,6 +22236,9 @@ var _MKB_CPQ_OK = 10000, _MKB_CPQ_BAD = 15000, _MKB_LOST_NORM = 3;
 var _MKB_NOCRM = 'CRM этого продукта не подключена';
 var _MKB_LOST_R = { form_not_connected: 'Форма не подключена', no_deal: 'Нет сделки в amo', bad_phone: 'Пустой номер' };
 var _MKB_RES = [['added_to_amo', 'Завели в amo'], ['no_answer', 'Не дозвонились'], ['not_our_client', 'Не наш клиент']];
+// v1017: чем менеджер впервые тронул лид (mkt_work.leads[].taken_kind)
+var _MKB_KIND = { status: 'этап', note: 'заметка', task: 'задача', call: 'звонок', call_out: 'звонок', whatsapp: 'WhatsApp' };
+function _mkbKindName(k){ return _MKB_KIND[k] || (k ? String(k) : ''); }
 var _MKB_MON = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
 function _mkbCrmOn(){ return _mkdProduct === 'SD' || _mkdProduct === 'ALL'; }
 function _mkbProdLabel(){ return _mkdProduct === 'ALL' ? 'все продукты' : _mkdProdName(_mkdProduct); }
@@ -22518,7 +22521,7 @@ function _mkbSalesFunnel(m){
 
 // 7. Не взято в работу (рабочее время Пн–Пт 9:00–18:00 по Бишкеку)
 function _mkbNotTaken(m){
- var h = '<div class="mkb-card mkb-o-nt" id="mkb-b-nt"><div class="mkb-h"><h3>Не взято в работу</h3><span class="mkb-n">рабочее время Пн–Пт 9:00–18:00</span></div>';
+ var h = '<div class="mkb-card mkb-o-nt" id="mkb-b-nt"><div class="mkb-h"><h3>Не взято в работу</h3><span class="mkb-n">время считаем только Пн–Пт 9:00–18:00</span></div>';
  if(!m.crmOn) return h + _mkbPlq(_MKB_NOCRM) + '</div>';
  if(!m.amoOk) return h + _mkbAmoPlq() + '</div>';
  var W = _mkbWork || {};
@@ -22536,7 +22539,7 @@ function _mkbNotTaken(m){
   var url = /^https:\/\/[a-z0-9-]+\.amocrm\.ru\//i.test(l.url || '') ? l.url : '';
   return '<div class="mkb-lr"><div class="a"><b>Лид ' + sanitize(String(l.id)) + '</b><span>' + sanitize(w.phone_masked || '') + '</span></div>'
    + '<div class="b"><span class="cp">' + sanitize(camp) + '</span><span>пришёл ' + _mkbWhen(at) + (_mkbOffHours(at, m.holidays) ? ', отсчёт с 9:00' : '') + '</span></div>'
-   + '<span class="mkb-pill w ' + tone + '">ждёт ' + _mkbWait(w.wait_wmin) + '</span>'
+   + '<span class="mkb-pill w ' + tone + '" title="только рабочее время: Пн–Пт 9:00–18:00 по Бишкеку">ждёт ' + _mkbWait(w.wait_wmin) + ' в рабочее время</span>'
    + (url ? '<a class="mkb-bt pri" href="' + sanitize(url) + '" target="_blank" rel="noopener">В amo</a>' : '<span></span>') + '</div>';
  }).join('');
  if(list.length > 4) h += '<div class="mkb-more">' + (_mkbOpen.nt ? '' : 'и ещё ' + (list.length - 4) + ' · ') + '<button class="mkb-link" onclick="mkbToggleAll(&quot;nt&quot;)">' + (_mkbOpen.nt ? 'свернуть' : 'показать все') + '</button></div>';
@@ -22671,26 +22674,33 @@ function _mkbManagers(m){
  });
  var react = {};
  ((m.work || {}).managers || []).forEach(function(x){ if(x && x.name) react[x.name] = x; });
+ // первое действие менеджера по его лидам: «этап 12, звонок 5, WhatsApp 2» — в подсказке к реакции
+ var kc = {}, kinds = {};
+ Object.keys((m.work || {}).leads || {}).forEach(function(id){
+  var w = m.work.leads[id]; if(!w || !w.taken_at || !w.taken_by_name || !w.taken_kind) return;
+  var o = kc[w.taken_by_name] || (kc[w.taken_by_name] = {}); var nm = _mkbKindName(w.taken_kind); o[nm] = (o[nm] || 0) + 1;
+ });
+ Object.keys(kc).forEach(function(n){ kinds[n] = 'Первое действие: ' + Object.keys(kc[n]).sort(function(a, b){ return kc[n][b] - kc[n][a]; }).map(function(k){ return k + ' ' + kc[n][k]; }).join(', '); });
  var rows = Object.keys(by).map(function(k){ return by[k]; }).sort(function(a, b){ return b.n - a.n; });
  var noOwner = m.work ? m.untaken.length : m.leads.filter(function(l){ return !l.manager || l.manager === '—'; }).length;
  var view = rows.map(function(x){
   var rc = react[x.name], t = rc ? _mkbWaitTone(rc.avg_reaction_wmin) : '';
   var c = x.n ? x.won / x.n * 100 : 0;
   return { name: sanitize(x.name), n: x.n, qual: x.qual, meet: x.meet, won: x.won, conv: (Math.round(c * 10) / 10).toLocaleString('ru-RU') + '%', bar: Math.min(100, c * 10), tone: t,
-           speed: rc && rc.avg_reaction_wmin != null ? _mkbWait(rc.avg_reaction_wmin) : '—' };
+           speed: rc && rc.avg_reaction_wmin != null ? _mkbWait(rc.avg_reaction_wmin) : '—', kinds: kinds[x.name] || '' };
  });
  if(noOwner) view.push({ name: 'Без ответственного', bad: true, n: noOwner, qual: 0, meet: 0, won: 0, conv: '—', bar: 0, tone: 'bad', speed: m.work ? 'не взяты' : '—' });
  if(!view.length) return h + _mkbPlq('За период сделок нет.') + '</div>';
- h += '<div class="mkb-tw mkb-desk"><table class="mkb-t"><thead><tr><th>Менеджер</th><th class="r">Взял лидов</th><th class="r">Квал</th><th class="r">Встречи</th><th class="r">Успешно</th><th class="r">Выручка</th><th>Из лида в успех</th><th class="r">Средняя реакция</th></tr></thead><tbody>'
+ h += '<div class="mkb-tw mkb-desk"><table class="mkb-t"><thead><tr><th>Менеджер</th><th class="r">Взял лидов</th><th class="r">Квал</th><th class="r">Встречи</th><th class="r">Успешно</th><th class="r">Выручка</th><th>Из лида в успех</th><th class="r">Средняя реакция, в рабочее время</th></tr></thead><tbody>'
   + view.map(function(v){
      return '<tr><td class="nm' + (v.bad ? ' bad' : '') + '">' + v.name + '</td><td class="r">' + _mkbN(v.n) + '</td><td class="r">' + _mkbN(v.qual) + '</td><td class="r">' + _mkbN(v.meet) + '</td><td class="r">' + _mkbN(v.won) + '</td><td class="r dim">—</td>'
       + '<td><span class="mkb-cv"><span class="mkb-cbar"><i class="' + (v.tone || 'acc') + '" style="width:' + v.bar + '%"></i></span><b>' + v.conv + '</b></span></td>'
-      + '<td class="r sp mkb-t-' + v.tone + '">' + v.speed + '</td></tr>';
+      + '<td class="r sp mkb-t-' + v.tone + '"' + (v.kinds ? ' title="' + sanitize(v.kinds) + '"' : '') + '>' + v.speed + '</td></tr>';
     }).join('') + '</tbody></table></div>'
   + '<div class="mkb-mob">' + view.map(function(v){
      return '<div class="mkb-mc"><div class="t"><b class="' + (v.bad ? 'mkb-t-bad' : '') + '">' + v.name + '</b><b>' + v.conv + '</b></div>'
       + '<span class="mkb-cbar w"><i class="' + (v.tone || 'acc') + '" style="width:' + v.bar + '%"></i></span>'
-      + '<div class="g"><div>Взял <b>' + _mkbN(v.n) + '</b></div><div>Квал <b>' + _mkbN(v.qual) + '</b></div><div>Успешно <b>' + _mkbN(v.won) + '</b></div><div>Реакция <b class="mkb-t-' + v.tone + '">' + v.speed + '</b></div></div></div>';
+      + '<div class="g"><div>Взял <b>' + _mkbN(v.n) + '</b></div><div>Квал <b>' + _mkbN(v.qual) + '</b></div><div>Успешно <b>' + _mkbN(v.won) + '</b></div><div>Реакция, раб. время <b class="mkb-t-' + v.tone + '">' + v.speed + '</b></div></div>' + (v.kinds ? '<div class="mkb-n">' + sanitize(v.kinds) + '</div>' : '') + '</div>';
     }).join('') + '</div>';
  return h + '</div>';
 }
@@ -22786,7 +22796,7 @@ function _mkbAttention(m){
  var items = [];
  if(m.crmOn && m.amoOk && m.work && m.untaken.length){
   var late = m.untaken.filter(function(x){ return (x.w.wait_wmin || 0) > 60; }).length;
-  items.push(['bad', 'Не взято в работу ' + m.untaken.length + ' ' + _mkdPlural(m.untaken.length, 'лид', 'лида', 'лидов') + (late ? ', из них ' + late + (late % 10 === 1 && late % 100 !== 11 ? ' ждёт' : ' ждут') + ' дольше часа.' : '.')]);
+  items.push(['bad', 'Не взято в работу ' + m.untaken.length + ' ' + _mkdPlural(m.untaken.length, 'лид', 'лида', 'лидов') + (late ? ', из них ' + late + (late % 10 === 1 && late % 100 !== 11 ? ' ждёт' : ' ждут') + ' дольше часа рабочего времени.' : '.')]);
  }
  var rows = m.metaOk ? _mkbCampRows(m) : [];
  if(m.crmOn && m.amoOk){

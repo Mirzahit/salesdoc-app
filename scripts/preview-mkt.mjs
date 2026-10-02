@@ -284,7 +284,7 @@ function workFixture(url) {
       } else {
         const r = l.manager === 'Амир' ? 4 + h % 18 : 20 + h % 55;
         leads[l.id] = { taken_at: new Date(((l.arrival_at || l.created || now) + r * 60) * 1000).toISOString(), taken_by: l.responsible_user_id || null, taken_by_name: l.manager,
-          taken_kind: ['status', 'note', 'call_out', 'task'][h % 4], reaction_wmin: r, wait_wmin: null, tone: r <= 15 ? 'ok' : (r <= 60 ? 'mid' : 'bad'), phone_masked: pm };
+          taken_kind: ['status', 'note', 'call', 'task', 'whatsapp'][h % 5], reaction_wmin: r, wait_wmin: null, tone: r <= 15 ? 'ok' : (r <= 60 ? 'mid' : 'bad'), phone_masked: pm };
         const x = mg[l.manager] || (mg[l.manager] = { responsible_user_id: l.responsible_user_id || null, name: l.manager, n: 0, sum: 0 });
         x.n++; x.sum += r;
       }
