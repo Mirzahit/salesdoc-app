@@ -5,7 +5,7 @@ import './_preview_guard.js'; // v1017: в превью-сборке запис�
 // scripts/mkt-selftest.mjs. Решения CEO — в docs/superpowers/specs (Stage A маркетинга).
 
 import { sbSelect } from './_supabase.js';
-import { localIso, zonedToUtcMs } from './_dates.js';
+import { localIso, zonedToUtcMs, addDaysIso } from './_dates.js';
 
 // ── Продукты ────────────────────────────────────────────────────────────────
 // Продукт кампании узнаём по началу названия: SD_KG_LF_IH_2026-09 → SalesDoc.
@@ -152,6 +152,39 @@ export function productOfLead(cfg, lead, touch, adsByForm) {
   if (fp) return fp;
   if (touch && (touch.campaign_id || touch.campaign)) return classifyCampaign(cfg, { id: touch.campaign_id, name: touch.campaign });
   return cfg.default || 'SD';
+}
+// v1017 (b2): откуда пришла сделка — по названию, тегам и тому, кто завёл:
+//   form   — лидформа Meta («Facebook №…» или тег fb<номер формы>);
+//   call   — завела интеграция телефонии (created_by 0, «Исходящий/Входящий/Пропущенный…»);
+//   chat   — завела другая интеграция (created_by 0: Wazzup/WhatsApp и прочие);
+//   manual — завёл сотрудник (created_by ≠ 0).
+export const SOURCE_TYPES = ['form', 'chat', 'call', 'manual'];
+// v1017 (b2): дозаливка переписок идёт ночами кусками — отметки соседних/пересекающихся периодов
+// склеиваем в одну (from=min, to=max), чтобы в конце была одна отметка на весь пропуск.
+export function mergeBackfillMark(prev, next) {
+  if (!next) return prev || null;
+  const ok = (m) => m && /^\d{4}-\d{2}-\d{2}$/.test(String(m.from || '')) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.to || ''));
+  if (!ok(prev) || !ok(next)) return next;
+  const touch = next.from <= addDaysIso(prev.to, 1) && next.to >= addDaysIso(prev.from, -1);
+  if (!touch) return next;
+  return { from: prev.from < next.from ? prev.from : next.from, to: prev.to > next.to ? prev.to : next.to,
+    done_at: next.done_at || prev.done_at || null,
+    matched: (Number(prev.matched) || 0) + (Number(next.matched) || 0), checked: (Number(prev.checked) || 0) + (Number(next.checked) || 0) };
+}
+// Нужна ли ещё дозаливка по заявке mkt_chat_backfill_request.
+export function backfillNeeded(request, mark) {
+  if (!request || !request.from || !request.to) return false;
+  if (!mark || !mark.from || !mark.to) return true;
+  return mark.to < request.to || mark.from > request.from;
+}
+export function sourceTypeOf(lead) {
+  const l = lead || {};
+  const name = String(l.name || '');
+  const tags = (l.tags || []).map(t => typeof t === 'string' ? t : (t && t.name)).map(x => String(x || '').trim());
+  if (/Facebook\s*№/i.test(name) || tags.some(t => /^fb\d+$/i.test(t))) return 'form';
+  if (Number(l.created_by)) return 'manual';
+  if (/исходящ|входящ|пропущ/i.test(name)) return 'call';
+  return 'chat';
 }
 export function emptyByProduct(fields) {
   const o = {};

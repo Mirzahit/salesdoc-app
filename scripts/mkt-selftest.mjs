@@ -6,7 +6,7 @@ import { localIso, dayStartMs, dayEndMs, addDaysIso, zonedToUtcMs, tzOffsetMinAt
 import {
   DEFAULT_PRODUCTS, classifyCampaign, classifyForm, formIdFromTags, productOfLead, validateProducts,
   buildStageModel, reachedFromVisited, reachedFlags, computeArrival, splitInt, splitMoney,
-  shiftHourToDay, bishkekShiftRows, metaErrKind, classifyMetaLead, cpqTone, campaignDecision
+  shiftHourToDay, bishkekShiftRows, metaErrKind, classifyMetaLead, cpqTone, campaignDecision, sourceTypeOf, mergeBackfillMark, backfillNeeded
 } from '../api/_mkt.js';
 import { normalizeHolidays, workMinutesBetween, toneOf, firstHumanAction, candidatesOf, collectTasks, collectWhatsapp, isAutoReply, normWaText,
   validateWaTemplates, WA_TEMPLATES_DEFAULT, piiAllowed, maskTail, applyWorkPii } from '../api/_mkt_work.js'; // v1017
@@ -416,6 +416,45 @@ t('сверка: сделка за 23 ч до заявки и через 13 дн
 t('ошибка базы без «Failing row» (там телефон)', () => {
   assert.equal(cleanErr(new Error('INSERT-IGNORE meta_leads failed [400]: {"message":"null value", "details":"Failing row contains (123, 996555123456, Азамат)"}')).includes('996555123456'), false);
   assert.equal(cleanErr('ok text'), 'ok text');
+});
+
+// ── v1017 (b2): источник сделки ──
+t('источник: лидформа по названию и по тегу fb…', () => {
+  assert.equal(sourceTypeOf({ name: 'Facebook №1234567890', created_by: 0 }), 'form');
+  assert.equal(sourceTypeOf({ name: 'Сделка #5', tags: ['таргет', 'fb1056856707121847'], created_by: 7 }), 'form');
+  assert.equal(sourceTypeOf({ name: 'Сделка #5', tags: [{ name: 'fb1056856707121847' }], created_by: 0 }), 'form');
+});
+t('источник: звонок интеграции телефонии', () => {
+  assert.equal(sourceTypeOf({ name: 'Исходящий звонок 0555123456', created_by: 0 }), 'call');
+  assert.equal(sourceTypeOf({ name: 'Пропущенный вызов', created_by: 0 }), 'call');
+  assert.equal(sourceTypeOf({ name: 'входящий', created_by: 0 }), 'call');
+});
+t('источник: прочая интеграция — переписка; сотрудник — вручную', () => {
+  assert.equal(sourceTypeOf({ name: 'Сделка #77', created_by: 0, tags: ['whatsapp'] }), 'chat');
+  assert.equal(sourceTypeOf({ name: 'Исходящий звонок', created_by: 5 }), 'manual');
+  assert.equal(sourceTypeOf({ name: 'ТОО Ромашка', created_by: 5, tags: ['fbx'] }), 'manual');
+});
+
+// ── v1017 (b2): ночная дозаливка переписок ──
+t('отметки дозаливки: соседние и пересекающиеся куски склеиваются', () => {
+  const a = { from: '2026-09-09', to: '2026-09-20', matched: 5, checked: 50 };
+  assert.deepEqual(mergeBackfillMark(a, { from: '2026-09-21', to: '2026-09-30', done_at: 'x', matched: 2, checked: 20 }),
+    { from: '2026-09-09', to: '2026-09-30', done_at: 'x', matched: 7, checked: 70 });
+  assert.equal(mergeBackfillMark(a, { from: '2026-09-15', to: '2026-09-25', matched: 0, checked: 1 }).to, '2026-09-25');
+  assert.equal(mergeBackfillMark(a, { from: '2026-09-15', to: '2026-09-25', matched: 0, checked: 1 }).from, '2026-09-09');
+});
+t('отметки дозаливки: разрыв — новая отметка вместо старой; без старой — новая', () => {
+  const n = { from: '2026-09-25', to: '2026-09-30', matched: 1, checked: 3 };
+  assert.deepEqual(mergeBackfillMark({ from: '2026-09-09', to: '2026-09-20' }, n), n);
+  assert.deepEqual(mergeBackfillMark(null, n), n);
+});
+t('нужна ли дозаливка', () => {
+  const rq = { from: '2026-09-09', to: '2026-09-30' };
+  assert.equal(backfillNeeded(rq, null), true);
+  assert.equal(backfillNeeded(rq, { from: '2026-09-09', to: '2026-09-25' }), true);
+  assert.equal(backfillNeeded(rq, { from: '2026-09-10', to: '2026-09-30' }), true);
+  assert.equal(backfillNeeded(rq, { from: '2026-09-01', to: '2026-10-01' }), false);
+  assert.equal(backfillNeeded(null, null), false);
 });
 
 console.log(`\n${pass} ok, ${fail} fail`);

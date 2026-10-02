@@ -13,12 +13,12 @@ import './_preview_guard.js'; // v1017: в превью-сборке запис�
 
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { requirePermSoft } from './_perm.js';
-import { sbSelect, sbSelectAll, sbInsertIgnoreDup } from './_supabase.js';
+import { sbSelect, sbSelectAll, sbInsertIgnoreDup, sbUpsert } from './_supabase.js';
 import { localIso, tzOffsetH, dayStartMs, dayEndMs } from './_dates.js';
 import { normalizePhone } from './_phone.js'; // v1015: один разбор телефона KG+KZ вместо четырёх копий
 import { DEFAULT_PRODUCTS, loadProducts, classifyCampaign, productOfLead, productParam, PRODUCT_CODES,
   buildStageModel, reachedFromVisited, reachedFlags, stageRef, computeArrival, touchRef, NEAR_SEC,
-  amoErrOf } from './_mkt.js'; // v1015
+  amoErrOf, sourceTypeOf, SOURCE_TYPES, mergeBackfillMark } from './_mkt.js'; // v1015
 import { requirePerm } from './_perm.js'; // v1017: закрыть потерянную заявку — только сотрудник с подписанной сессией
 import { callerName, resolveCaller } from './_caller.js';
 import { syncMetaLeads, importLgRows, buildRecon, closeLost, mergeTouches } from './_meta_leads.js'; // v1017: заявки лидформ и сверка
@@ -504,6 +504,8 @@ function selfBase(req){
 }
 const _trCache = new Map(); // v946: готовые отчёты по таргетологам
 // v1017: номера переписок, по которым недавно искали и не нашли сделку (номер → когда искали)
+// v1017 (b2): с этой даты сбор касаний переписок не работал — начало «дыры» в разметке
+const CHAT_UNMARKED_FROM = '2026-09-09';
 const _tsMiss = new Map();
 const TS_MISS_TTL_MS = 6 * 3600 * 1000;
 // v1017: сильный пропуск для записи и диагностики — секрет крона (Bearer), админ-код или
@@ -883,6 +885,7 @@ async function buildLeadReport(env, fromTs, toTs, opts){
       out.touch = a ? touchRef(a.touch) : null;
       out.product = productOfLead(cfg, { tags }, a && a.touch);
       out.is_postponed = model.postponedIds.has(l.status_id);
+      out.source_type = sourceTypeOf({ name: l.name, tags, created_by: l.created_by }); // v1017 (b2)
       // v1017: для блоков «Воронка продаж», «Менеджеры», «Почему закрыли»
       out.responsible_user_id = Number(l.responsible_user_id) || null;
       out.closed_at = Number(l.closed_at) || null;
@@ -946,6 +949,11 @@ async function buildLeadReport(env, fromTs, toTs, opts){
     out.postponed_now = leads.filter(l => l.is_postponed).length;
     out.products = products;
     out.month_rule = 'arrival';
+    // v1017 (b2): сколько сделок из каждого источника; sources_ad — только обращения из рекламы (ad/return)
+    const sources = {}, sourcesAd = {};
+    SOURCE_TYPES.forEach(k => { sources[k] = 0; sourcesAd[k] = 0; });
+    leads.forEach(l => { sources[l.source_type]++; if(l.arrival_kind === 'ad' || l.arrival_kind === 'return') sourcesAd[l.source_type]++; });
+    out.sources = sources; out.sources_ad = sourcesAd;
   }
   return out;
 }
@@ -1065,7 +1073,11 @@ export default async function handler(req, res){
       const amoSub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
       try {
         const out = await buildRecon({ since, until, product: productParam(req.query), trusted, pii, sub: amoSub });
-        return res.status(200).json(Object.assign({ country }, out));
+        // v1017 (b2): переписки с 09.09.2026 не размечались (сбор касаний не работал) — пока дозаливка
+        // не отмечена в app_settings.mkt_chat_backfill, экран подписывает такие периоды «не размечено».
+        let chatBackfill = null;
+        try { const r = await sbSelect('app_settings', { key: 'eq.mkt_chat_backfill', limit: '1' }); chatBackfill = (r[0] && r[0].value) || null; } catch(_){}
+        return res.status(200).json(Object.assign({ country }, out, { chat_backfill: chatBackfill, chat_unmarked_from: CHAT_UNMARKED_FROM }));
       } catch(e){
         return res.status(500).json({ error: 'Сверка заявок: ' + String(e.message || e).slice(0, 200), code: 'db_error' });
       }
@@ -1765,10 +1777,25 @@ export default async function handler(req, res){
       // Касания храним в своей таблице ad_touches: тег в amo не помнит ни дату касания,
       // ни объявление, ни кампанию, а деньги считать надо именно по ним.
       // Теги в amo — отдельно, для менеджеров, и только с админ-кодом.
-      const days = Math.min(Math.max(Number(req.query.days || 30), 1), 180);
-      const maxPhones = Math.min(Math.max(Number(req.query.limit || 60), 1), 200);
+      // v1017 (b2): дозаливка старых переписок — явный период since/until (бишкекские дни, ≤45 дней),
+      // max — до 200 номеров за вызов. Запись по периоду — только крон/админ (strongGate).
+      const qSince = String(req.query.since || '').slice(0, 10), qUntil = String(req.query.until || '').slice(0, 10);
+      const isDay = (x) => /^\d{4}-\d{2}-\d{2}$/.test(x);
+      const range = isDay(qSince) && isDay(qUntil);
+      if((qSince || qUntil) && !range) return bad(res, 400, 'since/until — в виде YYYY-MM-DD, оба');
+      let rangeFromMs = null, rangeToMs = null;
+      if(range){
+        rangeFromMs = dayStartMs(qSince, country); rangeToMs = dayEndMs(qUntil, country);
+        if(rangeToMs <= rangeFromMs) return bad(res, 400, 'until раньше since');
+        if((rangeToMs - rangeFromMs) / 86400000 > 45) return bad(res, 400, 'Период дозаливки — не больше 45 дней');
+      }
+      const days = range ? Math.max(1, Math.ceil((Date.now() - rangeFromMs) / 86400000))
+        : Math.min(Math.max(Number(req.query.days || 30), 1), 180);
+      const maxPhones = Math.min(Math.max(Number(req.query.max || req.query.limit || 60), 1), 200);
       const dryRunRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
       const dryRun = dryRunRaw !== '0' && dryRunRaw !== 'false';
+      if(range && !dryRun && !(await strongGate(req))) return bad(res, 403, 'Дозаливка переписок — только крон или админ-код');
+      const markDone = range && !dryRun && String(req.query.mark || '') === '1';
       const writeTags = String(req.query.tags || '') === '1' && !dryRun;
       // Права разведены намеренно: складывать касания в СВОЮ таблицу — обычная работа
       // отчёта, а вот менять теги в amoCRM (чужие данные, видят менеджеры) — только
@@ -1789,15 +1816,17 @@ export default async function handler(req, res){
 
       const base = selfBase(req);
       const tsErrors = [], tsIncomplete = []; // v1015: никаких тихих нулей
-      if(days > 31) tsIncomplete.push({ source: 'meta', what: 'ads_perf', detail: 'расход по дням взят за последние 31 день из ' + days });
+      if(days > 31 && !range) tsIncomplete.push({ source: 'meta', what: 'ads_perf', detail: 'расход по дням взят за последние 31 день из ' + days });
 
       // 2) Карта «пост → объявления» и расход объявлений по дням (для правила «что крутилось в тот день»).
       // v1015: дни — по поясу страны (KG — Бишкек), расход по дням тоже в бишкекских днях (v=2).
-      const until = localIso(Date.now(), country);
+      const until = range ? (qUntil < localIso(Date.now(), country) ? qUntil : localIso(Date.now(), country)) : localIso(Date.now(), country);
       // v1015: расход по дням нужен только для выбора объявления — не больше 31 дня,
       // иначе почасовой пересчёт кабинета Лос-Анджелеса не уложится по времени
       const perfDays = Math.min(days, 31);
-      const sinceIso = localIso(Date.now() - perfDays * 86400000, country);
+      const sinceIso = range ? (() => { const lo = localIso(dayStartMs(until, country) - 30 * 86400000, country); return qSince > lo ? qSince : lo; })()
+        : localIso(Date.now() - perfDays * 86400000, country);
+      if(range && sinceIso > qSince) tsIncomplete.push({ source: 'meta', what: 'ads_perf', detail: 'расход по дням есть только с ' + sinceIso + ' — раньше объявление выбрано без него' });
       const [adsR, perfR] = await Promise.all([
         selfFetch(base, '/api/meta-ads?endpoint=ads_map'),
         selfFetch(base, `/api/meta-ads?endpoint=ads_perf&daily=1&since=${sinceIso}&until=${until}&country=${country}&v=2`)
@@ -1868,16 +1897,18 @@ export default async function handler(req, res){
       // 3) Переписки из приёмника Wazzup: ссылка на объявление лежит в первом сообщении.
       // v1017: все сообщения окна (sbSelectAll, без потолка 1000/2000), СВЕЖИЕ ПЕРВЫМИ — раньше брались
       // первые 2000 по возрастанию, и свежие переписки не доходили до разбора.
-      const since = new Date(Date.now() - days * 86400000).toISOString();
-      const events = await sbSelectAll('wazzup_events', {
+      const since = new Date(range ? rangeFromMs : Date.now() - days * 86400000).toISOString();
+      const events = (await sbSelectAll('wazzup_events', {
         select: 'id,received_at,kind,direction,phone,message_text,ad_source_id,message_id',
         received_at: 'gte.' + since, order: 'received_at.desc,id.desc'
-      });
+      })).filter(e => !range || Date.parse(e.received_at) < rangeToMs);
       // уже сохранённые касания: их не разбираем повторно и в лимит не считаем
-      let savedIds = new Set();
+      let savedIds = new Set(), savedPhones = new Set();
       try {
-        savedIds = new Set((await sbSelectAll('ad_touches', { select: 'message_id', country: 'eq.' + country,
-          touched_at: 'gte.' + since, order: 'message_id.asc' })).map(r => String(r.message_id)));
+        const sv = await sbSelectAll('ad_touches', { select: 'message_id,phone', country: 'eq.' + country,
+          touched_at: 'gte.' + since, order: 'message_id.asc' });
+        savedIds = new Set(sv.map(r => String(r.message_id)));
+        savedPhones = new Set(sv.map(r => String(r.phone || '')).filter(Boolean)); // v1017 (b2): дозаливка пропускает уже размеченные номера
       } catch(e){ tsIncomplete.push({ source: 'db', what: 'touches', detail: 'сохранённые касания не прочитались — разбираем всё подряд' }); }
 
       const shortCache = {};
@@ -1939,7 +1970,7 @@ export default async function handler(req, res){
       // иначе каждый час перебирались бы одни и те же 60 свежих переписок, а старые не доходили бы никогда.
       const nowMs = Date.now();
       const recentMiss = (ph) => { const at = _tsMiss.get(ph); return at != null && nowMs - at < TS_MISS_TTL_MS; };
-      const pending = touches.filter(t => !savedIds.has(String(t.message_id)) && !recentMiss(t.phone));
+      const pending = touches.filter(t => !savedIds.has(String(t.message_id)) && !recentMiss(t.phone) && !(range && savedPhones.has(String(t.phone))));
       const todoTouches = pending.filter(t => !_tsMiss.has(t.phone)).concat(pending.filter(t => _tsMiss.has(t.phone)));
       for(const t of todoTouches){
         const willSearch = leadCache.get(t.phone) === undefined; // в лимит считаем только поиски в amo
@@ -2025,6 +2056,17 @@ export default async function handler(req, res){
         }
       }
 
+      // v1017 (b2): весь период пройден (не упёрлись в лимит, запись без ошибок) — отмечаем дозаливку
+      let backfillMark = null;
+      if(markDone && !cappedTouches && !saveErrors.length){
+        backfillMark = { from: qSince, to: qUntil, done_at: new Date().toISOString(), matched: rowsToSave.length, checked: processed };
+        try {
+          // соседние ночные куски склеиваем в одну отметку
+          const prevRow = await sbSelect('app_settings', { key: 'eq.mkt_chat_backfill', limit: '1' }).catch(() => []);
+          backfillMark = mergeBackfillMark((prevRow[0] && prevRow[0].value) || null, backfillMark);
+          await sbUpsert('app_settings', { key: 'mkt_chat_backfill', value: backfillMark, updated_at: new Date().toISOString() }, 'key'); }
+        catch(e){ backfillMark = null; tsErrors.push({ source: 'db', kind: 'other', message: 'отметка дозаливки не записалась' }); }
+      }
       return res.status(200).json({
         country, days, dry_run: dryRun, write_tags: writeTags,
         cabinets: (adsJson.cabinets || []).map(c => ({ account: c.account, targetolog: nameForAcc(c.account), ads: c.ads || 0, ok: c.ok })),
@@ -2044,6 +2086,7 @@ export default async function handler(req, res){
         skipped: skipped,
         link_unknown: noLink,
         errors: tsErrors, incomplete: tsIncomplete,
+        range: range ? { since: qSince, until: qUntil, max: maxPhones } : null, backfill_mark: backfillMark, checked_phones: processed,
         message: dryRun
           ? `Ничего не записано. Готово к сохранению: ${rowsToSave.length} касаний. Применить — dry_run=false (и tags=1, если ставить теги в amo).`
           : `Сохранено касаний: ${saved}. Тегов проставлено: ${tagged}.`

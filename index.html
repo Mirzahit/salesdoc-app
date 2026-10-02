@@ -6260,8 +6260,9 @@ body.light #view-marketing .mkd-lq{background:var(--surface-2)}
 /* воронка Meta */
 #view-marketing .mkb-mstep{display:flex;flex-direction:column;gap:5px}
 #view-marketing .mkb-conv{font-size:11.5px;color:var(--text-soft);padding-left:10px}
-#view-marketing .mkb-mbar{height:40px;background:var(--ds-info);color:#FFFFFF;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px;box-sizing:border-box;font-size:13px;font-weight:600;min-width:150px;max-width:100%}
-#view-marketing .mkb-mbar span:last-child{font-family:var(--mono)}
+#view-marketing .mkb-mbar{height:40px;background:var(--ds-info);color:#FFFFFF;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px;box-sizing:border-box;font-size:13px;font-weight:600;min-width:min(260px,100%);max-width:100%}
+#view-marketing .mkb-mbar span:last-child{font-family:var(--mono);flex:none}
+#view-marketing .mkb-mbar span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 #view-marketing .mkb-stats{margin-top:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding-top:12px;border-top:1px solid var(--border-faint)}
 #view-marketing .mkb-stats .l{font-size:11.5px;color:var(--text-soft)}
 #view-marketing .mkb-stats .v{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--text)}
@@ -6305,6 +6306,13 @@ body.light #view-marketing .mkd-lq{background:var(--surface-2)}
 #view-marketing .mkb-lr .b .cp{font-size:12.5px;color:var(--text)}
 #view-marketing .mkb-lr .w{justify-self:start}
 #sd-preview-note{position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:1000011;padding:4px 12px;border-radius:999px;background:var(--ds-warning-bg,#F5E7C8);color:var(--ds-warning-text,#8A5A00);border:1px solid var(--border-strong,#CFC9BC);font-size:11.5px;font-weight:600;white-space:nowrap;pointer-events:none;box-shadow:var(--sh-1)}
+#view-marketing .mkb-kpi .v .of{font-family:var(--font);font-size:12px;font-weight:500;letter-spacing:0;color:var(--text-soft);margin-left:8px}
+#view-marketing .mkb-kpi.k-qual .v{white-space:normal}
+#view-marketing .mkb-kpi .v .of{white-space:nowrap;display:inline-block}
+#view-marketing .mkb-warnline{color:var(--ds-warning-text)}
+#view-marketing .mkb-seg2{display:inline-flex;gap:2px;background:var(--surface-3);padding:3px;border-radius:8px;align-self:flex-start}
+#view-marketing .mkb-seg2 button{font:inherit;font-size:12px;font-weight:600;height:28px;padding:0 11px;border:0;border-radius:6px;background:transparent;color:var(--text-soft);cursor:pointer;white-space:nowrap}
+#view-marketing .mkb-seg2 button.on{background:#FFFFFF;color:var(--text);box-shadow:var(--sh-1)}
 #view-marketing .mkb-hid{font-style:normal;font-size:10.5px;font-weight:600;color:var(--text-faint);margin-left:4px}
 #view-marketing .mkb-why{font-size:12px;font-weight:600;color:var(--ds-warning-text)}
 #view-marketing .mkb-acts{display:inline-flex;gap:6px;justify-content:flex-end}
@@ -22336,11 +22344,26 @@ function _mkbModel(){
  // ── сделки amo (KG) ──
  var rp = (d.rep || {}).KG || null;
  m.rp = rp; m.amoOk = !!rp;
- m.leads = rp ? (rp.leads || []).filter(_mkdProdPass) : [];
+ // v1017-b2: «из рекламы» = сделка пришла с рекламы (arrival_kind ad/return); «все сделки» — весь отдел
+ m.allLeads = rp ? (rp.leads || []).filter(_mkdProdPass) : [];
+ m.hasArrival = m.allLeads.some(function(l){ return l.arrival_kind !== undefined; });
+ m.adLeads = m.hasArrival ? m.allLeads.filter(function(l){ return l.arrival_kind === 'ad' || l.arrival_kind === 'return'; }) : m.allLeads;
+ m.scope = m.hasArrival ? _mkbScope : 'all';
+ m.leads = m.scope === 'ad' ? m.adLeads : m.allLeads; // по этому списку — воронка, менеджеры, «не взято», причины
  var qs = _lrQualStage(rp);
- m.qual = m.leads.filter(function(l){ return _mkdIsQual(l, qs); }).length;
- m.cpl = (m.spendSom != null && m.leads.length) ? m.spendSom / m.leads.length : null;
- m.cpq = (m.spendSom != null && m.qual) ? m.spendSom / m.qual : null;
+ var isQ = function(l){ return _mkdIsQual(l, qs); };
+ m.qualAll = m.allLeads.filter(isQ).length;
+ m.adQual = m.adLeads.filter(isQ).length;
+ m.qual = m.adQual;
+ m.cpl = (m.spendSom != null && m.adLeads.length) ? m.spendSom / m.adLeads.length : null;
+ m.cpq = (m.spendSom != null && m.adQual) ? m.spendSom / m.adQual : null;
+ // откуда сделки в amo: формы / WhatsApp / звонки / вручную (сервер даёт sources, иначе считаем по source_type)
+ var src = rp && rp.sources && typeof rp.sources === 'object' ? rp.sources : null;
+ if(!src && m.allLeads.some(function(l){ return l.source_type; })){
+  src = { form: 0, chat: 0, call: 0, manual: 0 };
+  m.allLeads.forEach(function(l){ if(src[l.source_type] != null) src[l.source_type]++; });
+ }
+ m.sources = src;
  // ── кто взял лид ──
  var wk = _mkbWork && _mkbWork.state === 'ok' ? _mkbWork.data : null;
  m.work = wk;
@@ -22354,8 +22377,39 @@ function _mkbModel(){
   m.untaken.sort(function(a, b){ return (b.l.arrival_at || b.l.created || 0) - (a.l.arrival_at || a.l.created || 0); });
  }
  m.rec = rec;
+ // переписки WhatsApp с chat_unmarked_from не размечены рекламой, пока догрузка (chat_backfill) не покрыла период
+ m.unmarked = false;
+ if(rec && rec.chat_unmarked_from){
+  var pr = _mktSelRange(_mktSel), uf = String(rec.chat_unmarked_from).slice(0, 10);
+  var bf = rec.chat_backfill || null;
+  var needFrom = pr.since > uf ? pr.since : uf;
+  var covered = !!(bf && bf.from && bf.to && String(bf.from).slice(0, 10) <= needFrom && String(bf.to).slice(0, 10) >= pr.until);
+  m.unmarked = pr.until >= uf && !covered;
+ }
  return m;
 }
+// v1017-b2: переключатель «Из рекламы / Все сделки» для воронки продаж, менеджеров, «не взято» и причин
+var _mkbScope = (function(){ try { return localStorage.getItem('mkb_scope') === 'all' ? 'all' : 'ad'; } catch(_){ return 'ad'; } })();
+function _mkbScopeSeg(m){
+ if(!m.hasArrival) return '';
+ return '<span class="mkb-seg2" role="group" aria-label="Какие сделки">'
+  + [['ad', 'Из рекламы'], ['all', 'Все сделки']].map(function(x){
+     return '<button type="button" class="' + (m.scope === x[0] ? 'on' : '') + '" onclick="mkbSetScope(&quot;' + x[0] + '&quot;)">' + x[1] + '</button>';
+    }).join('') + '</span>';
+}
+window.mkbSetScope = function(v){
+ v = v === 'all' ? 'all' : 'ad';
+ if(v === _mkbScope) return;
+ _mkbScope = v;
+ try { localStorage.setItem('mkb_scope', v); } catch(_){}
+ var m = _mkbModel();
+ _mkbSwap('mkb-b-sales', _mkbSalesFunnel(m));
+ _mkbSwap('mkb-b-nt', _mkbNotTaken(m));
+ _mkbSwap('mkb-b-mgr', _mkbManagers(m));
+ _mkbSwap('mkb-b-loss', _mkbLossReasons(m));
+ _mkbSwap('mkb-b-att', _mkbAttention(m));
+};
+function _mkbScopeNote(m){ return m.hasArrival ? (m.scope === 'ad' ? ' · из рекламы' : ' · все сделки') : ''; }
 
 function _mkbPage(){
  var m = _mkbModel();
@@ -22401,11 +22455,20 @@ function _mkbKpis(m){
  if(!m.crmOn){ leadsV = qualV = '—'; leadsH = qualH = _MKB_NOCRM; }
  else if(!m.amoOk){ leadsV = qualV = '—'; leadsH = qualH = 'нет связи с amoCRM'; }
  else {
-  leadsV = _mkbN(m.leads.length);
-  leadsH = m.cpl != null ? _mkbN(m.cpl) + ' сом за лид' : 'цена лида — нет расхода в сомах';
-  qualV = _mkbN(m.qual);
+  leadsV = _mkbN(m.adLeads.length);
+  var sc = m.sources, sp = [];
+  if(sc){
+   if(sc.form != null) sp.push('формы ' + _mkbN(sc.form));
+   if(sc.chat != null) sp.push('WhatsApp ' + _mkbN(sc.chat));
+   if(sc.call != null) sp.push('звонки ' + _mkbN(sc.call));
+   if(sc.manual != null) sp.push('вручную ' + _mkbN(sc.manual));
+  }
+  leadsH = (m.hasArrival ? 'из рекламы · ' : '') + (m.cpl != null ? _mkbN(m.cpl) + ' сом за лид' : 'цены лида нет')
+   + '<br>всего в amo ' + _mkbN(m.allLeads.length) + (sp.length ? ': ' + sp.join(' · ') : '');
+  qualV = _mkbN(m.adQual) + (m.hasArrival ? '<span class="of">всего в отделе ' + _mkbN(m.qualAll) + '</span>' : '');
   var t = _mkbCpqTone(m.cpq);
-  qualH = 'дошли до квалификации или дальше · ' + (m.cpq != null ? '<b class="mkb-t-' + t + '">' + _mkbN(m.cpq) + ' сом за квал</b>' : 'цены квала нет') + ', норма до 10 000';
+  qualH = (m.hasArrival ? 'из рекламы, ' : '') + 'дошли до квалификации или дальше · ' + (m.cpq != null ? '<b class="mkb-t-' + t + '">' + _mkbN(m.cpq) + ' сом за квал</b>' : 'цены квала нет') + ', норма до 10 000'
+   + (m.unmarked && m.cpq != null ? '<br><span class="mkb-warnline">часть рекламных переписок WhatsApp за период не размечена — цена может быть ниже</span>' : '');
  }
  var tile = function(cls, l, v, h){
   return '<div class="mkb-kpi ' + cls + '"><div class="l">' + l + '</div><div class="v' + (v === '—' ? ' dim' : '') + '">' + v + '</div><div class="h">' + h + '</div></div>';
@@ -22424,7 +22487,7 @@ function _mkbMetaFunnel(m){
  var h = '<div class="mkb-card mkb-o-meta" id="mkb-b-meta"><div class="mkb-h"><h3>Воронка рекламы</h3><span class="mkb-tag meta">Meta</span></div>'
   + '<div class="mkb-s">Сколько людей увидели и откликнулись</div>';
  if(!m.metaOk) return h + _mkbPlq('Нет связи с рекламой — это не ноль, а нет данных.') + '</div>';
- var rows = [['Показы', m.impr, 100, ''], ['Клики', m.clicks, 70, _mkbPct(m.clicks, m.impr) + ' кликнули'], ['Лиды', m.metaLeads, 46, _mkbPct(m.metaLeads, m.clicks) + ' оставили заявку']];
+ var rows = [['Показы', m.impr, 100, ''], ['Клики', m.clicks, 78, _mkbPct(m.clicks, m.impr) + ' кликнули'], ['Заявки и переписки (по Meta)', m.metaLeads, 62, _mkbPct(m.metaLeads, m.clicks) + ' оставили заявку']];
  h += rows.map(function(r){
   return '<div class="mkb-mstep">' + (r[3] ? '<div class="mkb-conv">↓ ' + r[3] + '</div>' : '')
    + '<div class="mkb-mbar" style="width:' + r[2] + '%"><span>' + r[0] + '</span><span>' + _mkbN(r[1]) + '</span></div></div>';
@@ -22446,7 +22509,7 @@ function _mkbReconLoading(rc){
 }
 function _mkbReconCard(m){
  var R = _mkbRecon || {};
- var open = function(cls){ return '<div class="mkb-card mkb-recon mkb-o-recon' + (cls ? ' ' + cls : '') + '" id="mkb-b-recon"><div class="mkb-kick">Сверка</div><h3>Meta → amoCRM</h3>'; };
+ var open = function(cls){ return '<div class="mkb-card mkb-recon mkb-o-recon' + (cls ? ' ' + cls : '') + '" id="mkb-b-recon"><div class="mkb-kick">Сверка</div><h3>Заявки из лид-форм</h3><div class="mkb-n">Переписки WhatsApp и сделки без рекламы сюда не входят</div>'; };
  if(R.state === 'loading') return open() + '<div class="mkb-s">Считаем…</div></div>';
  if(R.state === 'missing') return open() + _mkbPlq('Сверка появится после обновления сервера.') + '</div>';
  if(R.state !== 'ok') return open() + _mkbPlq('Не загрузилось. <button class="mkd-retry" onclick="mktLoadOverview(true)">Повторить</button>') + '</div>';
@@ -22480,6 +22543,7 @@ function _mkbReconCard(m){
   + (reasons.length ? '<div class="r">' + reasons.join('<br>') + '</div>' : '')
   + (extra.length ? '<div class="r dim">' + extra.join('<br>') + '</div>' : '')
   + '</div>'
+  + (m.sources && m.sources.form != null ? '<div class="mkb-n">Сделок из лид-форм в amo: ' + _mkbN(m.sources.form) + '</div>' : '')
   + '<div class="mkb-n">Норма потерь — до 3%. Сверка по номеру заявки Meta, каждый час.</div></div>';
 }
 
@@ -22490,6 +22554,7 @@ var _MKB_STUCK = [
 ];
 function _mkbSalesFunnel(m){
  var h = '<div class="mkb-card mkb-o-sales" id="mkb-b-sales"><div class="mkb-h"><h3>Воронка продаж</h3><span>' + _mkbAllNote() + '<span class="mkb-tag amo">amoCRM</span></span></div>';
+ if(m.crmOn && m.amoOk) h += _mkbScopeSeg(m);
  if(!m.crmOn) return h + _mkbPlq(_MKB_NOCRM) + '</div>';
  if(!m.amoOk) return h + _mkbAmoPlq() + '</div>';
  var rp = m.rp, leads = m.leads;
@@ -22536,7 +22601,7 @@ function _mkbSalesFunnel(m){
 
 // 7. Не взято в работу (рабочее время Пн–Пт 9:00–18:00 по Бишкеку)
 function _mkbNotTaken(m){
- var h = '<div class="mkb-card mkb-o-nt" id="mkb-b-nt"><div class="mkb-h"><h3>Не взято в работу</h3><span class="mkb-n">время считаем только Пн–Пт 9:00–18:00</span></div>';
+ var h = '<div class="mkb-card mkb-o-nt" id="mkb-b-nt"><div class="mkb-h"><h3>Не взято в работу</h3><span class="mkb-n">время считаем только Пн–Пт 9:00–18:00' + (m.crmOn && m.amoOk ? _mkbScopeNote(m) : '') + '</span></div>';
  if(!m.crmOn) return h + _mkbPlq(_MKB_NOCRM) + '</div>';
  if(!m.amoOk) return h + _mkbAmoPlq() + '</div>';
  var W = _mkbWork || {};
@@ -22675,6 +22740,7 @@ window.mkbLostExport = function(){
 // 9. Конверсия по менеджерам (по ответственному в сделке amo)
 function _mkbManagers(m){
  var h = '<div class="mkb-card mkb-o-mgr" id="mkb-b-mgr"><div class="mkb-h"><h3>Конверсия по менеджерам</h3><span class="mkb-n">' + _mkbAllNote() + ' Считается по ответственному в сделке amoCRM</span></div>';
+ if(m.crmOn && m.amoOk) h += _mkbScopeSeg(m);
  if(!m.crmOn) return h + _mkbPlq(_MKB_NOCRM) + '</div>';
  if(!m.amoOk) return h + _mkbAmoPlq() + '</div>';
  var rp = m.rp, qs = _lrQualStage(rp), ms = (rp.meet_stage && rp.meet_stage.sort != null) ? rp.meet_stage : _lrPick(rp, _RE_MEET);
@@ -22739,7 +22805,7 @@ function _mkbLossReasons(m){
  if(!m.crmOn) return h + _mkbPlq(_MKB_NOCRM) + '</div>';
  if(!m.amoOk) return h + _mkbAmoPlq() + '</div>';
  var lost = m.leads.filter(function(l){ return l.is_lost; });
- h += '<div class="mkb-s">' + _mkbN(lost.length) + ' ' + _mkdPlural(lost.length, 'сделка', 'сделки', 'сделок') + ' «Закрыто и не реализовано»' + (_mkdProduct === 'ALL' ? ' · CRM — только SalesDoc' : '') + '</div>';
+ h += '<div class="mkb-s">' + _mkbN(lost.length) + ' ' + _mkdPlural(lost.length, 'сделка', 'сделки', 'сделок') + ' «Закрыто и не реализовано»' + _mkbScopeNote(m) + (_mkdProduct === 'ALL' ? ' · CRM — только SalesDoc' : '') + '</div>';
  if(!lost.length) return h + '</div>';
  if(!lost.some(function(l){ return l.loss_reason !== undefined; })) return h + _mkbPlq('Причины появятся после обновления сервера.') + '</div>';
  var by = {}, none = 0;
@@ -22758,7 +22824,7 @@ function _mkbCampRows(m){
  var byCamp = {};
  if(m.crmOn && m.amoOk){
   var qs = _lrQualStage(m.rp);
-  m.leads.forEach(function(l){
+  m.allLeads.forEach(function(l){ // v1017-b2: у сделки есть кампания — значит она из рекламы; решение по её квалам
    var id = l.touch && l.touch.campaign_id; if(!id) return;
    var x = byCamp[id] || (byCamp[id] = { leads: 0, qual: 0, won: 0 });
    x.leads++; if(_mkdIsQual(l, qs)) x.qual++; if(l.is_won) x.won++;

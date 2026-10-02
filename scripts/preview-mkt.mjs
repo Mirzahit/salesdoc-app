@@ -20,6 +20,7 @@
 //     дата входа в этап, причина отказа). «Кто взял» строится из настоящего lead_report того же
 //     периода: сделки на первом этапе — «не взяты». Доп. сбои: ?mock=lost_close_401 (нужен вход),
 //     ?mock=old (старый сервер: новых действий нет), ?mock=untrusted (телефоны скрыты, pii:false).
+//     ?mock=backfill_done — переписки за сентябрь уже размечены (подпись про цену квала пропадает).
 //     ?mock=preview_readonly — запись отвечает code preview_readonly (как превью Vercel).
 //     Настройки wa_autoreply_templates и work_holidays хранятся в памяти сервера превью.
 //
@@ -224,7 +225,17 @@ function enrichLeadReport(j, mock) {
     l.stage_entered_at = (l.is_won || l.is_lost) ? null : Math.max(l.created || 0, now - 86400 * (h % 21));
     if (l.is_lost) { const r = LOSS[h % LOSS.length]; l.loss_reason = r; l.loss_reason_src = r ? 'field' : null; }
     else { l.loss_reason = null; l.loss_reason_src = null; }
+    // b2: откуда сделка — как в настоящем сентябре (формы 143, WhatsApp 55, звонки 13, вручную 66)
+    if (!l.source_type) {
+      const k = h % 211;
+      l.source_type = l.origin === 'manual' ? 'manual' : (k < 143 ? 'form' : (k < 198 ? 'chat' : 'call'));
+    }
   });
+  if (!j.sources) {
+    const cnt = (list) => { const o = { form: 0, chat: 0, call: 0, manual: 0 }; list.forEach(l => { if (o[l.source_type] != null) o[l.source_type]++; }); return o; };
+    j.sources = cnt(j.leads);
+    j.sources_ad = cnt(j.leads.filter(l => l.arrival_kind === 'ad' || l.arrival_kind === 'return'));
+  }
 }
 function reconFixture(url, mock) {
   const since = url.searchParams.get('since'), until = url.searchParams.get('until');
@@ -270,7 +281,9 @@ function reconFixture(url, mock) {
   }
   return { country: 'KG', since, until, product, trusted, pii: trusted, amo_sub: 'zeidplyus',
     fx: { cur: 'USD', by_day, avg_rate: 87.44, fallback_rate: 87, missing_days: [] },
-    recon, lost: (product === 'SD' || product === 'ALL') ? lost : [], errors: [], incomplete: [] };
+    recon, lost: (product === 'SD' || product === 'ALL') ? lost : [], errors: [], incomplete: [],
+    chat_unmarked_from: '2026-09-09',
+    chat_backfill: mock === 'backfill_done' ? { from: '2026-09-01', to: '2026-12-31', done_at: new Date().toISOString() } : null };
 }
 function workFixture(url) {
   const lr = LR_CACHE.get(lrKey(url));
@@ -363,4 +376,4 @@ http.createServer((req, res) => {
     return res.end(i >= 0 ? html.slice(0, i) + ENTER + html.slice(i) : html + ENTER);
   }
   fs.createReadStream(file).pipe(res);
-}).listen(PORT, () => console.log('Маркетинг: предпросмотр на http://localhost:' + PORT + '  (сбои: ?mock=meta_token | amo_auth | truncated | lost_close_401 | old | untrusted | preview_readonly)'));
+}).listen(PORT, () => console.log('Маркетинг: предпросмотр на http://localhost:' + PORT + '  (сбои: ?mock=meta_token | amo_auth | truncated | lost_close_401 | old | untrusted | preview_readonly | backfill_done)'));
