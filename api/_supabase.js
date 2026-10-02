@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // v350: Тонкий helper для Supabase REST API через fetch.
 // SDK @supabase/supabase-js на Node 20 требует WebSocket (для realtime) — он у нас не нужен.
 // Поэтому ходим напрямую в PostgREST. Это проще, меньше зависимостей.

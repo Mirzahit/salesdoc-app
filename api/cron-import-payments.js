@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/cron-import-payments — авто-синхронизация платежей Google Sheets → Supabase.
 // Дёргается Vercel Cron по расписанию из vercel.json. Прогоняет реальный импорт
 // (dry_run=0) для KZ и KG: новые строки из листов доходов попадают в Supabase,

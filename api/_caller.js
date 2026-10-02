@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // v587: резолв вызывающего (email + role) из таблицы employees — для серверной проверки прав.
 // Заменяет чтение ролей из GAS-листа Users. TTL-кэш 5 мин (как было в employee-access.js).
 import { sbSelect } from './_supabase.js';

@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // v1015: общие правила экрана «Маркетинг» — продукт, этапы воронки, дата обращения,
 // ошибки источников и перевод рекламных часов в бишкекские дни.
 // Здесь только чистые функции (без сети), кроме loadProducts — их проверяет
@@ -14,7 +15,10 @@ export const PRODUCT_CODES = ['SD', 'Z24', 'SHTURM'];
 export const DEFAULT_PRODUCTS = {
   version: 1, default: 'SD',
   products: [
-    { code: 'SD', name: 'SalesDoc', prefixes: ['SD'], campaign_ids: [], form_ids: ['1056856707121847'] },
+    // v1017: кампании и формы SalesDoc, названные не по схеме SD_… (выгрузка 01.10.2026). Cliq — это SalesDoc.
+    { code: 'SD', name: 'SalesDoc', prefixes: ['SD'],
+      campaign_ids: ['52537154151252', '52537159060852', '52534294129852', '6986710298448', '120250929785560444', '120251110515330444', '120250929937200444', '120250909391990444'],
+      form_ids: ['1056856707121847', '1107958975222847', '1690320792809154', '1619183776219131', '28209238382066599', '825357413900105'] },
     { code: 'Z24', name: 'Zakaz24', prefixes: ['Z24'], campaign_ids: ['120251108502780444'], form_ids: ['1640508510930310'] },
     { code: 'SHTURM', name: 'Штурм', prefixes: ['SHTURM'], campaign_ids: ['120251202836020444'], form_ids: ['1775408007121079', '1138537525515939'] }
   ]
@@ -96,6 +100,36 @@ function _formProduct(cfg, formId, adsByForm) {
     return classifyCampaign(cfg, { id: ad.campaign_id, name: ad.campaign || ad.campaign_name });
   }
   return null;
+}
+// v1017: продукт заявки лидформы — СТРОГО, без «по умолчанию». Порядок: начало названия
+// кампании → номер кампании из настроек → номер формы из настроек → null («продукт не распознан»).
+// Решение CEO: нераспознанную заявку не приписываем SalesDoc молча, её видно отдельно.
+export function classifyMetaLead(cfg, lead) {
+  cfg = cfg || DEFAULT_PRODUCTS;
+  const l = lead || {};
+  const byName = _prefixMatch(cfg, l.campaign_name);
+  if (byName) return byName;
+  const cid = l.campaign_id != null ? String(l.campaign_id) : '';
+  if (cid) for (const p of cfg.products || []) if ((p.campaign_ids || []).includes(cid)) return p.code;
+  const fid = l.form_id != null ? String(l.form_id) : '';
+  if (fid) for (const p of cfg.products || []) if ((p.form_ids || []).includes(fid)) return p.code;
+  return null;
+}
+// v1017: цена квала → оттенок и решение по кампании (пока нет оплат — решаем по цене квала).
+// До 10 000 сом — норма, 10–15 тыс. — оптимизировать, от 15 000 — красная зона.
+export const CPQ_OK = 10000, CPQ_BAD = 15000, CPQ_MIN_QUAL = 3;
+export function cpqTone(cpq) {
+  const v = Number(cpq);
+  if (!Number.isFinite(v) || v <= 0) return null;
+  return v < CPQ_OK ? 'ok' : (v < CPQ_BAD ? 'mid' : 'bad');
+}
+export function campaignDecision(cpq, qual) {
+  if (!(Number(qual) >= CPQ_MIN_QUAL)) return { key: 'few', label: 'мало данных' };
+  const t = cpqTone(cpq);
+  if (t === 'ok') return { key: 'scale', label: 'Масштабировать' };
+  if (t === 'mid') return { key: 'optimize', label: 'Оптимизировать' };
+  if (t === 'bad') return { key: 'off', label: 'Отключить' };
+  return { key: 'few', label: 'мало данных' };
 }
 export function classifyForm(cfg, formId, adsByForm) {
   cfg = cfg || DEFAULT_PRODUCTS;

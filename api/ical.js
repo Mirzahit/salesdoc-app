@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // v787: ICS-лента задач для подписки в Google Calendar (и любом другом календаре).
 // GET /api/ical?token=APP_TOKEN[&assignee=Имя]
 // Google Calendar не умеет слать заголовки — токен принимаем query-параметром

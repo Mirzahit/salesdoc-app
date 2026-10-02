@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/cards — CRUD карточек Канбана Внедрения (kanban_cards) И тикетов поддержки (tickets).
 // Объединено в один endpoint из-за лимита Vercel Hobby = 12 serverless functions (мы на пределе).
 //

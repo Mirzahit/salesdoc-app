@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/settings — общие настройки программы (ключ-значение, таблица app_settings).
 // v795: первый потребитель — план интеграций в месяц (key='intg_month_plan', value={plan:10}).
 //
@@ -11,6 +12,7 @@ import { sbSelect, sbUpsert } from './_supabase.js';
 import { checkAuth } from './_auth.js';
 import { requirePerm } from './_perm.js'; // v979 SEC
 import { DEFAULT_PRODUCTS, validateProducts } from './_mkt.js'; // v1015
+import { normalizeHolidays, validateWaTemplates, WA_TEMPLATES_DEFAULT } from './_mkt_work.js'; // v1017
 
 // intg_fields (v796): настройка полей карты интеграции — {hidden:[стандартные ключи], custom:[{key,label}]}
 // mkt_lead_plan (v797): план лидов на месяц по странам — {KZ:{plan:200}, KG:{plan:80}}
@@ -29,9 +31,13 @@ import { DEFAULT_PRODUCTS, validateProducts } from './_mkt.js'; // v1015
 // v964: autopause — {enabled:bool, days:30}: действующий клиент без оплаты дольше N дней → «На паузе» (крон)
 // v993: salary_grades — грейды менеджеров (оклад, премия KPI, план, шкала бонуса, веса, штраф, кто на каком грейде);
 //   salary_manual — то, что РОП ставит руками по месяцам: балл CRM и нарушения {'YYYY-MM':{email:{crm,late,noreport,complaint}}}.
-const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_text_codes', 'mkt_ad_sources', 'mkt_exclude_ads', 'tg_digest', 'company_plans', 'plan_history', 'route_stages', 'autopause', 'salary_grades', 'salary_manual', 'salary_closed', 'finansist_agent_limits', 'finansist_expected_items', 'mkt_products']; // v1006: лимит агента ($/день) и обязательные статьи
+const ALLOWED_KEYS = ['intg_month_plan', 'intg_fields', 'mkt_lead_plan', 'mkt_costs', 'mkt_targetologs', 'mkt_text_codes', 'mkt_ad_sources', 'mkt_exclude_ads', 'tg_digest', 'company_plans', 'plan_history', 'route_stages', 'autopause', 'salary_grades', 'salary_manual', 'salary_closed', 'finansist_agent_limits', 'finansist_expected_items', 'mkt_products', 'work_holidays', 'wa_autoreply_templates']; // v1006: лимит агента ($/день) и обязательные статьи
 // v1015: mkt_products — какие кампании и формы Meta к какому продукту (SalesDoc / Zakaz24 / Штурм).
 //   Пока строки нет — отдаём значение по умолчанию из api/_mkt.js.
+// v1017: work_holidays — праздничные дни ['YYYY-MM-DD', …]: в них рабочее время «Не взято в работу»
+//   не идёт (Пн–Пт 9:00–18:00 по Бишкеку). Пока строки нет — пустой список.
+// v1017: wa_autoreply_templates — тексты автоответов WhatsApp (список строк): такое исходящее сообщение
+//   не считается «взял в работу». Пока строки нет — три шаблона по умолчанию из api/_mkt_work.js.
 // v1001: salary_closed — закрытые месяцы: {'YYYY-MM':{email:{closed_at,by,total,oklad,kpi,bonus,minus,sales_fact,sales_pct}}}; расчёт заморожен.
 
 // v993 SEC: кто видит зарплаты всех (руководители, РОП, бухгалтер) и кто их правит (без бухгалтера)
@@ -79,6 +85,8 @@ export default async function handler(req, res) {
       const rows = await sbSelect('app_settings', { key: 'eq.' + key, limit: '1' });
       let value = rows.length ? rows[0].value : null;
       if (key === 'mkt_products' && value == null) value = DEFAULT_PRODUCTS; // v1015
+      if (key === 'work_holidays') value = normalizeHolidays(value); // v1017: нет строки → []
+      if (key === 'wa_autoreply_templates' && value == null) value = WA_TEMPLATES_DEFAULT; // v1017
       if (caller && value && !salaryFullAccess(caller)) value = salaryOwnOnly(key, value, caller.email);
       return res.status(200).json({ ok: true, key: key, value: value });
     }
@@ -107,6 +115,15 @@ export default async function handler(req, res) {
       }
       if (key === 'mkt_products') { // v1015: проверяем коды продуктов и номера кампаний/форм
         const chk = validateProducts(body.value);
+        if (!chk.ok) return res.status(400).json({ ok: false, error: chk.error });
+        body.value = chk.value;
+      }
+      if (key === 'work_holidays') { // v1017: только настоящие даты, без повторов, по порядку
+        if (!Array.isArray(body.value)) return res.status(400).json({ ok: false, error: 'value должен быть списком дат YYYY-MM-DD' });
+        body.value = normalizeHolidays(body.value);
+      }
+      if (key === 'wa_autoreply_templates') { // v1017: непустые строки до 300 знаков, не больше 50
+        const chk = validateWaTemplates(body.value);
         if (!chk.ok) return res.status(400).json({ ok: false, error: chk.error });
         body.value = chk.value;
       }

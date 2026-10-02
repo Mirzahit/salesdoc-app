@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/payments — Платежи компании. Источник истины с v512 (мигрируем с Google Sheets).
 //
 // GET    /api/payments?country=KZ                               → все платежи страны

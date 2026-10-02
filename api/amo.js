@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/amo — Vercel Node serverless function (v308)
 // Прокси к amoCRM API v4. Использует долгосрочный токен (JWT) из env.
 //
@@ -15,9 +16,13 @@ import { requirePermSoft } from './_perm.js';
 import { sbSelect, sbSelectAll, sbInsertIgnoreDup } from './_supabase.js';
 import { localIso, tzOffsetH, dayStartMs, dayEndMs } from './_dates.js';
 import { normalizePhone } from './_phone.js'; // v1015: один разбор телефона KG+KZ вместо четырёх копий
-import { DEFAULT_PRODUCTS, loadProducts, classifyCampaign, classifyForm, productOfLead, productParam, PRODUCT_CODES,
+import { DEFAULT_PRODUCTS, loadProducts, classifyCampaign, productOfLead, productParam, PRODUCT_CODES,
   buildStageModel, reachedFromVisited, reachedFlags, stageRef, computeArrival, touchRef, NEAR_SEC,
   amoErrOf } from './_mkt.js'; // v1015
+import { requirePerm } from './_perm.js'; // v1017: закрыть потерянную заявку — только сотрудник с подписанной сессией
+import { callerName } from './_caller.js';
+import { syncMetaLeads, importLgRows, buildRecon, closeLost, mergeTouches } from './_meta_leads.js'; // v1017: заявки лидформ и сверка
+import { buildWork, applyWorkPii, piiAllowed } from './_mkt_work.js'; // v1017: «Не взято в работу», кто видит телефоны
 
 // v1015: отчёты Маркетинга тяжёлые (amo + Meta), даём запас по времени.
 export const config = { maxDuration: 300 };
@@ -541,9 +546,15 @@ async function fetchUsers(env, incomplete){
 // История смен этапа. Мало сделок — спрашиваем историю каждой (по 10 за запрос, вся жизнь
 // сделки); много — листаем общий журнал аккаунта с начала периода, как раньше.
 // Возвращает {visited: Map<lead_id, Set<status_id>>, scanned, truncated, error}.
+// v1017: попутно (без лишних запросов) запоминаем:
+//   firstHuman — первая смена этапа, которую сделал человек (created_by ≠ 0) — для «Не взято в работу»;
+//   lastStatus — последняя смена этапа {status, at} — когда сделка попала на текущий этап («застряли»);
+//   mode/from — по сделкам (вся история) или общий журнал с даты from.
 async function scanStatusEvents(env, ids, fromTs, toTs){
   const visited = new Map();
+  const firstHuman = new Map(), lastStatus = new Map();
   let scanned = 0, truncated = false, error = null;
+  let mode = ids.size <= 60 ? 'leads' : 'global';
   const take = (batch) => batch.forEach(e => {
     const id = Number(e.entity_id);
     if(!ids.has(id)) return;
@@ -551,6 +562,13 @@ async function scanStatusEvents(env, ids, fromTs, toTs){
     if(!after) return;
     if(!visited.has(id)) visited.set(id, new Set());
     visited.get(id).add(after.id);
+    const at = Number(e.created_at) || 0;
+    if(Number(e.created_by)){
+      const f = firstHuman.get(id);
+      if(!f || at < f.at) firstHuman.set(id, { at, by: Number(e.created_by) });
+    }
+    const ls = lastStatus.get(id);
+    if(!ls || at >= ls.at) lastStatus.set(id, { status: after.id, at });
   });
   const nowS = Math.floor(Date.now()/1000);
   const globalScan = async () => {
@@ -586,11 +604,12 @@ async function scanStatusEvents(env, ids, fromTs, toTs){
         }
       } catch(e){
         if(Number(e.status) !== 400) throw e;
+        mode = 'global';
         await globalScan(); // фильтр по сделкам не принят — общий журнал
       }
     } else await globalScan();
   } catch(e){ error = e; }
-  return { visited, scanned, truncated, error };
+  return { visited, firstHuman, lastStatus, mode, from: fromTs, scanned, truncated, error };
 }
 function reachedOf(model, lead, sc){
   const v = sc && sc.visited.get(lead.id);
@@ -618,13 +637,34 @@ async function fetchLeadsByIds(env, ids, withParam, errors){
 
 // Рекламные касания за [fromMs, toMs). PostgREST отдаёт ≤1000 строк — берём все страницы.
 // Верхнюю границу режем в коде: sbSelect хранит один фильтр на колонку.
+// v1017: общий источник — переписки из ad_touches + заявки лидформ из meta_leads, найденные в amo
+// (matched/renamed/manual). Старые 'lg:'-строки ad_touches выбрасываются, если заявка уже в meta_leads.
+// meta_leads не прочиталась — работаем по ad_touches как раньше и помечаем «неполные данные» (_warn).
 async function loadTouches(country, fromMs, toMs){
-  const rows = await sbSelectAll('ad_touches', {
+  const inRange = (iso) => { const ms = Date.parse(iso); return Number.isFinite(ms) && ms < toMs; };
+  const rows = (await sbSelectAll('ad_touches', {
     country: 'eq.' + country,
     touched_at: 'gte.' + new Date(fromMs).toISOString(),
     order: 'touched_at.asc,message_id.asc'
-  });
-  return rows.filter(t => { const ms = Date.parse(t.touched_at); return Number.isFinite(ms) && ms < toMs; });
+  })).filter(t => inRange(t.touched_at));
+  let meta = null, warn = null;
+  try {
+    // страна заявки — по номеру телефона, а форма одна на всю программу KG: берём все заявки
+    if(country === 'KG'){
+      meta = (await sbSelectAll('meta_leads', {
+        select: 'meta_lead_id,country,created_time,form_id,campaign_id,campaign_name,ad_id,ad_name,account_id,phone_norm,match_status,amo_lead_id,amo_contact_id,amo_created_at',
+        created_time: 'gte.' + new Date(fromMs).toISOString(),
+        order: 'created_time.asc,meta_lead_id.asc'
+      })).filter(r => inRange(r.created_time));
+    }
+  } catch(e){ warn = 'заявки лидформ (meta_leads) не загрузились: ' + String(e.message || e).slice(0, 120); }
+  if(!meta){
+    if(warn) Object.defineProperty(rows, '_warn', { value: warn, enumerable: false });
+    return rows;
+  }
+  let targByAcc = {};
+  try { const r = await sbSelect('app_settings', { key: 'eq.mkt_targetologs', limit: '1' }); targByAcc = (r.length && r[0].value) || {}; } catch(_){}
+  return mergeTouches(rows, meta, targByAcc);
 }
 
 // v1015: одно правило месяца — по дате обращения. Сделка из рекламы относится к месяцу
@@ -638,6 +678,7 @@ async function buildArrivals(env, country, fromTs, toTs, opts){
   try {
     // v1015: и на 7 дней после периода — сделка 30.08 с касанием 02.09 это реклама (обращение 30.08)
     touches = await loadTouches(country, (fromTs - NEAR_SEC) * 1000, ((toTs || Math.floor(Date.now()/1000)) + NEAR_SEC + 1) * 1000);
+    if(touches._warn) incomplete.push({ source: 'db', what: 'touches', detail: touches._warn }); // v1017
   } catch(e){ errors.push({ source: 'db', kind: 'other', message: 'рекламные касания: ' + String(e.message || e).slice(0, 200) }); }
   const byLead = new Map();
   touches.forEach(t => { if(!t.lead_id) return; const id = Number(t.lead_id); if(!byLead.has(id)) byLead.set(id, []); byLead.get(id).push(t); });
@@ -755,6 +796,36 @@ async function buildLeadReport(env, fromTs, toTs, opts){
   const wonIds = model.wonIds, lostIds = model.lostIds;
   const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
 
+  // v1017 (v=2): причина отказа — поле «Причина отказа» (KG id 2640481, в другом кабинете — по названию),
+  // иначе родная причина amo (loss_reason_id → справочник, 10 минут из памяти), иначе null.
+  const lossCf = (l) => {
+    for(const f of (l.custom_fields_values || [])){
+      if(Number(f.field_id) === 2640481 || /причин[аы]\s*отказ/i.test(String(f.field_name || ''))){
+        const v = (f.values || []).map(x => x && x.value).filter(Boolean).join(', ');
+        if(v) return String(v).trim();
+      }
+    }
+    return null;
+  };
+  let lossName = {};
+  if(v2 && raw.some(l => lostIds.has(l.status_id) && !lossCf(l) && l.loss_reason_id)){
+    try {
+      const lr = await memo('lr|' + sub, 10 * 60 * 1000, () => amoFetch('/leads/loss_reasons?limit=250', env));
+      ((lr && lr._embedded && lr._embedded.loss_reasons) || []).forEach(x => { lossName[x.id] = x.name; });
+    } catch(e){
+      if(Number(e.status) === 401 || Number(e.status) === 403) throw e;
+      incomplete.push({ source: 'amo', what: 'loss_reasons', detail: 'справочник причин отказа не загрузился' });
+    }
+  }
+  // Когда сделка попала на текущий этап: последняя смена этапа из истории. Смен нет и история
+  // полная (по сделке или сделка создана после начала журнала) — с момента создания.
+  const stageEnteredAt = (l) => {
+    const ls = sc && sc.lastStatus ? sc.lastStatus.get(Number(l.id)) : null;
+    if(ls) return ls.status === l.status_id ? ls.at : null;
+    const fullHistory = sc && (sc.mode === 'leads' || Number(l.created_at) >= Number(sc.from || 0));
+    return fullHistory && !(sc && sc.truncated) ? (Number(l.created_at) || null) : null;
+  };
+
   const leads = raw.map(l => {
     const r = reachedOf(model, l, sc);
     let deepest = null;
@@ -799,6 +870,15 @@ async function buildLeadReport(env, fromTs, toTs, opts){
       out.touch = a ? touchRef(a.touch) : null;
       out.product = productOfLead(cfg, { tags }, a && a.touch);
       out.is_postponed = model.postponedIds.has(l.status_id);
+      // v1017: для блоков «Воронка продаж», «Менеджеры», «Почему закрыли»
+      out.responsible_user_id = Number(l.responsible_user_id) || null;
+      out.closed_at = Number(l.closed_at) || null;
+      out.stage_entered_at = stageEnteredAt(l);
+      if(out.is_lost){
+        const cfv = lossCf(l);
+        out.loss_reason = cfv || (l.loss_reason_id ? (lossName[l.loss_reason_id] || null) : null);
+        out.loss_reason_src = cfv ? 'field' : (out.loss_reason ? 'amo' : null);
+      } else { out.loss_reason = null; out.loss_reason_src = null; }
     }
     return out;
   }).sort((a, b) => v2 ? (b.arrival_at - a.arrival_at) : (b.created - a.created));
@@ -909,7 +989,141 @@ export default async function handler(req, res){
         }], env);
         return res.status(201).json({ ok: true, note: result });
       }
-      return bad(res, 400, 'Unknown POST action. Use ?action=update_status | add_note');
+      if(action === 'mkt_lost_close'){
+        // v1017: закрыть потерянную заявку Meta — кто разобрал и чем закончилось. В amo ничего не пишем.
+        // Только сотрудник с правом на Маркетинг и подписанной сессией: по общему ключу (он публичный)
+        // нельзя, иначе любой мог бы «закрыть» потери от чужого имени.
+        const gate = await requirePerm(req, res, 'view_marketing');
+        if(!gate.ok) return;
+        if(!gate.caller.trusted) return res.status(401).json({ ok: false, needLogin: true, error: 'Войдите в программу заново' });
+        let name = callerName(req);
+        if(!name){
+          try { const r = await sbSelect('employees', { select: 'name', email: 'eq.' + gate.caller.email, limit: '1' }); name = (r[0] && r[0].name) || ''; } catch(_){}
+        }
+        const r = await closeLost(body, { email: gate.caller.email, name: name || gate.caller.email });
+        return res.status(r.status).json(r.body);
+      }
+      return bad(res, 400, 'Unknown POST action. Use ?action=update_status | add_note | mkt_lost_close');
+    }
+    if(action === 'meta_leads_sync'){
+      // v1017: заявки лидформ Meta → meta_leads и поиск их сделок в amo. Зовёт крон раз в час.
+      // dry_run=1 (по умолчанию) — ничего не пишет, показывает, что бы сделал.
+      if(country !== 'KG') return bad(res, 400, 'meta_leads_sync: только KG');
+      const gate = await requirePermSoft(req, res, 'view_marketing');
+      if(!gate.ok) return;
+      const dryRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
+      const dryRun = dryRaw !== '0' && dryRaw !== 'false';
+      const base = selfBase(req);
+      const nightQ = req.query.night == null ? null : String(req.query.night) === '1';
+      const out = await syncMetaLeads({
+        env, country, amoFetch, fetchLeadsByIds,
+        adsMap: async () => { const r = await selfFetch(base, '/api/meta-ads?endpoint=ads_map'); return selfFailed(r) ? null : r.json; }
+      }, { dryRun, max: Number(req.query.max || 100), night: nightQ, full: String(req.query.full || '') === '1' });
+      if(out.error) return bad(res, 500, out.error);
+      return res.status(200).json(out);
+    }
+    if(action === 'meta_leads_import_lg'){
+      // v1017: разовый перенос 56 старых заявок 'lg:' из ad_touches в meta_leads.
+      // dry_run=1 — только посчитать и показать SQL; запись — только с админ-кодом CEO.
+      const dryRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
+      const dryRun = dryRaw !== '0' && dryRaw !== 'false';
+      if(!dryRun){
+        const g = checkAdminToken(req);
+        if(!g.ok) return bad(res, g.unconfigured ? 503 : 403, g.unconfigured ? 'ADMIN_TOKEN не настроен' : 'Нужен админ-код (x-admin-token)');
+      } else {
+        const gate = await requirePermSoft(req, res, 'view_marketing');
+        if(!gate.ok) return;
+      }
+      return res.status(200).json(await importLgRows(dryRun));
+    }
+    if(action === 'mkt_recon'){
+      // v1017: сверка «Meta → amoCRM» и список потерянных заявок — только из базы (без amo и Meta).
+      // Полный телефон, имя и ответы формы — только по подписанной сессии с ролью admin/head/rop/manager
+      // или по админ-коду (решение CEO); остальным «••• 1234», без имени.
+      const gate = await requirePermSoft(req, res, 'view_marketing');
+      if(!gate.ok) return;
+      const adminOk = !!(req.headers['x-admin-token'] && checkAdminToken(req).ok);
+      const trusted = !!(gate.caller && gate.caller.trusted) || adminOk;
+      const pii = piiAllowed(gate.caller, adminOk);
+      const since = String(req.query.since || localIso(Date.now(), country).slice(0, 8) + '01').slice(0, 10);
+      const until = String(req.query.until || localIso(Date.now(), country)).slice(0, 10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(since) || !/^\d{4}-\d{2}-\d{2}$/.test(until)) return bad(res, 400, 'Нужны since/until в виде YYYY-MM-DD');
+      const amoSub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+      try {
+        const out = await buildRecon({ since, until, product: productParam(req.query), trusted, pii, sub: amoSub });
+        return res.status(200).json(Object.assign({ country }, out));
+      } catch(e){
+        return res.status(500).json({ error: 'Сверка заявок: ' + String(e.message || e).slice(0, 200), code: 'db_error' });
+      }
+    }
+    if(action === 'mkt_work'){
+      // v1017: «Не взято в работу» — первое действие менеджера по новым сделкам периода и скорость
+      // в рабочих минутах. Основа периода общая с lead_report (periodBase), ответ держим 3 минуты.
+      const fromTs = req.query.from ? Number(req.query.from) : null;
+      const toTs = req.query.to ? Number(req.query.to) : null;
+      if(!fromTs) return bad(res, 400, 'Need ?from=<unix> (&to=<unix>)');
+      const gate = await requirePermSoft(req, res, 'view_marketing');
+      if(!gate.ok) return;
+      const adminOk = !!(req.headers['x-admin-token'] && checkAdminToken(req).ok);
+      // WhatsApp как «взял в работу» — за флагом, пока CEO не подтвердит правило
+      const useWa = String(req.query.use_whatsapp || '') === '1';
+      const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+      const data = await memo(['mw', sub, fromTs, toTs || 0, useWa ? 1 : 0].join('|'), 3 * 60 * 1000, () => buildWork({
+        env, sub, country, amoFetch,
+        fetchUsers: (inc) => fetchUsers(env, inc),
+        periodBase: (f, t) => periodBase(env, country, f, t)
+      }, fromTs, toTs, { useWhatsapp: useWa }), v => !!(v.error || (v.errors && v.errors.length)));
+      if(data.error) return bad(res, 500, data.error);
+      return res.status(200).json(applyWorkPii(data, piiAllowed(gate.caller, adminOk)));
+    }
+    if(action === 'contact_notes' || action === 'lead_events'){
+      // v1017: диагностика для правил «Не взято в работу» — какие примечания/события реально есть
+      // у контакта и сделки. Только чтение, через ограничитель amo. Номера телефонов и ссылки на
+      // записи разговоров НЕ отдаём: телефон — последние 4 цифры, ссылку выбрасываем.
+      const adminOk = !!(req.headers['x-admin-token'] && checkAdminToken(req).ok);
+      if(!adminOk){ const gate = await requirePermSoft(req, res, 'view_marketing'); if(!gate.ok) return; }
+      const users = await fetchUsers(env, []);
+      const who = (id) => Number(id) ? (users[id] || ('id ' + id)) : 'робот/интеграция';
+      if(action === 'lead_events'){
+        const leadId = Number(req.query.lead_id || 0);
+        if(!leadId) return bad(res, 400, 'Need ?lead_id=');
+        const events = [];
+        for(let page = 1; page <= 3; page++){
+          const r = await amoFetch(`/events?filter[entity]=lead&filter[entity_id][]=${leadId}&limit=100&page=${page}`, env);
+          const arr = (r && r._embedded && r._embedded.events) || [];
+          arr.forEach(e => events.push({ type: e.type, created_by: e.created_by || 0, created_by_name: who(e.created_by), created_at: e.created_at }));
+          if(arr.length < 100) break;
+        }
+        events.sort((x, y) => x.created_at - y.created_at);
+        const types = {}; events.forEach(e => { types[e.type] = (types[e.type] || 0) + 1; });
+        return res.status(200).json({ country, lead_id: leadId, count: events.length, types, events });
+      }
+      const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 250);
+      let cids = [];
+      if(req.query.contact_id) cids = [Number(req.query.contact_id)].filter(Boolean);
+      else if(req.query.lead_id){
+        const l = await amoFetch(`/leads/${Number(req.query.lead_id)}?with=contacts`, env);
+        cids = (((l && l._embedded && l._embedded.contacts) || []).map(c => Number(c.id))).slice(0, 3);
+      }
+      if(!cids.length) return bad(res, 400, 'Need ?contact_id= or ?lead_id=');
+      const tail4 = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length < 4 ? '' : '••• ' + d.slice(-4); };
+      const contacts = [];
+      for(const cid of cids){
+        const r = await amoFetch(`/contacts/${cid}/notes?limit=${limit}`, env);
+        const notes = ((r && r._embedded && r._embedded.notes) || []).map(n => {
+          const pr = n.params || {};
+          const o = { id: n.id, note_type: n.note_type, created_by: n.created_by || 0, created_by_name: who(n.created_by),
+            responsible_user_id: n.responsible_user_id || null, created_at: n.created_at, params_keys: Object.keys(pr) };
+          if(/^call/.test(String(n.note_type || ''))){
+            ['duration', 'call_status', 'call_result', 'direction', 'source'].forEach(k => { if(pr[k] != null) o[k] = pr[k]; });
+            if(pr.phone) o.phone_masked = tail4(pr.phone);
+          }
+          return o;
+        });
+        const types = {}; notes.forEach(n => { types[n.note_type] = (types[n.note_type] || 0) + 1; });
+        contacts.push({ contact_id: cid, count: notes.length, types, notes });
+      }
+      return res.status(200).json({ country, contacts });
     }
     if(action === 'pipelines'){
       const list = await getPipelines(env);
@@ -1639,12 +1853,19 @@ export default async function handler(req, res){
       }
 
       // 3) Переписки из приёмника Wazzup: ссылка на объявление лежит в первом сообщении.
+      // v1017: все сообщения окна (sbSelectAll, без потолка 1000/2000), СВЕЖИЕ ПЕРВЫМИ — раньше брались
+      // первые 2000 по возрастанию, и свежие переписки не доходили до разбора.
       const since = new Date(Date.now() - days * 86400000).toISOString();
-      const events = await sbSelect('wazzup_events', {
-        received_at: 'gte.' + since, order: 'received_at.asc', limit: 2000
+      const events = await sbSelectAll('wazzup_events', {
+        select: 'id,received_at,kind,direction,phone,message_text,ad_source_id,message_id',
+        received_at: 'gte.' + since, order: 'received_at.desc,id.desc'
       });
-      // v1015: упёрлись в потолок — свежие переписки не просмотрены (порядок чиним на этапе B)
-      if(events.length >= 2000) tsIncomplete.push({ source: 'db', what: 'chats', detail: 'просмотрены первые 2000 сообщений' });
+      // уже сохранённые касания: их не разбираем повторно и в лимит не считаем
+      let savedIds = new Set();
+      try {
+        savedIds = new Set((await sbSelectAll('ad_touches', { select: 'message_id', country: 'eq.' + country,
+          touched_at: 'gte.' + since, order: 'message_id.asc' })).map(r => String(r.message_id)));
+      } catch(e){ tsIncomplete.push({ source: 'db', what: 'touches', detail: 'сохранённые касания не прочитались — разбираем всё подряд' }); }
 
       const shortCache = {};
       async function expandFbMe(code){
@@ -1700,8 +1921,9 @@ export default async function handler(req, res){
       const leadCache = new Map();
       const rowsToSave = [], skipped = [], notFound = [];
       let processed = 0;
-      for(const t of touches){
-        if(processed >= maxPhones){ tsIncomplete.push({ source: 'amo', what: 'touches', detail: 'обработано ' + processed + ' из ' + touches.length }); break; }
+      const todoTouches = touches.filter(t => !savedIds.has(String(t.message_id))); // v1017: только новые, свежие первыми
+      for(const t of todoTouches){
+        if(processed >= maxPhones){ tsIncomplete.push({ source: 'amo', what: 'touches', detail: 'обработано ' + processed + ' из ' + todoTouches.length + ' новых' }); break; }
         processed++;
         const acc = t.ad.account;
         const targ = nameForAcc(acc);
@@ -2007,12 +2229,9 @@ export default async function handler(req, res){
         });
       }
 
-      let saved = 0; const saveErrors = [];
-      if(!dryRun && rowsToSave.length){
-        const clean = rowsToSave.map(r => { const c = Object.assign({}, r); delete c._lead_name; return c; });
-        try { await sbInsertIgnoreDup('ad_touches', clean, 'country,message_id'); saved = clean.length; }
-        catch(e){ saveErrors.push(e.message || String(e)); }
-      }
+      // v1017: заявки лидформ больше НЕ пишем в ad_touches — их единственный дом теперь meta_leads
+      // (action=meta_leads_sync). Здесь остаётся только чтение для проверки руками.
+      const saved = 0; const saveErrors = [];
 
       return res.status(200).json({
         country, days, dry_run: dryRun,
@@ -2028,16 +2247,16 @@ export default async function handler(req, res){
           ad_name: r.ad_name, lead_id: r.lead_id, lead_name: r._lead_name })),
         not_found: notFound,
         skipped: skipped,
-        message: raw.length === 0
+        message: !dryRun ? 'заявки форм теперь в meta_leads'
+          : (raw.length === 0
           ? 'Заявок лидформ не получили. Если в ad_errors стоит про права — доступу нужно разрешение leads_retrieval на страницу.'
-          : (dryRun ? `Готово к сохранению: ${rowsToSave.length} заявок. Применить — dry_run=false.`
-                    : `Сохранено: ${saved}.`)
+          : `Найдено в amo: ${rowsToSave.length} заявок. Записи нет: заявки форм теперь в meta_leads.`)
       });
     }
     if(action === 'targ_unmatched'){
       // v950: обратились с рекламы, но в CRM их не нашли. CEO хочет видеть таких людей
-      // поимённо, чтобы найти вручную. Два источника: переписки Wazzup (телефон и имя
-      // контакта уже есть) и заявки лидформ Meta (имя из формы + хвост телефона).
+      // поимённо, чтобы найти вручную. v1017: только переписки Wazzup (телефон и имя контакта
+      // уже есть); потерянные заявки лидформ — в сверке (action=mkt_recon).
       // Полный телефон отдаём только сотруднику с подписанной сессией и правом на
       // Маркетинг — APP_TOKEN публичный, а телефоны клиентов наружу утекать не должны.
       // v1015: дни по поясу страны (KG — Бишкек), все страницы таблиц, ошибки — в errors[],
@@ -2060,13 +2279,10 @@ export default async function handler(req, res){
       const trusted = !!(gate.caller && gate.caller.trusted) || adminOk;
       const mask = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length < 7 ? '' : d.slice(0, 3) + ' ••• ' + d.slice(-4); };
       const fromMs = dayStartMs(since, country), toMs = dayEndMs(until, country);
-      const days = Math.min(90, Math.max(1, Math.ceil((Date.now() - fromMs) / 86400000) + 1));
       const errors = [], incomplete = [];
       const cfg = await loadProducts();
 
       const base = selfBase(req);
-      // админ-код пробрасываем дальше, чтобы лидформы тоже отдали полный номер
-      const extraHdr = adminOk ? { 'x-admin-token': String(req.headers['x-admin-token'] || '') } : null;
       let targByAcc = {};
       try { const rows = await sbSelect('app_settings', { key: 'eq.mkt_targetologs', limit: '1' }); targByAcc = (rows.length && rows[0].value) || {}; } catch(_){}
       const nameForAcc = (acc) => targByAcc[acc] || targByAcc[String(acc).replace(/^act_/, '')] || ('кабинет ' + String(acc).replace(/^act_/, ''));
@@ -2125,28 +2341,8 @@ export default async function handler(req, res){
         }
       } catch(e){ errors.push({ source: 'db', kind: 'other', message: 'переписки: ' + String(e.message || e).slice(0, 200) }); }
 
-      // 2) Заявки лидформ без сделки — из сухого прогона.
-      try {
-        // v1015: заявки лидформ не спрашиваем на каждое открытие экрана — это сотни запросов
-        // в amo. Держим 30 минут; одинаковые запросы, пришедшие разом, ждут один ответ.
-        const fR = await memo(['tf', country, days, adminOk ? 1 : 0].join('|'), 30 * 60 * 1000,
-          () => selfFetch(base, `/api/amo?action=targ_forms&country=${country}&days=${days}&limit=200`, extraHdr), selfFailed);
-        if(selfFailed(fR)){
-          errors.push({ source: 'meta', kind: (fR.json && fR.json.code) === 'meta_token' ? 'token' : 'other', code: fR.json && fR.json.code, message: 'заявки: ' + ((fR.json && fR.json.error) || fR.status) });
-        } else {
-          (fR.json.errors || []).forEach(x => errors.push(x));
-          (fR.json.incomplete || []).forEach(x => incomplete.push(x));
-        }
-        const f = selfFailed(fR) ? null : fR.json;
-        ((f && f.not_found) || []).forEach(x => {
-          const ms = Date.parse(x.at);
-          if(!Number.isFinite(ms) || ms < fromMs || ms >= toMs) return;
-          out.push({ at: x.at, kind: 'заявка', name: x.name || '', phone: (adminOk && x.phone_full) ? x.phone_full : (x.phone_masked || ''), phone_tail: x.phone_tail || '',
-            targetolog: x.targetolog, campaign: x.campaign, ad_name: x.ad_name, first_line: '',
-            product: x.form_id ? classifyForm(cfg, x.form_id, x.campaign || x.campaign_id ? { [x.form_id]: { campaign_id: x.campaign_id, campaign: x.campaign } } : null)
-              : classifyCampaign(cfg, { id: x.campaign_id, name: x.campaign }) });
-        });
-      } catch(e){ errors.push({ source: 'meta', kind: 'other', message: 'заявки: ' + String(e.message || e).slice(0, 200) }); }
+      // v1017: заявки лидформ отсюда убраны — потерянные заявки теперь в сверке (action=mkt_recon).
+      // Здесь остаются только переписки.
 
       const items = product === 'ALL' ? out : out.filter(x => x.product === product);
       items.sort((a, b) => (b.at || '') < (a.at || '') ? -1 : 1);

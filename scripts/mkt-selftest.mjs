@@ -6,8 +6,11 @@ import { localIso, dayStartMs, dayEndMs, addDaysIso, zonedToUtcMs, tzOffsetMinAt
 import {
   DEFAULT_PRODUCTS, classifyCampaign, classifyForm, formIdFromTags, productOfLead, validateProducts,
   buildStageModel, reachedFromVisited, reachedFlags, computeArrival, splitInt, splitMoney,
-  shiftHourToDay, bishkekShiftRows, metaErrKind
+  shiftHourToDay, bishkekShiftRows, metaErrKind, classifyMetaLead, cpqTone, campaignDecision
 } from '../api/_mkt.js';
+import { normalizeHolidays, workMinutesBetween, toneOf, firstHumanAction, candidatesOf, collectTasks, collectWhatsapp, isAutoReply, normWaText,
+  validateWaTemplates, WA_TEMPLATES_DEFAULT, piiAllowed, maskTail, applyWorkPii } from '../api/_mkt_work.js'; // v1017
+import { leadIdFromDealName, decideMatch, mergeTouches, parseMetaLead, fxByDay, lgTouchToRow, maskPhone } from '../api/_meta_leads.js'; // v1017
 
 let pass = 0, fail = 0;
 function t(name, fn) {
@@ -214,6 +217,172 @@ t('коды ошибок Meta', () => {
   assert.equal(metaErrKind(10), 'perm');
   assert.equal(metaErrKind(200), 'perm');
   assert.equal(metaErrKind(1), 'other');
+});
+
+// ── v1017: рабочее время «Не взято в работу» (2026-10-05 — понедельник, Бишкек +6) ──
+const bk = (s) => Date.parse(s + '+06:00');
+t('Пн 10:00→10:09 = 9', () => assert.equal(workMinutesBetween(bk('2026-10-05T10:00:00'), bk('2026-10-05T10:09:00'), []), 9));
+t('Пн 17:50→Вт 09:10 = 20', () => assert.equal(workMinutesBetween(bk('2026-10-05T17:50:00'), bk('2026-10-06T09:10:00'), []), 20));
+t('Пт 21:40→Пн 09:15 = 15', () => assert.equal(workMinutesBetween(bk('2026-10-02T21:40:00'), bk('2026-10-05T09:15:00'), []), 15));
+t('Сб 12→15 = 0', () => assert.equal(workMinutesBetween(bk('2026-10-03T12:00:00'), bk('2026-10-03T15:00:00'), []), 0));
+t('Ср 08:00→09:30 = 30', () => assert.equal(workMinutesBetween(bk('2026-10-07T08:00:00'), bk('2026-10-07T09:30:00'), []), 30));
+t('Пн 09:00→Ср 09:00 = 1080', () => assert.equal(workMinutesBetween(bk('2026-10-05T09:00:00'), bk('2026-10-07T09:00:00'), []), 1080));
+t('праздник Пн: Пт 17:00→Вт 09:30 = 90', () => assert.equal(workMinutesBetween(bk('2026-10-02T17:00:00'), bk('2026-10-06T09:30:00'), ['2026-10-05']), 90));
+t('конец раньше начала = 0', () => assert.equal(workMinutesBetween(bk('2026-10-05T12:00:00'), bk('2026-10-05T11:00:00'), []), 0));
+t('2026-10-05T03:00Z (09:00 Бишкек) +10 мин = 10', () => assert.equal(workMinutesBetween(Date.parse('2026-10-05T03:00:00Z'), Date.parse('2026-10-05T03:10:00Z'), new Set()), 10));
+t('нормы: 15 норма, 16 и 60 поздно, 61 провал', () => {
+  assert.equal(toneOf(15), 'ok'); assert.equal(toneOf(16), 'mid'); assert.equal(toneOf(60), 'mid'); assert.equal(toneOf(61), 'bad');
+});
+const C0 = 1790000000;
+t('робот +1 с, человек сменил этап +20 мин → этап +20 мин', () => {
+  const r = firstHumanAction(C0, candidatesOf({ notes: [{ created_at: C0 + 1, created_by: 0, note_type: 'common' }], statusEv: [{ created_at: C0 + 1200, created_by: 77 }] }));
+  assert.deepEqual(r, { at: C0 + 1200, by: 77, kind: 'status' });
+});
+t('исходящий звонок контакту +5 мин раньше задачи +7 мин', () => {
+  const r = firstHumanAction(C0, candidatesOf({ contactNotes: [{ created_at: C0 + 300, created_by: 5, note_type: 'call_out' }, { created_at: C0 + 100, created_by: 5, note_type: 'call_in' }],
+    tasks: [{ created_at: C0 + 420, created_by: 6, is_completed: false }] }));
+  assert.equal(r.at, C0 + 300); assert.equal(r.kind, 'call'); assert.equal(r.by, 5);
+});
+t('только робот → не взято', () => assert.equal(firstHumanAction(C0, candidatesOf({ notes: [{ created_at: C0 + 1, created_by: 0, note_type: 'common' }],
+  tasks: [{ created_at: C0 + 2, created_by: 0, is_completed: false }], statusEv: [] })), null));
+t('звонок до создания сделки не считается', () => assert.equal(firstHumanAction(C0, candidatesOf({ contactNotes: [{ created_at: C0 - 50, created_by: 5, note_type: 'call_out' }] })), null));
+t('выбор не зависит от источника: любые кандидаты {at, human}', () => {
+  const r = firstHumanAction(C0, [{ at: C0 + 50, kind: 'x', human: false }, { at: C0 + 90, kind: 'y', human: true, by: 3 }, { at: C0 + 70, kind: 'z', human: true, by: null, by_name: 'Айдана' }]);
+  assert.deepEqual(r, { at: C0 + 70, by: null, kind: 'z', by_name: 'Айдана' });
+});
+t('задача закрыта человеком → task_done', () => {
+  const r = firstHumanAction(C0, collectTasks([{ created_at: C0 + 1, created_by: 0, is_completed: true, updated_at: C0 + 600, responsible_user_id: 9 }]));
+  assert.deepEqual(r, { at: C0 + 600, by: 9, kind: 'task_done' });
+});
+t('праздники: кривые даты отбрасываются, повторы убираются', () => {
+  assert.deepEqual(normalizeHolidays(['2026-13-01', '2026-10-05', '2026-02-30', '2026-01-07', '2026-10-05', 'x']), ['2026-01-07', '2026-10-05']);
+  assert.deepEqual(normalizeHolidays(null), []);
+});
+// WhatsApp (за флагом): шаблоны автоответов, автор
+const wa = (at, dir, author, text) => ({ received_at: new Date((C0 + at) * 1000).toISOString(), kind: 'message', direction: dir, message_text: text, raw: { authorName: author } });
+t('WhatsApp: шаблон автоответа и пустой автор — бот; Phone — ответственный; имя менеджера — он сам', () => {
+  const c = collectWhatsapp([
+    wa(5, 'in', '', 'Добрый день'),
+    wa(6, 'out', '', 'Здравствуйте! Спасибо, что написали. Мы скоро ответим.'),
+    wa(8, 'out', 'Phone', 'Здравствуйте!! Спасибо, что написали 🙂 Мы скоро ответим'),
+    wa(30, 'out', 'Phone', 'Добрый день, подскажите город'),
+    wa(40, 'out', 'Айдана', 'Отправила КП')
+  ], { managers: { 'айдана': 11 }, responsibleId: 22 });
+  assert.deepEqual(c.map(x => [x.human, x.by]), [[false, null], [false, null], [true, 22], [true, 11]]);
+  assert.deepEqual(firstHumanAction(C0, c), { at: C0 + 30, by: 22, kind: 'whatsapp', by_name: 'Phone' });
+});
+t('WhatsApp: шаблон по началу текста, ё=е, без знаков', () => {
+  assert.equal(isAutoReply('Здравствуйте! Хотите узнать подробнее о решении для управления товарами? Ответьте «да»', WA_TEMPLATES_DEFAULT), true);
+  assert.equal(isAutoReply('здравствуйте не смогли принять ваш вызов но непременно ответим!!!', WA_TEMPLATES_DEFAULT), true);
+  assert.equal(isAutoReply('Здравствуйте, когда удобно созвониться?', WA_TEMPLATES_DEFAULT), false);
+  assert.equal(normWaText('  Ёлка, 🎄 ПРИВЕТ!  '), 'елка привет');
+});
+t('шаблоны автоответов: проверка настройки', () => {
+  assert.deepEqual(validateWaTemplates([' a ', '', 'a', 'b']).value, ['a', 'b']);
+  assert.equal(validateWaTemplates('x').ok, false);
+  assert.equal(validateWaTemplates(['x'.repeat(301)]).ok, false);
+  assert.equal(validateWaTemplates(Array.from({ length: 51 }, (_, i) => 's' + i)).ok, false);
+});
+// Кто видит телефоны и имена
+t('персональные данные: подписанная сессия + admin/head/rop/manager или админ-код', () => {
+  assert.equal(piiAllowed({ role: 'manager', trusted: true }), true);
+  assert.equal(piiAllowed({ role: 'rop', trusted: true }), true);
+  assert.equal(piiAllowed({ role: 'manager', trusted: false }), false);
+  assert.equal(piiAllowed({ role: 'targetolog', trusted: true }), false);
+  assert.equal(piiAllowed({ role: 'viewer', trusted: true }), false);
+  assert.equal(piiAllowed({ role: 'admin', trusted: true, active: false }), false);
+  assert.equal(piiAllowed(null), false);
+  assert.equal(piiAllowed(null, true), true);
+});
+t('маска телефона: последние 4 цифры', () => {
+  assert.equal(maskTail('996555123456'), '••• 3456');
+  assert.equal(maskTail('+996 (555) 12-34-56'), '••• 3456');
+  assert.equal(maskTail('12'), '');
+  assert.equal(maskPhone('77011234567'), '••• 4567');
+});
+t('отчёт «не взято»: полный номер только с правом', () => {
+  const row = { phone_masked: '••• 3456' }; Object.defineProperty(row, '_phone', { value: '996555123456', enumerable: false });
+  const data = { leads: { 1: row } };
+  const a = applyWorkPii(data, false), b = applyWorkPii(data, true);
+  assert.equal(a.pii, false); assert.equal(a.leads[1].phone, undefined); assert.equal(JSON.stringify(a).includes('996555123456'), false);
+  assert.equal(b.pii, true); assert.equal(b.leads[1].phone, '996555123456');
+  assert.equal(JSON.stringify(data).includes('996555123456'), false);
+});
+
+// ── v1017: заявки лидформ ──
+t('продукт заявки: SD_KG_LF_IH_2026-09 → SD', () => assert.equal(classifyMetaLead(cfg, { campaign_name: 'SD_KG_LF_IH_2026-09' }), 'SD'));
+t('продукт заявки: неизвестно и без номеров → null', () => assert.equal(classifyMetaLead(cfg, { campaign_name: 'IH_Лидформы_SD', campaign_id: '1', form_id: '2' }), null));
+t('продукт заявки: форма 1775408007121079 → SHTURM', () => assert.equal(classifyMetaLead(cfg, { campaign_name: 'IH_Штурм_тест', form_id: '1775408007121079' }), 'SHTURM'));
+t('номер заявки из названия сделки', () => {
+  assert.equal(leadIdFromDealName('Facebook №1234567890123'), '1234567890123');
+  assert.equal(leadIdFromDealName('Facebook № 1234567890123 (копия)'), '1234567890123');
+  assert.equal(leadIdFromDealName('Сделка #5'), null);
+});
+const mrow = (o) => Object.assign({ meta_lead_id: '900001', created_time: '2026-09-20T10:00:00Z', product: 'SD', form_id: '111111', phone_norm: '996555123456', full_name: 'Азамат', phone_raw: '+996555123456', answers: {} }, o || {});
+const ctS = Math.floor(Date.parse('2026-09-20T10:00:00Z') / 1000);
+t('сверка: тестовая заявка', () => assert.equal(decideMatch(mrow({ full_name: '<test lead: dummy data for full_name>', phone_norm: null }), {}).match_status, 'test'));
+t('сверка: Zakaz24 → other_product (в amo не ищем)', () => assert.equal(decideMatch(mrow({ product: 'Z24' }), { dealByMetaId: new Map([['900001', { id: 1 }]]) }).match_status, 'other_product'));
+t('сверка: номер в названии → matched', () => {
+  const d = decideMatch(mrow(), { dealByMetaId: new Map([['900001', { id: 55, created_at: ctS + 5, created_by: 0, contact_id: 9 }]]) });
+  assert.equal(d.match_status, 'matched'); assert.equal(d.match_method, 'lead_id'); assert.equal(d.amo_lead_id, 55); assert.equal(d.amo_contact_id, 9);
+});
+t('сверка: номер уже пришёл другой заявкой → duplicate', () => {
+  const d = decideMatch(mrow(), { matchedPhones: new Map([['996555123456', '900000']]), phoneDeals: new Map([['996555123456', { contact_id: 1, deals: [{ id: 2, created_at: ctS, created_by: 0 }] }]]) });
+  assert.equal(d.match_status, 'duplicate');
+});
+t('сверка: робот-сделка по телефону → renamed', () => {
+  const d = decideMatch(mrow(), { phoneDeals: new Map([['996555123456', { contact_id: 3, deals: [{ id: 10, created_at: ctS - 90 * 86400, created_by: 7 }, { id: 11, created_at: ctS + 60, created_by: 0 }] }]]) });
+  assert.equal(d.match_status, 'renamed'); assert.equal(d.amo_lead_id, 11); assert.equal(d.match_method, 'phone');
+});
+t('сверка: ручная сделка по телефону → manual', () => {
+  const d = decideMatch(mrow(), { phoneDeals: new Map([['996555123456', { contact_id: 3, deals: [{ id: 12, created_at: ctS + 3600, created_by: 7 }] }]]) });
+  assert.equal(d.match_status, 'manual'); assert.equal(d.amo_lead_id, 12);
+});
+t('сверка: форма не подключена', () => {
+  const d = decideMatch(mrow(), { connectedForms: new Set(['222222']), phoneDeals: new Map() });
+  assert.equal(d.match_status, 'not_found'); assert.equal(d.lost_reason, 'form_not_connected');
+});
+t('сверка: форма подключена, сделки нет → no_deal', () => {
+  const d = decideMatch(mrow(), { connectedForms: new Set(['111111']) });
+  assert.equal(d.match_status, 'not_found'); assert.equal(d.lost_reason, 'no_deal');
+});
+t('сверка: пустой номер → bad_phone; неизвестный продукт ищется как SD', () => {
+  assert.equal(decideMatch(mrow({ phone_norm: null }), {}).match_status, 'bad_phone');
+  assert.equal(decideMatch(mrow({ product: null }), { dealByMetaId: { '900001': { id: 1 } } }).match_status, 'matched');
+});
+t('разбор заявки Meta: телефон, имя, ответы, страна, продукт', () => {
+  const r = parseMetaLead({ id: '1753000000000001', created_time: '2026-09-30T04:41:47+0000', form_id: '1640508510930310', campaign_name: 'IH_Заказ24_тест',
+    field_data: [{ name: 'какой_у_вас_бизнес', values: ['дистрибуция'] }, { name: 'full_name', values: ['Айбек'] }, { name: 'phone_number', values: ['+77011234567'] }] }, cfg, { form_name: 'Z24 форма' });
+  assert.equal(r.phone_norm, '77011234567'); assert.equal(r.country, 'KZ'); assert.equal(r.full_name, 'Айбек');
+  assert.deepEqual(r.answers, { 'какой_у_вас_бизнес': 'дистрибуция' }); assert.equal(r.product, 'Z24');
+  assert.equal(r.created_time, '2026-09-30T04:41:47.000Z'); assert.equal(r.recheck_until, '2026-10-14T04:41:47.000Z'); assert.equal(r.match_status, 'new');
+});
+t('общий источник касаний: lg:X выброшен, если заявка X есть в meta_leads', () => {
+  const ad = [{ message_id: 'lg:777', touched_at: '2026-09-10T05:00:00Z', lead_id: 1 }, { message_id: 'lg:888', touched_at: '2026-09-11T05:00:00Z', lead_id: 2 },
+    { message_id: 'wz1', touched_at: '2026-09-12T05:00:00Z', lead_id: 3 }];
+  const ml = [{ meta_lead_id: '777', created_time: '2026-09-10T05:00:00Z', match_status: 'matched', amo_lead_id: 1, account_id: 'act_5', campaign_name: 'SD_X', form_id: '42' },
+    { meta_lead_id: '999', created_time: '2026-09-13T05:00:00Z', match_status: 'not_found', amo_lead_id: null }];
+  const m = mergeTouches(ad, ml, { act_5: 'Ибрагим' });
+  assert.deepEqual(m.map(x => x.message_id), ['ml:777', 'lg:888', 'wz1']);
+  assert.equal(m[0].source, 'meta_leadform'); assert.equal(m[0].targetolog, 'Ибрагим'); assert.equal(m[0].lead_id, 1); assert.equal(m[0].campaign, 'SD_X');
+});
+t('перенос lg:-строки: номер заявки, форма, телефон', () => {
+  const r = lgTouchToRow({ message_id: 'lg:123456789', touched_at: '2026-09-01T00:00:00Z', link: 'лидформа 1056856707121847', phone: '0555123456', lead_id: '7' });
+  assert.equal(r.meta_lead_id, '123456789'); assert.equal(r.form_id, '1056856707121847'); assert.equal(r.phone_norm, '996555123456'); assert.equal(r.amo_lead_id, 7);
+});
+t('курс: суббота → курс пятницы; 6 дней без курса → курс из настроек', () => {
+  const rates = { '2026-10-02': { USD: 87.4, src: 'nbkr' }, '2026-09-20': { USD: 87.1 } };
+  const fx = fxByDay(rates, ['2026-10-03', '2026-09-26'], 88);
+  assert.deepEqual(fx.by_day['2026-10-03'], { rate: 87.4, src: 'nbkr', from: '2026-10-02' });
+  assert.deepEqual(fx.by_day['2026-09-26'], { rate: 88, src: 'settings', from: null });
+  assert.deepEqual(fxByDay(rates, ['2026-09-27'], null).missing_days, ['2026-09-27']);
+});
+t('решение по кампании по цене квала', () => {
+  assert.equal(campaignDecision(9999, 5).label, 'Масштабировать');
+  assert.equal(campaignDecision(10000, 5).label, 'Оптимизировать');
+  assert.equal(campaignDecision(15000, 5).label, 'Отключить');
+  assert.equal(campaignDecision(5000, 2).label, 'мало данных');
+  assert.equal(cpqTone(9999), 'ok'); assert.equal(cpqTone(14999), 'mid'); assert.equal(cpqTone(15000), 'bad');
 });
 
 console.log(`\n${pass} ok, ${fail} fail`);

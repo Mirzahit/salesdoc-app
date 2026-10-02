@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/cron-fdx-reminder — ежедневное напоминание CEO в Telegram по модулю 4DX.
 // Дёргается Vercel Cron каждое утро в 08:00 Almaty (03:00 UTC, см. vercel.json crons).
 //

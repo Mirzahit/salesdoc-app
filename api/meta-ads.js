@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/meta-ads — Vercel Node serverless. Прокси к Meta Graph API.
 // ENV: META_ACCESS_TOKEN, META_AD_ACCOUNT_ID (например act_105673026201294)
 // ENV для KG (если есть отдельный кабинет): META_AD_ACCOUNT_ID_KG, META_ACCESS_TOKEN_KG (опц., иначе используется общий)

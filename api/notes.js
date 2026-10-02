@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/notes — Примечания (заметки) по клиенту (amoCRM-style notes, отдельно от tasks).
 // Spec: docs/superpowers/specs/2026-05-25-tasks-module-design.md
 //

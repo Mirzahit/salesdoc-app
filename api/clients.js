@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/clients — CRUD Реестра клиентов.
 //
 // GET  /api/clients                          → все клиенты

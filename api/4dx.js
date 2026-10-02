@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/4dx — модуль 4 дисциплин исполнения Кови (4DX) для команды SalesDoc.
 // Все 5 сущностей через один endpoint по образцу api/cards.js:
 //   ?entity=goals|metrics|entries|sessions|commitments|board|analytics

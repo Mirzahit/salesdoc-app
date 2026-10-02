@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/tasks — модуль «Задачи» (amoCRM-style follow-up).
 // Spec: docs/superpowers/specs/2026-05-25-tasks-module-design.md
 //

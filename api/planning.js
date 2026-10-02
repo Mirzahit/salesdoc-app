@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/planning — общий стор для Планёрок (спринты, задачи, ретро).
 // Хранилище: Vercel KV (Upstash Redis) через REST API — без npm-зависимостей.
 // ENV: KV_REST_API_URL, KV_REST_API_TOKEN (Vercel создаёт автоматически при подключении KV).

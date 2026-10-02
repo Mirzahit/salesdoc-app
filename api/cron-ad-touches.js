@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/cron-ad-touches — копим рекламные касания сами, без ручного запуска.
 //
 // Зачем: разбивка Маркетинга по таргетологам держится на таблице ad_touches —
@@ -12,6 +13,7 @@
 //
 // ENV: CRON_SECRET (Vercel Cron шлёт его сам), APP_TOKEN (для вызова своих же
 // эндпоинтов), META_LEADS_TOKEN (доступ к заявкам лидформ).
+// v1017: заявки лидформ копятся в meta_leads (action=meta_leads_sync), в ad_touches — только переписки.
 
 import { bishkekIso } from './_dates.js'; // v1015
 
@@ -43,11 +45,12 @@ export default async function handler(req, res) {
   } catch (e) { out.chats = { error: e.message || String(e) }; }
 
   try {
-    // Заявки лидформ: окно шире, потому что заявка и сделка в amoCRM могут
-    // разойтись на несколько дней, пока менеджер до неё дойдёт.
-    const forms = await call('action=targ_forms&country=KG&days=14&limit=100&dry_run=false');
-    out.forms = { found: forms.forms_leads_found || 0, matched: forms.matched || 0,
-                  saved: forms.saved || 0, errors: forms.save_errors || [] };
+    // v1017: заявки лидформ — в свою таблицу meta_leads (а не в ad_touches) и поиск их сделок в amo.
+    // Днём проверяются свежие заявки, ночью — ещё и старые порциями (до 100 за прогон).
+    const ml = await call('action=meta_leads_sync&country=KG&dry_run=false&max=100');
+    out.forms = { pulled: ml.pulled || 0, inserted: ml.inserted || 0, checked: ml.checked || 0, by_status: ml.by_status || {},
+                  backfill_pending: ml.backfill_pending || 0, requests: ml.requests || null,
+                  errors: (ml.errors || []).map(e => e.message || e).concat(ml.error ? [ml.error] : []) };
   } catch (e) { out.forms = { error: e.message || String(e) }; }
 
   // Прогреваем отчёт за текущий месяц, чтобы экран открывался сразу, а не через 40 с.

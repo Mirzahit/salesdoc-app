@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/notifications — v813: центр уведомлений (колокольчик) + привязка Telegram.
 //
 // GET   /api/notifications              → { ok, unread, items:[последние 30] } для caller

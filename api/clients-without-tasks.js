@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/clients-without-tasks — клиенты без открытых задач старше N дней.
 // Spec: docs/superpowers/specs/2026-05-25-tasks-module-design.md §5 (фаза 5)
 //

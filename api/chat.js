@@ -1,3 +1,4 @@
+import './_preview_guard.js'; // v1017: в превью-сборке запись наружу отключена (см. файл)
 // /api/chat — Vercel Node serverless function (v147)
 // Принимает {agentId, messages, context} и проксирует к Anthropic API.
 // ENV: ANTHROPIC_API_KEY (обязательно), задать в Vercel Project Settings → Environment Variables.
