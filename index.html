@@ -22437,6 +22437,13 @@ function _mkbMetaFunnel(m){
 }
 
 // 5. Сверка Meta → amoCRM (из базы meta_leads)
+// v1017: сверка ещё ни разу не прошла (таблица заявок пустая или ни одна заявка периода не проверена)
+function _mkbReconLoading(rc){
+ rc = rc || {};
+ if(!rc.last_checked_at) return true;
+ var total = Number(rc.meta_total) || 0, pend = Number(rc.pending_new) || 0;
+ return total > 0 && pend >= total;
+}
 function _mkbReconCard(m){
  var R = _mkbRecon || {};
  var open = function(cls){ return '<div class="mkb-card mkb-recon mkb-o-recon' + (cls ? ' ' + cls : '') + '" id="mkb-b-recon"><div class="mkb-kick">Сверка</div><h3>Meta → amoCRM</h3>'; };
@@ -22449,6 +22456,8 @@ function _mkbReconCard(m){
   return open() + '<div class="mkb-rn"><div class="l">Meta отдала</div><div class="v">' + _mkbN(op != null ? op : rc.meta_total) + '</div></div>'
    + _mkbPlq(_MKB_NOCRM + ' — сверять не с чем.') + '</div>';
  }
+ // v1017: до первой ночной загрузки заявок ни одна не проверена — показываем «загружаются», а не нули
+ if(_mkbReconLoading(rc)) return open() + _mkbPlq('Данные загружаются: заявки из Meta подтягиваются ночью. Сверка появится утром.') + '</div>';
  var lost = rc.lost || {}, inAmo = rc.in_amo || {};
  var lostN = Number(lost.total) || 0, total = Number(rc.meta_total) || 0;
  var pct = rc.lost_pct != null ? Number(rc.lost_pct) : (total ? lostN / total * 100 : 0);
@@ -22568,8 +22577,10 @@ function _mkbLost(m){
   var op = (((R.data || {}).recon || {}).other_product || {})[m.prod];
   return h + _mkbPlq(_MKB_NOCRM + (op ? ' · заявок из Meta: ' + _mkbN(op) : '')) + '</div>';
  }
- var list = _mkbLostList();
- h += '<div class="mkb-big"><b class="' + (list.length ? 'bad' : 'ok') + '">' + _mkbN(list.length) + '</b><span>' + (list.length ? 'есть в Meta, нет в amoCRM' : 'потерянных заявок нет') + '</span></div>';
+ var rcL = (R.data || {}).recon || {};
+ if(_mkbReconLoading(rcL)) return h + _mkbPlq('Данные загружаются: заявки из Meta подтягиваются ночью. Список появится утром.') + '</div>';
+ var list = _mkbLostList(), pendL = Number(rcL.pending_new) || 0;
+ h += '<div class="mkb-big"><b class="' + (list.length ? 'bad' : 'ok') + '">' + _mkbN(list.length) + '</b><span>' + (list.length ? 'есть в Meta, нет в amoCRM' : (pendL ? 'пока не нашли потерянных' : 'потерянных заявок нет')) + (pendL ? ' · ещё проверяем ' + _mkbN(pendL) : '') + '</span></div>';
  var show = _mkbOpen.lost ? list : list.slice(0, 4), hid = _mkbPiiHidden();
  h += show.map(function(x){
   var id = String(x.meta_lead_id || '');

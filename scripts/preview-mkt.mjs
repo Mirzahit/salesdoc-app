@@ -261,6 +261,13 @@ function reconFixture(url, mock) {
     closed: { added_to_amo: CLOSED.size, no_answer: 0, not_our_client: 0 }, not_recognized: 3, other_product: { Z24: 56, SHTURM: 19 },
     pending_new: 2, last_checked_at: new Date(Date.now() - 23 * 60000).toISOString() };
   if (product === 'ALL') { recon.meta_total = 312 + 56 + 19; }
+  if (mock === 'recon_empty') { // до первой ночной загрузки: таблица заявок пустая
+    return { country: 'KG', since, until, product, trusted, pii: trusted, amo_sub: 'zeidplyus',
+      fx: { cur: 'USD', by_day, avg_rate: 87.44, fallback_rate: 87, missing_days: [] },
+      recon: { meta_total: 0, test: 0, in_amo: { matched: 0, renamed: 0, manual: 0, total: 0 }, duplicates: 0,
+        lost: { total: 0, form_not_connected: 0, no_deal: 0, bad_phone: 0 }, lost_pct: null, closed: {}, not_recognized: 0,
+        other_product: { Z24: 0, SHTURM: 0 }, pending_new: 0, last_checked_at: null }, lost: [], errors: [], incomplete: [] };
+  }
   return { country: 'KG', since, until, product, trusted, pii: trusted, amo_sub: 'zeidplyus',
     fx: { cur: 'USD', by_day, avg_rate: 87.44, fallback_rate: 87, missing_days: [] },
     recon, lost: (product === 'SD' || product === 'ALL') ? lost : [], errors: [], incomplete: [] };
