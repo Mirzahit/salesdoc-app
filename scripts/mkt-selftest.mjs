@@ -10,6 +10,7 @@ import {
 } from '../api/_mkt.js';
 import { normalizeHolidays, workMinutesBetween, toneOf, firstHumanAction, candidatesOf, collectTasks, collectWhatsapp, isAutoReply, normWaText,
   validateWaTemplates, WA_TEMPLATES_DEFAULT, piiAllowed, maskTail, applyWorkPii } from '../api/_mkt_work.js'; // v1017
+import { monthInfo, prevMonthOf, closeDue, fxForDays, fxSourceOf, parseNbkrArchive, planFxFill, buildCloseRow, decideCloseWrite, buildRecalc, idsDelta, liveIdsOf, recalcAccess, shortErr } from '../api/_mkt_close.js'; // v1019
 import { leadIdFromDealName, decideMatch, mergeTouches, parseMetaLead, fxByDay, lgTouchToRow, maskPhone, cleanErr } from '../api/_meta_leads.js'; // v1017
 
 let pass = 0, fail = 0;
@@ -176,14 +177,15 @@ const touch = (iso, extra) => Object.assign({ touched_at: iso, campaign: 'SD_KG_
 const sec = (iso) => Math.floor(Date.parse(iso) / 1000);
 const aug = [sec('2026-08-01T00:00:00+06:00'), sec('2026-09-01T00:00:00+06:00') - 1];
 const sep = [sec('2026-09-01T00:00:00+06:00'), sec('2026-10-01T00:00:00+06:00') - 1];
-t('касание 31.08 23:50 по Бишкеку, сделка 01.09 → август', () => {
+t('v1019: касание 31.08 23:50, сделка 01.09 → сентябрь (месяц создания), из рекламы', () => {
   const lead = { created: sec('2026-09-01T10:00:00+06:00'), tags: [] };
   const tt = [touch('2026-08-31T17:50:00Z')];
-  const a = computeArrival(lead, tt, aug[0], aug[1]);
-  assert.ok(a, 'должна попасть в август');
+  assert.equal(computeArrival(lead, tt, aug[0], aug[1]), null, 'в августе её нет');
+  const a = computeArrival(lead, tt, sep[0], sep[1]);
+  assert.ok(a, 'должна попасть в сентябрь');
   assert.equal(a.arrival_kind, 'ad');
-  assert.equal(a.arrival_at, sec('2026-08-31T17:50:00Z'));
-  assert.equal(computeArrival(lead, tt, sep[0], sep[1]), null);
+  assert.equal(a.arrival_at, lead.created);
+  assert.equal(a.touch.ad_id, 'a1');
 });
 t('касание через 40 дней после создания → «возврат» в месяце касания', () => {
   const lead = { created: sec('2026-08-05T12:00:00+06:00'), tags: [] };
@@ -465,6 +467,103 @@ t('дозаливка: куски ≤45 дней с конца отметки, �
   assert.equal(backfillPiece(rq, { from: '2026-06-01', to: '2026-09-30' }, '2026-10-03'), null);
   assert.deepEqual(backfillPiece({ from: '2026-09-09', to: '2026-10-10' }, null, '2026-10-03'), { from: '2026-09-09', to: '2026-10-03' });
   assert.deepEqual(backfillPiece(rq, { from: '2026-08-01', to: '2026-08-20' }, '2026-10-03'), { from: '2026-07-01', to: '2026-08-14' });
+});
+
+// ── v1019: закрытие месяца ──
+t('месяц: границы по Бишкеку, прошлый месяц, когда закрывать', () => {
+  const mi = monthInfo('2026-09', 'KG');
+  assert.equal(mi.first, '2026-09-01'); assert.equal(mi.until, '2026-09-30'); assert.equal(mi.days.length, 30);
+  assert.equal(mi.fromTs, Date.parse('2026-09-01T00:00:00+06:00') / 1000); assert.equal(mi.toTs, Date.parse('2026-10-01T00:00:00+06:00') / 1000 - 1);
+  assert.equal(prevMonthOf('2026-10-05'), '2026-09'); assert.equal(prevMonthOf('2027-01-05'), '2026-12');
+  assert.equal(closeDue(5, 6), false); assert.equal(closeDue(5, 7), true); assert.equal(closeDue(6, 0), true); assert.equal(closeDue(4, 23), false);
+  assert.equal(monthInfo('2026-13', 'KG'), null);
+});
+t('курс по дням: НБКР за день / архив / из Настроек / смешанный', () => {
+  const rates = { '2026-09-01': { USD: 87.4, src: 'nbkr' }, '2026-09-02': { USD: 87.5, src: 'nbkr_archive' }, '2026-09-03': { KZT: 0.17, src: 'nbkr' } };
+  const fx = fxForDays(rates, ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-20'], 88);
+  assert.equal(fx.by_day['2026-09-01'].kind, 'daily'); assert.equal(fx.by_day['2026-09-02'].kind, 'archive');
+  assert.equal(fx.by_day['2026-09-03'].kind, 'archive'); // ближайший опубликованный — 02.09 (архив)
+  assert.equal(fx.by_day['2026-09-20'].kind, 'settings'); assert.equal(fx.source, 'mixed');
+  assert.deepEqual([fx.days_daily, fx.days_archive, fx.days_settings], [1, 2, 1]);
+  assert.equal(fxSourceOf({ daily: 30 }), 'daily'); assert.equal(fxSourceOf({ archive: 30 }), 'archive'); assert.equal(fxSourceOf({ settings: 30 }), 'settings');
+  assert.deepEqual(fxForDays({}, ['2026-09-20'], null).missing, ['2026-09-20']);
+});
+const NBKR_SNIPPET = "<tr bgcolor=\"#EDEEEF\"><td class=\"stat-center\"><!--date-->30.09.2026<!--date--></td><td class=\"stat-right\"><!--value-->87,4483<!--value-->&nbsp;&nbsp;</td></tr><tr bgcolor=\"#EDEEEF\"><td class=\"stat-center\"><!--date-->29.09.2026<!--date--></td><td class=\"stat-right\"><!--value-->87,4485<!--value-->&nbsp;&nbsp;</td></tr><tr bgcolor=\"#EDEEEF\"><td class=\"stat-center\"><!--date-->28.09.2026<!--date--></td><td class=\"stat-right\"><!--value-->87,4482<!--value-->&nbsp;&nbsp;</td></tr><tr bgcolor=\"#EDEEEF\"><td class=\"stat-cente";
+t('архив НБКР: разбор строк «дата → курс»', () => {
+  const a = parseNbkrArchive(NBKR_SNIPPET);
+  assert.equal(a['2026-09-30'], 87.4483); assert.equal(a['2026-09-29'], 87.4485);
+  assert.ok(Object.keys(a).length >= 2);
+  assert.deepEqual(parseNbkrArchive('<html>нет данных</html>'), {});
+});
+t('архив НБКР: дописываем только дни без доллара, существующие не трогаем', () => {
+  const pl = planFxFill({ '2026-09-29': { USD: 87.1, src: 'nbkr' }, '2026-09-30': { KZT: 0.17 } }, { '2026-09-29': 87.4485, '2026-09-30': 87.4483 }, '2026-09-28', '2026-09-30');
+  assert.deepEqual(pl.filled, ['2026-09-30']); assert.deepEqual(pl.skipped, ['2026-09-28', '2026-09-29']);
+});
+const key = { country: 'KG', product: 'SD', month: '2026-09-01' };
+t('закрытие: закрытую строку не трогаем никогда', () => {
+  assert.deepEqual(decideCloseWrite({ status: 'closed', attempts: 1 }, { ok: true, row: { spend_som: 1 } }, key, 'T'), { action: 'skip' });
+  assert.deepEqual(decideCloseWrite({ status: 'closed' }, { ok: false, error: 'x' }, key, 'T'), { action: 'skip' });
+});
+t('закрытие: неудачи считаются, цифр нет, причина без телефонов', () => {
+  const a = decideCloseWrite(null, { ok: false, error: 'amo 502' }, key, 'T1');
+  assert.equal(a.row.status, 'failed'); assert.equal(a.row.attempts, 1); assert.equal(a.row.spend_som, null); assert.equal(a.row.last_attempt_at, 'T1');
+  const b = decideCloseWrite(a.row, { ok: false, error: 'Failing row contains (996555123456)' }, key, 'T2');
+  assert.equal(b.row.attempts, 2); assert.equal(b.row.last_error.includes('996555123456'), false);
+  const c = decideCloseWrite(b.row, { ok: true, row: { spend_som: 100, leads_ad: 5 } }, key, 'T3');
+  assert.equal(c.row.status, 'closed'); assert.equal(c.row.attempts, 3); assert.equal(c.row.closed_at, 'T3'); assert.equal(c.row.closed_by, 'cron'); assert.equal(c.row.leads_ad, 5);
+  assert.equal(shortErr('ошибка 77011234567').includes('77011234567'), false);
+});
+t('пересчёт: история «было → стало», закрытие не сдвигается', () => {
+  const ex = { status: 'closed', closed_at: 'T0', closed_by: 'cron', attempts: 1, recalc_count: 0, spend_som: 100, leads_ad: 5, lead_ids_ad: [1, 2] };
+  const r = buildRecalc(ex, { spend_som: 120, leads_ad: 6, lead_ids_ad: [1, 2, 3] }, 'ceo@salesdoc.io', 'добавили оплаты', key, 'T9');
+  assert.equal(r.update.closed_at, 'T0'); assert.equal(r.update.closed_by, 'cron'); assert.equal(r.update.recalc_count, 1); assert.equal(r.update.recalculated_at, 'T9');
+  assert.equal(r.history.old_row.spend_som, 100); assert.equal(r.history.new_row.spend_som, 120); assert.equal(r.history.old_row.lead_ids_ad, undefined);
+  assert.equal(r.history.changed_by, 'ceo@salesdoc.io'); assert.equal(r.history.reason, 'добавили оплаты');
+  assert.ok(buildRecalc(ex, {}, 'a', 'кор', key, 'T').error);
+  const f = buildRecalc({ status: 'failed', attempts: 4 }, { spend_som: 1 }, 'ceo@salesdoc.io', 'закрыть руками', key, 'T5');
+  assert.equal(f.update.status, 'closed'); assert.equal(f.update.closed_by, 'ceo@salesdoc.io'); assert.equal(f.update.closed_at, 'T5'); assert.equal(f.update.recalc_count, 0);
+});
+t('пересчёт: только администратор с подписанной сессией', () => {
+  assert.equal(recalcAccess({ role: 'admin', trusted: true }), 'ok');
+  assert.equal(recalcAccess({ role: 'admin', trusted: false }), 'need_login');
+  assert.equal(recalcAccess({ role: 'head', trusted: true }), 'forbidden');
+  assert.equal(recalcAccess({ role: 'admin', trusted: true, active: false }), 'forbidden');
+  assert.equal(recalcAccess(null), 'need_login');
+});
+t('уточнено после закрытия: прибавилось / ушло', () => {
+  assert.deepEqual(idsDelta([1, 2, 3], [2, 3, 4, 5]), { added: 2, removed: 1 });
+  const rp = { qual_stage: { sort: 30 }, leads: [{ id: 1, product: 'SD', arrival_kind: 'ad', reached_sort: 40 }, { id: 2, product: 'SD', arrival_kind: 'organic' }, { id: 3, product: 'Z24', arrival_kind: 'ad' }, { id: 4, arrival_kind: 'return', reached_sort: 10 }] };
+  assert.deepEqual(liveIdsOf(rp, 'SD'), { ad: [1, 4], qual: [1] });
+  assert.equal(liveIdsOf(rp, 'Z24'), null);
+});
+t('строка закрытия: цифры месяца из рекламы и amo', () => {
+  const mi = monthInfo('2026-09', 'KG');
+  const fx = fxForDays({ '2026-09-01': { USD: 87, src: 'nbkr' }, '2026-09-02': { USD: 88, src: 'nbkr' } }, ['2026-09-01', '2026-09-02'], null);
+  const meta = { geo: { countries: [{ code: 'KG', spend: 30, impressions: 1000, link_clicks: 50, clicks: 70, leads: 4 }, { code: 'KZ', spend: 999 }], accounts: [{ msgs: 6 }] },
+    daily: { days: [{ date: '2026-09-01', by_country: { KG: { spend: 10 }, KZ: { spend: 500 } } }, { date: '2026-09-02', by_country: { KG: { spend: 20 } } }] },
+    camps: { campaigns: [{ id: 'c1', name: 'SD_KG_LF', by_country: { KG: { spend: 30 } } }] } };
+  const rp = { qual_stage: { id: 3, name: 'Квалификация пройдена', sort: 30 }, meet_stage: { sort: 40 }, stages: [{ id: 1, name: 'Неразобранное', sort: 10 }, { id: 3, name: 'Квал', sort: 30 }],
+    leads: [{ id: 1, product: 'SD', arrival_kind: 'ad', reached_sort: 30, source_type: 'form', manager: 'Асель', touch: { campaign_id: 'c1' } },
+      { id: 2, product: 'SD', arrival_kind: 'ad', reached_sort: 10, source_type: 'chat', manager: 'Асель', is_lost: true, loss_reason: 'Дорого', touch: { campaign_id: 'c1' } },
+      { id: 3, product: 'SD', arrival_kind: 'organic', reached_sort: 30, source_type: 'manual', manager: 'Бакыт' }] };
+  const recon = { recon: { meta_total: 7, lost: { total: 1 }, pending_new: 0 } };
+  const b = buildCloseRow({ product: 'SD', month: mi, meta, rp, recon, work: { leads: { 2: { taken_at: null, wait_wmin: 90 } }, managers: [] }, fx });
+  assert.deepEqual(b.holes, []);
+  assert.equal(b.row.spend_usd, 30); assert.equal(b.row.spend_som, 10 * 87 + 20 * 88); assert.equal(b.row.fx_source, 'daily');
+  assert.deepEqual([b.row.leads_ad, b.row.leads_all, b.row.quals_ad, b.row.quals_all], [2, 3, 1, 2]);
+  assert.equal(b.row.cpl_som, Math.round(2630 / 2)); assert.equal(b.row.cpq_som, 2630);
+  assert.deepEqual(b.row.lead_ids_ad, [1, 2]); assert.deepEqual(b.row.lead_ids_qual, [1]);
+  assert.equal(b.row.meta_form_leads, 7); assert.equal(b.row.lost, 1);
+  assert.deepEqual(b.row.details.sources_ad, { form: 1, chat: 1, call: 0, manual: 0 });
+  assert.equal(b.row.details.not_taken.ad.untaken, 1); assert.equal(b.row.details.not_taken.ad.late, 1);
+  assert.equal(b.row.details.managers.ad[0].n, 1); // лид без «взял» в менеджерах не считается
+  assert.deepEqual(b.row.details.loss_reasons.ad, [{ reason: 'Дорого', n: 1 }]);
+  assert.equal(b.row.details.campaigns[0].leads, 2); assert.equal(b.row.details.campaigns[0].qual, 1);
+  assert.equal(b.row.details.meta.meta_leads, 10);
+  const z = buildCloseRow({ product: 'Z24', month: mi, meta, rp, recon, work: null, fx });
+  assert.equal(z.row.leads_ad, null); assert.equal(z.row.spend_usd, 30);
+  const hole = buildCloseRow({ product: 'SD', month: mi, meta, rp, recon, work: null, fx: fxForDays({}, ['2026-09-01'], null) });
+  assert.ok(hole.holes.length && /курса/.test(hole.holes[0]));
 });
 
 console.log(`\n${pass} ok, ${fail} fail`);

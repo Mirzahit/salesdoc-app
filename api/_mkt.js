@@ -258,9 +258,9 @@ export function reachedFlags(model, r) {
 export function stageRef(st) { return st ? { id: st.id, name: st.name, sort: Number(st.sort) } : null; }
 
 // ── Дата обращения (одно правило месяца на весь экран) ──────────────────────
-// Сделка из рекламы относится к месяцу рекламного касания, остальные — к дате создания.
-// Касание в пределах 7 дней от создания — это то же обращение (берём более раннюю дату).
-// Касание позже 7 дней после создания — человек вернулся: новое обращение в месяце касания.
+// v1019: сделка относится к месяцу своего создания в amo (по Бишкеку). Касание в пределах 7 дней
+// от создания — то же обращение: сделка «из рекламы» (ad), но дата остаётся датой создания.
+// Касание позже 7 дней после создания — человек вернулся: новое обращение в месяце касания (return).
 export const NEAR_SEC = 7 * 86400;
 export function computeArrival(lead, touches, fromTs, toTs) {
   const created = Number(lead && lead.created) || 0;
@@ -269,7 +269,9 @@ export function computeArrival(lead, touches, fromTs, toTs) {
     .filter(x => Number.isFinite(x.at)).sort((a, b) => a.at - b.at);
   const near = ts.filter(x => Math.abs(x.at - created) <= NEAR_SEC);
   const returns = ts.filter(x => x.at - created > NEAR_SEC);
-  const newAt = near.reduce((m, x) => Math.min(m, x.at), created);
+  // v1019 (решение CEO): месяц сделки = дата её создания в amo (по Бишкеку), касание рядом лишь
+  // говорит «из рекламы» и больше НЕ сдвигает сделку раньше. Возврат (касание позже 7 дней) — по дате возврата.
+  const newAt = created;
   const inP = (s) => s >= fromTs && s <= to;
   const newIn = inP(newAt);
   const retIn = returns.filter(x => inP(x.at));

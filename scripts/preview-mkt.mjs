@@ -21,6 +21,7 @@
 //     периода: сделки на первом этапе — «не взяты». Доп. сбои: ?mock=lost_close_401 (нужен вход),
 //     ?mock=old (старый сервер: новых действий нет), ?mock=untrusted (телефоны скрыты, pii:false).
 //     ?mock=backfill_done — переписки за сентябрь уже размечены (подпись про цену квала пропадает).
+//     ?mock=close_failed — сентябрь не закрылся (3 попытки); иначе сентябрь закрыт 5 октября, с поправкой.
 //     ?mock=preview_readonly — запись отвечает code preview_readonly (как превью Vercel).
 //     Настройки wa_autoreply_templates и work_holidays хранятся в памяти сервера превью.
 //
@@ -54,6 +55,7 @@ const ENTER = `<script>/* preview-mkt: вход под владельцем */
     try {
       if (typeof currentUser !== 'undefined' && currentUser) return;
       currentUser = _empWithAccess({ id: 'preview-owner', email: '${OWNER}', name: 'Мирзахит', role: 'admin' });
+      window._SESSION_TOKEN = window._SESSION_TOKEN || 'preview-session'; // v1019: кнопка «Пересчитать» видна только с сессией
       _enterAppAsCurrentUser();
       var v = new URLSearchParams(location.search).get('view') || 'marketing';
       setTimeout(function(){ try { showView(v); } catch(e){ console.warn('preview: showView', e); } }, 300);
@@ -316,6 +318,60 @@ function workFixture(url) {
     work: { start: '09:00', end: '18:00', tz: 6, holidays: HOLIDAYS.list.slice() }, norms: { ok: 15, late: 60 },
     leads, managers, scanned: { leads: Object.keys(leads).length, requests: lr ? 3 : 0 }, errors: [], incomplete: lr ? [] : [{ source: 'amo', what: 'leads', detail: 'превью: сделки периода ещё не загружены' }] };
 }
+
+// ── v1019: закрытие месяца (mkt_month_status / mkt_month_recalc) ─────────────
+// Сентябрь 2026 закрыт 5 октября (числа из макета) и после закрытия в amo добавилось +3/−1 лидов, +1 квал;
+// ?mock=close_failed — сентябрь не закрылся 3 раза; текущий месяц — строк нет («идёт»).
+const MONTH_CLOSE = { recalc: 0, history: [] };
+function stages(k) {
+  const raw = [['Неразобранное', 281], ['Взят в работу', 268], ['Квалификация пройдена', 28], ['Назначена встреча', 20], ['Встреча проведена', 16],
+    ['КП/материалы направлены', 12], ['Клиент думает / согласует', 9], ['Реквизиты получены', 6], ['Договор согласован', 5], ['Счет выставлен', 4], ['Предоплата', 3]];
+  return raw.map((r, i) => ({ id: 82205446 + i, name: r[0], sort: (i + 1) * 10, n: Math.round(r[1] * k), qual: i === 2 }));
+}
+function closedRow(product) {
+  const k = product === 'SD' ? 1 : (product === 'ALL' ? 1.24 : (product === 'Z24' ? 0.18 : 0.06));
+  const crm = product === 'SD' || product === 'ALL';
+  const row = { country: 'KG', product, month: '2026-09-01', status: 'closed', attempts: 1, last_attempt_at: '2026-10-05T01:30:00Z', last_error: null,
+    closed_at: '2026-10-05T01:31:00Z', closed_by: 'cron', recalc_count: MONTH_CLOSE.recalc, recalculated_at: MONTH_CLOSE.recalc ? '2026-10-12T05:00:00Z' : null,
+    spend_usd: Math.round(1380 * k), spend_som: Math.round(120000 * k), fx_avg: 87.44, fx_source: 'archive', fx_days_daily: 0, fx_days_archive: 30, fx_days_settings: 0,
+    leads_ad: crm ? Math.round(158 * k) : null, leads_all: crm ? Math.round(277 * k) : null, quals_ad: crm ? Math.round(20 * k) : null, quals_all: crm ? Math.round(28 * k) : null,
+    won_ad: crm ? 2 : null, cpl_som: crm ? Math.round(120000 / 158) : null, cpq_som: crm ? 6000 : null, meta_form_leads: Math.round(312 * k), lost: Math.round(27 * k) };
+  if (crm) {
+    row.details = {
+      sources: { form: 143, chat: 55, call: 13, manual: 66 }, sources_ad: { form: 120, chat: 35, call: 3, manual: 0 },
+      funnel: { all: { stages: stages(k), won: 3, postponed: 18, lost: 126 }, ad: { stages: stages(k * 158 / 281), won: 2, postponed: 9, lost: 70 } },
+      managers: { all: [{ name: 'Амир', n: 142, qual: 16, meet: 11, won: 2, avg_reaction_wmin: 12 }, { name: 'Асель', n: 126, qual: 12, meet: 9, won: 1, avg_reaction_wmin: 48 }],
+                  ad: [{ name: 'Амир', n: 84, qual: 11, meet: 7, won: 1, avg_reaction_wmin: 11 }, { name: 'Асель', n: 70, qual: 9, meet: 6, won: 1, avg_reaction_wmin: 44 }] },
+      loss_reasons: { all: [{ reason: 'Не ЛПР', n: 22 }, { reason: 'Нет бюджета', n: 18 }, { reason: 'Не дозвонились', n: 17 }, { reason: 'Не наш профиль', n: 10 }, { reason: 'Спам, ошибка в номере', n: 5 }, { reason: 'Причина не указана', n: 54 }],
+              ad: [{ reason: 'Не ЛПР', n: 14 }, { reason: 'Не дозвонились', n: 12 }, { reason: 'Нет бюджета', n: 9 }, { reason: 'Причина не указана', n: 35 }] },
+      campaigns: [
+        { id: '120250929785560444', name: 'SD_KG_LF_IH_2026-09', account: 'act_1', usd: 790, som: 69000, leads: 148, qual: 18, won: 2 },
+        { id: '120251110515330444', name: 'SD_KG_SITE_IH_2026-09', account: 'act_1', usd: 208, som: 18200, leads: 39, qual: 7, won: 1 },
+        { id: '52537154151252', name: 'Лиды - KG', account: 'act_2', usd: 284, som: 24800, leads: 57, qual: 2, won: 0 },
+        { id: '6986710298448', name: 'SD_KG_CHAT_IH_2026-09', account: 'act_2', usd: 92, som: 8000, leads: 37, qual: 1, won: 0 }],
+      recon: { meta_total: 312, test: 2, in_amo: { matched: 230, renamed: 30, manual: 21, total: 281 }, duplicates: 8, lost: { total: 27, form_not_connected: 19, no_deal: 4, bad_phone: 4 },
+               lost_pct: 8.7, closed: { added_to_amo: 3, no_answer: 1, not_our_client: 0 }, not_recognized: 3, other_product: { Z24: 56, SHTURM: 19 }, pending_new: 0, last_checked_at: '2026-10-05T01:30:00Z' },
+      not_taken: { ad: { untaken: 4, late: 2, taken: 150, avg_reaction_wmin: 25 }, all: { untaken: 13, late: 9, taken: 255, avg_reaction_wmin: 29 } }
+    };
+  } else row.details = { recon: { meta_total: Math.round(312 * k), other_product: { Z24: 56, SHTURM: 19 } } };
+  return row;
+}
+function monthStatusFixture(url, mock) {
+  const month = url.searchParams.get('month') || '';
+  const rows = [];
+  if (month === '2026-09') {
+    ['SD', 'Z24', 'SHTURM', 'ALL'].forEach(p => {
+      if (mock === 'close_failed') rows.push({ country: 'KG', product: p, month: '2026-09-01', status: 'failed', attempts: 3, last_attempt_at: new Date(Date.now() - 20 * 60000).toISOString(),
+        last_error: 'amoCRM не ответила (таймаут)', closed_at: null, closed_by: null, recalc_count: 0, details: null });
+      else rows.push(closedRow(p));
+    });
+  }
+  const sept = month === '2026-09' && mock !== 'close_failed';
+  const cur = month >= new Date(Date.now() + 6 * 3600000).toISOString().slice(0, 7);
+  return { country: 'KG', month, month_first: month + '-01', state: cur ? 'current' : 'past', can_recalc: true, rows,
+    history: sept ? MONTH_CLOSE.history : [],
+    live: sept ? { SD: { leads_ad: { added: 3, removed: 1 }, quals_ad: { added: 1, removed: 0 }, partial: false }, ALL: { leads_ad: { added: 3, removed: 1 }, quals_ad: { added: 1, removed: 0 }, partial: false } } : null };
+}
 // Возвращает [status, body] или null (тогда запрос идёт на прод как раньше)
 async function fixture(req, url, mock) {
   const action = url.searchParams.get('action');
@@ -326,6 +382,22 @@ async function fixture(req, url, mock) {
   }
   if (url.pathname === '/api/amo' && action === 'mkt_work' && req.method === 'GET') {
     return mock === 'old' ? [400, OLD_ACTION] : [200, workFixture(url)];
+  }
+  if (url.pathname === '/api/amo' && action === 'mkt_month_status' && req.method === 'GET') {
+    return mock === 'old' ? [400, OLD_ACTION] : [200, monthStatusFixture(url, mock)];
+  }
+  if (url.pathname === '/api/amo' && action === 'mkt_month_recalc') {
+    if (req.method !== 'POST') return [405, { error: 'Only POST' }];
+    const body = await readBody(req);
+    if (mock === 'old') return [400, { error: 'Unknown POST action. Use ?action=update_status | add_note | mkt_lost_close' }];
+    if (String(body.reason || '').trim().length < 5) return [400, { ok: false, error: 'Напишите причину (от 5 знаков)' }];
+    const before = closedRow(body.product || 'SD');
+    MONTH_CLOSE.recalc++;
+    const after = closedRow(body.product || 'SD'); after.leads_ad += 2; after.quals_ad += 1;
+    MONTH_CLOSE.history.unshift({ product: body.product || 'SD', changed_at: new Date().toISOString(), changed_by: OWNER, changed_by_name: 'Мирзахит', reason: String(body.reason).trim().slice(0, 300),
+      was: { leads_ad: before.leads_ad, quals_ad: before.quals_ad, spend_som: before.spend_som, cpq_som: before.cpq_som },
+      now: { leads_ad: after.leads_ad, quals_ad: after.quals_ad, spend_som: after.spend_som, cpq_som: after.cpq_som } });
+    return [200, { ok: true, month: body.month, product: body.product, recalc_count: MONTH_CLOSE.recalc }];
   }
   if (url.pathname === '/api/amo' && action === 'mkt_lost_close') {
     if (req.method !== 'POST') return [405, { error: 'Only POST' }];
@@ -376,4 +448,4 @@ http.createServer((req, res) => {
     return res.end(i >= 0 ? html.slice(0, i) + ENTER + html.slice(i) : html + ENTER);
   }
   fs.createReadStream(file).pipe(res);
-}).listen(PORT, () => console.log('Маркетинг: предпросмотр на http://localhost:' + PORT + '  (сбои: ?mock=meta_token | amo_auth | truncated | lost_close_401 | old | untrusted | preview_readonly | backfill_done)'));
+}).listen(PORT, () => console.log('Маркетинг: предпросмотр на http://localhost:' + PORT + '  (сбои: ?mock=meta_token | amo_auth | truncated | lost_close_401 | old | untrusted | preview_readonly | backfill_done | close_failed)'));

@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="SalesDoc">
-<title>SalesDoc — Финансовый Дашборд v1018</title>
+<title>SalesDoc — Финансовый Дашборд v1019</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -6313,6 +6313,23 @@ body.light #view-marketing .mkd-lq{background:var(--surface-2)}
 #view-marketing .mkb-seg2{display:inline-flex;gap:2px;background:var(--surface-3);padding:3px;border-radius:8px;align-self:flex-start}
 #view-marketing .mkb-seg2 button{font:inherit;font-size:12px;font-weight:600;height:28px;padding:0 11px;border:0;border-radius:6px;background:transparent;color:var(--text-soft);cursor:pointer;white-space:nowrap}
 #view-marketing .mkb-seg2 button.on{background:#FFFFFF;color:var(--text);box-shadow:var(--sh-1)}
+#view-marketing .mkb-mbadge{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
+#view-marketing .mkb-mbadge:empty{display:none}
+#view-marketing .mkb-mb-pill{display:inline-block;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--surface-3);color:var(--text-soft);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#view-marketing .mkb-mb-pill.ok{background:var(--ds-success-bg);color:var(--ds-success-text)}
+#view-marketing .mkb-mb-pill.warn{background:var(--ds-warning-bg);color:var(--ds-warning-text)}
+#view-marketing .mkb-mb-act{font:inherit;font-size:11.5px;font-weight:600;height:24px;padding:0 10px;border-radius:999px;border:1px solid var(--border-strong);background:#FFFFFF;color:var(--text-2);cursor:pointer}
+#view-marketing .mkb-mb-act:hover{border-color:var(--accent);color:var(--accent)}
+#view-marketing .mkb-delta{font-size:12px;color:var(--ds-warning-text);margin-top:-6px}
+.ct-dd.mkb-recalc{width:360px}
+.ct-dd.mkb-recalc .mkb-hist{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto}
+.ct-dd.mkb-recalc .hi{border-top:1px solid var(--border-faint);padding-top:7px;font-size:12px;line-height:1.45}
+.ct-dd.mkb-recalc .hi .w{color:var(--text-soft);font-size:11.5px}
+.ct-dd.mkb-recalc .hi .r{color:var(--text)}
+.ct-dd.mkb-recalc .hi .c{color:var(--text-soft);font-family:var(--mono);font-size:11.5px}
+.ct-dd.mkb-recalc .mkb-bt{font:inherit;font-size:12.5px;font-weight:600;height:34px;padding:0 12px;border-radius:6px;border:1px solid var(--border-strong);background:#FFFFFF;color:var(--text);cursor:pointer}
+.ct-dd.mkb-recalc .mkb-bt.pri{background:var(--text);border-color:var(--text);color:#FFFFFF}
+.ct-dd.mkb-recalc .mkb-bt:disabled{opacity:.45;cursor:default}
 #view-marketing .mkb-hid{font-style:normal;font-size:10.5px;font-weight:600;color:var(--text-faint);margin-left:4px}
 #view-marketing .mkb-why{font-size:12px;font-weight:600;color:var(--ds-warning-text)}
 #view-marketing .mkb-acts{display:inline-flex;gap:6px;justify-content:flex-end}
@@ -9644,6 +9661,7 @@ body.light #view-dashboard #plan-fact-strip .dash-hero::before{ display:none; }
  <div>
  <div class="mkb-title">Реклама и окупаемость</div>
  <div id="mkt-period-sub" class="mkb-sub">Meta Ads → amoCRM</div>
+ <div id="mkt-month-badge" class="mkb-mbadge"></div>
  </div>
  <div class="mkb-ctl">
  <!-- v1017: продукт рекламы — сегмент (SalesDoc / Zakaz24 / Штурм / Все), рисует mktSyncProductBtn -->
@@ -21084,6 +21102,9 @@ window.mktLoadOverview = async function(force){
  mktSyncProductBtn();
  if(force){ _mkdAmoCache = {}; _mkbWorkCache = {}; _mkdAdsKey = ''; }
  _mkbRecon = { state: 'loading' }; _mkbWork = { state: 'loading' };
+ var mKey = _mkbMonthKey(), pKey = _mkbPrevMonthKey(); // v1019: закрытие месяца
+ _mkbMonth = { state: mKey ? 'loading' : 'none', month: mKey }; _mkbMonthPrev = { state: 'none', month: pKey };
+ _mkbRenderBadge();
  el.innerHTML = '<div class="mkd-empty">Собираем отчёт: реклама, сверка заявок и сделки amoCRM за выбранный период. Это занимает 10–40 секунд.</div>';
  try {
   await mktSettingsLoad(force);
@@ -21096,7 +21117,10 @@ window.mktLoadOverview = async function(force){
    _mkdGet('/api/meta-ads?endpoint=geo&scope=all&' + q, 'реклама'),
    _mkdGet('/api/meta-ads?endpoint=geo_daily&scope=all&' + q, 'реклама по дням'),
    _mkdGet('/api/meta-ads?endpoint=campaigns_geo&scope=all&' + q, 'кампании'),
-   _mkbSbGet('/api/amo?action=mkt_recon&country=KG&since=' + r.since + '&until=' + r.until + '&product=' + _mkdProduct)
+   _mkbSbGet('/api/amo?action=mkt_recon&country=KG&since=' + r.since + '&until=' + r.until + '&product=' + _mkdProduct),
+   mKey ? _mkbSbGet('/api/amo?action=mkt_month_status&country=KG&month=' + mKey) : Promise.resolve({ state: 'none' }),
+   // прошлый месяц — чтобы «не закрылся» было видно и из текущего месяца
+   (pKey && pKey !== mKey) ? _mkbSbGet('/api/amo?action=mkt_month_status&country=KG&month=' + pKey) : Promise.resolve({ state: 'none' })
   ]);
   if(seq !== _mkdSeq) return;
   var issues = { fail: [], part: [] };
@@ -21105,6 +21129,9 @@ window.mktLoadOverview = async function(force){
    else _mkdIssueAdd(issues.fail, _mkdErrText(x.err), '');
   });
   _mkbRecon = res[3];
+  _mkbMonth = res[4]; _mkbMonth.month = mKey;
+  _mkbMonthPrev = (pKey && pKey === mKey) ? _mkbMonth : res[5]; _mkbMonthPrev.month = pKey;
+  if(_mkbMonth.state === 'error') _mkdIssueAdd(issues.part, 'Статус месяца: ' + String(_mkbMonth.err || '').slice(0, 120), '');
   if(_mkbRecon.state === 'ok') _mkdIssuesFrom(_mkbRecon.data, issues, '');
   else if(_mkbRecon.state === 'error') _mkdIssueAdd(issues.fail, 'Сверка заявок: ' + String(_mkbRecon.err || '').slice(0, 160), '');
   // Реклама не ответила — цифры рекламы «—» и баннер, а сделки amo всё равно грузим.
@@ -22161,6 +22188,7 @@ function _mkdRender(){
   html += '<div class="mkd-warn"><div><b>Реклама только кабинета ' + sanitize(_mkdTarg) + '.</b> Сделки amoCRM — по всему отделу. '
    + '<button class="mkd-retry" onclick="mkdSetTarg(&quot;&quot;)">Показать всех</button></div></div>';
  }
+ _mkbRenderBadge(); // v1019
  html += _mkbPage();
  html += '<button id="mkt-dash-more-btn" class="mkd-more-btn mkb-o-more" onclick="mkdToggleMore()">' + _mkdMoreLabel() + '</button>';
  html += '<div id="mkt-dash-more"' + (_mkdMoreOpen ? '' : ' hidden') + '>' + (_mkdMoreOpen ? _mkdMoreHtml() : '') + '</div>';
@@ -22355,6 +22383,7 @@ function _mkbModel(){
  m.qualAll = m.allLeads.filter(isQ).length;
  m.adQual = m.adLeads.filter(isQ).length;
  m.qual = m.adQual;
+ m.nAd = m.adLeads.length; m.nAll = m.allLeads.length; // v1019: закрытый месяц подменяет эти числа
  m.cpl = (m.spendSom != null && m.adLeads.length) ? m.spendSom / m.adLeads.length : null;
  m.cpq = (m.spendSom != null && m.adQual) ? m.spendSom / m.adQual : null;
  // откуда сделки в amo: формы / WhatsApp / звонки / вручную (сервер даёт sources, иначе считаем по source_type)
@@ -22390,8 +22419,168 @@ function _mkbModel(){
   var covered = !!(bf && bf.from && bf.to && String(bf.from).slice(0, 10) <= needFrom && String(bf.to).slice(0, 10) >= needTo);
   m.unmarked = pr.until >= uf && !covered;
  }
+ // v1019: курс — откуда взят (по дням сверки)
+ m.fxLabel = '';
+ if(fx && fx.by_day){
+  var fd = 0, fa = 0, fs = 0;
+  Object.keys(fx.by_day).forEach(function(k){ var x = fx.by_day[k] || {}; if(x.src === 'nbkr_archive') fa++; else if(x.src === 'nbkr') fd++; else fs++; });
+  m.fxLabel = _MKB_FX[(fd && !fa && !fs) ? 'daily' : ((fa && !fd && !fs) ? 'archive' : ((fs && !fd && !fa) ? 'settings' : 'mixed'))];
+ } else if(m.spendSom != null) m.fxLabel = _MKB_FX.settings;
+ _mkbApplyClosed(m);
  return m;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// v1019 — закрытие месяца. 5-го числа сервер считает прошлый месяц и сохраняет цифры
+// (mkt_month_close). Закрытый месяц показываем по сохранённым цифрам — они не «плывут»;
+// под цифрами — «уточнено после закрытия», если в amo с тех пор что-то поменялось.
+// Пересчитать закрытый месяц может только руководитель (admin), с причиной — всё пишется в историю.
+// ════════════════════════════════════════════════════════════════════════════
+var _mkbMonth = { state: 'none' }, _mkbMonthPrev = { state: 'none' };
+var _MKB_FX = { daily: 'курс: Нацбанк, по дням', archive: 'курс: Нацбанк, архив', mixed: 'курс: смешанный', settings: 'курс: из Настроек' };
+function _mkbYm(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+// Период — ровно один календарный месяц? Тогда 'YYYY-MM', иначе null
+function _mkbMonthKey(){
+ var sel = _mktSel;
+ if(sel.mode !== 'range') return sel.y + '-' + String(sel.m + 1).padStart(2, '0');
+ var r = _mktSelRange(sel);
+ if(!r.since || r.since.slice(8) !== '01' || r.since.slice(0, 7) !== String(r.until).slice(0, 7)) return null;
+ var a = _mktParseIso(r.since), last = new Date(a.getFullYear(), a.getMonth() + 1, 0).getDate();
+ return Number(String(r.until).slice(8)) === last ? r.since.slice(0, 7) : null;
+}
+function _mkbPrevMonthKey(){ var t = _mktBkToday(); return _mkbYm(new Date(t.getFullYear(), t.getMonth() - 1, 1)); }
+function _mkbMonthName(key){ var a = String(key || '').split('-'); var n = _MKT_MONTHS_R[Number(a[1]) - 1] || ''; return n.charAt(0).toUpperCase() + n.slice(1); }
+function _mkbDayMonth(iso){ var b = _mkbBk(iso); return b ? b.dd + ' ' + _MKT_MONTHS_ROD[b.m] : ''; }
+function _mkbRowOf(M, product){
+ var rows = (M && M.state === 'ok' && M.data && Array.isArray(M.data.rows)) ? M.data.rows : [];
+ for(var i = 0; i < rows.length; i++) if(rows[i] && rows[i].product === (product || _mkdProduct)) return rows[i];
+ return null;
+}
+function _mkbMonthRow(){ return _mkbRowOf(_mkbMonth); }
+function _mkbIsAdmin(){
+ return !!(typeof currentUser !== 'undefined' && currentUser && String(currentUser.role || '').toLowerCase() === 'admin' && window._SESSION_TOKEN);
+}
+// Изменение после закрытия: {plus, minus} или число; сервер кладёт в row.delta или data.delta[product]
+function _mkbDeltaOf(key){
+ var row = _mkbMonthRow(); if(!row) return null;
+ var md = _mkbMonth.data || {};
+ var d = row.delta || ((md.live || {})[row.product]) || ((md.delta || {})[row.product]) || null; // сервер: live[product] = {leads_ad:{added,removed}}
+ var x = d && d[key]; if(x == null) return null;
+ if(typeof x === 'number') return x > 0 ? { plus: x, minus: 0 } : { plus: 0, minus: -x };
+ return { plus: Number(x.plus != null ? x.plus : x.added) || 0, minus: Number(x.minus != null ? x.minus : x.removed) || 0 };
+}
+function _mkbApplyClosed(m){
+ m.closed = null;
+ var row = _mkbMonthRow();
+ if(!row || row.status !== 'closed') return;
+ var d = row.details || {}, num = function(v){ return v == null || v === '' ? null : Number(v); };
+ m.closed = row; m.cd = d;
+ if(row.spend_som != null){ m.spendSom = num(row.spend_som); m.rateMissing = false; }
+ if(row.spend_usd != null) m.adUsd = num(row.spend_usd);
+ m.rate = (m.spendSom != null && m.adUsd > 0) ? m.spendSom / m.adUsd : m.rate;
+ m.cpl = num(row.cpl_som); m.cpq = num(row.cpq_som);
+ if(row.leads_ad != null) m.nAd = num(row.leads_ad);
+ if(row.leads_all != null) m.nAll = num(row.leads_all);
+ if(row.quals_ad != null) m.adQual = num(row.quals_ad);
+ if(row.quals_all != null) m.qualAll = num(row.quals_all);
+ if(d.sources) m.sources = d.sources;
+ m.fxLabel = _MKB_FX[row.fx_source] || m.fxLabel;
+ m.unmarked = false; // закрытые цифры окончательные
+ if(d.funnel && d.funnel.ad){ m.hasArrival = true; m.scope = _mkbScope; }
+}
+// Часть закрытого месяца по выбранному переключателю «из рекламы / все»
+function _mkbClosedPart(m, key){
+ if(key === 'loss' && m.cd && m.cd.loss == null && m.cd.loss_reasons != null) key = 'loss_reasons'; // сервер кладёт loss_reasons
+ if(!m.closed || !m.cd || m.cd[key] == null) return null;
+ var x = m.cd[key];
+ if(x && !Array.isArray(x) && (x.ad || x.all)) return x[m.scope] || x.all || x.ad;
+ return x;
+}
+function _mkbBadgeHtml(){
+ var key = _mkbMonthKey(); if(!key) return '';
+ var cur = key === _mkbYm(_mktBkToday());
+ var row = _mkbMonthRow();
+ var h = '';
+ if(row && row.status === 'closed'){
+  h = '<span class="mkb-mb-pill ok">закрыт ' + _mkbDayMonth(row.closed_at) + (Number(row.recalc_count) ? ' · пересчитан ' + _mkbDayMonth(row.recalculated_at) : '') + '</span>';
+ } else if(row && row.status === 'failed' && Number(row.attempts) >= 3){
+  h = '<span class="mkb-mb-pill warn" title="' + sanitize(String(row.last_error || '')) + '">закрытие не удалось, пробуем снова' + (row.last_error ? ' · ' + sanitize(String(row.last_error).slice(0, 80)) : '') + '</span>';
+ } else if(cur || !row || row.status === 'failed'){
+  if(!cur && _mkbMonth.state !== 'ok') return ''; // прошлый месяц, а статуса нет (грузится или старый сервер) — не гадаем
+  h = '<span class="mkb-mb-pill">идёт, цифры уточняются</span>';
+ }
+ var canR = (_mkbMonth.data && _mkbMonth.data.can_recalc != null) ? (_mkbMonth.data.can_recalc && _mkbIsAdmin()) : _mkbIsAdmin();
+ if(row && (row.status === 'closed' || row.status === 'failed') && canR){
+  h += '<button type="button" class="mkb-mb-act" onclick="mkbMonthRecalc(event)">Пересчитать</button>';
+ }
+ return h;
+}
+function _mkbRenderBadge(){ var b = document.getElementById('mkt-month-badge'); if(b) b.innerHTML = _mkbBadgeHtml(); }
+// «уточнено после закрытия: +N лидов, +M квалов» — только если что-то поменялось
+function _mkbDeltaLine(m){
+ if(!m.closed) return '';
+ var part = function(x, one, few, many){
+  if(!x || (!x.plus && !x.minus)) return '';
+  var n = x.plus || x.minus;
+  return (x.plus ? '+' + x.plus : '') + (x.plus && x.minus ? ' / ' : '') + (x.minus ? '−' + x.minus : '') + ' ' + _mkdPlural(n, one, few, many);
+ };
+ var a = part(_mkbDeltaOf('leads_ad'), 'лид', 'лида', 'лидов'), b = part(_mkbDeltaOf('quals_ad'), 'квал', 'квала', 'квалов');
+ if(!a && !b) return '';
+ return '<div class="mkb-delta mkb-o-kpi">уточнено после закрытия: ' + [a, b].filter(Boolean).join(', ') + '</div>';
+}
+// Пересчёт месяца (руководитель): причина обязательна, внизу — история пересчётов
+window.mkbMonthRecalc = function(ev){
+ if(ev && ev.stopPropagation) ev.stopPropagation();
+ document.querySelectorAll('.ct-dd.mkb-recalc').forEach(function(d){ d.remove(); });
+ var row = _mkbMonthRow(), key = _mkbMonthKey(); if(!row || !key) return;
+ var hist = (((_mkbMonth.data || {}).history) || []).filter(function(x){ return !x.product || x.product === row.product; })
+  .sort(function(a, b){ return String(b.changed_at || '').localeCompare(String(a.changed_at || '')); });
+ var KEYS = [['leads_ad', 'лиды'], ['quals_ad', 'квалы'], ['spend_som', 'расход, сом'], ['cpq_som', 'цена квала']];
+ var histHtml = hist.length ? hist.slice(0, 10).map(function(x){
+  var o = x.old_row || x.was || {}, n = x.new_row || x.now || {};
+  var ch = KEYS.filter(function(k){ return o[k[0]] != null && n[k[0]] != null && Number(o[k[0]]) !== Number(n[k[0]]); })
+   .map(function(k){ return k[1] + ' ' + _mkbN(o[k[0]]) + ' → ' + _mkbN(n[k[0]]); });
+  return '<div class="hi"><div class="w">' + _mkbWhen(x.changed_at) + ' · ' + sanitize(x.changed_by_name || x.changed_by || '—') + '</div>'
+   + '<div class="r">' + sanitize(x.reason || '') + '</div>' + (ch.length ? '<div class="c">' + ch.join(' · ') + '</div>' : '<div class="c">цифры не изменились</div>') + '</div>';
+ }).join('') : '<div class="hi"><div class="w">Пересчётов не было.</div></div>';
+ var dd = document.createElement('div');
+ dd.className = 'ct-dd mkb-pop mkb-recalc';
+ dd.innerHTML = '<div class="lab">Пересчитать ' + sanitize(_mkbMonthName(key).toLowerCase()) + ' · ' + sanitize(_mkbProdLabel()) + '</div>'
+  + '<textarea maxlength="300" rows="3" placeholder="Почему пересчитываем (обязательно)"></textarea>'
+  + '<div class="acts"><button type="button" class="mkb-bt" data-x>Отмена</button><button type="button" class="mkb-bt pri" data-go disabled>Пересчитать</button></div>'
+  + '<div class="lab">История</div><div class="mkb-hist">' + histHtml + '</div>';
+ document.body.appendChild(dd);
+ var rect = ev.currentTarget.getBoundingClientRect();
+ dd.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - dd.offsetWidth - 12)) + 'px';
+ var y = rect.bottom + 6; if(y + dd.offsetHeight > window.innerHeight - 12) y = Math.max(12, rect.top - dd.offsetHeight - 6);
+ dd.style.top = y + 'px';
+ var ta = dd.querySelector('textarea'), go = dd.querySelector('[data-go]'), busy = false;
+ var closer = function(e2){ if(!dd.contains(e2.target)) close(); };
+ function close(){ dd.remove(); document.removeEventListener('mousedown', closer, true); }
+ ta.addEventListener('input', function(){ go.disabled = String(ta.value || '').trim().length < 5; });
+ dd.querySelector('[data-x]').addEventListener('click', close);
+ go.addEventListener('click', async function(){
+  var reason = String(ta.value || '').trim();
+  if(reason.length < 5 || busy) return;
+  busy = true; go.disabled = true; go.textContent = 'Считаем…';
+  var d = null;
+  try { d = await sbFetch('/api/amo?action=mkt_month_recalc&country=KG', { method: 'POST', body: JSON.stringify({ month: key, product: row.product, reason: reason }) }); }
+  catch(e){ d = { error: String((e && e.message) || e) }; }
+  if(d && d.needLogin){ close(); sdToast('Войдите в программу заново', 'err'); return; }
+  if(_sdPreviewBlocked(d)){ close(); return; }
+  var msg = String((d && d.error) || '');
+  if(/unknown (post )?action/i.test(msg)){ close(); sdToast('Пересчёт появится после обновления сервера', 'err'); return; }
+  if(msg || !d){ busy = false; go.disabled = false; go.textContent = 'Пересчитать'; sdToast('Не удалось пересчитать: ' + msg.slice(0, 120), 'err'); return; }
+  close();
+  sdToast('Пересчитано', 'ok');
+  var st = await _mkbSbGet('/api/amo?action=mkt_month_status&country=KG&month=' + key);
+  if(_mkbMonthKey() !== key) return;
+  st.month = key; _mkbMonth = st; if(_mkbMonthPrev.month === key) _mkbMonthPrev = st;
+  _mkdRender();
+ });
+ setTimeout(function(){ ta.focus(); }, 30);
+ setTimeout(function(){ document.addEventListener('mousedown', closer, true); }, 50);
+};
 // v1017-b2: переключатель «Из рекламы / Все сделки» для воронки продаж, менеджеров, «не взято» и причин
 var _mkbScope = (function(){ try { return localStorage.getItem('mkb_scope') === 'all' ? 'all' : 'ad'; } catch(_){ return 'ad'; } })();
 function _mkbScopeSeg(m){
@@ -22418,7 +22607,7 @@ function _mkbScopeNote(m){ return m.hasArrival ? (m.scope === 'ad' ? ' · из �
 function _mkbPage(){
  var m = _mkbModel();
  return '<div class="mkb-page">'
-  + _mkbKpis(m)
+  + _mkbKpis(m) + _mkbDeltaLine(m)
   + '<div class="mkb-row1">' + _mkbMetaFunnel(m) + _mkbReconCard(m) + _mkbSalesFunnel(m) + '</div>'
   + '<div class="mkb-row2">' + _mkbNotTaken(m) + _mkbLost(m) + '</div>'
   + _mkbManagers(m)
@@ -22454,12 +22643,12 @@ function _mkbKpis(m){
  var spendV = m.spendSom != null ? _mkbN(m.spendSom) : '—';
  var spendH = !m.metaOk ? 'нет связи с рекламой'
   : (m.spendSom == null ? 'не задан курс доллара — Настройки → Параметры'
-  : 'сом, пока без зарплаты · реклама $' + _mkbN(m.adUsd));
+  : 'сом, пока без зарплаты · реклама $' + _mkbN(m.adUsd) + (m.fxLabel ? '<br>' + m.fxLabel : ''));
  var leadsV, leadsH, qualV, qualH;
  if(!m.crmOn){ leadsV = qualV = '—'; leadsH = qualH = _MKB_NOCRM; }
- else if(!m.amoOk){ leadsV = qualV = '—'; leadsH = qualH = 'нет связи с amoCRM'; }
+ else if(!m.amoOk && !m.closed){ leadsV = qualV = '—'; leadsH = qualH = 'нет связи с amoCRM'; }
  else {
-  leadsV = _mkbN(m.adLeads.length);
+  leadsV = _mkbN(m.nAd);
   var sc = m.sources, sp = [];
   if(sc){
    if(sc.form != null) sp.push('формы ' + _mkbN(sc.form));
@@ -22468,7 +22657,7 @@ function _mkbKpis(m){
    if(sc.manual != null) sp.push('вручную ' + _mkbN(sc.manual));
   }
   leadsH = (m.hasArrival ? 'из рекламы · ' : '') + (m.cpl != null ? _mkbN(m.cpl) + ' сом за лид' : 'цены лида нет')
-   + '<br>всего в amo ' + _mkbN(m.allLeads.length) + (sp.length ? ': ' + sp.join(' · ') : '');
+   + '<br>всего в amo ' + _mkbN(m.nAll) + (sp.length ? ': ' + sp.join(' · ') : '');
   qualV = _mkbN(m.adQual) + (m.hasArrival ? '<span class="of">всего в отделе ' + _mkbN(m.qualAll) + '</span>' : '');
   var t = _mkbCpqTone(m.cpq);
   qualH = (m.hasArrival ? 'из рекламы, ' : '') + 'дошли до квалификации или дальше · ' + (m.cpq != null ? '<b class="mkb-t-' + t + '">' + _mkbN(m.cpq) + ' сом за квал</b>' : 'цены квала нет') + ', норма до 10 000'
@@ -22514,17 +22703,19 @@ function _mkbReconLoading(rc){
 function _mkbReconCard(m){
  var R = _mkbRecon || {};
  var open = function(cls){ return '<div class="mkb-card mkb-recon mkb-o-recon' + (cls ? ' ' + cls : '') + '" id="mkb-b-recon"><div class="mkb-kick">Сверка</div><h3>Заявки из лид-форм</h3><div class="mkb-n">Переписки WhatsApp и сделки без рекламы сюда не входят</div>'; };
- if(R.state === 'loading') return open() + '<div class="mkb-s">Считаем…</div></div>';
+ if(R.state === 'loading' && !(m.closed && m.cd && m.cd.recon)) return open() + '<div class="mkb-s">Считаем…</div></div>';
+ if(m.closed && m.cd && m.cd.recon && R.state !== 'ok') R = { state: 'ok', data: { recon: m.cd.recon } };
  if(R.state === 'missing') return open() + _mkbPlq('Сверка появится после обновления сервера.') + '</div>';
  if(R.state !== 'ok') return open() + _mkbPlq('Не загрузилось. <button class="mkd-retry" onclick="mktLoadOverview(true)">Повторить</button>') + '</div>';
  var rc = (R.data && R.data.recon) || {};
+ if(m.closed && m.cd && m.cd.recon) rc = m.cd.recon; // v1019: закрытый месяц — сверка на момент закрытия
  if(!m.crmOn){
   var op = (rc.other_product || {})[m.prod];
   return open() + '<div class="mkb-rn"><div class="l">Meta отдала</div><div class="v">' + _mkbN(op != null ? op : rc.meta_total) + '</div></div>'
    + _mkbPlq(_MKB_NOCRM + ' — сверять не с чем.') + '</div>';
  }
  // v1017: до первой ночной загрузки заявок ни одна не проверена — показываем «загружаются», а не нули
- if(_mkbReconLoading(rc)) return open() + _mkbPlq('Данные загружаются: заявки из Meta подтягиваются ночью. Сверка появится утром.') + '</div>';
+ if(!(m.closed && m.cd && m.cd.recon) && _mkbReconLoading(rc)) return open() + _mkbPlq('Данные загружаются: заявки из Meta подтягиваются ночью. Сверка появится утром.') + '</div>';
  var lost = rc.lost || {}, inAmo = rc.in_amo || {};
  var lostN = Number(lost.total) || 0, total = Number(rc.meta_total) || 0;
  var pct = rc.lost_pct != null ? Number(rc.lost_pct) : (total ? lostN / total * 100 : 0);
@@ -22558,8 +22749,16 @@ var _MKB_STUCK = [
 ];
 function _mkbSalesFunnel(m){
  var h = '<div class="mkb-card mkb-o-sales" id="mkb-b-sales"><div class="mkb-h"><h3>Воронка продаж</h3><span>' + _mkbAllNote() + '<span class="mkb-tag amo">amoCRM</span></span></div>';
- if(m.crmOn && m.amoOk) h += _mkbScopeSeg(m);
+ if(m.crmOn && (m.amoOk || m.closed)) h += _mkbScopeSeg(m);
  if(!m.crmOn) return h + _mkbPlq(_MKB_NOCRM) + '</div>';
+ var cf = _mkbClosedPart(m, 'funnel'); // v1019: закрытый месяц — воронка на момент закрытия
+ if(cf && Array.isArray(cf.stages)){
+  var crows = cf.stages.map(function(st){ return { name: st.name, n: Number(st.n != null ? st.n : st.reached) || 0, stuck: 0, norm: '', qual: !!st.qual }; });
+  crows.push({ name: 'Успешно реализовано', n: Number(cf.won) || 0, stuck: 0, norm: '', won: true });
+  return h + '<div class="mkb-s">Цифры на момент закрытия месяца.</div>' + _mkbStagesHtml(crows)
+   + '<div class="mkb-out"><div><span>Отложили на период</span><b>' + _mkbN(cf.postponed) + '</b></div><div class="lost"><span>Закрыто и не реализовано</span><b>' + _mkbN(cf.lost) + '</b></div></div>'
+   + '<div class="mkb-n">Исходы не входят в воронку: «Отложили» не считается ни встречей, ни счётом.</div></div>';
+ }
  if(!m.amoOk) return h + _mkbAmoPlq() + '</div>';
  var rp = m.rp, leads = m.leads;
  var flow = (rp.stages || []).slice().sort(function(a, b){ return a.sort - b.sort; });
@@ -22587,8 +22786,16 @@ function _mkbSalesFunnel(m){
   return { name: stg.name, n: n, stuck: stuck, norm: norm, qual: !!(rp.qual_stage && rp.qual_stage.id === stg.id) };
  });
  rows.push({ name: 'Успешно реализовано', n: leads.filter(function(l){ return l.is_won; }).length, stuck: 0, norm: '', won: true });
- var top = rows[0].n || 1;
- h += '<div class="mkb-stl">' + rows.map(function(r, i){
+ h += _mkbStagesHtml(rows);
+ var post = leads.filter(function(l){ return l.is_postponed; }).length, lost = leads.filter(function(l){ return l.is_lost; }).length;
+ h += '<div class="mkb-out"><div><span>Отложили на период</span><b>' + _mkbN(post) + '</b></div><div class="lost"><span>Закрыто и не реализовано</span><b>' + _mkbN(lost) + '</b></div></div>'
+  + '<div class="mkb-n">Исходы не входят в воронку: «Отложили» не считается ни встречей, ни счётом.'
+  + (hasEntered ? '' : ' «Застряли» по этапам появятся после обновления сервера.') + '</div>';
+ return h + '</div>';
+}
+function _mkbStagesHtml(rows){
+ var top = (rows[0] && rows[0].n) || 1;
+ return '<div class="mkb-stl">' + rows.map(function(r, i){
   var w = Math.max(46, r.n / top * 100);
   var conv = i === 0 ? '100%' : (rows[i - 1].n ? Math.round(r.n / rows[i - 1].n * 100) + '%' : '—');
   return '<div class="mkb-st"><div class="mkb-st-l"><div class="mkb-sbar' + (r.won ? ' won' : (r.qual ? ' q' : '')) + '" style="width:' + w + '%">'
@@ -22596,11 +22803,6 @@ function _mkbSalesFunnel(m){
    + (r.stuck ? '<span class="mkb-pill bad" title="застряли">' + _mkbN(r.stuck) + ' · ' + r.norm + '</span>' : '')
    + '</div><div class="c">' + conv + '</div></div>';
  }).join('') + '</div>';
- var post = leads.filter(function(l){ return l.is_postponed; }).length, lost = leads.filter(function(l){ return l.is_lost; }).length;
- h += '<div class="mkb-out"><div><span>Отложили на период</span><b>' + _mkbN(post) + '</b></div><div class="lost"><span>Закрыто и не реализовано</span><b>' + _mkbN(lost) + '</b></div></div>'
-  + '<div class="mkb-n">Исходы не входят в воронку: «Отложили» не считается ни встречей, ни счётом.'
-  + (hasEntered ? '' : ' «Застряли» по этапам появятся после обновления сервера.') + '</div>';
- return h + '</div>';
 }
 
 // 7. Не взято в работу (рабочее время Пн–Пт 9:00–18:00 по Бишкеку)
@@ -22744,8 +22946,22 @@ window.mkbLostExport = function(){
 // 9. Конверсия по менеджерам (по ответственному в сделке amo)
 function _mkbManagers(m){
  var h = '<div class="mkb-card mkb-o-mgr" id="mkb-b-mgr"><div class="mkb-h"><h3>Конверсия по менеджерам</h3><span class="mkb-n">' + _mkbAllNote() + ' Считается по ответственному в сделке amoCRM</span></div>';
- if(m.crmOn && m.amoOk) h += _mkbScopeSeg(m);
+ if(m.crmOn && (m.amoOk || m.closed)) h += _mkbScopeSeg(m);
  if(!m.crmOn) return h + _mkbPlq(_MKB_NOCRM) + '</div>';
+ var cm = _mkbClosedPart(m, 'managers'); // v1019: закрытый месяц
+ if(Array.isArray(cm)){
+  var cview = cm.map(function(x){
+   var c = x.n ? (Number(x.won) || 0) / x.n * 100 : 0, t = _mkbWaitTone(x.avg_reaction_wmin), bad = !x.name;
+   return { name: sanitize(x.name || 'Без ответственного'), bad: bad, n: Number(x.n) || 0, qual: Number(x.qual) || 0, meet: Number(x.meet) || 0, won: Number(x.won) || 0,
+            conv: bad ? '—' : (Math.round(c * 10) / 10).toLocaleString('ru-RU') + '%', bar: bad ? 0 : Math.min(100, c * 10), tone: bad ? 'bad' : t,
+            speed: x.avg_reaction_wmin != null ? _mkbWait(x.avg_reaction_wmin) : (bad ? 'не взяты' : '—'), kinds: '' };
+  });
+  var cnt = _mkbClosedPart(m, 'not_taken');
+  var unN = cnt ? Number(cnt.untaken != null ? cnt.untaken : cnt.count) || 0 : 0;
+  if(unN && !cview.some(function(v){ return v.bad; })) cview.push({ name: 'Без ответственного', bad: true, n: unN, qual: 0, meet: 0, won: 0, conv: '—', bar: 0, tone: 'bad', speed: 'не взяты', kinds: '' });
+  if(!cview.length) return h + _mkbPlq('За месяц сделок нет.') + '</div>';
+  return h + _mkbMgrHtml(cview) + '</div>';
+ }
  if(!m.amoOk) return h + _mkbAmoPlq() + '</div>';
  var rp = m.rp, qs = _lrQualStage(rp), ms = (rp.meet_stage && rp.meet_stage.sort != null) ? rp.meet_stage : _lrPick(rp, _RE_MEET);
  var untakenIds = {}; m.untaken.forEach(function(x){ untakenIds[x.l.id] = 1; });
@@ -22779,7 +22995,10 @@ function _mkbManagers(m){
  });
  if(noOwner) view.push({ name: 'Без ответственного', bad: true, n: noOwner, qual: 0, meet: 0, won: 0, conv: '—', bar: 0, tone: 'bad', speed: m.work ? 'не взяты' : '—' });
  if(!view.length) return h + _mkbPlq('За период сделок нет.') + '</div>';
- h += '<div class="mkb-tw mkb-desk"><table class="mkb-t"><thead><tr><th>Менеджер</th><th class="r">Взял лидов</th><th class="r">Квал</th><th class="r">Встречи</th><th class="r">Успешно</th><th class="r">Выручка</th><th>Из лида в успех</th><th class="r">Средняя реакция, в рабочее время</th></tr></thead><tbody>'
+ return h + _mkbMgrHtml(view) + '</div>';
+}
+function _mkbMgrHtml(view){
+ return '<div class="mkb-tw mkb-desk"><table class="mkb-t"><thead><tr><th>Менеджер</th><th class="r">Взял лидов</th><th class="r">Квал</th><th class="r">Встречи</th><th class="r">Успешно</th><th class="r">Выручка</th><th>Из лида в успех</th><th class="r">Средняя реакция, в рабочее время</th></tr></thead><tbody>'
   + view.map(function(v){
      return '<tr><td class="nm' + (v.bad ? ' bad' : '') + '">' + v.name + '</td><td class="r">' + _mkbN(v.n) + '</td><td class="r">' + _mkbN(v.qual) + '</td><td class="r">' + _mkbN(v.meet) + '</td><td class="r">' + _mkbN(v.won) + '</td><td class="r dim">—</td>'
       + '<td><span class="mkb-cv"><span class="mkb-cbar"><i class="' + (v.tone || 'acc') + '" style="width:' + v.bar + '%"></i></span><b>' + v.conv + '</b></span></td>'
@@ -22790,7 +23009,6 @@ function _mkbManagers(m){
       + '<span class="mkb-cbar w"><i class="' + (v.tone || 'acc') + '" style="width:' + v.bar + '%"></i></span>'
       + '<div class="g"><div>Взял <b>' + _mkbN(v.n) + '</b></div><div>Квал <b>' + _mkbN(v.qual) + '</b></div><div>Успешно <b>' + _mkbN(v.won) + '</b></div><div>Реакция, раб. время <b class="mkb-t-' + v.tone + '">' + v.speed + '</b></div></div>' + (v.kinds ? '<div class="mkb-n">' + sanitize(v.kinds) + '</div>' : '') + '</div>';
     }).join('') + '</div>';
- return h + '</div>';
 }
 
 // 10. Куда ушли деньги
@@ -22807,6 +23025,16 @@ function _mkbMoney(m){
 function _mkbLossReasons(m){
  var h = '<div class="mkb-card mkb-o-loss" id="mkb-b-loss"><h3>Почему закрыли</h3>';
  if(!m.crmOn) return h + _mkbPlq(_MKB_NOCRM) + '</div>';
+ var cl = _mkbClosedPart(m, 'loss'); // v1019: закрытый месяц — [{reason,n}] или {причина: n}
+ if(cl){
+  var lr = Array.isArray(cl) ? cl.map(function(x){ return Array.isArray(x) ? [x[0], Number(x[1]) || 0] : [x.reason || x.name || '', Number(x.n != null ? x.n : x.count) || 0]; })
+   : Object.keys(cl).map(function(k){ return [k, Number(cl[k]) || 0]; });
+  var noneN = 0;
+  lr = lr.filter(function(x){ if(!String(x[0] || '').trim() || x[0] === 'Причина не указана'){ noneN += x[1]; return false; } return true; }).sort(function(a, b){ return b[1] - a[1]; });
+  if(noneN) lr.push(['Причина не указана', noneN]);
+  var tot = lr.reduce(function(a, x){ return a + x[1]; }, 0);
+  return h + '<div class="mkb-s">' + _mkbN(tot) + ' ' + _mkdPlural(tot, 'сделка', 'сделки', 'сделок') + ' «Закрыто и не реализовано»' + _mkbScopeNote(m) + ' · на момент закрытия</div>' + _mkbLossRowsHtml(lr) + '</div>';
+ }
  if(!m.amoOk) return h + _mkbAmoPlq() + '</div>';
  var lost = m.leads.filter(function(l){ return l.is_lost; });
  h += '<div class="mkb-s">' + _mkbN(lost.length) + ' ' + _mkdPlural(lost.length, 'сделка', 'сделки', 'сделок') + ' «Закрыто и не реализовано»' + _mkbScopeNote(m) + (_mkdProduct === 'ALL' ? ' · CRM — только SalesDoc' : '') + '</div>';
@@ -22816,14 +23044,35 @@ function _mkbLossReasons(m){
  lost.forEach(function(l){ var k = String(l.loss_reason || '').trim(); if(k) by[k] = (by[k] || 0) + 1; else none++; });
  var rows = Object.keys(by).map(function(k){ return [k, by[k]]; }).sort(function(a, b){ return b[1] - a[1]; });
  if(none) rows.push(['Причина не указана', none]);
+ return h + _mkbLossRowsHtml(rows) + '</div>';
+}
+function _mkbLossRowsHtml(rows){
  var mx = rows.reduce(function(a, r){ return Math.max(a, r[1]); }, 1);
- return h + rows.slice(0, 8).map(function(r){
+ return rows.slice(0, 8).map(function(r){
   return '<div class="mkb-lsr"><div class="t"><span>' + sanitize(r[0]) + '</span><b>' + _mkbN(r[1]) + '</b></div><span class="mkb-hb"><i style="width:' + (r[1] / mx * 100) + '%"></i></span></div>';
- }).join('') + (rows.length > 8 ? '<div class="mkb-n">и ещё ' + (rows.length - 8) + ' причин</div>' : '') + '</div>';
+ }).join('') + (rows.length > 8 ? '<div class="mkb-n">и ещё ' + (rows.length - 8) + ' причин</div>' : '');
 }
 
 // 13. Какая реклама работает (по кампаниям)
+function _mkbCampDecide(r, m){
+ if(!m.crmOn || r.som == null){ r.dec = '—'; r.tone = ''; }
+ else if(r.qual < 3){ r.dec = 'мало данных'; r.tone = 'mut'; }
+ else { r.tone = _mkbCpqTone(r.cpq); r.dec = r.tone === 'ok' ? 'Масштабировать' : (r.tone === 'mid' ? 'Оптимизировать' : 'Отключить'); }
+ return r;
+}
 function _mkbCampRows(m){
+ // v1019: закрытый месяц — кампании на момент закрытия
+ if(m.closed && m.cd && Array.isArray(m.cd.campaigns)){
+  return m.cd.campaigns.map(function(c){
+   var somV = c.som != null ? c.som : c.spend_som, usdV = c.usd != null ? c.usd : c.spend_usd;
+   var som = somV != null ? Number(somV) : null, leads = Number(c.leads) || 0, qual = Number(c.qual) || 0;
+   var tg = _mkdTargOf(c.account), nm = String(c.name || '');
+   var sub = /_LF(_|$)/i.test(nm) ? 'Лид-формы' : (/_SITE(_|$)/i.test(nm) ? 'Сайт' : (/_(CHAT|WA)(_|$)/i.test(nm) ? 'Переписки' : ''));
+   if(tg) sub = sub ? sub + ' · ' + tg : tg;
+   return _mkbCampDecide({ id: c.id, name: nm || '(без названия)', sub: sub, usd: Number(usdV) || 0, som: som, leads: leads,
+     cpl: (som != null && leads) ? som / leads : null, qual: qual, cpq: (som != null && qual) ? som / qual : null, won: Number(c.won) || 0 }, m);
+  }).filter(function(x){ return x.usd > 0 || x.som > 0 || x.leads > 0; }).sort(function(a, b){ return (b.som || 0) - (a.som || 0); });
+ }
  var camps = ((_mkdData || {}).camps || {}).campaigns || [];
  var byCamp = {};
  if(m.crmOn && m.amoOk){
@@ -22859,7 +23108,7 @@ function _mkbCampRows(m){
 }
 function _mkbCampaigns(m){
  var h = '<div class="mkb-card mkb-o-camp" id="mkb-b-camp"><div class="mkb-h"><h3>Какая реклама работает</h3><span class="mkb-n">Пока нет оплат, решение по цене квала: до 10 000 сом — норма, больше 15 000 — красная зона</span></div>';
- if(!m.metaOk) return h + _mkbPlq('Нет связи с рекламой — это не ноль, а нет данных.') + '</div>';
+ if(!m.metaOk && !(m.closed && m.cd && Array.isArray(m.cd.campaigns))) return h + _mkbPlq('Нет связи с рекламой — это не ноль, а нет данных.') + '</div>';
  var rows = _mkbCampRows(m);
  if(!rows.length) return h + _mkbPlq('За период расхода на рекламу нет.') + '</div>';
  if(!m.crmOn) h += '<div class="mkb-n">' + _MKB_NOCRM + ': лиды — из Meta, квалов и продаж нет.</div>';
@@ -22882,6 +23131,14 @@ function _mkbCampaigns(m){
 // 12. Что требует внимания — выводы из цифр выше
 function _mkbAttention(m){
  var items = [];
+ // v1019: месяц не закрылся (3 попытки и больше)
+ [_mkbMonthPrev, _mkbMonth].forEach(function(M, i){
+  if(i === 1 && _mkbMonth === _mkbMonthPrev) return;
+  var r = _mkbRowOf(M, 'SD') || _mkbRowOf(M);
+  if(r && r.status === 'failed' && Number(r.attempts) >= 3 && !items.some(function(x){ return x[2] === M.month; })){
+   items.push(['bad', sanitize(_mkbMonthName(M.month)) + ' не закрылся' + (r.last_error ? ': ' + sanitize(String(r.last_error).slice(0, 120)) : '') + '. Пробуем каждый час.', M.month]);
+  }
+ });
  if(m.crmOn && m.amoOk && m.work && m.untaken.length){
   var late = m.untaken.filter(function(x){ return (x.w.wait_wmin || 0) > 60; }).length;
   items.push(['bad', 'Не взято в работу ' + m.untaken.length + ' ' + _mkdPlural(m.untaken.length, 'лид', 'лида', 'лидов') + (late ? ', из них ' + late + (late % 10 === 1 && late % 100 !== 11 ? ' ждёт' : ' ждут') + ' дольше часа рабочего времени.' : '.')]);
@@ -36792,7 +37049,9 @@ async function _routeRenderHistory(){
  // v417: таб «История» тоже грузим по card_id + client_id и склеиваем — иначе события
  // привязанные только к клиенту (тикеты, звонки на номер вне канбана) пропадают.
  try {
-  var reqs = [sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50')];
+  // v1019: синтетическая карта «Действующих» (id 'client:…') в истории карточек не живёт — по ней только client_id
+  var reqs = [String(_routeCurrentCard.id || '').indexOf('client:') === 0 ? Promise.resolve({ ok: true, count: 0, items: [] })
+   : sbFetch('/api/history?card_id=' + encodeURIComponent(_routeCurrentCard.id) + '&limit=50')];
   if(_routeCurrentCard.client_id){
    reqs.push(sbFetch('/api/history?client_id=' + encodeURIComponent(_routeCurrentCard.client_id) + '&limit=50'));
   }
@@ -37877,7 +38136,9 @@ async function _routeRenderFeed(){
   // v765: справочник типов задач нужен ленте и плашке «Следующий шаг» (иначе на первом
   // открытии карты мелькает «Тип 1» вместо «Связаться»). Кэшируется — грузится один раз.
   var typesReady = (typeof crmTasksLoadTypes === 'function') ? crmTasksLoadTypes().catch(function(){}) : null;
-  var reqs = [sbFetch('/api/history?card_id=' + _routeCurrentCard.id + '&limit=50')];
+  // v1019: синтетическая карта «Действующих» (id 'client:…') в истории карточек не живёт — по ней только client_id
+  var reqs = [String(_routeCurrentCard.id || '').indexOf('client:') === 0 ? Promise.resolve({ ok: true, count: 0, items: [] })
+   : sbFetch('/api/history?card_id=' + encodeURIComponent(_routeCurrentCard.id) + '&limit=50')];
   if(_routeCurrentCard.client_id){
    reqs.push(sbFetch('/api/history?client_id=' + encodeURIComponent(_routeCurrentCard.client_id) + '&limit=50'));
    // v458: подтягиваем задачи клиента, чтобы они тоже отрисовались в ленте

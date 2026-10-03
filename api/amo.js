@@ -13,7 +13,10 @@ import './_preview_guard.js'; // v1017: в превью-сборке запис�
 
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { requirePermSoft } from './_perm.js';
-import { sbSelect, sbSelectAll, sbInsertIgnoreDup, sbUpsert } from './_supabase.js';
+import { sbSelect, sbSelectAll, sbInsertIgnoreDup, sbUpsert, sbInsert } from './_supabase.js';
+import { loadFxRates } from './_finansist_core.js'; // v1019
+import { CLOSE_PRODUCTS, CRM_PRODUCTS, RECALC_REASON_MIN, monthInfo, prevMonthOf, fxForDays, fillFxFromArchive, buildCloseRow,
+  decideCloseWrite, buildRecalc, slimRow, idsDelta, liveIdsOf, shortErr, recalcAccess } from './_mkt_close.js'; // v1019: закрытие месяца
 import { localIso, tzOffsetH, dayStartMs, dayEndMs } from './_dates.js';
 import { normalizePhone } from './_phone.js'; // v1015: один разбор телефона KG+KZ вместо четырёх копий
 import { DEFAULT_PRODUCTS, loadProducts, classifyCampaign, productOfLead, productParam, PRODUCT_CODES,
@@ -958,6 +961,115 @@ async function buildLeadReport(env, fromTs, toTs, opts){
   return out;
 }
 
+// ── v1019: закрытие месяца Маркетинга ───────────────────────────────────────
+// Собираем всё, что нужно экрану за месяц, теми же функциями, что и экран: lead_report v2,
+// реклама (geo / geo_daily / campaigns_geo по каждому продукту, сутки по Бишкеку), сверка заявок,
+// «не взято в работу», курс по дням. holes — почему месяц закрывать нельзя (общие и по продукту).
+async function gatherMonth(env, country, mi, base, products){
+  const holes = [], holesBy = {};
+  products.forEach(p => { holesBy[p] = []; });
+  const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+  const cfg = await loadProducts();
+  let excl = ['МК'], settingsRate = null, archiveOk = false;
+  try {
+    const rows = await sbSelect('app_settings', { key: 'in.(mkt_exclude_ads,mkt_costs,mkt_fx_archive_ok)' });
+    rows.forEach(r => {
+      if(r.key === 'mkt_exclude_ads' && Array.isArray(r.value)) excl = r.value;
+      if(r.key === 'mkt_costs') settingsRate = Number(((r.value || {})[country] || {}).usd_rate) || null;
+      if(r.key === 'mkt_fx_archive_ok') archiveOk = r.value === true || (r.value && r.value.ok === true);
+    });
+  } catch(e){ holes.push('настройки не прочитались'); }
+  // курс: сначала (если CEO разрешил) дописываем недостающие дни из архива НБКР
+  let fxFill = null;
+  if(archiveOk){
+    try { fxFill = await fillFxFromArchive(mi.first, mi.until, { currencies: ['USD'] }); }
+    catch(e){ fxFill = { error: shortErr(e) }; }
+  }
+  let fx = null;
+  try { fx = fxForDays(await loadFxRates(), mi.days, settingsRate); } catch(e){ holes.push('курсы доллара не прочитались'); }
+  // сделки amo
+  let rp = null;
+  try {
+    rp = await buildLeadReport(env, mi.fromTs, mi.toTs, { v2: true, country, cfg });
+    if(rp.error){ holes.push('amoCRM: ' + shortErr(rp.error)); rp = null; }
+    else {
+      (rp.errors || []).forEach(e => holes.push('amoCRM: ' + shortErr(e.message || e)));
+      (rp.incomplete || []).forEach(e => holes.push('amoCRM неполные: ' + shortErr(e.detail || e.what || e)));
+    }
+  } catch(e){ holes.push('amoCRM: ' + shortErr(e)); rp = null; }
+  // «не взято в работу» (KG)
+  let work = null;
+  try {
+    work = await memo(['mw', sub, mi.fromTs, mi.toTs, 1].join('|'), 3 * 60 * 1000, () => buildWork({
+      env, sub, country, amoFetch, fetchUsers: (inc) => fetchUsers(env, inc), periodBase: (f, t) => periodBase(env, country, f, t)
+    }, mi.fromTs, mi.toTs, { useWhatsapp: true }), v => !!(v.error || (v.errors && v.errors.length)));
+    if(work.error){ holes.push('не взято в работу: ' + shortErr(work.error)); work = null; }
+    else {
+      (work.errors || []).forEach(e => holes.push('не взято в работу: ' + shortErr(e.message || e)));
+      (work.incomplete || []).forEach(e => holes.push('не взято в работу, неполные: ' + shortErr(e.detail || e)));
+    }
+  } catch(e){ holes.push('не взято в работу: ' + shortErr(e)); work = null; }
+  // реклама и сверка — по каждому продукту
+  const meta = {}, recon = {};
+  const exQ = excl.length ? '&exclude=' + encodeURIComponent(excl.join(',')) : '';
+  for(const p of products){
+    const q = 'since=' + mi.since + '&until=' + mi.until + exQ + '&product=' + p + '&v=2';
+    const part = {};
+    for(const [k, ep] of [['geo', 'geo'], ['daily', 'geo_daily'], ['camps', 'campaigns_geo']]){
+      const r = await selfFetch(base, '/api/meta-ads?endpoint=' + ep + '&scope=all&' + q);
+      if(selfFailed(r)){ holesBy[p].push('реклама (' + ep + '): ' + shortErr((r.json && r.json.error) || ('ответ ' + r.status))); part[k] = null; continue; }
+      (r.json.errors || []).forEach(e => holesBy[p].push('реклама (' + ep + '): ' + shortErr(e.message || e)));
+      part[k] = r.json;
+    }
+    meta[p] = part;
+    try {
+      recon[p] = await buildRecon({ since: mi.since, until: mi.until, product: p, trusted: false, pii: false, sub });
+      (recon[p].errors || []).forEach(e => holesBy[p].push('сверка заявок: ' + shortErr(e.message || e)));
+      const pend = Number(recon[p].recon && recon[p].recon.pending_new) || 0;
+      if(pend) holesBy[p].push('сверка заявок ещё идёт: не проверено ' + pend);
+    } catch(e){ holesBy[p].push('сверка заявок: ' + shortErr(e)); recon[p] = null; }
+  }
+  return { rp, work, fx, fxFill, meta, recon, holes, holesBy };
+}
+
+// Закрыть месяц: по каждому продукту — либо 'closed' со всеми цифрами, либо 'failed' (attempts+1).
+// Закрытую строку не трогаем. write=false — только посчитать и показать.
+async function closeMonth(env, country, month, base, opts){
+  const o = opts || {};
+  const mi = monthInfo(month, country);
+  if(!mi) return { error: 'month — в виде YYYY-MM' };
+  const existing = {};
+  try {
+    (await sbSelect('mkt_month_close', { country: 'eq.' + country, month: 'eq.' + mi.first })).forEach(r => { existing[r.product] = r; });
+  } catch(e){ return { error: 'mkt_month_close: ' + shortErr(e) }; }
+  const todo = CLOSE_PRODUCTS.filter(p => !(existing[p] && existing[p].status === 'closed'));
+  const out = { country, month: mi.month, results: {} };
+  CLOSE_PRODUCTS.filter(p => !todo.includes(p)).forEach(p => { out.results[p] = { status: 'closed', skipped: true }; });
+  if(!todo.length) return out;
+  const g = await gatherMonth(env, country, mi, base, todo);
+  out.fx = g.fx ? { source: g.fx.source, days_daily: g.fx.days_daily, days_archive: g.fx.days_archive, days_settings: g.fx.days_settings, missing: g.fx.missing.length } : null;
+  out.fx_archive = g.fxFill ? { filled: (g.fxFill.filled || []).length, errors: g.fxFill.errors || g.fxFill.error || [] } : null;
+  const nowIso = new Date().toISOString();
+  for(const p of todo){
+    const built = buildCloseRow({ product: p, month: mi, meta: g.meta[p] || {}, rp: g.rp, recon: g.recon[p], work: g.work, fx: g.fx });
+    const holes = g.holes.concat(g.holesBy[p] || [], built.holes);
+    const key = { country, product: p, month: mi.first };
+    const outcome = holes.length ? { ok: false, error: holes[0] + (holes.length > 1 ? ' (и ещё ' + (holes.length - 1) + ')' : '') } : { ok: true, row: built.row, by: 'cron' };
+    const w = decideCloseWrite(existing[p] || null, outcome, key, nowIso);
+    const res1 = { status: outcome.ok ? 'closed' : 'failed', holes: holes.slice(0, 5),
+      numbers: outcome.ok ? { spend_usd: built.row.spend_usd, spend_som: built.row.spend_som, fx_avg: built.row.fx_avg, fx_source: built.row.fx_source,
+        leads_ad: built.row.leads_ad, leads_all: built.row.leads_all, quals_ad: built.row.quals_ad, quals_all: built.row.quals_all, won_ad: built.row.won_ad,
+        cpl_som: built.row.cpl_som, cpq_som: built.row.cpq_som, meta_form_leads: built.row.meta_form_leads, lost: built.row.lost } : null };
+    if(o.write && w.action === 'upsert'){
+      try { await sbUpsert('mkt_month_close', w.row, 'country,product,month'); res1.written = true; res1.attempts = w.row.attempts; }
+      catch(e){ res1.written = false; res1.write_error = shortErr(e); }
+    }
+    if(o.withRow) res1.row = Object.assign({}, w.row || {}, built.row);
+    out.results[p] = res1;
+  }
+  return out;
+}
+
 export default async function handler(req, res){
   // v376: разрешаем POST для двусторонней синхронизации SD→amo (update_status, add_note).
   if(req.method !== 'GET' && req.method !== 'POST'){ return bad(res, 405, 'Only GET/POST'); }
@@ -1010,6 +1122,34 @@ export default async function handler(req, res){
         }], env);
         return res.status(201).json({ ok: true, note: result });
       }
+      if(action === 'mkt_month_recalc'){
+        // v1019: пересчитать закрытый (или не закрывшийся) месяц — только администратор с подписанной
+        // сессией (не общий ключ и не заголовок с email), с причиной. «Было → стало» — в mkt_month_close_history.
+        const gate = await requirePerm(req, res, null);
+        if(!gate.ok) return;
+        const c = gate.caller;
+        const acc = recalcAccess(c);
+        if(acc === 'need_login') return res.status(401).json({ ok: false, needLogin: true, error: 'Войдите в программу заново' });
+        if(acc !== 'ok') return res.status(403).json({ ok: false, error: 'Пересчитать месяц может только администратор' });
+        if(country !== 'KG') return bad(res, 400, 'только KG');
+        const mi = monthInfo(String(body.month || ''), country);
+        const product = String(body.product || '').toUpperCase();
+        if(!mi) return bad(res, 400, 'month — в виде YYYY-MM');
+        if(!CLOSE_PRODUCTS.includes(product)) return bad(res, 400, 'product — SD, Z24, SHTURM или ALL');
+        if(String(body.reason || '').trim().length < RECALC_REASON_MIN) return bad(res, 400, 'Напишите причину — не короче 5 знаков');
+        if(mi.month >= localIso(Date.now(), country).slice(0, 7)) return bad(res, 400, 'Текущий месяц ещё идёт — пересчитывать нечего');
+        const cur = await sbSelect('mkt_month_close', { country: 'eq.' + country, product: 'eq.' + product, month: 'eq.' + mi.first });
+        const existing = cur[0] || null;
+        const g = await gatherMonth(env, country, mi, selfBase(req), [product]);
+        const built = buildCloseRow({ product, month: mi, meta: g.meta[product] || {}, rp: g.rp, recon: g.recon[product], work: g.work, fx: g.fx });
+        const holes = g.holes.concat(g.holesBy[product] || [], built.holes);
+        if(holes.length) return res.status(409).json({ ok: false, error: 'Пересчитать нельзя — данные неполные: ' + holes[0], holes: holes.slice(0, 5) });
+        const rc = buildRecalc(existing, built.row, c.email, body.reason, { country, product, month: mi.first }, new Date().toISOString());
+        if(rc.error) return bad(res, 400, rc.error);
+        await sbInsert('mkt_month_close_history', rc.history);
+        const saved = await sbUpsert('mkt_month_close', rc.update, 'country,product,month');
+        return res.status(200).json({ ok: true, row: slimRow(saved[0] || rc.update), history: { changed_at: rc.history.changed_at, changed_by: c.email, reason: rc.history.reason } });
+      }
       if(action === 'mkt_lost_close'){
         // v1017: закрыть потерянную заявку Meta — кто разобрал и чем закончилось. В amo ничего не пишем.
         // Только сотрудник с правом на Маркетинг и подписанной сессией: по общему ключу (он публичный)
@@ -1024,7 +1164,92 @@ export default async function handler(req, res){
         const r = await closeLost(body, { email: gate.caller.email, name: name || gate.caller.email });
         return res.status(r.status).json(r.body);
       }
-      return bad(res, 400, 'Unknown POST action. Use ?action=update_status | add_note | mkt_lost_close');
+      return bad(res, 400, 'Unknown POST action. Use ?action=update_status | add_note | mkt_lost_close | mkt_month_recalc');
+    }
+    if(action === 'mkt_month_close'){
+      // v1019: закрыть месяц (зовёт крон 5-го в 07:30 и потом каждый час, пока SD не закрыт).
+      // Тяжёлый расчёт и запись — только крон/админ (strongGate). dry_run=1 (по умолчанию) — посчитать и показать.
+      if(country !== 'KG') return bad(res, 400, 'mkt_month_close: только KG');
+      if(!(await strongGate(req))) return bad(res, 403, 'Закрытие месяца — только крон или админ-код');
+      const month = String(req.query.month || prevMonthOf(localIso(Date.now(), country)));
+      const dryRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
+      const dryRun = dryRaw !== '0' && dryRaw !== 'false';
+      const out = await closeMonth(env, country, month, selfBase(req), { write: !dryRun, withRow: String(req.query.rows || '') === '1' });
+      if(out.error) return bad(res, 400, out.error);
+      return res.status(200).json(Object.assign({ dry_run: dryRun }, out));
+    }
+    if(action === 'mkt_month_status'){
+      // v1019: состояние месяца по всем продуктам + история пересчётов + «уточнено после закрытия».
+      const gate = await requirePermSoft(req, res, 'view_marketing');
+      if(!gate.ok) return;
+      const mi = monthInfo(String(req.query.month || ''), country);
+      if(!mi) return bad(res, 400, 'Нужен month=YYYY-MM');
+      const withIds = String(req.query.ids || '') === '1';
+      const curMonth = localIso(Date.now(), country).slice(0, 7);
+      let rows = [], history = [];
+      try {
+        rows = await sbSelect('mkt_month_close', { country: 'eq.' + country, month: 'eq.' + mi.first });
+        history = await sbSelect('mkt_month_close_history', { select: 'id,product,changed_at,changed_by,reason,old_row,new_row',
+          country: 'eq.' + country, month: 'eq.' + mi.first, order: 'changed_at.desc', limit: '50' });
+      } catch(e){ return res.status(500).json({ error: 'Закрытие месяца: ' + shortErr(e), code: 'db_error' }); }
+      // имена тех, кто пересчитывал
+      const names = {};
+      try {
+        const em = [...new Set(history.map(h => String(h.changed_by || '').toLowerCase()).filter(x => x.includes('@')))];
+        if(em.length) (await sbSelect('employees', { select: 'email,name', email: 'in.(' + em.join(',') + ')' })).forEach(e => { names[String(e.email).toLowerCase()] = e.name; });
+      } catch(_){}
+      const MAIN = ['spend_som', 'leads_ad', 'quals_ad', 'won_ad', 'cpl_som', 'cpq_som', 'meta_form_leads', 'lost'];
+      const hist = history.map(h => {
+        const was = {}, now = {};
+        MAIN.forEach(k => { was[k] = h.old_row ? (h.old_row[k] ?? null) : null; now[k] = h.new_row ? (h.new_row[k] ?? null) : null; });
+        return { id: h.id, product: h.product, changed_at: h.changed_at, changed_by: h.changed_by,
+          changed_by_name: names[String(h.changed_by || '').toLowerCase()] || h.changed_by, reason: h.reason, was, now };
+      });
+      // живая разница: какие сделки появились/ушли после закрытия (по номерам сделок)
+      let live = null;
+      const closedCrm = rows.filter(r => r.status === 'closed' && CRM_PRODUCTS.includes(r.product) && Array.isArray(r.lead_ids_ad));
+      if(closedCrm.length && String(req.query.live || '1') !== '0'){
+        try {
+          const lrKey = country + '|' + mi.fromTs + '|' + mi.toTs + '|2';
+          let rp = _lrGet(lrKey);
+          if(!rp){
+            rp = await buildLeadReport(env, mi.fromTs, mi.toTs, { v2: true, country, cfg: await loadProducts() });
+            if(!rp.error && !(rp.errors && rp.errors.length)) _lrSet(lrKey, rp);
+          }
+          if(!rp.error){
+            live = {};
+            closedCrm.forEach(r => {
+              const ids = liveIdsOf(rp, r.product);
+              if(!ids) return;
+              live[r.product] = { leads_ad: idsDelta(r.lead_ids_ad, ids.ad), quals_ad: idsDelta(r.lead_ids_qual, ids.qual),
+                partial: !!((rp.errors && rp.errors.length) || (rp.incomplete && rp.incomplete.length)) };
+            });
+          }
+        } catch(e){
+          if(e && e.upstream === 'amo') live = { error: 'amo: ' + shortErr(e) };
+          else live = { error: shortErr(e) };
+        }
+      }
+      const out = rows.map(r => { const c = Object.assign({}, r); if(!withIds){ delete c.lead_ids_ad; delete c.lead_ids_qual; } return c; });
+      const caller = gate.caller;
+      return res.status(200).json({ country, month: mi.month, month_first: mi.first,
+        state: mi.month >= curMonth ? 'current' : 'past',
+        can_recalc: recalcAccess(caller) === 'ok',
+        rows: out, history: hist, live });
+    }
+    if(action === 'fx_archive_fill'){
+      // v1019: дописать курс доллара из архива НБКР в finansist_fx_rates (только недостающие дни).
+      // dry_run=1 (по умолчанию) — показать, что было бы дописано; запись — только крон/админ.
+      const dryRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
+      const dryRun = dryRaw !== '0' && dryRaw !== 'false';
+      if(dryRun){ const gate = await requirePermSoft(req, res, 'view_marketing'); if(!gate.ok) return; }
+      else if(!(await strongGate(req))) return bad(res, 403, 'Запись курсов — только крон или админ-код');
+      const pm = monthInfo(prevMonthOf(localIso(Date.now(), country)), country);
+      const from = String(req.query.from || pm.first).slice(0, 10), to = String(req.query.to || pm.until).slice(0, 10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) return bad(res, 400, 'from/to — YYYY-MM-DD');
+      if((Date.parse(to) - Date.parse(from)) / 86400000 > 400) return bad(res, 400, 'Не больше 400 дней за раз');
+      const r = await fillFxFromArchive(from, to, { currencies: ['USD'], dryRun });
+      return res.status(200).json(Object.assign({ dry_run: dryRun, from, to }, r));
     }
     if(action === 'meta_leads_sync'){
       // v1017: заявки лидформ Meta → meta_leads и поиск их сделок в amo. Зовёт крон раз в час.

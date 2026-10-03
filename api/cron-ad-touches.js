@@ -18,6 +18,7 @@ import './_preview_guard.js'; // v1017: в превью-сборке запис�
 import { bishkekIso } from './_dates.js'; // v1015
 import { sbSelect } from './_supabase.js';
 import { backfillPiece } from './_mkt.js'; // v1017 (b2)
+import { closeDue, prevMonthOf } from './_mkt_close.js'; // v1019: закрытие месяца
 // v1017 (QA): в журнал — без «Failing row contains (…)» (там телефон и имя клиента)
 const cleanErr = (m) => String(m || '').split(/Failing row/i)[0].trim().slice(0, 200);
 
@@ -78,6 +79,30 @@ export default async function handler(req, res) {
                   errors: (ml.errors || []).map(e => cleanErr(e.message || e)).concat(ml.error ? [cleanErr(ml.error)] : []) };
   } catch (e) { out.forms = { error: e.message || String(e) }; }
 
+  // v1019: закрытие прошлого месяца — 5-го с 07:30 и потом каждый час, пока SalesDoc не закрыт.
+  // В прогон 06:30 (дозаливка переписок) не закрываем, чтобы не делить время.
+  let closeMonthQ = null;
+  const todayB = bishkekIso(Date.now());
+  if (!bfReq && hourB !== 6 && closeDue(Number(todayB.slice(8, 10)), hourB)) {
+    const pm = prevMonthOf(todayB);
+    try {
+      const done = await sbSelect('mkt_month_close', { select: 'status', country: 'eq.KG', product: 'eq.SD', month: 'eq.' + pm + '-01', status: 'eq.closed' });
+      if (!done.length) closeMonthQ = pm;
+    } catch (e) { out.close = { error: 'состояние закрытия не прочиталось' }; }
+  }
+  if (closeMonthQ) {
+    const tmo = Math.min(250000, left() - 5000);
+    if (tmo < 60000) out.close = { month: closeMonthQ, skipped: 'не хватило времени, следующий час' };
+    else {
+      try {
+        const c = await call(`action=mkt_month_close&country=KG&month=${closeMonthQ}&dry_run=0`, tmo, true);
+        const sum = {};
+        Object.keys(c.results || {}).forEach(p => { const x = c.results[p]; sum[p] = x.skipped ? 'уже закрыт' : (x.status + (x.status === 'failed' ? ': ' + cleanErr((x.holes || [])[0]) + ' (попытка ' + (x.attempts || '?') + ')' : '')); });
+        out.close = { month: closeMonthQ, products: sum, fx: c.fx || null, error: c.error ? cleanErr(c.error) : undefined };
+      } catch (e) { out.close = { month: closeMonthQ, error: e.message || String(e) }; }
+    }
+  }
+
   if (bfReq) {
     const tmo = Math.min(200000, left() - 5000);
     if (tmo < 45000) out.backfill = { skipped: 'не хватило времени, следующей ночью' };
@@ -92,7 +117,7 @@ export default async function handler(req, res) {
           marked: !!b.backfill_mark, error: b.error ? cleanErr(b.error) : undefined };
       } catch (e) { out.backfill = { error: e.message || String(e) }; }
     }
-  } else {
+  } else if (!closeMonthQ) {
     // Прогреваем отчёт за текущий месяц, чтобы экран открывался сразу, а не через 40 с.
     // v1015: месяц — по Бишкеку; греем тот же вариант, что открывает экран: v=2, продукт SalesDoc.
     try {

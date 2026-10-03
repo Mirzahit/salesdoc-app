@@ -24,8 +24,12 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const { card_id, client_id, limit } = req.query || {};
+      // v1019: карточка «Действующих» синтетическая (id 'client:…') — в card_history таких card_id нет,
+      // а сравнение не-uuid с uuid-колонкой роняло запрос 500-й. Не uuid → пустая история.
+      const cardOk = !!card_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(card_id));
+      if (card_id && !cardOk && !client_id) return res.status(200).json({ ok: true, count: 0, items: [] });
       const params = { order: 'created_at.desc' };
-      if (card_id) params['card_id'] = 'eq.' + card_id;
+      if (cardOk) params['card_id'] = 'eq.' + card_id;
       if (client_id) params['client_id'] = 'eq.' + client_id;
       if (limit) params['limit'] = limit;
       const items = await sbSelect('card_history', params);
