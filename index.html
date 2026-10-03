@@ -21120,7 +21120,7 @@ window.mktLoadOverview = async function(force){
    _mkbSbGet('/api/amo?action=mkt_recon&country=KG&since=' + r.since + '&until=' + r.until + '&product=' + _mkdProduct),
    mKey ? _mkbSbGet('/api/amo?action=mkt_month_status&country=KG&month=' + mKey) : Promise.resolve({ state: 'none' }),
    // прошлый месяц — чтобы «не закрылся» было видно и из текущего месяца
-   (pKey && pKey !== mKey) ? _mkbSbGet('/api/amo?action=mkt_month_status&country=KG&month=' + pKey) : Promise.resolve({ state: 'none' })
+   (pKey && pKey !== mKey) ? _mkbSbGet('/api/amo?action=mkt_month_status&country=KG&month=' + pKey + '&live=0') : Promise.resolve({ state: 'none' }) // live=0: живой отчёт не пересобираем
   ]);
   if(seq !== _mkdSeq) return;
   var issues = { fail: [], part: [] };
@@ -22753,7 +22753,8 @@ function _mkbSalesFunnel(m){
  if(!m.crmOn) return h + _mkbPlq(_MKB_NOCRM) + '</div>';
  var cf = _mkbClosedPart(m, 'funnel'); // v1019: закрытый месяц — воронка на момент закрытия
  if(cf && Array.isArray(cf.stages)){
-  var crows = cf.stages.map(function(st){ return { name: st.name, n: Number(st.n != null ? st.n : st.reached) || 0, stuck: 0, norm: '', qual: !!st.qual }; });
+  var hasQ = cf.stages.some(function(st){ return st.qual != null; }); // сервер отмечает этап квала; у старых строк — по названию
+  var crows = cf.stages.map(function(st){ return { name: st.name, n: Number(st.n != null ? st.n : st.reached) || 0, stuck: 0, norm: '', qual: hasQ ? !!st.qual : _RE_QUAL.test(String(st.name || '').toLowerCase()) }; });
   crows.push({ name: 'Успешно реализовано', n: Number(cf.won) || 0, stuck: 0, norm: '', won: true });
   return h + '<div class="mkb-s">Цифры на момент закрытия месяца.</div>' + _mkbStagesHtml(crows)
    + '<div class="mkb-out"><div><span>Отложили на период</span><b>' + _mkbN(cf.postponed) + '</b></div><div class="lost"><span>Закрыто и не реализовано</span><b>' + _mkbN(cf.lost) + '</b></div></div>'

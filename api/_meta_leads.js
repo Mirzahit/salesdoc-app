@@ -162,7 +162,8 @@ export function fxByDay(rates, days, fallbackRate) {
   let sum = 0, n = 0;
   (days || []).forEach(d => {
     const r = fxRateFor(rates, d, 'USD');
-    if (r) by_day[d] = { rate: r.rate, src: 'nbkr', from: r.date };
+    // v1019 (QA): настоящий источник доллара дня — 'nbkr' или 'nbkr_archive' (поле USD_src, иначе src дня)
+    if (r) { const day = rates && rates[r.date]; const us = (day && (day.USD_src || day.src)) || 'nbkr'; by_day[d] = { rate: r.rate, src: us === 'nbkr_archive' ? 'nbkr_archive' : 'nbkr', from: r.date }; }
     else if (fb) by_day[d] = { rate: fb, src: 'settings', from: null };
     else { missing_days.push(d); return; }
     sum += by_day[d].rate; n++;

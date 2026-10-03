@@ -13,10 +13,9 @@ import './_preview_guard.js'; // v1017: в превью-сборке запис�
 
 import { checkAuth, checkAdminToken } from './_auth.js';
 import { requirePermSoft } from './_perm.js';
-import { sbSelect, sbSelectAll, sbInsertIgnoreDup, sbUpsert, sbInsert } from './_supabase.js';
-import { loadFxRates } from './_finansist_core.js'; // v1019
+import { sbSelect, sbSelectAll, sbInsertIgnoreDup, sbUpsert, sbInsert, sbUpdate, sbDelete } from './_supabase.js';
 import { CLOSE_PRODUCTS, CRM_PRODUCTS, RECALC_REASON_MIN, monthInfo, prevMonthOf, fxForDays, fillFxFromArchive, buildCloseRow,
-  decideCloseWrite, buildRecalc, slimRow, idsDelta, liveIdsOf, shortErr, recalcAccess } from './_mkt_close.js'; // v1019: закрытие месяца
+  decideCloseWrite, buildRecalc, slimRow, idsDelta, liveIdsOf, shortErr, recalcAccess, needsClose, readFxRatesStrict } from './_mkt_close.js'; // v1019: закрытие месяца
 import { localIso, tzOffsetH, dayStartMs, dayEndMs } from './_dates.js';
 import { normalizePhone } from './_phone.js'; // v1015: один разбор телефона KG+KZ вместо четырёх копий
 import { DEFAULT_PRODUCTS, loadProducts, classifyCampaign, productOfLead, productParam, PRODUCT_CODES,
@@ -530,7 +529,7 @@ async function selfFetch(base, path, extraHeaders){
   const bypass = String(process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '').trim();
   if(bypass) hdr['x-vercel-protection-bypass'] = bypass;
   try {
-    const r = await fetch(`${base}${path}`, { headers: hdr });
+    const r = await fetch(`${base}${path}`, { headers: hdr, signal: AbortSignal.timeout(60000) }); // v1019 (QA): не висим дольше минуты
     const json = await r.json().catch(() => null);
     return { status: r.status, json };
   } catch(e){ return { status: 0, json: { error: e.message || String(e) } }; }
@@ -989,9 +988,9 @@ async function gatherMonth(env, country, mi, base, products, opt){
   }
   let fx = null;
   try {
-    const ratesNow = await loadFxRates();
+    const ratesNow = await readFxRatesStrict(); // v1019 (QA): ошибка чтения — дыра, а не «курсов нет»
     if(opt.dryFx && fxFill && Array.isArray(fxFill.rates_preview)){
-      fxFill.rates_preview.forEach(x => { if(x && x.date && Number(x.USD) > 0 && !(ratesNow[x.date] && Number(ratesNow[x.date].USD) > 0)) ratesNow[x.date] = Object.assign({}, ratesNow[x.date] || {}, { USD: Number(x.USD), src: 'nbkr_archive' }); });
+      fxFill.rates_preview.forEach(x => { if(x && x.date && Number(x.USD) > 0 && !(ratesNow[x.date] && Number(ratesNow[x.date].USD) > 0)) ratesNow[x.date] = Object.assign({}, ratesNow[x.date] || {}, { USD: Number(x.USD), USD_src: 'nbkr_archive' }); });
     }
     fx = fxForDays(ratesNow, mi.days, settingsRate);
   } catch(e){ holes.push('курсы доллара не прочитались'); }
@@ -1021,14 +1020,18 @@ async function gatherMonth(env, country, mi, base, products, opt){
   const meta = {}, recon = {};
   const exQ = excl.length ? '&exclude=' + encodeURIComponent(excl.join(',')) : '';
   for(const p of products){
+    // v1019 (QA): общий срок закрытия — не успели дойти до продукта, он закрывается в следующий раз
+    if(opt.deadline && Date.now() > opt.deadline){ holesBy[p].push('не хватило времени'); meta[p] = {}; recon[p] = null; continue; }
     const q = 'since=' + mi.since + '&until=' + mi.until + exQ + '&product=' + p + '&v=2';
     const part = {};
-    for(const [k, ep] of [['geo', 'geo'], ['daily', 'geo_daily'], ['camps', 'campaigns_geo']]){
-      const r = await selfFetch(base, '/api/meta-ads?endpoint=' + ep + '&scope=all&' + q);
-      if(selfFailed(r)){ holesBy[p].push('реклама (' + ep + '): ' + shortErr((r.json && r.json.error) || ('ответ ' + r.status))); part[k] = null; continue; }
+    const eps = [['geo', 'geo'], ['daily', 'geo_daily'], ['camps', 'campaigns_geo']];
+    const rs = await Promise.all(eps.map(([, ep]) => selfFetch(base, '/api/meta-ads?endpoint=' + ep + '&scope=all&' + q))); // три запроса продукта — разом
+    eps.forEach(([k, ep], i) => {
+      const r = rs[i];
+      if(selfFailed(r)){ holesBy[p].push('реклама (' + ep + '): ' + shortErr((r.json && r.json.error) || ('ответ ' + r.status))); part[k] = null; return; }
       (r.json.errors || []).forEach(e => holesBy[p].push('реклама (' + ep + '): ' + shortErr(e.message || e)));
       part[k] = r.json;
-    }
+    });
     meta[p] = part;
     try {
       recon[p] = await buildRecon({ since: mi.since, until: mi.until, product: p, trusted: false, pii: false, sub });
@@ -1038,6 +1041,25 @@ async function gatherMonth(env, country, mi, base, products, opt){
     } catch(e){ holesBy[p].push('сверка заявок: ' + shortErr(e)); recon[p] = null; }
   }
   return { rp, work, fx, fxFill, meta, recon, holes, holesBy };
+}
+
+// v1019 (QA): запись одного продукта без гонок. Возвращает { written, attempts, skipped?, w }.
+async function writeCloseRow(key, outcome, nowIso){
+  const filt = { country: 'eq.' + key.country, product: 'eq.' + key.product, month: 'eq.' + key.month };
+  for(let i = 0; i < 2; i++){
+    const cur = (await sbSelect('mkt_month_close', filt))[0] || null;
+    if(cur && cur.status === 'closed') return { written: false, skipped: 'closed_meanwhile' };
+    const w = decideCloseWrite(cur, outcome, key, nowIso);
+    if(w.action !== 'upsert') return { written: false, skipped: 'closed_meanwhile' };
+    if(!cur){
+      const ins = await sbInsertIgnoreDup('mkt_month_close', w.row, 'country,product,month');
+      if(ins.length) return { written: true, attempts: w.row.attempts, w };
+      continue; // кто-то вставил строку одновременно — перечитываем
+    }
+    const upd = await sbUpdate('mkt_month_close', Object.assign({}, filt, { status: 'eq.failed' }), w.row);
+    if(upd.length) return { written: true, attempts: w.row.attempts, w };
+  }
+  return { written: false, skipped: 'race' };
 }
 
 // Закрыть месяц: по каждому продукту — либо 'closed' со всеми цифрами, либо 'failed' (attempts+1).
@@ -1050,11 +1072,15 @@ async function closeMonth(env, country, month, base, opts){
   try {
     (await sbSelect('mkt_month_close', { country: 'eq.' + country, month: 'eq.' + mi.first })).forEach(r => { existing[r.product] = r; });
   } catch(e){ return { error: 'mkt_month_close: ' + shortErr(e) }; }
-  const todo = CLOSE_PRODUCTS.filter(p => !(existing[p] && existing[p].status === 'closed'));
+  const todo = CLOSE_PRODUCTS.filter(p => needsClose(existing[p] || null));
   const out = { country, month: mi.month, results: {} };
-  CLOSE_PRODUCTS.filter(p => !todo.includes(p)).forEach(p => { out.results[p] = { status: 'closed', skipped: true }; });
+  CLOSE_PRODUCTS.filter(p => !todo.includes(p)).forEach(p => {
+    const ex = existing[p];
+    out.results[p] = ex && ex.status === 'closed' ? { status: 'closed', skipped: true } : { status: 'failed', skipped: true, attempts: ex ? ex.attempts : null, capped: true };
+  });
   if(!todo.length) return out;
-  const g = await gatherMonth(env, country, mi, base, todo, { dryFx: !o.write });
+  const deadline = Date.now() + (o.budgetMs || 230000); // v1019 (QA): ~230 с на весь расчёт
+  const g = await gatherMonth(env, country, mi, base, todo, { dryFx: !o.write, deadline });
   out.fx = g.fx ? { source: g.fx.source, days_daily: g.fx.days_daily, days_archive: g.fx.days_archive, days_settings: g.fx.days_settings, missing: g.fx.missing.length } : null;
   out.fx_archive = g.fxFill ? { filled: (g.fxFill.filled || []).length, errors: g.fxFill.errors || g.fxFill.error || [] } : null;
   const nowIso = new Date().toISOString();
@@ -1063,14 +1089,21 @@ async function closeMonth(env, country, month, base, opts){
     const holes = g.holes.concat(g.holesBy[p] || [], built.holes);
     const key = { country, product: p, month: mi.first };
     const outcome = holes.length ? { ok: false, error: holes[0] + (holes.length > 1 ? ' (и ещё ' + (holes.length - 1) + ')' : '') } : { ok: true, row: built.row, by: 'cron' };
-    const w = decideCloseWrite(existing[p] || null, outcome, key, nowIso);
+    let w = decideCloseWrite(existing[p] || null, outcome, key, nowIso);
     const res1 = { status: outcome.ok ? 'closed' : 'failed', holes: holes.slice(0, 5),
       numbers: outcome.ok ? { spend_usd: built.row.spend_usd, spend_som: built.row.spend_som, fx_avg: built.row.fx_avg, fx_source: built.row.fx_source,
         leads_ad: built.row.leads_ad, leads_all: built.row.leads_all, quals_ad: built.row.quals_ad, quals_all: built.row.quals_all, won_ad: built.row.won_ad,
         cpl_som: built.row.cpl_som, cpq_som: built.row.cpq_som, meta_form_leads: built.row.meta_form_leads, lost: built.row.lost } : null };
-    if(o.write && w.action === 'upsert'){
-      try { await sbUpsert('mkt_month_close', w.row, 'country,product,month'); res1.written = true; res1.attempts = w.row.attempts; }
-      catch(e){ res1.written = false; res1.write_error = shortErr(e); }
+    if(o.write){
+      // v1019 (QA): гонка двух прогонов — перечитываем строку прямо перед записью; новую вставляем без
+      // перезаписи, неудачную обновляем только пока она 'failed'; закрытую не трогаем никогда.
+      try {
+        const wr = await writeCloseRow(key, outcome, nowIso);
+        res1.written = wr.written; res1.attempts = wr.attempts; if(wr.skipped) res1.skipped = wr.skipped;
+        w = wr.w || w;
+      } catch(e){ res1.written = false; res1.write_error = shortErr(e); }
+      // «закрыт» в ответе и в журнале крона — только если строка действительно записана
+      if(!res1.written) res1.status = res1.skipped === 'closed_meanwhile' ? 'closed' : (outcome.ok ? 'not_written' : 'failed');
     }
     if(o.withRow) res1.row = Object.assign({}, w.row || {}, built.row);
     out.results[p] = res1;
@@ -1154,8 +1187,14 @@ export default async function handler(req, res){
         if(holes.length) return res.status(409).json({ ok: false, error: 'Пересчитать нельзя — данные неполные: ' + holes[0], holes: holes.slice(0, 5) });
         const rc = buildRecalc(existing, built.row, c.email, body.reason, { country, product, month: mi.first }, new Date().toISOString());
         if(rc.error) return bad(res, 400, rc.error);
-        await sbInsert('mkt_month_close_history', rc.history);
-        const saved = await sbUpsert('mkt_month_close', rc.update, 'country,product,month');
+        // v1019 (QA): история пишется первой, но если строка не обновилась — запись истории удаляем
+        const hrow = (await sbInsert('mkt_month_close_history', rc.history))[0] || null;
+        let saved;
+        try { saved = await sbUpsert('mkt_month_close', rc.update, 'country,product,month'); }
+        catch(e){
+          if(hrow && hrow.id != null){ try { await sbDelete('mkt_month_close_history', { id: 'eq.' + hrow.id }); } catch(_){} }
+          return res.status(500).json({ ok: false, error: 'Пересчёт не записался: ' + shortErr(e) });
+        }
         return res.status(200).json({ ok: true, row: slimRow(saved[0] || rc.update), history: { changed_at: rc.history.changed_at, changed_by: c.email, reason: rc.history.reason } });
       }
       if(action === 'mkt_lost_close'){
@@ -1183,9 +1222,11 @@ export default async function handler(req, res){
       const dryRun = dryRaw !== '0' && dryRaw !== 'false';
       // v1019: пробный расчёт (ничего не пишет, курс из архива только подставляется) — по праву на Маркетинг;
       // запись — только крон или админ-код
-      if(dryRun){ const g0 = await requirePermSoft(req, res, 'view_marketing'); if(!g0.ok) return; }
+      // v1019 (QA): пробный расчёт — только узнанный сотрудник с правом на Маркетинг (не общий ключ без лица)
+      if(dryRun){ const g0 = await requirePerm(req, res, 'view_marketing'); if(!g0.ok) return; }
       else if(!(await strongGate(req))) return bad(res, 403, 'Закрытие месяца — только крон или админ-код');
-      const out = await closeMonth(env, country, month, selfBase(req), { write: !dryRun, withRow: String(req.query.rows || '') === '1' });
+      const budgetS = Math.min(230, Math.max(1, Number(req.query.budget || 230))); // v1019 (QA): срок расчёта, с
+      const out = await closeMonth(env, country, month, selfBase(req), { write: !dryRun, withRow: String(req.query.rows || '') === '1', budgetMs: budgetS * 1000 });
       if(out.error) return bad(res, 400, out.error);
       return res.status(200).json(Object.assign({ dry_run: dryRun }, out));
     }
@@ -1253,7 +1294,7 @@ export default async function handler(req, res){
       // dry_run=1 (по умолчанию) — показать, что было бы дописано; запись — только крон/админ.
       const dryRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
       const dryRun = dryRaw !== '0' && dryRaw !== 'false';
-      if(dryRun){ const gate = await requirePermSoft(req, res, 'view_marketing'); if(!gate.ok) return; }
+      if(dryRun){ const gate = await requirePerm(req, res, 'view_marketing'); if(!gate.ok) return; } // v1019 (QA): не по общему ключу
       else if(!(await strongGate(req))) return bad(res, 403, 'Запись курсов — только крон или админ-код');
       const pm = monthInfo(prevMonthOf(localIso(Date.now(), country)), country);
       const from = String(req.query.from || pm.first).slice(0, 10), to = String(req.query.to || pm.until).slice(0, 10);
@@ -1389,7 +1430,7 @@ export default async function handler(req, res){
     if(action === 'amo_net'){
       // v1019 диагностика сети: до какого адреса amo этот сервер может открыть соединение.
       // Только TCP+TLS и GET /api/v4/account без ключа (ответ 401) — ничего не читаем и не пишем.
-      const gate = await requirePermSoft(req, res, 'view_marketing'); if(!gate.ok) return;
+      const gate = await requirePerm(req, res, 'view_marketing'); if(!gate.ok) return; // v1019 (QA): не по общему ключу
       const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
       const host = sub + '.amocrm.ru';
       const dns = await import('dns');

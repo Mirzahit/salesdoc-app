@@ -18,7 +18,7 @@ import './_preview_guard.js'; // v1017: в превью-сборке запис�
 import { bishkekIso } from './_dates.js'; // v1015
 import { sbSelect } from './_supabase.js';
 import { backfillPiece } from './_mkt.js'; // v1017 (b2)
-import { closeDue, prevMonthOf } from './_mkt_close.js'; // v1019: закрытие месяца
+import { closeDue, prevMonthOf, CLOSE_PRODUCTS, needsClose } from './_mkt_close.js'; // v1019: закрытие месяца
 // v1017 (QA): в журнал — без «Failing row contains (…)» (там телефон и имя клиента)
 const cleanErr = (m) => String(m || '').split(/Failing row/i)[0].trim().slice(0, 200);
 
@@ -79,15 +79,17 @@ export default async function handler(req, res) {
                   errors: (ml.errors || []).map(e => cleanErr(e.message || e)).concat(ml.error ? [cleanErr(ml.error)] : []) };
   } catch (e) { out.forms = { error: e.message || String(e) }; }
 
-  // v1019: закрытие прошлого месяца — 5-го с 07:30 и потом каждый час, пока SalesDoc не закрыт.
+  // v1019: закрытие прошлого месяца — 5-го с 07:30 и потом каждый час, пока не закрыты все продукты.
   // В прогон 06:30 (дозаливка переписок) не закрываем, чтобы не делить время.
   let closeMonthQ = null;
   const todayB = bishkekIso(Date.now());
   if (!bfReq && hourB !== 6 && closeDue(Number(todayB.slice(8, 10)), hourB)) {
     const pm = prevMonthOf(todayB);
     try {
-      const done = await sbSelect('mkt_month_close', { select: 'status', country: 'eq.KG', product: 'eq.SD', month: 'eq.' + pm + '-01', status: 'eq.closed' });
-      if (!done.length) closeMonthQ = pm;
+      // v1019 (QA): смотрим все четыре продукта — повторяем, пока хоть один не закрыт (не больше 48 попыток на продукт)
+      const rows = await sbSelect('mkt_month_close', { select: 'product,status,attempts', country: 'eq.KG', month: 'eq.' + pm + '-01' });
+      const byP = {}; rows.forEach(r => { byP[r.product] = r; });
+      if (CLOSE_PRODUCTS.some(p => needsClose(byP[p] || null))) closeMonthQ = pm;
     } catch (e) { out.close = { error: 'состояние закрытия не прочиталось' }; }
   }
   if (closeMonthQ) {
@@ -97,7 +99,7 @@ export default async function handler(req, res) {
       try {
         const c = await call(`action=mkt_month_close&country=KG&month=${closeMonthQ}&dry_run=0`, tmo, true);
         const sum = {};
-        Object.keys(c.results || {}).forEach(p => { const x = c.results[p]; sum[p] = x.skipped ? 'уже закрыт' : (x.status + (x.status === 'failed' ? ': ' + cleanErr((x.holes || [])[0]) + ' (попытка ' + (x.attempts || '?') + ')' : '')); });
+        Object.keys(c.results || {}).forEach(p => { const x = c.results[p]; sum[p] = x.skipped && x.status === 'closed' ? 'уже закрыт' : (x.capped ? 'попыток больше нет (' + x.attempts + ')' : (x.status + (x.status !== 'closed' ? ': ' + cleanErr((x.holes || [])[0] || x.write_error || x.skipped) + ' (попытка ' + (x.attempts || '?') + ')' : ''))); });
         out.close = { month: closeMonthQ, products: sum, fx: c.fx || null, error: c.error ? cleanErr(c.error) : undefined };
       } catch (e) { out.close = { month: closeMonthQ, error: e.message || String(e) }; }
     }

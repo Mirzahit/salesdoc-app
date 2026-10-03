@@ -10,9 +10,9 @@ import './_preview_guard.js'; // v1017: в превью-сборке запис�
 //     Настроек (settings). Архив дописывается только с разрешения CEO (app_settings.mkt_fx_archive_ok).
 // Здесь чистые функции (их проверяет scripts/mkt-selftest.mjs) и дозапись курсов из архива НБКР.
 
-import { sbUpsert } from './_supabase.js';
+import { sbUpsert, sbSelect } from './_supabase.js';
 import { addDaysIso, dayStartMs, dayEndMs } from './_dates.js';
-import { loadFxRates, fxRateFor } from './_finansist_core.js';
+import { fxRateFor } from './_finansist_core.js';
 import { campaignDecision } from './_mkt.js';
 
 export const CLOSE_PRODUCTS = ['SD', 'Z24', 'SHTURM', 'ALL'];
@@ -52,7 +52,8 @@ export function fxForDays(rates, days, settingsRate) {
   (days || []).forEach(d => {
     const r = fxRateFor(rates, d, 'USD');
     if (r) {
-      const kind = r.src === FX_ARCHIVE_SRC ? 'archive' : 'daily';
+      const dayObj = rates && rates[r.date];
+      const kind = usdSrcOf(dayObj) === FX_ARCHIVE_SRC ? 'archive' : 'daily';
       by_day[d] = { rate: r.rate, kind, from: r.date };
       if (kind === 'archive') archive++; else daily++;
     } else if (fb) { by_day[d] = { rate: fb, kind: 'settings', from: null }; settings++; }
@@ -96,6 +97,30 @@ export function planFxFill(rates, archive, fromIso, toIso) {
   return { filled, skipped };
 }
 const FX_VALUTA = { USD: 15 };
+// v1019 (QA): источник доллара дня — своё поле USD_src (день мог прийти из ежедневного курса по тенге,
+// а доллар дописан из архива), иначе общий src дня.
+export function usdSrcOf(day) { return (day && (day.USD_src || day.src)) || null; }
+// Курсы читаем напрямую: ошибка чтения — исключение (а не пустой объект, который при записи стёр бы всё).
+export async function readFxRatesStrict() {
+  const r = await sbSelect('app_settings', { key: 'eq.finansist_fx_rates', limit: '1' });
+  const v = (r[0] && r[0].value) || {};
+  if (typeof v !== 'object' || Array.isArray(v)) throw new Error('finansist_fx_rates: неожиданный формат');
+  return v;
+}
+// Слияние: из архива добавляются только дни/поля без доллара; ни один ключ не пропадает.
+export function mergeArchiveRates(fresh, archiveUsd, days, nowIso) {
+  const out = Object.assign({}, fresh);
+  const added = [];
+  days.forEach(d => {
+    const cur = out[d];
+    if (cur && Number(cur.USD) > 0) return;
+    if (!(archiveUsd[d] > 0)) return;
+    out[d] = cur ? Object.assign({}, cur, { USD: archiveUsd[d], USD_src: FX_ARCHIVE_SRC })
+      : { USD: archiveUsd[d], USD_src: FX_ARCHIVE_SRC, src: FX_ARCHIVE_SRC, by: 'архив Нацбанка', at: nowIso };
+    added.push(d);
+  });
+  return { rates: out, added };
+}
 // Дозапись курсов из архива НБКР в app_settings.finansist_fx_rates (src 'nbkr_archive').
 // opts: { currencies: ['USD'], dryRun, fetchImpl }. Возвращает { filled:[даты], skipped:[даты], errors }.
 export async function fillFxFromArchive(fromIso, toIso, opts) {
@@ -114,21 +139,17 @@ export async function fillFxFromArchive(fromIso, toIso, opts) {
       if (!Object.keys(archive[c]).length) errors.push('архив НБКР: курсов ' + c + ' не нашли');
     } catch (e) { errors.push('архив НБКР ' + c + ': ' + String(e.message || e).slice(0, 120)); archive[c] = {}; }
   }
-  const rates = await loadFxRates();
+  const rates = await readFxRatesStrict(); // ошибка чтения — исключение, ничего не пишем
   const plan = planFxFill(rates, archive.USD || {}, fromIso, toIso);
   if (o.dryRun || !plan.filled.length) return Object.assign(plan, { errors, rates_preview: plan.filled.slice(0, 40).map(d => ({ date: d, USD: archive.USD[d] })) });
   // перечитываем прямо перед записью и сливаем только недостающее (ночной крон Финансиста мог записать день)
-  const fresh = await loadFxRates();
+  const fresh = await readFxRatesStrict();
+  if (Object.keys(fresh).length < Object.keys(rates).length) throw new Error('курсы за это время уменьшились — запись отменена');
   const now = new Date().toISOString();
-  const really = [];
-  plan.filled.forEach(d => {
-    if (fresh[d] && Number(fresh[d].USD) > 0) return;
-    if (fresh[d]) fresh[d] = Object.assign({}, fresh[d], { USD: archive.USD[d] });
-    else fresh[d] = { USD: archive.USD[d], src: FX_ARCHIVE_SRC, by: 'архив Нацбанка', at: now };
-    really.push(d);
-  });
-  if (really.length) await sbUpsert('app_settings', { key: 'finansist_fx_rates', value: fresh, updated_at: now }, 'key');
-  return { filled: really, skipped: plan.skipped.concat(plan.filled.filter(d => !really.includes(d))), errors };
+  const m = mergeArchiveRates(fresh, archive.USD || {}, plan.filled, now);
+  if (Object.keys(m.rates).length < Object.keys(fresh).length) throw new Error('слияние потеряло дни — запись отменена');
+  if (m.added.length) await sbUpsert('app_settings', { key: 'finansist_fx_rates', value: m.rates, updated_at: now }, 'key');
+  return { filled: m.added, skipped: plan.skipped.concat(plan.filled.filter(d => !m.added.includes(d))), errors };
 }
 
 // ── Строка закрытого месяца ─────────────────────────────────────────────────
@@ -184,6 +205,7 @@ export function buildCloseRow(input) {
   const flow = rp ? (rp.stages || []).slice().sort((a, b) => a.sort - b.sort) : [];
   const funnel = (list) => ({
     stages: flow.map((st, i) => ({ id: st.id, name: st.name, sort: st.sort,
+      qual: !!(qs && String(qs.id) === String(st.id)), // v1019 (QA): этап квала подсвечивается в закрытой воронке
       n: i === 0 ? list.length : list.filter(l => l.is_won || (l.reached_sort != null && l.reached_sort >= st.sort)).length })),
     won: list.filter(l => l.is_won).length, postponed: list.filter(l => l.is_postponed).length, lost: list.filter(l => l.is_lost).length
   });
@@ -267,6 +289,13 @@ export function buildCloseRow(input) {
   return { row, holes };
 }
 
+// v1019 (QA): крон повторяет неудачные продукты, но не больше 48 попыток на продукт (дальше — пересчёт администратором).
+export const CLOSE_MAX_ATTEMPTS = 48;
+export function needsClose(row) {
+  if (!row) return true;
+  if (row.status === 'closed') return false;
+  return (Number(row.attempts) || 0) < CLOSE_MAX_ATTEMPTS;
+}
 // ── Запись ──────────────────────────────────────────────────────────────────
 // Что делать с закрытием одного продукта. existing — строка из базы или null.
 // outcome: { ok:true, row } или { ok:false, error }. Закрытую строку не трогаем никогда.

@@ -10,7 +10,7 @@ import {
 } from '../api/_mkt.js';
 import { normalizeHolidays, workMinutesBetween, toneOf, firstHumanAction, candidatesOf, collectTasks, collectWhatsapp, isAutoReply, normWaText,
   validateWaTemplates, WA_TEMPLATES_DEFAULT, piiAllowed, maskTail, applyWorkPii } from '../api/_mkt_work.js'; // v1017
-import { monthInfo, prevMonthOf, closeDue, fxForDays, fxSourceOf, parseNbkrArchive, planFxFill, buildCloseRow, decideCloseWrite, buildRecalc, idsDelta, liveIdsOf, recalcAccess, shortErr } from '../api/_mkt_close.js'; // v1019
+import { monthInfo, prevMonthOf, closeDue, fxForDays, fxSourceOf, parseNbkrArchive, planFxFill, buildCloseRow, decideCloseWrite, buildRecalc, idsDelta, liveIdsOf, recalcAccess, shortErr, mergeArchiveRates, usdSrcOf, needsClose, CLOSE_MAX_ATTEMPTS, fillFxFromArchive } from '../api/_mkt_close.js'; // v1019
 import { leadIdFromDealName, decideMatch, mergeTouches, parseMetaLead, fxByDay, lgTouchToRow, maskPhone, cleanErr } from '../api/_meta_leads.js'; // v1017
 
 let pass = 0, fail = 0;
@@ -565,6 +565,40 @@ t('строка закрытия: цифры месяца из рекламы и
   const hole = buildCloseRow({ product: 'SD', month: mi, meta, rp, recon, work: null, fx: fxForDays({}, ['2026-09-01'], null) });
   assert.ok(hole.holes.length && /курса/.test(hole.holes[0]));
 });
+
+// ── v1019 (QA) ──
+t('архив: слияние не теряет дни и не перезаписывает доллар; USD_src у дописанного', () => {
+  const fresh = { '2026-09-01': { USD: 87.1, src: 'nbkr' }, '2026-09-02': { KZT: 0.17, src: 'nbkr', by: 'крон' }, '2025-01-01': { KZT: 0.2 } };
+  const m = mergeArchiveRates(fresh, { '2026-09-01': 99, '2026-09-02': 87.2, '2026-09-03': 87.3 }, ['2026-09-01', '2026-09-02', '2026-09-03'], 'T');
+  assert.deepEqual(m.added, ['2026-09-02', '2026-09-03']);
+  assert.equal(m.rates['2026-09-01'].USD, 87.1);
+  assert.deepEqual(m.rates['2026-09-02'], { KZT: 0.17, src: 'nbkr', by: 'крон', USD: 87.2, USD_src: 'nbkr_archive' });
+  assert.equal(m.rates['2026-09-03'].USD_src, 'nbkr_archive'); assert.ok(m.rates['2025-01-01']);
+  assert.equal(Object.keys(m.rates).length, 4); assert.equal(fresh['2026-09-02'].USD, undefined, 'исходный объект не меняется');
+});
+t('курс: день с ежедневным тенге, но долларом из архива — для доллара это архив', () => {
+  assert.equal(usdSrcOf({ src: 'nbkr', USD_src: 'nbkr_archive' }), 'nbkr_archive'); assert.equal(usdSrcOf({ src: 'nbkr' }), 'nbkr');
+  const fx = fxForDays({ '2026-09-02': { KZT: 0.17, src: 'nbkr', USD: 87.2, USD_src: 'nbkr_archive' } }, ['2026-09-02'], null);
+  assert.equal(fx.by_day['2026-09-02'].kind, 'archive'); assert.equal(fx.source, 'archive');
+});
+t('крон: повторяем неудачные продукты, но не больше 48 попыток; закрытые — никогда', () => {
+  assert.equal(needsClose(null), true); assert.equal(needsClose({ status: 'failed', attempts: 3 }), true);
+  assert.equal(needsClose({ status: 'failed', attempts: CLOSE_MAX_ATTEMPTS }), false); assert.equal(needsClose({ status: 'closed', attempts: 1 }), false);
+  assert.equal(CLOSE_MAX_ATTEMPTS, 48);
+});
+
+// v1019 (QA): курсы не прочитались — дописывание из архива падает, а не пишет «только архив»
+await (async () => {
+  const name = 'архив: ошибка чтения курсов — исключение, ничего не записано';
+  const html = '<!--date-->30.09.2026<!--date--></td><td><!--value-->87,4483<!--value-->';
+  const fakeFetch = async () => ({ ok: true, arrayBuffer: async () => Buffer.from(html, 'latin1') });
+  try {
+    let threw = false;
+    try { await fillFxFromArchive('2026-09-30', '2026-09-30', { fetchImpl: fakeFetch }); } catch (e) { threw = true; }
+    assert.equal(threw, true);
+    pass++; console.log('ok   ' + name);
+  } catch (e) { fail++; console.log('FAIL ' + name + '\n     ' + (e.message || e)); }
+})();
 
 console.log(`\n${pass} ok, ${fail} fail`);
 process.exit(fail ? 1 : 0);
