@@ -1386,6 +1386,30 @@ export default async function handler(req, res){
       }
       return res.status(200).json({ country, contacts });
     }
+    if(action === 'amo_net'){
+      // v1019 диагностика сети: до какого адреса amo этот сервер может открыть соединение.
+      // Только TCP+TLS и GET /api/v4/account без ключа (ответ 401) — ничего не читаем и не пишем.
+      const gate = await requirePermSoft(req, res, 'view_marketing'); if(!gate.ok) return;
+      const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
+      const host = sub + '.amocrm.ru';
+      const dns = await import('dns');
+      const httpsMod = await import('https');
+      let ips = [];
+      try { ips = (await dns.promises.lookup(host, { all: true })).map(a => a.address + (a.family === 6 ? ' (v6)' : '')); } catch(e){ ips = ['dns: ' + e.code]; }
+      const probe = (ip) => new Promise(ok => {
+        const t0 = Date.now();
+        const rq = httpsMod.request({ host: ip, servername: host, path: '/api/v4/account', method: 'GET', headers: { Host: host }, timeout: 8000 }, r => { r.resume(); ok({ ip, status: r.statusCode, ms: Date.now() - t0 }); });
+        rq.on('timeout', () => { rq.destroy(); ok({ ip, error: 'timeout', ms: Date.now() - t0 }); });
+        rq.on('error', e => ok({ ip, error: e.code || e.message, ms: Date.now() - t0 }));
+        rq.end();
+      });
+      const targets = Array.from(new Set(['23.111.41.254', '88.212.250.100'].concat(ips.map(x => x.split(' ')[0]).filter(x => /^\d+\.\d+\.\d+\.\d+$/.test(x)))));
+      const results = [];
+      for(const ip of targets) results.push(await probe(ip));
+      let egress = null;
+      try { const r = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(5000) }); egress = (await r.json()).ip; } catch(_){ }
+      return res.status(200).json({ host, dns: ips, results, egress_ip: egress, region: process.env.VERCEL_REGION || null });
+    }
     if(action === 'pipelines'){
       const list = await getPipelines(env);
       return res.status(200).json({ pipelines: list });
