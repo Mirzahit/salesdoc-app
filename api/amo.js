@@ -965,7 +965,8 @@ async function buildLeadReport(env, fromTs, toTs, opts){
 // Собираем всё, что нужно экрану за месяц, теми же функциями, что и экран: lead_report v2,
 // реклама (geo / geo_daily / campaigns_geo по каждому продукту, сутки по Бишкеку), сверка заявок,
 // «не взято в работу», курс по дням. holes — почему месяц закрывать нельзя (общие и по продукту).
-async function gatherMonth(env, country, mi, base, products){
+async function gatherMonth(env, country, mi, base, products, opt){
+  opt = opt || {};
   const holes = [], holesBy = {};
   products.forEach(p => { holesBy[p] = []; });
   const sub = String(env.AMO_SUBDOMAIN || '').replace(/\s+/g, '');
@@ -982,11 +983,18 @@ async function gatherMonth(env, country, mi, base, products){
   // курс: сначала (если CEO разрешил) дописываем недостающие дни из архива НБКР
   let fxFill = null;
   if(archiveOk){
-    try { fxFill = await fillFxFromArchive(mi.first, mi.until, { currencies: ['USD'] }); }
+    // v1019: пробный расчёт (dry run) курс не записывает — архивные дни только подставляются в расчёт
+    try { fxFill = await fillFxFromArchive(mi.first, mi.until, { currencies: ['USD'], dryRun: !!opt.dryFx }); }
     catch(e){ fxFill = { error: shortErr(e) }; }
   }
   let fx = null;
-  try { fx = fxForDays(await loadFxRates(), mi.days, settingsRate); } catch(e){ holes.push('курсы доллара не прочитались'); }
+  try {
+    const ratesNow = await loadFxRates();
+    if(opt.dryFx && fxFill && Array.isArray(fxFill.rates_preview)){
+      fxFill.rates_preview.forEach(x => { if(x && x.date && Number(x.USD) > 0 && !(ratesNow[x.date] && Number(ratesNow[x.date].USD) > 0)) ratesNow[x.date] = Object.assign({}, ratesNow[x.date] || {}, { USD: Number(x.USD), src: 'nbkr_archive' }); });
+    }
+    fx = fxForDays(ratesNow, mi.days, settingsRate);
+  } catch(e){ holes.push('курсы доллара не прочитались'); }
   // сделки amo
   let rp = null;
   try {
@@ -1046,7 +1054,7 @@ async function closeMonth(env, country, month, base, opts){
   const out = { country, month: mi.month, results: {} };
   CLOSE_PRODUCTS.filter(p => !todo.includes(p)).forEach(p => { out.results[p] = { status: 'closed', skipped: true }; });
   if(!todo.length) return out;
-  const g = await gatherMonth(env, country, mi, base, todo);
+  const g = await gatherMonth(env, country, mi, base, todo, { dryFx: !o.write });
   out.fx = g.fx ? { source: g.fx.source, days_daily: g.fx.days_daily, days_archive: g.fx.days_archive, days_settings: g.fx.days_settings, missing: g.fx.missing.length } : null;
   out.fx_archive = g.fxFill ? { filled: (g.fxFill.filled || []).length, errors: g.fxFill.errors || g.fxFill.error || [] } : null;
   const nowIso = new Date().toISOString();
@@ -1170,10 +1178,13 @@ export default async function handler(req, res){
       // v1019: закрыть месяц (зовёт крон 5-го в 07:30 и потом каждый час, пока SD не закрыт).
       // Тяжёлый расчёт и запись — только крон/админ (strongGate). dry_run=1 (по умолчанию) — посчитать и показать.
       if(country !== 'KG') return bad(res, 400, 'mkt_month_close: только KG');
-      if(!(await strongGate(req))) return bad(res, 403, 'Закрытие месяца — только крон или админ-код');
       const month = String(req.query.month || prevMonthOf(localIso(Date.now(), country)));
       const dryRaw = String(req.query.dry_run == null ? '1' : req.query.dry_run);
       const dryRun = dryRaw !== '0' && dryRaw !== 'false';
+      // v1019: пробный расчёт (ничего не пишет, курс из архива только подставляется) — по праву на Маркетинг;
+      // запись — только крон или админ-код
+      if(dryRun){ const g0 = await requirePermSoft(req, res, 'view_marketing'); if(!g0.ok) return; }
+      else if(!(await strongGate(req))) return bad(res, 403, 'Закрытие месяца — только крон или админ-код');
       const out = await closeMonth(env, country, month, selfBase(req), { write: !dryRun, withRow: String(req.query.rows || '') === '1' });
       if(out.error) return bad(res, 400, out.error);
       return res.status(200).json(Object.assign({ dry_run: dryRun }, out));
